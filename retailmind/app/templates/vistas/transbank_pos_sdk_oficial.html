@@ -493,20 +493,42 @@
             <h6><i class="bi bi-shield-check"></i> Estado de cuentas por empresa</h6>
             <hr>
             <table class="table table-sm mb-0" style="font-size:.74rem;">
-                <thead><tr><th>Empresa</th><th class="text-center">Token</th><th class="text-center">Clave webhook</th><th class="text-center">Activa</th></tr></thead>
+                <thead><tr><th>Empresa</th><th class="text-center">Token</th><th class="text-center">Clave webhook</th>{% if es_admin_mp %}<th class="text-center">Acciones</th>{% endif %}</tr></thead>
                 <tbody>
                 {% for c in cuentas_mp %}
                     <tr>
-                        <td>{{ c.empresa_nombre }}</td>
+                        <td title="{{ c.empresa_rut }}">{{ c.empresa_nombre }}</td>
                         <td class="text-center">{% if c.tiene_token %}✅{% else %}❌{% endif %}</td>
                         <td class="text-center">{% if c.tiene_secret %}✅{% else %}❌{% endif %}</td>
-                        <td class="text-center">{% if c.activo %}✅{% else %}—{% endif %}</td>
+                        {% if es_admin_mp %}
+                        <td class="text-center text-nowrap">
+                            <button class="btn btn-sm btn-outline-primary py-0 px-1" style="font-size:.68rem;" title="Editar (carga la empresa en el formulario)"
+                                    onclick="editarCuentaMP({{ c.empresa_id }}, '{{ c.mp_user_id|escapejs }}')"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-sm btn-outline-success py-0 px-1" style="font-size:.68rem;" title="Probar conexión (valida el token contra MP)"
+                                    onclick="probarCuentaMP({{ c.empresa_id }}, '{{ c.empresa_nombre|escapejs }}')"><i class="bi bi-plug"></i></button>
+                            <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:.68rem;" title="Eliminar cuenta"
+                                    onclick="eliminarCuentaMP({{ c.empresa_id }}, '{{ c.empresa_nombre|escapejs }}')"><i class="bi bi-trash"></i></button>
+                        </td>
+                        {% endif %}
                     </tr>
                 {% empty %}
                     <tr><td colspan="4" class="text-muted text-center">Sin cuentas cargadas</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
+        </div>
+
+        <div class="tbk-card">
+            <h6><i class="bi bi-receipt-cutoff"></i> Resumen del día (equivale al cierre)</h6>
+            <hr>
+            <p class="tbk-tech-body mb-1">Mercado Pago no tiene "cierre de lote" como
+            Transbank: los pagos liquidan solos. Este resumen es el cierre del día.</p>
+            <div class="d-flex gap-1 mb-2">
+                <input type="date" class="form-control-sm-pos" id="mpResumenFecha" style="max-width:150px;">
+                <button class="btn btn-sm btn-primary py-0 px-2" style="font-size:.72rem;" onclick="resumenDiaMP()"><i class="bi bi-search"></i> Ver</button>
+                <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.72rem;" onclick="imprimirResumenMP()"><i class="bi bi-printer"></i> Imprimir</button>
+            </div>
+            <div id="mpResumenBody" class="tbk-tech-body">—</div>
         </div>
     </div>
 
@@ -543,7 +565,7 @@
             <h6><i class="bi bi-pc-display"></i> Asociación de máquinas (cajas QR)</h6>
             <hr>
             <table class="table table-sm mb-2" style="font-size:.72rem;">
-                <thead><tr><th>Sucursal</th><th>Caja MP (external_pos_id)</th><th class="text-center">Habilitada</th></tr></thead>
+                <thead><tr><th>Sucursal</th><th>Caja MP (external_pos_id)</th><th class="text-center">Habilitada</th>{% if es_admin_mp %}<th class="text-center">Acciones</th>{% endif %}</tr></thead>
                 <tbody>
                 {% for cfg in configs_mp %}
                     <tr {% if es_admin_mp %}style="cursor:pointer;" title="Clic para editar"
@@ -551,19 +573,31 @@
                         <td>{{ cfg.sucursal_alias }}{% if cfg.es_principal %} ⭐{% endif %}</td>
                         <td class="font-monospace">{{ cfg.external_pos_id|default:'—' }}</td>
                         <td class="text-center">{% if cfg.habilitado %}✅{% else %}❌{% endif %}</td>
+                        {% if es_admin_mp %}
+                        <td class="text-center text-nowrap">
+                            <button class="btn btn-sm btn-outline-success py-0 px-1" style="font-size:.68rem;" title="Transacción de PRUEBA: genera un QR real contra esta caja"
+                                    onclick="event.stopPropagation(); probarConfigMP({{ cfg.id }}, '{{ cfg.sucursal_alias|escapejs }}')"><i class="bi bi-qr-code-scan"></i></button>
+                            <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:.68rem;" title="Eliminar asociación"
+                                    onclick="event.stopPropagation(); eliminarConfigMP({{ cfg.id }}, '{{ cfg.sucursal_alias|escapejs }}')"><i class="bi bi-trash"></i></button>
+                        </td>
+                        {% endif %}
                     </tr>
                 {% empty %}
-                    <tr><td colspan="3" class="text-muted text-center">Sin cajas asociadas</td></tr>
+                    <tr><td colspan="4" class="text-muted text-center">Sin cajas asociadas</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
 
             {% if es_admin_mp %}
             <hr>
+            <button class="btn btn-sm btn-outline-primary w-100 mb-2" style="font-size:.74rem;" onclick="buscarCajasMP()"
+                    title="Lista las sucursales y cajas ya creadas en la cuenta MP de la empresa de la sucursal elegida — clic en una para llenar los campos solo">
+                <i class="bi bi-cloud-download"></i> Buscar cajas creadas en Mercado Pago
+            </button>
             <input type="hidden" id="mpCfgId" value="">
             <label class="form-label-sm">Sucursal</label>
             <select class="form-control-sm-pos mb-2" id="mpCfgSucursal">
-                {% for s in sucursales_mp %}<option value="{{ s.id }}">{{ s.alias }}</option>{% endfor %}
+                {% for s in sucursales_mp %}<option value="{{ s.id }}" data-empresa="{{ s.empresa_id }}">{{ s.alias }}</option>{% endfor %}
             </select>
             <label class="form-label-sm">Nombre de la caja</label>
             <input type="text" class="form-control-sm-pos mb-2" id="mpCfgNombre" value="Caja principal">
@@ -1464,6 +1498,220 @@ function limpiarFormConfigMP() {
     document.getElementById('mpCfgStore').value = '';
     document.getElementById('mpCfgPos').value = '';
     document.getElementById('mpCfgHabilitado').checked = false;
+}
+
+// ── Cuentas: editar / probar / eliminar ──
+
+function editarCuentaMP(empresaId, userId) {
+    const sel = document.getElementById('mpCuentaEmpresa');
+    if (sel) {
+        sel.value = String(empresaId);
+        if (window.jQuery && jQuery.fn.select2) jQuery(sel).val(String(empresaId)).trigger('change');
+    }
+    const uid = document.getElementById('mpCuentaUserId');
+    if (uid) uid.value = userId || '';
+    document.getElementById('mpCuentaToken').value = '';
+    document.getElementById('mpCuentaSecret').value = '';
+}
+
+function probarCuentaMP(empresaId, nombre) {
+    Swal.fire({ title: 'Probando token…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
+    const fd = new FormData();
+    fd.append('empresa_id', empresaId);
+    fd.append('csrfmiddlewaretoken', _csrfMP());
+    fetch('/app/pos/mercadopago/gestion/cuenta/probar/', { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const d = data.datos || {};
+                Swal.fire({ icon: 'success', title: 'Conexión OK',
+                    html: `<div class="text-start small"><strong>${nombre}</strong><br>` +
+                          `User ID: <code>${d.user_id || '-'}</code><br>` +
+                          `Cuenta: ${d.nickname || '-'} (${d.email || '-'})<br>` +
+                          `Sitio: ${d.site || '-'}</div>` });
+            } else {
+                Swal.fire({ icon: 'error', title: 'Token con problemas', text: data.error });
+            }
+        })
+        .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
+}
+
+function eliminarCuentaMP(empresaId, nombre) {
+    Swal.fire({
+        icon: 'warning', title: '¿Eliminar cuenta MP?',
+        text: `Se borrarán las credenciales guardadas de ${nombre}. Las cajas y cobros no se tocan.`,
+        showCancelButton: true, confirmButtonText: 'Eliminar', confirmButtonColor: '#FF4D4D',
+        cancelButtonText: 'Cancelar'
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        _postGestionMP('/app/pos/mercadopago/gestion/cuenta/eliminar/', { empresa_id: empresaId }, 'Cuenta eliminada');
+    });
+}
+
+// ── Cajas: buscar en MP / probar QR / eliminar ──
+
+function buscarCajasMP() {
+    const sel = document.getElementById('mpCfgSucursal');
+    const opcion = sel && sel.options[sel.selectedIndex];
+    const empresaId = opcion ? opcion.dataset.empresa : null;
+    if (!empresaId) { Swal.fire({ icon: 'warning', title: 'Elige primero la sucursal' }); return; }
+    Swal.fire({ title: 'Consultando cajas en Mercado Pago…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
+    const fd = new FormData();
+    fd.append('empresa_id', empresaId);
+    fd.append('csrfmiddlewaretoken', _csrfMP());
+    fetch('/app/pos/mercadopago/gestion/cajas-mp/', { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) { Swal.fire({ icon: 'error', title: 'No se pudo listar', text: data.error }); return; }
+            const cajas = data.cajas || [];
+            if (!cajas.length) {
+                Swal.fire({ icon: 'info', title: 'Sin cajas en MP',
+                    text: 'Esta cuenta no tiene cajas creadas todavía. Créalas en mercadopago.cl → Tu negocio → Sucursales y cajas.' });
+                return;
+            }
+            const filas = cajas.map((c, i) => `
+                <tr style="cursor:pointer;" onclick="usarCajaMP(${i})">
+                    <td>${c.store_nombre || '-'}<br><code style="font-size:.68rem;">${c.external_store_id || 'SIN ID EXTERNO'}</code></td>
+                    <td>${c.caja_nombre || '-'}<br><code style="font-size:.68rem;">${c.external_pos_id || 'SIN ID EXTERNO'}</code></td>
+                </tr>`).join('');
+            window.__cajasMP = cajas;
+            Swal.fire({
+                title: 'Cajas creadas en Mercado Pago',
+                html: `<p class="small text-muted mb-1">Clic en una fila para llenar el formulario</p>
+                       <table class="table table-sm table-hover" style="font-size:.76rem;">
+                       <thead><tr><th>Sucursal MP</th><th>Caja MP</th></tr></thead>
+                       <tbody>${filas}</tbody></table>`,
+                width: 520, showConfirmButton: false, showCloseButton: true
+            });
+        })
+        .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
+}
+
+function usarCajaMP(i) {
+    const c = (window.__cajasMP || [])[i];
+    if (!c) return;
+    if (!c.external_pos_id) {
+        Swal.fire({ icon: 'warning', title: 'Caja sin ID externo',
+            text: 'Esa caja no tiene external_id en MP: créala de nuevo con identificador o usa la API.' });
+        return;
+    }
+    document.getElementById('mpCfgStore').value = c.external_store_id || '';
+    document.getElementById('mpCfgPos').value = c.external_pos_id;
+    if (c.caja_nombre) document.getElementById('mpCfgNombre').value = c.caja_nombre;
+    Swal.close();
+}
+
+function eliminarConfigMP(configId, sucursal) {
+    Swal.fire({
+        icon: 'warning', title: '¿Eliminar asociación?',
+        text: `Se quita la caja de ${sucursal}. Si ya tiene cobros, quedará deshabilitada en vez de borrarse.`,
+        showCancelButton: true, confirmButtonText: 'Eliminar', confirmButtonColor: '#FF4D4D',
+        cancelButtonText: 'Cancelar'
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        _postGestionMP('/app/pos/mercadopago/gestion/config/eliminar/', { config_id: configId }, 'Asociación eliminada');
+    });
+}
+
+function probarConfigMP(configId, sucursal) {
+    Swal.fire({
+        title: `Transacción de prueba — ${sucursal}`,
+        html: '<p class="small text-muted">Genera un QR REAL contra esta caja. Puedes escanearlo y pagar (queda marcado PRUEBA) o solo verificar que el QR se genere y cancelarlo.</p>',
+        input: 'number', inputValue: 100, inputLabel: 'Monto CLP',
+        showCancelButton: true, confirmButtonText: 'Generar QR', cancelButtonText: 'Cerrar'
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        const fd = new FormData();
+        fd.append('config_id', configId);
+        fd.append('monto', r.value || 100);
+        fd.append('csrfmiddlewaretoken', _csrfMP());
+        Swal.fire({ title: 'Generando QR…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
+        fetch('/app/pos/mercadopago/gestion/config/probar/', { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(resp => resp.json())
+            .then(data => {
+                if (!data.success) { Swal.fire({ icon: 'error', title: 'Falló la prueba', text: data.error }); return; }
+                _modalQRPruebaMP(data);
+            })
+            .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
+    });
+}
+
+function _modalQRPruebaMP(data) {
+    let poll = null;
+    const detener = () => { if (poll) clearInterval(poll); poll = null; };
+    const cancelar = () => fetch(`/app/pos/mercadopago/cancelar/${data.transaccion_id}/`, {
+        method: 'POST', headers: { 'X-CSRFToken': _csrfMP() }, credentials: 'same-origin' }).catch(() => {});
+    const qrHtml = data.qr_base64
+        ? `<img src="data:image/png;base64,${data.qr_base64}" style="width:260px;max-width:100%;">`
+        : `<textarea class="form-control" rows="3" readonly style="font-size:.68rem;">${data.qr_data || ''}</textarea>`;
+    Swal.fire({
+        title: '✅ QR de prueba generado',
+        html: `<p class="small mb-1">La caja y el token funcionan. Monto: <strong>$${Number(data.monto).toLocaleString('es-CL')}</strong></p>
+               ${qrHtml}
+               <p class="small text-muted mt-1 mb-0" id="mpPruebaEstado">Esperando pago… (puedes cerrar y se cancela)</p>`,
+        showConfirmButton: false, showCancelButton: true, cancelButtonText: 'Cancelar prueba',
+        width: 400, allowOutsideClick: false
+    }).then(() => { detener(); cancelar(); });
+    poll = setInterval(() => {
+        fetch(`/app/pos/mercadopago/estado/${data.transaccion_id}/`, { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(est => {
+                if (!est.success) return;
+                if (est.estado === 'APROBADA') {
+                    detener();
+                    Swal.fire({ icon: 'success', title: '🎉 Pago de prueba APROBADO',
+                        html: `<p class="small">El circuito completo funciona (QR + webhook/polling).<br>Payment: <code>${est.payment_id || '-'}</code></p>
+                               <p class="small text-muted">Recuerda devolverlo desde la app/panel de MP o vía conciliación.</p>` });
+                } else if (est.estado !== 'PENDIENTE' && est.estado !== 'CREADA') {
+                    detener();
+                    const el = document.getElementById('mpPruebaEstado');
+                    if (el) el.textContent = 'Estado: ' + est.estado;
+                }
+            }).catch(() => {});
+    }, 2500);
+}
+
+// ── Resumen del día (cierre MP) ──
+
+function resumenDiaMP() {
+    const fecha = document.getElementById('mpResumenFecha').value || new Date().toISOString().slice(0, 10);
+    fetch(`/app/pos/mercadopago/gestion/resumen-dia/?fecha=${fecha}`, { credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return;
+            document.getElementById('mpResumenFecha').value = data.fecha;
+            const f = v => '$' + Number(v || 0).toLocaleString('es-CL');
+            const filas = Object.entries(data.sucursales || {}).map(([suc, d]) => `
+                <tr><td>${suc}</td><td class="text-center">${d.cobros}</td>
+                <td class="text-end font-monospace">${f(d.monto)}</td>
+                <td class="text-end font-monospace">${d.monto_devuelto ? '-' + f(d.monto_devuelto).slice(1) : '—'}</td></tr>`).join('');
+            const t = data.total || {};
+            document.getElementById('mpResumenBody').innerHTML = `
+                <table class="table table-sm mb-1" style="font-size:.72rem;">
+                <thead><tr><th>Sucursal</th><th class="text-center">Cobros</th><th class="text-end">Cobrado</th><th class="text-end">Devuelto</th></tr></thead>
+                <tbody>${filas || '<tr><td colspan="4" class="text-muted text-center">Sin movimientos MP ese día</td></tr>'}</tbody>
+                </table>
+                <div class="fw-bold" style="font-size:.78rem;">TOTAL: ${f(t.monto)} · Devol: ${f(t.monto_devuelto)} · Neto: ${f(t.neto)}${t.comisiones ? ' · Comisiones: ' + f(t.comisiones) : ''}</div>`;
+        })
+        .catch(() => { document.getElementById('mpResumenBody').textContent = 'Error al cargar'; });
+}
+
+function imprimirResumenMP() {
+    const fecha = document.getElementById('mpResumenFecha').value || new Date().toISOString().slice(0, 10);
+    const cuerpo = document.getElementById('mpResumenBody').innerHTML;
+    if (!cuerpo || cuerpo === '—') { Swal.fire({ icon: 'info', title: 'Primero presiona "Ver"' }); return; }
+    const w = window.open('', '_blank', 'width=420,height=600');
+    w.document.write(`<html><head><title>Resumen Mercado Pago ${fecha}</title>
+        <style>body{font-family:monospace;font-size:12px;margin:12px;}
+        table{width:100%;border-collapse:collapse;}td,th{padding:2px 4px;text-align:left;}
+        .text-end{text-align:right;}.text-center{text-align:center;}</style></head>
+        <body><h3 style="margin:0 0 4px;">RESUMEN MERCADO PAGO</h3>
+        <div>Fecha: ${fecha}</div><hr>${cuerpo}<hr>
+        <div style="font-size:10px;">MP liquida solo (sin cierre de lote). Generado ${new Date().toLocaleString('es-CL')}</div>
+        </body></html>`);
+    w.document.close();
+    w.focus();
+    w.print();
 }
 
 window.addEventListener('load', function () {

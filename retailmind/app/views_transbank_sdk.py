@@ -65,7 +65,10 @@ def gestion_transbank_pos_sdk(request):
     try:
         from .models import MercadoPagoConfig, MercadoPagoCuenta
         context['cuentas_mp'] = [{
+            'empresa_id': c.empresa_id,
             'empresa_nombre': c.empresa.nombre or c.empresa.razon_social,
+            'empresa_rut': c.empresa.rut,
+            'mp_user_id': c.mp_user_id,
             'tiene_token': bool(c.access_token_cifrado),
             'tiene_secret': bool(c.webhook_secret_cifrado),
             'activo': c.activo,

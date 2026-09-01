@@ -82,13 +82,16 @@ def crear_pago_qr_mp(request):
 
 
 def _transaccion_de_sesion(request, transaccion_id):
-    """Solo transacciones de la sucursal en sesión (evita IDOR entre tiendas)."""
+    """Solo transacciones de la sucursal en sesión (evita IDOR entre tiendas).
+    Un administrador puede consultar cualquiera (necesario para la transacción
+    de prueba de la pestaña de gestión, que apunta a la caja de otra sucursal)."""
+    qs = TransaccionMercadoPago.objects.filter(id=transaccion_id).select_related('config')
+    if getattr(request.user, 'rol', '') in ('administrador', 'administracion'):
+        return qs.first()
     sucursal_id = _sucursal_sesion(request)
     if not sucursal_id:
         return None
-    return TransaccionMercadoPago.objects.filter(
-        id=transaccion_id, sucursal_id=sucursal_id
-    ).select_related('config').first()
+    return qs.filter(sucursal_id=sucursal_id).first()
 
 
 @api_view(['GET'])
@@ -251,6 +254,163 @@ def gestion_guardar_config_mp(request):
     return JsonResponse({'success': True, 'config_id': config.id})
 
 
+def _cuenta_por_empresa(request):
+    try:
+        return MercadoPagoCuenta.objects.get(empresa_id=int(request.POST.get('empresa_id', 0)))
+    except (MercadoPagoCuenta.DoesNotExist, TypeError, ValueError):
+        return None
+
+
+@login_required
+@require_POST
+def gestion_probar_cuenta_mp(request):
+    """POST gestion/cuenta/probar/ — valida el token contra /users/me (admin)."""
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
+    cuenta = _cuenta_por_empresa(request)
+    if not cuenta:
+        return JsonResponse({'success': False, 'error': 'La empresa no tiene cuenta MP guardada.'}, status=404)
+    try:
+        datos = mp.probar_cuenta(cuenta)
+    except mp.MercadoPagoError as e:
+        return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
+    return JsonResponse({'success': True, 'datos': datos})
+
+
+@login_required
+@require_POST
+def gestion_eliminar_cuenta_mp(request):
+    """POST gestion/cuenta/eliminar/ — borra la cuenta de una empresa (admin)."""
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
+    cuenta = _cuenta_por_empresa(request)
+    if not cuenta:
+        return JsonResponse({'success': False, 'error': 'La empresa no tiene cuenta MP guardada.'}, status=404)
+    from django.db.models import ProtectedError
+    try:
+        rut = cuenta.empresa.rut
+        cuenta.delete()
+    except ProtectedError:
+        return JsonResponse({'success': False,
+                             'error': 'Hay cajas apuntando explícitamente a esta cuenta: quita el vínculo primero.'},
+                            status=400)
+    logger.warning("MP gestión: cuenta de %s ELIMINADA por %s", rut, request.user.username)
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
+def gestion_listar_cajas_mp(request):
+    """POST gestion/cajas-mp/ — lista las sucursales/cajas YA CREADAS en la
+    cuenta MP de la empresa, para asociarlas con un clic (admin)."""
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
+    cuenta = _cuenta_por_empresa(request)
+    if not cuenta:
+        return JsonResponse({'success': False,
+                             'error': 'Primero guarda las credenciales de la empresa (columna del medio).'},
+                            status=404)
+    try:
+        cajas = mp.listar_cajas(cuenta)
+    except mp.MercadoPagoError as e:
+        return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
+    return JsonResponse({'success': True, 'cajas': cajas})
+
+
+@login_required
+@require_POST
+def gestion_eliminar_config_mp(request):
+    """POST gestion/config/eliminar/ — elimina una asociación de caja (admin).
+    Si ya tiene transacciones, no se puede borrar: deshabilitarla."""
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
+    config = MercadoPagoConfig.objects.filter(id=int(request.POST.get('config_id', 0) or 0)).first()
+    if not config:
+        return JsonResponse({'success': False, 'error': 'Caja no encontrada.'}, status=404)
+    from django.db.models import ProtectedError
+    try:
+        config.delete()
+    except ProtectedError:
+        config.habilitado = False
+        config.save(update_fields=['habilitado', 'actualizado_en'])
+        return JsonResponse({'success': False,
+                             'error': 'La caja ya tiene cobros registrados y no puede borrarse: quedó DESHABILITADA.'},
+                            status=400)
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_POST
+def gestion_probar_config_mp(request):
+    """POST gestion/config/probar/ — TRANSACCIÓN DE PRUEBA: crea un QR real
+    contra la caja para verificar token + external_pos_id de punta a punta
+    (admin). El correlativo parte con 'PRUEBA-' y queda excluido de las
+    alertas de huérfanas."""
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
+    config = MercadoPagoConfig.objects.select_related('sucursal').filter(
+        id=int(request.POST.get('config_id', 0) or 0)).first()
+    if not config:
+        return JsonResponse({'success': False, 'error': 'Caja no encontrada.'}, status=404)
+    try:
+        monto = max(50, int(request.POST.get('monto', 100) or 100))
+    except (TypeError, ValueError):
+        monto = 100
+    correlativo = f"PRUEBA-{timezone.now():%d%H%M%S}"
+    try:
+        transaccion, qr_data = mp.crear_orden(
+            config, correlativo, monto,
+            descripcion=f'PRUEBA caja {config.external_pos_id}', usuario=request.user,
+        )
+    except mp.MercadoPagoError as e:
+        return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
+    return JsonResponse({
+        'success': True,
+        'transaccion_id': transaccion.id,
+        'qr_base64': mp.qr_png_base64(qr_data),
+        'qr_data': qr_data,
+        'monto': monto,
+        'expira_en_segundos': mp.QR_TIMEOUT_SEGUNDOS,
+    })
+
+
+@login_required
+def gestion_resumen_dia_mp(request):
+    """GET gestion/resumen-dia/?fecha= — totales MP del día por sucursal.
+    MP no tiene cierre de lote (los pagos liquidan solos): este resumen es el
+    equivalente al 'cierre de día' de Transbank, para cuadrar e imprimir."""
+    fecha = request.GET.get('fecha') or str(timezone.localdate())
+    base = TransaccionMercadoPago.objects.filter(
+        creado_en__date=fecha,
+    ).exclude(correlativo_ticket__startswith='PRUEBA-').select_related('sucursal')
+    filas = {}
+    for t in base:
+        fila = filas.setdefault(t.sucursal.alias if t.sucursal_id else '?', {
+            'cobros': 0, 'monto': 0, 'devoluciones': 0, 'monto_devuelto': 0,
+            'comisiones': 0, 'rechazadas_expiradas': 0,
+        })
+        if t.tipo == 'VENTA' and t.estado == 'APROBADA':
+            fila['cobros'] += 1
+            fila['monto'] += t.monto
+            if t.fee_mp:
+                fila['comisiones'] += t.fee_mp
+        elif t.tipo == 'DEVOLUCION':
+            fila['devoluciones'] += 1
+            fila['monto_devuelto'] += t.monto
+        elif t.estado in ('RECHAZADA', 'EXPIRADA', 'CANCELADA'):
+            fila['rechazadas_expiradas'] += 1
+    total = {
+        'cobros': sum(f['cobros'] for f in filas.values()),
+        'monto': sum(f['monto'] for f in filas.values()),
+        'devoluciones': sum(f['devoluciones'] for f in filas.values()),
+        'monto_devuelto': sum(f['monto_devuelto'] for f in filas.values()),
+        'comisiones': sum(f['comisiones'] for f in filas.values()),
+    }
+    total['neto'] = total['monto'] - total['monto_devuelto']
+    return JsonResponse({'success': True, 'fecha': fecha,
+                         'sucursales': filas, 'total': total})
+
+
 # ==================== PANTALLA DINEROS ====================
 
 @login_required
@@ -302,8 +462,10 @@ def api_dineros_mercadopago(request):
         'depositado': _suma(depositado),
         'devuelto': _suma(base.filter(estado='DEVUELTA')),
         'contracargos': _suma(base.filter(estado='CONTRACARGO')),
-        'huerfanas': _suma(aprobadas.filter(consumida=False)),
-        'cantidad_huerfanas': aprobadas.filter(consumida=False).count(),
+        'huerfanas': _suma(aprobadas.filter(consumida=False)
+                           .exclude(correlativo_ticket__startswith='PRUEBA-')),
+        'cantidad_huerfanas': aprobadas.filter(consumida=False)
+                              .exclude(correlativo_ticket__startswith='PRUEBA-').count(),
     }
 
     por_sucursal = list(

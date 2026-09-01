@@ -526,7 +526,13 @@ from .views_mercadopago import (
     dineros_mercadopago,
     api_dineros_mercadopago,
     gestion_guardar_cuenta_mp,
+    gestion_probar_cuenta_mp,
+    gestion_eliminar_cuenta_mp,
+    gestion_listar_cajas_mp,
     gestion_guardar_config_mp,
+    gestion_eliminar_config_mp,
+    gestion_probar_config_mp,
+    gestion_resumen_dia_mp,
 )
 from .views_dashboards_kpi import (
     dashboard_documentos,
@@ -1141,7 +1147,13 @@ urlpatterns = [
     # Gestión (pestaña MP de /app/pos/transbank/) — endpoints SOLO ADMIN
     # (el gate de rol está en la vista, no en URL_PERMISO_MAP)
     path('pos/mercadopago/gestion/cuenta/', gestion_guardar_cuenta_mp, name='mp_gestion_cuenta'),
+    path('pos/mercadopago/gestion/cuenta/probar/', gestion_probar_cuenta_mp, name='mp_gestion_cuenta_probar'),
+    path('pos/mercadopago/gestion/cuenta/eliminar/', gestion_eliminar_cuenta_mp, name='mp_gestion_cuenta_eliminar'),
+    path('pos/mercadopago/gestion/cajas-mp/', gestion_listar_cajas_mp, name='mp_gestion_listar_cajas'),
     path('pos/mercadopago/gestion/config/', gestion_guardar_config_mp, name='mp_gestion_config'),
+    path('pos/mercadopago/gestion/config/eliminar/', gestion_eliminar_config_mp, name='mp_gestion_config_eliminar'),
+    path('pos/mercadopago/gestion/config/probar/', gestion_probar_config_mp, name='mp_gestion_config_probar'),
+    path('pos/mercadopago/gestion/resumen-dia/', gestion_resumen_dia_mp, name='mp_gestion_resumen_dia'),
     # Pantalla Dineros MP (pendiente de liberación / liberado / depositado)
     path('ventas/dineros-mercadopago/', dineros_mercadopago, name='dineros_mercadopago'),
     path('api/mercadopago/dineros/', api_dineros_mercadopago, name='api_dineros_mercadopago'),

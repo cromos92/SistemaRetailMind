@@ -158,6 +158,85 @@ def obtener_config(sucursal_id, requerir_habilitada=True):
     return config
 
 
+def probar_cuenta(cuenta):
+    """Prueba el access token de una cuenta contra /users/me. Devuelve datos
+    básicos del vendedor; si mp_user_id estaba vacío, lo completa solo."""
+    token = cuenta.get_access_token()
+    if not token:
+        raise MercadoPagoError('La cuenta no tiene access token guardado.')
+    try:
+        resp = requests.get(
+            MP_API_BASE + '/users/me',
+            headers={'Authorization': f'Bearer {token}'},
+            timeout=REQUEST_TIMEOUT,
+        )
+    except requests.RequestException as e:
+        raise MercadoPagoError('No se pudo contactar a Mercado Pago.', detalle=str(e))
+    try:
+        data = resp.json()
+    except ValueError:
+        data = {}
+    if resp.status_code != 200:
+        raise MercadoPagoError(
+            f'Token inválido o vencido (HTTP {resp.status_code}).',
+            detalle=data,
+        )
+    if not cuenta.mp_user_id and data.get('id'):
+        cuenta.mp_user_id = str(data['id'])[:30]
+        cuenta.save(update_fields=['mp_user_id', 'actualizado_en'])
+    return {
+        'user_id': data.get('id'),
+        'nickname': data.get('nickname'),
+        'email': data.get('email'),
+        'site': data.get('site_id'),
+    }
+
+
+def listar_cajas(cuenta):
+    """Sucursales (stores) y cajas (pos) YA CREADAS en la cuenta MP, para que
+    el admin asocie con un clic en vez de tipear external_ids a mano."""
+    token = cuenta.get_access_token()
+    if not token:
+        raise MercadoPagoError('La cuenta no tiene access token guardado.')
+    if not cuenta.mp_user_id:
+        probar_cuenta(cuenta)  # completa mp_user_id desde /users/me
+        cuenta.refresh_from_db()
+    headers = {'Authorization': f'Bearer {token}'}
+
+    def _get(path, params=None):
+        try:
+            resp = requests.get(MP_API_BASE + path, headers=headers,
+                                params=params, timeout=REQUEST_TIMEOUT)
+        except requests.RequestException as e:
+            raise MercadoPagoError('No se pudo contactar a Mercado Pago.', detalle=str(e))
+        try:
+            return resp.status_code, resp.json()
+        except ValueError:
+            return resp.status_code, {}
+
+    status_s, data_s = _get(f'/users/{cuenta.mp_user_id}/stores/search', {'limit': 50})
+    if status_s != 200:
+        raise MercadoPagoError(f'No se pudieron listar las sucursales MP (HTTP {status_s}).',
+                               detalle=data_s)
+    stores = {str(s.get('id')): s for s in (data_s.get('results') or [])}
+
+    status_p, data_p = _get('/pos', {'limit': 100})
+    if status_p != 200:
+        raise MercadoPagoError(f'No se pudieron listar las cajas MP (HTTP {status_p}).',
+                               detalle=data_p)
+
+    cajas = []
+    for pos in (data_p.get('results') or []):
+        store = stores.get(str(pos.get('store_id')), {})
+        cajas.append({
+            'caja_nombre': pos.get('name') or '',
+            'external_pos_id': pos.get('external_id') or '',
+            'store_nombre': store.get('name') or '',
+            'external_store_id': store.get('external_id') or '',
+        })
+    return cajas
+
+
 # ==================== QR (imagen) ====================
 
 def qr_png_base64(qr_data):

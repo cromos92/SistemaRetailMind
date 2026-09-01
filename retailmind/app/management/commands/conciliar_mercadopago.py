@@ -153,7 +153,7 @@ class Command(BaseCommand):
         problemas = 0
         huerfanas = TransaccionMercadoPago.objects.filter(
             tipo='VENTA', estado='APROBADA', consumida=False,
-        )
+        ).exclude(correlativo_ticket__startswith='PRUEBA-')
         for trx in huerfanas:
             problemas += 1
             self.stdout.write(self.style.WARNING(
