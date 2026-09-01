@@ -464,9 +464,14 @@ window.addEventListener('error', function (ev) {
                 }
                 return;
             }
+            // SIEMPRE los dos identificadores: AllConnected busca por ticket
+            // y cae al numero de canal. Un pedido "zombie" (RM asignó ticket
+            // pero AC nunca guardó la respuesta) tiene ticket en RM y ticket
+            // VACÍO en AC: mandando solo el ticket daba NO_ENCONTRADO aunque
+            // el código fuera correcto.
             validar({
                 numero_ticket_rm: objetivo.ticket || '',
-                numero_pedido_canal: objetivo.ticket ? '' : (objetivo.numeroCanal || ''),
+                numero_pedido_canal: objetivo.numeroCanal || '',
                 codigo: v
             });
             return;
