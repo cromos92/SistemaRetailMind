@@ -494,6 +494,12 @@ def gestion_resumen_dia_mp(request):
         creado_en__date=fecha,
     ).exclude(correlativo_ticket__startswith='PRUEBA-').select_related(
         'sucursal', 'config')
+    # Usuario normal: solo ve el cierre de SU sucursal de sesión
+    if not _es_admin(request):
+        sucursal_id = _sucursal_sesion(request)
+        if not sucursal_id:
+            return JsonResponse({'success': False, 'error': 'No hay sucursal en sesión.'}, status=400)
+        base = base.filter(sucursal_id=sucursal_id)
 
     def _canal_vacio():
         return {'cobros': 0, 'monto': 0, 'devoluciones': 0, 'monto_devuelto': 0,
@@ -543,13 +549,30 @@ def gestion_resumen_dia_mp(request):
 @require_POST
 def gestion_imprimir_cierre_terminal_mp(request):
     """POST gestion/terminal/imprimir-cierre/ — imprime el cierre del día de
-    una caja EN LA IMPRESORA de su máquina Point (API de Impresiones)."""
-    if not _es_admin(request):
-        return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
-    config = MercadoPagoConfig.objects.select_related('sucursal').filter(
-        id=int(request.POST.get('config_id', 0) or 0)).first()
-    if not config:
-        return JsonResponse({'success': False, 'error': 'Caja no encontrada.'}, status=404)
+    una caja EN LA IMPRESORA de su máquina Point (API de Impresiones).
+
+    Disponible para CUALQUIER usuario logueado (sacar el cierre es operación
+    de tienda): un no-admin queda limitado a la caja de SU sucursal de sesión;
+    el admin puede elegir caja (config_id). El ticket sale con fecha, hora y
+    el usuario responsable que lo pidió.
+    """
+    if _es_admin(request):
+        config = MercadoPagoConfig.objects.select_related('sucursal').filter(
+            id=int(request.POST.get('config_id', 0) or 0)).first()
+        if not config:
+            return JsonResponse({'success': False, 'error': 'Caja no encontrada.'}, status=404)
+    else:
+        sucursal_id = _sucursal_sesion(request)
+        if not sucursal_id:
+            return JsonResponse({'success': False, 'error': 'No hay sucursal en sesión.'}, status=400)
+        config = (MercadoPagoConfig.objects.select_related('sucursal')
+                  .filter(sucursal_id=sucursal_id, habilitado=True)
+                  .exclude(device_id='')
+                  .order_by('-es_principal', 'id').first())
+        if not config:
+            return JsonResponse({'success': False,
+                                 'error': 'Tu sucursal no tiene una caja con máquina Point asociada.'},
+                                status=404)
     if not config.device_id:
         return JsonResponse({'success': False, 'error': 'Esa caja no tiene máquina Point asociada.'}, status=400)
     fecha = request.POST.get('fecha') or str(timezone.localdate())
@@ -579,6 +602,7 @@ def gestion_imprimir_cierre_terminal_mp(request):
             canal['monto_devuelto'] += t.monto
     caja['total_neto'] = (caja['QR']['monto'] + caja['POINT']['monto']
                           - caja['QR']['monto_devuelto'] - caja['POINT']['monto_devuelto'])
+    caja['responsable'] = (request.user.get_full_name() or request.user.username)
     try:
         contenido = mp.contenido_cierre_terminal(caja, fecha)
         mp.imprimir_en_terminal(

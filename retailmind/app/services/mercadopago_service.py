@@ -435,7 +435,9 @@ def contenido_cierre_terminal(caja, fecha):
     partes.append(linea('------------------------------'))
     partes.append(linea('MP liquida solo (sin cierre'))
     partes.append(linea('de lote). Resumen NEXO.'))
-    partes.append(linea(f"Impreso: {timezone.localtime():%d/%m/%Y %H:%M}"))
+    if caja.get('responsable'):
+        partes.append(linea(f"Responsable: {caja['responsable']}"))
+    partes.append(linea(f"Fecha/hora: {timezone.localtime():%d/%m/%Y %H:%M:%S}"))
     return ''.join(partes)
 
 

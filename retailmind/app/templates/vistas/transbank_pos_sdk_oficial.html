@@ -495,7 +495,7 @@
             <label class="form-label-sm">Caja con máquina Point</label>
             <select class="form-control-sm-pos" id="mpOpCaja">
                 {% for cfg in configs_mp %}{% if cfg.device_id %}
-                <option value="{{ cfg.id }}">{{ cfg.sucursal_alias }} · {{ cfg.nombre }} ({{ cfg.external_pos_id }})</option>
+                <option value="{{ cfg.id }}" {% if cfg.sucursal_id == sucursal_sesion_id %}selected{% endif %}>{{ cfg.sucursal_alias }} · {{ cfg.nombre }} ({{ cfg.external_pos_id }})</option>
                 {% endif %}{% endfor %}
             </select>
         </div>
@@ -577,10 +577,8 @@
                 <input type="date" class="form-control-sm-pos" id="mpResumenFecha" style="max-width:150px;">
                 <button class="btn btn-sm btn-primary py-0 px-2" style="font-size:.72rem;" onclick="resumenDiaMP()"><i class="bi bi-search"></i> Ver</button>
                 <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.72rem;" onclick="imprimirResumenMP()"><i class="bi bi-printer"></i> Imprimir (PC)</button>
-                {% if es_admin_mp %}
-                <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.72rem;" title="Imprime el cierre en la impresora de la propia máquina Point (usa la caja elegida en Operación Terminal)"
+                <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.72rem;" title="Imprime el cierre en la impresora de la máquina Point ({% if es_admin_mp %}usa la caja elegida en Operación Terminal{% else %}la de tu sucursal{% endif %}) — sale con fecha, hora y responsable"
                         onclick="imprimirCierreEnMaquinaMP()"><i class="bi bi-phone-vibrate"></i> Imprimir EN la máquina</button>
-                {% endif %}
             </div>
             <div id="mpResumenBody" class="tbk-tech-body">—</div>
         </div>
@@ -1492,6 +1490,7 @@ function agregarLogTransaccion(resultado, montoEnviado) {
 // ==================== PESTAÑA MERCADO PAGO ====================
 
 var MP_ES_ADMIN = {{ es_admin_mp|yesno:"true,false" }};
+var MP_RESPONSABLE = "{{ request.user.get_full_name|default:request.user.username|escapejs }}";
 
 function _csrfMP() {
     const el = document.querySelector('#tab-mp input[name=csrfmiddlewaretoken]');
@@ -2102,18 +2101,23 @@ function resumenDiaMP() {
 }
 
 function imprimirCierreEnMaquinaMP() {
+    // Admin: usa la caja elegida en Operación Terminal. Usuario normal: no ve
+    // ese selector — el servidor resuelve la caja de SU sucursal de sesión.
     const sel = document.getElementById('mpOpCaja');
-    if (!sel || !sel.value) { Swal.fire({ icon: 'warning', title: 'No hay cajas con máquina Point', text: 'Elige la caja en "Operación Terminal".' }); return; }
+    if (MP_ES_ADMIN && (!sel || !sel.value)) {
+        Swal.fire({ icon: 'warning', title: 'No hay cajas con máquina Point', text: 'Elige la caja en "Operación Terminal".' });
+        return;
+    }
     const fecha = document.getElementById('mpResumenFecha').value || new Date().toISOString().slice(0, 10);
-    const cajaTxt = sel.options[sel.selectedIndex].text;
+    const cajaTxt = (MP_ES_ADMIN && sel && sel.value) ? sel.options[sel.selectedIndex].text : 'la máquina de tu sucursal';
     Swal.fire({
         icon: 'question', title: '¿Imprimir cierre en la máquina?',
-        html: `<div class="text-start small">Caja: ${cajaTxt}<br>Fecha: ${fecha}<br><br>El ticket saldrá por la impresora de la propia Point.</div>`,
+        html: `<div class="text-start small">Caja: ${cajaTxt}<br>Fecha: ${fecha}<br><br>El ticket saldrá por la impresora de la propia Point, con fecha, hora y responsable.</div>`,
         showCancelButton: true, confirmButtonText: '🖨 Imprimir', cancelButtonText: 'Cancelar'
     }).then(r => {
         if (!r.isConfirmed) return;
         const fd = new FormData();
-        fd.append('config_id', sel.value);
+        if (MP_ES_ADMIN && sel && sel.value) fd.append('config_id', sel.value);
         fd.append('fecha', fecha);
         fd.append('csrfmiddlewaretoken', _csrfMP());
         Swal.fire({ title: 'Enviando a la impresora…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
@@ -2141,7 +2145,7 @@ function imprimirResumenMP() {
         .text-end{text-align:right;}.text-center{text-align:center;}</style></head>
         <body><h3 style="margin:0 0 4px;">RESUMEN MERCADO PAGO</h3>
         <div>Fecha: ${fecha}</div><hr>${cuerpo}<hr>
-        <div style="font-size:10px;">MP liquida solo (sin cierre de lote). Generado ${new Date().toLocaleString('es-CL')}</div>
+        <div style="font-size:10px;">Responsable: ${MP_RESPONSABLE}<br>MP liquida solo (sin cierre de lote). Generado ${new Date().toLocaleString('es-CL')}</div>
         </body></html>`);
     w.document.close();
     w.focus();

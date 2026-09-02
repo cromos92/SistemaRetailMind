@@ -48,6 +48,15 @@ def gestion_transbank_pos_sdk(request):
     # en los endpoints de views_mercadopago, esto solo controla la UI).
     from .models import Empresa, Sucursal
     context['es_admin_mp'] = getattr(request.user, 'rol', '') in ('administrador', 'administracion')
+    # Sucursal de la sesión: preselecciona su caja en los selectores MP y es
+    # la caja que usa el cierre de un usuario no-admin
+    try:
+        context['sucursal_sesion_id'] = int(
+            request.session.get('idSucursalActual')
+            or request.session.get('sucursalActual') or 0
+        ) or None
+    except (TypeError, ValueError):
+        context['sucursal_sesion_id'] = None
     # Empresas candidatas a cuenta MP: las que tienen sucursales (dueñas de
     # tiendas). NO filtrar por esProveedor: las empresas madre de las cadenas
     # (ej. Nicole Andrea) también operan como CD/proveedoras y ese flag las
