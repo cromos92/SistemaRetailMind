@@ -857,6 +857,11 @@ def procesar_notificacion(request_id, topic, data_id, payload, headers):
             transaccion = TransaccionMercadoPago.objects.filter(order_id=str(data_id)).first()
             if transaccion:
                 transaccion = consultar_estado(transaccion, forzar=True)
+                # Estampar que la novedad llegó por webhook (consultar_estado
+                # no lo hace: es la misma función que usa el polling)
+                if transaccion and not transaccion.webhook_recibido_en:
+                    transaccion.webhook_recibido_en = timezone.now()
+                    transaccion.save(update_fields=['webhook_recibido_en', 'actualizado_en'])
         if transaccion and payment:
             estado_local = _ESTADO_DESDE_PAYMENT.get(str(payment.get('status') or '').lower())
             if estado_local:
