@@ -920,23 +920,23 @@
                                                     <small class="label-sub">Automático</small>
                                                 </button>
                                             </div>
-                                            {% if mp_habilitado %}
+                                            {% if mp_point_habilitado %}
+                                            {# Con máquina Point, ella es el botón MP principal; el QR queda escondido en Especiales #}
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-primary w-100 pos-pago-btn pos-pago-btn-lg pos-pago-btn-integrado" onclick="pagarConMercadoPagoPoint()" id="btn-mercadopago-point" title="Cobro en la máquina Point de Mercado Pago — el cliente pasa la tarjeta en el terminal (integrado vía API)">
+                                                    <span class="pos-badge-integrado">INTEGRADO</span>
+                                                    <i class="ri-smartphone-line"></i>
+                                                    <span class="label-principal">M. Pago</span>
+                                                    <small class="label-sub">Máquina Point</small>
+                                                </button>
+                                            </div>
+                                            {% elif mp_habilitado %}
                                             <div class="col-6">
                                                 <button class="btn btn-outline-info w-100 pos-pago-btn pos-pago-btn-lg pos-pago-btn-integrado" onclick="pagarConMercadoPago()" id="btn-mercadopago-qr" title="Cobro con QR Mercado Pago — el cliente escanea y paga desde su app (integrado vía API)">
                                                     <span class="pos-badge-integrado">INTEGRADO</span>
                                                     <i class="ri-qr-code-line"></i>
                                                     <span class="label-principal">MP QR</span>
                                                     <small class="label-sub">Mercado Pago</small>
-                                                </button>
-                                            </div>
-                                            {% endif %}
-                                            {% if mp_point_habilitado %}
-                                            <div class="col-6">
-                                                <button class="btn btn-outline-primary w-100 pos-pago-btn pos-pago-btn-lg pos-pago-btn-integrado" onclick="pagarConMercadoPagoPoint()" id="btn-mercadopago-point" title="Cobro en la máquina Point de Mercado Pago — el cliente pasa la tarjeta en el terminal (integrado vía API)">
-                                                    <span class="pos-badge-integrado">INTEGRADO</span>
-                                                    <i class="ri-smartphone-line"></i>
-                                                    <span class="label-principal">MP Point</span>
-                                                    <small class="label-sub">Máquina</small>
                                                 </button>
                                             </div>
                                             {% endif %}
@@ -1008,6 +1008,15 @@
                                                     <span class="fw-bold">ORDEN COMPRA</span>
                                                 </button>
                                             </div>
+                                            {% if mp_habilitado and mp_point_habilitado %}
+                                            {# QR en pantalla: uso excepcional (la máquina Point ya muestra su propio QR) #}
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-info w-100 pos-pago-btn pos-pago-btn-sm" style="border-style: dashed;" onclick="pagarConMercadoPago()" id="btnPagoMpQr" title="QR de Mercado Pago en la pantalla del computador — solo si la máquina no está disponible">
+                                                    <i class="ri-qr-code-line"></i>
+                                                    <span class="label-principal">MP QR pantalla</span>
+                                                </button>
+                                            </div>
+                                            {% endif %}
                                         </div>
 
                                         <!-- Indicador crédito activo -->
@@ -12971,6 +12980,64 @@ body {
     // habla con la API de MP: este JS solo crea la orden, muestra el QR y hace
     // polling a Django hasta estado terminal. El pago contable se registra
     // igual que TBK: push a pagosActuales y luego registrar_pagos_ticket.
+    // Estilos de los modales MP (animación de espera) — inyección única
+    (function () {
+        const css = `
+        @keyframes mpPulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.12);opacity:.6} }
+        .mp-wait-icon { font-size: 3.4rem; color: #0066FF; display: inline-block; animation: mpPulse 1.4s ease-in-out infinite; line-height: 1; }
+        .mp-wait-monto { font-size: 2rem; font-weight: 800; color: #1A1A2E; font-family: monospace; }
+        .mp-estado-line { font-size: .92rem; color: #444; min-height: 1.5em; font-weight: 600; }
+        .mp-timer { font-size: .74rem; color: #8A8A9A; font-family: monospace; }
+        .mp-exito-medio { display:inline-block; background:#e6faf5; color:#087f5b; border-radius:50px; padding:3px 12px; font-weight:700; font-size:.85rem; }`;
+        const s = document.createElement('style');
+        s.textContent = css;
+        document.head.appendChild(s);
+    })();
+
+    const _MEDIOS_MP_TXT = {
+        'debit_card': '💳 Tarjeta Débito', 'credit_card': '💳 Tarjeta Crédito',
+        'prepaid_card': '💳 Prepago', 'account_money': '📱 Dinero en cuenta MP',
+        'bank_transfer': '🏦 Transferencia'
+    };
+    function _medioTextoMP(m) { return _MEDIOS_MP_TXT[(m || '').toLowerCase()] || (m || 'Mercado Pago'); }
+
+    function _estadoTextoMP(estado, detalle) {
+        const d = (detalle || '').toLowerCase();
+        if (d.includes('at_terminal')) return '💳 En la pantalla de la máquina — esperando al cliente…';
+        if (d.includes('created')) return '📡 Conectando con Mercado Pago…';
+        if (d.includes('processing') || d.includes('action')) return '⏳ Procesando el pago…';
+        if (estado === 'PENDIENTE' || estado === 'CREADA') return '⏳ Esperando el pago…';
+        return '';
+    }
+
+    // Modal de éxito compartido QR/Point
+    function _exitoPagoMP(monto, data, canalTxt) {
+        beepAprobacionMP();
+        const nuevoSaldo = calcularSaldoPendiente();
+        const completo = nuevoSaldo <= 0;
+        Swal.fire({
+            icon: 'success',
+            title: '🎉 Pago Aprobado',
+            html: `
+                <div class="text-center mb-2">
+                    <div class="mp-wait-monto text-success">${formatearMoneda(monto)}</div>
+                    <span class="mp-exito-medio">${_medioTextoMP(data.metodo_pago_mp)}${data.ultimos_4_digitos ? ' ····' + data.ultimos_4_digitos : ''}</span>
+                </div>
+                <div class="text-start small text-muted">
+                    <div>Canal: ${canalTxt}</div>
+                    <div>Pago MP: <code>${data.payment_id || '-'}</code>${data.codigo_autorizacion ? ' · Aut: ' + data.codigo_autorizacion : ''}</div>
+                </div>
+                <hr class="my-2">
+                <h6 class="${completo ? 'text-success' : 'text-warning'} mb-0">
+                    ${completo ? '✅ Ticket completamente pagado' : '⚠️ Saldo pendiente: ' + formatearMoneda(nuevoSaldo)}
+                </h6>`,
+            confirmButtonText: completo ? 'Finalizar venta' : 'Continuar',
+            confirmButtonColor: '#00D4AA',
+            width: '440px'
+        });
+        mostrarNotificacion(completo ? 'Ticket completamente pagado' : `Pago parcial - Saldo: ${formatearMoneda(nuevoSaldo)}`, 'success');
+    }
+
     function beepAprobacionMP() {
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -13087,10 +13154,10 @@ body {
             title: 'Escanee para pagar',
             html: `
                 <div class="text-center">
-                    <p class="mb-1"><strong>Monto:</strong> <span class="fs-4 text-primary">${formatearMoneda(montoCobrar)}</span></p>
+                    <div class="mp-wait-monto mb-1">${formatearMoneda(montoCobrar)}</div>
                     ${qrHtml}
-                    <p class="small text-muted mt-2 mb-1">El cliente escanea con la app de Mercado Pago</p>
-                    <p class="small mb-0">Expira en <strong><span id="mp-countdown">${segundosRestantes}</span>s</strong></p>
+                    <div class="mp-estado-line mt-2" id="mp-qr-estado">📱 El cliente escanea con la app de Mercado Pago…</div>
+                    <div class="mp-timer">Expira en <strong><span id="mp-countdown">${segundosRestantes}</span>s</strong></div>
                 </div>
             `,
             showCancelButton: true,
@@ -13130,29 +13197,7 @@ body {
                 pagosActuales.push(pago);
                 actualizarListaPagos();
                 actualizarResumenVenta();
-                beepAprobacionMP();
-                const nuevoSaldo = calcularSaldoPendiente();
-                const ticketCompletado = nuevoSaldo <= 0;
-                Swal.fire({
-                    icon: 'success',
-                    title: '🎉 Pago Aprobado',
-                    html: `
-                        <div class="text-start">
-                            <h5 class="text-center mb-3 text-success">
-                                ${ticketCompletado ? '✅ Ticket Pagado' : `⚠️ Saldo: ${formatearMoneda(nuevoSaldo)}`}
-                            </h5>
-                            <hr>
-                            <p><strong>Monto:</strong> ${formatearMoneda(montoCobrar)}</p>
-                            <p><strong>Medio:</strong> Mercado Pago (${data.metodo_pago_mp || 'app'})</p>
-                            <p><strong>Pago MP:</strong> ${data.payment_id || '-'}</p>
-                        </div>
-                    `,
-                    confirmButtonText: 'OK'
-                });
-                mostrarNotificacion(
-                    ticketCompletado ? 'Ticket completamente pagado' : `Pago parcial - Saldo: ${formatearMoneda(nuevoSaldo)}`,
-                    'success'
-                );
+                _exitoPagoMP(montoCobrar, data, 'QR en pantalla');
             } else {
                 const titulos = {
                     'RECHAZADA': 'Pago Rechazado',
@@ -13256,14 +13301,23 @@ body {
         const transaccionId = creacion.transaccion_id;
         let finalizado = false;
         let pollTimer = null;
-        const detener = () => { if (pollTimer) clearInterval(pollTimer); pollTimer = null; };
+        let cronoTimer = null;
+        let segundos = 0;
+        const detener = () => {
+            if (pollTimer) clearInterval(pollTimer);
+            if (cronoTimer) clearInterval(cronoTimer);
+            pollTimer = null; cronoTimer = null;
+        };
 
         Swal.fire({
-            title: '📟 Cobro en la máquina',
+            title: 'Cobro en la máquina Point',
             html: `
                 <div class="text-center">
-                    <p class="mb-1"><strong>Monto:</strong> <span class="fs-4 text-primary">${formatearMoneda(montoCobrar)}</span></p>
-                    <p class="small text-muted mb-1">El cliente pasa o acerca la tarjeta en la máquina Point.</p>
+                    <div class="mp-wait-icon"><i class="ri-smartphone-line"></i></div>
+                    <div class="mp-wait-monto my-1">${formatearMoneda(montoCobrar)}</div>
+                    <div class="mp-estado-line" id="mp-live-estado">📡 Conectando con Mercado Pago…</div>
+                    <div class="mp-timer mt-1">Esperando hace <span id="mp-live-timer">0</span>s</div>
+                    <hr class="my-2">
                     <p class="small text-muted mb-0">Para abortar: botón atrás/cancelar <strong>de la máquina</strong>.</p>
                 </div>
             `,
@@ -13282,13 +13336,24 @@ body {
             }
         });
 
+        cronoTimer = setInterval(() => {
+            segundos += 1;
+            const el = document.getElementById('mp-live-timer');
+            if (el) el.textContent = segundos;
+        }, 1000);
+
         pollTimer = setInterval(async () => {
             if (finalizado) return;
             try {
                 const resp = await fetch(`/app/pos/mercadopago/estado/${transaccionId}/`);
                 const data = await resp.json();
                 if (!data.success) return;
-                if (data.estado === 'PENDIENTE' || data.estado === 'CREADA') return;
+                if (data.estado === 'PENDIENTE' || data.estado === 'CREADA') {
+                    const el = document.getElementById('mp-live-estado');
+                    const txt = _estadoTextoMP(data.estado, data.estado_detalle);
+                    if (el && txt) el.textContent = txt;
+                    return;
+                }
                 finalizado = true;
                 detener();
                 if (data.estado === 'APROBADA') {
@@ -13305,17 +13370,7 @@ body {
                     pagosActuales.push(pago);
                     actualizarListaPagos();
                     actualizarResumenVenta();
-                    beepAprobacionMP();
-                    const nuevoSaldo = calcularSaldoPendiente();
-                    Swal.fire({
-                        icon: 'success', title: '🎉 Pago Aprobado en la máquina',
-                        html: `<div class="text-start">
-                               <h5 class="text-center mb-3 text-success">${nuevoSaldo <= 0 ? '✅ Ticket Pagado' : `⚠️ Saldo: ${formatearMoneda(nuevoSaldo)}`}</h5><hr>
-                               <p><strong>Monto:</strong> ${formatearMoneda(montoCobrar)}</p>
-                               <p><strong>Medio:</strong> ${data.metodo_pago_mp || 'tarjeta'}${data.ultimos_4_digitos ? ' ****' + data.ultimos_4_digitos : ''}</p>
-                               <p><strong>Pago MP:</strong> ${data.payment_id || '-'}</p></div>`,
-                        confirmButtonText: 'OK'
-                    });
+                    _exitoPagoMP(montoCobrar, data, 'Máquina Point');
                 } else {
                     const titulos = { 'RECHAZADA': 'Pago Rechazado', 'EXPIRADA': 'Cobro Expirado',
                                       'CANCELADA': 'Cobro Cancelado', 'ERROR': 'Error en el Cobro' };
