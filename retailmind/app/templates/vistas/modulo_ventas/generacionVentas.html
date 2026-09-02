@@ -930,6 +930,16 @@
                                                 </button>
                                             </div>
                                             {% endif %}
+                                            {% if mp_point_habilitado %}
+                                            <div class="col-6">
+                                                <button class="btn btn-outline-primary w-100 pos-pago-btn pos-pago-btn-lg pos-pago-btn-integrado" onclick="pagarConMercadoPagoPoint()" id="btn-mercadopago-point" title="Cobro en la máquina Point de Mercado Pago — el cliente pasa la tarjeta en el terminal (integrado vía API)">
+                                                    <span class="pos-badge-integrado">INTEGRADO</span>
+                                                    <i class="ri-smartphone-line"></i>
+                                                    <span class="label-principal">MP Point</span>
+                                                    <small class="label-sub">Máquina</small>
+                                                </button>
+                                            </div>
+                                            {% endif %}
                                         </div>
 
                                         <!-- Grupo 2: MANUALES (digitación de voucher) -->
@@ -13182,6 +13192,140 @@ body {
             } catch (e) {
                 // Error transitorio de red: el próximo tick reintenta
             }
+        }, 2500);
+    };
+
+    // ==================== COBRO MERCADO PAGO POINT (MÁQUINA FÍSICA) ====================
+    // El cobro viaja por API a la Point (modo PDV): el cliente pasa la
+    // tarjeta en el terminal. Mismo circuito de confirmación que el QR
+    // (webhook + polling). OJO: mientras el cobro está en la pantalla de la
+    // máquina, MP no permite cancelarlo remoto — se cancela EN el terminal.
+    window.pagarConMercadoPagoPoint = async function() {
+        if (!ticketActual) {
+            Swal.fire({ icon: 'warning', title: 'Sin Ticket', text: 'Debe buscar o crear un ticket primero' });
+            return;
+        }
+        const saldoPendiente = calcularSaldoPendiente();
+        if (saldoPendiente <= 0) {
+            Swal.fire({ icon: 'info', title: 'Ticket Pagado', text: 'El ticket ya está completamente pagado' });
+            return;
+        }
+        const { value: montoCobrar } = await Swal.fire({
+            title: 'Cobro en máquina Point (Mercado Pago)',
+            html: `
+                <div class="text-start mb-3">
+                    <p><strong>Saldo pendiente:</strong> <span class="text-danger fs-5">${formatearMoneda(saldoPendiente)}</span></p>
+                    <hr><p class="text-muted small">El monto se enviará a la pantalla de la máquina:</p>
+                </div>
+                <input type="number" id="monto-mppoint-input" class="swal2-input" value="${saldoPendiente}"
+                       min="50" max="${saldoPendiente}" style="font-size:1.5rem;text-align:center;font-weight:bold;">
+            `,
+            showCancelButton: true,
+            confirmButtonText: '📟 Enviar a la máquina',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#0066FF',
+            width: '500px',
+            preConfirm: () => {
+                const monto = parseInt(document.getElementById('monto-mppoint-input').value);
+                if (!monto || monto < 50) { Swal.showValidationMessage('El monto mínimo es $50'); return false; }
+                if (monto > saldoPendiente) { Swal.showValidationMessage('No puede superar el saldo pendiente'); return false; }
+                return monto;
+            }
+        });
+        if (!montoCobrar) return;
+
+        const correlativoMP = ticketActual.es_cotizacion ? ticketActual.correlativo : ticketActual.ticket_id;
+        Swal.fire({ title: 'Enviando a la máquina…', html: '<div class="spinner-border text-primary"></div>',
+                    allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() });
+        let creacion;
+        try {
+            const resp = await fetch('/app/pos/mercadopago/qr/crear/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify({ correlativo: correlativoMP, monto: montoCobrar, canal: 'POINT' })
+            });
+            creacion = await resp.json();
+        } catch (e) {
+            creacion = { success: false, error: 'No se pudo contactar al servidor' };
+        }
+        if (!creacion || !creacion.success) {
+            Swal.fire({ icon: 'error', title: 'Mercado Pago Point', text: (creacion && creacion.error) || 'Error al enviar el cobro' });
+            return;
+        }
+
+        const transaccionId = creacion.transaccion_id;
+        let finalizado = false;
+        let pollTimer = null;
+        const detener = () => { if (pollTimer) clearInterval(pollTimer); pollTimer = null; };
+
+        Swal.fire({
+            title: '📟 Cobro en la máquina',
+            html: `
+                <div class="text-center">
+                    <p class="mb-1"><strong>Monto:</strong> <span class="fs-4 text-primary">${formatearMoneda(montoCobrar)}</span></p>
+                    <p class="small text-muted mb-1">El cliente pasa o acerca la tarjeta en la máquina Point.</p>
+                    <p class="small text-muted mb-0">Para abortar: botón atrás/cancelar <strong>de la máquina</strong>.</p>
+                </div>
+            `,
+            showCancelButton: true, showConfirmButton: false,
+            cancelButtonText: 'Cerrar (cancelar en la máquina)',
+            allowOutsideClick: false, width: '420px'
+        }).then(() => {
+            if (!finalizado) {
+                finalizado = true;
+                detener();
+                // Se intenta igual (por si aún estaba en 'created'); si ya está
+                // en pantalla, MP lo rechaza y se cancela en el terminal.
+                fetch(`/app/pos/mercadopago/cancelar/${transaccionId}/`, {
+                    method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') }
+                }).catch(() => {});
+            }
+        });
+
+        pollTimer = setInterval(async () => {
+            if (finalizado) return;
+            try {
+                const resp = await fetch(`/app/pos/mercadopago/estado/${transaccionId}/`);
+                const data = await resp.json();
+                if (!data.success) return;
+                if (data.estado === 'PENDIENTE' || data.estado === 'CREADA') return;
+                finalizado = true;
+                detener();
+                if (data.estado === 'APROBADA') {
+                    const pago = {
+                        metodo_pago: (data.metodo_pago_mp || '').includes('debit') ? 'MP_POINT_DEBITO'
+                                   : (data.metodo_pago_mp || '').includes('credit') ? 'MP_POINT_CREDITO'
+                                   : 'MP_POINT',
+                        monto: montoCobrar,
+                        tipo_tarjeta: data.metodo_pago_mp || 'MERCADO PAGO POINT',
+                        voucher: data.payment_id || '',
+                        notas: `MP Point Aut: ${data.codigo_autorizacion || '-'}${data.ultimos_4_digitos ? ' | ****' + data.ultimos_4_digitos : ''}`,
+                        origen_pago: 'POS_INTEGRADO'
+                    };
+                    pagosActuales.push(pago);
+                    actualizarListaPagos();
+                    actualizarResumenVenta();
+                    beepAprobacionMP();
+                    const nuevoSaldo = calcularSaldoPendiente();
+                    Swal.fire({
+                        icon: 'success', title: '🎉 Pago Aprobado en la máquina',
+                        html: `<div class="text-start">
+                               <h5 class="text-center mb-3 text-success">${nuevoSaldo <= 0 ? '✅ Ticket Pagado' : `⚠️ Saldo: ${formatearMoneda(nuevoSaldo)}`}</h5><hr>
+                               <p><strong>Monto:</strong> ${formatearMoneda(montoCobrar)}</p>
+                               <p><strong>Medio:</strong> ${data.metodo_pago_mp || 'tarjeta'}${data.ultimos_4_digitos ? ' ****' + data.ultimos_4_digitos : ''}</p>
+                               <p><strong>Pago MP:</strong> ${data.payment_id || '-'}</p></div>`,
+                        confirmButtonText: 'OK'
+                    });
+                } else {
+                    const titulos = { 'RECHAZADA': 'Pago Rechazado', 'EXPIRADA': 'Cobro Expirado',
+                                      'CANCELADA': 'Cobro Cancelado', 'ERROR': 'Error en el Cobro' };
+                    Swal.fire({
+                        icon: 'error', title: titulos[data.estado] || 'Cobro no completado',
+                        text: data.estado_detalle || 'El pago no se concretó en la máquina.',
+                        showCancelButton: true, confirmButtonText: '🔁 Reintentar', cancelButtonText: 'Cerrar'
+                    }).then(r => { if (r.isConfirmed) window.pagarConMercadoPagoPoint(); });
+                }
+            } catch (e) { /* siguiente tick */ }
         }, 2500);
     };
 

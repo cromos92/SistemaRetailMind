@@ -298,15 +298,17 @@ def asignar_external_ids(cuenta, pos_id, store_id, external_store_id, external_p
 
 
 def listar_devices_point(cuenta):
-    """Máquinas Point de la cuenta (GET /point/integration-api/devices):
-    id del device y su operating_mode (PDV = esclava del sistema,
-    STANDALONE = cobra sola desde su pantalla)."""
+    """Máquinas Point de la cuenta vía la API NUEVA de terminales
+    (GET /terminals/v1/list — la legacy point/integration-api devuelve 403
+    'site id is not valid' para Chile; comprobado en vivo). Devuelve id,
+    operating_mode (PDV = esclava del sistema / STANDALONE = cobra sola),
+    y la caja/sucursal a la que está vinculada."""
     token = cuenta.get_access_token()
     if not token:
         raise MercadoPagoError('La cuenta no tiene access token guardado.')
     try:
         resp = requests.get(
-            MP_API_BASE + '/point/integration-api/devices',
+            MP_API_BASE + '/terminals/v1/list',
             headers={'Authorization': f'Bearer {token}'},
             params={'limit': 50}, timeout=REQUEST_TIMEOUT,
         )
@@ -321,18 +323,20 @@ def listar_devices_point(cuenta):
             f'No se pudieron listar las máquinas Point (HTTP {resp.status_code}).',
             detalle=data,
         )
+    terminales = ((data.get('data') or {}).get('terminals')) or []
     return [{
-        'device_id': d.get('id'),
-        'operating_mode': d.get('operating_mode'),
-        'pos_id': d.get('pos_id'),
-        'store_id': d.get('store_id'),
-    } for d in (data.get('devices') or [])]
+        'device_id': t.get('id'),
+        'operating_mode': t.get('operating_mode'),
+        'pos_id': t.get('pos_id'),
+        'store_id': t.get('store_id'),
+        'external_pos_id': t.get('external_pos_id') or '',
+    } for t in terminales]
 
 
 def cambiar_modo_device(cuenta, device_id, modo):
-    """Cambia el operating_mode de una Point (PATCH
-    /point/integration-api/devices/{id}). PDV la deja esclava del sistema
-    (no acepta cobros digitados en su pantalla); STANDALONE la libera."""
+    """Cambia el operating_mode de una Point vía la API nueva
+    (PATCH /terminals/v1/setup — la legacy no soporta Chile). PDV la deja
+    esclava del sistema; STANDALONE la libera para cobrar sola."""
     if modo not in ('PDV', 'STANDALONE'):
         raise MercadoPagoError('Modo inválido (PDV o STANDALONE).')
     token = cuenta.get_access_token()
@@ -340,10 +344,11 @@ def cambiar_modo_device(cuenta, device_id, modo):
         raise MercadoPagoError('La cuenta no tiene access token guardado.')
     try:
         resp = requests.patch(
-            MP_API_BASE + f'/point/integration-api/devices/{device_id}',
+            MP_API_BASE + '/terminals/v1/setup',
             headers={'Authorization': f'Bearer {token}',
                      'Content-Type': 'application/json'},
-            json={'operating_mode': modo}, timeout=REQUEST_TIMEOUT,
+            json={'terminals': [{'id': device_id, 'operating_mode': modo}]},
+            timeout=REQUEST_TIMEOUT,
         )
     except requests.RequestException as e:
         raise MercadoPagoError('No se pudo contactar a Mercado Pago.', detalle=str(e))
@@ -355,7 +360,10 @@ def cambiar_modo_device(cuenta, device_id, modo):
         mensaje = data.get('message') or f'HTTP {resp.status_code}'
         raise MercadoPagoError(f'MP rechazó el cambio de modo: {mensaje}', detalle=data)
     logger.info(f"MP: device {device_id} -> modo {modo}")
-    return data.get('operating_mode') or modo
+    resultado = ((data.get('data') or {}).get('terminals')) or []
+    if resultado and resultado[0].get('operating_mode'):
+        return resultado[0]['operating_mode']
+    return modo
 
 
 # ==================== QR (imagen) ====================
@@ -393,31 +401,55 @@ def crear_orden(config, correlativo, monto, descripcion='', canal='QR', usuario=
     monto = int(monto)
     if monto <= 0:
         raise MercadoPagoError('El monto a cobrar debe ser mayor que cero.')
-    if canal != 'QR':
-        raise MercadoPagoError('Canal Point aún no habilitado (Fase 5 del plan).')
-    if not config.external_pos_id:
+    canal = (canal or 'QR').upper()
+    if canal not in ('QR', 'POINT'):
+        raise MercadoPagoError('Canal inválido (QR o POINT).')
+    if canal == 'QR' and not config.external_pos_id:
         raise MercadoPagoError('La configuración MP de la sucursal no tiene caja (external_pos_id).')
+    if canal == 'POINT' and not config.device_id:
+        raise MercadoPagoError('La caja no tiene una máquina Point asociada (device). '
+                               'Asóciala en la pestaña Mercado Pago (requiere la máquina en modo PDV).')
 
     external_reference = f"RM-{config.sucursal_id}-{correlativo}-{uuid.uuid4().hex[:8]}"
-    # Payload mínimo del create-order QR. OJO: la Orders API presencial
-    # rechaza propiedades extra con 'unsupported_properties' (processing_mode,
-    # p.ej., es de pagos online y NO va aquí — comprobado contra prod CL).
-    body = {
-        'type': 'qr',
-        'external_reference': external_reference,
-        'description': (descripcion or f'Venta {correlativo}')[:120],
-        'expiration_time': f'PT{QR_TIMEOUT_SEGUNDOS}S',
-        'total_amount': str(monto),
-        'config': {
-            'qr': {
-                'external_pos_id': config.external_pos_id,
-                'mode': 'dynamic',
-            }
-        },
-        'transactions': {
-            'payments': [{'amount': str(monto)}],
-        },
-    }
+    # Payload mínimo del create-order. OJO: la Orders API presencial rechaza
+    # propiedades extra con 'unsupported_properties' (processing_mode, p.ej.,
+    # es de pagos online y NO va aquí — comprobado contra prod CL). El
+    # auto-reintento de abajo quita lo que MP no acepte.
+    if canal == 'POINT':
+        # El cobro viaja a la máquina Point (modo PDV): el cliente pasa la
+        # tarjeta en el terminal. PROBADO EN VIVO contra una Point Smart 2 CL:
+        # total_amount en la raíz NO va (unsupported_properties) — el monto
+        # vive solo en transactions.payments.
+        body = {
+            'type': 'point',
+            'external_reference': external_reference,
+            'description': (descripcion or f'Venta {correlativo}')[:120],
+            'config': {
+                'point': {
+                    'terminal_id': config.device_id,
+                }
+            },
+            'transactions': {
+                'payments': [{'amount': str(monto)}],
+            },
+        }
+    else:
+        body = {
+            'type': 'qr',
+            'external_reference': external_reference,
+            'description': (descripcion or f'Venta {correlativo}')[:120],
+            'expiration_time': f'PT{QR_TIMEOUT_SEGUNDOS}S',
+            'total_amount': str(monto),
+            'config': {
+                'qr': {
+                    'external_pos_id': config.external_pos_id,
+                    'mode': 'dynamic',
+                }
+            },
+            'transactions': {
+                'payments': [{'amount': str(monto)}],
+            },
+        }
 
     def _crear(cuerpo, sufijo=''):
         resp = _request(config, 'POST', '/v1/orders', json_body=cuerpo,
@@ -431,10 +463,18 @@ def crear_orden(config, correlativo, monto, descripcion='', canal='QR', usuario=
         # reintentar UNA vez (la API cambia el contrato entre sitios/versiones).
         detalle = e.detalle if isinstance(e.detalle, dict) else {}
         props = []
+        import re as _re
         for err in (detalle.get('errors') or []):
             if isinstance(err, dict) and err.get('code') == 'unsupported_properties':
                 for d in (err.get('details') or []):
-                    props.append(str(d).lstrip('$.').split('.')[0].strip())
+                    texto = str(d)
+                    # Dos formatos reales: "campo" a secas, o
+                    # "additionalProperties '$.campo' not allowed"
+                    encontrados = _re.findall(r'\$\.(\w+)', texto)
+                    if encontrados:
+                        props.extend(encontrados)
+                    else:
+                        props.append(texto.split('.')[0].strip())
         props = [p for p in props if p and p in body and p not in ('type', 'transactions', 'config')]
         if not props:
             raise
@@ -443,16 +483,18 @@ def crear_orden(config, correlativo, monto, descripcion='', canal='QR', usuario=
         data = _crear(body_min, sufijo='-r')
 
     qr_data = (data.get('type_response') or {}).get('qr_data') or data.get('qr_data')
-    if not qr_data:
+    if canal == 'QR' and not qr_data:
         logger.error(f"MP: orden creada sin qr_data: {json.dumps(data)[:500]}")
         raise MercadoPagoError('Mercado Pago no devolvió el QR. Reintente.', detalle=data)
+    if canal == 'POINT':
+        qr_data = None  # el cobro está EN la máquina, no hay QR que mostrar
 
     transaccion = TransaccionMercadoPago.objects.create(
         config=config,
         sucursal_id=config.sucursal_id,
         correlativo_ticket=str(correlativo),
         tipo='VENTA',
-        canal='QR',
+        canal=canal,
         external_reference=external_reference,
         order_id=str(data.get('id') or ''),
         monto=monto,
@@ -559,6 +601,10 @@ def consultar_estado(transaccion, forzar=False):
 
 
 def cancelar(transaccion):
+    """Cancela el cobro. NUNCA debe fallar hacia el cajero salvo un caso: que
+    el cliente haya alcanzado a pagar (ahí corresponde devolución). Cualquier
+    otro rechazo de MP (orden ya expirada/cancelada/inexistente) se resuelve
+    cerrando la transacción local — la orden en MP expira sola igual."""
     if transaccion.estado == 'APROBADA':
         raise MercadoPagoError('El pago ya fue aprobado: corresponde devolución, no cancelación.')
     if transaccion.estado in ESTADOS_FINALES_MP:
@@ -569,12 +615,29 @@ def cancelar(transaccion):
                             idempotency_key=f'{transaccion.external_reference}-cancel')
             _json_o_error(resp, f'cancelar orden {transaccion.order_id}')
         except MercadoPagoError as e:
-            # Si MP dice que ya está pagada, el próximo polling la aprobará
-            logger.warning(f"MP: cancelar {transaccion.external_reference} falló: {e.mensaje}")
-            actualizada = consultar_estado(transaccion, forzar=True)
+            logger.warning(f"MP: cancelar {transaccion.external_reference} rechazado: {e.mensaje}")
+            # Point en pantalla: MP NO permite cancelar por API mientras la
+            # orden está 'at_terminal' (probado en vivo, 409 cannot_cancel).
+            # Se cancela EN la máquina; no marcar cancelada local mientras
+            # la pantalla siga mostrando el cobro.
+            if transaccion.canal == 'POINT' and 'cannot_cancel' in str(e.detalle):
+                raise MercadoPagoError(
+                    'Cancela el cobro EN LA MÁQUINA (botón atrás/cancelar del '
+                    'terminal): mientras está en su pantalla, MP no permite '
+                    'cancelarlo remoto.')
+            # ¿Alcanzó a pagar? Es lo ÚNICO que justifica no cancelar.
+            try:
+                actualizada = consultar_estado(transaccion, forzar=True)
+            except Exception:  # noqa: BLE001 — sin red igual cerramos local
+                actualizada = transaccion
             if actualizada.estado == 'APROBADA':
                 raise MercadoPagoError('El cliente alcanzó a pagar: el cobro quedó APROBADO.')
-            raise
+            if actualizada.estado in ESTADOS_FINALES_MP:
+                return actualizada
+            # MP no dejó cancelar pero tampoco está pagada (p.ej. ya expiró en
+            # MP y el cancel devuelve 4xx): cerrar local y dejar que expire.
+            return _aplicar_estado(transaccion, 'CANCELADA',
+                                   detalle=f'Cancelada local ({e.mensaje[:80]})')
     return _aplicar_estado(transaccion, 'CANCELADA', detalle='Cancelada desde el POS')
 
 

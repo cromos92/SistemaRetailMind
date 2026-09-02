@@ -62,10 +62,11 @@ def crear_pago_qr_mp(request):
     except (TypeError, ValueError):
         return Response({'success': False, 'error': 'Monto inválido'},
                         status=status.HTTP_400_BAD_REQUEST)
+    canal = str(request.data.get('canal') or 'QR').upper()
     try:
         config = mp.obtener_config(sucursal_id)
         transaccion, qr_data = mp.crear_orden(
-            config, correlativo, monto,
+            config, correlativo, monto, canal=canal,
             descripcion=f'Venta {correlativo}', usuario=request.user,
         )
     except MercadoPagoError as e:
@@ -74,9 +75,10 @@ def crear_pago_qr_mp(request):
     return Response({
         'success': True,
         'transaccion_id': transaccion.id,
+        'canal': canal,
         'external_reference': transaccion.external_reference,
         'qr_data': qr_data,
-        'qr_base64': mp.qr_png_base64(qr_data),
+        'qr_base64': mp.qr_png_base64(qr_data) if qr_data else None,
         'expira_en_segundos': mp.QR_TIMEOUT_SEGUNDOS,
     })
 
@@ -238,7 +240,9 @@ def gestion_guardar_config_mp(request):
     config.external_store_id = (request.POST.get('external_store_id') or '').strip()[:60]
     config.external_pos_id = (request.POST.get('external_pos_id') or '').strip()[:60]
     config.habilitado = request.POST.get('habilitado') == '1'
-    config.modo = 'QR'
+    config.device_id = (request.POST.get('device_id') or '').strip()[:60]
+    # Con máquina Point asociada la caja puede cobrar por ambos canales
+    config.modo = 'AMBOS' if config.device_id else 'QR'
     # Primera caja de la sucursal = principal; si ya hay otra principal se respeta
     if not MercadoPagoConfig.objects.filter(sucursal=sucursal, es_principal=True).exclude(id=config.id).exists():
         config.es_principal = True
@@ -274,6 +278,7 @@ def gestion_datos_mp(request):
         'nombre': cfg.nombre,
         'external_store_id': cfg.external_store_id,
         'external_pos_id': cfg.external_pos_id,
+        'device_id': cfg.device_id,
         'habilitado': cfg.habilitado,
         'es_principal': cfg.es_principal,
     } for cfg in MercadoPagoConfig.objects.select_related('sucursal').order_by('sucursal__alias', 'nombre')]
@@ -451,10 +456,11 @@ def gestion_probar_config_mp(request):
         monto = max(50, int(request.POST.get('monto', 100) or 100))
     except (TypeError, ValueError):
         monto = 100
+    canal = (request.POST.get('canal') or 'QR').strip().upper()
     correlativo = f"PRUEBA-{timezone.now():%d%H%M%S}"
     try:
         transaccion, qr_data = mp.crear_orden(
-            config, correlativo, monto,
+            config, correlativo, monto, canal=canal,
             descripcion=f'PRUEBA caja {config.external_pos_id}', usuario=request.user,
         )
     except mp.MercadoPagoError as e:
@@ -469,7 +475,8 @@ def gestion_probar_config_mp(request):
     return JsonResponse({
         'success': True,
         'transaccion_id': transaccion.id,
-        'qr_base64': mp.qr_png_base64(qr_data),
+        'canal': canal,
+        'qr_base64': mp.qr_png_base64(qr_data) if qr_data else None,
         'qr_data': qr_data,
         'monto': monto,
         'expira_en_segundos': mp.QR_TIMEOUT_SEGUNDOS,
@@ -478,39 +485,97 @@ def gestion_probar_config_mp(request):
 
 @login_required
 def gestion_resumen_dia_mp(request):
-    """GET gestion/resumen-dia/?fecha= — totales MP del día por sucursal.
-    MP no tiene cierre de lote (los pagos liquidan solos): este resumen es el
-    equivalente al 'cierre de día' de Transbank, para cuadrar e imprimir."""
+    """GET gestion/resumen-dia/?fecha= — CIERRE del día POR CAJA/TERMINAL con
+    desglose de canal (QR vs máquina Point). MP no tiene cierre de lote (los
+    pagos liquidan solos): este resumen es el equivalente al cierre de
+    Transbank, pensado para cuadrar e imprimir por máquina."""
     fecha = request.GET.get('fecha') or str(timezone.localdate())
     base = TransaccionMercadoPago.objects.filter(
         creado_en__date=fecha,
-    ).exclude(correlativo_ticket__startswith='PRUEBA-').select_related('sucursal')
-    filas = {}
+    ).exclude(correlativo_ticket__startswith='PRUEBA-').select_related(
+        'sucursal', 'config')
+
+    def _canal_vacio():
+        return {'cobros': 0, 'monto': 0, 'devoluciones': 0, 'monto_devuelto': 0,
+                'comisiones': 0, 'rechazadas': 0}
+
+    cajas = {}
     for t in base:
-        fila = filas.setdefault(t.sucursal.alias if t.sucursal_id else '?', {
-            'cobros': 0, 'monto': 0, 'devoluciones': 0, 'monto_devuelto': 0,
-            'comisiones': 0, 'rechazadas_expiradas': 0,
+        key = t.config_id
+        caja = cajas.setdefault(key, {
+            'caja': t.config.nombre if t.config_id else '?',
+            'sucursal': t.sucursal.alias if t.sucursal_id else '?',
+            'external_pos_id': t.config.external_pos_id if t.config_id else '',
+            'device': t.config.device_id if t.config_id else '',
+            'QR': _canal_vacio(), 'POINT': _canal_vacio(),
         })
+        canal = caja.get(t.canal) or caja['QR']
         if t.tipo == 'VENTA' and t.estado == 'APROBADA':
-            fila['cobros'] += 1
-            fila['monto'] += t.monto
+            canal['cobros'] += 1
+            canal['monto'] += t.monto
             if t.fee_mp:
-                fila['comisiones'] += t.fee_mp
+                canal['comisiones'] += t.fee_mp
         elif t.tipo == 'DEVOLUCION':
-            fila['devoluciones'] += 1
-            fila['monto_devuelto'] += t.monto
-        elif t.estado in ('RECHAZADA', 'EXPIRADA', 'CANCELADA'):
-            fila['rechazadas_expiradas'] += 1
-    total = {
-        'cobros': sum(f['cobros'] for f in filas.values()),
-        'monto': sum(f['monto'] for f in filas.values()),
-        'devoluciones': sum(f['devoluciones'] for f in filas.values()),
-        'monto_devuelto': sum(f['monto_devuelto'] for f in filas.values()),
-        'comisiones': sum(f['comisiones'] for f in filas.values()),
-    }
+            canal['devoluciones'] += 1
+            canal['monto_devuelto'] += t.monto
+        elif t.estado in ('RECHAZADA', 'EXPIRADA', 'CANCELADA', 'ERROR'):
+            canal['rechazadas'] += 1
+
+    total = _canal_vacio()
+    for caja in cajas.values():
+        for canal in ('QR', 'POINT'):
+            for k in total:
+                total[k] += caja[canal][k]
+        caja['total_monto'] = caja['QR']['monto'] + caja['POINT']['monto']
+        caja['total_neto'] = (caja['total_monto']
+                              - caja['QR']['monto_devuelto']
+                              - caja['POINT']['monto_devuelto'])
     total['neto'] = total['monto'] - total['monto_devuelto']
     return JsonResponse({'success': True, 'fecha': fecha,
-                         'sucursales': filas, 'total': total})
+                         'cajas': list(cajas.values()), 'total': total})
+
+
+@login_required
+@require_POST
+def gestion_cobrar_terminal_mp(request):
+    """POST gestion/terminal/cobrar/ — COBRO DIRECTO en la máquina Point desde
+    la pestaña de gestión (admin). ⚠️ No queda asociado a un ticket: para
+    ventas normales se usa el POS; esto sirve para cobros sueltos/soporte.
+    Correlativo DIRECTO-* — visible en Dineros y en el resumen por terminal."""
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
+    config = MercadoPagoConfig.objects.select_related('sucursal').filter(
+        id=int(request.POST.get('config_id', 0) or 0)).first()
+    if not config:
+        return JsonResponse({'success': False, 'error': 'Caja no encontrada.'}, status=404)
+    if not config.device_id:
+        return JsonResponse({'success': False, 'error': 'Esa caja no tiene máquina Point asociada.'}, status=400)
+    try:
+        monto = int(request.POST.get('monto', 0) or 0)
+    except (TypeError, ValueError):
+        monto = 0
+    if monto < 50:
+        return JsonResponse({'success': False, 'error': 'Monto mínimo $50.'}, status=400)
+    correlativo = f"DIRECTO-{timezone.now():%d%m-%H%M%S}"
+    try:
+        transaccion, _qr = mp.crear_orden(
+            config, correlativo, monto, canal='POINT',
+            descripcion=f'Cobro directo terminal {config.external_pos_id}',
+            usuario=request.user,
+        )
+    except mp.MercadoPagoError as e:
+        detalle = ''
+        try:
+            detalle = json.dumps(e.detalle, ensure_ascii=False)[:800] if e.detalle else ''
+        except (TypeError, ValueError):
+            detalle = str(e.detalle)[:800]
+        return JsonResponse({'success': False, 'error': e.mensaje, 'detalle': detalle}, status=400)
+    logger.warning("MP gestión: COBRO DIRECTO $%s en terminal %s por %s (%s)",
+                   monto, config.device_id, request.user.username, correlativo)
+    return JsonResponse({'success': True, 'transaccion_id': transaccion.id,
+                         'canal': 'POINT', 'monto': monto,
+                         'correlativo': correlativo,
+                         'expira_en_segundos': mp.QR_TIMEOUT_SEGUNDOS})
 
 
 # ==================== PANTALLA DINEROS ====================

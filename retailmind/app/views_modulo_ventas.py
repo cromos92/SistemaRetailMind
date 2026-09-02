@@ -1751,11 +1751,15 @@ def pos_dashboard(request):
     # la sucursal tiene config habilitada (a diferencia del botón TBK, que se
     # renderiza incondicionalmente por razones históricas).
     mp_habilitado = False
+    mp_point_habilitado = False
     if sucursal_id:
         from .models import MercadoPagoConfig
-        mp_habilitado = MercadoPagoConfig.objects.filter(
+        _cfg_mp = MercadoPagoConfig.objects.filter(
             sucursal_id=sucursal_id, habilitado=True
-        ).exists()
+        ).order_by('-es_principal', 'id').first()
+        mp_habilitado = _cfg_mp is not None
+        # Botón "MP Point" solo si la caja tiene una máquina asociada
+        mp_point_habilitado = bool(_cfg_mp and _cfg_mp.device_id)
 
     context = {
         'metodo_pago_choices': METODO_PAGO_TICKET_CHOICES,
@@ -1764,6 +1768,7 @@ def pos_dashboard(request):
         'limite_descuento_rol': limite_descuento_rol,
         'es_admin': es_admin,
         'mp_habilitado': mp_habilitado,
+        'mp_point_habilitado': mp_point_habilitado,
         'qz_config': _get_qz_config(sucursal_id),
     }
     return render(request, 'vistas/modulo_ventas/generacionVentas.html', context)

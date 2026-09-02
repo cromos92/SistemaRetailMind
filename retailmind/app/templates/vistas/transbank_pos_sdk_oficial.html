@@ -485,6 +485,36 @@
 </div>
 {% endif %}
 
+{% if es_admin_mp %}
+<!-- Operación PDV: cobrar directo en la máquina Point -->
+<div class="tbk-card" style="border-left:4px solid var(--tbk-primary);">
+    <h6><i class="bi bi-lightning-charge-fill"></i> Operación Terminal (PDV) — cobrar en la máquina<span class="mp-chip-admin">SOLO ADMIN</span></h6>
+    <hr>
+    <div class="d-flex flex-wrap align-items-end gap-2">
+        <div style="min-width:220px;">
+            <label class="form-label-sm">Caja con máquina Point</label>
+            <select class="form-control-sm-pos" id="mpOpCaja">
+                {% for cfg in configs_mp %}{% if cfg.device_id %}
+                <option value="{{ cfg.id }}">{{ cfg.sucursal_alias }} · {{ cfg.nombre }} ({{ cfg.external_pos_id }})</option>
+                {% endif %}{% endfor %}
+            </select>
+        </div>
+        <div style="width:140px;">
+            <label class="form-label-sm">Monto CLP</label>
+            <input type="number" class="form-control-sm-pos" id="mpOpMonto" min="50" placeholder="0">
+        </div>
+        <button class="tbk-btn tbk-btn-primary" style="width:auto; padding:6px 16px;" onclick="cobrarTerminalMP()">
+            <i class="bi bi-credit-card"></i> Cobrar en terminal
+        </button>
+        <span class="tbk-tech-body" style="max-width:380px;">
+            ⚠️ Cobro suelto SIN ticket (no entra a la cuadratura de tickets; queda
+            como <code>DIRECTO-*</code> en Dineros y en el resumen por terminal).
+            Para ventas normales usar el botón MP Point del POS.
+        </span>
+    </div>
+</div>
+{% endif %}
+
 <div class="row g-2">
     <!-- Col 1: Webhook -->
     <div class="col-md-4">
@@ -538,10 +568,11 @@
         </div>
 
         <div class="tbk-card">
-            <h6><i class="bi bi-receipt-cutoff"></i> Resumen del día (equivale al cierre)</h6>
+            <h6><i class="bi bi-receipt-cutoff"></i> Cierre / Resumen por terminal</h6>
             <hr>
-            <p class="tbk-tech-body mb-1">Mercado Pago no tiene "cierre de lote" como
-            Transbank: los pagos liquidan solos. Este resumen es el cierre del día.</p>
+            <p class="tbk-tech-body mb-1">MP no tiene cierre de lote (los pagos liquidan
+            solos): este es el cierre del día <strong>por caja/terminal</strong>, con
+            desglose QR vs máquina Point. Imprimible por máquina.</p>
             <div class="d-flex gap-1 mb-2">
                 <input type="date" class="form-control-sm-pos" id="mpResumenFecha" style="max-width:150px;">
                 <button class="btn btn-sm btn-primary py-0 px-2" style="font-size:.72rem;" onclick="resumenDiaMP()"><i class="bi bi-search"></i> Ver</button>
@@ -596,14 +627,14 @@
                 <tbody id="mpConfigsBody">
                 {% for cfg in configs_mp %}
                     <tr {% if es_admin_mp %}style="cursor:pointer;" title="Clic para editar"
-                        onclick="editarConfigMP({{ cfg.id }}, {{ cfg.sucursal_id }}, '{{ cfg.nombre|escapejs }}', '{{ cfg.external_store_id|escapejs }}', '{{ cfg.external_pos_id|escapejs }}', {{ cfg.habilitado|yesno:'true,false' }}){% endif %}">
-                        <td>{{ cfg.sucursal_alias }}{% if cfg.es_principal %} ⭐{% endif %}</td>
+                        onclick="editarConfigMP({{ cfg.id }}, {{ cfg.sucursal_id }}, '{{ cfg.nombre|escapejs }}', '{{ cfg.external_store_id|escapejs }}', '{{ cfg.external_pos_id|escapejs }}', {{ cfg.habilitado|yesno:'true,false' }}, '{{ cfg.device_id|escapejs }}'){% endif %}">
+                        <td>{{ cfg.sucursal_alias }}{% if cfg.es_principal %} ⭐{% endif %}{% if cfg.device_id %} <i class="bi bi-phone" title="Con máquina Point asociada"></i>{% endif %}</td>
                         <td class="font-monospace">{{ cfg.external_pos_id|default:'—' }}</td>
                         <td class="text-center">{% if cfg.habilitado %}✅{% else %}❌{% endif %}</td>
                         {% if es_admin_mp %}
                         <td class="text-center text-nowrap">
                             <button class="btn btn-sm btn-outline-success py-0 px-1" style="font-size:.68rem;" title="Transacción de PRUEBA: genera un QR real contra esta caja"
-                                    onclick="event.stopPropagation(); probarConfigMP({{ cfg.id }}, '{{ cfg.sucursal_alias|escapejs }}')"><i class="bi bi-qr-code-scan"></i></button>
+                                    onclick="event.stopPropagation(); probarConfigMP({{ cfg.id }}, '{{ cfg.sucursal_alias|escapejs }}', {{ cfg.device_id|yesno:'true,false' }})"><i class="bi bi-qr-code-scan"></i></button>
                             <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:.68rem;" title="Eliminar asociación"
                                     onclick="event.stopPropagation(); eliminarConfigMP({{ cfg.id }}, '{{ cfg.sucursal_alias|escapejs }}')"><i class="bi bi-trash"></i></button>
                         </td>
@@ -631,7 +662,13 @@
             <label class="form-label-sm">external_store_id (sucursal en MP)</label>
             <input type="text" class="form-control-sm-pos mb-2" id="mpCfgStore" placeholder="RETAIL-SUC5">
             <label class="form-label-sm">external_pos_id (caja en MP)</label>
-            <input type="text" class="form-control-sm-pos mb-2" id="mpCfgPos" placeholder="RETAIL-SUC5-CAJA1">
+            <input type="text" class="form-control-sm-pos mb-2" id="mpCfgPos" placeholder="REALSPORTCAJA1">
+            <label class="form-label-sm">Máquina Point (opcional — habilita el botón "MP Point" del POS)</label>
+            <div class="d-flex gap-1 mb-2">
+                <input type="text" class="form-control-sm-pos" id="mpCfgDevice" placeholder="vacío = solo QR">
+                <button class="btn btn-sm btn-outline-secondary py-0 px-2" type="button" style="font-size:.72rem;"
+                        title="Elegir de las máquinas Point de la cuenta" onclick="elegirDeviceMP()"><i class="bi bi-phone"></i></button>
+            </div>
             <div class="form-check mb-2" style="font-size:.76rem;">
                 <input class="form-check-input" type="checkbox" id="mpCfgHabilitado">
                 <label class="form-check-label" for="mpCfgHabilitado">Habilitada (muestra el botón MP QR en el POS)</label>
@@ -1529,8 +1566,8 @@ function _renderConfigsMP(configs) {
 function configAccionMP(i, accion) {
     const cfg = (window.__mpConfigs || [])[i];
     if (!cfg) return;
-    if (accion === 'editar') editarConfigMP(cfg.id, cfg.sucursal_id, cfg.nombre, cfg.external_store_id, cfg.external_pos_id, cfg.habilitado);
-    else if (accion === 'probar') probarConfigMP(cfg.id, cfg.sucursal_alias);
+    if (accion === 'editar') editarConfigMP(cfg.id, cfg.sucursal_id, cfg.nombre, cfg.external_store_id, cfg.external_pos_id, cfg.habilitado, cfg.device_id);
+    else if (accion === 'probar') probarConfigMP(cfg.id, cfg.sucursal_alias, !!cfg.device_id);
     else if (accion === 'eliminar') eliminarConfigMP(cfg.id, cfg.sucursal_alias);
 }
 
@@ -1586,11 +1623,12 @@ function guardarConfigMP() {
         nombre: document.getElementById('mpCfgNombre').value.trim() || 'Caja principal',
         external_store_id: document.getElementById('mpCfgStore').value.trim(),
         external_pos_id: document.getElementById('mpCfgPos').value.trim(),
+        device_id: document.getElementById('mpCfgDevice').value.trim(),
         habilitado: document.getElementById('mpCfgHabilitado').checked ? '1' : '0'
     }, 'Asociación de caja guardada');
 }
 
-function editarConfigMP(id, sucursalId, nombre, storeId, posId, habilitado) {
+function editarConfigMP(id, sucursalId, nombre, storeId, posId, habilitado, deviceId) {
     document.getElementById('mpCfgId').value = id;
     document.getElementById('mpCfgSucursal').value = sucursalId;
     // Con Select2 activo hay que notificar el cambio para que se pinte
@@ -1600,6 +1638,7 @@ function editarConfigMP(id, sucursalId, nombre, storeId, posId, habilitado) {
     document.getElementById('mpCfgNombre').value = nombre;
     document.getElementById('mpCfgStore').value = storeId;
     document.getElementById('mpCfgPos').value = posId;
+    document.getElementById('mpCfgDevice').value = deviceId || '';
     document.getElementById('mpCfgHabilitado').checked = habilitado;
     document.getElementById('tab-mp-btn').click();
 }
@@ -1609,7 +1648,56 @@ function limpiarFormConfigMP() {
     document.getElementById('mpCfgNombre').value = 'Caja principal';
     document.getElementById('mpCfgStore').value = '';
     document.getElementById('mpCfgPos').value = '';
+    document.getElementById('mpCfgDevice').value = '';
     document.getElementById('mpCfgHabilitado').checked = false;
+}
+
+function elegirDeviceMP() {
+    const sel = document.getElementById('mpCfgSucursal');
+    const opcion = sel && sel.options[sel.selectedIndex];
+    const empresaId = opcion ? opcion.dataset.empresa : null;
+    if (!empresaId) { Swal.fire({ icon: 'warning', title: 'Elige primero la sucursal' }); return; }
+    Swal.fire({ title: 'Buscando máquinas Point…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
+    const fd = new FormData();
+    fd.append('empresa_id', empresaId);
+    fd.append('csrfmiddlewaretoken', _csrfMP());
+    fetch('/app/pos/mercadopago/gestion/devices/', { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) { Swal.fire({ icon: 'error', title: 'No se pudo listar', text: data.error }); return; }
+            const devices = data.devices || [];
+            if (!devices.length) { Swal.fire({ icon: 'info', title: 'Sin máquinas Point en la cuenta' }); return; }
+            window.__devicesForm = devices;
+            const filas = devices.map((d, i) => `
+                <tr style="cursor:pointer;" onclick="usarDeviceMP(${i})">
+                    <td style="word-break:break-all;"><code style="font-size:.66rem;">${_escMP(d.device_id)}</code></td>
+                    <td class="text-center"><span class="badge ${(d.operating_mode||'')==='PDV'?'bg-primary':'bg-secondary'}" style="font-size:.6rem;">${_escMP(d.operating_mode||'?')}</span></td>
+                    <td class="text-center"><code style="font-size:.64rem;">${_escMP(d.external_pos_id)||'—'}</code></td>
+                </tr>`).join('');
+            Swal.fire({
+                title: 'Elegir máquina Point',
+                html: `<p class="small text-muted mb-1">Clic para asociarla a esta caja (debe estar en modo PDV para recibir cobros)</p>
+                       <table class="table table-sm table-hover" style="font-size:.72rem;">
+                       <thead><tr><th>Device</th><th class="text-center">Modo</th><th class="text-center">Caja MP</th></tr></thead>
+                       <tbody>${filas}</tbody></table>`,
+                width: 560, showConfirmButton: false, showCloseButton: true
+            });
+        })
+        .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
+}
+
+function usarDeviceMP(i) {
+    const d = (window.__devicesForm || [])[i];
+    if (!d) return;
+    document.getElementById('mpCfgDevice').value = d.device_id || '';
+    if (d.external_pos_id && !document.getElementById('mpCfgPos').value.trim()) {
+        document.getElementById('mpCfgPos').value = d.external_pos_id;
+    }
+    Swal.close();
+    if ((d.operating_mode || '') !== 'PDV') {
+        Swal.fire({ icon: 'warning', title: 'Máquina en Standalone',
+            text: 'Para que reciba cobros del sistema debe estar en modo PDV (botón 🖥 de la cuenta).' });
+    }
 }
 
 // ── Cuentas: editar / probar / eliminar ──
@@ -1709,9 +1797,10 @@ function cambiarModoDeviceMP(empresaId, deviceId, modoNuevo, nombre) {
         title: aPDV ? '¿Activar modo PDV?' : '¿Volver a Standalone?',
         html: aPDV
             ? '<div class="text-start small">La máquina quedará <strong>esclava del sistema</strong>: ' +
-              'NO se podrán digitar cobros en su pantalla hasta volver a Standalone. ' +
-              'Úsalo solo cuando la integración Point esté operativa o para probar.</div>'
-            : '<div class="text-start small">La máquina volverá a cobrar de forma independiente desde su pantalla.</div>',
+              'NO se podrán digitar cobros en su pantalla hasta volver a Standalone.<br><br>' +
+              '🔄 <strong>Después del cambio hay que REINICIAR la máquina</strong> para que tome el modo (requisito de MP).</div>'
+            : '<div class="text-start small">La máquina volverá a cobrar de forma independiente desde su pantalla.<br><br>' +
+              '🔄 <strong>Después del cambio hay que REINICIAR la máquina</strong> para que tome el modo (requisito de MP).</div>',
         showCancelButton: true,
         confirmButtonText: aPDV ? 'Sí, activar PDV' : 'Sí, volver a Standalone',
         confirmButtonColor: aPDV ? '#FFB020' : '#0066FF',
@@ -1846,19 +1935,29 @@ function eliminarConfigMP(configId, sucursal) {
     });
 }
 
-function probarConfigMP(configId, sucursal) {
+function probarConfigMP(configId, sucursal, tieneDevice) {
+    const canalHtml = tieneDevice
+        ? `<div class="text-start small mb-2"><label class="form-label-sm">Canal de la prueba</label>
+           <select id="swalCanalPrueba" class="form-select form-select-sm">
+             <option value="QR">QR (el cliente escanea)</option>
+             <option value="POINT">Máquina Point (pasa la tarjeta en el terminal)</option>
+           </select></div>`
+        : '';
     Swal.fire({
         title: `Transacción de prueba — ${sucursal}`,
-        html: '<p class="small text-muted">Genera un QR REAL contra esta caja. Puedes escanearlo y pagar (queda marcado PRUEBA) o solo verificar que el QR se genere y cancelarlo.</p>',
+        html: `<p class="small text-muted">Cobro REAL de prueba (queda marcado PRUEBA). Si nadie paga, se cancela.</p>${canalHtml}`,
         input: 'number', inputValue: 100, inputLabel: 'Monto CLP',
-        showCancelButton: true, confirmButtonText: 'Generar QR', cancelButtonText: 'Cerrar'
+        showCancelButton: true, confirmButtonText: 'Enviar prueba', cancelButtonText: 'Cerrar'
     }).then(r => {
         if (!r.isConfirmed) return;
+        const canalSel = document.getElementById('swalCanalPrueba');
+        const canal = canalSel ? canalSel.value : 'QR';
         const fd = new FormData();
         fd.append('config_id', configId);
         fd.append('monto', r.value || 100);
+        fd.append('canal', canal);
         fd.append('csrfmiddlewaretoken', _csrfMP());
-        Swal.fire({ title: 'Generando QR…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
+        Swal.fire({ title: canal === 'POINT' ? 'Enviando a la máquina…' : 'Generando QR…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
         fetch('/app/pos/mercadopago/gestion/config/probar/', { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(resp => resp.json())
             .then(data => {
@@ -1880,18 +1979,23 @@ function probarConfigMP(configId, sucursal) {
 
 function _modalQRPruebaMP(data) {
     let poll = null;
+    const esPoint = data.canal === 'POINT';
     const detener = () => { if (poll) clearInterval(poll); poll = null; };
     const cancelar = () => fetch(`/app/pos/mercadopago/cancelar/${data.transaccion_id}/`, {
         method: 'POST', headers: { 'X-CSRFToken': _csrfMP() }, credentials: 'same-origin' }).catch(() => {});
-    const qrHtml = data.qr_base64
-        ? `<img src="data:image/png;base64,${data.qr_base64}" style="width:260px;max-width:100%;">`
-        : `<textarea class="form-control" rows="3" readonly style="font-size:.68rem;">${data.qr_data || ''}</textarea>`;
+    const qrHtml = esPoint
+        ? `<div class="my-3"><i class="bi bi-phone-vibrate" style="font-size:3rem;color:var(--tbk-primary);"></i>
+           <p class="fw-bold mb-0">Cobro enviado a la máquina Point</p>
+           <p class="small text-muted">El cliente pasa/acerca la tarjeta en el terminal</p></div>`
+        : (data.qr_base64
+            ? `<img src="data:image/png;base64,${data.qr_base64}" style="width:260px;max-width:100%;">`
+            : `<textarea class="form-control" rows="3" readonly style="font-size:.68rem;">${data.qr_data || ''}</textarea>`);
     Swal.fire({
-        title: '✅ QR de prueba generado',
-        html: `<p class="small mb-1">La caja y el token funcionan. Monto: <strong>$${Number(data.monto).toLocaleString('es-CL')}</strong></p>
+        title: esPoint ? '📟 Prueba enviada a la máquina' : '✅ QR de prueba generado',
+        html: `<p class="small mb-1">Monto: <strong>$${Number(data.monto).toLocaleString('es-CL')}</strong></p>
                ${qrHtml}
-               <p class="small text-muted mt-1 mb-0" id="mpPruebaEstado">Esperando pago… (puedes cerrar y se cancela)</p>`,
-        showConfirmButton: false, showCancelButton: true, cancelButtonText: 'Cancelar prueba',
+               <p class="small text-muted mt-1 mb-0" id="mpPruebaEstado">${esPoint ? 'Si nadie paga, cancélalo con el botón atrás de la MÁQUINA (MP no permite cancelarlo remoto en pantalla).' : 'Esperando pago… (puedes cerrar y se cancela)'}</p>`,
+        showConfirmButton: false, showCancelButton: true, cancelButtonText: esPoint ? 'Cerrar (cancela en la máquina)' : 'Cancelar prueba',
         width: 400, allowOutsideClick: false
     }).then(() => { detener(); cancelar(); });
     poll = setInterval(() => {
@@ -1913,7 +2017,45 @@ function _modalQRPruebaMP(data) {
     }, 2500);
 }
 
-// ── Resumen del día (cierre MP) ──
+// ── Operación Terminal (PDV): cobro directo en la máquina ──
+
+function cobrarTerminalMP() {
+    const sel = document.getElementById('mpOpCaja');
+    const monto = parseInt(document.getElementById('mpOpMonto').value);
+    if (!sel || !sel.value) { Swal.fire({ icon: 'warning', title: 'No hay cajas con máquina Point asociada' }); return; }
+    if (!monto || monto < 50) { Swal.fire({ icon: 'warning', title: 'Monto mínimo $50' }); return; }
+    const cajaTxt = sel.options[sel.selectedIndex].text;
+    Swal.fire({
+        icon: 'question', title: `¿Cobrar $${monto.toLocaleString('es-CL')} en la máquina?`,
+        html: `<div class="text-start small">${cajaTxt}<br><br>
+               ⚠️ Este cobro <strong>no queda asociado a un ticket</strong> — quedará como
+               <code>DIRECTO-*</code> en Dineros y en el resumen por terminal.</div>`,
+        showCancelButton: true, confirmButtonText: 'Enviar a la máquina', cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0066FF'
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        const fd = new FormData();
+        fd.append('config_id', sel.value);
+        fd.append('monto', monto);
+        fd.append('csrfmiddlewaretoken', _csrfMP());
+        Swal.fire({ title: 'Enviando a la máquina…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
+        fetch('/app/pos/mercadopago/gestion/terminal/cobrar/', { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(resp => resp.json())
+            .then(data => {
+                if (!data.success) {
+                    Swal.fire({ icon: 'error', title: 'No se pudo enviar',
+                        html: `<div class="text-start small">${_escMP(data.error)}</div>` +
+                              (data.detalle ? `<pre class="text-start mt-2" style="font-size:.62rem;max-height:140px;overflow:auto;background:#f4f4f7;padding:6px;border-radius:6px;">${_escMP(data.detalle)}</pre>` : '') });
+                    return;
+                }
+                document.getElementById('mpOpMonto').value = '';
+                _modalQRPruebaMP(data);
+            })
+            .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
+    });
+}
+
+// ── Cierre / Resumen por terminal ──
 
 function resumenDiaMP() {
     const fecha = document.getElementById('mpResumenFecha').value || new Date().toISOString().slice(0, 10);
@@ -1923,17 +2065,28 @@ function resumenDiaMP() {
             if (!data.success) return;
             document.getElementById('mpResumenFecha').value = data.fecha;
             const f = v => '$' + Number(v || 0).toLocaleString('es-CL');
-            const filas = Object.entries(data.sucursales || {}).map(([suc, d]) => `
-                <tr><td>${suc}</td><td class="text-center">${d.cobros}</td>
-                <td class="text-end font-monospace">${f(d.monto)}</td>
-                <td class="text-end font-monospace">${d.monto_devuelto ? '-' + f(d.monto_devuelto).slice(1) : '—'}</td></tr>`).join('');
+            const canalFila = (nombre, c) => (c.cobros || c.devoluciones || c.rechazadas) ? `
+                <tr><td class="ps-3 text-muted">${nombre}</td>
+                <td class="text-center">${c.cobros}</td>
+                <td class="text-end font-monospace">${f(c.monto)}</td>
+                <td class="text-end font-monospace">${c.monto_devuelto ? '-' + f(c.monto_devuelto).slice(1) : '—'}</td>
+                <td class="text-center text-muted">${c.rechazadas || '—'}</td></tr>` : '';
+            const bloques = (data.cajas || []).map(caja => `
+                <tr class="table-light"><td colspan="5" class="fw-bold">
+                    ${_escMP(caja.sucursal)} · ${_escMP(caja.caja)}
+                    <code style="font-size:.64rem;">${_escMP(caja.external_pos_id) || ''}</code>
+                    ${caja.device ? '<i class="bi bi-phone" title="' + _escMP(caja.device) + '"></i>' : ''}
+                    <span class="float-end font-monospace">Neto: ${f(caja.total_neto)}</span>
+                </td></tr>
+                ${canalFila('QR', caja.QR)}
+                ${canalFila('Máquina Point', caja.POINT)}`).join('');
             const t = data.total || {};
             document.getElementById('mpResumenBody').innerHTML = `
                 <table class="table table-sm mb-1" style="font-size:.72rem;">
-                <thead><tr><th>Sucursal</th><th class="text-center">Cobros</th><th class="text-end">Cobrado</th><th class="text-end">Devuelto</th></tr></thead>
-                <tbody>${filas || '<tr><td colspan="4" class="text-muted text-center">Sin movimientos MP ese día</td></tr>'}</tbody>
+                <thead><tr><th>Caja / canal</th><th class="text-center">Cobros</th><th class="text-end">Cobrado</th><th class="text-end">Devuelto</th><th class="text-center">Rech.</th></tr></thead>
+                <tbody>${bloques || '<tr><td colspan="5" class="text-muted text-center">Sin movimientos MP ese día</td></tr>'}</tbody>
                 </table>
-                <div class="fw-bold" style="font-size:.78rem;">TOTAL: ${f(t.monto)} · Devol: ${f(t.monto_devuelto)} · Neto: ${f(t.neto)}${t.comisiones ? ' · Comisiones: ' + f(t.comisiones) : ''}</div>`;
+                <div class="fw-bold" style="font-size:.78rem;">TOTAL DÍA: ${f(t.monto)} · Devol: ${f(t.monto_devuelto)} · Neto: ${f(t.neto)}${t.comisiones ? ' · Comisiones MP: ' + f(t.comisiones) : ''}</div>`;
         })
         .catch(() => { document.getElementById('mpResumenBody').textContent = 'Error al cargar'; });
 }

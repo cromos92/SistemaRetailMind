@@ -544,3 +544,40 @@ class MercadoPagoConfigAdmin(admin.ModelAdmin):
             'fields': ('token_env', 'webhook_secret_env'),
         }),
     )
+
+
+from .models import MercadoPagoWebhookEvento, TransaccionMercadoPago
+
+
+@admin.register(TransaccionMercadoPago)
+class TransaccionMercadoPagoAdmin(admin.ModelAdmin):
+    """Solo lectura: para verificar cobros en vivo. La columna clave para
+    testear el webhook es webhook_recibido_en: con fecha = la confirmación
+    llegó por webhook; NULL con estado APROBADA = la salvó el polling."""
+    list_display = ['creado_en', 'external_reference', 'correlativo_ticket', 'sucursal',
+                    'monto', 'estado', 'metodo_pago_mp', 'consumida', 'webhook_recibido_en']
+    list_filter = ['estado', 'tipo', 'canal', 'consumida']
+    search_fields = ['external_reference', 'correlativo_ticket', 'payment_id', 'order_id']
+    readonly_fields = [f.name for f in TransaccionMercadoPago._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(MercadoPagoWebhookEvento)
+class MercadoPagoWebhookEventoAdmin(admin.ModelAdmin):
+    """Solo lectura: cada notificación webhook que llegó de MP (firma válida
+    o no, procesada o no). Es el lugar para testear el circuito del webhook."""
+    list_display = ['recibido_en', 'topic', 'data_id', 'firma_valida', 'procesado', 'error']
+    list_filter = ['firma_valida', 'procesado', 'topic']
+    search_fields = ['request_id', 'data_id']
+    readonly_fields = [f.name for f in MercadoPagoWebhookEvento._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

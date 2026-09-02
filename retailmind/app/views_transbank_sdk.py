@@ -80,6 +80,7 @@ def gestion_transbank_pos_sdk(request):
             'nombre': cfg.nombre,
             'external_store_id': cfg.external_store_id,
             'external_pos_id': cfg.external_pos_id,
+            'device_id': cfg.device_id,
             'habilitado': cfg.habilitado,
             'es_principal': cfg.es_principal,
         } for cfg in MercadoPagoConfig.objects.select_related('sucursal').order_by('sucursal__alias', 'nombre')]
