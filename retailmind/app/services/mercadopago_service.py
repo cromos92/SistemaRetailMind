@@ -366,6 +366,79 @@ def cambiar_modo_device(cuenta, device_id, modo):
     return modo
 
 
+def imprimir_en_terminal(config, contenido, external_reference):
+    """Imprime contenido en la impresora de la Point (API de Impresiones,
+    POST /terminals/v1/actions). Formato del contenido DESCUBIERTO EN VIVO:
+    etiquetas {center} {w} (destacado) {s} (normal) {br} (salto); content en
+    la raíz y subtype dentro de config.point. external_reference ≤64 chars."""
+    if not config.device_id:
+        raise MercadoPagoError('La caja no tiene máquina Point asociada.')
+    resp = _request(config, 'POST', '/terminals/v1/actions', json_body={
+        'type': 'print',
+        'external_reference': external_reference[:64],
+        'content': contenido,
+        'config': {'point': {'terminal_id': config.device_id, 'subtype': 'custom'}},
+    }, idempotency_key=external_reference[:64])
+    data = _json_o_error(resp, f'imprimir en terminal {config.device_id}')
+    logger.info(f"MP: impresión {data.get('id')} enviada a {config.device_id}")
+    return data
+
+
+# Medio de pago que reporta MP (payment_type_id) → etiqueta para cierres
+_MEDIO_MP_LABEL = {
+    'debit_card': 'DEBITO',
+    'credit_card': 'CREDITO',
+    'prepaid_card': 'PREPAGO',
+    'account_money': 'DINERO EN CUENTA',
+    'bank_transfer': 'TRANSFERENCIA',
+    'ticket': 'EFECTIVO (PAGO FACIL)',
+}
+
+
+def etiqueta_medio_mp(medio):
+    m = (medio or '').strip().lower()
+    return _MEDIO_MP_LABEL.get(m, m.upper() or 'SIN DATO')
+
+
+def contenido_cierre_terminal(caja, fecha):
+    """Arma el texto etiquetado del cierre de una caja para la impresora de la
+    Point. `caja` es un dict del resumen por terminal (QR/POINT/total_*)."""
+    def linea(texto=''):
+        return '{s}' + texto + '{br}'
+
+    def plata(v):
+        return f"${int(v or 0):,}".replace(',', '.')
+
+    partes = [
+        '{center}{w}CIERRE MERCADO PAGO{br}',
+        '{center}{s}' + f"{caja.get('sucursal', '')} - {caja.get('caja', '')}" + '{br}',
+        '{center}{s}' + f"Fecha: {fecha}" + '{br}',
+        linea('------------------------------'),
+    ]
+    for nombre, canal in (('QR', caja.get('QR') or {}), ('MAQUINA POINT', caja.get('POINT') or {})):
+        if not (canal.get('cobros') or canal.get('devoluciones')):
+            continue
+        partes.append(linea(f"{nombre}:"))
+        partes.append(linea(f"  Cobros: {canal.get('cobros', 0)}  {plata(canal.get('monto'))}"))
+        if canal.get('devoluciones'):
+            partes.append(linea(f"  Devol.: {canal.get('devoluciones', 0)}  -{plata(canal.get('monto_devuelto'))}"))
+        if canal.get('comisiones'):
+            partes.append(linea(f"  Comisiones MP: {plata(canal.get('comisiones'))}"))
+    medios = caja.get('medios') or {}
+    if medios:
+        partes.append(linea('POR MEDIO DE PAGO:'))
+        for etiqueta in sorted(medios):
+            m = medios[etiqueta]
+            partes.append(linea(f"  {etiqueta}: {m.get('cobros', 0)}  {plata(m.get('monto'))}"))
+    partes.append(linea('------------------------------'))
+    partes.append('{center}{w}' + f"NETO: {plata(caja.get('total_neto'))}" + '{br}')
+    partes.append(linea('------------------------------'))
+    partes.append(linea('MP liquida solo (sin cierre'))
+    partes.append(linea('de lote). Resumen NEXO.'))
+    partes.append(linea(f"Impreso: {timezone.localtime():%d/%m/%Y %H:%M}"))
+    return ''.join(partes)
+
+
 # ==================== QR (imagen) ====================
 
 def qr_png_base64(qr_data):

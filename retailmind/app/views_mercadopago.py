@@ -507,7 +507,7 @@ def gestion_resumen_dia_mp(request):
             'sucursal': t.sucursal.alias if t.sucursal_id else '?',
             'external_pos_id': t.config.external_pos_id if t.config_id else '',
             'device': t.config.device_id if t.config_id else '',
-            'QR': _canal_vacio(), 'POINT': _canal_vacio(),
+            'QR': _canal_vacio(), 'POINT': _canal_vacio(), 'medios': {},
         })
         canal = caja.get(t.canal) or caja['QR']
         if t.tipo == 'VENTA' and t.estado == 'APROBADA':
@@ -515,6 +515,10 @@ def gestion_resumen_dia_mp(request):
             canal['monto'] += t.monto
             if t.fee_mp:
                 canal['comisiones'] += t.fee_mp
+            etiqueta = mp.etiqueta_medio_mp(t.metodo_pago_mp)
+            medio = caja['medios'].setdefault(etiqueta, {'cobros': 0, 'monto': 0})
+            medio['cobros'] += 1
+            medio['monto'] += t.monto
         elif t.tipo == 'DEVOLUCION':
             canal['devoluciones'] += 1
             canal['monto_devuelto'] += t.monto
@@ -533,6 +537,59 @@ def gestion_resumen_dia_mp(request):
     total['neto'] = total['monto'] - total['monto_devuelto']
     return JsonResponse({'success': True, 'fecha': fecha,
                          'cajas': list(cajas.values()), 'total': total})
+
+
+@login_required
+@require_POST
+def gestion_imprimir_cierre_terminal_mp(request):
+    """POST gestion/terminal/imprimir-cierre/ — imprime el cierre del día de
+    una caja EN LA IMPRESORA de su máquina Point (API de Impresiones)."""
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
+    config = MercadoPagoConfig.objects.select_related('sucursal').filter(
+        id=int(request.POST.get('config_id', 0) or 0)).first()
+    if not config:
+        return JsonResponse({'success': False, 'error': 'Caja no encontrada.'}, status=404)
+    if not config.device_id:
+        return JsonResponse({'success': False, 'error': 'Esa caja no tiene máquina Point asociada.'}, status=400)
+    fecha = request.POST.get('fecha') or str(timezone.localdate())
+
+    def _canal_vacio():
+        return {'cobros': 0, 'monto': 0, 'devoluciones': 0, 'monto_devuelto': 0, 'comisiones': 0}
+
+    caja = {'caja': config.nombre, 'sucursal': config.sucursal.alias,
+            'QR': _canal_vacio(), 'POINT': _canal_vacio(), 'medios': {}}
+    trxs = TransaccionMercadoPago.objects.filter(
+        config=config, creado_en__date=fecha,
+    ).exclude(correlativo_ticket__startswith='PRUEBA-')
+    for t in trxs:
+        canal = caja.get(t.canal) or caja['QR']
+        if t.tipo == 'VENTA' and t.estado == 'APROBADA':
+            canal['cobros'] += 1
+            canal['monto'] += t.monto
+            if t.fee_mp:
+                canal['comisiones'] += t.fee_mp
+            # Desglose final por medio real (débito/crédito/prepago/…)
+            etiqueta = mp.etiqueta_medio_mp(t.metodo_pago_mp)
+            medio = caja['medios'].setdefault(etiqueta, {'cobros': 0, 'monto': 0})
+            medio['cobros'] += 1
+            medio['monto'] += t.monto
+        elif t.tipo == 'DEVOLUCION':
+            canal['devoluciones'] += 1
+            canal['monto_devuelto'] += t.monto
+    caja['total_neto'] = (caja['QR']['monto'] + caja['POINT']['monto']
+                          - caja['QR']['monto_devuelto'] - caja['POINT']['monto_devuelto'])
+    try:
+        contenido = mp.contenido_cierre_terminal(caja, fecha)
+        mp.imprimir_en_terminal(
+            config, contenido,
+            f"CIERRE-{config.id}-{fecha}-{timezone.now():%H%M%S}",
+        )
+    except mp.MercadoPagoError as e:
+        return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
+    logger.info("MP gestión: cierre %s de caja %s impreso en terminal por %s",
+                fecha, config.id, request.user.username)
+    return JsonResponse({'success': True})
 
 
 @login_required

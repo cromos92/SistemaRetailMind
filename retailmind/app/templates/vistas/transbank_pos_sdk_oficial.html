@@ -573,10 +573,14 @@
             <p class="tbk-tech-body mb-1">MP no tiene cierre de lote (los pagos liquidan
             solos): este es el cierre del día <strong>por caja/terminal</strong>, con
             desglose QR vs máquina Point. Imprimible por máquina.</p>
-            <div class="d-flex gap-1 mb-2">
+            <div class="d-flex gap-1 mb-2 flex-wrap">
                 <input type="date" class="form-control-sm-pos" id="mpResumenFecha" style="max-width:150px;">
                 <button class="btn btn-sm btn-primary py-0 px-2" style="font-size:.72rem;" onclick="resumenDiaMP()"><i class="bi bi-search"></i> Ver</button>
-                <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.72rem;" onclick="imprimirResumenMP()"><i class="bi bi-printer"></i> Imprimir</button>
+                <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.72rem;" onclick="imprimirResumenMP()"><i class="bi bi-printer"></i> Imprimir (PC)</button>
+                {% if es_admin_mp %}
+                <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.72rem;" title="Imprime el cierre en la impresora de la propia máquina Point (usa la caja elegida en Operación Terminal)"
+                        onclick="imprimirCierreEnMaquinaMP()"><i class="bi bi-phone-vibrate"></i> Imprimir EN la máquina</button>
+                {% endif %}
             </div>
             <div id="mpResumenBody" class="tbk-tech-body">—</div>
         </div>
@@ -2071,6 +2075,11 @@ function resumenDiaMP() {
                 <td class="text-end font-monospace">${f(c.monto)}</td>
                 <td class="text-end font-monospace">${c.monto_devuelto ? '-' + f(c.monto_devuelto).slice(1) : '—'}</td>
                 <td class="text-center text-muted">${c.rechazadas || '—'}</td></tr>` : '';
+            const medioFila = (nombre, m) => `
+                <tr><td class="ps-4 text-muted" style="font-size:.68rem;">↳ ${_escMP(nombre)}</td>
+                <td class="text-center" style="font-size:.68rem;">${m.cobros}</td>
+                <td class="text-end font-monospace" style="font-size:.68rem;">${f(m.monto)}</td>
+                <td></td><td></td></tr>`;
             const bloques = (data.cajas || []).map(caja => `
                 <tr class="table-light"><td colspan="5" class="fw-bold">
                     ${_escMP(caja.sucursal)} · ${_escMP(caja.caja)}
@@ -2079,7 +2088,8 @@ function resumenDiaMP() {
                     <span class="float-end font-monospace">Neto: ${f(caja.total_neto)}</span>
                 </td></tr>
                 ${canalFila('QR', caja.QR)}
-                ${canalFila('Máquina Point', caja.POINT)}`).join('');
+                ${canalFila('Máquina Point', caja.POINT)}
+                ${Object.keys(caja.medios || {}).sort().map(k => medioFila(k, caja.medios[k])).join('')}`).join('');
             const t = data.total || {};
             document.getElementById('mpResumenBody').innerHTML = `
                 <table class="table table-sm mb-1" style="font-size:.72rem;">
@@ -2089,6 +2099,35 @@ function resumenDiaMP() {
                 <div class="fw-bold" style="font-size:.78rem;">TOTAL DÍA: ${f(t.monto)} · Devol: ${f(t.monto_devuelto)} · Neto: ${f(t.neto)}${t.comisiones ? ' · Comisiones MP: ' + f(t.comisiones) : ''}</div>`;
         })
         .catch(() => { document.getElementById('mpResumenBody').textContent = 'Error al cargar'; });
+}
+
+function imprimirCierreEnMaquinaMP() {
+    const sel = document.getElementById('mpOpCaja');
+    if (!sel || !sel.value) { Swal.fire({ icon: 'warning', title: 'No hay cajas con máquina Point', text: 'Elige la caja en "Operación Terminal".' }); return; }
+    const fecha = document.getElementById('mpResumenFecha').value || new Date().toISOString().slice(0, 10);
+    const cajaTxt = sel.options[sel.selectedIndex].text;
+    Swal.fire({
+        icon: 'question', title: '¿Imprimir cierre en la máquina?',
+        html: `<div class="text-start small">Caja: ${cajaTxt}<br>Fecha: ${fecha}<br><br>El ticket saldrá por la impresora de la propia Point.</div>`,
+        showCancelButton: true, confirmButtonText: '🖨 Imprimir', cancelButtonText: 'Cancelar'
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        const fd = new FormData();
+        fd.append('config_id', sel.value);
+        fd.append('fecha', fecha);
+        fd.append('csrfmiddlewaretoken', _csrfMP());
+        Swal.fire({ title: 'Enviando a la impresora…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
+        fetch('/app/pos/mercadopago/gestion/terminal/imprimir-cierre/', { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(resp => resp.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({ icon: 'success', title: 'Enviado a la máquina', text: 'El cierre está saliendo por la impresora de la Point.', timer: 2500, showConfirmButton: false });
+                } else {
+                    Swal.fire({ icon: 'error', title: 'No se pudo imprimir', text: data.error });
+                }
+            })
+            .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
+    });
 }
 
 function imprimirResumenMP() {
