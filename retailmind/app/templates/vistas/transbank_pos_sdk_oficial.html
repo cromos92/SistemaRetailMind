@@ -576,9 +576,8 @@
             <div class="d-flex gap-1 mb-2 flex-wrap">
                 <input type="date" class="form-control-sm-pos" id="mpResumenFecha" style="max-width:150px;">
                 <button class="btn btn-sm btn-primary py-0 px-2" style="font-size:.72rem;" onclick="resumenDiaMP()"><i class="bi bi-search"></i> Ver</button>
-                <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.72rem;" onclick="imprimirResumenMP()"><i class="bi bi-printer"></i> Imprimir (PC)</button>
-                <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.72rem;" title="Imprime el cierre en la impresora de la máquina Point ({% if es_admin_mp %}usa la caja elegida en Operación Terminal{% else %}la de tu sucursal{% endif %}) — sale con fecha, hora y responsable"
-                        onclick="imprimirCierreEnMaquinaMP()"><i class="bi bi-phone-vibrate"></i> Imprimir EN la máquina</button>
+                <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.72rem;" title="Imprime el cierre COMPLETO del día en la impresora de la máquina Point ({% if es_admin_mp %}caja elegida en Operación Terminal{% else %}la de tu sucursal{% endif %}): MP débito/crédito/prepago + todos los medios de pago del día + total global, con fecha, hora y responsable"
+                        onclick="imprimirCierreEnMaquinaMP()"><i class="bi bi-phone-vibrate"></i> Imprimir cierre en la máquina</button>
             </div>
             <div id="mpResumenBody" class="tbk-tech-body">—</div>
         </div>
@@ -2134,23 +2133,8 @@ function imprimirCierreEnMaquinaMP() {
     });
 }
 
-function imprimirResumenMP() {
-    const fecha = document.getElementById('mpResumenFecha').value || new Date().toISOString().slice(0, 10);
-    const cuerpo = document.getElementById('mpResumenBody').innerHTML;
-    if (!cuerpo || cuerpo === '—') { Swal.fire({ icon: 'info', title: 'Primero presiona "Ver"' }); return; }
-    const w = window.open('', '_blank', 'width=420,height=600');
-    w.document.write(`<html><head><title>Resumen Mercado Pago ${fecha}</title>
-        <style>body{font-family:monospace;font-size:12px;margin:12px;}
-        table{width:100%;border-collapse:collapse;}td,th{padding:2px 4px;text-align:left;}
-        .text-end{text-align:right;}.text-center{text-align:center;}</style></head>
-        <body><h3 style="margin:0 0 4px;">RESUMEN MERCADO PAGO</h3>
-        <div>Fecha: ${fecha}</div><hr>${cuerpo}<hr>
-        <div style="font-size:10px;">Responsable: ${MP_RESPONSABLE}<br>MP liquida solo (sin cierre de lote). Generado ${new Date().toLocaleString('es-CL')}</div>
-        </body></html>`);
-    w.document.close();
-    w.focus();
-    w.print();
-}
+// (El botón "Imprimir (PC)" se eliminó a pedido: el cierre se imprime SOLO en
+// la máquina Point, ahora con todos los medios de pago del día y total global.)
 
 window.addEventListener('load', function () {
     const inputFecha = document.getElementById('fecha_registro');

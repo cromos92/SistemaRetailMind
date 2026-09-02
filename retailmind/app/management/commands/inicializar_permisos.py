@@ -95,7 +95,6 @@ class Command(BaseCommand):
             ('cuadratura_caja', 'Cuadratura y Arqueo', 'cuadratura_caja', 'ri-calculator-line', 6),
             ('pos_transbank', 'POS Transbank y Mercado Pago', 'gestion_transbank_pos_sdk', 'ri-bank-card-line', 7),
             ('revision_arqueos', 'Revisi?n Arqueos y Dep?sitos', 'revision_arqueos', 'ri-shield-check-line', 8),
-            ('dineros_mercadopago', 'Dineros Mercado Pago', 'dineros_mercadopago', 'ri-money-dollar-circle-line', 9),
         ]
         
         for codigo, nombre, url_name, icono, orden in opciones:
@@ -134,6 +133,9 @@ class Command(BaseCommand):
             # Permiso granular: controla el bot?n "Descargar TXT Acepta"
             # en la pantalla Gesti?n DTE y el endpoint que genera el TXT.
             ('dte_descargar_txt', 'Descargar TXT Acepta de DTE', None, None, 'bi-file-earmark-text', 8),
+            # Conciliaci?n Mercado Pago (pendiente de liberaci?n / dep?sitos /
+            # conciliaci?n) — solo administrador/administraci?n (0224/0227)
+            ('dineros_mercadopago', 'Conciliaci?n Mercado Pago', None, '/app/ventas/dineros-mercadopago/', 'ri-money-dollar-circle-line', 9),
         ]
         
         for item in opciones:

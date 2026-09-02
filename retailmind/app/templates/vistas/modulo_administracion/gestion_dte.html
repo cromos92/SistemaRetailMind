@@ -4174,7 +4174,43 @@
         }
     }
 
+    // "Verificar por Mercado Pago": cobros MP de la venta del DTE en el modal
+    // de NC — muestra medio, monto, devuelto y saldo devolvible a la tarjeta.
+    window.verificarMpDte = function () {
+        const dteId = window.__dteAnulacionActual;
+        if (!dteId) { Swal.fire({ icon: 'warning', title: 'Abre primero un documento' }); return; }
+        fetch(`/app/api/mercadopago/dte/${dteId}/pagos/`, { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) { Swal.fire({ icon: 'error', title: 'Error', text: data.error }); return; }
+                if (!data.tiene_mp) {
+                    Swal.fire({ icon: 'info', title: 'Sin cobros Mercado Pago',
+                        text: 'La venta original de este documento no registra pagos MP — la devolución a tarjeta no aplica (usa efectivo o transferencia).' });
+                    return;
+                }
+                const fCLP = v => '$' + Number(v || 0).toLocaleString('es-CL');
+                const filas = (data.transacciones || []).map(t => `
+                    <tr><td>${t.fecha}</td><td>${t.medio}${t.ultimos_4 ? ' ····' + t.ultimos_4 : ''}</td>
+                    <td class="text-end font-monospace">${fCLP(t.monto)}</td>
+                    <td class="text-end font-monospace">${t.devuelto ? '-' + fCLP(t.devuelto).slice(1) : '—'}</td>
+                    <td class="text-end font-monospace fw-bold">${fCLP(t.disponible)}</td></tr>`).join('');
+                Swal.fire({
+                    title: '💳 Cobros Mercado Pago de la venta',
+                    html: `<table class="table table-sm" style="font-size:.76rem;">
+                           <thead><tr><th>Fecha</th><th>Medio</th><th class="text-end">Cobrado</th><th class="text-end">Devuelto</th><th class="text-end">Devolvible</th></tr></thead>
+                           <tbody>${filas}</tbody></table>
+                           <div class="fw-bold">Total devolvible a la tarjeta: ${fCLP(data.total_disponible)}</div>
+                           ${data.puede_devolver ? '<p class="small text-muted mt-1 mb-0">Puedes elegir "Tarjeta (M. Pago)" como método de devolución.</p>'
+                                                 : '<p class="small text-warning mt-1 mb-0">⚠️ Devolver a la tarjeta requiere rol Administrador.</p>'}`,
+                    width: 620, confirmButtonText: 'Cerrar'
+                });
+            })
+            .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
+    };
+
     async function anularDocumento(dteId, numeroDoc, tipoDocumento, montoOriginal, ncAcumulado) {
+        // Disponible para "Verificar por Mercado Pago" y la devolución a tarjeta
+        window.__dteAnulacionActual = dteId;
         const esBoleta = tipoDocumento.toUpperCase().includes('BOLETA');
         const nombreDoc = esBoleta ? 'Boleta Electrónica' : 'Factura Electrónica';
         // monto_con_iva puede venir con decimales (DTEs guardados como neto*1.19
@@ -4449,7 +4485,9 @@
                 </div>
                 <div id="subDevolucion" class="mt-2 ms-4" style="font-size:0.85rem;">
                     <label class="me-3"><input type="radio" name="metodoDevolucion" value="EFECTIVO_CAJA" checked class="me-1"><i class="bi bi-cash me-1"></i>Efectivo</label>
-                    <label><input type="radio" name="metodoDevolucion" value="TRANSFERENCIA_BANCARIA" class="me-1"><i class="bi bi-bank me-1"></i>Transferencia</label>
+                    <label class="me-3"><input type="radio" name="metodoDevolucion" value="TRANSFERENCIA_BANCARIA" class="me-1"><i class="bi bi-bank me-1"></i>Transferencia</label>
+                    <label class="me-2" title="Devuelve la plata a la tarjeta del cliente vía API de Mercado Pago (solo Administrador; requiere que la venta se haya cobrado con MP)"><input type="radio" name="metodoDevolucion" value="MERCADOPAGO_API" class="me-1"><i class="bi bi-credit-card me-1"></i>Tarjeta (M. Pago)</label>
+                    <button type="button" class="btn btn-sm btn-outline-info py-0 px-2" style="font-size:.72rem;" onclick="verificarMpDte()" title="Consulta los cobros Mercado Pago de esta venta y cuánto queda devolvible a la tarjeta"><i class="bi bi-search"></i> Verificar MP</button>
                     <div class="mt-2">
                         <label class="d-block mb-1" style="font-size:0.8rem;font-weight:600;"><i class="bi bi-calendar-event me-1"></i>Fecha que afecta la cuadratura</label>
                         <input type="date" id="anulFechaDevolucionCaja" class="form-control form-control-sm" style="max-width:200px;" value="${hoyISO}" max="${hoyISO}"${boletaISO ? ` min="${boletaISO}"` : ''}>
@@ -5060,7 +5098,7 @@
                 <span class="badge-nexo badge-nexo-secondary"><i class="bi bi-x-circle me-1"></i>No afecta transferencia</span>`;
         })();
         const tituloModalidad = modalidadNC === 'DEVOLUCION'
-            ? `Devolución (${metodoDevolucion === 'EFECTIVO_CAJA' ? 'Efectivo' : 'Transferencia'})`
+            ? `Devolución (${metodoDevolucion === 'EFECTIVO_CAJA' ? 'Efectivo' : metodoDevolucion === 'MERCADOPAGO_API' ? 'Tarjeta Mercado Pago' : 'Transferencia'})`
             : modalidadNC === 'INFORMATIVA' ? 'NC Informativa' : 'NC Oculta';
 
         // Resumen de líneas seleccionadas

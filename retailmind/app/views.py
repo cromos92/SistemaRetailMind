@@ -31805,12 +31805,22 @@ def anular_factura_dte(request):
         tipo_anulacion = 'ANULACION'
 
     metodo_devolucion = body.get('metodo_devolucion', 'NO_AFECTA_CAJA')
-    if metodo_devolucion not in ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA', 'NO_AFECTA_CAJA'):
+    if metodo_devolucion not in ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA',
+                                 'MERCADOPAGO_API', 'NO_AFECTA_CAJA'):
         metodo_devolucion = 'NO_AFECTA_CAJA'
+
+    # Devolver a la tarjeta vía API de Mercado Pago: mueve plata real de la
+    # cuenta MP de la empresa — SOLO ADMINISTRADOR.
+    if metodo_devolucion == 'MERCADOPAGO_API' and \
+            getattr(request.user, 'rol', '') not in ('administrador', 'administracion'):
+        return JsonResponse({
+            'error': 'La devolución a la tarjeta (Mercado Pago) requiere rol Administrador.'
+        }, status=403)
 
     if modalidad_nc == 'DEVOLUCION':
         tipo_anulacion = 'DEVOLUCION'
-        if metodo_devolucion not in ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA'):
+        if metodo_devolucion not in ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA',
+                                     'MERCADOPAGO_API'):
             metodo_devolucion = 'EFECTIVO_CAJA'
     elif modalidad_nc in ('INFORMATIVA', 'OCULTA'):
         tipo_anulacion = 'ANULACION'
@@ -32327,6 +32337,23 @@ def anular_factura_dte(request):
                 'error': f'El documento ya tiene NC por el monto total (${monto_original:,}). No se puede generar otra NC.'
             }, status=409)
 
+        # ── Devolución a la tarjeta (Mercado Pago) ANTES de emitir la NC ──
+        # Refund-primero: si MP lo rechaza (sin saldo devolvible, pago de otro
+        # medio, red caída) la NC NO se emite y no se quema folio — el
+        # operador puede reintentar o elegir efectivo/transferencia.
+        _canal_mp_nc = None
+        if metodo_devolucion == 'MERCADOPAGO_API':
+            from .services import mercadopago_service as _mp_srv
+            try:
+                _resultado_mp = _mp_srv.devolver_por_nc(
+                    dte, monto_con_iva_nc, usuario=request.user)
+                _canal_mp_nc = _resultado_mp['canal']
+            except _mp_srv.MercadoPagoError as e:
+                return JsonResponse({
+                    'error': f'Mercado Pago no pudo devolver a la tarjeta: {e.mensaje} '
+                             'La NC NO fue emitida.'
+                }, status=400)
+
         numero_nc = obtener_siguiente_correlativo(dte.sucursal, 'NOTA DE CREDITO')
 
         motivo_nc_texto = motivo_anulacion or (
@@ -32399,6 +32426,17 @@ def anular_factura_dte(request):
             Dte_Detalle_Pago.objects.create(
                 dte=nc, metodo_pago='TRANSFERENCIA', monto=nc.monto_con_iva,
                 fecha_pago=fecha_devolucion_caja,
+            )
+        elif metodo_devolucion == 'MERCADOPAGO_API':
+            # El refund YA se ejecutó arriba (refund-primero). El metodo_pago
+            # MP_* hace que la cuadratura la reste del teórico MP presencial
+            # (total_nc_mercadopago_pos), no del efectivo.
+            Dte_Detalle_Pago.objects.create(
+                dte=nc,
+                metodo_pago='MP_POINT' if _canal_mp_nc == 'POINT' else 'MP_QR',
+                monto=nc.monto_con_iva,
+                fecha_pago=fecha_devolucion_caja,
+                notas='Devolución a la tarjeta vía API Mercado Pago',
             )
 
         # Modalidad OCULTA: marcar la NC como descartada para excluirla

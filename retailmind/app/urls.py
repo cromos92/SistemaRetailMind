@@ -525,6 +525,7 @@ from .views_mercadopago import (
     webhook_mercadopago,
     dineros_mercadopago,
     api_dineros_mercadopago,
+    verificar_pago_mp_dte,
     gestion_datos_mp,
     gestion_guardar_cuenta_mp,
     gestion_probar_cuenta_mp,
@@ -1169,6 +1170,8 @@ urlpatterns = [
     # Pantalla Dineros MP (pendiente de liberación / liberado / depositado)
     path('ventas/dineros-mercadopago/', dineros_mercadopago, name='dineros_mercadopago'),
     path('api/mercadopago/dineros/', api_dineros_mercadopago, name='api_dineros_mercadopago'),
+    # "Verificar por Mercado Pago" desde gestión-DTE (pagos MP de la venta de un DTE)
+    path('api/mercadopago/dte/<int:dte_id>/pagos/', verificar_pago_mp_dte, name='mp_verificar_pago_dte'),
 
     # ========== MÓDULO DE CAMBIOS Y DEVOLUCIONES ==========
     # Vista principal

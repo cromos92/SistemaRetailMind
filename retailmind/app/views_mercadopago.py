@@ -21,6 +21,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from .models import (
+    Dte,
     Empresa,
     MercadoPagoConfig,
     MercadoPagoCuenta,
@@ -603,6 +604,35 @@ def gestion_imprimir_cierre_terminal_mp(request):
     caja['total_neto'] = (caja['QR']['monto'] + caja['POINT']['monto']
                           - caja['QR']['monto_devuelto'] - caja['POINT']['monto_devuelto'])
     caja['responsable'] = (request.user.get_full_name() or request.user.username)
+
+    # ── Venta del día de la sucursal: TODOS los medios de pago + total global.
+    # Sale de la MISMA cuadratura del arqueo, así el papel siempre calza con
+    # lo que la tienda cuadra en pantalla.
+    try:
+        from .views_modulo_ventas import _calcular_cuadratura_data
+        cua = _calcular_cuadratura_data(config.sucursal, fecha)
+        medios_dia = [
+            ('EFECTIVO', cua.get('total_efectivo', 0)),
+            ('TRANSBANK DEBITO', cua.get('total_tarjeta_debito', 0)),
+            ('TRANSBANK CREDITO', cua.get('total_visa_mc_amex', 0)),
+            ('MERCADO PAGO POS', cua.get('total_mercadopago_pos', 0)),
+            ('TRANSFERENCIA', cua.get('total_transferencia', 0)),
+            ('TARJETA COMERCIAL', cua.get('total_tarjetas_comerciales', 0)),
+            ('VENTA INTERNET', cua.get('total_venta_internet', 0)),
+            ('GIFT CARD', cua.get('total_giftcard', 0)),
+            ('CRED. TRABAJADOR', cua.get('total_credito_trabajador', 0)),
+            ('CRED. EXTERNO', cua.get('total_credito_externo', 0)),
+            ('CONVENIO', cua.get('total_convenio', 0)),
+            ('ORDEN COMPRA', cua.get('total_orden_compra', 0)),
+            ('CHEQUE', cua.get('total_cheque', 0)),
+        ]
+        caja['dia_sucursal'] = [(n, int(m or 0)) for n, m in medios_dia if int(m or 0)]
+        caja['dia_nc'] = int(cua.get('total_notas_credito', 0) or 0)
+        caja['dia_total_global'] = int(cua.get('venta_total', 0) or 0)
+    except Exception as e:
+        # El cierre MP sale igual aunque la cuadratura falle
+        logger.warning(f"MP cierre: no se pudo calcular la venta del día: {e}")
+
     try:
         contenido = mp.contenido_cierre_terminal(caja, fecha)
         mp.imprimir_en_terminal(
@@ -657,6 +687,25 @@ def gestion_cobrar_terminal_mp(request):
                          'canal': 'POINT', 'monto': monto,
                          'correlativo': correlativo,
                          'expira_en_segundos': mp.QR_TIMEOUT_SEGUNDOS})
+
+
+@login_required
+def verificar_pago_mp_dte(request, dte_id):
+    """GET api/mercadopago/dte/<id>/pagos/ — "Verificar por Mercado Pago":
+    dice si la venta original del DTE tiene cobros MP, cuánto se devolvió y
+    cuánto queda devolvible a la tarjeta. Lo usa el modal de NC de
+    gestión-DTE para habilitar/validar la devolución vía API."""
+    dte = Dte.objects.filter(id=dte_id).select_related('sucursal').first()
+    if not dte:
+        return JsonResponse({'success': False, 'error': 'DTE no encontrado'}, status=404)
+    resumen = mp.resumen_pagos_mp_de_dte(dte)
+    return JsonResponse({
+        'success': True,
+        'tiene_mp': bool(resumen['transacciones']),
+        'total_disponible': resumen['total_disponible'],
+        'transacciones': resumen['transacciones'],
+        'puede_devolver': _es_admin(request),
+    })
 
 
 # ==================== PANTALLA DINEROS ====================

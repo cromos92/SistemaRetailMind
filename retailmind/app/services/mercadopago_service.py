@@ -426,13 +426,27 @@ def contenido_cierre_terminal(caja, fecha):
             partes.append(linea(f"  Comisiones MP: {plata(canal.get('comisiones'))}"))
     medios = caja.get('medios') or {}
     if medios:
-        partes.append(linea('POR MEDIO DE PAGO:'))
+        partes.append(linea('MP POR MEDIO DE PAGO:'))
         for etiqueta in sorted(medios):
             m = medios[etiqueta]
             partes.append(linea(f"  {etiqueta}: {m.get('cobros', 0)}  {plata(m.get('monto'))}"))
     partes.append(linea('------------------------------'))
-    partes.append('{center}{w}' + f"NETO: {plata(caja.get('total_neto'))}" + '{br}')
+    partes.append('{center}{w}' + f"NETO MP: {plata(caja.get('total_neto'))}" + '{br}')
     partes.append(linea('------------------------------'))
+
+    # Venta del día de la sucursal: todos los medios + total global (misma
+    # fuente que la cuadratura del arqueo, para que el papel siempre calce)
+    dia = caja.get('dia_sucursal') or []
+    if dia:
+        partes.append('{center}{w}VENTA DEL DIA - TODOS' + '{br}')
+        partes.append('{center}{w}LOS MEDIOS DE PAGO' + '{br}')
+        for nombre, monto in dia:
+            partes.append(linea(f"  {nombre}: {plata(monto)}"))
+        if caja.get('dia_nc'):
+            partes.append(linea(f"  NOTAS DE CREDITO: -{plata(caja['dia_nc'])}"))
+        partes.append(linea('------------------------------'))
+        partes.append('{center}{w}' + f"TOTAL GLOBAL: {plata(caja.get('dia_total_global'))}" + '{br}')
+        partes.append(linea('------------------------------'))
     partes.append(linea('MP liquida solo (sin cierre'))
     partes.append(linea('de lote). Resumen NEXO.'))
     if caja.get('responsable'):
@@ -779,6 +793,95 @@ def reembolsar_pagos_de_ticket(ticket, usuario=None):
     for venta in ventas:
         devoluciones.append(reembolsar(venta, usuario=usuario))
     return devoluciones
+
+
+def transacciones_mp_de_dte(dte):
+    """Cobros MP (VENTA) asociados a la venta original de un DTE: por el
+    ticket cuyo folio_dte == numero_documento en la misma sucursal."""
+    from app.models import Ticket
+    ticket = Ticket.objects.filter(
+        sucursal_id=dte.sucursal_id, folio_dte=dte.numero_documento,
+    ).order_by('-id').first()
+    if not ticket:
+        return []
+    from django.db.models import Q
+    return list(
+        TransaccionMercadoPago.objects.filter(tipo='VENTA')
+        .filter(Q(ticket=ticket) | Q(sucursal_id=dte.sucursal_id,
+                                     correlativo_ticket=str(ticket.correlativo)))
+        .filter(estado__in=('APROBADA', 'DEVUELTA'))
+        .distinct().order_by('-monto')
+    )
+
+
+def _disponible_trx(trx):
+    """Monto aún devolvible de una venta MP (monto − devoluciones hechas)."""
+    devuelto = sum(d.monto for d in trx.devoluciones.all())
+    return max(trx.monto - devuelto, 0)
+
+
+def resumen_pagos_mp_de_dte(dte):
+    """Para la acción "Verificar por Mercado Pago" de gestión-DTE."""
+    filas = []
+    total_disponible = 0
+    for trx in transacciones_mp_de_dte(dte):
+        disponible = _disponible_trx(trx)
+        total_disponible += disponible
+        filas.append({
+            'external_reference': trx.external_reference,
+            'canal': trx.canal,
+            'medio': etiqueta_medio_mp(trx.metodo_pago_mp),
+            'ultimos_4': trx.ultimos_4_digitos,
+            'payment_id': trx.payment_id,
+            'estado': trx.estado,
+            'monto': trx.monto,
+            'devuelto': trx.monto - disponible,
+            'disponible': disponible,
+            'fecha': timezone.localtime(trx.creado_en).strftime('%d/%m/%Y %H:%M'),
+        })
+    return {'transacciones': filas, 'total_disponible': total_disponible}
+
+
+def devolver_por_nc(dte, monto, usuario=None):
+    """Devuelve `monto` CLP a la(s) tarjeta(s) de los cobros MP de la venta
+    original de `dte` (refund vía API — la plata vuelve al mismo medio).
+
+    Se ejecuta ANTES de crear la NC: si acá falla, la NC no se emite y el
+    operador puede elegir otro método. Reparte sobre las transacciones con
+    saldo devolvible (mayor primero). Lanza MercadoPagoError si el saldo MP
+    disponible no cubre el monto (evita doble devolución)."""
+    monto = int(monto)
+    if monto <= 0:
+        raise MercadoPagoError('Monto de devolución inválido.')
+    trxs = transacciones_mp_de_dte(dte)
+    if not trxs:
+        raise MercadoPagoError(
+            'La venta original no tiene cobros Mercado Pago asociados '
+            '(¿se pagó por otro medio o es anterior a la integración?).')
+    disponibles = [(t, _disponible_trx(t)) for t in trxs]
+    total_disp = sum(d for _t, d in disponibles)
+    if total_disp < monto:
+        raise MercadoPagoError(
+            f'El saldo devolvible en Mercado Pago es ${total_disp:,} y la NC '
+            f'pide ${monto:,} — probablemente ya se devolvió parte.'.replace(',', '.'))
+
+    restante = monto
+    devoluciones = []
+    canal = trxs[0].canal
+    for trx, disp in disponibles:
+        if restante <= 0:
+            break
+        if disp <= 0:
+            continue
+        tomar = min(restante, disp)
+        devoluciones.append(reembolsar(trx, monto=tomar, usuario=usuario))
+        restante -= tomar
+    logger.warning(
+        "MP: devolución por NC de $%s sobre DTE %s (%s refund/s) por %s",
+        monto, dte.numero_documento, len(devoluciones),
+        getattr(usuario, 'username', 'sistema'),
+    )
+    return {'devoluciones': devoluciones, 'canal': canal, 'total': monto}
 
 
 # ==================== GUARD SERVER-SIDE ====================
