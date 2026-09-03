@@ -41,6 +41,7 @@ from .services.pdf_requerimiento_proveedor import (
     generar_pdf_requerimiento, nombre_archivo_pdf,
 )
 from .services.correo_service import enviar_correo_trazado, CorreoError
+from .services.fotos_evidencia import comprimir_para_adjunto
 
 logger = logging.getLogger('app')
 
@@ -53,6 +54,13 @@ PLAZO_RESPUESTA_DIAS = int(os.environ.get('REQUERIMIENTOS_PLAZO_RESPUESTA_DIAS',
 # Timeout (segundos) de cada operación SMTP del envío al proveedor. Sin él,
 # un servidor de correo colgado deja la request esperando sin límite y el
 # usuario mirando el spinner.
+# OJO: este plazo corre sobre el `sendall` COMPLETO, no por trozo enviado. O
+# sea, TODO el correo tiene que terminar de subir dentro de estos segundos o
+# Python corta con SMTPServerDisconnected('Server not connected'). Por eso las
+# fotos se comprimen antes de adjuntarse (ver services/fotos_evidencia.py).
+# Como hay un reintento, el peor caso son 2x este número más la preparación:
+# manténlo bien por debajo del --timeout de gunicorn o el worker muere antes de
+# poder registrar el fallo.
 EMAIL_TIMEOUT_SEGUNDOS = int(os.environ.get('REQUERIMIENTOS_EMAIL_TIMEOUT', '30'))
 
 
@@ -1568,13 +1576,27 @@ def enviar_a_proveedor(request, requerimiento_id):
     presupuesto = MAX_ADJUNTOS_MB * 1024 * 1024 - len(pdf_bytes or b'')
     adjuntos_fotos = []      # [(nombre, contenido)] que realmente se envían
     fotos_omitidas = []      # no cupieron: van igual dentro del PDF
+    peso_original = peso_adjunto = 0
     for foto in fotos_adjuntables:
-        contenido = fotos_bytes[foto.id]
+        # Se comprime ANTES de presupuestar: una foto de celular sin tocar pesa
+        # 4MB y arma un mensaje que no alcanza a subir dentro del timeout del
+        # socket (el plazo corre sobre el `sendall` completo, no por trozo).
+        nombre, contenido = comprimir_para_adjunto(
+            os.path.basename(foto.imagen.name), fotos_bytes[foto.id])
+        peso_original += len(fotos_bytes[foto.id])
         if len(contenido) > presupuesto:
             fotos_omitidas.append(foto.imagen.name)
             continue
         presupuesto -= len(contenido)
-        adjuntos_fotos.append((os.path.basename(foto.imagen.name), contenido))
+        peso_adjunto += len(contenido)
+        adjuntos_fotos.append((nombre, contenido))
+
+    if peso_original:
+        logger.info(
+            'Requerimiento %s: fotos %.2fMB -> %.2fMB adjuntas (%.0f%% menos)',
+            requerimiento.id, peso_original / 1024 / 1024, peso_adjunto / 1024 / 1024,
+            100 - peso_adjunto * 100 / peso_original,
+        )
 
     fotos_enviadas = len(adjuntos_fotos)
 
@@ -1620,7 +1642,7 @@ def enviar_a_proveedor(request, requerimiento_id):
         f'Motivo: {requerimiento.motivo}\n'
         f'{("Mensaje: " + mensaje_adicional) if mensaje_adicional else ""}\n'
         f'{"Se adjunta el formato del requerimiento en PDF con la evidencia fotográfica. " if pdf_bytes else ""}'
-        f'Se adjuntan {fotos_enviadas} foto(s) en su resolución original.\n'
+        f'Se adjuntan {fotos_enviadas} foto(s) de la evidencia en alta resolución.\n'
         f'Por favor responda indicando si procede.\n'
         f'Contacto: {request.user.get_full_name()} - {requerimiento.sucursal.empresa.nombre}'
     )
@@ -1662,43 +1684,61 @@ def enviar_a_proveedor(request, requerimiento_id):
             requerimiento.id, len(fotos_omitidas), MAX_ADJUNTOS_MB,
         )
 
-    try:
-        # Abrir a mano: si la abre send(), Django la cierra al terminar ese
-        # send() y la copia vuelve a pagar la conexión completa.
-        connection.open()
-        envio = enviar_correo_trazado(
-            modulo='REQUERIMIENTO',
-            objeto_id=requerimiento.id,
-            asunto=asunto,
-            texto=texto_plano,
-            html=html_message,
-            destinatario=correo_destino,
-            cc=cc,
-            reply_to=reply_to,
-            adjuntos=adjuntos,
-            from_email=(getattr(settings, 'REQUERIMIENTOS_FROM_EMAIL', '')
-                        or settings.DEFAULT_FROM_EMAIL),
-            usuario=request.user,
-            connection=connection,
-            tags=['requerimiento', requerimiento.tipo.lower()],
-        )
-    except CorreoError as e:
+    envio_kwargs = dict(
+        modulo='REQUERIMIENTO',
+        objeto_id=requerimiento.id,
+        asunto=asunto,
+        texto=texto_plano,
+        html=html_message,
+        destinatario=correo_destino,
+        cc=cc,
+        reply_to=reply_to,
+        adjuntos=adjuntos,
+        from_email=(getattr(settings, 'REQUERIMIENTOS_FROM_EMAIL', '')
+                    or settings.DEFAULT_FROM_EMAIL),
+        usuario=request.user,
+        tags=['requerimiento', requerimiento.tipo.lower()],
+    )
+
+    # Un segundo intento con conexión NUEVA. La caída de conexión contra el
+    # relay es transitoria: el 27-ago el primer envío murió y el mismo correo
+    # salió bien 47 segundos después. Sin reintento, esa caída obliga a que
+    # alguien se dé cuenta y vuelva a apretar el botón, y mientras tanto el
+    # requerimiento se ve "enviado" para nadie.
+    envio = None
+    ultimo_error = None
+    for intento in (1, 2):
         try:
-            connection.close()
-        except Exception:
-            pass
+            # Abrir a mano: si la abre send(), Django la cierra al terminar ese
+            # send() y la copia vuelve a pagar la conexión completa.
+            connection.open()
+            envio = enviar_correo_trazado(connection=connection, **envio_kwargs)
+            break
+        except CorreoError as e:
+            ultimo_error = e
+            try:
+                connection.close()
+            except Exception:
+                pass
+            if intento == 1:
+                logger.warning(
+                    'Requerimiento %s: falló el envío a %s (%s). Se reintenta una vez '
+                    'con conexión nueva.', requerimiento.id, correo_destino, e)
+                connection = get_connection(timeout=EMAIL_TIMEOUT_SEGUNDOS)
+
+    if envio is None:
         # El fallo queda en el historial, no solo en el log: sin esto, mañana
         # nadie sabe que este requerimiento nunca le llegó al proveedor.
         HistorialRequerimiento.objects.create(
             requerimiento=requerimiento,
             accion='ENVIO_FALLIDO',
             comentario=(f'NO se pudo enviar a {requerimiento.proveedor.nombre} '
-                        f'({correo_destino}): {e}'),
+                        f'({correo_destino}) en 2 intentos: {ultimo_error}'),
             usuario=request.user,
         )
         return JsonResponse({
             'success': False,
-            'error': f'Error al enviar correo al proveedor: {e}'
+            'error': f'Error al enviar correo al proveedor: {ultimo_error}'
         }, status=500)
 
     # Actualizar requerimiento + historial

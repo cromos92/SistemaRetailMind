@@ -32342,12 +32342,14 @@ def anular_factura_dte(request):
         # medio, red caída) la NC NO se emite y no se quema folio — el
         # operador puede reintentar o elegir efectivo/transferencia.
         _canal_mp_nc = None
+        _medio_mp_nc = ''
         if metodo_devolucion == 'MERCADOPAGO_API':
             from .services import mercadopago_service as _mp_srv
             try:
                 _resultado_mp = _mp_srv.devolver_por_nc(
                     dte, monto_con_iva_nc, usuario=request.user)
                 _canal_mp_nc = _resultado_mp['canal']
+                _medio_mp_nc = _resultado_mp.get('medio') or ''
             except _mp_srv.MercadoPagoError as e:
                 return JsonResponse({
                     'error': f'Mercado Pago no pudo devolver a la tarjeta: {e.mensaje} '
@@ -32434,6 +32436,9 @@ def anular_factura_dte(request):
             Dte_Detalle_Pago.objects.create(
                 dte=nc,
                 metodo_pago='MP_POINT' if _canal_mp_nc == 'POINT' else 'MP_QR',
+                # Medio real devuelto (debit_card / credit_card…): la
+                # cuadratura lo usa para restar del sub-bucket MP correcto.
+                tipo_tarjeta=(_medio_mp_nc or None),
                 monto=nc.monto_con_iva,
                 fecha_pago=fecha_devolucion_caja,
                 notas='Devolución a la tarjeta vía API Mercado Pago',

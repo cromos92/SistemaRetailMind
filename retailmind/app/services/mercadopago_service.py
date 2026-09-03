@@ -868,6 +868,10 @@ def devolver_por_nc(dte, monto, usuario=None):
     restante = monto
     devoluciones = []
     canal = trxs[0].canal
+    # Medio real (debit_card / credit_card / …) del primer cobro devuelto:
+    # la NC lo guarda en `tipo_tarjeta` para que la cuadratura reste la
+    # devolución del sub-bucket MP correcto (débito / crédito / otros).
+    medio = ''
     for trx, disp in disponibles:
         if restante <= 0:
             break
@@ -875,13 +879,16 @@ def devolver_por_nc(dte, monto, usuario=None):
             continue
         tomar = min(restante, disp)
         devoluciones.append(reembolsar(trx, monto=tomar, usuario=usuario))
+        if not medio:
+            medio = trx.metodo_pago_mp or ''
         restante -= tomar
     logger.warning(
         "MP: devolución por NC de $%s sobre DTE %s (%s refund/s) por %s",
         monto, dte.numero_documento, len(devoluciones),
         getattr(usuario, 'username', 'sistema'),
     )
-    return {'devoluciones': devoluciones, 'canal': canal, 'total': monto}
+    return {'devoluciones': devoluciones, 'canal': canal, 'total': monto,
+            'medio': medio}
 
 
 # ==================== GUARD SERVER-SIDE ====================

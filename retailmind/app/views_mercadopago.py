@@ -615,7 +615,11 @@ def gestion_imprimir_cierre_terminal_mp(request):
             ('EFECTIVO', cua.get('total_efectivo', 0)),
             ('TRANSBANK DEBITO', cua.get('total_tarjeta_debito', 0)),
             ('TRANSBANK CREDITO', cua.get('total_visa_mc_amex', 0)),
-            ('MERCADO PAGO POS', cua.get('total_mercadopago_pos', 0)),
+            # MP presencial desglosado igual que Transbank (débito/crédito);
+            # QR sin dato / dinero en cuenta quedan en OTROS.
+            ('MP POS DEBITO', cua.get('total_mercadopago_pos_debito', 0)),
+            ('MP POS CREDITO', cua.get('total_mercadopago_pos_credito', 0)),
+            ('MP POS QR/OTROS', cua.get('total_mercadopago_pos_otros', 0)),
             ('TRANSFERENCIA', cua.get('total_transferencia', 0)),
             ('TARJETA COMERCIAL', cua.get('total_tarjetas_comerciales', 0)),
             ('VENTA INTERNET', cua.get('total_venta_internet', 0)),

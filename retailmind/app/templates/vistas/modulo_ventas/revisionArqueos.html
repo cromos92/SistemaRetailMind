@@ -420,7 +420,7 @@
                 <div class="modal-body p-0">
                     <div class="px-4 py-2 d-flex align-items-center gap-2" style="background:var(--nexo-gray-100);border-bottom:1px solid var(--nexo-gray-300);">
                         <i class="ri-information-line text-primary" style="font-size:1rem;flex-shrink:0;"></i>
-                        <span style="font-size:.82rem;color:var(--nexo-gray-700);">Seleccione el arqueo y complete los datos del depósito bancario. El monto debe coincidir con el comprobante.</span>
+                        <span style="font-size:.82rem;color:var(--nexo-gray-700);">Seleccione el arqueo y complete los datos del depósito bancario. El monto debe coincidir con el comprobante. Un arqueo admite varios depósitos (parciales): el selector muestra el saldo pendiente de cada día.</span>
                     </div>
                     <div class="px-4 py-3">
                         <div class="row g-3">
@@ -522,6 +522,7 @@
                     <div class="alert alert-info mb-3" style="font-size:.85rem;">
                         <i class="ri-information-line me-2"></i>
                         Un <strong>solo comprobante bancario</strong> que cubre el efectivo de <strong>varios días</strong>. La suma debe coincidir con el monto total.
+                        <div class="mt-1"><i class="ri-store-2-line me-1"></i>Sucursal: <strong id="mdSucursalHint">—</strong></div>
                     </div>
                     <div class="row g-3 mb-3">
                         <div class="col-md-4">
@@ -1577,6 +1578,11 @@ function revisarConResultado(resultado) {
 // ===== COMPROBANTE BANCARIO =====
 let cbArqueosData = [];
 
+// Saldo por depositar de un arqueo: efectivo + cheques teóricos menos lo ya
+// verificado. Mismo criterio que `estado_deposito` en el backend.
+function cbEsperado(a) { return parseInt(a.efectivo_teorico || 0) + parseInt(a.cheque_teorico || 0); }
+function cbPendiente(a) { return cbEsperado(a) - parseInt(a.total_depositado_verificado || 0); }
+
 function abrirComprobanteBancario() {
     // Reset campos
     document.getElementById('cbFecha').value = new Date().toISOString().split('T')[0];
@@ -1611,7 +1617,7 @@ function abrirComprobanteBancario() {
         const id = parseInt($(this).val());
         const arqueo = cbArqueosData.find(a => a.id === id);
         if (arqueo) {
-            const pendiente = (arqueo.efectivo_teorico || 0) - (arqueo.total_depositado_verificado || 0);
+            const pendiente = cbPendiente(arqueo);
             document.getElementById('cbResEfTeorico').textContent = fmt(arqueo.efectivo_teorico);
             document.getElementById('cbResDepositado').textContent = fmt(arqueo.total_depositado_verificado || 0);
             document.getElementById('cbResPendiente').textContent = fmt(Math.max(0, pendiente));
@@ -1640,16 +1646,23 @@ function abrirComprobanteBancario() {
         .then(r => r.json())
         .then(data => {
             if (!data.success) return;
-            cbArqueosData = (data.arqueos || []).filter(a => !a.tiene_comprobante);
+            // Antes se ocultaba todo arqueo con un comprobante verificado
+            // (`tiene_comprobante`): un día depositado en dos o más partes
+            // desaparecía del selector tras el primer depósito y el resto no
+            // se podía registrar por esta vía. Ahora se listan los que aún
+            // tienen saldo por depositar (o no tienen teórico registrado).
+            cbArqueosData = (data.arqueos || []).filter(a => cbPendiente(a) > 0 || cbEsperado(a) === 0);
             $sel.empty().append('<option value=""></option>');
             if (cbArqueosData.length === 0) {
-                $sel.append('<option value="" disabled>Todos los arqueos ya tienen comprobante</option>');
+                $sel.append('<option value="" disabled>Todos los arqueos del rango ya están depositados</option>');
             } else {
                 cbArqueosData.forEach(a => {
                     const fecha = new Date(a.fecha_arqueo + 'T12:00:00')
                         .toLocaleDateString('es-CL', {weekday:'short', day:'numeric', month:'short', year:'numeric'});
-                    const efTeorico = '$' + parseInt(a.efectivo_teorico || 0).toLocaleString('es-CL');
-                    $sel.append(new Option(fecha + ' — ' + (a.estado_display || a.estado) + ' — Ef. Teórico: ' + efTeorico, a.id));
+                    const nDep = parseInt(a.depositos_confirmados || 0);
+                    let etiqueta = fecha + ' — ' + (a.estado_display || a.estado) + ' — Ef. Teórico: ' + fmt(a.efectivo_teorico);
+                    if (nDep > 0) etiqueta += ' — ' + nDep + ' dep. — Pendiente: ' + fmt(cbPendiente(a));
+                    $sel.append(new Option(etiqueta, a.id));
                 });
             }
             $sel.trigger('change');
@@ -1662,7 +1675,7 @@ function cbAutoFillMonto() {
     const id = parseInt($('#cbArqueo').val());
     const arqueo = cbArqueosData.find(a => a.id === id);
     if (arqueo) {
-        const pendiente = (arqueo.efectivo_teorico || 0) - (arqueo.total_depositado_verificado || 0);
+        const pendiente = cbPendiente(arqueo);
         if (pendiente > 0) document.getElementById('cbMonto').value = pendiente;
     }
 }
@@ -1694,10 +1707,19 @@ function abrirDepositoMultidia() {
     document.getElementById('mdValidacion').style.display = 'none';
     document.getElementById('btnMdGuardar').disabled = true;
 
-    fetch('/app/api/cuadratura/deposito-multidia/arqueos-disponibles/')
+    // Se envía la sucursal de la pill: el endpoint caía a la de SESIÓN, así
+    // que con otra tienda seleccionada el modal listaba (y grababa) los días
+    // de la tienda equivocada, y parecía que "sólo había esos días".
+    const mdSuc = (sucursalActualId && sucursalActualId !== 'all')
+        ? '?sucursal_id=' + encodeURIComponent(sucursalActualId) : '';
+    const pillActiva = document.querySelector('.sucursal-pill.active');
+    document.getElementById('mdSucursalHint').textContent = (sucursalActualId !== 'all' && pillActiva)
+        ? pillActiva.textContent
+        : '{{ sucursal_actual.alias|escapejs }} (sucursal de sesión: elija una pill para otra tienda)';
+    fetch('/app/api/cuadratura/deposito-multidia/arqueos-disponibles/' + mdSuc)
         .then(r => r.json())
         .then(data => {
-            if (!data.success) return;
+            if (!data.success) { Swal.fire('Error', escHtml(data.error || 'No se pudo cargar'), 'error'); return; }
             let html = '';
             data.arqueos.forEach(a => {
                 const pend = a.pendiente_depositar;
@@ -1711,7 +1733,7 @@ function abrirDepositoMultidia() {
                     <td><span class="badge" style="background:rgba(0,0,0,.06);color:var(--nexo-gray-700);font-size:.72rem;">${a.estado}</span></td>
                 </tr>`;
             });
-            document.getElementById('mdBodyDias').innerHTML = html || '<tr><td colspan="7" class="text-center text-muted py-3">Sin arqueos</td></tr>';
+            document.getElementById('mdBodyDias').innerHTML = html || '<tr><td colspan="7" class="text-center text-muted py-3">Sin arqueos con efectivo pendiente en esta sucursal</td></tr>';
         });
     new bootstrap.Modal(document.getElementById('modalMultidia')).show();
 }
@@ -1764,6 +1786,7 @@ function guardarMultidia() {
     fd.append('numero_comprobante', document.getElementById('mdNumComp').value);
     fd.append('observaciones', document.getElementById('mdObs').value);
     fd.append('desglose', JSON.stringify(desglose));
+    if (sucursalActualId && sucursalActualId !== 'all') fd.append('sucursal_id', sucursalActualId);
     const img = document.getElementById('mdImagen').files[0]; if (img) fd.append('imagen_comprobante', img);
     document.getElementById('btnMdGuardar').disabled = true;
     fetch('/app/api/cuadratura/deposito-multidia/crear/', { method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') }, body: fd })

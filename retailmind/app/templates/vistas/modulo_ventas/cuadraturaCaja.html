@@ -1259,6 +1259,11 @@
                                         <tr class="row-detalle" data-categoria="tarjetas" data-metodos="TARJETA_COMERCIAL" data-tipo-tarjeta="PRESTO" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">PRESTO</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="presto">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="tarjetas" data-metodos="TARJETA_COMERCIAL" data-tipo-tarjeta="HITES" title="Ver detalle"><td class="text-muted" style="font-size:.75rem;">HITES</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;"><span id="hites">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="tarjetas" data-metodos="MP_QR,MP_POINT,MP_POINT_DEBITO,MP_POINT_CREDITO" title="Ver detalle — Mercado Pago presencial (QR/Point), distinto del MP de Venta Internet"><td style="font-size:.75rem;color:var(--nexo-primary);">MERCADO PAGO POS</td><td class="text-end fw-bold" style="font-size:.82rem;font-family:monospace;color:var(--nexo-primary);"><span id="mercadopago_pos">$0</span></td></tr>
+                                        <!-- Desglose MP presencial por medio real (payment_type_id de MP). El filtro
+                                             data-tipo-tarjeta usa los IDs exactos de MP para no pescar Transbank. -->
+                                        <tr class="row-detalle mp-sub" data-categoria="tarjetas" data-metodos="MP_POINT_DEBITO,MP_QR,MP_POINT" data-tipo-tarjeta="DEBIT_CARD,PREPAID_CARD" title="Ver detalle — Mercado Pago débito / prepago"><td class="text-muted ps-3" style="font-size:.7rem;">└ MP DÉBITO</td><td class="text-end" style="font-size:.78rem;font-family:monospace;color:var(--nexo-primary);"><span id="mercadopago_pos_debito">$0</span></td></tr>
+                                        <tr class="row-detalle mp-sub" data-categoria="tarjetas" data-metodos="MP_POINT_CREDITO,MP_QR,MP_POINT" data-tipo-tarjeta="CREDIT_CARD" title="Ver detalle — Mercado Pago crédito"><td class="text-muted ps-3" style="font-size:.7rem;">└ MP CRÉDITO</td><td class="text-end" style="font-size:.78rem;font-family:monospace;color:var(--nexo-primary);"><span id="mercadopago_pos_credito">$0</span></td></tr>
+                                        <tr class="row-detalle mp-sub" data-categoria="tarjetas" data-metodos="MP_QR,MP_POINT" data-tipo-tarjeta="ACCOUNT_MONEY,BANK_TRANSFER,MERCADO PAGO" title="Ver detalle — QR sin dato de medio, dinero en cuenta MP, transferencia MP"><td class="text-muted ps-3" style="font-size:.7rem;">└ MP QR / OTROS</td><td class="text-end" style="font-size:.78rem;font-family:monospace;color:var(--nexo-primary);"><span id="mercadopago_pos_otros">$0</span></td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -3567,6 +3572,13 @@ function cargarDatosCuadratura(c) {
     $('#credito_trabajador').text(fmCLP(c.total_credito_trabajador||0)); $('#credito_externo').text(fmCLP(c.total_credito_externo||0));
     $('#giftcard').text(fmCLP(c.total_giftcard||0));
     $('#mercadopago_pos').text(fmCLP(c.total_mercadopago_pos||0));
+    // Desglose MP presencial (débito / crédito / QR-otros). Las filas se
+    // atenúan cuando el bucket está en 0 para no ensuciar el resumen.
+    [['debito','mercadopago_pos_debito'],['credito','mercadopago_pos_credito'],['otros','mercadopago_pos_otros']]
+        .forEach(([k, id]) => {
+            const v = Number(c['total_mercadopago_pos_' + k]) || 0;
+            $('#' + id).text(fmCLP(v)).closest('tr').css('opacity', v ? '' : '.55');
+        });
     $('#cheque').text(fmCLP(c.total_cheque||0)); $('#orden_compra').text(fmCLP(c.total_orden_compra||0));
     $('#falabella').text(fmCLP(c.total_falabella||0)); $('#paris').text(fmCLP(c.total_paris||0));
     $('#ripley').text(fmCLP(c.total_ripley||0)); $('#mercadopago').text(fmCLP(c.total_mercadopago||0));

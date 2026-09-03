@@ -387,6 +387,108 @@ class CuadraturaMPTests(BaseMPTest):
         for metodo in ('MP_QR', 'MP_POINT', 'MP_POINT_DEBITO', 'MP_POINT_CREDITO'):
             self.assertEqual(_categoria_metodo_pago(metodo), 'tarjetas')
 
+    # ── Desglose débito / crédito / otros del MP presencial ──────────────
+
+    def test_sub_bucket_mp_helper(self):
+        from app.views_modulo_ventas import _sub_bucket_mp
+        # El método Point ya trae el medio resuelto
+        self.assertEqual(_sub_bucket_mp('MP_POINT_DEBITO', ''), 'debito')
+        self.assertEqual(_sub_bucket_mp('MP_POINT_CREDITO', 'debit_card'), 'credito')
+        # QR / Point genérico: se clasifica por el payment_type_id de MP
+        # (el loop de tickets lo pasa en MAYÚSCULAS, el de DTE tal cual)
+        self.assertEqual(_sub_bucket_mp('MP_QR', 'DEBIT_CARD'), 'debito')
+        self.assertEqual(_sub_bucket_mp('MP_QR', 'credit_card'), 'credito')
+        self.assertEqual(_sub_bucket_mp('MP_POINT', 'prepaid_card'), 'debito')
+        self.assertEqual(_sub_bucket_mp('MP_QR', 'account_money'), 'otros')
+        self.assertEqual(_sub_bucket_mp('MP_QR', 'MERCADO PAGO'), 'otros')
+        self.assertEqual(_sub_bucket_mp('MP_QR', None), 'otros')
+
+    def test_desglose_mp_debito_credito_otros(self):
+        from app.views_modulo_ventas import _calcular_cuadratura_data
+        ticket = self._ticket_pagado(9003, 50000)
+        # QR pagado con débito (tipo_tarjeta = payment_type_id real)
+        TicketDetallePago.objects.create(
+            ticket=ticket, metodo_pago='MP_QR', monto=10000,
+            tipo_tarjeta='debit_card', origen_pago='POS_INTEGRADO',
+        )
+        # Point crédito (método ya resuelto por el POS)
+        TicketDetallePago.objects.create(
+            ticket=ticket, metodo_pago='MP_POINT_CREDITO', monto=20000,
+            tipo_tarjeta='credit_card', origen_pago='POS_INTEGRADO',
+        )
+        # Point prepago → débito (misma convención que TBK_PREPAGO_POS)
+        TicketDetallePago.objects.create(
+            ticket=ticket, metodo_pago='MP_POINT', monto=5000,
+            tipo_tarjeta='prepaid_card', origen_pago='POS_INTEGRADO',
+        )
+        # QR con dinero en cuenta → otros
+        TicketDetallePago.objects.create(
+            ticket=ticket, metodo_pago='MP_QR', monto=15000,
+            tipo_tarjeta='account_money', origen_pago='POS_INTEGRADO',
+        )
+        hoy = timezone.localdate().strftime('%Y-%m-%d')
+        data = _calcular_cuadratura_data(self.sucursal, hoy)
+        self.assertEqual(data['total_mercadopago_pos'], 50000)
+        self.assertEqual(data['total_mercadopago_pos_debito'], 15000)
+        self.assertEqual(data['total_mercadopago_pos_credito'], 20000)
+        self.assertEqual(data['total_mercadopago_pos_otros'], 15000)
+        # Invariante: el desglose siempre suma el bucket total
+        self.assertEqual(
+            data['total_mercadopago_pos_debito']
+            + data['total_mercadopago_pos_credito']
+            + data['total_mercadopago_pos_otros'],
+            data['total_mercadopago_pos'],
+        )
+        # Sigue sin mezclarse con Transbank
+        self.assertEqual(data['total_tarjeta_debito'], 0)
+        self.assertEqual(data['total_tarjeta_credito'], 0)
+
+    def test_nc_mp_resta_del_sub_bucket_del_medio_devuelto(self):
+        """Una NC devuelta por la API MP (tipo_tarjeta = medio real) resta del
+        sub-bucket correcto y el desglose sigue cuadrando con el total."""
+        from decimal import Decimal
+        from app.models import Dte, Dte_Detalle_Pago
+        from app.views_modulo_ventas import _calcular_cuadratura_data
+        ticket = self._ticket_pagado(9004, 30000)
+        TicketDetallePago.objects.create(
+            ticket=ticket, metodo_pago='MP_POINT_CREDITO', monto=30000,
+            tipo_tarjeta='credit_card', origen_pago='POS_INTEGRADO',
+        )
+        hoy_date = timezone.localdate()
+        nc = Dte.objects.create(
+            emisor=self.empresa,
+            receptor=None,
+            numero_documento=77001,
+            tipo_documento='NOTA DE CREDITO',
+            monto_con_iva=Decimal('12000'),
+            monto_neto=Decimal('10084'),
+            descuento=0,
+            estado_pago='PAGADO',
+            estado_dte='EMITIDO',
+            responsable='test-mp',
+            fecha_emision=hoy_date,
+            fecha_vencimiento=hoy_date,
+            diasCredito=0,
+            bultos=0,
+            unidades_productos=0,
+            tipo_transaccion='DEVOLUCION',
+            sucursal=self.sucursal,
+            es_nota_credito=True,
+            hora=timezone.localtime().time(),
+        )
+        # Igual que anular_factura_dte con MERCADOPAGO_API: MP_POINT +
+        # tipo_tarjeta = medio devuelto por devolver_por_nc()
+        Dte_Detalle_Pago.objects.create(
+            dte=nc, metodo_pago='MP_POINT', tipo_tarjeta='credit_card',
+            monto=12000, fecha_pago=hoy_date,
+        )
+        data = _calcular_cuadratura_data(self.sucursal, hoy_date.strftime('%Y-%m-%d'))
+        self.assertEqual(data['total_nc_mercadopago_pos'], 12000)
+        self.assertEqual(data['total_mercadopago_pos'], 18000)
+        self.assertEqual(data['total_mercadopago_pos_credito'], 18000)
+        self.assertEqual(data['total_mercadopago_pos_debito'], 0)
+        self.assertEqual(data['total_mercadopago_pos_otros'], 0)
+
 
 # ==================== PESTAÑA DE GESTIÓN (render + endpoints) ====================
 
@@ -493,6 +595,22 @@ class ReembolsoTests(BaseMPTest):
                            estado='PENDIENTE', payment_id='779')
         with self.assertRaises(mp.MercadoPagoError):
             mp.reembolsar(trx)
+
+    def test_devolver_por_nc_informa_medio_del_cobro_devuelto(self):
+        """`devolver_por_nc` expone el payment_type_id del cobro devuelto
+        ('medio') para que la NC lo guarde en tipo_tarjeta y la cuadratura
+        reste del sub-bucket MP correcto."""
+        trx = _transaccion(self.config, correlativo='403', monto=10000,
+                           payment_id='781', metodo_pago_mp='credit_card',
+                           canal='POINT')
+        dte_fake = mock.MagicMock(numero_documento=123)
+        with mock.patch.object(mp, 'transacciones_mp_de_dte', return_value=[trx]), \
+             mock.patch.object(mp, 'reembolsar', return_value=None) as m_ref:
+            res = mp.devolver_por_nc(dte_fake, 4000)
+        m_ref.assert_called_once()
+        self.assertEqual(res['medio'], 'credit_card')
+        self.assertEqual(res['canal'], 'POINT')
+        self.assertEqual(res['total'], 4000)
 
     @mock.patch('app.services.mercadopago_service.requests.request')
     def test_refund_parcial_no_marca_devuelta(self, m_req):

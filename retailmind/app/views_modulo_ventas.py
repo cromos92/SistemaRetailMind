@@ -11750,6 +11750,25 @@ def obtener_depositos_pendientes(request):
 
 # ========== DEPÓSITO MULTI-DÍA ==========
 
+def _sucursal_para_deposito(request):
+    """Sucursal sobre la que opera el depósito multi-día.
+
+    Acepta `sucursal_id` (GET o POST) validado contra las sucursales
+    permitidas del usuario; si no viene o no está permitido, cae a la de
+    sesión. Antes los dos endpoints leían SOLO la sesión: en Revisión de
+    Arqueos el modal listaba —y grababa— los días de la sucursal de sesión
+    aunque la pill de pantalla fuera otra tienda, y la tienda seleccionada
+    parecía tener "sólo esos días" disponibles para depositar.
+    """
+    sucursal_id = get_sucursal_id(request)
+    pedida = request.GET.get('sucursal_id') or request.POST.get('sucursal_id')
+    if pedida and str(pedida).isdigit():
+        permitidas, _ = _sucursales_permitidas(request)
+        if int(pedida) in permitidas:
+            sucursal_id = int(pedida)
+    return sucursal_id
+
+
 @login_required
 @require_GET
 def listar_arqueos_para_deposito(request):
@@ -11764,7 +11783,7 @@ def listar_arqueos_para_deposito(request):
         if not es_supervisor:
             return JsonResponse({'success': False, 'error': 'Solo supervisores pueden acceder a depósitos multi-día.'}, status=403)
 
-        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        sucursal_id = _sucursal_para_deposito(request)
         if not sucursal_id:
             return JsonResponse({'success': False, 'error': 'Sin sucursal'})
 
@@ -11807,7 +11826,7 @@ def listar_arqueos_para_deposito(request):
                 'estado': a.get_estado_display(),
             })
 
-        return JsonResponse({'success': True, 'arqueos': resultado})
+        return JsonResponse({'success': True, 'arqueos': resultado, 'sucursal_id': int(sucursal_id)})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
 
@@ -11830,7 +11849,7 @@ def crear_deposito_multidia(request):
         if not es_supervisor:
             return JsonResponse({'success': False, 'error': 'Solo supervisores pueden crear depósitos multi-día.'}, status=403)
 
-        sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
+        sucursal_id = _sucursal_para_deposito(request)
         if not sucursal_id:
             return JsonResponse({'success': False, 'error': 'Sin sucursal'})
 
@@ -12449,11 +12468,17 @@ def _sucursales_permitidas(request):
     rol_usuario = getattr(request.user, 'rol', None)
     es_supervisor = rol_usuario in ['administrador', 'administracion']
     try:
-        permitidas = [
-            int(s['sucursal_id'])
-            for s in obtener_sucursales_usuario(request.user)
-            if s.get('sucursal_id')
-        ]
+        # `obtener_sucursales_usuario` (utils_permisos) devuelve instancias de
+        # Sucursal, no dicts. Se leía `s['sucursal_id']`, el error caía en el
+        # `except` y `permitidas` quedaba vacío: TODO usuario —también el
+        # administrador— terminaba acotado a su sucursal de sesión, así que
+        # el `sucursal_id` de las pills y "Todas" se ignoraban en silencio.
+        # Se aceptan ambas formas por si alguna vez vuelve a llegar un dict.
+        permitidas = []
+        for s in obtener_sucursales_usuario(request.user):
+            sid = s.get('sucursal_id') if isinstance(s, dict) else getattr(s, 'id', None)
+            if sid:
+                permitidas.append(int(sid))
     except Exception:
         permitidas = []
     if not permitidas:
@@ -13110,6 +13135,7 @@ def listar_arqueos(request):
                 'supervisor': arqueo.supervisor_revision.username if arqueo.supervisor_revision else '',
                 'fecha_cierre': arqueo.fecha_cierre.strftime('%d/%m/%Y %H:%M') if arqueo.fecha_cierre else '',
                 'tiene_comprobante': bool(arqueo.ann_tiene_comprobante),
+                'cheque_teorico': arqueo.total_cheque_teorico or 0,
                 'total_depositado_verificado': total_dep_verif_all,
                 'depositos_declarados': depositos_declarados,
                 'depositos_confirmados': arqueo.cache_depositos_confirmados or 0,
@@ -14408,19 +14434,53 @@ def registrar_comprobante_supervisor(request):
             })
         
         arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id)
-        
-        # Validar que no tenga ya un comprobante bancario verificado
-        comprobante_existente = DepositoBancario.objects.filter(
-            arqueo=arqueo,
-            verificado=True,
-            numero_comprobante__gt=''
-        ).exists()
-        if comprobante_existente:
+
+        # El arqueo tiene que ser de una sucursal habilitada para el usuario.
+        # Se valida contra las permitidas y no contra la de sesión porque la
+        # pantalla de revisión trabaja con pills sobre varias sucursales.
+        permitidas, _ = _sucursales_permitidas(request)
+        if permitidas and arqueo.sucursal_id not in permitidas:
             return JsonResponse({
                 'success': False,
-                'error': f'Este arqueo ({arqueo.fecha_arqueo.strftime("%d/%m/%Y")}) ya tiene un comprobante bancario registrado. '
-                         'Si necesita corregirlo, primero elimine el existente.'
-            })
+                'error': 'El arqueo no pertenece a una sucursal habilitada para su usuario.'
+            }, status=403)
+
+        # Se admiten VARIOS depósitos por arqueo (parciales, bancos o días
+        # distintos). Antes se rechazaba cualquier segundo comprobante
+        # verificado ("ya tiene un comprobante bancario registrado"), así
+        # que un día depositado en dos o más partes sólo se completaba
+        # borrando el primero y recargando el total. Lo que se controla
+        # ahora es el MONTO: no se sigue depositando un arqueo ya cubierto.
+        fecha_txt = arqueo.fecha_arqueo.strftime('%d/%m/%Y')
+        esperado = _to_int(arqueo.total_efectivo_teorico) + _to_int(arqueo.total_cheque_teorico)
+        depositado = _to_int(arqueo.total_depositado_verificado)
+        declarado_sin_confirmar = _to_int(
+            arqueo.depositos.filter(verificado=False, monto_declarado__gt=0)
+            .aggregate(t=Sum('monto_declarado'))['t']
+        )
+        pendiente = esperado - depositado - declarado_sin_confirmar
+        if esperado > 0:
+            if declarado_sin_confirmar > 0 and pendiente <= 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': (f'Este arqueo ({fecha_txt}) tiene ${declarado_sin_confirmar:,} declarados por caja '
+                              'pendientes de confirmar que ya cubren el saldo. Confírmelos (o elimínelos) '
+                              'en vez de registrar otro depósito.')
+                })
+            if pendiente <= 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': (f'Este arqueo ({fecha_txt}) ya tiene depositado ${depositado:,} de ${esperado:,} '
+                              'esperados: no queda saldo por depositar. Si necesita corregir un depósito, '
+                              'elimínelo desde el detalle del arqueo.')
+                })
+            holgura = max(int(esperado * 0.1), TOLERANCIA_ARQUEO_DEPOSITO)
+            if monto > pendiente + holgura:
+                return JsonResponse({
+                    'success': False,
+                    'error': (f'El monto ${monto:,} excede el saldo pendiente de depositar (${pendiente:,}). '
+                              f'Ya hay ${depositado:,} depositados de ${esperado:,}.')
+                })
         
         # Convertir fecha
         from datetime import datetime
@@ -14448,22 +14508,44 @@ def registrar_comprobante_supervisor(request):
             fecha_verificacion=timezone.now()
         )
         
+        # Mismo criterio que los otros endpoints de depósito: el estado se
+        # re-evalúa con la diferencia de CONTEO y no se pisa el avance del
+        # supervisor (ver `_reevaluar_estado_arqueo_por_deposito`).
+        arqueo.refresh_from_db()
+        _reevaluar_estado_arqueo_por_deposito(arqueo)
+        depositado_ahora = _to_int(arqueo.total_depositado_verificado)
+        pendiente_restante = max(esperado - depositado_ahora, 0) if esperado > 0 else 0
+        cantidad_depositos = arqueo.depositos.count()
+
         logger.info(
-            "Comprobante bancario registrado: arqueo_id=%s, monto=%s, banco=%s",
-            arqueo_id,
-            monto,
-            banco,
+            "Comprobante bancario registrado: arqueo_id=%s, monto=%s, banco=%s, depositos=%s, pendiente=%s",
+            arqueo_id, monto, banco, cantidad_depositos, pendiente_restante,
         )
-        
+
+        mensaje = f'Comprobante de ${monto:,} registrado exitosamente'
+        if esperado > 0:
+            mensaje += (f'. Quedan ${pendiente_restante:,} por depositar' if pendiente_restante > 0
+                        else '. El arqueo quedó completamente depositado')
+        if cantidad_depositos > 1:
+            mensaje += f' ({cantidad_depositos} depósitos en total)'
+
         return JsonResponse({
             'success': True,
-            'message': f'Comprobante de ${monto:,} registrado exitosamente',
+            'message': mensaje,
             'deposito': {
                 'id': deposito.id,
                 'monto': deposito.monto,
                 'banco': deposito.get_banco_display(),
                 'numero_comprobante': deposito.numero_comprobante,
                 'tiene_imagen': bool(deposito.imagen_comprobante)
+            },
+            'arqueo_actualizado': {
+                'estado': arqueo.estado,
+                'estado_display': arqueo.get_estado_display(),
+                'estado_deposito': arqueo.estado_deposito,
+                'total_depositado_verificado': depositado_ahora,
+                'pendiente_depositar': pendiente_restante,
+                'cantidad_depositos': cantidad_depositos,
             }
         })
         

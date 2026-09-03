@@ -443,7 +443,7 @@
                 <div class="req-modal-icon"><i class="ri-mail-send-line"></i></div>
                 <div>
                     <h6 id="env-titulo">Enviar al proveedor</h6>
-                    <div class="req-modal-sub">Se envía el formato PDF con la evidencia y las fotos originales</div>
+                    <div class="req-modal-sub">Se envía el formato PDF con la evidencia y las fotos en alta resolución</div>
                 </div>
                 <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal"></button>
             </div>
@@ -1518,8 +1518,8 @@ function abrirModalEnvio(esReenvio) {
     avisos += nFotos > 0
         ? `<div class="alert alert-info py-1 px-2 mb-2" style="font-size:.75rem">
              <i class="ri-attachment-2 me-1"></i>Se adjunta el <strong>formato PDF</strong>
-             (con las ${nFotos} foto(s) incrustadas) más las fotos originales.
-             La copia de control no lleva adjuntos.</div>`
+             (con las ${nFotos} foto(s) incrustadas) más las fotos en alta resolución,
+             optimizadas para que el correo salga rápido. La copia de control no lleva adjuntos.</div>`
         : `<div class="alert alert-danger py-1 px-2 mb-2" style="font-size:.75rem">
              <i class="ri-error-warning-line me-1"></i>Este requerimiento <strong>no tiene fotos</strong>:
              el formato irá sin evidencia y el proveedor puede rechazarlo por eso.</div>`;
