@@ -1280,6 +1280,15 @@ function verDetalle(id) {
                     '<div class="col-md-4"><div class="kpi-card"><div class="kpi-value">' + fmt(a.total_transbank_teorico) + '</div><div class="kpi-label">Transbank Teórico</div></div></div>' +
                     '<div class="col-md-4"><div class="kpi-card"><div class="kpi-value">' + fmt(a.cierre_pos_fisico) + '</div><div class="kpi-label">Cierre POS</div></div></div>' +
                     '<div class="col-md-4"><div class="kpi-card"><div class="kpi-value" style="color:' + (a.diferencia_transbank===0?'var(--nexo-success)':'var(--nexo-error)') + ';">' + fmt(a.diferencia_transbank) + '</div><div class="kpi-label">Dif. Transbank</div></div></div>' +
+                    // Mercado Pago presencial: la fila sólo aparece si el día
+                    // tuvo MP o si la tienda declaró un cierre. Un arqueo sin
+                    // MP no debe ganar 3 KPI en cero que el supervisor tenga
+                    // que descartar visualmente en cada revisión.
+                    (((a.total_mercadopago_pos_teorico||0) > 0 || (a.cierre_mp_fisico||0) > 0) ?
+                        '<div class="col-md-4"><div class="kpi-card"><div class="kpi-value">' + fmt(a.total_mercadopago_pos_teorico||0) + '</div><div class="kpi-label">Mercado Pago Teórico</div></div></div>' +
+                        '<div class="col-md-4"><div class="kpi-card"><div class="kpi-value">' + ((a.cierre_mp_fisico||0) > 0 ? fmt(a.cierre_mp_fisico) : '<span style="font-size:.9rem;color:var(--nexo-gray-500);">Sin declarar</span>') + '</div><div class="kpi-label">Cierre Mercado Pago</div></div></div>' +
+                        '<div class="col-md-4"><div class="kpi-card"><div class="kpi-value" style="color:' + ((a.cierre_mp_fisico||0) === 0 ? 'var(--nexo-gray-500)' : ((a.diferencia_mercadopago_pos||0)===0?'var(--nexo-success)':'var(--nexo-error)')) + ';">' + ((a.cierre_mp_fisico||0) === 0 ? '—' : fmt(a.diferencia_mercadopago_pos||0)) + '</div><div class="kpi-label">Dif. Mercado Pago</div></div></div>'
+                    : '') +
                 '</div>' +
                 '<div class="row g-3 mt-2">' +
                     '<div class="col-md-6"><div class="kpi-card"><div class="kpi-value" style="font-size:1.1rem;">' + fmt(a.venta_total) + '</div><div class="kpi-label">Venta Total</div></div></div>' +

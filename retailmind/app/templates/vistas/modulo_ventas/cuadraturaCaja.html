@@ -835,7 +835,7 @@
                     <div class="workflow-connector" id="wizardConn2"></div>
                     <button type="button" class="wizard-step-tab" id="wizardTab3" onclick="cambiarPasoArqueo(3)">
                         <span class="step-indicator" id="wizardIndicator3" style="width:28px;height:28px;font-size:.75rem;">3</span>
-                        <span>Cierre Transbank</span>
+                        <span>Cierre Tarjetas</span>
                     </button>
                     <div class="workflow-connector" id="wizardConn3"></div>
                     <button type="button" class="wizard-step-tab" id="wizardTab4" onclick="cambiarPasoArqueo(4)">
@@ -1006,7 +1006,7 @@
                     </div>
                 </div>
 
-                <!-- ---- PASO 3: CIERRE TRANSBANK ---- -->
+                <!-- ---- PASO 3: CIERRE DE TARJETAS (Transbank + Mercado Pago POS) ---- -->
                 <div id="wizardStep3" class="arqueo-wizard-step p-4">
                     <div class="card border-primary">
                         <div class="card-header bg-primary"><h6 class="mb-0 text-white"><i class="ri-bank-card-line me-2"></i>Cierre Transbank — Ingrese los montos del comprobante POS</h6></div>
@@ -1087,6 +1087,70 @@
                     <div class="alert alert-info mt-3 mb-0" style="font-size:.82rem;">
                         <i class="ri-information-line me-2"></i>
                         Si el sistema no tiene máquina Transbank, deje los campos en 0 y continúe al siguiente paso.
+                    </div>
+
+                    <!--
+                        Cierre Mercado Pago presencial (QR / Point).
+
+                        Decisiones de diseño (para no entorpecer el flujo actual):
+                          * Va en el MISMO paso 3 que Transbank, no en un paso 5:
+                            son dos cierres de tarjeta y el cajero los hace juntos.
+                          * La tarjeta se OCULTA cuando el día no tuvo ventas MP
+                            presenciales (`total_mercadopago_pos == 0`) y el arqueo
+                            tampoco trae un cierre MP declarado. Así una tienda sin
+                            Mercado Pago ve exactamente la pantalla de antes.
+                          * El monto es OPCIONAL: MP no emite comprobante de cierre
+                            de máquina como Transbank. En blanco/0 = "no declarado"
+                            y la diferencia NO se calcula (no ensucia el arqueo).
+                    -->
+                    <div class="card mt-3" id="cardCierreMercadoPago" style="display:none;border:1px solid var(--nexo-primary);">
+                        <div class="card-header d-flex align-items-center justify-content-between" style="background:var(--nexo-primary-light);">
+                            <h6 class="mb-0" style="color:var(--nexo-primary);font-weight:700;font-size:.9rem;">
+                                <i class="ri-qr-code-line me-2"></i>Cierre Mercado Pago POS — QR / Point
+                            </h6>
+                            <span class="badge" style="background:var(--nexo-warning,#FFB020);color:#1A1A2E;font-size:.68rem;">Opcional</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-5">
+                                    <label class="form-label" style="font-size:.8rem;">
+                                        Total según app Mercado Pago
+                                        <i class="ri-question-line text-muted" title="Abra la app o el panel de Mercado Pago, filtre por el día y copie el total cobrado en esta caja. Si no lo tiene a mano, deje el campo vacío: el arqueo se cierra igual y la conciliación queda pendiente."></i>
+                                    </label>
+                                    <div class="input-group input-group-lg">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" class="form-control text-center" id="cierreMercadoPagoExpress"
+                                               placeholder="Dejar vacío si no se revisó" min="0" step="1"
+                                               style="font-size:1.15rem;font-weight:600;"
+                                               onchange="calcularDiferenciasMercadoPago()" oninput="calcularDiferenciasMercadoPago()">
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label text-muted" style="font-size:.75rem;">Sistema espera</label>
+                                    <div class="h5 mb-0" id="mercadoPagoTeoricoExpress" style="color:var(--nexo-primary);">$0</div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label text-muted" style="font-size:.75rem;">Resultado</label>
+                                    <div id="diferenciaMercadoPagoExpress"><span class="badge bg-secondary">Sin declarar</span></div>
+                                </div>
+                                <div class="col-12">
+                                    <div id="desgloseMercadoPagoExpress" class="text-muted" style="font-size:.75rem;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Total consolidado de los dos cierres de tarjeta del día. -->
+                    <div class="d-flex align-items-center justify-content-between p-3 rounded mt-3" id="resumenTarjetasPaso3"
+                         style="background:var(--nexo-gray-100);border:1px dashed var(--nexo-gray-300);display:none;">
+                        <div>
+                            <span class="fw-bold me-2" style="color:var(--nexo-gray-900);">Total tarjetas declarado (TBK + MP):</span>
+                            <span class="h5 mb-0" id="totalTarjetasFisicoPaso3">$0</span>
+                        </div>
+                        <div class="text-end">
+                            <span class="text-muted small">Sistema: <span id="totalTarjetasTeoricoPaso3">$0</span></span>
+                            <span class="ms-2" id="diferenciaTarjetasPaso3"></span>
+                        </div>
                     </div>
                 </div>
 
@@ -2578,9 +2642,15 @@ function iniciarArqueoHoy() {
 function limpiarModalArqueo() {
     arqueoActual = null;
     window.transbankTeoricos = { debito:0, credito:0, total:0 };
+    window.mercadoPagoTeoricos = { total:0 };
     $('#montoTotalExpress').val('');
     $('.conteo-input').val(0);
     $('#cierreDebitoExpress,#cierreCreditoExpress').val('');
+    $('#cierreMercadoPagoExpress').val('');
+    $('#cardCierreMercadoPago,#resumenTarjetasPaso3').hide();
+    $('#mercadoPagoTeoricoExpress').text('$0');
+    $('#diferenciaMercadoPagoExpress').html('<span class="badge bg-secondary">Sin declarar</span>');
+    $('#desgloseMercadoPagoExpress').html('');
     $('#numeroLoteExpress').val('');
     $('#observaciones,#observacionesDiferencia').val('');
     $('#observacionesDiferenciaDiv').hide();
@@ -2639,6 +2709,8 @@ function abrirModalArqueo() {
     $('#fechaArqueoModal').text(fechaStr);
     $('.conteo-input').val(0);
     $('#montoTotalExpress,#cierreDebitoExpress,#cierreCreditoExpress').val(0);
+    // MP arranca VACÍO (no 0): vacío = "no revisado", 0 sería una declaración.
+    $('#cierreMercadoPagoExpress').val('');
     $('#numeroLoteExpress,#observaciones,#observacionesDiferencia').val('');
     $('#modoExpress').prop('checked', true);
     cambiarModoArqueo();
@@ -2661,6 +2733,13 @@ function abrirModalArqueo() {
         $('#creditoTeoricoExpress').text('$' + formatearNumero(arqueoActual.cuadratura.total_tarjeta_credito||0));
         $('#totalTransbankTeoricoExpress').text('$' + formatearNumero(arqueoActual.cuadratura.total_transbank||0));
         window.transbankTeoricos = { debito:arqueoActual.cuadratura.total_tarjeta_debito||0, credito:arqueoActual.cuadratura.total_tarjeta_credito||0, total:arqueoActual.cuadratura.total_transbank||0 };
+        configurarBloqueMercadoPago(
+            arqueoActual.cuadratura.total_mercadopago_pos || 0,
+            {
+                debito:  arqueoActual.cuadratura.total_mercadopago_pos_debito  || 0,
+                credito: arqueoActual.cuadratura.total_mercadopago_pos_credito || 0,
+                otros:   arqueoActual.cuadratura.total_mercadopago_pos_otros   || 0,
+            }, 0);
         // Fondo fijo
         if (arqueoActual.cuadratura.fondo_fijo) {
             const ff = arqueoActual.cuadratura.fondo_fijo;
@@ -2687,6 +2766,9 @@ function abrirModalArqueo() {
             $('#cierreCreditoExpress').val(arqueoActual.arqueo.cierre_transbank.credito_fisico||0);
             $('#numeroLoteExpress').val(arqueoActual.arqueo.cierre_transbank.numero_lote||'');
         }
+        const mpTeo = (arqueoActual.arqueo.totales_teoricos.mercadopago_pos || {}).total || 0;
+        const mpCierre = (arqueoActual.arqueo.cierre_mercadopago || {}).total_fisico || 0;
+        configurarBloqueMercadoPago(mpTeo, null, mpCierre);
         // Fondo fijo from existing arqueo
         if (arqueoActual.arqueo.fondo_fijo) {
             const ff = arqueoActual.arqueo.fondo_fijo;
@@ -2800,6 +2882,80 @@ function calcularDiferenciasTransbank() {
     $('#diferenciaDebitoExpress').html(dD===0?'<span class="text-success"><i class="ri-check-line"></i> Cuadra</span>': dD>0?`<span class="text-success">+$${formatearNumero(dD)}</span>`:`<span class="text-danger">-$${formatearNumero(Math.abs(dD))}</span>`);
     $('#diferenciaCreditoExpress').html(dC===0?'<span class="text-success"><i class="ri-check-line"></i> Cuadra</span>': dC>0?`<span class="text-success">+$${formatearNumero(dC)}</span>`:`<span class="text-danger">-$${formatearNumero(Math.abs(dC))}</span>`);
     $('#diferenciaTransbankExpress').html(dT===0?'<span class="badge bg-success"><i class="ri-check-line me-1"></i>Cuadra</span>': dT>0?`<span class="badge bg-success">+$${formatearNumero(dT)}</span>`:`<span class="badge bg-danger">-$${formatearNumero(Math.abs(dT))}</span>`);
+    actualizarResumenTarjetasPaso3();
+}
+
+// ========== FUNCIONES DE MERCADO PAGO POS ==========
+// El cierre de MP es OPCIONAL: campo vacío significa "no revisado" y la
+// diferencia no se calcula. Se distingue del 0 explícito (que sí es una
+// declaración: "la app de MP no muestra cobros hoy").
+function _cierreMercadoPagoDeclarado() {
+    const raw = ($('#cierreMercadoPagoExpress').val() || '').trim();
+    return raw !== '' && (parseInt(raw) || 0) > 0;
+}
+
+function calcularDiferenciasMercadoPago() {
+    const teo = Number((window.mercadoPagoTeoricos || {}).total) || 0;
+    $('#mercadoPagoTeoricoExpress').text('$' + formatearNumero(teo));
+    if (!_cierreMercadoPagoDeclarado()) {
+        $('#diferenciaMercadoPagoExpress').html(
+            teo > 0
+                ? '<span class="badge bg-secondary" title="El arqueo se cierra igual; la conciliación con Mercado Pago queda pendiente.">Sin declarar</span>'
+                : '<span class="badge bg-light text-muted">Sin ventas MP</span>');
+        actualizarResumenTarjetasPaso3();
+        return;
+    }
+    const fis = parseInt($('#cierreMercadoPagoExpress').val()) || 0;
+    const d = fis - teo;
+    $('#diferenciaMercadoPagoExpress').html(
+        d === 0 ? '<span class="badge bg-success"><i class="ri-check-line me-1"></i>Cuadra</span>'
+                : d > 0 ? `<span class="badge bg-success">+$${formatearNumero(d)}</span>`
+                        : `<span class="badge bg-danger">-$${formatearNumero(Math.abs(d))}</span>`);
+    actualizarResumenTarjetasPaso3();
+}
+
+// Consolidado del paso: sólo aparece si el día tuvo Mercado Pago, para que
+// una tienda sólo-Transbank no vea una fila extra que no le aporta nada.
+function actualizarResumenTarjetasPaso3() {
+    const mpTeo = Number((window.mercadoPagoTeoricos || {}).total) || 0;
+    const mpDeclarado = _cierreMercadoPagoDeclarado();
+    if (mpTeo <= 0 && !mpDeclarado) { $('#resumenTarjetasPaso3').hide(); return; }
+    const tbk = window.transbankTeoricos || {debito:0,credito:0,total:0};
+    const tbkFis = (parseInt($('#cierreDebitoExpress').val())||0) + (parseInt($('#cierreCreditoExpress').val())||0);
+    const mpFis = mpDeclarado ? (parseInt($('#cierreMercadoPagoExpress').val())||0) : 0;
+    // El teórico del consolidado excluye MP cuando no se declaró cierre: si
+    // se sumara, la fila mostraría un faltante del tamaño de la venta MP del
+    // día por el solo hecho de no haber revisado la app.
+    const teoTotal = (Number(tbk.total)||0) + (mpDeclarado ? mpTeo : 0);
+    const fisTotal = tbkFis + mpFis;
+    const d = fisTotal - teoTotal;
+    $('#totalTarjetasFisicoPaso3').text('$' + formatearNumero(fisTotal));
+    $('#totalTarjetasTeoricoPaso3').text('$' + formatearNumero(teoTotal));
+    $('#diferenciaTarjetasPaso3').html(
+        d === 0 ? '<span class="badge bg-success"><i class="ri-check-line me-1"></i>Cuadra</span>'
+                : d > 0 ? `<span class="badge bg-success">+$${formatearNumero(d)}</span>`
+                        : `<span class="badge bg-danger">-$${formatearNumero(Math.abs(d))}</span>`);
+    $('#resumenTarjetasPaso3').show();
+}
+
+// Muestra/oculta la tarjeta de MP y pinta su teórico + desglose.
+function configurarBloqueMercadoPago(teorico, desglose, cierreGuardado) {
+    const teo = Number(teorico) || 0;
+    window.mercadoPagoTeoricos = { total: teo };
+    const guardado = Number(cierreGuardado) || 0;
+    if (guardado > 0) $('#cierreMercadoPagoExpress').val(guardado);
+    // Visible si hubo venta MP presencial en el día O si el arqueo ya trae un
+    // cierre declarado (para no esconder un dato ya digitado al reabrirlo).
+    const visible = teo > 0 || guardado > 0;
+    $('#cardCierreMercadoPago').toggle(visible);
+    const d = desglose || {};
+    const partes = [];
+    if (Number(d.debito)) partes.push('Débito $' + formatearNumero(d.debito));
+    if (Number(d.credito)) partes.push('Crédito $' + formatearNumero(d.credito));
+    if (Number(d.otros)) partes.push('QR/Otros $' + formatearNumero(d.otros));
+    $('#desgloseMercadoPagoExpress').html(
+        partes.length ? '<i class="ri-pie-chart-line me-1"></i>Desglose del teórico: ' + partes.join(' · ') : '');
+    calcularDiferenciasMercadoPago();
 }
 
 function cargarDatosArqueoExistente(arqueo) {
@@ -2832,6 +2988,15 @@ function cargarDatosArqueoExistente(arqueo) {
         $('#cierreDebitoExpress').val(arqueo.cierre_transbank.debito_fisico||0);
         $('#cierreCreditoExpress').val(arqueo.cierre_transbank.credito_fisico||0);
         $('#numeroLoteExpress').val(arqueo.cierre_transbank.numero_lote||'');
+    }
+    // Igual que con los teóricos de efectivo: esta función también corre tras
+    // "Recalcular desde DTEs", así que el teórico de MP debe refrescarse aquí
+    // o el bloque quedaría con el número viejo.
+    if (arqueo.totales_teoricos) {
+        configurarBloqueMercadoPago(
+            (arqueo.totales_teoricos.mercadopago_pos || {}).total || 0,
+            null,
+            (arqueo.cierre_mercadopago || {}).total_fisico || 0);
     }
     const suma = (['20000','10000','5000','2000','1000'].reduce((s,k)=>s+parseInt(arqueo.conteo_fisico.billetes[k]||0)*parseInt(k),0)) +
                  (['500','100','50','10','5','1'].reduce((s,k)=>s+parseInt(arqueo.conteo_fisico.monedas[k]||0)*parseInt(k),0));
@@ -3047,6 +3212,7 @@ function guardarConteo() {
     if (modoExpress && (parseInt($('#montoTotalExpress').val())||0) < 0) { mostrarError('Monto inválido'); return; }
     let datos = { arqueo_id:arqueoActual.id, observaciones:$('#observaciones').val(), observaciones_diferencia:$('#observacionesDiferencia').val(),
         modo_express:modoExpress, cierre_debito:parseInt($('#cierreDebitoExpress').val())||0, cierre_credito:parseInt($('#cierreCreditoExpress').val())||0,
+        cierre_mp:_cierreMercadoPagoDeclarado() ? (parseInt($('#cierreMercadoPagoExpress').val())||0) : 0,
         numero_lote:$('#numeroLoteExpress').val()||'' };
     if (modoExpress) { datos.monto_total_express = parseInt($('#montoTotalExpress').val())||0; }
     else { ['billetes_20000','billetes_10000','billetes_5000','billetes_2000','billetes_1000','monedas_500','monedas_100','monedas_50','monedas_10','monedas_5','monedas_1'].forEach(k=>{ datos[k]=parseInt($('#'+k).val())||0; }); }
@@ -3075,6 +3241,14 @@ async function cerrarArqueo() {
     const avisoLote = sinLote
         ? '<div class="alert alert-warning py-2 mt-2 mb-0" style="font-size:.85rem;"><i class="ri-alert-line me-1"></i>Cierre Transbank sin <strong>número de lote</strong>. Regístrelo para poder auditar el comprobante del POS.</div>'
         : '';
+    // Aviso (no bloqueante) si el día tuvo Mercado Pago presencial y nadie
+    // declaró el cierre. No se bloquea el cierre porque MP no emite
+    // comprobante de máquina y la conciliación dura la hace la API; pero el
+    // supervisor tiene que saber que ese medio quedó sin contrastar.
+    const mpTeoCierre = Number((window.mercadoPagoTeoricos || {}).total) || 0;
+    const avisoMP = (mpTeoCierre > 0 && !_cierreMercadoPagoDeclarado())
+        ? `<div class="alert alert-warning py-2 mt-2 mb-0" style="font-size:.85rem;"><i class="ri-qr-code-line me-1"></i>El día tiene <strong>$${formatearNumero(mpTeoCierre)}</strong> en Mercado Pago POS y no se declaró el cierre. Puede cerrar igual: quedará marcado como <em>sin declarar</em> para revisión.</div>`
+        : '';
     // La validación de observaciones usa la diferencia REAL (antes se
     // calculaba contra un teórico leído del DOM, que en conteo ciego valía
     // 0 y disparaba el bloqueo en todos los arqueos de cajeros).
@@ -3084,11 +3258,11 @@ async function cerrarArqueo() {
         title: modoCiegoActivo ? 'Cerrar Arqueo' : (dif===0 ? 'Arqueo sin diferencias' : 'Arqueo con Diferencias'),
         html: modoCiegoActivo
             ? `<div class="text-start"><p class="mb-2">Se cerrará el arqueo con un efectivo contado de <strong>$${formatearNumero(fis)}</strong>.</p>
-               <p class="text-muted mb-0" style="font-size:.85rem;">La diferencia contra el teórico la calcula el sistema al cerrar.</p>${avisoLote}</div>`
+               <p class="text-muted mb-0" style="font-size:.85rem;">La diferencia contra el teórico la calcula el sistema al cerrar.</p>${avisoLote}${avisoMP}</div>`
             : (dif===0 ? `<div class="text-center"><p class="mt-2 mb-2">El efectivo contado coincide exactamente con el teórico.</p>
-               <div class="alert alert-info py-2 mb-0 text-start" style="font-size:.85rem;"><i class="ri-information-line me-1"></i>Confirme que el monto sale de un <strong>conteo físico real</strong> y no del valor que mostraba el sistema.</div>${avisoLote}</div>`
+               <div class="alert alert-info py-2 mb-0 text-start" style="font-size:.85rem;"><i class="ri-information-line me-1"></i>Confirme que el monto sale de un <strong>conteo físico real</strong> y no del valor que mostraba el sistema.</div>${avisoLote}${avisoMP}</div>`
             : `<div class="text-start"><div class="alert ${fis>teo?'alert-success':'alert-danger'} mb-2"><strong>${fis>teo?'Sobrante':'Faltante'}:</strong> $${formatearNumero(dif)}</div>
-               <table class="table table-sm mb-0"><tr><td>Teórico:</td><td class="text-end fw-bold">$${formatearNumero(teo)}</td></tr><tr><td>Físico:</td><td class="text-end fw-bold">$${formatearNumero(fis)}</td></tr></table>${avisoLote}</div>`),
+               <table class="table table-sm mb-0"><tr><td>Teórico:</td><td class="text-end fw-bold">$${formatearNumero(teo)}</td></tr><tr><td>Físico:</td><td class="text-end fw-bold">$${formatearNumero(fis)}</td></tr></table>${avisoLote}${avisoMP}</div>`),
         icon: modoCiegoActivo ? 'question' : (dif===0 ? 'success' : 'warning'), showCancelButton:true,
         confirmButtonColor: (!modoCiegoActivo && dif===0) ? '#00D4AA' : '#FFB020', cancelButtonColor:'#8A8A9A',
         confirmButtonText:'<i class="ri-check-double-line me-1"></i>Cerrar Arqueo', cancelButtonText:'Cancelar', reverseButtons:true
@@ -3096,6 +3270,7 @@ async function cerrarArqueo() {
     if (!res.isConfirmed) return;
     let datos = { arqueo_id:arqueoActual.id, observaciones:$('#observaciones').val(), observaciones_diferencia:$('#observacionesDiferencia').val(),
         modo_express:modoExpress, cierre_debito:parseInt($('#cierreDebitoExpress').val())||0, cierre_credito:parseInt($('#cierreCreditoExpress').val())||0,
+        cierre_mp:_cierreMercadoPagoDeclarado() ? (parseInt($('#cierreMercadoPagoExpress').val())||0) : 0,
         numero_lote:$('#numeroLoteExpress').val()||'' };
     if (modoExpress) datos.monto_total_express = parseInt($('#montoTotalExpress').val())||0;
     else { ['billetes_20000','billetes_10000','billetes_5000','billetes_2000','billetes_1000','monedas_500','monedas_100','monedas_50','monedas_10','monedas_5','monedas_1'].forEach(k=>{ datos[k]=parseInt($('#'+k).val())||0; }); }
@@ -3343,7 +3518,7 @@ function verDetalleArqueo(id) {
 function aplicarModoSoloLectura(soloLectura, estado) {
     const modal = $('#modalArqueo');
     if (soloLectura) {
-        modal.find('.conteo-input, #montoTotalExpress, #cierreDebitoExpress, #cierreCreditoExpress, #numeroLoteExpress, #observaciones, #observacionesDiferencia')
+        modal.find('.conteo-input, #montoTotalExpress, #cierreDebitoExpress, #cierreCreditoExpress, #cierreMercadoPagoExpress, #numeroLoteExpress, #observaciones, #observacionesDiferencia')
              .prop('disabled', true).css('opacity', '0.7');
         modal.find('input[name="modoArqueo"]').prop('disabled', true);
         $('#btnToggleModo').prop('disabled', true);
@@ -3353,7 +3528,7 @@ function aplicarModoSoloLectura(soloLectura, estado) {
         const label = estadoLabels[estado] || estado;
         $('#modalArqueoLabel').html(`<i class="ri-eye-line me-2"></i>Arqueo de Caja <span class="badge bg-light text-dark ms-2" style="font-size:.7rem;">${label} — Solo lectura</span> — <span id="fechaArqueoModal">${$('#fechaArqueoModal').text()}</span>`);
     } else {
-        modal.find('.conteo-input, #montoTotalExpress, #cierreDebitoExpress, #cierreCreditoExpress, #numeroLoteExpress, #observaciones, #observacionesDiferencia')
+        modal.find('.conteo-input, #montoTotalExpress, #cierreDebitoExpress, #cierreCreditoExpress, #cierreMercadoPagoExpress, #numeroLoteExpress, #observaciones, #observacionesDiferencia')
              .prop('disabled', false).css('opacity', '1');
         modal.find('input[name="modoArqueo"]').prop('disabled', false);
         $('#btnToggleModo').prop('disabled', false);

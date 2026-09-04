@@ -8721,6 +8721,47 @@ def cuadratura_caja(request):
 _METODOS_PAGO_CREDITO_NC = {'CREDITO_EXTERNO', 'CREDITO_TRABAJADOR', 'CONVENIO', 'ORDEN_COMPRA'}
 
 
+
+# Medios de pago que Mercado Pago reporta en `payment_type_id` (guardado en
+# `tipo_tarjeta`) y su equivalencia con el desglose de la cuadratura. Se
+# normaliza en MAYÚSCULAS porque el dato llega en minúsculas desde la API
+# ("credit_card") y ya en mayúsculas desde el loop de tickets.
+_MP_TIPOS_CREDITO = {'CREDIT_CARD', 'CREDITO', 'CRÉDITO'}
+_MP_TIPOS_DEBITO = {'DEBIT_CARD', 'PREPAID_CARD', 'DEBITO', 'DÉBITO', 'PREPAGO'}
+
+
+def _sub_bucket_mp(metodo, tipo_tarjeta):
+    """Clasifica un cobro de Mercado Pago presencial en 'debito'/'credito'/'otros'.
+
+    El MÉTODO manda sobre `tipo_tarjeta`: `MP_POINT_DEBITO` / `MP_POINT_CREDITO`
+    los escribe el POS con el medio ya resuelto por la máquina, mientras que
+    `tipo_tarjeta` puede venir de un payload viejo o incompleto de la API.
+
+    Para `MP_QR` / `MP_POINT` genéricos se usa el `payment_type_id` que MP
+    guarda en `tipo_tarjeta`. Lo no clasificable cae en 'otros' (dinero en
+    cuenta MP, transferencia MP, QR sin dato de medio), de modo que el
+    invariante `debito + credito + otros == total_mercadopago_pos` se cumpla
+    siempre y el desglose nunca pierda plata en silencio.
+    """
+    met = (metodo or '').upper().strip()
+    if met == 'MP_POINT_CREDITO':
+        return 'credito'
+    if met == 'MP_POINT_DEBITO':
+        return 'debito'
+    tipo = (tipo_tarjeta or '').upper().strip()
+    if tipo in _MP_TIPOS_CREDITO:
+        return 'credito'
+    if tipo in _MP_TIPOS_DEBITO:
+        return 'debito'
+    return 'otros'
+
+
+def _acumular_desglose_mercadopago_pos(cuadratura_data, metodo, tipo_tarjeta, monto):
+    """Suma `monto` al sub-bucket MP que corresponda (negativo para NC)."""
+    bucket = _sub_bucket_mp(metodo, tipo_tarjeta)
+    cuadratura_data['total_mercadopago_pos_' + bucket] += monto
+
+
 def _calcular_cuadratura_data(sucursal, fecha_str):
     """
     Función helper para calcular datos de cuadratura.
@@ -8776,6 +8817,13 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         # 'total_mercadopago' de más arriba es marketplace (Venta Internet por
         # tipo_tarjeta) y mezclarlos descuadraría la caja.
         'total_mercadopago_pos': 0,
+        # Desglose del bucket MP presencial por medio real del cobro. Se
+        # clasifica con `tipo_tarjeta`, que para MP guarda el `payment_type_id`
+        # devuelto por la API (credit_card / debit_card / account_money / ...).
+        # Invariante: debito + credito + otros == total_mercadopago_pos.
+        'total_mercadopago_pos_debito': 0,
+        'total_mercadopago_pos_credito': 0,
+        'total_mercadopago_pos_otros': 0,
         'total_nc_mercadopago_pos': 0,
         'total_nota_credito': 0,
         'total_descuentos': 0,  # Descuentos aplicados
@@ -8870,6 +8918,8 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
                 # ✅ Mercado Pago presencial (MP_QR / MP_POINT*): bucket propio,
                 # NO va a total_transbank ni a total_mercadopago (marketplace)
                 cuadratura_data['total_mercadopago_pos'] += monto
+                _acumular_desglose_mercadopago_pos(
+                    cuadratura_data, metodo, tipo_tarjeta, monto)
             elif metodo == 'TRANSFERENCIA':
                 cuadratura_data['total_transferencia'] += monto
             elif metodo == 'CHEQUE':
@@ -9060,6 +9110,8 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
                 # Mercado Pago presencial (bucket propio, no marketplace)
                 elif metodo_upper.startswith('MP_'):
                     cuadratura_data['total_mercadopago_pos'] += monto
+                    _acumular_desglose_mercadopago_pos(
+                        cuadratura_data, metodo_upper, tarjeta_upper, monto)
 
                 # Transferencia
                 elif 'TRANSFERENCIA' in metodo_upper:
@@ -9158,6 +9210,22 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
             # Devolución hecha por la API de MP (refund): resta del teórico MP
             # presencial del día, simétrico al tratamiento de transferencias.
             cuadratura_data['total_nc_mercadopago_pos'] += monto_nc
+            # El desglose se descuenta con el MISMO criterio del cobro, usando
+            # el medio que devolvió la API (`devolver_por_nc` deja el
+            # payment_type_id en `tipo_tarjeta`). Si no se descontara aquí, el
+            # invariante debito+credito+otros == total dejaría de cumplirse en
+            # cuanto hubiera una NC por MP.
+            pago_mp_nc = next(
+                (p for p in pagos_nc if (p.metodo_pago or '').upper().startswith('MP_')),
+                None,
+            )
+            if pago_mp_nc is not None:
+                _acumular_desglose_mercadopago_pos(
+                    cuadratura_data,
+                    (pago_mp_nc.metodo_pago or '').upper(),
+                    (pago_mp_nc.tipo_tarjeta or '').upper(),
+                    -monto_nc,
+                )
         elif any((p.metodo_pago or '').upper() in _METODOS_PAGO_CREDITO_NC for p in pagos_nc):
             # Devolución sobre una venta A CRÉDITO: no salió plata de ningún
             # medio de caja, se rebajó la cuenta por cobrar. Se descuenta del
@@ -13130,6 +13198,14 @@ def listar_arqueos(request):
                 'credito_teorico': arqueo.total_tarjeta_credito_teorico,
                 'credito_fisico': arqueo.cierre_credito_fisico,
                 'diferencia_credito': arqueo.diferencia_credito,
+                # Mercado Pago presencial. `mp_declarado=False` significa que
+                # la tienda no digitó el cierre de MP: la diferencia vale 0 por
+                # definición y la pantalla debe mostrarlo como "sin declarar",
+                # no como "cuadra".
+                'mercadopago_pos_teorico': arqueo.total_mercadopago_pos_teorico or 0,
+                'mercadopago_pos_fisico': arqueo.cierre_mp_fisico or 0,
+                'diferencia_mercadopago_pos': arqueo.diferencia_mercadopago_pos or 0,
+                'mp_declarado': (arqueo.cierre_mp_fisico or 0) > 0,
                 'numero_lote': arqueo.numero_lote_pos or '',
                 'observaciones': arqueo.observaciones or '',
                 'supervisor': arqueo.supervisor_revision.username if arqueo.supervisor_revision else '',
@@ -13662,6 +13738,16 @@ def guardar_conteo_fisico(request):
         diferencia_debito = cierre_debito - arqueo.total_tarjeta_debito_teorico
         diferencia_credito = cierre_credito - arqueo.total_tarjeta_credito_teorico
         diferencia_transbank = cierre_pos_total - arqueo.total_transbank_teorico
+
+        # Cierre Mercado Pago presencial (QR/Point). A diferencia de Transbank
+        # NO hay comprobante de máquina obligatorio: el cajero contrasta contra
+        # la app/panel de MP y puede dejarlo en blanco. Por eso la diferencia
+        # solo se calcula cuando se declaró un monto (>0); con 0 se reporta 0
+        # para no marcar descuadres fantasma en tiendas que no cierran MP.
+        cierre_mp = int(data.get('cierre_mp', 0) or 0)
+        diferencia_mp = (
+            cierre_mp - arqueo.total_mercadopago_pos_teorico if cierre_mp > 0 else 0
+        )
         
         logger.debug(
             "Conteo Transbank arqueo %s: debito=%s teorico_debito=%s, credito=%s teorico_credito=%s, "
@@ -13673,6 +13759,10 @@ def guardar_conteo_fisico(request):
             arqueo.total_tarjeta_credito_teorico,
             cierre_pos_total,
             arqueo.total_transbank_teorico,
+        )
+        logger.debug(
+            "Conteo MercadoPago POS arqueo %s: cierre=%s teorico=%s diferencia=%s",
+            arqueo.id, cierre_mp, arqueo.total_mercadopago_pos_teorico, diferencia_mp,
         )
         
         # Guardar según el modo
@@ -13703,6 +13793,9 @@ def guardar_conteo_fisico(request):
                 diferencia_debito=diferencia_debito,
                 diferencia_credito=diferencia_credito,
                 diferencia_transbank=diferencia_transbank,
+                # Mercado Pago presencial
+                cierre_mp_fisico=cierre_mp,
+                diferencia_mercadopago_pos=diferencia_mp,
                 # Estos tres se asignaban en memoria más arriba y se perdían:
                 # el `.update()` no los incluía. Por eso en producción los 624
                 # arqueos quedaron con `modo_conteo='DETALLADO'` y sólo 3 con
@@ -13728,6 +13821,8 @@ def guardar_conteo_fisico(request):
             arqueo.diferencia_debito = diferencia_debito
             arqueo.diferencia_credito = diferencia_credito
             arqueo.diferencia_transbank = diferencia_transbank
+            arqueo.cierre_mp_fisico = cierre_mp
+            arqueo.diferencia_mercadopago_pos = diferencia_mp
             arqueo.save()
             logger.info(
                 "Conteo guardado en modo detallado: arqueo_id=%s, total_fisico=%s",
@@ -15066,6 +15161,11 @@ def obtener_arqueo_detalle(request, arqueo_id):
                     'credito': arqueo.total_tarjeta_credito_teorico,
                     'total': arqueo.total_transbank_teorico,
                 },
+                # Mercado Pago presencial (QR/Point). Va aparte de
+                # `venta_internet.mercadopago`, que es el marketplace.
+                'mercadopago_pos': {
+                    'total': arqueo.total_mercadopago_pos_teorico,
+                },
                 'otros': {
                     'tarjeta_debito': arqueo.total_tarjeta_debito_teorico,
                     'tarjeta_credito': arqueo.total_tarjeta_credito_teorico,
@@ -15114,11 +15214,21 @@ def obtener_arqueo_detalle(request, arqueo_id):
                 'diferencia_credito': arqueo.diferencia_credito,
                 'diferencia_total': arqueo.diferencia_transbank,
             },
-            
+
+            # Cierre Mercado Pago presencial. `cierre_fisico` es opcional:
+            # 0 significa "no declarado" y la diferencia se reporta como 0
+            # para no inventar descuadres en tiendas que no cierran MP.
+            'cierre_mercadopago': {
+                'total_fisico': arqueo.cierre_mp_fisico or 0,
+                'diferencia_total': arqueo.diferencia_mercadopago_pos or 0,
+                'declarado': (arqueo.cierre_mp_fisico or 0) > 0,
+            },
+
             # Diferencias
             'diferencias': {
                 'efectivo': arqueo.diferencia_efectivo,
                 'transbank': arqueo.diferencia_transbank,
+                'mercadopago_pos': arqueo.diferencia_mercadopago_pos or 0,
                 'absoluta': arqueo.diferencia_absoluta,
                 'tipo': arqueo.tipo_diferencia,
                 'porcentaje': round(arqueo.porcentaje_diferencia, 2),
