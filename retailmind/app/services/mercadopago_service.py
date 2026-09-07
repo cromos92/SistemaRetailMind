@@ -483,9 +483,13 @@ def qr_png_base64(qr_data):
 
 # ==================== CREACIÓN / CONSULTA / CANCELACIÓN ====================
 
-def crear_orden(config, correlativo, monto, descripcion='', canal='QR', usuario=None):
+def crear_orden(config, correlativo, monto, descripcion='', canal='QR', usuario=None,
+                permitir_en_curso=False):
     """Crea la orden en MP (Orders API, processing_mode automatic) y la
     TransaccionMercadoPago local en PENDIENTE. Devuelve (transaccion, qr_data).
+
+    `permitir_en_curso=True` salta el guard de cobro previo vivo (lo usan los
+    cobros de prueba/directos de la pestaña de gestión, que no son tickets).
     """
     monto = int(monto)
     if monto <= 0:
@@ -498,6 +502,25 @@ def crear_orden(config, correlativo, monto, descripcion='', canal='QR', usuario=
     if canal == 'POINT' and not config.device_id:
         raise MercadoPagoError('La caja no tiene una máquina Point asociada (device). '
                                'Asóciala en la pestaña Mercado Pago (requiere la máquina en modo PDV).')
+
+    # ── No dejar DOS cobros vivos para el mismo ticket ──────────────────────
+    # El "Reintentar" del POS crea una orden nueva; si la anterior seguía en la
+    # pantalla del terminal, el cliente podía pagar las dos. Antes de crear,
+    # se cierra o se denuncia lo que haya vivo.
+    if not permitir_en_curso:
+        for previa in cobros_vivos_de_ticket(config.sucursal_id, correlativo, refrescar=True):
+            if previa.estado == 'APROBADA':
+                raise MercadoPagoError(
+                    f'Ya hay un cobro APROBADO de ${previa.monto:,} en Mercado Pago para '
+                    f'este ticket (pago {previa.payment_id or previa.external_reference}). '
+                    'Regístralo como pago Mercado Pago o devuélvelo; no cobres de nuevo.'
+                    .replace(',', '.'))
+            try:
+                cancelar(previa)
+            except MercadoPagoError as e:
+                raise MercadoPagoError(
+                    f'Hay un cobro anterior de ${previa.monto:,} todavía en curso para este '
+                    f'ticket. {e.mensaje}'.replace(',', '.'))
 
     external_reference = f"RM-{config.sucursal_id}-{correlativo}-{uuid.uuid4().hex[:8]}"
     # Payload mínimo del create-order. OJO: la Orders API presencial rechaza
@@ -920,6 +943,127 @@ def consumir_transaccion_aprobada(sucursal_id, correlativo, monto, detalle_pago=
                 transaccion.ticket_id = detalle_pago.ticket_id
         transaccion.save(update_fields=['consumida', 'detalle_pago', 'ticket', 'actualizado_en'])
         return transaccion
+
+
+# ==================== COBROS VIVOS (anti "se cobró dos veces") ====================
+#
+# Caso real (NICK2, 05-09-2026): el cobro se mandó a la Point, la máquina pidió
+# REINTENTE, el cajero cerró la ventana de espera y el cliente igual pasó la
+# tarjeta en el terminal. La venta se cerró con un CRÉDITO MANUAL: la plata
+# entró por Mercado Pago pero la cuadratura la muestra en VISA-MC-AMEX (un
+# Transbank que nunca va a depositar) y el cobro MP quedó huérfano. Estos
+# helpers son la red que evita repetirlo: antes de cerrar la venta se pregunta
+# a MP si ese cobro sigue vivo o ya se aprobó.
+
+# Estados en los que el cobro todavía puede terminar en plata cobrada.
+ESTADOS_EN_VUELO_MP = ('CREADA', 'PENDIENTE')
+
+# Correlativos que no son tickets del POS (prueba de la pestaña de gestión y
+# cobro directo en terminal): nunca bloquean una venta.
+PREFIJOS_CORRELATIVO_SIN_TICKET = ('PRUEBA-', 'DIRECTO-')
+
+
+def metodo_pago_ticket_de(transaccion):
+    """Método de `METODO_PAGO_TICKET_CHOICES` que corresponde a este cobro.
+
+    Mismo mapeo que aplica el POS al empujar el pago (debit → DÉBITO,
+    credit → CRÉDITO, resto genérico), para que un pago reparado a mano caiga
+    en el mismo sub-bucket de la cuadratura que uno registrado normalmente.
+    """
+    if transaccion.canal != 'POINT':
+        return 'MP_QR'
+    medio = (transaccion.metodo_pago_mp or '').lower()
+    if 'debit' in medio:
+        return 'MP_POINT_DEBITO'
+    if 'credit' in medio:
+        return 'MP_POINT_CREDITO'
+    return 'MP_POINT'
+
+
+def cobros_vivos_de_ticket(sucursal_id, correlativo, refrescar=False):
+    """Cobros MP que aún pueden convertirse en (o ya son) plata de este ticket.
+
+    Devuelve las transacciones EN VUELO (CREADA/PENDIENTE: el cobro sigue en
+    la pantalla de la máquina o del QR) y las APROBADAS SIN CONSUMIR (el
+    cliente ya pagó y ningún pago del ticket las respalda).
+
+    `refrescar=True` consulta el estado real en MP antes de decidir: es lo que
+    convierte "se cerró la ventana y el cliente pagó igual" en un dato conocido
+    ANTES de cerrar la venta con otro medio.
+    """
+    correlativo = str(correlativo)
+    if correlativo.startswith(PREFIJOS_CORRELATIVO_SIN_TICKET):
+        return []
+    candidatas = (
+        TransaccionMercadoPago.objects
+        .filter(sucursal_id=sucursal_id, correlativo_ticket=correlativo, tipo='VENTA')
+        .exclude(estado__in=list(ESTADOS_FINALES_MP))
+        .select_related('config')
+        .order_by('creado_en')
+    )
+    vivos = []
+    for trx in candidatas:
+        if refrescar and trx.estado in ESTADOS_EN_VUELO_MP:
+            try:
+                trx = consultar_estado(trx, forzar=True)
+            except Exception:  # noqa: BLE001 — sin red se decide con lo que hay en BD
+                logger.warning(
+                    "MP: no se pudo refrescar %s al revisar cobros vivos",
+                    trx.external_reference,
+                )
+        if trx.estado in ESTADOS_FINALES_MP:
+            continue
+        if trx.estado == 'APROBADA':
+            if trx.consumida:
+                continue
+        elif trx.estado not in ESTADOS_EN_VUELO_MP:
+            # CONTRACARGO y cualquier estado futuro: no es un cobro pendiente
+            # de usar, se resuelve por conciliación y no debe frenar la venta.
+            continue
+        vivos.append(trx)
+    return vivos
+
+
+def resumen_cobro(trx):
+    """Dict serializable de un cobro vivo (POS, mensajes de error, comandos)."""
+    return {
+        'id': trx.id,
+        'estado': trx.estado,
+        'estado_detalle': trx.estado_detalle,
+        'aprobada': trx.estado == 'APROBADA',
+        'canal': trx.canal,
+        'monto': trx.monto,
+        'payment_id': trx.payment_id,
+        'external_reference': trx.external_reference,
+        'metodo_pago_mp': trx.metodo_pago_mp,
+        'medio': etiqueta_medio_mp(trx.metodo_pago_mp),
+        'ultimos_4_digitos': trx.ultimos_4_digitos,
+        'codigo_autorizacion': trx.codigo_autorizacion,
+        'metodo_pago_ticket': metodo_pago_ticket_de(trx),
+        'creado_en': timezone.localtime(trx.creado_en).strftime('%d-%m %H:%M'),
+        'edad_segundos': int((timezone.now() - trx.creado_en).total_seconds()),
+    }
+
+
+def cobros_no_respaldados(sucursal_id, correlativo, montos_mp, refrescar=True):
+    """Cobros vivos que los pagos MP del payload NO explican.
+
+    `montos_mp` son los montos de los pagos MP integrados que el POS quiere
+    registrar. El match es el mismo greedy de la pre-validación (al pago más
+    grande, la transacción aprobada más chica que lo cubra); lo que sobra es
+    exactamente lo que quedaría huérfano si la venta se cierra así.
+    """
+    vivos = cobros_vivos_de_ticket(sucursal_id, correlativo, refrescar=refrescar)
+    if not vivos:
+        return []
+    aprobados = sorted([t for t in vivos if t.estado == 'APROBADA'],
+                       key=lambda t: t.monto)
+    en_vuelo = [t for t in vivos if t.estado != 'APROBADA']
+    for monto in sorted((int(m) for m in montos_mp), reverse=True):
+        idx = next((i for i, t in enumerate(aprobados) if t.monto >= monto), None)
+        if idx is not None:
+            aprobados.pop(idx)
+    return sorted(aprobados + en_vuelo, key=lambda t: t.creado_en)
 
 
 # ==================== WEBHOOK ====================

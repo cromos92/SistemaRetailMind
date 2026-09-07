@@ -5232,6 +5232,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (qa) qa.focus();
             }, 150);
             mostrarTarjetaFidelizacion();
+            // Antes de cobrar: ¿Mercado Pago tiene un cobro vivo de este ticket?
+            // (cobro que quedó en la máquina, o ya aprobado y sin usar)
+            if (window.verificarCobrosMPPendientes) window.verificarCobrosMPPendientes();
         }
         
         actualizarProgreso();
@@ -9671,7 +9674,14 @@ document.addEventListener('DOMContentLoaded', function() {
         if (btnSig) btnSig.disabled = false;
     }
 
-    function finalizarVenta() {
+    /**
+     * @param {Object} [opcionesFinalizacion]
+     * @param {boolean} [opcionesFinalizacion.mp_confirmado_sin_cobro] El cajero
+     *   confirmó que el cobro que Mercado Pago tenía en curso quedó cancelado en
+     *   la máquina. Solo levanta el bloqueo de cobros EN CURSO: uno ya APROBADO
+     *   nunca se puede saltar (la plata existe).
+     */
+    function finalizarVenta(opcionesFinalizacion) {
         if (!ticketActual) {
             mostrarNotificacion('No hay ticket seleccionado', 'error');
             return;
@@ -9765,6 +9775,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (cotizacionActual && cotizacionActual.id) {
             payload.cotizacion_id = cotizacionActual.id;
             console.log('📋 Facturando cotización:', cotizacionActual.numero_cotizacion);
+        }
+
+        // El cajero confirmó que canceló en la máquina el cobro MP que seguía
+        // en curso (ver guard MP_COBRO_EN_CURSO del servidor).
+        if (opcionesFinalizacion && opcionesFinalizacion.mp_confirmado_sin_cobro) {
+            payload.mp_confirmado_sin_cobro = true;
         }
         // =========================================================================
         
@@ -10097,9 +10113,100 @@ document.addEventListener('DOMContentLoaded', function() {
                     confirmButtonText: 'Entendido',
                     confirmButtonColor: '#dc3545'
                 });
+            } else if (errData.error_tipo === 'MP_COBRO_SIN_USAR') {
+                _mpModalCobroSinUsar(errData);
+            } else if (errData.error_tipo === 'MP_COBRO_EN_CURSO') {
+                _mpModalCobroEnCurso(errData);
             } else {
                 mostrarNotificacion(error.message || 'Error al finalizar la venta', 'error');
             }
+        });
+    }
+
+    // ===== Bloqueos de cierre por cobro Mercado Pago (guard server-side) =====
+    // Métodos con los que un cajero registra una tarjeta "a mano" — son los que
+    // hay que reemplazar cuando resulta que la plata entró por Mercado Pago.
+    const _METODOS_TARJETA_MANUAL = [
+        'TBK_CREDITO_POS', 'TBK_DEBITO_POS', 'TBK_PREPAGO_POS', 'TBK_MANUAL',
+        'TBK_POS_INTEGRADO', 'TARJETA_CREDITO', 'TARJETA_DEBITO'
+    ];
+
+    function _mpPagoDesdeCobro(cobro) {
+        return {
+            metodo_pago: cobro.metodo_pago_ticket || 'MP_POINT',
+            monto: cobro.monto,
+            tipo_tarjeta: cobro.metodo_pago_mp || 'MERCADO PAGO',
+            voucher: cobro.payment_id || '',
+            notas: `MP ${cobro.canal} Aut: ${cobro.codigo_autorizacion || '-'}`
+                 + (cobro.ultimos_4_digitos ? ' | ****' + cobro.ultimos_4_digitos : ''),
+            origen_pago: 'POS_INTEGRADO'
+        };
+    }
+
+    /** Cobro YA APROBADO en MP que la venta no está usando: la plata existe. */
+    function _mpModalCobroSinUsar(errData) {
+        const cobros = (errData.cobros_mp || []).filter(c => c.aprobada);
+        const filas = cobros.map(c => `<tr>
+                <td>${formatearMoneda(c.monto)}</td><td>${c.medio || c.canal}</td>
+                <td><code>${c.payment_id || '-'}</code></td><td>${c.creado_en}</td>
+            </tr>`).join('');
+        // ¿Podemos cambiar solo el medio del pago ya cargado? Sí cuando hay una
+        // tarjeta manual por el mismo monto: ese es exactamente el error que se
+        // quiere corregir (se cobró por MP y se registró como tarjeta).
+        const canjeables = cobros.filter(c => pagosActuales.some(
+            p => _METODOS_TARJETA_MANUAL.includes(p.metodo_pago) && Number(p.monto) === Number(c.monto)));
+        Swal.fire({
+            icon: 'error',
+            title: '💳 Mercado Pago ya cobró esta venta',
+            html: `<div class="text-start">
+                <p>${errData.error || ''}</p>
+                <table class="table table-sm table-bordered mb-2">
+                    <thead><tr><th>Monto</th><th>Medio</th><th>Pago MP</th><th>Hora</th></tr></thead>
+                    <tbody>${filas}</tbody>
+                </table>
+                <p class="small text-muted mb-0">Si lo registras como tarjeta manual, la plata queda
+                   en Mercado Pago pero la cuadratura la va a mostrar en VISA-MC-AMEX.</p>
+            </div>`,
+            width: '600px',
+            showCancelButton: true,
+            confirmButtonText: canjeables.length ? '✅ Usar el cobro de Mercado Pago' : 'Entendido',
+            cancelButtonText: 'Volver a los pagos',
+            confirmButtonColor: '#00D4AA'
+        }).then(r => {
+            if (!r.isConfirmed || !canjeables.length) return;
+            canjeables.forEach(c => {
+                const idx = pagosActuales.findIndex(
+                    p => _METODOS_TARJETA_MANUAL.includes(p.metodo_pago) && Number(p.monto) === Number(c.monto));
+                if (idx >= 0) pagosActuales.splice(idx, 1, _mpPagoDesdeCobro(c));
+            });
+            actualizarListaPagos();
+            actualizarResumenVenta();
+            mostrarNotificacion('Pago cambiado a Mercado Pago — revisa y finaliza de nuevo', 'success');
+        });
+    }
+
+    /** Cobro todavía en la pantalla de la máquina: puede aprobarse en segundos. */
+    function _mpModalCobroEnCurso(errData) {
+        const c = (errData.cobros_mp || [])[0] || {};
+        Swal.fire({
+            icon: 'warning',
+            title: '⏳ Hay un cobro en curso en la máquina',
+            html: `<div class="text-start">
+                <p>${errData.error || ''}</p>
+                <p class="mb-1"><strong>${formatearMoneda(c.monto || 0)}</strong> — ${c.canal || 'POINT'}
+                   · enviado ${c.creado_en || ''}</p>
+                <p class="small text-muted mb-0">Cerrar la venta ahora es lo que deja la plata en Mercado Pago
+                   y el pago registrado como tarjeta. Cancela el cobro <strong>en el terminal</strong> y recién
+                   ahí continúa.</p>
+            </div>`,
+            width: '560px',
+            showCancelButton: true,
+            confirmButtonText: 'Ya lo cancelé en la máquina, continuar',
+            cancelButtonText: 'Volver',
+            confirmButtonColor: '#dc3545',
+            focusCancel: true
+        }).then(r => {
+            if (r.isConfirmed) finalizarVenta({ mp_confirmado_sin_cobro: true });
         });
     }
 
@@ -13050,6 +13157,164 @@ body {
         } catch (e) { /* sin audio no pasa nada */ }
     }
 
+    // ==================== VIGILANCIA DE COBROS MP EN CURSO ====================
+    // Cerrar la ventana de espera NO cancela el cobro cuando ya está en la
+    // pantalla de la máquina: MP responde 409 (cannot_cancel_order) y el cliente
+    // igual puede pagar. Eso fue lo que pasó en NICK2 el 05-09-2026 — se cerró la
+    // ventana, el cliente pagó en la Point y la venta se cerró con crédito manual:
+    // la plata entró por Mercado Pago y la cuadratura la mostró en VISA-MC-AMEX.
+    // Ahora el cobro queda VIGILADO en segundo plano: si se aprueba, se agrega
+    // solo a los pagos del ticket; si el ticket ya se cerró, se avisa fuerte.
+    const _mpVigilados = new Map();   // transaccionId -> {timer, monto, correlativo, canal}
+    const MP_VIGILANCIA_MS = 4000;
+    const MP_VIGILANCIA_MAX_TICKS = 90;   // ~6 minutos
+
+    function _mpBannerRefrescar() {
+        let banner = document.getElementById('mp-banner-vigilancia');
+        if (_mpVigilados.size === 0) {
+            if (banner) banner.remove();
+            return;
+        }
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'mp-banner-vigilancia';
+            banner.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:20000;'
+                + 'background:#1A1A2E;color:#fff;border-left:4px solid #FFC107;border-radius:8px;'
+                + 'padding:10px 14px;box-shadow:0 6px 20px rgba(0,0,0,.35);font-size:.82rem;max-width:320px;';
+            document.body.appendChild(banner);
+        }
+        let total = 0;
+        _mpVigilados.forEach(v => { total += v.monto; });
+        banner.innerHTML = `<div style="font-weight:700;margin-bottom:2px;">⚠️ Cobro Mercado Pago en curso</div>
+            <div>${_mpVigilados.size} cobro(s) por <strong>${formatearMoneda(total)}</strong> siguen vivos en la máquina.</div>
+            <div style="opacity:.75;margin-top:3px;">No cobres de nuevo a mano: si el cliente paga, el pago se agrega solo.</div>`;
+    }
+
+    function _mpDetenerVigilancia(transaccionId) {
+        const v = _mpVigilados.get(transaccionId);
+        if (v && v.timer) clearInterval(v.timer);
+        _mpVigilados.delete(transaccionId);
+        _mpBannerRefrescar();
+    }
+
+    /**
+     * Sigue consultando un cobro que quedó vivo tras cerrar la ventana de espera.
+     * `correlativo` es el mismo que recibió MP al crear la orden, para poder
+     * decidir si el cobro aprobado todavía pertenece al ticket en pantalla.
+     */
+    function _mpVigilarCobro(transaccionId, monto, correlativo, canalTxt) {
+        if (!transaccionId || _mpVigilados.has(transaccionId)) return;
+        let ticks = 0;
+        const timer = setInterval(async () => {
+            ticks += 1;
+            if (ticks > MP_VIGILANCIA_MAX_TICKS) { _mpDetenerVigilancia(transaccionId); return; }
+            let data;
+            try {
+                const resp = await fetch(`/app/pos/mercadopago/estado/${transaccionId}/`);
+                data = await resp.json();
+            } catch (e) { return; }   // siguiente tick
+            if (!data || !data.success) return;
+            if (data.estado === 'PENDIENTE' || data.estado === 'CREADA') return;
+            _mpDetenerVigilancia(transaccionId);
+            if (data.estado !== 'APROBADA') return;   // rechazado/cancelado/expirado: nada que hacer
+
+            const mismoTicket = ticketActual &&
+                String(ticketActual.es_cotizacion ? ticketActual.correlativo : ticketActual.ticket_id) === String(correlativo);
+            if (mismoTicket) {
+                pagosActuales.push({
+                    metodo_pago: (data.metodo_pago_mp || '').includes('debit') ? 'MP_POINT_DEBITO'
+                               : (data.metodo_pago_mp || '').includes('credit') ? 'MP_POINT_CREDITO'
+                               : (canalTxt === 'QR' ? 'MP_QR' : 'MP_POINT'),
+                    monto: data.monto || monto,
+                    tipo_tarjeta: data.metodo_pago_mp || 'MERCADO PAGO',
+                    voucher: data.payment_id || '',
+                    notas: `MP ${canalTxt} (aprobado tras cerrar la ventana) Aut: ${data.codigo_autorizacion || '-'}`,
+                    origen_pago: 'POS_INTEGRADO'
+                });
+                actualizarListaPagos();
+                actualizarResumenVenta();
+                _exitoPagoMP(data.monto || monto, data, canalTxt + ' (vigilado)');
+            } else {
+                beepAprobacionMP();
+                Swal.fire({
+                    icon: 'warning',
+                    title: '⚠️ El cliente pagó DESPUÉS de cerrar la venta',
+                    html: `<div class="text-start">
+                        <p>Mercado Pago aprobó <strong>${formatearMoneda(data.monto || monto)}</strong>
+                           del ticket <code>${correlativo}</code>, pero esa venta ya no está en pantalla.</p>
+                        <p class="mb-0 small text-muted">Ese cobro quedó <strong>sin usar</strong>: revísalo en
+                           <em>Documentos → Conciliación Mercado Pago</em> antes de cerrar la caja, o se va a
+                           cuadrar como si la venta hubiera sido con otro medio de pago.</p>
+                    </div>`,
+                    confirmButtonText: 'Entendido', confirmButtonColor: '#f7b924'
+                });
+            }
+        }, MP_VIGILANCIA_MS);
+        _mpVigilados.set(transaccionId, { timer, monto, correlativo, canal: canalTxt });
+        _mpBannerRefrescar();
+    }
+
+    /**
+     * Avisa al entrar al paso de cobro si Mercado Pago tiene un cobro vivo para
+     * este ticket. Cubre el caso de otro turno / otra pestaña: el cajero abre un
+     * ticket pendiente sin saber que la máquina ya cobró.
+     */
+    window.verificarCobrosMPPendientes = async function() {
+        if (!ticketActual) return;
+        const correlativo = ticketActual.es_cotizacion ? ticketActual.correlativo : ticketActual.ticket_id;
+        if (!correlativo) return;
+        let data;
+        try {
+            const resp = await fetch(`/app/pos/mercadopago/en-curso/${encodeURIComponent(correlativo)}/?refrescar=1`);
+            data = await resp.json();
+        } catch (e) { return; }
+        if (!data || !data.success || !(data.cobros || []).length) return;
+        // Los cobros que los pagos MP ya cargados explican no son problema: es
+        // el caso normal de volver al paso 3 después de cobrar en la máquina.
+        // Mismo emparejamiento greedy que hace el guard del servidor.
+        const pendientesMP = (data.cobros || []).filter(c => c.aprobada)
+            .sort((a, b) => a.monto - b.monto);
+        pagosActuales
+            .filter(p => String(p.metodo_pago || '').startsWith('MP_'))
+            .map(p => Number(p.monto))
+            .sort((a, b) => b - a)
+            .forEach(monto => {
+                const i = pendientesMP.findIndex(c => c.monto >= monto);
+                if (i >= 0) pendientesMP.splice(i, 1);
+            });
+        const cobros = (data.cobros || []).filter(
+            c => !c.aprobada || pendientesMP.some(p => p.id === c.id));
+        if (!cobros.length) return;
+        const aprobados = cobros.filter(c => c.aprobada);
+        const filas = cobros.map(c => `<tr>
+                <td>${formatearMoneda(c.monto)}</td>
+                <td>${c.aprobada ? '<span class="badge bg-success">Pagado</span>'
+                                 : '<span class="badge bg-warning text-dark">En la máquina</span>'}</td>
+                <td>${c.medio || c.canal}</td><td>${c.creado_en}</td>
+            </tr>`).join('');
+        Swal.fire({
+            icon: aprobados.length ? 'error' : 'warning',
+            title: aprobados.length ? '💳 Mercado Pago ya cobró este ticket'
+                                    : '⏳ Cobro Mercado Pago en curso',
+            html: `<div class="text-start">
+                <table class="table table-sm table-bordered mb-2">
+                    <thead><tr><th>Monto</th><th>Estado</th><th>Medio</th><th>Hora</th></tr></thead>
+                    <tbody>${filas}</tbody>
+                </table>
+                <p class="mb-0 small text-muted">${aprobados.length
+                    ? 'Regístralo como pago <strong>Mercado Pago</strong>: si lo cobras como tarjeta manual, la plata queda en MP y la cuadratura la muestra en VISA-MC-AMEX.'
+                    : 'Cancélalo en la máquina antes de cobrar por otro medio, o espera a que el cliente pague.'}</p>
+            </div>`,
+            width: '560px',
+            confirmButtonText: 'Entendido',
+            confirmButtonColor: aprobados.length ? '#dc3545' : '#f7b924'
+        });
+        // Los que siguen en la máquina quedan vigilados: si el cliente paga, el
+        // pago se agrega solo al ticket que está en pantalla.
+        cobros.filter(c => !c.aprobada).forEach(
+            c => _mpVigilarCobro(c.id, c.monto, correlativo, c.canal === 'QR' ? 'QR' : 'Point'));
+    };
+
     window.pagarConMercadoPago = async function() {
         if (!ticketActual) {
             Swal.fire({ icon: 'warning', title: 'Sin Ticket', text: 'Debe buscar o crear un ticket primero' });
@@ -13138,10 +13403,20 @@ body {
         };
 
         const cancelarEnServidor = () => {
+            // Si MP no deja cancelar (el cliente ya escaneó y está pagando), el
+            // cobro queda vivo: se vigila en segundo plano para que el pago se
+            // agregue al ticket en vez de terminar como cobro huérfano.
             fetch(`/app/pos/mercadopago/cancelar/${transaccionId}/`, {
                 method: 'POST',
                 headers: { 'X-CSRFToken': getCookie('csrftoken') }
-            }).catch(() => {});
+            })
+            .then(r => r.json().catch(() => ({ success: false })))
+            .then(res => {
+                if (!res || !res.success) {
+                    _mpVigilarCobro(transaccionId, montoCobrar, correlativoMP, 'QR');
+                }
+            })
+            .catch(() => { _mpVigilarCobro(transaccionId, montoCobrar, correlativoMP, 'QR'); });
         };
 
         const qrHtml = creacion.qr_base64
@@ -13329,10 +13604,28 @@ body {
                 finalizado = true;
                 detener();
                 // Se intenta igual (por si aún estaba en 'created'); si ya está
-                // en pantalla, MP lo rechaza y se cancela en el terminal.
+                // en pantalla, MP lo rechaza y se cancela en el terminal. En ese
+                // caso el cobro sigue VIVO: se vigila en segundo plano en vez de
+                // dejar la caja libre para cobrarlo otra vez a mano.
                 fetch(`/app/pos/mercadopago/cancelar/${transaccionId}/`, {
                     method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') }
-                }).catch(() => {});
+                })
+                .then(r => r.json().catch(() => ({ success: false })))
+                .then(res => {
+                    if (res && res.success) return;
+                    _mpVigilarCobro(transaccionId, montoCobrar, correlativoMP, 'Point');
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'El cobro sigue en la máquina',
+                        html: `<div class="text-start">
+                            <p>${(res && res.error) || 'Mercado Pago no permitió cancelarlo desde el sistema.'}</p>
+                            <p class="mb-0"><strong>Cancélalo en el terminal</strong> (botón atrás/cancelar) antes de
+                               cobrar por otro medio. Si el cliente alcanza a pagar, el pago se agrega solo a este ticket.</p>
+                        </div>`,
+                        confirmButtonText: 'Entendido', confirmButtonColor: '#f7b924'
+                    });
+                })
+                .catch(() => { _mpVigilarCobro(transaccionId, montoCobrar, correlativoMP, 'Point'); });
             }
         });
 

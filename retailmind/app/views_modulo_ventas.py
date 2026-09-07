@@ -4814,6 +4814,64 @@ def registrar_pagos_ticket(request, correlativo):
                               'confirmación del QR o reintente el cobro.').replace(',', '.'),
                     'error_tipo': 'MP_SIN_RESPALDO',
                 }, status=400)
+
+        # ── Guard inverso: cobro MP vivo que la venta NO está usando ────────
+        # El caso que rompió la cuadratura de NICK2 el 05-09-2026: el cobro se
+        # mandó a la Point, el cajero cerró la ventana de espera (MP no deja
+        # cancelar una orden que está en pantalla) y cerró la venta con un
+        # CRÉDITO MANUAL mientras el cliente pasaba la tarjeta en la máquina.
+        # Resultado: la plata entró por Mercado Pago y la cuadratura la mostró
+        # en VISA-MC-AMEX. Acá se le pregunta a MP por el estado REAL antes de
+        # escribir nada; si el cobro sigue vivo (o ya se aprobó) la venta no se
+        # cierra hasta que el cajero resuelva —o confirme explícitamente que lo
+        # canceló en la máquina, lo que queda registrado en el log.
+        from .services import mercadopago_service as _mp_guard
+        _mp_vivos = _mp_guard.cobros_no_respaldados(
+            ticket.sucursal_id, correlativo, _pagos_mp, refrescar=True,
+        )
+        if _mp_vivos:
+            _detalles_mp = [_mp_guard.resumen_cobro(t) for t in _mp_vivos]
+            _aprobados_mp = [d for d in _detalles_mp if d['aprobada']]
+            _forzar_mp = bool(payload.get('mp_confirmado_sin_cobro'))
+            if _aprobados_mp or not _forzar_mp:
+                # Un cobro YA APROBADO no se puede saltar con la confirmación
+                # del cajero: la plata existe en Mercado Pago y tiene que
+                # quedar registrada como pago MP (o devolverse), nunca como
+                # tarjeta manual.
+                _primero = (_aprobados_mp or _detalles_mp)[0]
+                logger.warning(
+                    "Cobro MP vivo sin usar ticket=%s cobros=%s usuario=%s forzar=%s",
+                    correlativo,
+                    [(d['id'], d['estado'], d['monto']) for d in _detalles_mp],
+                    request.user.username, _forzar_mp,
+                )
+                if _aprobados_mp:
+                    _msg = (
+                        f'Mercado Pago YA COBRÓ ${_primero["monto"]:,} en esta venta '
+                        f'({_primero["medio"]}, pago {_primero["payment_id"] or "s/n"}). '
+                        'Registra ese pago como Mercado Pago en vez de tarjeta manual, '
+                        'o devuélvelo antes de cerrar la venta.'
+                    ).replace(',', '.')
+                    _tipo = 'MP_COBRO_SIN_USAR'
+                else:
+                    _msg = (
+                        f'Hay un cobro de ${_primero["monto"]:,} en curso en Mercado Pago '
+                        'para este ticket (sigue en la pantalla de la máquina). Cancélalo '
+                        'EN LA MÁQUINA o espera a que el cliente pague antes de cerrar la '
+                        'venta con otro medio.'
+                    ).replace(',', '.')
+                    _tipo = 'MP_COBRO_EN_CURSO'
+                return JsonResponse({
+                    'success': False,
+                    'error': _msg,
+                    'error_tipo': _tipo,
+                    'cobros_mp': _detalles_mp,
+                }, status=400)
+            logger.warning(
+                "Venta cerrada con cobro MP en curso IGNORADO por %s ticket=%s cobros=%s",
+                request.user.username, correlativo,
+                [(d['id'], d['estado'], d['monto']) for d in _detalles_mp],
+            )
     # ─────────────────────────────────────────────────────────────────────────
 
     # ── Candado anti doble cobro (compare-and-set atómico) ──────────────────

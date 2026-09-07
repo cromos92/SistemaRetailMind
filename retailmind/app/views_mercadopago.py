@@ -134,6 +134,34 @@ def cancelar_pago_mp(request, transaccion_id):
     return Response({'success': True, 'estado': transaccion.estado})
 
 
+@api_view(['GET'])
+@login_required
+def cobros_vivos_ticket_mp(request, correlativo):
+    """GET /app/pos/mercadopago/en-curso/<correlativo>/
+
+    Cobros de Mercado Pago que siguen vivos para este ticket: en la pantalla de
+    la máquina (CREADA/PENDIENTE) o ya aprobados sin respaldar ningún pago.
+    El POS lo consulta al cargar el paso de cobro y antes de finalizar, para
+    que nunca se cierre una venta con crédito manual mientras la Point todavía
+    tiene el cobro encima.
+
+    `?refrescar=1` fuerza la consulta a MP (más lento, pero es el dato real).
+    """
+    sucursal_id = _sucursal_sesion(request)
+    if not sucursal_id:
+        return Response({'success': False, 'error': 'No hay sucursal en sesión'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    refrescar = str(request.GET.get('refrescar') or '') in ('1', 'true', 'True')
+    cobros = mp.cobros_vivos_de_ticket(sucursal_id, correlativo, refrescar=refrescar)
+    return Response({
+        'success': True,
+        'correlativo': str(correlativo),
+        'cobros': [mp.resumen_cobro(t) for t in cobros],
+        'hay_aprobado_sin_usar': any(t.estado == 'APROBADA' for t in cobros),
+        'total': sum(t.monto for t in cobros),
+    })
+
+
 # ==================== WEBHOOK (sin sesión, viene de MP) ====================
 
 @csrf_exempt

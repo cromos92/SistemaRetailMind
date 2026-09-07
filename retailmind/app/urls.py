@@ -522,6 +522,7 @@ from .views_mercadopago import (
     crear_pago_qr_mp,
     estado_pago_mp,
     cancelar_pago_mp,
+    cobros_vivos_ticket_mp,
     webhook_mercadopago,
     dineros_mercadopago,
     api_dineros_mercadopago,
@@ -1149,6 +1150,7 @@ urlpatterns = [
     path('pos/mercadopago/qr/crear/', crear_pago_qr_mp, name='mp_crear_pago_qr'),
     path('pos/mercadopago/estado/<int:transaccion_id>/', estado_pago_mp, name='mp_estado_pago'),
     path('pos/mercadopago/cancelar/<int:transaccion_id>/', cancelar_pago_mp, name='mp_cancelar_pago'),
+    path('pos/mercadopago/en-curso/<str:correlativo>/', cobros_vivos_ticket_mp, name='mp_cobros_vivos_ticket'),
     # Webhook firmado (sin sesión — viene de los servidores de MP)
     path('pos/mercadopago/webhook/', webhook_mercadopago, name='mp_webhook'),
     # Gestión (pestaña MP de /app/pos/transbank/) — endpoints SOLO ADMIN

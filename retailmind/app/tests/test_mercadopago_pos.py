@@ -623,3 +623,320 @@ class ReembolsoTests(BaseMPTest):
         mp.reembolsar(trx, monto=4000)
         trx.refresh_from_db()
         self.assertEqual(trx.estado, 'APROBADA')
+
+
+# ==================== COBROS VIVOS / HUÉRFANOS ====================
+# Caso NICK2 05-09-2026: el cobro se mandó a la Point, la máquina pidió
+# REINTENTE, se cerró la ventana de espera y el cliente pagó igual; la venta
+# se cerró con crédito manual. La plata entró por MP y la cuadratura la mostró
+# en VISA-MC-AMEX, con la transacción MP huérfana.
+
+class CobrosVivosTests(BaseMPTest):
+
+    def test_aprobada_sin_consumir_esta_viva(self):
+        trx = _transaccion(self.config, correlativo='500', monto=7000)
+        vivos = mp.cobros_vivos_de_ticket(self.sucursal.id, '500')
+        self.assertEqual([t.id for t in vivos], [trx.id])
+
+    def test_aprobada_consumida_no_esta_viva(self):
+        _transaccion(self.config, correlativo='501', monto=7000, consumida=True)
+        self.assertEqual(mp.cobros_vivos_de_ticket(self.sucursal.id, '501'), [])
+
+    def test_pendiente_esta_viva(self):
+        _transaccion(self.config, correlativo='502', monto=7000, estado='PENDIENTE')
+        vivos = mp.cobros_vivos_de_ticket(self.sucursal.id, '502')
+        self.assertEqual(len(vivos), 1)
+        self.assertEqual(vivos[0].estado, 'PENDIENTE')
+
+    def test_estados_finales_no_estan_vivos(self):
+        for i, estado in enumerate(('CANCELADA', 'EXPIRADA', 'RECHAZADA', 'DEVUELTA')):
+            _transaccion(self.config, correlativo=f'51{i}', monto=1000, estado=estado)
+            self.assertEqual(mp.cobros_vivos_de_ticket(self.sucursal.id, f'51{i}'), [])
+
+    def test_correlativos_de_prueba_y_directo_nunca_bloquean(self):
+        _transaccion(self.config, correlativo='PRUEBA-0101', monto=100)
+        _transaccion(self.config, correlativo='DIRECTO-0101', monto=100)
+        self.assertEqual(mp.cobros_vivos_de_ticket(self.sucursal.id, 'PRUEBA-0101'), [])
+        self.assertEqual(mp.cobros_vivos_de_ticket(self.sucursal.id, 'DIRECTO-0101'), [])
+
+    def test_pago_mp_del_payload_explica_el_cobro(self):
+        _transaccion(self.config, correlativo='520', monto=7000)
+        # La venta se cierra CON el pago MP: no queda nada huérfano
+        self.assertEqual(
+            mp.cobros_no_respaldados(self.sucursal.id, '520', [7000], refrescar=False), [])
+
+    def test_cobro_sin_pago_mp_queda_sin_respaldo(self):
+        # El caso del bug: la venta se cierra con tarjeta manual (0 pagos MP)
+        _transaccion(self.config, correlativo='521', monto=114980)
+        sobrantes = mp.cobros_no_respaldados(self.sucursal.id, '521', [], refrescar=False)
+        self.assertEqual(len(sobrantes), 1)
+        self.assertEqual(sobrantes[0].monto, 114980)
+
+    def test_segundo_cobro_no_respaldado_se_denuncia(self):
+        _transaccion(self.config, correlativo='522', monto=5000)
+        _transaccion(self.config, correlativo='522', monto=8000,
+                     external_reference='RM-dup-522')
+        sobrantes = mp.cobros_no_respaldados(self.sucursal.id, '522', [5000],
+                                             refrescar=False)
+        self.assertEqual([t.monto for t in sobrantes], [8000])
+
+    def test_metodo_pago_ticket_segun_medio_real(self):
+        qr = _transaccion(self.config, correlativo='530', monto=1000, canal='QR')
+        self.assertEqual(mp.metodo_pago_ticket_de(qr), 'MP_QR')
+        deb = _transaccion(self.config, correlativo='531', monto=1000, canal='POINT',
+                           metodo_pago_mp='debit_card', external_reference='RM-p-531')
+        self.assertEqual(mp.metodo_pago_ticket_de(deb), 'MP_POINT_DEBITO')
+        cred = _transaccion(self.config, correlativo='532', monto=1000, canal='POINT',
+                            metodo_pago_mp='credit_card', external_reference='RM-p-532')
+        self.assertEqual(mp.metodo_pago_ticket_de(cred), 'MP_POINT_CREDITO')
+        otro = _transaccion(self.config, correlativo='533', monto=1000, canal='POINT',
+                            metodo_pago_mp='account_money', external_reference='RM-p-533')
+        self.assertEqual(mp.metodo_pago_ticket_de(otro), 'MP_POINT')
+
+    def test_resumen_cobro_es_serializable(self):
+        trx = _transaccion(self.config, correlativo='540', monto=9990,
+                           canal='POINT', metodo_pago_mp='debit_card', payment_id='999')
+        d = mp.resumen_cobro(trx)
+        self.assertEqual(d['monto'], 9990)
+        self.assertTrue(d['aprobada'])
+        self.assertEqual(d['metodo_pago_ticket'], 'MP_POINT_DEBITO')
+        self.assertEqual(d['payment_id'], '999')
+
+
+@mock.patch.dict('os.environ', ENV_TEST)
+class CrearOrdenConCobroVivoTests(BaseMPTest):
+    """El "Reintentar" del POS no puede dejar dos cobros vivos por el mismo
+    ticket: con la orden anterior en la pantalla del terminal, el cliente podía
+    pagar las dos."""
+
+    def test_cobro_aprobado_previo_bloquea_nueva_orden(self):
+        _transaccion(self.config, correlativo='600', monto=5000, payment_id='123')
+        with self.assertRaises(mp.MercadoPagoError) as ctx:
+            mp.crear_orden(self.config, '600', 5000)
+        self.assertIn('APROBADO', ctx.exception.mensaje)
+
+    def test_cobro_en_vuelo_previo_se_cancela_antes_de_crear(self):
+        previa = _transaccion(self.config, correlativo='601', monto=5000,
+                              estado='PENDIENTE')
+        with mock.patch.object(mp, 'cancelar') as m_cancel, \
+             mock.patch.object(mp, 'consultar_estado', side_effect=lambda t, **k: t), \
+             mock.patch('app.services.mercadopago_service.requests.request') as m_req:
+            resp = mock.MagicMock()
+            resp.status_code = 201
+            resp.json.return_value = {'id': 'ORD-9', 'status': 'created',
+                                      'type_response': {'qr_data': 'abc'}}
+            m_req.return_value = resp
+            mp.crear_orden(self.config, '601', 5000)
+        m_cancel.assert_called_once()
+        self.assertEqual(m_cancel.call_args[0][0].id, previa.id)
+
+    def test_prueba_no_dispara_el_guard(self):
+        _transaccion(self.config, correlativo='PRUEBA-0202', monto=100)
+        with mock.patch('app.services.mercadopago_service.requests.request') as m_req:
+            resp = mock.MagicMock()
+            resp.status_code = 201
+            resp.json.return_value = {'id': 'ORD-10', 'status': 'created',
+                                      'type_response': {'qr_data': 'abc'}}
+            m_req.return_value = resp
+            trx, _qr = mp.crear_orden(self.config, 'PRUEBA-0202', 100)
+        self.assertEqual(trx.estado, 'PENDIENTE')
+
+
+class RepararCobroHuerfanoTests(BaseMPTest):
+    """Comando `reparar_cobro_mp_huerfano`: pasa el pago de tarjeta manual a
+    Mercado Pago y consume la transacción huérfana."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.vendedor = crear_vendedor(empresa=cls.empresa)
+
+    def _venta_con_credito_manual(self, correlativo, monto):
+        ticket = Ticket.objects.create(
+            vendedor=self.vendedor, sucursal=self.sucursal, correlativo=correlativo,
+            estado='PAGADO', subTotal=monto, descuento=0, total=monto,
+            responsable='test-mp',
+        )
+        pago = TicketDetallePago.objects.create(
+            ticket=ticket, metodo_pago='TBK_CREDITO_POS', monto=monto,
+            tipo_tarjeta='VISA', voucher='000123', origen_pago='MANUAL',
+        )
+        trx = _transaccion(self.config, correlativo=correlativo, monto=monto,
+                           canal='POINT', metodo_pago_mp='credit_card',
+                           payment_id='PAY-1')
+        return ticket, pago, trx
+
+    def _correr(self, **kwargs):
+        from io import StringIO
+
+        from django.core.management import call_command
+        salida = StringIO()
+        call_command('reparar_cobro_mp_huerfano', stdout=salida, stderr=salida, **kwargs)
+        return salida.getvalue()
+
+    def test_dry_run_no_escribe(self):
+        _t, pago, trx = self._venta_con_credito_manual(7100, 114980)
+        salida = self._correr(sucursal=self.sucursal.alias)
+        pago.refresh_from_db()
+        trx.refresh_from_db()
+        self.assertEqual(pago.metodo_pago, 'TBK_CREDITO_POS')
+        self.assertFalse(trx.consumida)
+        self.assertIn('Reparables: 1', salida)
+
+    def test_apply_pasa_el_pago_a_mercado_pago(self):
+        _t, pago, trx = self._venta_con_credito_manual(7101, 114980)
+        self._correr(sucursal=self.sucursal.alias, apply=True)
+        pago.refresh_from_db()
+        trx.refresh_from_db()
+        self.assertEqual(pago.metodo_pago, 'MP_POINT_CREDITO')
+        self.assertEqual(pago.tipo_tarjeta, 'credit_card')
+        self.assertEqual(pago.voucher, 'PAY-1')
+        self.assertEqual(pago.origen_pago, 'POS_INTEGRADO')
+        self.assertIn('Corregido', pago.notas)
+        self.assertTrue(trx.consumida)
+        self.assertEqual(trx.detalle_pago_id, pago.id)
+
+    def test_apply_corrige_la_cuadratura(self):
+        from app.views_modulo_ventas import _calcular_cuadratura_data
+        self._venta_con_credito_manual(7102, 114980)
+        hoy = timezone.localdate().strftime('%Y-%m-%d')
+        antes = _calcular_cuadratura_data(self.sucursal, hoy)
+        self.assertEqual(antes['total_visa_mc_amex'], 114980)
+        self.assertEqual(antes['total_mercadopago_pos'], 0)
+
+        self._correr(sucursal=self.sucursal.alias, apply=True)
+
+        despues = _calcular_cuadratura_data(self.sucursal, hoy)
+        self.assertEqual(despues['total_visa_mc_amex'], 0)
+        self.assertEqual(despues['total_mercadopago_pos'], 114980)
+        self.assertEqual(despues['total_mercadopago_pos_credito'], 114980)
+        # La venta total no se mueve: cambia el medio, no la plata
+        self.assertEqual(antes['venta_total'], despues['venta_total'])
+
+    def test_no_toca_ventas_sin_contraparte_manual(self):
+        ticket = Ticket.objects.create(
+            vendedor=self.vendedor, sucursal=self.sucursal, correlativo=7103,
+            estado='PAGADO', subTotal=5000, descuento=0, total=5000,
+            responsable='test-mp',
+        )
+        TicketDetallePago.objects.create(
+            ticket=ticket, metodo_pago='EFECTIVO', monto=5000)
+        trx = _transaccion(self.config, correlativo=7103, monto=5000)
+        salida = self._correr(sucursal=self.sucursal.alias, apply=True)
+        trx.refresh_from_db()
+        self.assertFalse(trx.consumida)
+        self.assertIn('SIN CONTRAPARTE', salida)
+
+    def test_no_toca_montos_distintos(self):
+        ticket = Ticket.objects.create(
+            vendedor=self.vendedor, sucursal=self.sucursal, correlativo=7104,
+            estado='PAGADO', subTotal=9000, descuento=0, total=9000,
+            responsable='test-mp',
+        )
+        pago = TicketDetallePago.objects.create(
+            ticket=ticket, metodo_pago='TBK_CREDITO_POS', monto=9000)
+        trx = _transaccion(self.config, correlativo=7104, monto=5000)
+        self._correr(sucursal=self.sucursal.alias, apply=True)
+        pago.refresh_from_db()
+        trx.refresh_from_db()
+        self.assertEqual(pago.metodo_pago, 'TBK_CREDITO_POS')
+        self.assertFalse(trx.consumida)
+
+
+class GuardCierreConCobroMPTests(BaseMPTest):
+    """`registrar_pagos_ticket` no deja cerrar la venta con tarjeta manual
+    mientras Mercado Pago tiene un cobro vivo para ese mismo ticket."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        from app.tests.factories import crear_usuario
+        cls.vendedor = crear_vendedor(empresa=cls.empresa)
+        cls.cajero = crear_usuario(username='cajero_guard_mp', rol='cajero')
+
+    def setUp(self):
+        self.client.force_login(self.cajero)
+        sesion = self.client.session
+        sesion['idSucursalActual'] = self.sucursal.id
+        sesion.save()
+
+    def _ticket(self, correlativo, total):
+        return Ticket.objects.create(
+            vendedor=self.vendedor, sucursal=self.sucursal, correlativo=correlativo,
+            estado='PENDIENTE', subTotal=total, descuento=0, total=total,
+            responsable='cajero_guard_mp',
+        )
+
+    def _cerrar(self, ticket, pagos, extra=None):
+        cuerpo = {
+            'correlativo': ticket.correlativo,
+            'pagos': pagos,
+            'productos': [],
+            'tipo_documento': 'TICKET',
+            'estado': 'PAGADO',
+        }
+        cuerpo.update(extra or {})
+        return self.client.post(
+            f'/app/api/tickets/{ticket.correlativo}/pagos/',
+            data=cuerpo, content_type='application/json',
+        )
+
+    def test_cobro_aprobado_sin_usar_bloquea_el_cierre(self):
+        ticket = self._ticket(8100, 114980)
+        _transaccion(self.config, correlativo=8100, monto=114980, canal='POINT',
+                     metodo_pago_mp='credit_card', payment_id='PAY-9')
+        resp = self._cerrar(ticket, [{'metodo_pago': 'TBK_CREDITO_POS',
+                                      'monto': 114980, 'origen_pago': 'MANUAL'}])
+        self.assertEqual(resp.status_code, 400, resp.content)
+        data = resp.json()
+        self.assertEqual(data['error_tipo'], 'MP_COBRO_SIN_USAR')
+        self.assertEqual(data['cobros_mp'][0]['monto'], 114980)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.estado, 'PENDIENTE')
+        self.assertEqual(ticket.pagos.count(), 0)
+
+    def test_cobro_aprobado_no_se_puede_forzar(self):
+        """La plata existe en MP: la confirmación del cajero no lo salta."""
+        ticket = self._ticket(8101, 50000)
+        _transaccion(self.config, correlativo=8101, monto=50000)
+        resp = self._cerrar(ticket, [{'metodo_pago': 'TBK_CREDITO_POS', 'monto': 50000}],
+                            extra={'mp_confirmado_sin_cobro': True})
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()['error_tipo'], 'MP_COBRO_SIN_USAR')
+
+    def test_cobro_en_curso_bloquea_pero_se_puede_confirmar(self):
+        ticket = self._ticket(8102, 30000)
+        _transaccion(self.config, correlativo=8102, monto=30000, estado='PENDIENTE',
+                     canal='POINT')
+        pago_manual = [{'metodo_pago': 'TBK_DEBITO_POS', 'monto': 30000}]
+        with mock.patch.object(mp, 'consultar_estado', side_effect=lambda t, **k: t):
+            resp = self._cerrar(ticket, pago_manual)
+            self.assertEqual(resp.status_code, 400, resp.content)
+            self.assertEqual(resp.json()['error_tipo'], 'MP_COBRO_EN_CURSO')
+
+            # El cajero canceló el cobro en la máquina y confirma
+            resp2 = self._cerrar(ticket, pago_manual,
+                                 extra={'mp_confirmado_sin_cobro': True})
+        self.assertEqual(resp2.status_code, 200, resp2.content)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.estado, 'PAGADO')
+
+    def test_venta_con_pago_mp_correcto_no_se_bloquea(self):
+        ticket = self._ticket(8103, 20000)
+        _transaccion(self.config, correlativo=8103, monto=20000, canal='POINT',
+                     metodo_pago_mp='debit_card', payment_id='PAY-10')
+        resp = self._cerrar(ticket, [{
+            'metodo_pago': 'MP_POINT_DEBITO', 'monto': 20000,
+            'tipo_tarjeta': 'debit_card', 'voucher': 'PAY-10',
+            'origen_pago': 'POS_INTEGRADO',
+        }])
+        self.assertEqual(resp.status_code, 200, resp.content)
+        trx = TransaccionMercadoPago.objects.get(correlativo_ticket='8103')
+        self.assertTrue(trx.consumida)
+
+    def test_venta_sin_mercado_pago_no_consulta_nada(self):
+        ticket = self._ticket(8104, 12000)
+        resp = self._cerrar(ticket, [{'metodo_pago': 'EFECTIVO', 'monto': 12000}])
+        self.assertEqual(resp.status_code, 200, resp.content)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.estado, 'PAGADO')
