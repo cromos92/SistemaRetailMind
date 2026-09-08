@@ -69,10 +69,14 @@ class Command(BaseCommand):
                     else f'env {config.token_env or "?"}')
         self.stdout.write(f'\n== Cuenta MP ({etiqueta}) ==')
         try:
+            # El offset se calcula desde la zona del proyecto: hardcodear
+            # -04:00 dejaba fuera una hora de cobros en horario de verano.
+            inicio, _ = mp._rango_iso_dia(desde)
+            _, fin = mp._rango_iso_dia(hasta)
             resp = mp._request(config, 'GET', '/v1/payments/search', params={
                 'range': 'date_created',
-                'begin_date': f'{desde}T00:00:00.000-04:00',
-                'end_date': f'{hasta}T23:59:59.999-04:00',
+                'begin_date': inicio,
+                'end_date': fin,
                 'limit': 100,
                 'sort': 'date_created',
             })

@@ -1318,7 +1318,29 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
 
 <script>
 // ========== CONFIGURACIÓN ZEBRA BROWSER PRINT ==========
-const ZEBRA_URL = "http://localhost:9100";
+// Zebra Browser Print escucha en 9101 con TLS y en 9100 en claro.
+// Esta pagina se sirve por https en produccion y el navegador BLOQUEA por
+// mixed content cualquier fetch a http://localhost, asi que ahi SOLO sirve el
+// 9101. El 9100 queda para cuando se abre la pagina por http (desarrollo).
+// Antes esto era una constante fija al 9100 y por eso la impresion directa
+// nunca funciono desde https://retail.webappsolutions.cl.
+const ZEBRA_BASES = ["https://localhost:9101", "http://localhost:9100"];
+let ZEBRA_URL = null;   // se resuelve al buscar la impresora
+
+async function resolverZebraBase() {
+    for (const base of ZEBRA_BASES) {
+        if (window.location.protocol === 'https:' && base.startsWith('http://')) continue;
+        try {
+            const r = await fetch(base + '/available', {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' }
+            });
+            if (r.ok) { ZEBRA_URL = base; return base; }
+        } catch (e) { /* el agente no esta en ese puerto: probamos el siguiente */ }
+    }
+    ZEBRA_URL = null;
+    return null;
+}
 let printerDevice = null;
 let documentoSeleccionado = null;
 let productosDocumento = [];
@@ -1337,7 +1359,12 @@ async function buscarImpresora() {
     statusTextEl.textContent = 'Buscando impresora...';
     
     try {
-        const response = await fetch(ZEBRA_URL + '/available', {
+        const base = await resolverZebraBase();
+        if (!base) {
+            throw new Error('Zebra Browser Print no responde en localhost (9101/9100)');
+        }
+
+        const response = await fetch(base + '/available', {
             method: 'GET',
             headers: { 'Accept': 'application/json' }
         });
@@ -1361,6 +1388,9 @@ async function buscarImpresora() {
     } catch (error) {
         console.error('❌ Error buscando impresora:', error);
         statusEl.className = 'zebra-status disconnected';
+        console.error('   Si el agente esta corriendo y la pagina es https, revisa que '
+                    + window.location.origin
+                    + ' este listado en accepted_hosts del settings.json de Zebra Browser Print.');
         statusTextEl.textContent = 'Zebra Browser Print no disponible';
         printerDevice = null;
         actualizarBotonImprimir();
@@ -1991,9 +2021,18 @@ async function confirmarImpresionModal(confirmarDuplicado = false) {
         document.getElementById('loadingText').textContent = `Enviando ${data.total_etiquetas} etiquetas...`;
         const zpl = generarZPL(data.etiquetas);
 
+        if (!ZEBRA_URL) {
+            // La base se resuelve al buscar la impresora; sin eso no hay a donde escribir.
+            await resolverZebraBase();
+            if (!ZEBRA_URL) throw new Error('Zebra Browser Print no esta disponible');
+        }
+
         const printResponse = await fetch(ZEBRA_URL + '/write', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            // OJO con el Content-Type: 'text/plain' es CORS-safelisted y evita
+            // el preflight OPTIONS, que el agente de Zebra NO contesta. Con
+            // 'application/json' (como estaba) la request muere antes de salir.
+            headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
             body: JSON.stringify({
                 device: {
                     uid: printerDevice.uid,

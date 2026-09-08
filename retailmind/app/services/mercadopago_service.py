@@ -13,6 +13,7 @@ Lección heredada de transbank_simple_service: los tickets se buscan SIEMPRE
 por (sucursal, correlativo), nunca por PK.
 """
 import base64
+import datetime as _dt
 import hashlib
 import hmac
 import io
@@ -400,6 +401,308 @@ def etiqueta_medio_mp(medio):
     return _MEDIO_MP_LABEL.get(m, m.upper() or 'SIN DATO')
 
 
+# ==================== CONTROL CONTRA LA API DE MERCADO PAGO ====================
+#
+# El cierre por caja se armaba SOLO con lo que el ERP registró. Si Mercado Pago
+# cobró $100.000 y el sistema tiene $90.000 (un cobro que no se alcanzó a
+# registrar, o uno hecho desde la app de MP), el papel salía cuadrado igual.
+# Acá se le pregunta a MP qué cobró de verdad ese día y se compara medio por
+# medio (débito / crédito / prepago / dinero en cuenta).
+
+# Orden de presentación de los medios en el cierre
+MEDIOS_MP_ORDEN = ('debit_card', 'credit_card', 'prepaid_card',
+                   'account_money', 'bank_transfer', 'ticket')
+
+
+def _rango_iso_dia(fecha):
+    """(desde, hasta) en ISO-8601 con el offset REAL de la zona del proyecto.
+
+    Hardcodear `-04:00` (como hacía la conciliación) se rompe en el horario de
+    verano chileno: media hora de cobros del día quedaría fuera del rango.
+    """
+    if isinstance(fecha, str):
+        fecha = _dt.datetime.strptime(fecha, '%Y-%m-%d').date()
+    tz = timezone.get_current_timezone()
+    inicio = timezone.make_aware(_dt.datetime.combine(fecha, _dt.time.min), tz)
+    offset = inicio.strftime('%z')            # '-0400'
+    offset = f'{offset[:3]}:{offset[3:]}'     # '-04:00'
+    return (f"{fecha:%Y-%m-%d}T00:00:00.000{offset}",
+            f"{fecha:%Y-%m-%d}T23:59:59.999{offset}")
+
+
+def buscar_pagos_dia(config, fecha, max_paginas=20):
+    """Todos los pagos de la CUENTA MP en ese día (paginado, 100 por página).
+
+    Es por cuenta, no por caja: MP no permite filtrar por terminal. La
+    atribución a la caja se hace después, con el external_reference.
+    """
+    desde, hasta = _rango_iso_dia(fecha)
+    pagos, offset = [], 0
+    for _ in range(max_paginas):
+        resp = _request(config, 'GET', '/v1/payments/search', params={
+            'range': 'date_created',
+            'begin_date': desde,
+            'end_date': hasta,
+            'limit': 100,
+            'offset': offset,
+            'sort': 'date_created',
+            'criteria': 'asc',
+        })
+        data = _json_o_error(resp, 'payments/search')
+        lote = data.get('results') or []
+        pagos.extend(lote)
+        total = int((data.get('paging') or {}).get('total') or 0)
+        offset += len(lote)
+        if not lote or offset >= total:
+            break
+    return pagos
+
+
+def _sucursal_de_referencia(external_reference):
+    """El external_reference propio es `RM-{sucursal_id}-{correlativo}-{uuid}`.
+
+    Permite atribuir un cobro a su sucursal aunque la fila local se haya
+    perdido — que es justo el caso que se quiere detectar.
+    """
+    partes = str(external_reference or '').split('-')
+    if len(partes) >= 3 and partes[0] == 'RM' and partes[1].isdigit():
+        return int(partes[1])
+    return None
+
+
+def _pago_es_de_la_caja(pago, config):
+    """True / False / None (desconocido) según los ids de caja que traiga MP.
+
+    Solo decide cuando hay dato de ambos lados; si no, devuelve None y el
+    llamador se queda con la duda (que se reporta, no se esconde).
+    """
+    for campo in ('pos_id', 'store_id'):
+        propio = (getattr(config, campo, '') or '').strip()
+        ajeno = pago.get(campo)
+        if propio and ajeno not in (None, ''):
+            return str(ajeno) == propio
+    return None
+
+
+def conciliar_cierre_mp(config, fecha, pagos=None):
+    """Compara lo que el sistema registró para esta caja con lo que MP cobró.
+
+    `pagos` permite reutilizar una búsqueda ya hecha (varias cajas comparten
+    cuenta: sin esto se consultaría la misma lista una vez por caja).
+
+    Devuelve un dict con `ok`, la tabla `medios` (sistema / mp / diferencia por
+    payment_type_id), los totales, y el detalle de lo que no calza:
+      - `sin_registro`:  cobrado en MP, sin pago registrado en el sistema;
+      - `sin_confirmar`: registrado como aprobado, MP no lo reporta;
+      - `medio_distinto`: mismo cobro, distinto medio (débito/crédito) — hace
+        que la cuadratura lo impute al sub-bucket equivocado.
+    """
+    if pagos is None:
+        try:
+            pagos = buscar_pagos_dia(config, fecha)
+        except MercadoPagoError as e:
+            return {'ok': False, 'error': e.mensaje}
+
+    # ── Lado SISTEMA: lo mismo que ya imprime el cierre de esta caja ────────
+    locales_caja = list(
+        TransaccionMercadoPago.objects
+        .filter(config=config, creado_en__date=fecha, tipo='VENTA', estado='APROBADA')
+        .exclude(correlativo_ticket__startswith='PRUEBA-')
+    )
+    sistema = {}
+    for t in locales_caja:
+        b = sistema.setdefault(t.metodo_pago_mp or '', {'monto': 0, 'cobros': 0})
+        b['monto'] += t.monto
+        b['cobros'] += 1
+
+    # Las filas locales se buscan por external_reference (no por fecha): un
+    # cobro de las 23:59 puede tener la fila creada el día anterior.
+    refs = [str(p.get('external_reference') or '') for p in pagos]
+    locales = {
+        t.external_reference: t
+        for t in TransaccionMercadoPago.objects.filter(
+            external_reference__in=[r for r in refs if r]).select_related('config')
+    }
+
+    real = {}
+    sin_registro, medio_distinto = [], []
+    devoluciones_mp = 0
+    vistos = set()
+
+    for pago in pagos:
+        estado = str(pago.get('status') or '')
+        ext = str(pago.get('external_reference') or '')
+        monto = int(round(float(pago.get('transaction_amount') or 0)))
+        medio = str(pago.get('payment_type_id') or '')
+        if estado == 'refunded':
+            # Devuelto entero: el sistema tampoco lo cuenta como cobro, así
+            # que queda fuera de la comparación y se informa aparte.
+            trx = locales.get(ext)
+            if trx is None or trx.config_id == config.id:
+                devoluciones_mp += monto
+            continue
+        if estado != 'approved':
+            continue
+
+        trx = locales.get(ext)
+        if trx is not None:
+            if trx.config_id != config.id:
+                continue                      # cobro de otra caja de la cuenta
+            vistos.add(ext)
+            if (trx.metodo_pago_mp or '') != medio and medio:
+                medio_distinto.append({
+                    'payment_id': str(pago.get('id') or ''),
+                    'external_reference': ext,
+                    'monto': monto,
+                    'medio_sistema': etiqueta_medio_mp(trx.metodo_pago_mp),
+                    'medio_mp': etiqueta_medio_mp(medio),
+                })
+        else:
+            # Sin fila local: ¿es de esta caja?
+            de_la_caja = _pago_es_de_la_caja(pago, config)
+            sucursal_ref = _sucursal_de_referencia(ext)
+            if de_la_caja is False:
+                continue
+            if sucursal_ref is not None and sucursal_ref != config.sucursal_id:
+                continue                      # de otra sucursal de la cuenta
+            sin_registro.append({
+                'payment_id': str(pago.get('id') or ''),
+                'external_reference': ext,
+                'monto': monto,
+                'medio': etiqueta_medio_mp(medio),
+                'hora': str(pago.get('date_created') or '')[11:16],
+                'descripcion': str(pago.get('description') or '')[:60],
+                # None = MP no dio datos para atribuirlo a una caja
+                'atribuible': bool(de_la_caja) or sucursal_ref is not None,
+            })
+
+        b = real.setdefault(medio, {'monto': 0, 'cobros': 0})
+        b['monto'] += monto
+        b['cobros'] += 1
+
+    sin_confirmar = [
+        {'external_reference': t.external_reference, 'monto': t.monto,
+         'payment_id': t.payment_id, 'medio': etiqueta_medio_mp(t.metodo_pago_mp),
+         'correlativo_ticket': t.correlativo_ticket}
+        for t in locales_caja if t.external_reference not in vistos
+    ]
+
+    claves = list(dict.fromkeys(
+        list(MEDIOS_MP_ORDEN) + sorted(set(sistema) | set(real))))
+    medios = []
+    for clave in claves:
+        s = sistema.get(clave, {})
+        m = real.get(clave, {})
+        if not s.get('monto') and not m.get('monto'):
+            continue
+        medios.append({
+            'medio': clave,
+            'etiqueta': etiqueta_medio_mp(clave),
+            'sistema': s.get('monto', 0),
+            'mp': m.get('monto', 0),
+            'diferencia': m.get('monto', 0) - s.get('monto', 0),
+            'cobros_sistema': s.get('cobros', 0),
+            'cobros_mp': m.get('cobros', 0),
+        })
+
+    sistema_total = sum(v['monto'] for v in sistema.values())
+    mp_total = sum(v['monto'] for v in real.values())
+    return {
+        'ok': True,
+        'fecha': str(fecha),
+        'medios': medios,
+        'sistema_total': sistema_total,
+        'mp_total': mp_total,
+        'diferencia': mp_total - sistema_total,
+        'cuadra': mp_total == sistema_total,
+        'sin_registro': sin_registro,
+        'sin_confirmar': sin_confirmar,
+        'medio_distinto': medio_distinto,
+        'devoluciones_mp': devoluciones_mp,
+        # Cobros que MP no permitió atribuir a una caja concreta: si la cuenta
+        # tiene más de una, la diferencia puede venir de la otra tienda.
+        'hay_sin_atribuir': any(not d['atribuible'] for d in sin_registro),
+        'cajas_en_la_cuenta': MercadoPagoConfig.objects.filter(
+            cuenta_id=config.cuenta_id).count() if config.cuenta_id else 1,
+    }
+
+
+# Etiquetas de 8 caracteres para la tabla del ticket térmico (30 columnas)
+_ETIQUETA_CORTA_MP = {
+    'DINERO EN CUENTA': 'D.CUENTA',
+    'TRANSFERENCIA': 'TRANSFER',
+    'EFECTIVO (PAGO FACIL)': 'EFECTIVO',
+}
+
+
+def _bloque_control_mp(control, plata, linea):
+    """Sección 'CONTROL vs MERCADO PAGO' del ticket térmico (32 columnas).
+
+    `control` es lo que devuelve `conciliar_cierre_mp`. Si la consulta a MP
+    falló, se imprime el aviso: un cierre que no pudo verificarse NO puede
+    parecer verificado.
+    """
+    if not control:
+        return []
+    partes = ['{center}{w}CONTROL vs MERCADO PAGO{br}']
+    if not control.get('ok'):
+        partes.append(linea('No se pudo consultar MP:'))
+        partes.append(linea(f"  {str(control.get('error') or '')[:28]}"))
+        partes.append(linea('Cierre SIN verificar.'))
+        partes.append(linea('------------------------------'))
+        return partes
+
+    def monto_corto(v):
+        return f"{int(v or 0):,}".replace(',', '.')
+
+    def fila(etiqueta, sistema, mp_monto, marca=''):
+        # 8 + 1 + 9 + 1 + 9 + 2 = 30 columnas, el mismo ancho que las líneas
+        # separadoras del ticket. Más que eso, la Point corta o envuelve.
+        return linea(f"{_ETIQUETA_CORTA_MP.get(etiqueta, etiqueta)[:8]:<8} "
+                     f"{monto_corto(sistema):>9} {monto_corto(mp_monto):>9}{marca}")
+
+    partes.append(linea('MEDIO     SISTEMA        MP'))
+    for m in control.get('medios') or []:
+        partes.append(fila(m['etiqueta'], m['sistema'], m['mp'],
+                           ' *' if m['diferencia'] else ''))
+    partes.append(linea('------------------------------'))
+    partes.append(fila('TOTAL', control.get('sistema_total'),
+                       control.get('mp_total')))
+
+    diferencia = int(control.get('diferencia') or 0)
+    if not diferencia:
+        partes.append('{center}{w}CUADRA CON MERCADO PAGO{br}')
+    elif diferencia > 0:
+        partes.append('{center}{w}FALTAN ' + plata(diferencia) + '{br}')
+        partes.append(linea('Mercado Pago cobro mas de lo'))
+        partes.append(linea('que el sistema registro.'))
+    else:
+        partes.append('{center}{w}SOBRAN ' + plata(-diferencia) + '{br}')
+        partes.append(linea('El sistema registro mas de lo'))
+        partes.append(linea('que Mercado Pago confirma.'))
+
+    for d in (control.get('sin_registro') or [])[:8]:
+        partes.append(linea(
+            f"  {d['hora']} {plata(d['monto'])} {d['medio'][:8]}"))
+        partes.append(linea(f"    pago {d['payment_id'][:18]}"))
+    if len(control.get('sin_registro') or []) > 8:
+        partes.append(linea(f"  ...y {len(control['sin_registro']) - 8} mas"))
+    for d in (control.get('sin_confirmar') or [])[:5]:
+        partes.append(linea(f"  MP no confirma {plata(d['monto'])}"))
+        partes.append(linea(f"    ticket {str(d['correlativo_ticket'])[:16]}"))
+    for d in (control.get('medio_distinto') or [])[:5]:
+        partes.append(linea(f"  {plata(d['monto'])}: sistema dice"))
+        partes.append(linea(f"    {d['medio_sistema'][:12]}, MP {d['medio_mp'][:12]}"))
+    if control.get('hay_sin_atribuir') and (control.get('cajas_en_la_cuenta') or 1) > 1:
+        partes.append(linea('Ojo: la cuenta MP tiene varias'))
+        partes.append(linea('cajas; algun cobro sin ID puede'))
+        partes.append(linea('ser de otra tienda.'))
+    if control.get('devoluciones_mp'):
+        partes.append(linea(f"Devuelto en MP: {plata(control['devoluciones_mp'])}"))
+    partes.append(linea('------------------------------'))
+    return partes
+
+
 def contenido_cierre_terminal(caja, fecha):
     """Arma el texto etiquetado del cierre de una caja para la impresora de la
     Point. `caja` es un dict del resumen por terminal (QR/POINT/total_*)."""
@@ -433,6 +736,11 @@ def contenido_cierre_terminal(caja, fecha):
     partes.append(linea('------------------------------'))
     partes.append('{center}{w}' + f"NETO MP: {plata(caja.get('total_neto'))}" + '{br}')
     partes.append(linea('------------------------------'))
+
+    # ── Control contra la API de Mercado Pago ───────────────────────────────
+    # Lo que MP dice que cobró de verdad, medio por medio, contra lo que el
+    # sistema registró. Sin esto el cierre cuadra siempre consigo mismo.
+    partes.extend(_bloque_control_mp(caja.get('control_mp'), plata, linea))
 
     # Venta del día de la sucursal: todos los medios + total global (misma
     # fuente que la cuadratura del arqueo, para que el papel siempre calce)

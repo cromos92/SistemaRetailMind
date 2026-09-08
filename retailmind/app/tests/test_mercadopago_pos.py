@@ -940,3 +940,243 @@ class GuardCierreConCobroMPTests(BaseMPTest):
         self.assertEqual(resp.status_code, 200, resp.content)
         ticket.refresh_from_db()
         self.assertEqual(ticket.estado, 'PAGADO')
+
+
+# ==================== CONTROL DEL CIERRE CONTRA LA API DE MP ====================
+# El cierre por caja se armaba solo con datos propios: si MP cobró $100.000 y
+# el sistema registró $90.000, el papel salía cuadrado consigo mismo.
+
+def _pago_mp(monto, medio='debit_card', ext_ref='', estado='approved',
+             payment_id='1', hora='2026-09-05T12:31:00.000-04:00', **extra):
+    pago = {
+        'id': payment_id,
+        'status': estado,
+        'transaction_amount': monto,
+        'payment_type_id': medio,
+        'external_reference': ext_ref,
+        'date_created': hora,
+    }
+    pago.update(extra)
+    return pago
+
+
+class ControlCierreMPTests(BaseMPTest):
+
+    def setUp(self):
+        self.hoy = timezone.localdate()
+
+    def test_rango_del_dia_usa_el_offset_real(self):
+        desde, hasta = mp._rango_iso_dia('2026-09-05')
+        self.assertTrue(desde.startswith('2026-09-05T00:00:00.000'))
+        self.assertTrue(hasta.startswith('2026-09-05T23:59:59.999'))
+        # Offset real de America/Santiago, no un '-04:00' hardcodeado
+        self.assertRegex(desde[-6:], r'^[+-]\d{2}:\d{2}$')
+        self.assertEqual(desde[-6:], hasta[-6:])
+
+    def test_todo_calza(self):
+        trx = _transaccion(self.config, correlativo='900', monto=90000,
+                           metodo_pago_mp='debit_card', payment_id='P1')
+        res = mp.conciliar_cierre_mp(
+            self.config, self.hoy,
+            pagos=[_pago_mp(90000, 'debit_card', trx.external_reference, payment_id='P1')])
+        self.assertTrue(res['ok'])
+        self.assertTrue(res['cuadra'])
+        self.assertEqual(res['diferencia'], 0)
+        self.assertEqual(res['sistema_total'], 90000)
+        self.assertEqual(res['mp_total'], 90000)
+        self.assertEqual(res['sin_registro'], [])
+        self.assertEqual(res['sin_confirmar'], [])
+
+    def test_cobro_en_mp_sin_registro_local_es_la_diferencia(self):
+        """El caso que pidió el usuario: MP 100.000, sistema 90.000."""
+        trx = _transaccion(self.config, correlativo='901', monto=90000,
+                           metodo_pago_mp='debit_card', payment_id='P1')
+        pagos = [
+            _pago_mp(90000, 'debit_card', trx.external_reference, payment_id='P1'),
+            # Cobro que nunca llegó al sistema (external_reference de la sucursal)
+            _pago_mp(10000, 'debit_card', f'RM-{self.sucursal.id}-999-abcd1234',
+                     payment_id='P2'),
+        ]
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=pagos)
+        self.assertEqual(res['sistema_total'], 90000)
+        self.assertEqual(res['mp_total'], 100000)
+        self.assertEqual(res['diferencia'], 10000)
+        self.assertFalse(res['cuadra'])
+        self.assertEqual(len(res['sin_registro']), 1)
+        self.assertEqual(res['sin_registro'][0]['monto'], 10000)
+        self.assertTrue(res['sin_registro'][0]['atribuible'])
+        # …y la diferencia queda desglosada por medio
+        debito = [m for m in res['medios'] if m['medio'] == 'debit_card'][0]
+        self.assertEqual((debito['sistema'], debito['mp'], debito['diferencia']),
+                         (90000, 100000, 10000))
+
+    def test_desglose_por_medio_debito_credito_prepago(self):
+        for i, medio in enumerate(('debit_card', 'credit_card', 'prepaid_card')):
+            _transaccion(self.config, correlativo=f'91{i}', monto=1000 * (i + 1),
+                         metodo_pago_mp=medio, payment_id=f'P{i}',
+                         external_reference=f'RM-{self.sucursal.id}-91{i}-aa')
+        pagos = [
+            _pago_mp(1000, 'debit_card', f'RM-{self.sucursal.id}-910-aa', payment_id='P0'),
+            _pago_mp(2000, 'credit_card', f'RM-{self.sucursal.id}-911-aa', payment_id='P1'),
+            # El prepago de MP viene por 5.000, el sistema anotó 3.000
+            _pago_mp(5000, 'prepaid_card', f'RM-{self.sucursal.id}-912-aa', payment_id='P2'),
+        ]
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=pagos)
+        por_medio = {m['medio']: m for m in res['medios']}
+        self.assertEqual(por_medio['debit_card']['diferencia'], 0)
+        self.assertEqual(por_medio['credit_card']['diferencia'], 0)
+        self.assertEqual(por_medio['prepaid_card']['diferencia'], 2000)
+        # Orden de presentación: débito, crédito, prepago
+        self.assertEqual([m['medio'] for m in res['medios']],
+                         ['debit_card', 'credit_card', 'prepaid_card'])
+
+    def test_sistema_dice_cobrado_y_mp_no_lo_reporta(self):
+        _transaccion(self.config, correlativo='920', monto=7000,
+                     metodo_pago_mp='credit_card', payment_id='P9')
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[])
+        self.assertEqual(res['diferencia'], -7000)
+        self.assertEqual(len(res['sin_confirmar']), 1)
+        self.assertEqual(res['sin_confirmar'][0]['monto'], 7000)
+
+    def test_medio_distinto_se_denuncia(self):
+        trx = _transaccion(self.config, correlativo='930', monto=5000,
+                           metodo_pago_mp='debit_card', payment_id='P1')
+        res = mp.conciliar_cierre_mp(
+            self.config, self.hoy,
+            pagos=[_pago_mp(5000, 'credit_card', trx.external_reference, payment_id='P1')])
+        self.assertEqual(len(res['medio_distinto']), 1)
+        self.assertEqual(res['medio_distinto'][0]['medio_sistema'], 'DEBITO')
+        self.assertEqual(res['medio_distinto'][0]['medio_mp'], 'CREDITO')
+        # El total no cambia, pero el desglose sí: débito de menos, crédito de más
+        self.assertEqual(res['diferencia'], 0)
+        por_medio = {m['medio']: m['diferencia'] for m in res['medios']}
+        self.assertEqual(por_medio['debit_card'], -5000)
+        self.assertEqual(por_medio['credit_card'], 5000)
+
+    def test_cobro_de_otra_caja_de_la_misma_cuenta_no_contamina(self):
+        otra_suc = crear_sucursal(empresa=self.empresa, alias='SUC-OTRA-MP')
+        otra_config = _config(otra_suc, nombre='Caja otra')
+        ajena = _transaccion(otra_config, correlativo='940', monto=50000,
+                             metodo_pago_mp='debit_card',
+                             external_reference='RM-otra-940-zz')
+        ajena.sucursal_id = otra_suc.id
+        ajena.save(update_fields=['sucursal'])
+        propia = _transaccion(self.config, correlativo='941', monto=3000,
+                              metodo_pago_mp='debit_card')
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[
+            _pago_mp(50000, 'debit_card', ajena.external_reference, payment_id='PA'),
+            _pago_mp(3000, 'debit_card', propia.external_reference, payment_id='PB'),
+        ])
+        self.assertEqual(res['mp_total'], 3000)
+        self.assertEqual(res['sistema_total'], 3000)
+        self.assertTrue(res['cuadra'])
+
+    def test_pago_sin_referencia_de_otra_caja_por_pos_id(self):
+        """Si MP entrega pos_id y no es el de esta caja, no cuenta."""
+        self.config.pos_id = '111'
+        self.config.save(update_fields=['pos_id'])
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[
+            _pago_mp(8000, 'debit_card', '', payment_id='PX', pos_id='222'),
+        ])
+        self.assertEqual(res['mp_total'], 0)
+        self.assertEqual(res['sin_registro'], [])
+
+    def test_pago_suelto_sin_datos_se_reporta_como_no_atribuible(self):
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[
+            _pago_mp(8000, 'account_money', '', payment_id='PY'),
+        ])
+        self.assertEqual(res['diferencia'], 8000)
+        self.assertEqual(len(res['sin_registro']), 1)
+        self.assertFalse(res['sin_registro'][0]['atribuible'])
+        self.assertTrue(res['hay_sin_atribuir'])
+
+    def test_devolucion_total_sale_de_la_comparacion(self):
+        trx = _transaccion(self.config, correlativo='950', monto=4000,
+                           estado='DEVUELTA', metodo_pago_mp='debit_card')
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[
+            _pago_mp(4000, 'debit_card', trx.external_reference,
+                     estado='refunded', payment_id='PR'),
+        ])
+        self.assertEqual(res['devoluciones_mp'], 4000)
+        self.assertEqual(res['mp_total'], 0)
+        self.assertEqual(res['sistema_total'], 0)
+        self.assertTrue(res['cuadra'])
+
+    def test_error_de_api_no_finge_que_cuadra(self):
+        with mock.patch.object(mp, 'buscar_pagos_dia',
+                               side_effect=mp.MercadoPagoError('sin red')):
+            res = mp.conciliar_cierre_mp(self.config, self.hoy)
+        self.assertFalse(res['ok'])
+        self.assertIn('sin red', res['error'])
+
+    @mock.patch.dict('os.environ', ENV_TEST)
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_busqueda_pagina_hasta_el_total(self, m_req):
+        def _resp(results, total):
+            r = mock.MagicMock()
+            r.status_code = 200
+            r.json.return_value = {'results': results, 'paging': {'total': total}}
+            return r
+        m_req.side_effect = [
+            _resp([_pago_mp(100, payment_id=str(i)) for i in range(100)], 150),
+            _resp([_pago_mp(100, payment_id=str(i)) for i in range(50)], 150),
+        ]
+        pagos = mp.buscar_pagos_dia(self.config, '2026-09-05')
+        self.assertEqual(len(pagos), 150)
+        self.assertEqual(m_req.call_count, 2)
+        self.assertEqual(m_req.call_args.kwargs['params']['offset'], 100)
+
+
+class BloqueControlImpresoTests(BaseMPTest):
+    """El ticket térmico tiene que decir la diferencia, no esconderla."""
+
+    def _cierre(self, control):
+        caja = {'caja': 'Caja1', 'sucursal': 'NICK2', 'QR': {}, 'POINT': {},
+                'medios': {}, 'total_neto': 90000, 'control_mp': control}
+        return mp.contenido_cierre_terminal(caja, '2026-09-05')
+
+    def test_imprime_faltante(self):
+        texto = self._cierre({
+            'ok': True, 'sistema_total': 90000, 'mp_total': 100000,
+            'diferencia': 10000, 'cuadra': False,
+            'medios': [{'medio': 'debit_card', 'etiqueta': 'DEBITO',
+                        'sistema': 90000, 'mp': 100000, 'diferencia': 10000,
+                        'cobros_sistema': 3, 'cobros_mp': 4}],
+            'sin_registro': [{'payment_id': 'P2', 'monto': 10000, 'medio': 'DEBITO',
+                              'hora': '12:31', 'external_reference': '', 'atribuible': True,
+                              'descripcion': ''}],
+            'sin_confirmar': [], 'medio_distinto': [], 'devoluciones_mp': 0,
+            'hay_sin_atribuir': False, 'cajas_en_la_cuenta': 1,
+        })
+        self.assertIn('CONTROL vs MERCADO PAGO', texto)
+        self.assertIn('DEBITO', texto)
+        self.assertIn('FALTAN $10.000', texto)
+        self.assertIn('12:31', texto)
+        # El papel de la Point es de 32 columnas: una línea más larga se corta.
+        # (La tabla del control se arma a 30 para dejar aire.)
+        for renglon in texto.replace('{center}', '').replace('{w}', '').split('{br}'):
+            self.assertLessEqual(len(renglon.replace('{s}', '')), 32, renglon)
+
+    def test_imprime_que_cuadra(self):
+        texto = self._cierre({
+            'ok': True, 'sistema_total': 90000, 'mp_total': 90000,
+            'diferencia': 0, 'cuadra': True,
+            'medios': [{'medio': 'credit_card', 'etiqueta': 'CREDITO',
+                        'sistema': 90000, 'mp': 90000, 'diferencia': 0,
+                        'cobros_sistema': 1, 'cobros_mp': 1}],
+            'sin_registro': [], 'sin_confirmar': [], 'medio_distinto': [],
+            'devoluciones_mp': 0, 'hay_sin_atribuir': False, 'cajas_en_la_cuenta': 1,
+        })
+        self.assertIn('CUADRA CON MERCADO PAGO', texto)
+
+    def test_api_caida_avisa_que_no_esta_verificado(self):
+        texto = self._cierre({'ok': False, 'error': 'No se pudo contactar a MP'})
+        self.assertIn('Cierre SIN verificar', texto)
+        self.assertNotIn('CUADRA CON MERCADO PAGO', texto)
+
+    def test_sin_control_el_cierre_sale_igual(self):
+        caja = {'caja': 'Caja1', 'sucursal': 'NICK2', 'QR': {}, 'POINT': {},
+                'medios': {}, 'total_neto': 5000}
+        texto = mp.contenido_cierre_terminal(caja, '2026-09-05')
+        self.assertIn('CIERRE MERCADO PAGO', texto)
+        self.assertNotIn('CONTROL vs MERCADO PAGO', texto)

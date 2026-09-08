@@ -576,7 +576,10 @@
             <div class="d-flex gap-1 mb-2 flex-wrap">
                 <input type="date" class="form-control-sm-pos" id="mpResumenFecha" style="max-width:150px;">
                 <button class="btn btn-sm btn-primary py-0 px-2" style="font-size:.72rem;" onclick="resumenDiaMP()"><i class="bi bi-search"></i> Ver</button>
-                <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.72rem;" title="Imprime el cierre COMPLETO del día en la impresora de la máquina Point ({% if es_admin_mp %}caja elegida en Operación Terminal{% else %}la de tu sucursal{% endif %}): MP débito/crédito/prepago + todos los medios de pago del día + total global, con fecha, hora y responsable"
+                <button class="btn btn-sm btn-warning py-0 px-2" style="font-size:.72rem;"
+                        title="Le pregunta a Mercado Pago qué cobró de verdad ese día y lo compara medio por medio con lo que registró el sistema. Tarda unos segundos (consulta la API)."
+                        onclick="resumenDiaMP(true)"><i class="bi bi-shield-check"></i> Verificar con MP</button>
+                <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.72rem;" title="Imprime el cierre COMPLETO del día en la impresora de la máquina Point ({% if es_admin_mp %}caja elegida en Operación Terminal{% else %}la de tu sucursal{% endif %}): MP débito/crédito/prepago + todos los medios de pago del día + total global, con el control contra la API de Mercado Pago, fecha, hora y responsable"
                         onclick="imprimirCierreEnMaquinaMP()"><i class="bi bi-phone-vibrate"></i> Imprimir cierre en la máquina</button>
             </div>
             <div id="mpResumenBody" class="tbk-tech-body">—</div>
@@ -2059,9 +2062,75 @@ function cobrarTerminalMP() {
 
 // ── Cierre / Resumen por terminal ──
 
-function resumenDiaMP() {
+/** Tabla "sistema vs Mercado Pago" de una caja (solo con ?verificar=1). */
+function _controlMPHtml(caja, f) {
+    const c = caja.control;
+    if (!c) return '';
+    const titulo = `${_escMP(caja.sucursal)} · ${_escMP(caja.caja)}`;
+    if (!c.ok) {
+        return `<div class="alert alert-warning py-1 px-2 mt-2 mb-0" style="font-size:.7rem;">
+            <strong>${titulo}:</strong> no se pudo verificar con Mercado Pago —
+            ${_escMP(c.error || '')}. El cierre queda <strong>sin verificar</strong>.</div>`;
+    }
+    const filas = (c.medios || []).map(m => `
+        <tr>
+            <td>${_escMP(m.etiqueta)}</td>
+            <td class="text-center text-muted">${m.cobros_sistema} / ${m.cobros_mp}</td>
+            <td class="text-end font-monospace">${f(m.sistema)}</td>
+            <td class="text-end font-monospace">${f(m.mp)}</td>
+            <td class="text-end font-monospace ${m.diferencia ? 'text-danger fw-bold' : 'text-success'}">
+                ${m.diferencia ? (m.diferencia > 0 ? '+' : '−') + f(Math.abs(m.diferencia)).slice(1) : 'OK'}</td>
+        </tr>`).join('');
+    const detalle = [];
+    (c.sin_registro || []).forEach(d => detalle.push(
+        `<li>Cobrado en MP y <strong>no registrado</strong>: ${f(d.monto)} ${_escMP(d.medio)}
+         ${d.hora ? '(' + _escMP(d.hora) + ')' : ''} <code>${_escMP(d.payment_id)}</code>
+         ${d.atribuible ? '' : '<span class="text-muted">· sin ID de caja</span>'}</li>`));
+    (c.sin_confirmar || []).forEach(d => detalle.push(
+        `<li>El sistema lo da por cobrado y <strong>MP no lo reporta</strong>: ${f(d.monto)}
+         (ticket ${_escMP(String(d.correlativo_ticket || ''))})</li>`));
+    (c.medio_distinto || []).forEach(d => detalle.push(
+        `<li>${f(d.monto)}: el sistema dice <strong>${_escMP(d.medio_sistema)}</strong> y MP
+         <strong>${_escMP(d.medio_mp)}</strong> — la cuadratura lo imputa al bucket equivocado</li>`));
+    if (c.hay_sin_atribuir && (c.cajas_en_la_cuenta || 1) > 1) {
+        detalle.push('<li class="text-muted">La cuenta de Mercado Pago tiene varias cajas: un cobro sin ID podría ser de otra tienda.</li>');
+    }
+    const dif = c.diferencia || 0;
+    return `<div class="mt-2 p-2" style="border:1px solid ${dif ? '#dc3545' : '#0ab39c'};border-radius:6px;">
+        <div class="fw-bold" style="font-size:.72rem;">
+            <i class="bi bi-shield-check"></i> ${titulo} — sistema vs Mercado Pago</div>
+        <table class="table table-sm mb-1" style="font-size:.68rem;">
+        <thead><tr><th>Medio</th><th class="text-center">Cobros sist./MP</th>
+            <th class="text-end">Sistema</th><th class="text-end">Mercado Pago</th>
+            <th class="text-end">Diferencia</th></tr></thead>
+        <tbody>${filas || '<tr><td colspan="5" class="text-muted text-center">Sin cobros ese día</td></tr>'}</tbody>
+        <tfoot><tr class="fw-bold"><td colspan="2">TOTAL</td>
+            <td class="text-end font-monospace">${f(c.sistema_total)}</td>
+            <td class="text-end font-monospace">${f(c.mp_total)}</td>
+            <td class="text-end font-monospace ${dif ? 'text-danger' : 'text-success'}">
+                ${dif ? (dif > 0 ? '+' : '−') + f(Math.abs(dif)).slice(1) : 'CUADRA'}</td></tr></tfoot>
+        </table>
+        ${dif ? `<div class="alert ${dif > 0 ? 'alert-danger' : 'alert-warning'} py-1 px-2 mb-1" style="font-size:.7rem;">
+            <strong>${dif > 0 ? 'Faltan ' + f(dif) + ' en el sistema' : 'Sobran ' + f(-dif) + ' en el sistema'}</strong>:
+            ${dif > 0 ? 'Mercado Pago cobró más de lo que quedó registrado.'
+                      : 'el sistema registró cobros que Mercado Pago no confirma.'}</div>` : ''}
+        ${detalle.length ? `<ul class="mb-0 ps-3" style="font-size:.68rem;">${detalle.join('')}</ul>` : ''}
+    </div>`;
+}
+
+/**
+ * @param {boolean} [verificar] Cruza además contra la API de Mercado Pago:
+ *   qué cobró MP de verdad ese día vs lo que registró el sistema, medio por
+ *   medio. Es una llamada externa, por eso no va en el "Ver" de siempre.
+ */
+function resumenDiaMP(verificar) {
     const fecha = document.getElementById('mpResumenFecha').value || new Date().toISOString().slice(0, 10);
-    fetch(`/app/pos/mercadopago/gestion/resumen-dia/?fecha=${fecha}`, { credentials: 'same-origin' })
+    if (verificar) {
+        document.getElementById('mpResumenBody').innerHTML =
+            '<span class="text-muted">Consultando Mercado Pago…</span>';
+    }
+    fetch(`/app/pos/mercadopago/gestion/resumen-dia/?fecha=${fecha}${verificar ? '&verificar=1' : ''}`,
+          { credentials: 'same-origin' })
         .then(r => r.json())
         .then(data => {
             if (!data.success) return;
@@ -2089,12 +2158,14 @@ function resumenDiaMP() {
                 ${canalFila('Máquina Point', caja.POINT)}
                 ${Object.keys(caja.medios || {}).sort().map(k => medioFila(k, caja.medios[k])).join('')}`).join('');
             const t = data.total || {};
+            const controles = (data.cajas || []).map(caja => _controlMPHtml(caja, f)).join('');
             document.getElementById('mpResumenBody').innerHTML = `
                 <table class="table table-sm mb-1" style="font-size:.72rem;">
                 <thead><tr><th>Caja / canal</th><th class="text-center">Cobros</th><th class="text-end">Cobrado</th><th class="text-end">Devuelto</th><th class="text-center">Rech.</th></tr></thead>
                 <tbody>${bloques || '<tr><td colspan="5" class="text-muted text-center">Sin movimientos MP ese día</td></tr>'}</tbody>
                 </table>
-                <div class="fw-bold" style="font-size:.78rem;">TOTAL DÍA: ${f(t.monto)} · Devol: ${f(t.monto_devuelto)} · Neto: ${f(t.neto)}${t.comisiones ? ' · Comisiones MP: ' + f(t.comisiones) : ''}</div>`;
+                <div class="fw-bold" style="font-size:.78rem;">TOTAL DÍA: ${f(t.monto)} · Devol: ${f(t.monto_devuelto)} · Neto: ${f(t.neto)}${t.comisiones ? ' · Comisiones MP: ' + f(t.comisiones) : ''}</div>
+                ${controles}`;
         })
         .catch(() => { document.getElementById('mpResumenBody').textContent = 'Error al cargar'; });
 }

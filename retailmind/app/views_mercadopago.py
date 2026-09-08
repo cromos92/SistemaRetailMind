@@ -570,6 +570,37 @@ def gestion_resumen_dia_mp(request):
                               - caja['QR']['monto_devuelto']
                               - caja['POINT']['monto_devuelto'])
     total['neto'] = total['monto'] - total['monto_devuelto']
+
+    # ── ?verificar=1 → cruce contra la API de Mercado Pago ──────────────────
+    # Responde la pregunta que el resumen local no puede: ¿MP cobró lo mismo?
+    # La búsqueda de pagos es POR CUENTA, así que se hace una sola vez por
+    # token y se reparte entre las cajas que lo comparten.
+    if str(request.GET.get('verificar') or '') in ('1', 'true', 'True'):
+        configs = {c.id: c for c in MercadoPagoConfig.objects.filter(
+            id__in=[k for k in cajas if k]).select_related('sucursal', 'cuenta')}
+        pagos_por_token = {}
+        for config_id, caja in cajas.items():
+            config = configs.get(config_id)
+            if not config:
+                continue
+            try:
+                token = mp._token(config)
+            except mp.MercadoPagoError as e:
+                caja['control'] = {'ok': False, 'error': e.mensaje}
+                continue
+            if token not in pagos_por_token:
+                try:
+                    pagos_por_token[token] = mp.buscar_pagos_dia(config, fecha)
+                except mp.MercadoPagoError as e:
+                    pagos_por_token[token] = None
+                    caja['control'] = {'ok': False, 'error': e.mensaje}
+            pagos = pagos_por_token.get(token)
+            if pagos is None:
+                caja.setdefault('control', {'ok': False,
+                                            'error': 'No se pudo consultar Mercado Pago.'})
+                continue
+            caja['control'] = mp.conciliar_cierre_mp(config, fecha, pagos=pagos)
+
     return JsonResponse({'success': True, 'fecha': fecha,
                          'cajas': list(cajas.values()), 'total': total})
 
@@ -664,6 +695,22 @@ def gestion_imprimir_cierre_terminal_mp(request):
     except Exception as e:
         # El cierre MP sale igual aunque la cuadratura falle
         logger.warning(f"MP cierre: no se pudo calcular la venta del día: {e}")
+
+    # ── Control contra la API de MP: lo que Mercado Pago cobró de verdad ────
+    # Si falla la consulta, el ticket lo dice ("cierre SIN verificar") en vez
+    # de salir aparentemente cuadrado.
+    try:
+        caja['control_mp'] = mp.conciliar_cierre_mp(config, fecha)
+    except Exception as e:  # noqa: BLE001 — el cierre nunca se cae por esto
+        logger.warning(f"MP cierre: no se pudo verificar contra la API: {e}")
+        caja['control_mp'] = {'ok': False, 'error': 'error inesperado'}
+    if caja['control_mp'].get('ok') and caja['control_mp'].get('diferencia'):
+        logger.warning(
+            "MP cierre %s caja %s: DIFERENCIA de $%s (sistema $%s vs MP $%s) — %s cobro(s) sin registrar",
+            fecha, config.id, caja['control_mp']['diferencia'],
+            caja['control_mp']['sistema_total'], caja['control_mp']['mp_total'],
+            len(caja['control_mp']['sin_registro']),
+        )
 
     try:
         contenido = mp.contenido_cierre_terminal(caja, fecha)
