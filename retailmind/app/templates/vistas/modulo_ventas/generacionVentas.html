@@ -1745,21 +1745,33 @@ body.pos-kiosk [id="codigo-autorizacion-panel"] .codigo-panel-icon{width:32px;he
 
 /* Footer del wizard: 52px, borde superior, esquina inferior derecha reservada (#posKeyboardHelp,
    #mp-banner-vigilancia y la burbuja del asistente son fixed ahí) → padding-right 96px */
-#pvApp .wizard-footer{flex:0 0 auto;display:flex;align-items:center;height:52px;min-height:52px;margin:0;padding:0 96px 0 0;
+#pvApp .wizard-footer{flex:0 0 auto;display:flex;align-items:center;height:64px;min-height:64px;margin:0;padding:0 96px 0 0;
   border-top:1px solid var(--nexo-gray-300);background:#fff;
   position:relative /* sin z-index (no crea stacking context): solo garantiza que el footer se pinte y reciba clics
                        POR ENCIMA de lo que un paso desborde hacia abajo (hoy el interior viejo del paso 3) */}
 #pvApp .wizard-footer > .d-flex{flex:1 1 auto;min-width:0;gap:12px}
-#pvApp #btnAnterior{display:inline-flex;align-items:center;justify-content:center;height:var(--pv-ctrl);min-height:var(--pv-ctrl);min-width:140px;
-  padding:0 20px;font-size:var(--pv-fs-base);font-weight:600;line-height:1}
+#pvApp #btnAnterior{display:inline-flex;align-items:center;justify-content:center;height:48px;min-height:48px;min-width:150px;
+  padding:0 20px;font-size:var(--pv-fs-lg);font-weight:600;line-height:1}
 #pvApp #txtContextoBotones{font-size:var(--pv-fs-sm);opacity:1}
 /* #btnSiguiente: el JS reescribe su className en cada paso → SOLO por id */
 /* Paso 4: eco secundario del CTA. Texto en --pv-success-dark (el verde puro no llega a AA sobre blanco) */
 #pvApp #btnSiguiente.btn-outline-success{background:var(--pv-success-tint);border:2px solid var(--nexo-success);color:var(--pv-success-dark)}
 #pvApp #btnSiguiente.btn-outline-success:active{background:var(--pv-success-dark);border-color:var(--pv-success-dark);color:#fff}
-#pvApp #btnSiguiente{display:inline-flex;align-items:center;justify-content:center;height:48px;min-height:48px;min-width:220px;
-  padding:0 24px !important; /* .px-5/.py-3 de Bootstrap son !important y el JS reescribe el className en actualizarBotones: no se pueden quitar */
-  font-size:var(--pv-fs-lg);font-weight:600;line-height:1}
+/* El botón del pie es el MISMO paso que el CTA de la columna de cobro: mismo peso visual (56px) y, cuando la
+   venta queda cubierta, mismo color y mismo latido (ver .pv-venta-lista más abajo). */
+#pvApp #btnSiguiente{display:inline-flex;align-items:center;justify-content:center;height:56px;min-height:56px;min-width:260px;
+  padding:0 28px !important; /* .px-5/.py-3 de Bootstrap son !important y el JS reescribe el className en actualizarBotones: no se pueden quitar */
+  font-size:calc(var(--pv-fs-lg) + 2px);font-weight:700;line-height:1}
+#pvApp #btnSiguiente i{font-size:22px;line-height:1}
+/* Venta cubierta (clase puesta por actualizarResumenVenta en #pvApp, que el JS no reescribe). Acotada al paso 3
+   visible: en el paso 4 el primario ya es #btnFinalizarVenta y no queremos dos rellenos verdes compitiendo.
+   Sin :has() el botón conserva su tamaño nuevo y solo se pierde el aviso. */
+#pvApp.pv-venta-lista .step-content:has(> #step3[style*="block"]) ~ .wizard-footer #btnSiguiente{
+  background:var(--nexo-success);border-color:var(--nexo-success);color:var(--nexo-secondary);
+  animation:pv-tilt 1.1s ease-out 3}
+@media (prefers-reduced-motion:no-preference){
+  body.pos-kiosk #pvApp.pv-venta-lista .step-content:has(> #step3[style*="block"]) ~ .wizard-footer #btnSiguiente{animation-duration:1.1s !important}
+} /* pos-kiosk L510 recorta toda animación a 200ms */
 
 /* --- Esquina inferior derecha (§1.11): los tres fixed dejan de competir por el mismo punto.
        La burbuja del asistente baja a 48px pegada al borde y #posKeyboardHelp (44px, piso táctil)
@@ -7089,6 +7101,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     ctaFinalizar.style.display = (totalPagado > 0 && (totales.total || 0) > 0) ? 'block' : 'none';
                 }
             }
+        }
+        // El pie del wizard replica el aviso del CTA: con la venta cubierta, #btnSiguiente se pone verde y late.
+        // La clase va en #pvApp (el JS reescribe el className de #btnSiguiente en actualizarBotones, §1.4).
+        const _pvAppEl = document.getElementById('pvApp');
+        if (_pvAppEl) {
+            _pvAppEl.classList.toggle('pv-venta-lista', saldo === 0 && totalPagado > 0 && (totales.total || 0) > 0);
         }
 
         // Alerta inline cuando pagos exceden el total
