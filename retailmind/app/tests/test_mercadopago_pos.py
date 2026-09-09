@@ -1127,6 +1127,122 @@ class ControlCierreMPTests(BaseMPTest):
         self.assertEqual(m_req.call_args.kwargs['params']['offset'], 100)
 
 
+class ImputacionEnVentasTests(BaseMPTest):
+    """El punto ciego del cruce MP-vs-MP: un cobro pasado por la máquina y
+    anotado a mano como Transbank calza perfecto contra la API (la plata está
+    en los dos lados) y aun así la cuadratura lo muestra en VISA-MC-AMEX.
+    Caso real NICK1 y NICK2 del 05-09-2026.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.vendedor = crear_vendedor(empresa=cls.empresa)
+
+    def setUp(self):
+        self.hoy = timezone.localdate()
+
+    def _venta(self, correlativo, monto, metodo):
+        ticket = Ticket.objects.create(
+            vendedor=self.vendedor, sucursal=self.sucursal, correlativo=correlativo,
+            estado='PAGADO', subTotal=monto, descuento=0, total=monto,
+            responsable='test-mp',
+        )
+        pago = TicketDetallePago.objects.create(
+            ticket=ticket, metodo_pago=metodo, monto=monto)
+        return ticket, pago
+
+    def test_cobro_bien_imputado_no_aparece(self):
+        _tk, pago = self._venta(9500, 20000, 'MP_POINT_DEBITO')
+        trx = _transaccion(self.config, correlativo='9500', monto=20000,
+                           metodo_pago_mp='debit_card', consumida=True,
+                           detalle_pago=pago)
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[
+            _pago_mp(20000, 'debit_card', trx.external_reference)])
+        self.assertEqual(res['otro_medio'], [])
+        self.assertEqual(res['otro_medio_total'], 0)
+        self.assertEqual(res['ventas_total'], 20000)
+        self.assertTrue(res['todo_ok'])
+
+    def test_cobro_registrado_como_transbank_se_denuncia(self):
+        """NICK1 05-09: $31.980 cobrados por MP crédito, anotados TBK débito."""
+        _tk, _pago = self._venta(9501, 31980, 'TBK_DEBITO_POS')
+        trx = _transaccion(self.config, correlativo='9501', monto=31980,
+                           canal='POINT', metodo_pago_mp='credit_card')
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[
+            _pago_mp(31980, 'credit_card', trx.external_reference)])
+        # Contra la API cuadra: la plata está en los dos lados
+        self.assertTrue(res['cuadra'])
+        self.assertEqual(res['diferencia'], 0)
+        # …pero la venta no la registró como Mercado Pago
+        self.assertFalse(res['todo_ok'])
+        self.assertEqual(res['otro_medio_total'], 31980)
+        self.assertEqual(res['ventas_total'], 0)
+        desviado = res['otro_medio'][0]
+        self.assertEqual(desviado['correlativo_ticket'], '9501')
+        self.assertEqual(desviado['medio_mp'], 'CREDITO')
+        self.assertIn('TBK_DEBITO_POS', desviado['metodo_venta'])
+
+    def test_cobro_directo_de_gestion_no_es_desvio(self):
+        """Los cobros DIRECTO-* no tienen venta a propósito."""
+        trx = _transaccion(self.config, correlativo='DIRECTO-0909-120000',
+                           monto=5000, canal='POINT', metodo_pago_mp='debit_card')
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[
+            _pago_mp(5000, 'debit_card', trx.external_reference)])
+        self.assertEqual(res['otro_medio'], [])
+        self.assertTrue(res['todo_ok'])
+
+    def test_cobro_sin_venta_se_reporta(self):
+        trx = _transaccion(self.config, correlativo='9502', monto=8000,
+                           metodo_pago_mp='debit_card')
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[
+            _pago_mp(8000, 'debit_card', trx.external_reference)])
+        self.assertEqual(res['otro_medio_total'], 8000)
+        self.assertEqual(res['otro_medio'][0]['metodo_venta'], 'venta no encontrada')
+
+    def test_cuenta_sin_fk_cuenta_las_cajas_por_empresa(self):
+        """`cuenta` viene NULL en producción (el token se resuelve por la
+        empresa): contar por cuenta_id daba 1 siempre y el aviso de 'puede ser
+        de otra tienda' no salía nunca."""
+        otra = crear_sucursal(empresa=self.empresa, alias='SUC-CUENTA-MP')
+        _config(otra, nombre='Caja de la otra')
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[])
+        self.assertGreaterEqual(res['cajas_en_la_cuenta'], 2)
+
+    def test_pos_id_aprendido_descarta_pagos_de_la_otra_caja(self):
+        """MP entrega pos_id en cada pago pero el config casi nunca lo tiene
+        cargado: se aprende de los pagos que sí calzan por referencia."""
+        otra_suc = crear_sucursal(empresa=self.empresa, alias='SUC-POS-APRENDIDO')
+        otra_config = _config(otra_suc, nombre='Caja aprendida')
+        propia = _transaccion(self.config, correlativo='9510', monto=1000,
+                              metodo_pago_mp='debit_card')
+        ajena = _transaccion(otra_config, correlativo='9511', monto=2000,
+                             metodo_pago_mp='debit_card',
+                             external_reference='RM-x-9511-yy')
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[
+            _pago_mp(1000, 'debit_card', propia.external_reference,
+                     payment_id='A', pos_id='111'),
+            _pago_mp(2000, 'debit_card', ajena.external_reference,
+                     payment_id='B', pos_id='222'),
+            # Cobro suelto (sin referencia) con el pos_id de la OTRA caja
+            _pago_mp(9999, 'debit_card', '', payment_id='C', pos_id='222'),
+        ])
+        self.assertEqual(res['mp_total'], 1000)
+        self.assertEqual(res['sin_registro'], [])
+
+    def test_pos_id_aprendido_reconoce_lo_propio(self):
+        propia = _transaccion(self.config, correlativo='9520', monto=1000,
+                              metodo_pago_mp='debit_card')
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[
+            _pago_mp(1000, 'debit_card', propia.external_reference,
+                     payment_id='A', pos_id='111'),
+            _pago_mp(7000, 'debit_card', '', payment_id='C', pos_id='111'),
+        ])
+        self.assertEqual(res['mp_total'], 8000)
+        self.assertEqual(len(res['sin_registro']), 1)
+        self.assertTrue(res['sin_registro'][0]['atribuible'])
+
+
 class BloqueControlImpresoTests(BaseMPTest):
     """El ticket térmico tiene que decir la diferencia, no esconderla."""
 
@@ -1154,6 +1270,35 @@ class BloqueControlImpresoTests(BaseMPTest):
         self.assertIn('12:31', texto)
         # El papel de la Point es de 32 columnas: una línea más larga se corta.
         # (La tabla del control se arma a 30 para dejar aire.)
+        for renglon in texto.replace('{center}', '').replace('{w}', '').split('{br}'):
+            self.assertLessEqual(len(renglon.replace('{s}', '')), 32, renglon)
+
+    def test_imprime_el_cobro_registrado_con_otro_medio(self):
+        """Aunque contra la API cuadre, el papel avisa lo mal imputado."""
+        texto = self._cierre({
+            'ok': True, 'sistema_total': 2009780, 'mp_total': 2009780,
+            'diferencia': 0, 'cuadra': True, 'todo_ok': False,
+            'ventas_total': 1897320, 'otro_medio_total': 112460,
+            'otro_medio': [
+                {'monto': 80480, 'correlativo_ticket': '115800', 'medio_mp': 'PREPAGO',
+                 'metodo_venta': 'TBK_DEBITO_POS $80.480', 'estado_venta': 'PAGADO',
+                 'hora': '15:47', 'payment_id': 'PAY01'},
+                {'monto': 31980, 'correlativo_ticket': '115791', 'medio_mp': 'CREDITO',
+                 'metodo_venta': 'TBK_DEBITO_POS $31.980', 'estado_venta': 'PAGADO',
+                 'hora': '14:51', 'payment_id': 'PAY02'},
+            ],
+            'medios': [{'medio': 'debit_card', 'etiqueta': 'DEBITO',
+                        'sistema': 2009780, 'mp': 2009780, 'diferencia': 0,
+                        'cobros_sistema': 39, 'cobros_mp': 39}],
+            'sin_registro': [], 'sin_confirmar': [], 'medio_distinto': [],
+            'devoluciones_mp': 0, 'hay_sin_atribuir': False, 'cajas_en_la_cuenta': 2,
+        })
+        self.assertIn('OJO: $112.460', texto)
+        self.assertIn('registrado con OTRO medio', texto)
+        self.assertIn('115800', texto)
+        self.assertIn('TBK_DEBITO_POS', texto)
+        # Cuadra contra la API, pero NO puede decir que está todo bien
+        self.assertNotIn('CUADRA CON MERCADO PAGO', texto)
         for renglon in texto.replace('{center}', '').replace('{w}', '').split('{br}'):
             self.assertLessEqual(len(renglon.replace('{s}', '')), 32, renglon)
 

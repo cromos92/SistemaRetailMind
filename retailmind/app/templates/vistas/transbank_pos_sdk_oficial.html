@@ -2092,11 +2092,16 @@ function _controlMPHtml(caja, f) {
     (c.medio_distinto || []).forEach(d => detalle.push(
         `<li>${f(d.monto)}: el sistema dice <strong>${_escMP(d.medio_sistema)}</strong> y MP
          <strong>${_escMP(d.medio_mp)}</strong> — la cuadratura lo imputa al bucket equivocado</li>`));
+    (c.otro_medio || []).forEach(d => detalle.push(
+        `<li><strong>Cobrado por Mercado Pago (${_escMP(d.medio_mp)}) y registrado con otro medio</strong>:
+         ${f(d.monto)} en la venta ${_escMP(String(d.correlativo_ticket || ''))}
+         → <code>${_escMP(d.metodo_venta)}</code> ${d.hora ? '(' + _escMP(d.hora) + ')' : ''}</li>`));
     if (c.hay_sin_atribuir && (c.cajas_en_la_cuenta || 1) > 1) {
         detalle.push('<li class="text-muted">La cuenta de Mercado Pago tiene varias cajas: un cobro sin ID podría ser de otra tienda.</li>');
     }
     const dif = c.diferencia || 0;
-    return `<div class="mt-2 p-2" style="border:1px solid ${dif ? '#dc3545' : '#0ab39c'};border-radius:6px;">
+    const desviado = c.otro_medio_total || 0;
+    return `<div class="mt-2 p-2" style="border:1px solid ${(dif || desviado) ? '#dc3545' : '#0ab39c'};border-radius:6px;">
         <div class="fw-bold" style="font-size:.72rem;">
             <i class="bi bi-shield-check"></i> ${titulo} — sistema vs Mercado Pago</div>
         <table class="table table-sm mb-1" style="font-size:.68rem;">
@@ -2114,6 +2119,11 @@ function _controlMPHtml(caja, f) {
             <strong>${dif > 0 ? 'Faltan ' + f(dif) + ' en el sistema' : 'Sobran ' + f(-dif) + ' en el sistema'}</strong>:
             ${dif > 0 ? 'Mercado Pago cobró más de lo que quedó registrado.'
                       : 'el sistema registró cobros que Mercado Pago no confirma.'}</div>` : ''}
+        ${desviado ? `<div class="alert alert-danger py-1 px-2 mb-1" style="font-size:.7rem;">
+            <strong>${f(desviado)} cobrados por Mercado Pago quedaron registrados con OTRO medio de pago.</strong>
+            La plata entró por MP, pero la cuadratura la muestra en ese otro medio.
+            En ventas se imputó ${f(c.ventas_total)} de los ${f(c.sistema_total)} cobrados.
+            <br>Se corrige con <code>reparar_cobro_mp_huerfano</code>.</div>` : ''}
         ${detalle.length ? `<ul class="mb-0 ps-3" style="font-size:.68rem;">${detalle.join('')}</ul>` : ''}
     </div>`;
 }

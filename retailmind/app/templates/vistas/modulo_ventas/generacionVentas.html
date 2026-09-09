@@ -1745,13 +1745,17 @@ body.pos-kiosk [id="codigo-autorizacion-panel"] .codigo-panel-icon{width:32px;he
 
 /* Footer del wizard: 52px, borde superior, esquina inferior derecha reservada (#posKeyboardHelp,
    #mp-banner-vigilancia y la burbuja del asistente son fixed ahí) → padding-right 96px */
-#pvApp .wizard-footer{flex:0 0 auto;display:flex;align-items:center;height:64px;min-height:64px;margin:0;padding:0 96px 0 0;
+/* Pie a dos mitades (pedido 09-sep): Volver ocupa la mitad izquierda y Revisar y confirmar la derecha, de
+   borde a borde. El texto de contexto se oculta (el JS le sigue escribiendo) y los dos flotantes de la
+   esquina suben por encima del pie para no taparlo. */
+#pvApp .wizard-footer{flex:0 0 auto;display:flex;align-items:center;height:64px;min-height:64px;margin:0;padding:0 108px 0 12px;
   border-top:1px solid var(--nexo-gray-300);background:#fff;
   position:relative /* sin z-index (no crea stacking context): solo garantiza que el footer se pinte y reciba clics
                        POR ENCIMA de lo que un paso desborde hacia abajo (hoy el interior viejo del paso 3) */}
 #pvApp .wizard-footer > .d-flex{flex:1 1 auto;min-width:0;gap:12px}
-#pvApp #btnAnterior{display:inline-flex;align-items:center;justify-content:center;height:48px;min-height:48px;min-width:150px;
-  padding:0 20px;font-size:var(--pv-fs-lg);font-weight:600;line-height:1}
+#pvApp #txtContextoBotones{display:none !important} /* .d-sm-block de Bootstrap es !important; el pie es de los dos botones y el JS sigue escribiendo su texto */
+#pvApp #btnAnterior{display:inline-flex;align-items:center;justify-content:center;flex:1 1 50%;height:52px;min-height:52px;min-width:0;
+  padding:0 20px;font-size:calc(var(--pv-fs-lg) + 1px);font-weight:600;line-height:1}
 #pvApp #txtContextoBotones{font-size:var(--pv-fs-sm);opacity:1}
 /* #btnSiguiente: el JS reescribe su className en cada paso → SOLO por id */
 /* Paso 4: eco secundario del CTA. Texto en --pv-success-dark (el verde puro no llega a AA sobre blanco) */
@@ -1759,7 +1763,7 @@ body.pos-kiosk [id="codigo-autorizacion-panel"] .codigo-panel-icon{width:32px;he
 #pvApp #btnSiguiente.btn-outline-success:active{background:var(--pv-success-dark);border-color:var(--pv-success-dark);color:#fff}
 /* El botón del pie es el MISMO paso que el CTA de la columna de cobro: mismo peso visual (56px) y, cuando la
    venta queda cubierta, mismo color y mismo latido (ver .pv-venta-lista más abajo). */
-#pvApp #btnSiguiente{display:inline-flex;align-items:center;justify-content:center;height:56px;min-height:56px;min-width:260px;
+#pvApp #btnSiguiente{display:inline-flex;align-items:center;justify-content:center;flex:1 1 50%;height:52px;min-height:52px;min-width:0;
   padding:0 28px !important; /* .px-5/.py-3 de Bootstrap son !important y el JS reescribe el className en actualizarBotones: no se pueden quitar */
   font-size:calc(var(--pv-fs-lg) + 2px);font-weight:700;line-height:1}
 #pvApp #btnSiguiente i{font-size:22px;line-height:1}
@@ -1777,8 +1781,10 @@ body.pos-kiosk [id="codigo-autorizacion-panel"] .codigo-panel-icon{width:32px;he
        La burbuja del asistente baja a 48px pegada al borde y #posKeyboardHelp (44px, piso táctil)
        se corre a su izquierda: antes medía 36px con opacity .7 y quedaba ENTERRADO bajo el FAB.
        @1366: FAB x 1306–1354, ayuda x 1254–1298 (el CTA del footer acaba en ≈1247). --- */
-#posKeyboardHelp{position:fixed;bottom:12px;right:68px;z-index:1040}
-body .ai-fab{width:48px;height:48px;bottom:12px;right:12px}
+/* Los dos flotantes viven EN LA FRANJA DEL PIE (nunca sobre la lista de pagos ni sobre los botones):
+   asistente 48px pegado al borde y ayuda de teclado 44px a su izquierda. El pie reserva esos 108px. */
+#posKeyboardHelp{position:fixed;bottom:10px;right:66px;z-index:1040}
+body .ai-fab{width:48px;height:48px;bottom:8px;right:12px}
 #btnKeyboardHelp{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;min-height:44px;padding:0;opacity:1;font-size:20px;line-height:1}
 
 /* --- Dashboard: mismo shell; la tabla de tickets del día scrollea por dentro con thead sticky --- */
@@ -2074,23 +2080,27 @@ body .ai-fab{width:48px;height:48px;bottom:12px;right:12px}
 #pvApp .pv-resumen-slot > #resumenCol{width:100%;max-width:100%;flex:none;padding:0;margin:0}
 #pvApp .pv-hero-card{border:1px solid var(--nexo-gray-300);box-shadow:none;margin:0;overflow:visible}
 #pvApp .pv-hero-card > .card-body{padding:8px 12px}
-#pvApp .pos-hero-saldo{padding:4px 8px;border-radius:var(--pv-radius);text-align:center;animation:none;transform:none;
+/* Hero en HORIZONTAL: con la columna al 51% la etiqueta cabe al lado de la cifra, así el bloque gasta menos
+   alto y la cifra puede ser mucho mayor (48px a 15", 60 en FHD). */
+#pvApp .pos-hero-saldo{display:flex;align-items:center;justify-content:center;gap:14px;padding:6px 12px;
+  border-radius:var(--pv-radius);text-align:left;animation:none;transform:none;
   transition:background-color .15s,border-color .15s,color .15s}
 #pvApp .pos-hero-saldo.pos-hero-pendiente{background:var(--pv-error-tint);border:1px solid rgba(255,77,77,.35);color:var(--pv-error-dark)}
 #pvApp .pos-hero-saldo.pos-hero-pagado{background:var(--pv-success-tint);border:1px solid rgba(0,212,170,.45);color:var(--pv-success-dark)}
 #pvApp .pos-hero-saldo.pos-hero-exceso{background:var(--pv-warning-tint);border:1px solid rgba(255,184,0,.5);color:var(--pv-warning-dark)}
-#pvApp .pos-hero-label{display:flex;align-items:center;justify-content:center;gap:5px;font-size:var(--pv-fs-md);font-weight:700;letter-spacing:.06em;
-  text-transform:uppercase;opacity:1;line-height:1.2}
-#pvApp .pos-hero-amount{font-size:calc(var(--pv-fs-hero) + 8px);font-weight:800;line-height:1.05;margin:0;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+#pvApp .pos-hero-label{display:flex;align-items:center;gap:6px;flex:0 1 auto;min-width:0;font-size:var(--pv-fs-lg);font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;opacity:1;line-height:1.15;text-align:left}
+#pvApp .pos-hero-label i{font-size:22px;line-height:1;flex:0 0 auto}
+#pvApp .pos-hero-amount{flex:0 0 auto;font-size:calc(var(--pv-fs-hero) + 18px);font-weight:800;line-height:1.05;margin:0;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
 /* Mini-grid TOTAL · PAGADO · VUELTO (una línea por celda) */
-#pvApp .pv-mini-grid{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-evenly;gap:2px 6px;margin-top:4px}
+#pvApp .pv-mini-grid{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-evenly;gap:2px 10px;margin-top:6px}
 #pvApp .pv-mini-cell{display:flex;align-items:baseline;justify-content:center;gap:4px;min-width:0;white-space:nowrap}
 /* PV D-3: con la celda VUELTO visible (3 celdas en 340px) las cifras bajan a --pv-fs-base para caber en UNA línea;
    sin :has() (fallback) el flex-wrap manda VUELTO a una 2.ª línea (+18px) */
-#pvApp .pv-mini-grid:has(.pv-vuelto:not([hidden])) .pv-mini-cell strong,#pvApp .pv-mini-grid:has(.pv-vuelto:not([hidden])) .pv-vuelto{font-size:var(--pv-fs-base)}
-#pvApp .pos-mini-label{font-size:var(--pv-fs-md);font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--nexo-gray-700)}
-#pvApp .pv-mini-cell strong{font-size:calc(var(--pv-fs-base) + 3px);font-weight:700;color:var(--nexo-text-primary);font-variant-numeric:tabular-nums}
-#pvApp .pv-vuelto{display:flex;align-items:baseline;justify-content:center;gap:5px;font-size:calc(var(--pv-fs-base) + 3px);font-weight:700;
+#pvApp .pv-mini-grid:has(.pv-vuelto:not([hidden])) .pv-mini-cell strong,#pvApp .pv-mini-grid:has(.pv-vuelto:not([hidden])) .pv-vuelto{font-size:calc(var(--pv-fs-base) + 4px)}
+#pvApp .pos-mini-label{font-size:var(--pv-fs-base);font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--nexo-gray-700)}
+#pvApp .pv-mini-cell strong{font-size:calc(var(--pv-fs-base) + 7px);font-weight:700;color:var(--nexo-text-primary);font-variant-numeric:tabular-nums}
+#pvApp .pv-vuelto{display:flex;align-items:baseline;justify-content:center;gap:5px;font-size:calc(var(--pv-fs-base) + 7px);font-weight:700;
   color:var(--pv-warning-dark);font-variant-numeric:tabular-nums;white-space:nowrap}
 #pvApp .pv-vuelto[hidden]{display:none}
 /* Fila secundaria (Subtotal · Dcto. · Cupón): el JS pone #lineaDescuento en display:flex y #lineaBeneficio en '' →
@@ -2188,8 +2198,10 @@ body .ai-fab{width:48px;height:48px;bottom:12px;right:12px}
 /* 1366x633 (Chrome maximizado + barra de tareas): el alto útil de la columna es ~444px. Se recorta un punto
    cada fila para que 'Pagos registrados' conserve 2 filas visibles; nada baja del piso táctil de 44px. */
 @media (max-height:700px){
-  :root{--pv-h-f4:60px;--pv-h-cta:66px;--pv-h-payb:62px;--pv-h-payc:52px;--pv-h-payd:48px}
-  #pvApp .pos-hero-amount{font-size:calc(var(--pv-fs-hero) + 4px)}
+  :root{--pv-h-f4:56px;--pv-h-cta:64px;--pv-h-payb:58px;--pv-h-payc:48px;--pv-h-payd:44px}
+  #pvApp .pos-hero-amount{font-size:calc(var(--pv-fs-hero) + 14px)} /* 44px a 15" */
+  #pvApp .pv-hero-card > .card-body{padding:6px 10px}
+  #pvApp .pv-pago-item{min-height:calc(var(--pv-ctrl) + 8px)} /* 52px: el ultimo pago cabe entero en el hueco que queda */
   #pvApp .pv-pay-b .pv-pago i{font-size:22px}
   #pvApp .pv-pay-b .pv-pago-label{font-size:var(--pv-fs-lg)}
   #pvApp .pv-pay-d .pv-pago i{font-size:18px}
@@ -2210,9 +2222,9 @@ body .ai-fab{width:48px;height:48px;bottom:12px;right:12px}
 
 /* (d) Pagos registrados: crece con lo que sobra (mín. header + 1 fila), scrollea por dentro */
 #pvApp .pos-checkout-pagos{flex:1 1 auto;min-height:64px;display:flex;flex-direction:column;margin:0;border:1px solid var(--nexo-gray-300);box-shadow:none;overflow:hidden}
-#pvApp .pv-pagos-head{flex:0 0 auto;display:flex;align-items:center;gap:4px;height:22px;padding:0 8px;font-size:var(--pv-fs-md);font-weight:700;text-transform:uppercase;
+#pvApp .pv-pagos-head{flex:0 0 auto;display:flex;align-items:center;gap:5px;height:26px;padding:0 10px;font-size:var(--pv-fs-base);font-weight:700;text-transform:uppercase;
   letter-spacing:.05em;color:var(--nexo-gray-700);background:var(--nexo-gray-100);border-bottom:1px solid var(--nexo-gray-300);white-space:nowrap}
-#pvApp .pv-pagos-head i{font-size:14px;line-height:1}
+#pvApp .pv-pagos-head i{font-size:17px;line-height:1}
 #pvApp .pv-pagos-n:not(:empty)::before{content:'· '}
 #pvApp .pos-checkout-pagos > .card-body{flex:1 1 auto;min-height:0;max-height:none;overflow:auto;padding:4px 6px}
 #pvApp .pv-pagos-empty{display:flex;align-items:center;justify-content:center;gap:6px;min-height:40px;font-size:var(--pv-fs-sm);color:var(--nexo-gray-700)}
@@ -2376,16 +2388,16 @@ body .ai-fab{width:48px;height:48px;bottom:12px;right:12px}
 /* Ícono pequeño dentro de .pv-tool-btn (candado de "Dcto. Diferencia") */
 #pvApp .pv-tool-btn i.pv-ico-sm{font-size:14px;opacity:.85}
 /* Pagos registrados: ítem de 44px (ícono · método 13px 600 + detalle 12px | monto 15px 700 | eliminar 44×44 ghost danger) */
-#pvApp .pv-pago-item{display:flex;align-items:center;gap:8px;min-height:calc(var(--pv-ctrl) + 4px);margin:0 0 4px;padding:0 0 0 10px;background:#fff;
+#pvApp .pv-pago-item{display:flex;align-items:center;gap:10px;min-height:calc(var(--pv-ctrl) + 12px);margin:0 0 5px;padding:0 0 0 12px;background:#fff;
   border:0;box-shadow:inset 0 0 0 1px var(--nexo-gray-300);border-radius:var(--pv-radius)} /* borde como ring interno: ítem de 44 exactos */
 #pvApp .pv-pago-item:last-child{margin-bottom:0}
-#pvApp .pv-pago-item-ico{flex:0 0 auto;font-size:22px;line-height:1;color:var(--nexo-gray-700)}
+#pvApp .pv-pago-item-ico{flex:0 0 auto;font-size:24px;line-height:1;color:var(--nexo-gray-700)}
 #pvApp .pv-pago-ico-efectivo{color:var(--pv-success-dark)}
 #pvApp .pv-pago-txt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:center;line-height:1.2}
-#pvApp .pv-pago-met{font-size:var(--pv-fs-lg);font-weight:700;color:var(--nexo-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pvApp .pv-pago-met{font-size:calc(var(--pv-fs-lg) + 2px);font-weight:700;color:var(--nexo-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #pvApp .pv-pago-det{font-size:var(--pv-fs-md);color:var(--nexo-gray-700);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #pvApp .pv-pago-det i{font-size:12px;line-height:1}
-#pvApp .pv-pago-monto{flex:0 0 auto;font-size:calc(var(--pv-fs-base) + 4px);font-weight:700;color:var(--nexo-text-primary);font-variant-numeric:tabular-nums;
+#pvApp .pv-pago-monto{flex:0 0 auto;font-size:calc(var(--pv-fs-base) + 8px);font-weight:800;color:var(--nexo-text-primary);font-variant-numeric:tabular-nums;
   white-space:nowrap;text-align:right}
 #pvApp .pv-pago-del{flex:0 0 var(--pv-ctrl);width:var(--pv-ctrl);height:var(--pv-ctrl);min-height:var(--pv-ctrl);margin:0;padding:0;border:0;
   border-radius:0 var(--pv-radius) var(--pv-radius) 0;background:transparent;color:var(--pv-error-dark);display:inline-flex;align-items:center;justify-content:center;

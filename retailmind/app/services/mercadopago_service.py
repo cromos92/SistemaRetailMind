@@ -470,18 +470,84 @@ def _sucursal_de_referencia(external_reference):
     return None
 
 
-def _pago_es_de_la_caja(pago, config):
+def _pago_es_de_la_caja(pago, config, ids_propios=None, ids_ajenos=None):
     """True / False / None (desconocido) según los ids de caja que traiga MP.
+
+    `ids_propios` / `ids_ajenos` son los (pos_id, store_id) APRENDIDOS en la
+    misma corrida desde los pagos que sí calzaron por external_reference: MP
+    devuelve esos ids en cada pago, pero `MercadoPagoConfig.pos_id/store_id`
+    casi nunca están cargados (el formulario de gestión no los pide). Sin este
+    aprendizaje, un cobro sin referencia de la OTRA tienda de la misma cuenta
+    aparecería como diferencia de esta caja.
 
     Solo decide cuando hay dato de ambos lados; si no, devuelve None y el
     llamador se queda con la duda (que se reporta, no se esconde).
     """
     for campo in ('pos_id', 'store_id'):
-        propio = (getattr(config, campo, '') or '').strip()
         ajeno = pago.get(campo)
-        if propio and ajeno not in (None, ''):
-            return str(ajeno) == propio
+        if ajeno in (None, ''):
+            continue
+        ajeno = str(ajeno)
+        if ids_propios and ajeno in ids_propios:
+            return True
+        if ids_ajenos and ajeno in ids_ajenos:
+            return False
+        propio = (getattr(config, campo, '') or '').strip()
+        if propio:
+            return ajeno == propio
     return None
+
+
+def _imputacion_en_ventas(config, fecha, transacciones):
+    """¿Cada cobro de MP quedó registrado como Mercado Pago EN LA VENTA?
+
+    Es la pregunta que el cruce MP-vs-MP no puede responder: un cobro pasado
+    por la máquina y anotado a mano como Transbank calza perfecto contra la
+    API (la plata existe en los dos lados) pero la cuadratura lo imputa a
+    VISA-MC-AMEX. Fue exactamente lo que pasó en NICK1 y NICK2 el 05-09-2026.
+
+    Devuelve (lista_de_desviados, total_desviado).
+    """
+    from app.models import Ticket
+
+    # Los cobros directos de la pestaña de gestión no tienen venta a propósito.
+    candidatas = [t for t in transacciones
+                  if not str(t.correlativo_ticket or '').startswith('DIRECTO-')]
+    correlativos = [t.correlativo_ticket for t in candidatas
+                    if str(t.correlativo_ticket or '').isdigit()]
+    tickets = {
+        str(tk.correlativo): tk
+        for tk in Ticket.objects.filter(
+            sucursal_id=config.sucursal_id, correlativo__in=correlativos,
+        ).prefetch_related('pagos')
+    }
+
+    desviados = []
+    for t in candidatas:
+        detalle = t.detalle_pago
+        if detalle is not None and str(detalle.metodo_pago or '').startswith('MP_'):
+            continue                       # imputado correctamente
+        ticket = tickets.get(str(t.correlativo_ticket))
+        if ticket is None:
+            metodo_venta, estado_venta = 'venta no encontrada', ''
+        else:
+            estado_venta = ticket.estado
+            # El pago del mismo monto es el que se anotó en vez del de MP
+            iguales = [p for p in ticket.pagos.all() if int(p.monto or 0) == t.monto]
+            otros = iguales or list(ticket.pagos.all())
+            metodo_venta = ', '.join(
+                f'{p.metodo_pago} ${p.monto:,}'.replace(',', '.') for p in otros
+            ) or 'sin pagos'
+        desviados.append({
+            'monto': t.monto,
+            'correlativo_ticket': t.correlativo_ticket,
+            'medio_mp': etiqueta_medio_mp(t.metodo_pago_mp),
+            'metodo_venta': metodo_venta,
+            'estado_venta': estado_venta,
+            'hora': timezone.localtime(t.creado_en).strftime('%H:%M'),
+            'payment_id': t.payment_id,
+        })
+    return desviados, sum(d['monto'] for d in desviados)
 
 
 def conciliar_cierre_mp(config, fecha, pagos=None):
@@ -508,6 +574,7 @@ def conciliar_cierre_mp(config, fecha, pagos=None):
         TransaccionMercadoPago.objects
         .filter(config=config, creado_en__date=fecha, tipo='VENTA', estado='APROBADA')
         .exclude(correlativo_ticket__startswith='PRUEBA-')
+        .select_related('detalle_pago')
     )
     sistema = {}
     for t in locales_caja:
@@ -524,11 +591,26 @@ def conciliar_cierre_mp(config, fecha, pagos=None):
             external_reference__in=[r for r in refs if r]).select_related('config')
     }
 
+    # PASADA 1: de los pagos que calzan por external_reference se aprenden los
+    # ids que MP le pone a ESTA caja y a las otras de la misma cuenta.
+    ids_propios, ids_ajenos = set(), set()
+    for pago in pagos:
+        trx = locales.get(str(pago.get('external_reference') or ''))
+        if trx is None:
+            continue
+        destino = ids_propios if trx.config_id == config.id else ids_ajenos
+        for campo in ('pos_id', 'store_id'):
+            valor = pago.get(campo)
+            if valor not in (None, ''):
+                destino.add(str(valor))
+    ids_ajenos -= ids_propios
+
     real = {}
     sin_registro, medio_distinto = [], []
     devoluciones_mp = 0
     vistos = set()
 
+    # PASADA 2: clasificar cada pago
     for pago in pagos:
         estado = str(pago.get('status') or '')
         ext = str(pago.get('external_reference') or '')
@@ -559,7 +641,7 @@ def conciliar_cierre_mp(config, fecha, pagos=None):
                 })
         else:
             # Sin fila local: ¿es de esta caja?
-            de_la_caja = _pago_es_de_la_caja(pago, config)
+            de_la_caja = _pago_es_de_la_caja(pago, config, ids_propios, ids_ajenos)
             sucursal_ref = _sucursal_de_referencia(ext)
             if de_la_caja is False:
                 continue
@@ -607,6 +689,26 @@ def conciliar_cierre_mp(config, fecha, pagos=None):
 
     sistema_total = sum(v['monto'] for v in sistema.values())
     mp_total = sum(v['monto'] for v in real.values())
+
+    # ── Tercera pata: ¿la VENTA lo registró como Mercado Pago? ──────────────
+    # Sin esto el control es ciego al caso que originó todo: un cobro pasado
+    # por la máquina y anotado a mano como tarjeta calza perfecto MP-vs-MP
+    # (la plata está en los dos lados) y aun así la cuadratura lo muestra en
+    # VISA-MC-AMEX.
+    otro_medio, otro_medio_total = _imputacion_en_ventas(config, fecha, locales_caja)
+
+    # Cajas que comparten la MISMA cuenta MP. `cuenta` puede venir NULL (las
+    # credenciales se resuelven por la empresa de la sucursal), así que contar
+    # por `cuenta_id` daba 1 siempre y el aviso de "puede ser de otra tienda"
+    # no salía nunca.
+    if config.cuenta_id:
+        cajas_cuenta = MercadoPagoConfig.objects.filter(cuenta_id=config.cuenta_id).count()
+    else:
+        cajas_cuenta = MercadoPagoConfig.objects.filter(
+            cuenta__isnull=True,
+            sucursal__empresa_id=config.sucursal.empresa_id,
+        ).count()
+
     return {
         'ok': True,
         'fecha': str(fecha),
@@ -619,11 +721,15 @@ def conciliar_cierre_mp(config, fecha, pagos=None):
         'sin_confirmar': sin_confirmar,
         'medio_distinto': medio_distinto,
         'devoluciones_mp': devoluciones_mp,
+        # Cobrado por MP pero registrado en la venta con otro medio de pago
+        'otro_medio': otro_medio,
+        'otro_medio_total': otro_medio_total,
+        'ventas_total': sistema_total - otro_medio_total,
+        'todo_ok': mp_total == sistema_total and not otro_medio_total,
         # Cobros que MP no permitió atribuir a una caja concreta: si la cuenta
         # tiene más de una, la diferencia puede venir de la otra tienda.
         'hay_sin_atribuir': any(not d['atribuible'] for d in sin_registro),
-        'cajas_en_la_cuenta': MercadoPagoConfig.objects.filter(
-            cuenta_id=config.cuenta_id).count() if config.cuenta_id else 1,
+        'cajas_en_la_cuenta': cajas_cuenta,
     }
 
 
@@ -669,9 +775,29 @@ def _bloque_control_mp(control, plata, linea):
     partes.append(fila('TOTAL', control.get('sistema_total'),
                        control.get('mp_total')))
 
+    # Lo que la VENTA imputó a Mercado Pago: puede ser menos que lo cobrado si
+    # un cobro de la máquina se anotó a mano con otro medio de pago.
+    desviado = int(control.get('otro_medio_total') or 0)
+    if desviado:
+        partes.append(linea('------------------------------'))
+        partes.append(linea(
+            f"{'EN VENTAS':<8} {monto_corto(control.get('ventas_total')):>9}"))
+        partes.append('{center}{w}OJO: ' + plata(desviado) + '{br}')
+        partes.append(linea('cobrado por Mercado Pago pero'))
+        partes.append(linea('registrado con OTRO medio:'))
+        for d in (control.get('otro_medio') or [])[:6]:
+            partes.append(linea(
+                f"  {d['hora']} {plata(d['monto'])} {d['medio_mp'][:7]}"))
+            partes.append(linea(f"    venta {str(d['correlativo_ticket'])[:8]}: "
+                                f"{d['metodo_venta'].split(' $')[0][:14]}"))
+        if len(control.get('otro_medio') or []) > 6:
+            partes.append(linea(f"  ...y {len(control['otro_medio']) - 6} mas"))
+
     diferencia = int(control.get('diferencia') or 0)
-    if not diferencia:
+    if not diferencia and not desviado:
         partes.append('{center}{w}CUADRA CON MERCADO PAGO{br}')
+    elif not diferencia:
+        pass                      # el desvío ya se detalló arriba
     elif diferencia > 0:
         partes.append('{center}{w}FALTAN ' + plata(diferencia) + '{br}')
         partes.append(linea('Mercado Pago cobro mas de lo'))
