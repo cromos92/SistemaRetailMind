@@ -501,6 +501,9 @@ from .views_transbank_sdk import (
     # Vistas
     gestion_transbank_pos_sdk,
     gestion_transbank_pos_manual,
+    # Modo de cobro por sucursal (integrado vs manual)
+    listar_modos_pos,
+    cambiar_modo_pos,
     # API Transbank POS SDK
     listar_puertos,
     autoconectar,
@@ -1129,6 +1132,9 @@ urlpatterns = [
     path('testTransbank/', lambda request: render(request, 'test_transbank_pos.html'), name='test_transbank'),
     
     # APIs sin base de datos - Conexión directa a puerto serial
+    # Modo de cobro por sucursal: la tabla de /app/pos/transbank/ (GET) y el cambio (POST, solo admin)
+    path('pos/transbank/modos/', listar_modos_pos, name='transbank_listar_modos'),
+    path('pos/transbank/modos/cambiar/', cambiar_modo_pos, name='transbank_cambiar_modo'),
     path('pos/transbank/puertos/', listar_puertos, name='transbank_sdk_listar_puertos'),
     path('pos/transbank/autoconectar/', autoconectar, name='transbank_sdk_autoconectar'),
     path('pos/transbank/conectar/', conectar, name='transbank_sdk_conectar'),

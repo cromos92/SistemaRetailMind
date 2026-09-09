@@ -463,6 +463,45 @@
 
 </div><!-- /row -->
 
+<!-- ==================== MODO DE COBRO POR SUCURSAL ====================
+     Muestra, para cada caja, si cobra con el terminal conectado al POS (INTEGRADO)
+     o si el cajero digita el voucher (MANUAL). No es un campo aparte: es la misma
+     condición que evalúa el POS para autoconectar la máquina, así que lo que se ve
+     aquí es exactamente lo que hará la caja. -->
+<div class="tbk-card mt-2">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <h6 class="mb-0"><i class="bi bi-diagram-3"></i> Modo de cobro por caja</h6>
+        <div class="d-flex align-items-center gap-2">
+            <span class="text-muted" style="font-size:12px;">
+                <strong>Integrado:</strong> el POS cobra en el terminal ·
+                <strong>Manual:</strong> el cajero digita el voucher (F6/F7)
+            </span>
+            <button class="tbk-btn btn-info mb-0" style="width:auto;padding:6px 14px;" onclick="cargarModosPOS()">
+                <i class="bi bi-arrow-clockwise"></i> Actualizar
+            </button>
+        </div>
+    </div>
+    <hr>
+    <div id="modosPosAviso" class="alert alert-warning py-2 px-3 d-none" style="font-size:12px;"></div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0" style="font-size:13px;">
+            <thead class="table-light">
+                <tr>
+                    <th>Sucursal</th>
+                    <th>Terminal</th>
+                    <th>Puerto</th>
+                    <th>Última conexión</th>
+                    <th>Modo</th>
+                    <th class="text-end">Acción</th>
+                </tr>
+            </thead>
+            <tbody id="tbodyModosPos">
+                <tr><td colspan="6" class="text-center text-muted py-3">Cargando…</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
 </div><!-- /tab-tbk -->
 
 <!-- ==================== PESTAÑA MERCADO PAGO ==================== -->
@@ -2231,6 +2270,101 @@ window.addEventListener('load', function () {
         });
     }
 });
+
+// ══════════════ Modo de cobro por caja (integrado vs manual) ══════════════
+// El modo no es un campo propio: refleja si la sucursal tiene un terminal SDK
+// activo, que es lo que el POS consulta para autoconectar la maquina.
+let _modosPosPuedeEditar = false;
+
+function _escModo(t) {
+    return String(t == null ? '' : t).replace(/[&<>"']/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+}
+
+async function cargarModosPOS() {
+    const tbody = document.getElementById('tbodyModosPos');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Cargando…</td></tr>';
+    try {
+        const r = await fetch('/app/pos/transbank/modos/', { credentials: 'same-origin' });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error || 'No se pudo cargar');
+        _modosPosPuedeEditar = !!d.puede_editar;
+        const aviso = document.getElementById('modosPosAviso');
+        if (aviso) {
+            aviso.classList.toggle('d-none', _modosPosPuedeEditar);
+            if (!_modosPosPuedeEditar) {
+                aviso.innerHTML = '<i class="bi bi-info-circle"></i> Solo un administrador puede cambiar el modo de una caja. Aquí ves el estado actual.';
+            }
+        }
+        if (!d.filas.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Sin sucursales</td></tr>';
+            return;
+        }
+        tbody.innerHTML = d.filas.map(f => {
+            const integrado = f.modo === 'INTEGRADO';
+            const badge = integrado
+                ? '<span class="badge bg-success">INTEGRADO</span>'
+                : '<span class="badge bg-warning text-dark">MANUAL</span>';
+            // La caja con la que se inicio sesion se marca: es la que usan los
+            // botones de conexion de esta misma pantalla.
+            const marca = f.es_sesion
+                ? ' <span class="badge bg-primary" title="Sucursal de tu sesión">tu caja</span>' : '';
+            const accion = !_modosPosPuedeEditar
+                ? '<span class="text-muted">—</span>'
+                : (integrado
+                    ? `<button class="btn btn-sm btn-outline-warning" onclick="cambiarModoPOS(${f.sucursal_id}, 'MANUAL', '${_escModo(f.sucursal)}')">Pasar a manual</button>`
+                    : (f.puede_integrar
+                        ? `<button class="btn btn-sm btn-outline-success" onclick="cambiarModoPOS(${f.sucursal_id}, 'INTEGRADO', '${_escModo(f.sucursal)}')">Pasar a integrado</button>`
+                        : '<span class="text-muted" title="Falta registrar el terminal con su puerto desde la caja">sin terminal</span>'));
+            return `
+                <tr${f.es_sesion ? ' class="table-primary"' : ''}>
+                    <td class="fw-semibold">${_escModo(f.sucursal)}${marca}</td>
+                    <td>${_escModo(f.terminal) || '<span class="text-muted">—</span>'}
+                        ${f.tipo_pos ? `<div class="text-muted" style="font-size:11px;">${_escModo(f.tipo_pos)}</div>` : ''}</td>
+                    <td><code>${_escModo(f.puerto) || '—'}</code></td>
+                    <td class="text-muted">${_escModo(f.ultima_conexion) || '—'}</td>
+                    <td>${badge}</td>
+                    <td class="text-end">${accion}</td>
+                </tr>`;
+        }).join('');
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-3">${_escModo(e.message || e)}</td></tr>`;
+    }
+}
+
+async function cambiarModoPOS(sucursalId, modo, nombre) {
+    const aManual = modo === 'MANUAL';
+    const res = await Swal.fire({
+        icon: 'question',
+        title: aManual ? 'Pasar a cobro manual' : 'Pasar a cobro integrado',
+        html: aManual
+            ? `En <strong>${_escModo(nombre)}</strong> el POS dejará de conectarse al terminal.<br>` +
+              'Los cobros con tarjeta se registran digitando el voucher (F6/F7).'
+            : `En <strong>${_escModo(nombre)}</strong> el POS volverá a cobrar en el terminal Transbank.`,
+        showCancelButton: true,
+        confirmButtonText: aManual ? 'Sí, pasar a manual' : 'Sí, pasar a integrado',
+        cancelButtonText: 'Cancelar',
+    });
+    if (!res.isConfirmed) return;
+    try {
+        const r = await fetch('/app/pos/transbank/modos/cambiar/', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': _csrfMP() },
+            body: JSON.stringify({ sucursal_id: sucursalId, modo: modo }),
+        });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error || 'No se pudo cambiar');
+        await cargarModosPOS();
+        Swal.fire({ icon: 'success', title: `Ahora cobra en modo ${d.modo}`, timer: 1800, showConfirmButton: false });
+    } catch (e) {
+        Swal.fire({ icon: 'error', title: 'No se pudo cambiar el modo', text: e.message || String(e) });
+    }
+}
+
+document.addEventListener('DOMContentLoaded', cargarModosPOS);
 </script>
 
 {% include 'layout/footer.html' %}

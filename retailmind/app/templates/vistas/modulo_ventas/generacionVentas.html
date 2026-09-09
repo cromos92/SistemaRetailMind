@@ -751,6 +751,13 @@
                                             <span class="pv-pago-main"><i class="ri-qr-code-line"></i><span class="pv-pago-label">MP QR</span></span>
                                         </button>
                                         {% endif %}
+                                        <!-- Contingencia: cobro de Mercado Pago hecho FUERA del POS (Point Tap, app de MP,
+                                             o un cobro que la maquina aprobo y el POS no capturo). Va al FINAL para no mover
+                                             ningun boton de sitio, y siempre visible: no depende de que la sucursal tenga
+                                             MP integrado. ({# #} de Django es de UNA linea: en varias se imprime literal.) -->
+                                        <button class="btn pos-pago-btn pv-pago pv-pago-out pv-pago-manual" type="button" onclick="agregarPago('MP_MANUAL')" id="btnPagoMpManual" title="Registrar un cobro de Mercado Pago ya hecho fuera del sistema (Point Tap, app MP, o cobro que la maquina aprobo y el POS no alcanzo a capturar). Pide el N. de operacion.">
+                                            <span class="pv-pago-main"><i class="ri-smartphone-line"></i><span class="pv-pago-label">MP<br>manual</span></span>
+                                        </button>
                                     </div>
 
                                     <!-- Indicadores de crédito activo (display block por JS → el layout va en los wrappers internos) -->
@@ -2190,7 +2197,10 @@ body .ai-fab{width:48px;height:48px;bottom:8px;right:12px}
 #pvApp .pv-pay-d .pv-pago{gap:5px;padding:0 4px} /* con la columna al 51% hay ~107px por botón a 1366 */
 #pvApp .pv-pay-d .pv-pago-label{font-size:var(--pv-fs-md);font-weight:600}
 #pvApp .pv-pay-d .pv-pago-label{text-align:center} /* la fila D ya va a 2 lineas: centrada queda simetrica con la C */
-/* Con la columna al 51% el ícono SÍ cabe junto al label de 2 líneas (107px por botón a 1366). */
+/* Con la columna al 51% el ícono cabe junto al label de 2 líneas... mientras la fila D tenga 5 botones.
+   Con el de MP manual son 6 (86px por botón a 1366): bajo 1500 el ícono cede el sitio al texto, salvo
+   Gift Card, que se localiza por el ícono. En FHD (630px de columna) siguen todos. */
+@media (max-width:1499.98px){ #pvApp .pv-pay-d .pv-pago:not(.pv-pago-gc) i{display:none} }
 #pvApp .pv-pay-d .pv-pago-main{min-width:0;overflow:hidden}
 #pvApp .pv-pago-out:active{background:var(--nexo-gray-100);border-color:var(--nexo-gray-700);color:var(--nexo-text-primary)}
 #pvApp .pv-pago-gc i{color:var(--nexo-accent)}
@@ -2406,6 +2416,12 @@ body .ai-fab{width:48px;height:48px;bottom:8px;right:12px}
 #pvApp .pv-pago-del:active{background:var(--pv-error-tint)}
 #pvApp .pv-pago-del:focus-visible{outline:3px solid var(--nexo-accent);outline-offset:-3px}
 #pvApp .pv-pago-oc{background:var(--nexo-primary-light);box-shadow:inset 0 0 0 1px var(--nexo-primary)}
+/* Marca de cobro registrado a mano (MP fuera del sistema): el cajero y quien cuadra la caja tienen
+   que poder distinguirlo de un cobro integrado de un vistazo. */
+#pvApp .pv-chip-manual{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:4px;
+  font-size:var(--pv-fs-sm);font-weight:700;letter-spacing:.04em;
+  background:var(--pv-warning-tint);color:var(--pv-warning-dark)}
+#pvApp .pv-pago-manual i{color:var(--pv-warning-dark)}
 #pvApp .pv-pago-oc .pv-pago-item-ico{color:var(--nexo-primary)}
 #pvApp .pv-pago-ct{box-shadow:inset 0 0 0 1px var(--nexo-warning)}
 #pvApp .pv-pago-ct .pv-pago-item-ico{color:var(--pv-warning-dark)}
@@ -6249,6 +6265,26 @@ document.addEventListener('DOMContentLoaded', function() {
 
             labelVoucher.textContent = 'Código Gift Card';
             document.getElementById('pagoVoucher').placeholder = 'GC-XXXX-XXXX-XXXX o código físico';
+        } else if (metodo === 'MP_MANUAL') {
+            // Cobro de Mercado Pago hecho FUERA del sistema. Método VIRTUAL: solo vive en el modal;
+            // confirmarPago lo traduce al método real (MP_POINT*) + origen MANUAL.
+            campoTarjeta.style.display = 'block';
+            campoVoucher.style.display = 'block';
+            campoVuelto.style.display = 'none';
+            campoOrdenCompra.style.display = 'none';
+            if (campoDenominaciones) campoDenominaciones.style.display = 'none';
+
+            labelTarjeta.textContent = 'Tipo de tarjeta (opcional)';
+            labelVoucher.textContent = 'N° de operación Mercado Pago *';
+            document.getElementById('pagoVoucher').placeholder = 'Ej: 177422093000 — panel o app de MP';
+            // Mismos valores que el payment_type_id que devuelve MP en el cobro integrado, para que el
+            // desglose débito/crédito/otros de la cuadratura (_sub_bucket_mp) cuadre igual.
+            selectTipoTarjeta.innerHTML = `
+                <option value="">Sin especificar</option>
+                <option value="debit_card">Débito</option>
+                <option value="credit_card">Crédito</option>
+                <option value="account_money">Dinero en cuenta MP</option>
+            `;
         } else if (metodo === 'VENTA_INTERNET') {
             campoTarjeta.style.display = 'block';
             campoVoucher.style.display = 'block';
@@ -6352,6 +6388,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // si el foco cae en el voucher, el monto tecleado por hábito se registra como voucher y el pago va por el saldo COMPLETO.
         // El listener shown.bs.modal se registra UNA vez y lee window._pvFocoPago.
         window._pvFocoPago = (metodo === 'GIFTCARD') ? 'pagoVoucher'
+            : (metodo === 'MP_MANUAL') ? 'pagoVoucher'
             : (metodo === 'VENTA_INTERNET') ? 'pagoTipoTarjeta'
             : (metodo === 'ORDEN_COMPRA') ? 'pagoNumeroOrdenCompra'
             : 'pagoMonto';
@@ -6613,6 +6650,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
+        // ✅ VALIDAR MP MANUAL — sin N° de operación el cobro queda tan ciego como el crédito
+        // manual del 05-09: la conciliación no tiene por dónde cruzarlo contra el depósito de MP.
+        if (metodo === 'MP_MANUAL' && !voucher) {
+            mostrarNotificacion('Ingrese el N° de operación de Mercado Pago (lo ve en la app o en el comprobante del cliente)', 'warning', 5000);
+            document.getElementById('pagoVoucher')?.focus();
+            return;
+        }
+
         // ✅ VALIDAR ORDEN_COMPRA (número de orden)
         if (metodo === 'ORDEN_COMPRA') {
             if (!numeroOrdenCompra) {
@@ -6769,15 +6814,25 @@ document.addEventListener('DOMContentLoaded', function() {
             'TARJETA_DEBITO', 'TARJETA_CREDITO'
         ]);
 
+        // Mercado Pago manual: al ticket va el método REAL (para que caiga en el bucket
+        // total_mercadopago_pos de la cuadratura, no en el de Transbank) y el origen MANUAL, que es lo
+        // que lo exime del guard de respaldo de la API (views_modulo_ventas.py L4778-4782).
+        let metodoFinal = metodo;
+        if (metodo === 'MP_MANUAL') {
+            metodoFinal = (tipoTarjeta === 'debit_card') ? 'MP_POINT_DEBITO'
+                        : (tipoTarjeta === 'credit_card') ? 'MP_POINT_CREDITO'
+                        : 'MP_POINT';
+        }
+
         const pago = {
-            metodo_pago: metodo,
+            metodo_pago: metodoFinal,
             monto: monto,
             tipo_tarjeta: tipoTarjeta,
             voucher: voucher,
             numero_orden_compra: numeroOrdenCompra,
             notas: notas
         };
-        if (METODOS_TBK_MANUAL.has(metodo)) {
+        if (METODOS_TBK_MANUAL.has(metodo) || metodo === 'MP_MANUAL') {
             pago.origen_pago = 'MANUAL';
         }
 
@@ -6859,6 +6914,12 @@ document.addEventListener('DOMContentLoaded', function() {
             if (m === 'CREDITO_EXTERNO' && datosConvenio && datosConvenio.nombre) det.push(`<i class="ri-user-3-line"></i> ${escHtmlPos(datosConvenio.nombre)} - ${escHtmlPos(datosConvenio.rut)}`);
             if (m === 'ORDEN_COMPRA' && pago.numero_orden_compra) det.push(`<i class="ri-file-list-3-line"></i> OC: ${escHtmlPos(pago.numero_orden_compra)}`);
             if (m === 'GIFTCARD' && pago.voucher) det.push(`<i class="ri-gift-line"></i> ${escHtmlPos(pago.voucher)}`);
+            // Cobro MP registrado a mano: se marca MANUAL y se muestra el N° de operación, que es
+            // el dato con el que después se cuadra contra el depósito de Mercado Pago.
+            if (m.indexOf('MP_') === 0 && pago.origen_pago === 'MANUAL') {
+                det.push('<span class="pv-chip-manual">MANUAL</span>');
+                if (pago.voucher) det.push(`<i class="ri-hashtag"></i> ${escHtmlPos(pago.voucher)}`);
+            }
 
             const clases = ['pv-pago-item'];
             if (m === 'ORDEN_COMPRA') clases.push('pv-pago-oc');
@@ -10772,6 +10833,7 @@ body {
             'TBK_DEBITO_POS': 'Débito Manual',
             'TBK_CREDITO_POS': 'Crédito Manual',
             'TBK_PREPAGO_POS': 'Prepago Manual',
+            'MP_MANUAL': 'Mercado Pago — registro manual',
             'MP_QR': 'Mercado Pago QR',
             'MP_POINT': 'Mercado Pago Point',
             'MP_POINT_DEBITO': 'MP Point Débito',

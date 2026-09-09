@@ -1535,7 +1535,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td class="text-center">
                     <span class="badge bg-light text-dark">${doc.total_productos || 0}</span>
                 </td>
-                <td class="col-pago" title="${doc.metodos_pago_str || 'Sin pagos'}">
+                <td class="col-pago" title="${_tooltipPagos(doc)}">
                     <small class="text-muted pago-truncado">${doc.metodos_pago_str || 'Sin pagos'}</small>
                 </td>
                 <td>
@@ -1964,6 +1964,60 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    /**
+     * Tooltip de la columna Pago: además del medio, el N° de operación de cada
+     * cobro (voucher Transbank / id de pago Mercado Pago). Es el dato que se
+     * necesita para rastrear una venta contra la cartola del adquirente, y
+     * hasta ahora solo se veía abriendo el modal de edición.
+     */
+    function _tooltipPagos(doc) {
+        const pagos = doc.pagos_raw || [];
+        const conDato = pagos.filter(p => (p.voucher || '').trim() || p.payment_id_mp);
+        if (!conDato.length) return doc.metodos_pago_str || 'Sin pagos';
+        const lineas = pagos.map(p => {
+            const partes = [`${p.metodo_display || p.metodo || ''} ${formatearMoneda(p.monto || 0)}`];
+            // El Nº de Mercado Pago es el que sirve para buscar en su panel;
+            // el voucher de la Orders API se muestra solo si no hay otro.
+            if (p.payment_id_mp) partes.push(`N° MP ${p.payment_id_mp}`);
+            else if ((p.voucher || '').trim()) partes.push(`N° ${p.voucher.trim()}`);
+            if (p.codigo_autorizacion) partes.push(`Aut ${p.codigo_autorizacion}`);
+            if (p.ultimos_4_digitos) partes.push(`****${p.ultimos_4_digitos}`);
+            return partes.join(' · ');
+        });
+        return lineas.join('\n');
+    }
+
+    /**
+     * Sub-fila de solo lectura con los datos del cobro Mercado Pago.
+     * El Nº de operación de MP es el que se busca en su panel/app; el id de la
+     * Orders API se muestra aparte porque es el que quedó en el voucher del
+     * pago y en los comprobantes antiguos.
+     */
+    function _filaDatosMP(p, metodo) {
+        if (!String(metodo || '').startsWith('MP_')) return '';
+        const numeroMP = p.payment_id_mp || '';
+        const ordersId = (p.voucher || '').trim();
+        if (!numeroMP && !ordersId) return '';
+        const chip = (icono, etiqueta, valor) => valor
+            ? `<span class="me-3"><i class="${icono}"></i> ${etiqueta}
+               <code>${escaparHtml(valor)}</code></span>` : '';
+        return `
+            <tr class="pago-detalle-mp">
+                <td colspan="3" class="bg-light text-muted" style="font-size:11px;">
+                    <div class="px-1 py-1">
+                        ${chip('ri-hashtag', 'N° operación MP', numeroMP)}
+                        ${chip('ri-shield-check-line', 'Autorización', p.codigo_autorizacion)}
+                        ${chip('ri-bank-card-line', 'Tarjeta', p.ultimos_4_digitos ? '****' + p.ultimos_4_digitos : '')}
+                        ${chip('ri-percent-line', 'Comisión MP', p.comision_mp ? formatearMoneda(p.comision_mp) : '')}
+                        ${numeroMP && ordersId !== numeroMP
+                            ? chip('ri-code-line', 'Orders API', ordersId) : ''}
+                        ${!numeroMP ? '<span class="text-warning"><i class="ri-error-warning-line"></i> '
+                            + 'Sin N° de operación de Mercado Pago: correr <code>backfill_payment_id_mp</code></span>' : ''}
+                    </div>
+                </td>
+            </tr>`;
+    }
+
     function pintarTablaPagosEditar(pagos, tipoDte) {
         const tbody = document.getElementById('tbodyPagosEditar');
         if (!tbody) return;
@@ -1992,7 +2046,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const plataforma = p.tipo_tarjeta || '';
             const voucher = p.voucher || '';
             const platOpts = renderOpcionesPlataforma(plataforma);
-            const mostrarInternet = (metodo === 'VENTA_INTERNET');
+            // La sub-fila con el N° editable aplica a Venta por Internet (N° de pedido) y a los cobros
+            // de Mercado Pago (N° de operación): en un cobro MP registrado a mano ese número es lo único
+            // que permite cruzarlo después contra el depósito, y hasta ahora era de solo lectura.
+            const esMP = metodo.startsWith('MP_');
+            const mostrarInternet = (metodo === 'VENTA_INTERNET') || esMP;
             const dis = puedeEditarPagos ? '' : 'disabled';
             return `
                 <tr data-pago-idx="${idx}" data-pago-id="${p.id || ''}">
@@ -2010,12 +2068,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     </td>
                     <td class="text-muted" style="font-size:10px;">#${p.id || '—'}</td>
                 </tr>
+                ${_filaDatosMP(p, metodo)}
                 <tr data-pago-detalle-id="${p.id || ''}"
                     class="pago-detalle-internet ${mostrarInternet ? '' : 'd-none'}">
                     <td colspan="3" class="bg-light">
                         <div class="row g-2 px-1 py-1" style="font-size:11px;">
-                            <div class="col-md-6">
-                                <label class="form-label mb-1 text-muted" style="font-size:11px;">
+                            <div class="col-md-6 ${esMP ? 'd-none' : ''}">
+                                <label class="form-label mb-1 text-muted" style="font-size:12px;">
                                     <i class="ri-global-line"></i> Plataforma
                                 </label>
                                 <select class="form-select form-select-sm pago-plataforma"
@@ -2023,15 +2082,15 @@ document.addEventListener('DOMContentLoaded', function() {
                                     ${platOpts}
                                 </select>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label mb-1 text-muted" style="font-size:11px;">
-                                    <i class="ri-hashtag"></i> N° de pedido / voucher
+                            <div class="${esMP ? 'col-12' : 'col-md-6'}">
+                                <label class="form-label mb-1 text-muted" style="font-size:12px;">
+                                    <i class="ri-hashtag"></i> ${esMP ? 'N° de operación Mercado Pago' : 'N° de pedido / voucher'}
                                 </label>
                                 <input type="text" maxlength="100"
                                        class="form-control form-control-sm pago-voucher"
-                                       data-editor="pago"
+                                       data-editor="pago" style="font-size:14px;font-weight:600;"
                                        value="${voucher.replace(/"/g, '&quot;')}"
-                                       placeholder="Ej: ORD-123456" ${dis}>
+                                       placeholder="${esMP ? 'Ej: 177422093000 — panel o app de MP' : 'Ej: ORD-123456'}" ${dis}>
                             </div>
                         </div>
                     </td>
@@ -2058,8 +2117,9 @@ document.addEventListener('DOMContentLoaded', function() {
             `tr.pago-detalle-internet[data-pago-detalle-id="${pagoId}"]`
         );
         if (!detalle) return;
-        const esInternet = (select.value || '').toUpperCase() === 'VENTA_INTERNET';
-        detalle.classList.toggle('d-none', !esInternet);
+        const met = (select.value || '').toUpperCase();
+        const conNumero = met === 'VENTA_INTERNET' || met.startsWith('MP_');
+        detalle.classList.toggle('d-none', !conNumero);
     }
 
     function recalcularTotalPagosEditar() {
@@ -2380,6 +2440,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 // sin pisar lo que ya hay si el usuario no abrió la sub-fila.
                 if (metodo === 'VENTA_INTERNET') {
                     item.tipo_tarjeta = plataforma;
+                    item.voucher = voucher;
+                } else if (metodo.startsWith('MP_')) {
+                    // Solo el N° de operación: el tipo de tarjeta de un cobro MP lo escribe la máquina
+                    // (payment_type_id) y de él depende el desglose débito/crédito de la cuadratura.
                     item.voucher = voucher;
                 }
                 pagos.push(item);
@@ -3455,7 +3519,13 @@ document.addEventListener('DOMContentLoaded', function() {
             return `<div class="text-center py-1 text-muted" style="font-size:11px;"><i class="ri-bank-card-line"></i> Sin pagos</div>`;
         }
 
-        const tieneDetalle = pagos.some(p => p.voucher || p.tipo_tarjeta);
+        const tieneDetalle = pagos.some(p => p.tipo_tarjeta);
+        // N° de operación: el de Mercado Pago (payment_id_mp) es el que se busca en su panel; si el
+        // cobro se registró a mano no hay transacción y el número quedó en el voucher. Para Transbank
+        // el voucher es el del comprobante. Va en COLUMNA PROPIA y en mono: es el dato con el que se
+        // rastrea una venta contra la cartola del adquirente.
+        const numOperacion = (p) => (p.payment_id_mp || '').trim() || (p.voucher || '').trim();
+        const tieneOperacion = pagos.some(p => numOperacion(p));
         // Los pagos no tienen fecha propia: heredan de `fecha_emision` del
         // DTE. Al exponerla aquí el usuario puede confirmar visualmente que
         // las fechas quedaron sincronizadas tras editar la fecha del DTE.
@@ -3463,13 +3533,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let html = `
             <div class="table-responsive">
-                <table class="table table-sm mb-0 align-middle" style="font-size:11px;">
-                    <thead style="background:#198754;color:#fff;font-size:10px;">
+                <table class="table table-sm mb-0 align-middle" style="font-size:13px;">
+                    <thead style="background:#198754;color:#fff;font-size:12px;">
                         <tr>
-                            <th style="padding:4px 6px;">Método</th>
-                            ${tieneFecha ? '<th style="padding:4px 6px;">Fecha</th>' : ''}
-                            ${tieneDetalle ? '<th style="padding:4px 6px;">Detalle</th>' : ''}
-                            <th class="text-end" style="padding:4px 6px;">Monto</th>
+                            <th style="padding:6px 8px;">Método</th>
+                            ${tieneFecha ? '<th style="padding:6px 8px;">Fecha</th>' : ''}
+                            ${tieneDetalle ? '<th style="padding:6px 8px;">Detalle</th>' : ''}
+                            ${tieneOperacion ? '<th style="padding:6px 8px;">N° operación</th>' : ''}
+                            <th class="text-end" style="padding:6px 8px;">Monto</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -3478,15 +3549,21 @@ document.addEventListener('DOMContentLoaded', function() {
         let totalPagos = 0;
         pagos.forEach(pago => {
             totalPagos += pago.monto;
-            const detalle = [pago.tipo_tarjeta, pago.voucher].filter(Boolean).join(' · ');
+            const detalle = pago.tipo_tarjeta || '';
             const fechaPago = pago.fecha_pago ? formatearFecha(pago.fecha_pago) : '—';
+            const nOp = numOperacion(pago);
+            const esMP = String(pago.metodo || pago.metodo_pago || '').toUpperCase().startsWith('MP_');
+            // Cobro de MP registrado a mano: no tiene transacción en la API, así que se marca para que
+            // quien cuadra la caja sepa que el número lo tecleó el cajero.
+            const manual = esMP && !pago.payment_id_mp;
 
             html += `
                 <tr>
-                    <td style="padding:3px 6px;"><span class="badge bg-success" style="font-size:9px;">${pago.metodo_display}</span></td>
-                    ${tieneFecha ? `<td style="padding:3px 6px;" class="text-muted"><i class="ri-calendar-line me-1" style="opacity:.6;"></i>${fechaPago}</td>` : ''}
-                    ${tieneDetalle ? `<td style="padding:3px 6px;" class="text-muted">${detalle || '—'}</td>` : ''}
-                    <td class="text-end fw-semibold" style="padding:3px 6px;">${formatearMoneda(pago.monto)}</td>
+                    <td style="padding:5px 8px;"><span class="badge bg-success" style="font-size:11px;">${pago.metodo_display}</span>${manual ? ' <span class="badge bg-warning text-dark" style="font-size:10px;">MANUAL</span>' : ''}</td>
+                    ${tieneFecha ? `<td style="padding:5px 8px;" class="text-muted"><i class="ri-calendar-line me-1" style="opacity:.6;"></i>${fechaPago}</td>` : ''}
+                    ${tieneDetalle ? `<td style="padding:5px 8px;" class="text-muted">${detalle || '—'}</td>` : ''}
+                    ${tieneOperacion ? `<td style="padding:5px 8px;">${nOp ? `<code style="font-size:13px;font-weight:600;color:#0d6efd;">${nOp}</code>` : '<span class="text-muted">—</span>'}</td>` : ''}
+                    <td class="text-end fw-semibold" style="padding:5px 8px;">${formatearMoneda(pago.monto)}</td>
                 </tr>
             `;
         });

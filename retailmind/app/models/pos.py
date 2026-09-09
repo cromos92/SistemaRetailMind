@@ -499,7 +499,17 @@ class TransaccionMercadoPago(models.Model):
 
     external_reference = models.CharField(max_length=80, unique=True)
     order_id = models.CharField(max_length=60, blank=True)
+    # Id del pago en la Orders API: ULID con prefijo PAY (PAY01M1S0Y7D2...).
+    # NO es el número que muestra el panel/app de Mercado Pago.
     payment_id = models.CharField(max_length=60, blank=True)
+    # Id NUMÉRICO del pago (177422093000): es el "número de operación" que se
+    # ve en el panel, la app y los reportes de liquidación de MP, y el único
+    # que sirve para cruzar una venta contra la cartola. La Orders API no lo
+    # devuelve; llega por el webhook de topic=payment o por /v1/payments/search.
+    payment_id_mp = models.CharField(
+        max_length=40, blank=True, db_index=True,
+        help_text="Nº de operación de Mercado Pago (el del panel/app)",
+    )
 
     monto = models.IntegerField(help_text="Monto CLP")
     monto_neto = models.IntegerField(null=True, blank=True, help_text="Neto tras comisión MP")

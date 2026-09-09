@@ -5844,6 +5844,53 @@ def gestion_ventas_documentos(request):
     return render(request, 'vistas/modulo_ventas/gestionVentasDocumentos.html', context)
 
 
+def _q_busqueda_por_numero_mp(buscar):
+    """Q() extra para buscar un documento por el Nº de operación de Mercado Pago.
+
+    El `voucher` del pago guarda el id de la Orders API (`PAY01M1...`), pero el
+    número que el usuario tiene a la vista —el del panel, la app y el reporte
+    de liquidación de MP— es otro: el numérico. Se traduce a los ids de la
+    Orders API antes de filtrar, así que el buscador acepta cualquiera de los
+    dos. Devuelve un Q vacío (neutro para `|`) si no aplica.
+    """
+    if not str(buscar).isdigit():
+        return Q(pk__in=[])
+    from .models import TransaccionMercadoPago
+    ids_orders = list(
+        TransaccionMercadoPago.objects
+        .filter(payment_id_mp__startswith=buscar)
+        .exclude(payment_id='')
+        .values_list('payment_id', flat=True)[:200]
+    )
+    if not ids_orders:
+        return Q(pk__in=[])
+    return Q(dte_asociado__voucher__in=ids_orders)
+
+
+def _enriquecer_pagos_mercadopago(pagos_por_voucher):
+    """Completa los pagos Mercado Pago con los datos que solo tiene MP.
+
+    La orden de la Point no devuelve código de autorización, últimos 4 dígitos
+    ni el Nº de operación del panel: eso vive en `TransaccionMercadoPago`. Una
+    sola consulta por página del listado (los pagos se ubican por su voucher,
+    que es el id de la Orders API).
+    """
+    if not pagos_por_voucher:
+        return
+    from .models import TransaccionMercadoPago
+    campos = ('payment_id', 'payment_id_mp', 'codigo_autorizacion',
+              'ultimos_4_digitos', 'metodo_pago_mp', 'fee_mp')
+    for trx in TransaccionMercadoPago.objects.filter(
+        payment_id__in=list(pagos_por_voucher)
+    ).only(*campos):
+        for pago in pagos_por_voucher.get(trx.payment_id, []):
+            pago['payment_id_mp'] = trx.payment_id_mp or ''
+            pago['codigo_autorizacion'] = trx.codigo_autorizacion or ''
+            pago['ultimos_4_digitos'] = trx.ultimos_4_digitos or ''
+            pago['medio_mp'] = trx.metodo_pago_mp or ''
+            pago['comision_mp'] = trx.fee_mp or 0
+
+
 @login_required
 @require_GET
 def listar_documentos_ventas(request):
@@ -5966,14 +6013,21 @@ def listar_documentos_ventas(request):
                 ).distinct()
 
         if buscar:
-            dtes_filtrados = dtes_filtrados.filter(
+            filtro_busqueda = (
                 Q(numero_documento__icontains=buscar) |
                 Q(receptor__nombre__icontains=buscar) |
                 Q(receptor__rut__icontains=buscar) |
                 Q(vendedor__nombre__icontains=buscar) |
                 Q(dte_productos__productoTalla__sku__icontains=buscar) |
-                Q(dte_productos__productoTalla__producto__articulo__icontains=buscar)
-            ).distinct()
+                Q(dte_productos__productoTalla__producto__articulo__icontains=buscar) |
+                # El buscador ofrecía "voucher" en su placeholder pero no lo
+                # miraba: es el número de operación del cobro (Transbank o
+                # Mercado Pago) y es lo que se tiene a mano para rastrear un
+                # pago desde el comprobante.
+                Q(dte_asociado__voucher__icontains=buscar)
+            )
+            filtro_busqueda |= _q_busqueda_por_numero_mp(buscar)
+            dtes_filtrados = dtes_filtrados.filter(filtro_busqueda).distinct()
 
         if monto_min is not None:
             dtes_filtrados = dtes_filtrados.filter(monto_con_iva__gte=monto_min)
@@ -6103,6 +6157,10 @@ def listar_documentos_ventas(request):
             .values_list('documento_afectado_id', flat=True)
         ) if pk_pagina else set()
 
+        # Pagos Mercado Pago de la página, indexados por su voucher (el id de
+        # la Orders API) para completarlos después con una sola consulta.
+        pagos_mp_por_voucher = {}
+
         for dte in dtes_pagina:
             productos = []
             subtotal_bruto = 0
@@ -6138,7 +6196,7 @@ def listar_documentos_ventas(request):
             )
             for pago in dte.dte_asociado.all():
                 total_pagos += pago.monto or 0
-                metodos_pago_raw.append({
+                pago_dict = {
                     'id': pago.id,
                     'metodo': pago.metodo_pago,
                     'metodo_display': obtener_nombre_metodo_pago(pago.metodo_pago),
@@ -6147,7 +6205,10 @@ def listar_documentos_ventas(request):
                     'tipo_tarjeta': pago.tipo_tarjeta or '',
                     'notas': pago.notas or '',
                     'fecha_pago': fecha_pago_dte,
-                })
+                }
+                metodos_pago_raw.append(pago_dict)
+                if str(pago.metodo_pago or '').startswith('MP_') and pago.voucher:
+                    pagos_mp_por_voucher.setdefault(pago.voucher, []).append(pago_dict)
             metodos_pago = agrupar_metodos_pago(metodos_pago_raw)
 
             monto_lista = int(dte.monto_con_iva or 0)
@@ -6212,6 +6273,10 @@ def listar_documentos_ventas(request):
                 'observaciones': getattr(dte, 'referencias', '') or '',
                 'es_manual': bool(getattr(dte, 'es_manual', False)),
             })
+
+        # Nº de operación de MP, código de autorización y últimos 4: la orden
+        # de la Point no los devuelve, viven en TransaccionMercadoPago.
+        _enriquecer_pagos_mercadopago(pagos_mp_por_voucher)
 
         return JsonResponse({
             'success': True,
@@ -6341,14 +6406,18 @@ def exportar_documentos_ventas_excel(request):
         
         # Filtro de búsqueda
         if buscar:
-            dtes_query = dtes_query.filter(
+            filtro_busqueda = (
                 Q(numero_documento__icontains=buscar) |
                 Q(receptor__nombre__icontains=buscar) |
                 Q(receptor__rut__icontains=buscar) |
                 Q(vendedor__nombre__icontains=buscar) |
                 Q(dte_productos__productoTalla__sku__icontains=buscar) |
-                Q(dte_productos__productoTalla__producto__articulo__icontains=buscar)
-            ).distinct()
+                Q(dte_productos__productoTalla__producto__articulo__icontains=buscar) |
+                # Mismo criterio que el listado: buscar por número de operación
+                Q(dte_asociado__voucher__icontains=buscar)
+            )
+            filtro_busqueda |= _q_busqueda_por_numero_mp(buscar)
+            dtes_query = dtes_query.filter(filtro_busqueda).distinct()
         
         # Recolectar datos de documentos
         documentos_data = []
@@ -10104,6 +10173,16 @@ def obtener_detalle_cuadratura_metodos_pago(request):
     # Filtro por categoría (opcional)
     if categoria and categoria != 'todo':
         items = [it for it in items if it['categoria'] == categoria]
+
+    # Nº de operación de Mercado Pago: el `voucher` del pago guarda el id de la
+    # Orders API (`PAY01M1...`), que no existe en el panel ni en la app de MP.
+    # El número que sirve para cruzar contra la cartola vive en
+    # TransaccionMercadoPago y se agrega acá con una sola consulta.
+    _pagos_mp_detalle = {}
+    for _it in items:
+        if str(_it.get('metodo_pago') or '').startswith('MP_') and _it.get('voucher'):
+            _pagos_mp_detalle.setdefault(_it['voucher'], []).append(_it)
+    _enriquecer_pagos_mercadopago(_pagos_mp_detalle)
 
     # Ordenar por hora y luego correlativo
     items.sort(key=lambda it: (it['hora'] or '', it['correlativo'] or 0))

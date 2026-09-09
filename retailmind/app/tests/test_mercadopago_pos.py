@@ -12,6 +12,7 @@ import hmac
 import time
 from unittest import mock
 
+from django.db.models import Q
 from django.test import TestCase
 from django.utils import timezone
 
@@ -1241,6 +1242,248 @@ class ImputacionEnVentasTests(BaseMPTest):
         self.assertEqual(res['mp_total'], 8000)
         self.assertEqual(len(res['sin_registro']), 1)
         self.assertTrue(res['sin_registro'][0]['atribuible'])
+
+
+class NumeroOperacionMPTests(BaseMPTest):
+    """Mercado Pago identifica el MISMO cobro con dos ids: el ULID de la Orders
+    API (`PAY01M1...`, el que devuelve la orden y quedó en el voucher) y el
+    numérico (`177422093000`, el que se ve en el panel, la app y el reporte de
+    liquidación). Antes ambos se escribían sobre `payment_id`."""
+
+    def test_orders_api_llena_payment_id(self):
+        trx = _transaccion(self.config, correlativo='9600', monto=1000,
+                           estado='PENDIENTE')
+        mp._aplicar_estado(trx, 'APROBADA', payment={
+            'id': 'PAY01M1S0Y7D27DTM81ZE8SWMKGBC', 'payment_type_id': 'debit_card'})
+        trx.refresh_from_db()
+        self.assertEqual(trx.payment_id, 'PAY01M1S0Y7D27DTM81ZE8SWMKGBC')
+        self.assertEqual(trx.payment_id_mp, '')
+
+    def test_id_numerico_llena_payment_id_mp_sin_pisar_el_ulid(self):
+        trx = _transaccion(self.config, correlativo='9601', monto=1000,
+                           estado='PENDIENTE',
+                           payment_id='PAY01M1S0Y7D27DTM81ZE8SWMKGBC')
+        mp._aplicar_estado(trx, 'APROBADA', payment={
+            'id': 177422093000, 'payment_type_id': 'debit_card',
+            'authorization_code': '326087', 'card': {'last_four_digits': '1281'}})
+        trx.refresh_from_db()
+        self.assertEqual(trx.payment_id, 'PAY01M1S0Y7D27DTM81ZE8SWMKGBC')
+        self.assertEqual(trx.payment_id_mp, '177422093000')
+        self.assertEqual(trx.codigo_autorizacion, '326087')
+        self.assertEqual(trx.ultimos_4_digitos, '1281')
+
+    def test_id_numerico_sin_ulid_previo_llena_los_dos(self):
+        """Sin id de la Orders API (cobro resuelto solo por webhook de payment)
+        el numérico también sirve de referencia principal."""
+        trx = _transaccion(self.config, correlativo='9602', monto=1000,
+                           estado='PENDIENTE', payment_id='')
+        mp._aplicar_estado(trx, 'APROBADA', payment={'id': '99887766'})
+        trx.refresh_from_db()
+        self.assertEqual(trx.payment_id, '99887766')
+        self.assertEqual(trx.payment_id_mp, '99887766')
+
+    def test_busqueda_traduce_el_numero_de_mp_al_voucher(self):
+        from app.views_modulo_ventas import _q_busqueda_por_numero_mp
+        _transaccion(self.config, correlativo='9610', monto=1000,
+                     payment_id='PAY01ABC', payment_id_mp='177422093000')
+        q = _q_busqueda_por_numero_mp('177422093000')
+        self.assertIn('PAY01ABC', str(q))
+        # Un texto que no es número no dispara la traducción
+        self.assertEqual(str(_q_busqueda_por_numero_mp('PAY01ABC')), str(Q(pk__in=[])))
+        # Un número que no existe tampoco arrastra documentos
+        self.assertEqual(str(_q_busqueda_por_numero_mp('123')), str(Q(pk__in=[])))
+
+    def test_enriquecer_pagos_agrega_los_datos_de_mp(self):
+        from app.views_modulo_ventas import _enriquecer_pagos_mercadopago
+        _transaccion(self.config, correlativo='9620', monto=47480,
+                     payment_id='PAY01XYZ', payment_id_mp='177422093000',
+                     codigo_autorizacion='326087', ultimos_4_digitos='1281',
+                     metodo_pago_mp='debit_card', fee_mp=1239)
+        pago = {'metodo': 'MP_POINT_DEBITO', 'voucher': 'PAY01XYZ', 'monto': 47480}
+        _enriquecer_pagos_mercadopago({'PAY01XYZ': [pago]})
+        self.assertEqual(pago['payment_id_mp'], '177422093000')
+        self.assertEqual(pago['codigo_autorizacion'], '326087')
+        self.assertEqual(pago['ultimos_4_digitos'], '1281')
+        self.assertEqual(pago['comision_mp'], 1239)
+
+    def test_enriquecer_sin_transaccion_no_rompe(self):
+        from app.views_modulo_ventas import _enriquecer_pagos_mercadopago
+        pago = {'metodo': 'MP_POINT_DEBITO', 'voucher': 'NO-EXISTE', 'monto': 1}
+        _enriquecer_pagos_mercadopago({'NO-EXISTE': [pago]})
+        self.assertNotIn('payment_id_mp', pago)
+
+
+class BackfillPaymentIdMPTests(BaseMPTest):
+    """`backfill_payment_id_mp`: completa desde la API lo que la orden Point no
+    devuelve (Nº de operación, autorización, últimos 4, comisión)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.vendedor = crear_vendedor(empresa=cls.empresa)
+
+    def _correr(self, pagos, **kwargs):
+        from io import StringIO
+
+        from django.core.management import call_command
+        salida = StringIO()
+        with mock.patch.object(mp, '_token', return_value='tok'), \
+             mock.patch.object(mp, 'buscar_pagos_dia', return_value=pagos):
+            call_command('backfill_payment_id_mp', stdout=salida, stderr=salida,
+                         desde='2026-09-05', hasta='2026-09-05', **kwargs)
+        return salida.getvalue()
+
+    def test_dry_run_no_escribe(self):
+        trx = _transaccion(self.config, correlativo='9700', monto=47480,
+                           payment_id='PAY01AAA')
+        self._correr([_pago_mp(47480, 'debit_card', trx.external_reference,
+                               payment_id=177422093000,
+                               authorization_code='326087',
+                               card={'last_four_digits': '1281'})])
+        trx.refresh_from_db()
+        self.assertEqual(trx.payment_id_mp, '')
+        self.assertEqual(trx.codigo_autorizacion, '')
+
+    def test_apply_completa_los_campos_vacios(self):
+        trx = _transaccion(self.config, correlativo='9701', monto=47480,
+                           payment_id='PAY01BBB')
+        self._correr([_pago_mp(47480, 'debit_card', trx.external_reference,
+                               payment_id=177422093000,
+                               authorization_code='326087',
+                               card={'last_four_digits': '1281'},
+                               transaction_details={'net_received_amount': 46241})],
+                     apply=True)
+        trx.refresh_from_db()
+        self.assertEqual(trx.payment_id_mp, '177422093000')
+        self.assertEqual(trx.codigo_autorizacion, '326087')
+        self.assertEqual(trx.ultimos_4_digitos, '1281')
+        self.assertEqual(trx.monto_neto, 46241)
+        self.assertEqual(trx.fee_mp, 1239)
+        # El id de la Orders API no se toca
+        self.assertEqual(trx.payment_id, 'PAY01BBB')
+
+    def test_no_pisa_valores_ya_cargados(self):
+        trx = _transaccion(self.config, correlativo='9702', monto=1000,
+                           payment_id='PAY01CCC', payment_id_mp='111',
+                           codigo_autorizacion='ORIGINAL')
+        self._correr([_pago_mp(1000, 'debit_card', trx.external_reference,
+                               payment_id=999, authorization_code='OTRO')],
+                     apply=True)
+        trx.refresh_from_db()
+        self.assertEqual(trx.payment_id_mp, '111')
+        self.assertEqual(trx.codigo_autorizacion, 'ORIGINAL')
+
+    def test_voucher_opcional_deja_el_numero_de_mp_en_el_pago(self):
+        ticket = Ticket.objects.create(
+            vendedor=self.vendedor, sucursal=self.sucursal, correlativo=9703,
+            estado='PAGADO', subTotal=47480, descuento=0, total=47480,
+            responsable='test-mp',
+        )
+        pago = TicketDetallePago.objects.create(
+            ticket=ticket, metodo_pago='MP_POINT_DEBITO', monto=47480,
+            voucher='PAY01DDD')
+        trx = _transaccion(self.config, correlativo='9703', monto=47480,
+                           payment_id='PAY01DDD', detalle_pago=pago)
+        self._correr([_pago_mp(47480, 'debit_card', trx.external_reference,
+                               payment_id=177422093000)],
+                     apply=True, voucher=True)
+        pago.refresh_from_db()
+        self.assertEqual(pago.voucher, '177422093000')
+        # El id de la Orders API queda anotado, no se pierde
+        self.assertIn('PAY01DDD', pago.notas)
+
+    def test_sin_voucher_el_pago_queda_intacto(self):
+        ticket = Ticket.objects.create(
+            vendedor=self.vendedor, sucursal=self.sucursal, correlativo=9704,
+            estado='PAGADO', subTotal=1000, descuento=0, total=1000,
+            responsable='test-mp',
+        )
+        pago = TicketDetallePago.objects.create(
+            ticket=ticket, metodo_pago='MP_POINT_DEBITO', monto=1000,
+            voucher='PAY01EEE')
+        trx = _transaccion(self.config, correlativo='9704', monto=1000,
+                           payment_id='PAY01EEE', detalle_pago=pago)
+        self._correr([_pago_mp(1000, 'debit_card', trx.external_reference,
+                               payment_id=555)], apply=True)
+        pago.refresh_from_db()
+        self.assertEqual(pago.voucher, 'PAY01EEE')
+
+    def test_pago_de_mp_sin_transaccion_local_se_reporta(self):
+        salida = self._correr([_pago_mp(9000, 'debit_card', 'RM-999-000-zz',
+                                        payment_id=1)], apply=True)
+        self.assertIn('sin transaccion local', salida.lower())
+
+
+class DetalleCuadraturaMPTests(BaseMPTest):
+    """El detalle del modal "Resumen de Caja" mostraba el voucher crudo (el id
+    de la Orders API). Ahora expone el Nº de operación de Mercado Pago, que es
+    el que se puede buscar en el panel de MP."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        from app.tests.factories import crear_usuario
+        cls.vendedor = crear_vendedor(empresa=cls.empresa)
+        cls.usuario = crear_usuario(username='cajero_detalle_mp', rol='cajero')
+
+    def setUp(self):
+        self.client.force_login(self.usuario)
+        sesion = self.client.session
+        sesion['idSucursalActual'] = self.sucursal.id
+        sesion.save()
+        self.hoy = timezone.localdate()
+
+    def _venta_mp(self, correlativo, monto, voucher, **trx_kwargs):
+        ticket = Ticket.objects.create(
+            vendedor=self.vendedor, sucursal=self.sucursal, correlativo=correlativo,
+            estado='PAGADO', subTotal=monto, descuento=0, total=monto,
+            responsable='test-mp',
+        )
+        pago = TicketDetallePago.objects.create(
+            ticket=ticket, metodo_pago='MP_POINT_DEBITO', monto=monto,
+            tipo_tarjeta='debit_card', voucher=voucher, origen_pago='POS_INTEGRADO')
+        _transaccion(self.config, correlativo=str(correlativo), monto=monto,
+                     canal='POINT', metodo_pago_mp='debit_card',
+                     payment_id=voucher, detalle_pago=pago, **trx_kwargs)
+        return ticket, pago
+
+    def _detalle(self):
+        resp = self.client.get('/app/api/cuadratura/detalle-metodos-pago/',
+                               {'fecha': self.hoy.strftime('%Y-%m-%d')})
+        self.assertEqual(resp.status_code, 200, resp.content)
+        datos = resp.json()
+        self.assertTrue(datos.get('success'), datos)
+        return datos['items']
+
+    def test_detalle_expone_el_numero_de_operacion_mp(self):
+        self._venta_mp(9800, 47480, 'PAY01M1S0Y7D2',
+                       payment_id_mp='177422093000',
+                       codigo_autorizacion='326087', ultimos_4_digitos='1281')
+        item = [i for i in self._detalle() if i['metodo_pago'] == 'MP_POINT_DEBITO'][0]
+        self.assertEqual(item['payment_id_mp'], '177422093000')
+        self.assertEqual(item['codigo_autorizacion'], '326087')
+        self.assertEqual(item['ultimos_4_digitos'], '1281')
+        # El voucher original sigue disponible
+        self.assertEqual(item['voucher'], 'PAY01M1S0Y7D2')
+
+    def test_sin_backfill_el_item_no_trae_numero_mp(self):
+        """Mientras no se corra el backfill el modal cae al voucher de siempre,
+        sin romperse."""
+        self._venta_mp(9801, 1000, 'PAY01SINDATO')
+        item = [i for i in self._detalle() if i['metodo_pago'] == 'MP_POINT_DEBITO'][0]
+        self.assertEqual(item.get('payment_id_mp', ''), '')
+        self.assertEqual(item['voucher'], 'PAY01SINDATO')
+
+    def test_pago_no_mp_no_se_toca(self):
+        ticket = Ticket.objects.create(
+            vendedor=self.vendedor, sucursal=self.sucursal, correlativo=9802,
+            estado='PAGADO', subTotal=5000, descuento=0, total=5000,
+            responsable='test-mp',
+        )
+        TicketDetallePago.objects.create(
+            ticket=ticket, metodo_pago='EFECTIVO', monto=5000)
+        item = [i for i in self._detalle() if i['metodo_pago'] == 'EFECTIVO'][0]
+        self.assertNotIn('payment_id_mp', item)
 
 
 class BloqueControlImpresoTests(BaseMPTest):

@@ -3838,6 +3838,22 @@ async function imprimirResumenTermica() {
         visa:$('#visa').text(), debito:$('#debito').text(), presto:$('#presto').text(), hites:$('#hites').text(),
         falabella:$('#falabella').text(), paris:$('#paris').text(), ripley:$('#ripley').text(), mercadopago:$('#mercadopago').text(), klap:$('#klap').text(),
         transferencia:$('#transferencia').text(),
+        // El ticket sólo imprimía tarjetas Transbank, internet y documentos:
+        // faltaban Mercado Pago POS y todo el bloque de "Efectivo y Otros",
+        // así que el papel no sumaba la venta del día.
+        mercadopago_pos:$('#mercadopago_pos').text(),
+        mp_debito:$('#mercadopago_pos_debito').text(),
+        mp_credito:$('#mercadopago_pos_credito').text(),
+        mp_otros:$('#mercadopago_pos_otros').text(),
+        convenio:$('#convenio').text(),
+        credito_trabajador:$('#credito_trabajador').text(),
+        credito_externo:$('#credito_externo').text(),
+        giftcard:$('#giftcard').text(),
+        cheque:$('#cheque').text(),
+        orden_compra:$('#orden_compra').text(),
+        nc_efectivo:$('#nc_efectivo').text(),
+        nc_transferencia:$('#nc_transferencia').text(),
+        nc_credito:$('#nc_credito').text(),
         boletas_electronicas:$('#totalboletaelectronica').text(),
         boletas_papel:$('#totalboletapapel').text(),
         facturas:$('#totalfactura').text(),
@@ -3863,6 +3879,33 @@ async function imprimirResumenTermica() {
     mostrarExito('Enviando a impresora...');
 }
 
+/**
+ * Bloque "EFECTIVO Y OTROS" del ticket térmico. Son los medios que el modal
+ * agrupa bajo ese subtotal (efectivo, transferencia, convenio, créditos, gift
+ * card, cheque, orden de compra) y las NC que descuentan de caja. Ninguno se
+ * imprimía: el papel mostraba el subtotal pero no de qué estaba hecho.
+ */
+function _bloqueEfectivoOtrosTermica(d) {
+    const filas = [
+        ['EFECTIVO', d.efectivo],
+        ['TRANSFERENCIA', d.transferencia],
+        ['CONVENIO', d.convenio],
+        ['CRED. TRABAJADOR', d.credito_trabajador],
+        ['CRED. EXTERNO', d.credito_externo],
+        ['GIFT CARD', d.giftcard],
+        ['CHEQUE', d.cheque],
+        ['ORDEN COMPRA', d.orden_compra],
+        ['NC EFECTIVO', d.nc_efectivo],
+        ['NC TRANSFERENCIA', d.nc_transferencia],
+        ['NC CREDITO', d.nc_credito],
+    ].filter(([, v]) => v && v !== '$0');
+    if (!filas.length) return '';
+    const cuerpo = filas.map(([n, v]) =>
+        `<tr><td class="metodo">${n}:</td><td class="monto">${v}</td></tr>`).join('');
+    return `<div class="seccion"><div class="subtitulo">EFECTIVO Y OTROS</div>
+        <table>${cuerpo}</table></div><div class="linea"></div>`;
+}
+
 function generarContenidoTermica(d) {
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Resumen de Caja</title>
     <style>@media print{body{margin:0;padding:0;}.no-print{display:none!important;}}
@@ -3884,14 +3927,18 @@ function generarContenidoTermica(d) {
     ${d.debito!=='$0'?`<tr><td class="metodo">REDCOMPRA DEBITO:</td><td class="monto">${d.debito}</td></tr>`:''}
     ${d.presto!=='$0'?`<tr><td class="metodo">PRESTO:</td><td class="monto">${d.presto}</td></tr>`:''}
     ${d.hites!=='$0'?`<tr><td class="metodo">HITES:</td><td class="monto">${d.hites}</td></tr>`:''}
+    ${d.mercadopago_pos!=='$0'?`<tr><td class="metodo">MERCADO PAGO POS:</td><td class="monto">${d.mercadopago_pos}</td></tr>`:''}
+    ${d.mp_debito!=='$0'?`<tr><td class="metodo" style="padding-left:10px;">&#8627; MP DEBITO:</td><td class="monto">${d.mp_debito}</td></tr>`:''}
+    ${d.mp_credito!=='$0'?`<tr><td class="metodo" style="padding-left:10px;">&#8627; MP CREDITO:</td><td class="monto">${d.mp_credito}</td></tr>`:''}
+    ${d.mp_otros!=='$0'?`<tr><td class="metodo" style="padding-left:10px;">&#8627; MP QR/OTROS:</td><td class="monto">${d.mp_otros}</td></tr>`:''}
     </table></div><div class="linea"></div>
+    ${_bloqueEfectivoOtrosTermica(d)}
     <div class="seccion"><div class="subtitulo">VENTA INTERNET</div><table>
     ${d.falabella!=='$0'?`<tr><td class="metodo">WALMART:</td><td class="monto">${d.falabella}</td></tr>`:''}
     ${d.paris!=='$0'?`<tr><td class="metodo">PARIS:</td><td class="monto">${d.paris}</td></tr>`:''}
     ${d.ripley!=='$0'?`<tr><td class="metodo">RIPLEY:</td><td class="monto">${d.ripley}</td></tr>`:''}
     ${d.mercadopago!=='$0'?`<tr><td class="metodo">MERCADO PAGO:</td><td class="monto">${d.mercadopago}</td></tr>`:''}
     ${d.klap!=='$0'?`<tr><td class="metodo">KLAP:</td><td class="monto">${d.klap}</td></tr>`:''}
-    ${d.transferencia!=='$0'?`<tr><td class="metodo">TRANSFERENCIA:</td><td class="monto">${d.transferencia}</td></tr>`:''}
     </table></div><div class="linea"></div>
     <div class="seccion"><div class="subtitulo">DOCUMENTOS</div><table>
     ${d.boletas_electronicas!=='$0'?`<tr><td class="metodo">BOLETAS ELEC. (${d.cant_boletas_electronicas||0}):</td><td class="monto">${d.boletas_electronicas}</td></tr>`:''}
@@ -4224,7 +4271,20 @@ function _filaDetalleHTML(it, idx) {
         accionesCell = `<span class="text-muted" style="font-size:.68rem;" title="No autorizado para editar ${it.dte.tipo}">Sin permiso (${_abreviarTipoDte(it.dte.tipo)})</span>`;
     }
 
-    const tarjetaVoucher = [it.tipo_tarjeta, it.voucher].filter(Boolean).join(' · ') || '—';
+    // Mercado Pago: el voucher guarda el id de la Orders API, que no existe en
+    // el panel de MP. Cuando está el Nº de operación real se muestra ese (más
+    // la autorización), porque es el único que permite cruzar con la cartola.
+    let tarjetaVoucher;
+    if (it.payment_id_mp) {
+        tarjetaVoucher = [
+            it.medio_mp || it.tipo_tarjeta,
+            'N° MP ' + it.payment_id_mp,
+            it.codigo_autorizacion ? 'Aut ' + it.codigo_autorizacion : '',
+            it.ultimos_4_digitos ? '****' + it.ultimos_4_digitos : '',
+        ].filter(Boolean).join(' · ');
+    } else {
+        tarjetaVoucher = [it.tipo_tarjeta, it.voucher].filter(Boolean).join(' · ') || '—';
+    }
     const filaClase = it.es_nota_credito ? 'table-danger' : (it.drift_fecha ? 'table-warning' : (!it.dte && it.tipo_dte_ticket && it.tipo_dte_ticket !== 'TICKET' ? 'table-light' : ''));
     const montoClase = it.monto < 0 ? 'text-danger' : '';
 
@@ -5232,36 +5292,56 @@ function _generarEscPosCuadratura(datos) {
     c.push(_col2('VENTA INTERNET:', datos.venta_internet || '$0'));
     c.push(_sep('-'));
 
-    /* ── DETALLE TARJETAS (solo si hay montos) ─────────────────── */
-    const hayT = [datos.visa, datos.debito, datos.presto, datos.hites].some(v => v && v !== '$0');
-    if (hayT) {
+    /* ── Secciones por bloque: se imprime la línea sólo si tiene monto,
+          pero ningún medio de pago queda fuera de la lista. ────────── */
+    const _bloque = (titulo, filas) => {
+        const conMonto = filas.filter(([, v]) => v && v !== '$0');
+        if (!conMonto.length) return;
         c.push(_EP.BOLD_ON);
-        c.push(_pL('DETALLE TARJETAS', _COLS) + _N);
+        c.push(_pL(titulo, _COLS) + _N);
         c.push(_EP.BOLD_OFF);
         c.push(_sep('-'));
-        if (datos.visa   && datos.visa   !== '$0') c.push(_col2('VISA/MC/AMEX:', datos.visa));
-        if (datos.debito && datos.debito !== '$0') c.push(_col2('REDCOMPRA DEB.:', datos.debito));
-        if (datos.presto && datos.presto !== '$0') c.push(_col2('PRESTO:', datos.presto));
-        if (datos.hites  && datos.hites  !== '$0') c.push(_col2('HITES:', datos.hites));
+        conMonto.forEach(([n, v]) => c.push(_col2(n + ':', v)));
         c.push(_sep('-'));
-    }
+    };
 
-    /* ── VENTA INTERNET (solo si hay montos) ───────────────────── */
-    const hayI = [datos.falabella, datos.paris, datos.ripley,
-                  datos.mercadopago, datos.klap, datos.transferencia].some(v => v && v !== '$0');
-    if (hayI) {
-        c.push(_EP.BOLD_ON);
-        c.push(_pL('VENTA INTERNET', _COLS) + _N);
-        c.push(_EP.BOLD_OFF);
-        c.push(_sep('-'));
-        if (datos.falabella   && datos.falabella   !== '$0') c.push(_col2('WALMART:', datos.falabella));
-        if (datos.paris       && datos.paris       !== '$0') c.push(_col2('PARIS:', datos.paris));
-        if (datos.ripley      && datos.ripley      !== '$0') c.push(_col2('RIPLEY:', datos.ripley));
-        if (datos.mercadopago && datos.mercadopago !== '$0') c.push(_col2('MERCADO PAGO:', datos.mercadopago));
-        if (datos.klap        && datos.klap        !== '$0') c.push(_col2('KLAP:', datos.klap));
-        if (datos.transferencia && datos.transferencia !== '$0') c.push(_col2('TRANSFERENCIA:', datos.transferencia));
-        c.push(_sep('-'));
-    }
+    /* ── DETALLE TARJETAS ──────────────────────────────────────── */
+    _bloque('DETALLE TARJETAS', [
+        ['VISA/MC/AMEX', datos.visa],
+        ['REDCOMPRA DEB.', datos.debito],
+        ['PRESTO', datos.presto],
+        ['HITES', datos.hites],
+        ['MERCADO PAGO POS', datos.mercadopago_pos],
+        ['  MP DEBITO', datos.mp_debito],
+        ['  MP CREDITO', datos.mp_credito],
+        ['  MP QR/OTROS', datos.mp_otros],
+    ]);
+
+    /* ── EFECTIVO Y OTROS ──────────────────────────────────────── */
+    // Faltaba entero: el ticket mostraba el subtotal del bloque pero nunca
+    // de qué medios estaba hecho (convenio, créditos, gift card, cheque, OC).
+    _bloque('EFECTIVO Y OTROS', [
+        ['EFECTIVO', datos.efectivo],
+        ['TRANSFERENCIA', datos.transferencia],
+        ['CONVENIO', datos.convenio],
+        ['CRED. TRABAJADOR', datos.credito_trabajador],
+        ['CRED. EXTERNO', datos.credito_externo],
+        ['GIFT CARD', datos.giftcard],
+        ['CHEQUE', datos.cheque],
+        ['ORDEN COMPRA', datos.orden_compra],
+        ['NC EFECTIVO', datos.nc_efectivo],
+        ['NC TRANSFERENCIA', datos.nc_transferencia],
+        ['NC CREDITO', datos.nc_credito],
+    ]);
+
+    /* ── VENTA INTERNET ────────────────────────────────────────── */
+    _bloque('VENTA INTERNET', [
+        ['WALMART', datos.falabella],
+        ['PARIS', datos.paris],
+        ['RIPLEY', datos.ripley],
+        ['MERCADO PAGO', datos.mercadopago],
+        ['KLAP', datos.klap],
+    ]);
 
     /* ── DOCUMENTOS (solo si hay montos) ───────────────────────── */
     const hayD = [

@@ -350,3 +350,133 @@ def cerrar_dia(request):
         'success': False,
         'error': 'Endpoint deprecado. Use Web Serial API desde el navegador'
     }, status=status.HTTP_410_GONE)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Modo de cobro por sucursal: INTEGRADO (el POS habla con el terminal por el SDK
+# Web Serial) vs MANUAL (el cajero digita el voucher con F6/F7).
+#
+# El "modo" NO es un campo propio: es el mismo criterio que usa el POS para
+# decidir si autoconecta la máquina — una ConfiguracionPOS con tipo_pos
+# 'SDK_SERIAL' y activo=True (ver pos_dashboard en views_modulo_ventas.py). Se
+# expone tal cual para que lo que muestra esta tabla sea exactamente lo que hará
+# la caja, sin inventar un estado paralelo que pueda desincronizarse.
+# ══════════════════════════════════════════════════════════════════════════════
+
+TIPO_POS_SDK = 'SDK_SERIAL'
+
+
+def _es_admin_pos(user):
+    return getattr(user, 'rol', '') in ('administrador', 'administracion')
+
+
+@login_required
+def listar_modos_pos(request):
+    """Sucursales con su terminal Transbank y en qué modo cobra cada una."""
+    from django.http import JsonResponse
+    from .models import Sucursal
+
+    try:
+        sucursal_sesion = int(
+            request.session.get('idSucursalActual')
+            or request.session.get('sucursalActual') or 0
+        ) or None
+    except (TypeError, ValueError):
+        sucursal_sesion = None
+
+    configs = {}
+    for c in ConfiguracionPOS.objects.select_related('sucursal').order_by('sucursal__alias', '-es_principal', 'id'):
+        configs.setdefault(c.sucursal_id, []).append(c)
+
+    filas = []
+    for suc in Sucursal.objects.order_by('alias'):
+        propias = configs.get(suc.id, [])
+        # Misma condición que el POS: si no la cumple, la caja cobra a mano.
+        integrada = next(
+            (c for c in propias if c.tipo_pos == TIPO_POS_SDK and c.activo), None
+        )
+        principal = integrada or (propias[0] if propias else None)
+        filas.append({
+            'sucursal_id': suc.id,
+            'sucursal': suc.alias or suc.nombre or f'Sucursal {suc.id}',
+            'modo': 'INTEGRADO' if integrada else 'MANUAL',
+            'config_id': principal.id if principal else None,
+            'terminal': (principal.nombre if principal else ''),
+            'tipo_pos': (principal.get_tipo_pos_display() if principal else ''),
+            'puerto': (principal.puerto_conexion if principal else ''),
+            'numero_serie': (principal.numero_serie or '') if principal else '',
+            'estado_conexion': (principal.estado_conexion or '') if principal else '',
+            'ultima_conexion': (
+                principal.ultima_conexion.strftime('%d/%m/%Y %H:%M')
+                if principal and principal.ultima_conexion else ''
+            ),
+            # Sin ninguna ConfiguracionPOS no se puede pasar a integrado desde
+            # aquí: falta el puerto del terminal, que se configura en la caja.
+            'puede_integrar': bool(propias),
+            'es_sesion': suc.id == sucursal_sesion,
+        })
+
+    return JsonResponse({
+        'success': True,
+        'sucursal_sesion_id': sucursal_sesion,
+        'puede_editar': _es_admin_pos(request.user),
+        'filas': filas,
+    })
+
+
+@login_required
+def cambiar_modo_pos(request):
+    """Alterna el modo de cobro de una sucursal (solo administradores)."""
+    import json
+    from django.http import JsonResponse
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
+    if not _es_admin_pos(request.user):
+        return JsonResponse({
+            'success': False,
+            'error': 'Solo un administrador puede cambiar el modo de cobro de una caja.',
+        }, status=403)
+
+    try:
+        datos = json.loads(request.body or '{}')
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'Datos inválidos'}, status=400)
+
+    try:
+        sucursal_id = int(datos.get('sucursal_id') or 0)
+    except (TypeError, ValueError):
+        sucursal_id = 0
+    modo = str(datos.get('modo') or '').strip().upper()
+
+    if not sucursal_id or modo not in ('INTEGRADO', 'MANUAL'):
+        return JsonResponse({'success': False, 'error': 'Sucursal o modo inválido'}, status=400)
+
+    propias = list(ConfiguracionPOS.objects.filter(sucursal_id=sucursal_id))
+    if not propias:
+        return JsonResponse({
+            'success': False,
+            'error': ('Esta sucursal no tiene ningún terminal configurado: primero hay que '
+                      'registrarlo con su puerto desde la caja.'),
+        }, status=400)
+
+    if modo == 'MANUAL':
+        # Basta con que ninguna quede activa como SDK: el POS deja de autoconectar
+        # y los cobros pasan por Débito/Crédito manual (F6/F7).
+        ConfiguracionPOS.objects.filter(
+            sucursal_id=sucursal_id, tipo_pos=TIPO_POS_SDK
+        ).update(activo=False)
+    else:
+        # Se promueve la principal (o la primera) a terminal SDK activo y se
+        # desactiva el resto, para que no haya dos candidatas a autoconectar.
+        elegida = next((c for c in propias if c.es_principal), propias[0])
+        ConfiguracionPOS.objects.filter(sucursal_id=sucursal_id).exclude(id=elegida.id).update(activo=False)
+        elegida.tipo_pos = TIPO_POS_SDK
+        elegida.activo = True
+        elegida.save(update_fields=['tipo_pos', 'activo'])
+
+    logger.info(
+        "Modo de cobro POS cambiado a %s en sucursal=%s por %s",
+        modo, sucursal_id, request.user.username,
+    )
+    return JsonResponse({'success': True, 'modo': modo})

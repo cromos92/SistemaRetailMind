@@ -1075,7 +1075,19 @@ def _aplicar_estado(transaccion, estado_nuevo, detalle='', payment=None,
     transaccion.estado_detalle = (detalle or '')[:120]
 
     if payment:
-        transaccion.payment_id = str(payment.get('id') or payment.get('payment_id') or transaccion.payment_id or '')
+        # Mercado Pago identifica el MISMO cobro con dos ids según de dónde
+        # venga: la Orders API devuelve un ULID (`PAY01M1S0Y7D2...`) y el
+        # webhook de topic=payment / `payments/search` devuelven el número que
+        # se ve en el panel y la app (`177422093000`). Antes se escribían los
+        # dos sobre `payment_id`, así que el último en llegar borraba al otro.
+        _id_pago = str(payment.get('id') or payment.get('payment_id') or '')
+        if _id_pago:
+            if _id_pago.isdigit():
+                transaccion.payment_id_mp = _id_pago[:40]
+                if not transaccion.payment_id:
+                    transaccion.payment_id = _id_pago[:60]
+            else:
+                transaccion.payment_id = _id_pago[:60]
         transaccion.metodo_pago_mp = str(payment.get('payment_type_id') or payment.get('payment_method_id')
                                          or (payment.get('payment_method') or {}).get('type')
                                          or (payment.get('payment_method') or {}).get('id')
@@ -1100,9 +1112,9 @@ def _aplicar_estado(transaccion, estado_nuevo, detalle='', payment=None,
                     transaccion.money_release_date = fecha
             except Exception:
                 pass
-        campos += ['payment_id', 'metodo_pago_mp', 'ultimos_4_digitos',
-                   'codigo_autorizacion', 'installments', 'monto_neto', 'fee_mp',
-                   'money_release_date']
+        campos += ['payment_id', 'payment_id_mp', 'metodo_pago_mp',
+                   'ultimos_4_digitos', 'codigo_autorizacion', 'installments',
+                   'monto_neto', 'fee_mp', 'money_release_date']
 
     if raw is not None:
         transaccion.raw_response = raw
