@@ -1318,18 +1318,17 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
 
 <script>
 // ========== CONFIGURACIÓN ZEBRA BROWSER PRINT ==========
-// Zebra Browser Print escucha en 9101 con TLS y en 9100 en claro.
-// Esta pagina se sirve por https en produccion y el navegador BLOQUEA por
-// mixed content cualquier fetch a http://localhost, asi que ahi SOLO sirve el
-// 9101. El 9100 queda para cuando se abre la pagina por http (desarrollo).
-// Antes esto era una constante fija al 9100 y por eso la impresion directa
-// nunca funciono desde https://retail.webappsolutions.cl.
-const ZEBRA_BASES = ["https://localhost:9101", "http://localhost:9100"];
+// Zebra Browser Print escucha en 9100 (HTTP, el modo por defecto de la app
+// de escritorio) y opcionalmente en 9101 (TLS, solo si el usuario configuro
+// un certificado). Chrome/Edge/Firefox tratan http://localhost como origen
+// seguro y NO lo bloquean por mixed content aunque la pagina sea https, asi
+// que 9100 funciona igual desde https://retail.webappsolutions.cl. Se prueba
+// primero por ser el puerto que casi todas las instalaciones tienen activo.
+const ZEBRA_BASES = ["http://localhost:9100", "https://localhost:9101"];
 let ZEBRA_URL = null;   // se resuelve al buscar la impresora
 
 async function resolverZebraBase() {
     for (const base of ZEBRA_BASES) {
-        if (window.location.protocol === 'https:' && base.startsWith('http://')) continue;
         try {
             const r = await fetch(base + '/available', {
                 method: 'GET',
