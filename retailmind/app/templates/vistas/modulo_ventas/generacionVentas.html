@@ -893,6 +893,7 @@
                         <label class="form-label" for="pagoMetodo">Método de Pago</label>
                         <input type="text" class="form-control" id="pagoMetodo" readonly tabindex="-1">
                     </div>
+                    <div class="pv-pago-col pv-pago-col-a">
                     <div class="pv-pago-hero">
                         <div class="pv-pago-saldo" id="montoSugerido"></div>
                         <label class="form-label" for="pagoMonto">Monto a registrar *</label>
@@ -916,6 +917,8 @@
                         </div>
                     </div>
                     <!-- Vuelto para efectivo (display block/none por JS en #campoVuelto y en cada #cardVuelto*) -->
+                    </div>
+                    <div class="pv-pago-col pv-pago-col-b">
                     <div class="pv-field" id="campoVuelto" style="display: none;">
                         <div class="pv-vuelto-card pv-vuelto-pos" id="cardVueltoPositivo" style="display:none;">
                             <div class="pv-vuelto-in">
@@ -972,6 +975,7 @@
                     <div class="pv-field">
                         <label class="form-label" for="pagoNotas">Notas</label>
                         <textarea class="form-control" id="pagoNotas" rows="1" placeholder="Observaciones del pago (opcional)"></textarea>
+                    </div>
                     </div>
                 </form>
             </div>
@@ -2651,6 +2655,72 @@ body .modal.pv-modal .qty-btn:focus-visible{outline:3px solid var(--nexo-accent)
 body .modal.pv-modal .qty-input.form-control{width:60px;min-width:0;height:var(--pv-ctrl);min-height:var(--pv-ctrl);margin:0;border:0;border-left:1px solid var(--nexo-gray-300);border-right:1px solid var(--nexo-gray-300);border-radius:0;background:#fff;text-align:center;font-weight:700;color:var(--nexo-text-primary);font-variant-numeric:tabular-nums;-moz-appearance:textfield;appearance:textfield}
 body .modal.pv-modal .qty-input::-webkit-outer-spin-button,body .modal.pv-modal .qty-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 body .modal.pv-modal .qty-input.form-control:focus{outline:none;border-color:var(--nexo-gray-300);box-shadow:inset 0 0 0 2px var(--nexo-primary)}
+
+/* ==================== PV · MODAL DE PAGO XL — el doble de ancho y en dos columnas ====================
+   Pedido 09-sep: "los modales de los metodos de pago hacer doble de grande y la letra tambien".
+   560 -> 1120px. Como el alto sigue siendo el limitante (609px de diálogo a 1366x633), el ancho extra
+   se reparte en dos columnas: así el contenido gasta MENOS alto y la tipografía puede crecer.
+   Selector `#modalPago` (0,4,0 con el prefijo) para no arrastrar a los otros seis modales. */
+body .modal.pv-modal .pv-dialog-pago{--vz-modal-width:min(1120px,94vw)}
+body .modal.pv-modal#modalPago .modal-title{font-size:calc(var(--pv-fs-xl) + 2px)}
+body .modal.pv-modal#modalPago .modal-header{min-height:64px}
+body .modal.pv-modal#modalPago .modal-header .btn-close{width:56px;height:56px;min-height:56px;flex:0 0 56px;background-size:24px 24px}
+body .modal.pv-modal#modalPago .pv-modal-ico{width:40px;height:40px;font-size:22px}
+body .modal.pv-modal#modalPago .pv-pago-metodo{min-height:44px;font-size:var(--pv-fs-xl)}
+body .modal.pv-modal#modalPago .modal-body{padding:18px 20px}
+
+/* Dos columnas: el hero (saldo + monto + chips) a la izquierda; los campos del método y las notas a la
+   derecha. Bajo 900px de diálogo vuelve a una sola columna. */
+body .modal.pv-modal#modalPago .pv-pago-col{display:flex;flex-direction:column;gap:14px;min-width:0}
+body .modal.pv-modal#modalPago .pv-pago-col > .pv-field{margin:0}
+@media (min-width:920px){
+  /* Dos CONTENEDORES, no items sueltos: con items sueltos el grid crea filas implícitas y, al ocultar
+     el JS un campo, quedaban huecos verticales en la columna derecha. */
+  body .modal.pv-modal#modalPago #formPago{display:grid;grid-template-columns:1fr 1fr;gap:14px 22px;align-items:start}
+  body .modal.pv-modal#modalPago #formPago > .visually-hidden{grid-column:1 / -1}
+}
+
+/* Tipografía y controles al doble de presencia */
+body .modal.pv-modal#modalPago .pv-pago-saldo{min-height:34px;margin-bottom:8px;font-size:calc(var(--pv-fs-xl) + 6px);font-weight:600;color:var(--nexo-text-primary)}
+body .modal.pv-modal#modalPago .form-label{font-size:var(--pv-fs-lg);margin-bottom:5px}
+body .modal.pv-modal#modalPago #pagoMonto{height:72px;min-height:72px;font-size:34px !important;font-weight:700} /* font-size: pos-kiosk L165/L811 lo fija con !important */
+body .modal.pv-modal#modalPago .pv-monto-group .input-group-text{min-height:72px;font-size:28px;padding:0 16px}
+body .modal.pv-modal#modalPago .pv-modal-hint{font-size:var(--pv-fs-base)}
+body .modal.pv-modal#modalPago .pv-modal-hint kbd{height:22px;font-size:var(--pv-fs-sm)}
+body .modal.pv-modal#modalPago .pv-denoms{gap:8px}
+body .modal.pv-modal#modalPago .denominacion-btn{height:60px;min-height:60px;padding:0 12px;font-size:var(--pv-fs-xl);border-width:3px}
+body .modal.pv-modal#modalPago .pv-vuelto-card{padding:0 16px}
+body .modal.pv-modal#modalPago .pv-vuelto-in{min-height:72px}
+body .modal.pv-modal#modalPago .pv-vuelto-lbl{font-size:var(--pv-fs-lg)}
+body .modal.pv-modal#modalPago .pv-vuelto-val{font-size:34px}
+body .modal.pv-modal#modalPago .pv-vuelto-in i{font-size:28px}
+body .modal.pv-modal#modalPago .pv-vuelto-desglose{font-size:var(--pv-fs-base)}
+body .modal.pv-modal#modalPago .form-control,
+body .modal.pv-modal#modalPago .form-select{height:56px;min-height:56px}
+body .modal.pv-modal#modalPago #pagoNotas{height:auto;min-height:56px;font-size:var(--pv-fs-lg)}
+body .modal.pv-modal#modalPago #pagoVoucher,
+body .modal.pv-modal#modalPago #pagoNumeroOrdenCompra{font-size:20px !important;font-weight:600} /* mismo motivo que #pagoMonto */
+body .modal.pv-modal#modalPago .pv-btn-inline{height:56px;min-height:56px;font-size:var(--pv-fs-lg);padding:0 18px}
+body .modal.pv-modal#modalPago #giftcardSaldoInfo{font-size:var(--pv-fs-lg)}
+/* Pie: los dos botones al doble de presencia */
+body .modal.pv-modal#modalPago .modal-footer{min-height:88px;padding:12px 20px}
+body .modal.pv-modal#modalPago .pv-modal-primary{height:64px;min-height:64px;min-width:260px;font-size:calc(var(--pv-fs-xl) + 2px) !important;padding:0 26px} /* font-size: gana al .btn del bloque legacy */
+body .modal.pv-modal#modalPago .pv-btn-ghost{height:64px;min-height:64px;font-size:var(--pv-fs-xl);padding:0 22px}
+body .modal.pv-modal#modalPago .modal-footer kbd{height:24px;font-size:var(--pv-fs-md)}
+
+/* A 633px de alto el diálogo mide ~609: se recorta un punto para que el pie no se vaya bajo el pliegue. */
+@media (max-height:700px){
+  body .modal.pv-modal#modalPago #pagoMonto{height:64px;min-height:64px;font-size:30px !important}
+  body .modal.pv-modal#modalPago .pv-monto-group .input-group-text{min-height:64px;font-size:24px}
+  body .modal.pv-modal#modalPago .denominacion-btn{height:52px;min-height:52px;font-size:var(--pv-fs-lg)}
+  body .modal.pv-modal#modalPago .pv-vuelto-in{min-height:60px}
+  body .modal.pv-modal#modalPago .pv-vuelto-val{font-size:28px}
+  body .modal.pv-modal#modalPago .form-control,
+  body .modal.pv-modal#modalPago .form-select{height:52px;min-height:52px}
+  body .modal.pv-modal#modalPago .modal-footer{min-height:80px}
+  body .modal.pv-modal#modalPago .pv-modal-primary,
+  body .modal.pv-modal#modalPago .pv-btn-ghost{height:58px;min-height:58px}
+}
 
 /* ==================== PV · PASO 2 / DASHBOARD — cliente y documento, dashboard, tickets de cambio, paso 4 (overhaul POS 15", 2026-09) ====================
    Todo `#pvApp …` (1,n,0) > `body.pos-kiosk …` (0,2,1). Nodos con display escrito por JS (#seccionBuscarRut #busquedaEmpresaSection

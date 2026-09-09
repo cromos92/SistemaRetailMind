@@ -1141,6 +1141,34 @@ input[type=number] { -moz-appearance: textfield; }
     font-size: 11px;
 }
 
+/* N° de operación en la lista: el dato que se cruza contra la cartola del adquirente.
+   Mono y a 12px para que se lea de un vistazo sin ensanchar la columna. */
+.op-lista {
+    display: block;              /* línea propia, DEBAJO del medio de pago */
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 15px;             /* el medio de pago va en 11px: el número es lo que se lee */
+    font-weight: 700;
+    letter-spacing: -.2px;
+    line-height: 1.25;
+    margin-top: 1px;
+    color: #212529;
+}
+.op-lista i { opacity: .5; margin-right: 2px; font-size: 12px; vertical-align: 1px; }
+.op-lista.op-mp { color: #0d6efd; }   /* Mercado Pago: el que se busca en su panel */
+.op-lista.op-pendiente { font-family: inherit; font-size: 11px; font-weight: 600; color: #adb5bd; font-style: italic; }
+.op-mas {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    color: #6c757d;
+    margin-left: 3px;
+    vertical-align: 2px;
+}
+
 /* ========== MODAL EDICIÓN DTE - CAMPOS BLOQUEADOS POR PERMISOS ========== */
 .campo-bloqueado {
     opacity: 0.55;
@@ -1537,6 +1565,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </td>
                 <td class="col-pago" title="${_tooltipPagos(doc)}">
                     <small class="text-muted pago-truncado">${doc.metodos_pago_str || 'Sin pagos'}</small>
+                    ${_numOperacionLista(doc)}
                 </td>
                 <td>
                     <span class="fw-medium">${formatearMoneda(doc.subtotal_bruto || doc.total)}</span>
@@ -1965,6 +1994,52 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /**
+     * N° de OPERACIÓN de un cobro. Ojo con Mercado Pago: el `voucher` de un cobro integrado guarda el
+     * id de la Orders API (ULID con prefijo PAY, p.ej. PAY01M23BTY8A6H5XJJT9J4DJP8ZZ), que NO es el
+     * número que muestran el panel y la app de MP y no sirve para cruzar contra la cartola. Ese número
+     * es `payment_id_mp` (numérico) y llega por el webhook o por /v1/payments/search.
+     *   · No-MP (Transbank, venta internet): el voucher SÍ es el comprobante.
+     *   · MP con payment_id_mp: ese es el número.
+     *   · MP registrado a mano: no hay transacción, el cajero tecleó el número y quedó en el voucher
+     *     (se distingue del ULID porque no empieza con PAY).
+     *   · MP integrado sin payment_id_mp: aún no sincroniza — se dice, NO se muestra el ULID.
+     */
+    function _numOperacionPago(p) {
+        const esMP = String(p.metodo || p.metodo_pago || '').toUpperCase().startsWith('MP_');
+        const voucher = (p.voucher || '').trim();
+        if (!esMP) return { num: voucher, mp: false, manual: false, pendiente: false };
+        const idMp = (p.payment_id_mp || '').trim();
+        if (idMp) return { num: idMp, mp: true, manual: false, pendiente: false };
+        if (voucher && !/^PAY/i.test(voucher)) return { num: voucher, mp: true, manual: true, pendiente: false };
+        return { num: '', mp: true, manual: false, pendiente: !!voucher };
+    }
+
+    /**
+     * N° de operación VISIBLE en la lista (antes solo vivía en el `title`, así que había que pasar
+     * el mouse por encima). Es el dato con el que se rastrea una venta contra la cartola del
+     * adquirente: el de Mercado Pago si el cobro fue integrado, y el voucher si se registró a mano.
+     * Con más de un cobro se muestra el primero con número y se indica cuántos faltan.
+     */
+    function _numOperacionLista(doc) {
+        const pagos = doc.pagos_raw || [];
+        const datos = pagos.map(_numOperacionPago);
+        const conNumero = datos.filter(d => d.num);
+        if (!conNumero.length) {
+            // Cobro MP integrado cuyo nº aún no llegó por webhook: se avisa en vez de mostrar el ULID.
+            return datos.some(d => d.pendiente)
+                ? '<span class="op-lista op-pendiente" title="El N° de operación de Mercado Pago aún no se sincroniza (llega por el webhook o con backfill_payment_id_mp)">sin N° aún</span>'
+                : '';
+        }
+        const d = conNumero[0];
+        const resto = conNumero.length > 1 ? `<span class="op-mas">+${conNumero.length - 1}</span>` : '';
+        const tit = d.mp
+            ? (d.manual ? 'N° de operación Mercado Pago (registrado a mano)' : 'N° de operación Mercado Pago')
+            : 'N° de voucher / pedido';
+        return `<span class="op-lista ${d.mp ? 'op-mp' : ''}" title="${tit}">`
+             + `<i class="ri-hashtag"></i>${escaparHtml(d.num)}</span>${resto}`;
+    }
+
+    /**
      * Tooltip de la columna Pago: además del medio, el N° de operación de cada
      * cobro (voucher Transbank / id de pago Mercado Pago). Es el dato que se
      * necesita para rastrear una venta contra la cartola del adquirente, y
@@ -1978,8 +2053,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const partes = [`${p.metodo_display || p.metodo || ''} ${formatearMoneda(p.monto || 0)}`];
             // El Nº de Mercado Pago es el que sirve para buscar en su panel;
             // el voucher de la Orders API se muestra solo si no hay otro.
-            if (p.payment_id_mp) partes.push(`N° MP ${p.payment_id_mp}`);
-            else if ((p.voucher || '').trim()) partes.push(`N° ${p.voucher.trim()}`);
+            const _op = _numOperacionPago(p);
+            if (_op.num) partes.push(`${_op.mp ? 'N° MP' : 'N°'} ${_op.num}${_op.manual ? ' (manual)' : ''}`);
+            else if (_op.pendiente) partes.push('N° MP pendiente de sincronizar');
             if (p.codigo_autorizacion) partes.push(`Aut ${p.codigo_autorizacion}`);
             if (p.ultimos_4_digitos) partes.push(`****${p.ultimos_4_digitos}`);
             return partes.join(' · ');
@@ -3524,8 +3600,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // cobro se registró a mano no hay transacción y el número quedó en el voucher. Para Transbank
         // el voucher es el del comprobante. Va en COLUMNA PROPIA y en mono: es el dato con el que se
         // rastrea una venta contra la cartola del adquirente.
-        const numOperacion = (p) => (p.payment_id_mp || '').trim() || (p.voucher || '').trim();
-        const tieneOperacion = pagos.some(p => numOperacion(p));
+        const numOperacion = (p) => _numOperacionPago(p).num;
+        const tieneOperacion = pagos.some(p => numOperacion(p) || _numOperacionPago(p).pendiente);
         // Los pagos no tienen fecha propia: heredan de `fecha_emision` del
         // DTE. Al exponerla aquí el usuario puede confirmar visualmente que
         // las fechas quedaron sincronizadas tras editar la fecha del DTE.
@@ -3551,18 +3627,21 @@ document.addEventListener('DOMContentLoaded', function() {
             totalPagos += pago.monto;
             const detalle = pago.tipo_tarjeta || '';
             const fechaPago = pago.fecha_pago ? formatearFecha(pago.fecha_pago) : '—';
-            const nOp = numOperacion(pago);
-            const esMP = String(pago.metodo || pago.metodo_pago || '').toUpperCase().startsWith('MP_');
-            // Cobro de MP registrado a mano: no tiene transacción en la API, así que se marca para que
-            // quien cuadra la caja sepa que el número lo tecleó el cajero.
-            const manual = esMP && !pago.payment_id_mp;
+            const opDato = _numOperacionPago(pago);
+            const nOp = opDato.num;
+            // Cobro de MP registrado a mano: el número lo tecleó el cajero (no hay transacción en la API).
+            const manual = opDato.manual;
 
             html += `
                 <tr>
                     <td style="padding:5px 8px;"><span class="badge bg-success" style="font-size:11px;">${pago.metodo_display}</span>${manual ? ' <span class="badge bg-warning text-dark" style="font-size:10px;">MANUAL</span>' : ''}</td>
                     ${tieneFecha ? `<td style="padding:5px 8px;" class="text-muted"><i class="ri-calendar-line me-1" style="opacity:.6;"></i>${fechaPago}</td>` : ''}
                     ${tieneDetalle ? `<td style="padding:5px 8px;" class="text-muted">${detalle || '—'}</td>` : ''}
-                    ${tieneOperacion ? `<td style="padding:5px 8px;">${nOp ? `<code style="font-size:13px;font-weight:600;color:#0d6efd;">${nOp}</code>` : '<span class="text-muted">—</span>'}</td>` : ''}
+                    ${tieneOperacion ? `<td style="padding:5px 8px;">${nOp
+                        ? `<code style="font-size:14px;font-weight:700;color:${opDato.mp ? '#0d6efd' : '#212529'};">${escaparHtml(nOp)}</code>`
+                        : (opDato.pendiente
+                            ? '<span class="text-muted" style="font-size:12px;" title="Llega por el webhook de Mercado Pago o con backfill_payment_id_mp">sin N° aún</span>'
+                            : '<span class="text-muted">—</span>')}</td>` : ''}
                     <td class="text-end fw-semibold" style="padding:5px 8px;">${formatearMoneda(pago.monto)}</td>
                 </tr>
             `;

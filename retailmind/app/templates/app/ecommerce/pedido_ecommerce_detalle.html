@@ -1459,7 +1459,7 @@ async function imprimirPedidoEcommerce(data) {
         numero_pedido_canal: '{{ pedido.numero_pedido_canal }}',
         cliente_nombre: '{{ pedido.cliente_nombre|escapejs }}',
         cliente_documento: '{{ pedido.cliente_documento|escapejs }}',
-        direccion_envio: '{{ pedido.direccion_envio|escapejs|truncatechars:80 }}',
+        direccion_envio: '{{ pedido.direccion_envio|truncatechars:80|escapejs }}',
         total: {{ pedido.total|floatformat:0 }},
         fecha: '{{ pedido.fecha_recepcion|date:"d/m/Y H:i" }}',
         ticket_correlativo: data.ticket_correlativo,
@@ -1527,7 +1527,7 @@ async function imprimirGuiaPreparacion() {
         numero_pedido_canal: '{{ pedido.numero_pedido_canal }}',
         cliente_nombre: '{{ pedido.cliente_nombre|escapejs }}',
         cliente_documento: '{{ pedido.cliente_documento|escapejs }}',
-        direccion_envio: '{{ pedido.direccion_envio|escapejs|truncatechars:80 }}',
+        direccion_envio: '{{ pedido.direccion_envio|truncatechars:80|escapejs }}',
         total: {{ pedido.total|floatformat:0 }},
         fecha: '{{ pedido.fecha_recepcion|date:"d/m/Y H:i" }}',
         sucursal: {
