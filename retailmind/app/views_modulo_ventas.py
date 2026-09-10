@@ -4308,6 +4308,66 @@ def registrar_pagos_ticket(request, correlativo):
                 'error_tipo': 'PROMO_INVALIDA',
                 'detalles': val_promo['errores'],
             }, status=400)
+        idx_promo_exentos = set(val_promo['lineas_ok'].keys())
+
+        # --- Validar descuentos por línea contra el límite del rol, o el del
+        # supervisor dueño del código dinámico de navbar si se usó uno. Sin
+        # este chequeo el % de descuento del payload no se re-validaba en el
+        # endpoint que realmente persiste las líneas (el modal ya validaba
+        # contraseña/código, pero solo del lado del cliente). Las líneas gratis
+        # de promo NxM quedan exentas: su descuento_unitario == precio es un
+        # 100% legítimo, no uno manual.
+        from .models import PermisoRol, RegistroAutorizacion
+        from django.db.models import Max as _Max
+
+        limite_rol_cajero = 0
+        rol_cajero = getattr(request.user, 'rol', None)
+        if rol_cajero:
+            _res_cajero = PermisoRol.objects.filter(rol=rol_cajero).aggregate(max_limite=_Max('limite_descuento_porcentaje'))
+            if _res_cajero['max_limite'] is not None:
+                limite_rol_cajero = float(_res_cajero['max_limite'])
+
+        _limites_codigo_cache = {}  # codigo -> límite del supervisor (o None si no es válido para este cajero)
+
+        for _idx, _item in enumerate(productos_payload):
+            if _idx in idx_promo_exentos:
+                continue  # línea gratis de promo NxM validada
+            _desc_u = int(_item.get('descuento_unitario', 0) or 0)
+            _precio_u = int(_item.get('precio_unitario', 0) or 0)
+            if _desc_u <= 0 or _precio_u <= 0:
+                continue
+            _porcentaje = (_desc_u / _precio_u) * 100
+            _limite_aplicable = limite_rol_cajero
+
+            _codigo_str = (_item.get('codigo_autorizacion_descuento') or '').strip()
+            if _codigo_str:
+                if _codigo_str not in _limites_codigo_cache:
+                    _limites_codigo_cache[_codigo_str] = None
+                    _registro = RegistroAutorizacion.objects.filter(
+                        codigo_usado__codigo=_codigo_str,
+                        usuario_solicitante=request.user,
+                        tipo_operacion='DESCUENTO_ESPECIAL',
+                        exitoso=True,
+                    ).select_related('codigo_usado__generado_por').order_by('-fecha_hora').first()
+                    if _registro and _registro.codigo_usado and _registro.codigo_usado.generado_por:
+                        _rol_sup = getattr(_registro.codigo_usado.generado_por, 'rol', None)
+                        if _rol_sup:
+                            _res_sup = PermisoRol.objects.filter(rol=_rol_sup).aggregate(max_limite=_Max('limite_descuento_porcentaje'))
+                            if _res_sup['max_limite'] is not None:
+                                _limites_codigo_cache[_codigo_str] = float(_res_sup['max_limite'])
+                if _limites_codigo_cache[_codigo_str] is not None:
+                    _limite_aplicable = _limites_codigo_cache[_codigo_str]
+
+            if _limite_aplicable == 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No tienes permisos para aplicar descuentos. Contacta a un supervisor.'
+                }, status=400)
+            if _porcentaje > _limite_aplicable:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'El descuento ({_porcentaje:.1f}%) excede el límite permitido ({_limite_aplicable}%). Producto: {_item.get("articulo", "")}'
+                }, status=400)
 
         ids_existentes_usados = set()
 
@@ -19704,14 +19764,31 @@ def validar_codigo_autorizacion(request):
         
         # Marcar el código como usado (un solo uso por código)
         codigo_obj.marcar_como_usado()
-        
+
+        # Para DESCUENTO_ESPECIAL (código de supervisor en el modal de descuento
+        # del POS) el límite aplicable es el del ROL del supervisor dueño del
+        # código, no el del cajero que lo ingresó.
+        limite_descuento_supervisor = None
+        if codigo_obj.generado_por:
+            from .models import PermisoRol
+            from django.db.models import Max
+            rol_supervisor = getattr(codigo_obj.generado_por, 'rol', None)
+            if rol_supervisor:
+                resultado_sup = PermisoRol.objects.filter(rol=rol_supervisor).aggregate(
+                    max_limite=Max('limite_descuento_porcentaje')
+                )
+                if resultado_sup['max_limite'] is not None:
+                    limite_descuento_supervisor = float(resultado_sup['max_limite'])
+
         return JsonResponse({
             'success': True,
             'mensaje': 'Código de autorización validado correctamente',
             'codigo': {
                 'codigo': codigo_obj.codigo,
                 'valido_hasta': codigo_obj.fecha_hora_fin.strftime('%H:%M'),
-                'supervisor': codigo_obj.generado_por.get_full_name() if codigo_obj.generado_por else None
+                'supervisor': codigo_obj.generado_por.get_full_name() if codigo_obj.generado_por else None,
+                'supervisor_id': codigo_obj.generado_por_id,
+                'limite_descuento': limite_descuento_supervisor,
             }
         })
         

@@ -1173,7 +1173,7 @@
 
 <!-- Modal Aplicar Descuento -->
 <div class="modal fade pv-modal pv-modal--warn" id="modalDescuento" tabindex="-1" aria-labelledby="modalDescuentoTitulo">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalDescuentoTitulo">
@@ -1272,14 +1272,40 @@
                     </div>
                 </div>
 
+                <!-- Método de autorización -->
+                <div class="pv-field">
+                    <span class="form-label" id="pvLblAuthMetodoProducto">Autorizar con</span>
+                    <div class="btn-group w-100 pv-btn-group" role="group" aria-labelledby="pvLblAuthMetodoProducto">
+                        <input type="radio" class="btn-check" name="authMetodoDescuentoProducto" id="authMetodoPasswordProducto" value="PASSWORD" checked onchange="toggleMetodoAutorizacionDescuento('Producto')">
+                        <label class="btn btn-outline-secondary" for="authMetodoPasswordProducto">
+                            <i class="ri-lock-password-line"></i> Mi contraseña
+                        </label>
+                        <input type="radio" class="btn-check" name="authMetodoDescuentoProducto" id="authMetodoCodigoProducto" value="CODIGO" onchange="toggleMetodoAutorizacionDescuento('Producto')">
+                        <label class="btn btn-outline-secondary" for="authMetodoCodigoProducto">
+                            <i class="ri-shield-check-line"></i> Código de supervisor
+                        </label>
+                    </div>
+                </div>
+
                 <!-- Contraseña de autorización -->
-                <div class="pv-field pv-auth">
+                <div class="pv-field pv-auth" id="bloquePasswordDescuentoProducto">
                     <label class="form-label" for="passwordDescuento">
                         <i class="ri-lock-password-line"></i> Contraseña de autorización
                     </label>
                     <input type="password" class="form-control pv-input-auth" id="passwordDescuento"
                            placeholder="Tu contraseña de inicio de sesión"
                            autocomplete="off">
+                </div>
+
+                <!-- Código dinámico del supervisor (navbar) -->
+                <div class="pv-field pv-auth" id="bloqueCodigoDescuentoProducto" style="display:none;">
+                    <label class="form-label" for="codigoDescuentoProducto">
+                        <i class="ri-shield-check-line"></i> Código del supervisor
+                    </label>
+                    <input type="text" class="form-control pv-input-auth" id="codigoDescuentoProducto"
+                           placeholder="Código de 6 dígitos de su navbar" maxlength="6" inputmode="numeric"
+                           autocomplete="off">
+                    <div class="pv-modal-hint">El supervisor dueño del código queda registrado como responsable del descuento y define su propio límite</div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -1308,12 +1334,18 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                {% if limite_descuento_rol and limite_descuento_rol > 0 %}
                 <!-- Franja única: límite del rol + autorización -->
+                {% if limite_descuento_rol and limite_descuento_rol > 0 %}
                 <div class="pv-modal-strip">
                     <i class="ri-information-line"></i>
                     <span>Límite de tu rol: <strong>{{ limite_descuento_rol|floatformat:-2 }} %</strong> · Requiere autorización · se reparte proporcionalmente al precio de cada producto</span>
                 </div>
+                {% else %}
+                <div class="pv-modal-strip pv-modal-strip--danger">
+                    <i class="ri-error-warning-line"></i>
+                    <span>Tu rol no tiene descuento propio asignado · pide el código de un supervisor para autorizar</span>
+                </div>
+                {% endif %}
 
                 <!-- Resumen actual de la venta -->
                 <div class="pv-stat-row">
@@ -1393,20 +1425,40 @@
                     </div>
                 </div>
 
+                <!-- Método de autorización -->
+                <div class="pv-field">
+                    <span class="form-label" id="pvLblAuthMetodoGlobal">Autorizar con</span>
+                    <div class="btn-group w-100 pv-btn-group" role="group" aria-labelledby="pvLblAuthMetodoGlobal">
+                        <input type="radio" class="btn-check" name="authMetodoDescuentoGlobal" id="authMetodoPasswordGlobal" value="PASSWORD" checked onchange="toggleMetodoAutorizacionDescuento('Global')">
+                        <label class="btn btn-outline-secondary" for="authMetodoPasswordGlobal">
+                            <i class="ri-lock-password-line"></i> Mi contraseña
+                        </label>
+                        <input type="radio" class="btn-check" name="authMetodoDescuentoGlobal" id="authMetodoCodigoGlobal" value="CODIGO" onchange="toggleMetodoAutorizacionDescuento('Global')">
+                        <label class="btn btn-outline-secondary" for="authMetodoCodigoGlobal">
+                            <i class="ri-shield-check-line"></i> Código de supervisor
+                        </label>
+                    </div>
+                </div>
+
                 <!-- Contraseña -->
-                <div class="pv-field pv-auth">
+                <div class="pv-field pv-auth" id="bloquePasswordDescuentoGlobal">
                     <label class="form-label" for="passwordDescuentoGlobal">
                         <i class="ri-lock-password-line"></i> Contraseña de autorización
                     </label>
                     <input type="password" class="form-control pv-input-auth" id="passwordDescuentoGlobal"
                            placeholder="Contraseña" autocomplete="off">
                 </div>
-                {% else %}
-                <div class="pv-modal-strip pv-modal-strip--danger">
-                    <i class="ri-error-warning-line"></i>
-                    <span>No tienes permiso para aplicar descuentos</span>
+
+                <!-- Código dinámico del supervisor (navbar) -->
+                <div class="pv-field pv-auth" id="bloqueCodigoDescuentoGlobal" style="display:none;">
+                    <label class="form-label" for="codigoDescuentoGlobal">
+                        <i class="ri-shield-check-line"></i> Código del supervisor
+                    </label>
+                    <input type="text" class="form-control pv-input-auth" id="codigoDescuentoGlobal"
+                           placeholder="Código de 6 dígitos de su navbar" maxlength="6" inputmode="numeric"
+                           autocomplete="off">
+                    <div class="pv-modal-hint">El supervisor dueño del código queda registrado como responsable del descuento y define su propio límite</div>
                 </div>
-                {% endif %}
             </div>
             <div class="modal-footer">
                 <div class="pv-foot-l">
@@ -2514,8 +2566,11 @@ body .modal.pv-modal .pv-btn-inline.btn-outline-primary:active{background:var(--
 body .modal.pv-modal .modal-footer{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;row-gap:6px;min-height:64px;padding:6px 16px;border-top:1px solid var(--nexo-gray-300);background:#fff}
 body .modal.pv-modal .modal-footer > *{margin:0}
 body .modal.pv-modal .pv-foot-l{display:flex;align-items:center;gap:8px;min-width:0}
-/* #modalDescuento tiene 3 acciones (Cancelar + Quitar + Aplicar): el diálogo de 500px las solapaba */
-body .modal.pv-modal#modalDescuento .modal-dialog{max-width:600px}
+/* modalDescuento y modalDescuentoGlobal estandarizados al mismo ancho: 3 acciones en el
+   footer (Cancelar + Quitar + Aplicar) y el bloque de método de autorización (clave o
+   código de supervisor) necesitan más espacio que el modal-lg por defecto */
+body .modal.pv-modal#modalDescuento .modal-dialog,
+body .modal.pv-modal#modalDescuentoGlobal .modal-dialog{max-width:760px}
 body .modal.pv-modal .modal-footer .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:var(--pv-ctrl);min-height:var(--pv-ctrl);margin:0;padding:0 16px;border-radius:var(--pv-radius);font-size:var(--pv-fs-base);font-weight:600;line-height:1;white-space:nowrap}
 body .modal.pv-modal .pv-btn-ghost{background:transparent;border:2px solid transparent;color:var(--nexo-gray-700)}
 body .modal.pv-modal .pv-btn-ghost:active{background:var(--nexo-gray-100);color:var(--nexo-text-primary)}
@@ -3255,6 +3310,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 stock: p.stock,
                 stock_actual: p.stock_actual,
                 usuario_descuento: p.usuario_descuento || null,
+                codigo_autorizacion_descuento: p.codigo_autorizacion_descuento || null,
                 fecha_descuento: p.fecha_descuento || null,
                 es_pendiente_despacho: p.es_pendiente_despacho || false,
                 cotizacion_item_id: p.cotizacion_item_id || null,
@@ -7956,6 +8012,16 @@ document.addEventListener('DOMContentLoaded', function() {
     let productoDescuentoIndex = null;
     const LIMITE_DESCUENTO_ROL = parseFloat('{{ limite_descuento_rol|default:"0" }}') || 0; // Límite de descuento por rol
 
+    // Alterna entre "Mi contraseña" y "Código de supervisor" en los modales de
+    // descuento (por producto y global). sufijo: 'Producto' | 'Global'.
+    function toggleMetodoAutorizacionDescuento(sufijo) {
+        const metodo = document.querySelector(`input[name="authMetodoDescuento${sufijo}"]:checked`)?.value || 'PASSWORD';
+        const bloquePassword = document.getElementById(`bloquePasswordDescuento${sufijo}`);
+        const bloqueCodigo = document.getElementById(`bloqueCodigoDescuento${sufijo}`);
+        if (bloquePassword) bloquePassword.style.display = metodo === 'PASSWORD' ? '' : 'none';
+        if (bloqueCodigo) bloqueCodigo.style.display = metodo === 'CODIGO' ? '' : 'none';
+    }
+
     function mostrarModalDescuento(index) {
         if (ticketActual && ticketActual.modulo_origen === 'CAMBIO_DEVOLUCION') {
             mostrarNotificacion('No se pueden aplicar descuentos en un ticket de cambio/devolución', 'warning');
@@ -7997,7 +8063,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // Limpiar campos
         document.getElementById('valorDescuentoProducto').value = '';
         document.getElementById('passwordDescuento').value = '';  // Limpiar contraseña
-        
+        document.getElementById('codigoDescuentoProducto').value = '';  // Limpiar código de supervisor
+        document.getElementById('authMetodoPasswordProducto').checked = true;
+        toggleMetodoAutorizacionDescuento('Producto');
+
         // Configurar listeners para cambio de tipo
         document.querySelectorAll('input[name="tipoDescuentoProducto"]').forEach(radio => {
             if (!radio.dataset.pvBound) {
@@ -8113,6 +8182,60 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Aplica el descuento ya autorizado (por contraseña propia o por código de
+    // supervisor) a una línea del ticket y refresca la UI. codigoUsado es null
+    // cuando se autorizó con contraseña propia; se guarda para que el backend
+    // pueda re-validar el límite del supervisor al finalizar la venta.
+    function aplicarDescuentoLineaProducto(producto, montoDescuento, precioOriginal, usuarioResponsable, codigoUsado) {
+        producto.descuento_unitario = montoDescuento;
+        producto.precio_original = precioOriginal;
+        producto.subtotal = (precioOriginal - montoDescuento) * producto.cantidad;
+        producto.usuario_descuento = usuarioResponsable;
+        producto.fecha_descuento = new Date().toISOString();
+        producto.codigo_autorizacion_descuento = codigoUsado;
+
+        recalcularTotalesTicket();
+        cargarProductosTicket(ticketActual.productos);
+        actualizarResumenVenta();
+
+        bootstrap.Modal.getInstance(document.getElementById('modalDescuento'))?.hide();
+        mostrarNotificacion(`Descuento de ${formatearMoneda(montoDescuento)} aplicado (${usuarioResponsable})`, 'success');
+        guardarEstadoPOS();
+
+        // Verificar si los pagos ahora exceden el nuevo total
+        const totalPagadoActual = pagosActuales.reduce((sum, p) => sum + (p.monto || 0), 0);
+        const nuevoTotal = ticketActual.totales?.total || 0;
+        if (totalPagadoActual > 0 && totalPagadoActual > nuevoTotal) {
+            const exceso = totalPagadoActual - nuevoTotal;
+            Swal.fire({
+                icon: 'warning',
+                title: 'Pagos Exceden el Nuevo Total',
+                html: `
+                    <div class="text-start">
+                        <p>Al aplicar el descuento, los pagos registrados ahora <strong>exceden</strong> el total de la venta.</p>
+                        <div class="d-flex justify-content-between mb-2 border-bottom pb-2">
+                            <span>Nuevo total:</span>
+                            <strong class="text-primary">${formatearMoneda(nuevoTotal)}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2 border-bottom pb-2">
+                            <span>Pagos registrados:</span>
+                            <strong class="text-danger">${formatearMoneda(totalPagadoActual)}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between bg-danger bg-opacity-10 rounded p-2">
+                            <span class="fw-bold text-danger">Exceso:</span>
+                            <strong class="text-danger fs-5">+${formatearMoneda(exceso)}</strong>
+                        </div>
+                        <p class="text-muted small mt-2 mb-0"><i class="ri-information-line"></i> Debe eliminar o ajustar los pagos antes de continuar.</p>
+                    </div>
+                `,
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#ffc107'
+            });
+        }
+
+        productoDescuentoIndex = null;
+    }
+
     async function confirmarDescuentoProducto() {
         if (productoDescuentoIndex === null || !ticketActual || !ticketActual.productos[productoDescuentoIndex]) {
             mostrarNotificacion('Error al aplicar descuento', 'error');
@@ -8123,9 +8246,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const precioOriginal = producto.precio_unitario || producto.precio;
         const tipoDescuento = document.querySelector('input[name="tipoDescuentoProducto"]:checked').value;
         const valorInput = parseFloat(document.getElementById('valorDescuentoProducto').value) || 0;
+        const metodoAuth = document.querySelector('input[name="authMetodoDescuentoProducto"]:checked')?.value || 'PASSWORD';
 
         let montoDescuento = 0;
-        let tipoDescuentoTexto = '';
 
         if (tipoDescuento === 'PORCENTAJE') {
             // OPCIÓN 1: Porcentaje
@@ -8133,14 +8256,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 mostrarNotificacion('El porcentaje debe estar entre 0 y 100', 'warning');
                 return;
             }
-            // Validar límite de descuento por rol
-            if (valorInput > LIMITE_DESCUENTO_ROL && LIMITE_DESCUENTO_ROL > 0) {
-                mostrarNotificacion(`❌ El porcentaje de descuento (${valorInput}%) excede el límite permitido para tu rol (${LIMITE_DESCUENTO_ROL}%)`, 'error');
-                return;
-            }
             montoDescuento = Math.round((precioOriginal * valorInput) / 100);
-            tipoDescuentoTexto = `${valorInput}%`;
-            
+
         } else if (tipoDescuento === 'MONTO') {
             // OPCIÓN 2: Monto de Descuento
             if (valorInput < 0 || valorInput > precioOriginal) {
@@ -8148,16 +8265,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             montoDescuento = Math.round(valorInput);
-            // Validar límite de descuento por rol (convertir monto a porcentaje)
-            const porcentajeDescuento = precioOriginal > 0 ? (montoDescuento / precioOriginal * 100) : 0;
-            if (porcentajeDescuento > LIMITE_DESCUENTO_ROL && LIMITE_DESCUENTO_ROL > 0) {
-                mostrarNotificacion(`❌ Este descuento equivale a ${porcentajeDescuento.toFixed(1)}%, excede el límite permitido para tu rol (${LIMITE_DESCUENTO_ROL}%)`, 'error');
-                return;
-            }
-            tipoDescuentoTexto = formatearMoneda(valorInput);
-            
+
         } else if (tipoDescuento === 'PRECIO_FINAL') {
-            // OPCIÓN 3: Precio Final (NUEVA)
+            // OPCIÓN 3: Precio Final
             if (valorInput < 0) {
                 mostrarNotificacion('El precio final no puede ser negativo', 'warning');
                 return;
@@ -8166,39 +8276,76 @@ document.addEventListener('DOMContentLoaded', function() {
                 mostrarNotificacion('El precio final no puede ser mayor al precio original', 'warning');
                 return;
             }
-            // Calcular descuento a partir del precio final deseado
             const precioFinalDeseado = Math.round(valorInput);
             montoDescuento = precioOriginal - precioFinalDeseado;
-            // Validar límite de descuento por rol (convertir a porcentaje)
-            const porcentajeDescuento = precioOriginal > 0 ? (montoDescuento / precioOriginal * 100) : 0;
-            if (porcentajeDescuento > LIMITE_DESCUENTO_ROL && LIMITE_DESCUENTO_ROL > 0) {
-                mostrarNotificacion(`❌ Este precio equivale a ${porcentajeDescuento.toFixed(1)}% de descuento, excede el límite permitido para tu rol (${LIMITE_DESCUENTO_ROL}%)`, 'error');
-                return;
-            }
-            tipoDescuentoTexto = `Precio final: ${formatearMoneda(precioFinalDeseado)}`;
         }
-        
+
         if (montoDescuento <= 0) {
             mostrarNotificacion('Ingrese un descuento válido (el precio final debe ser menor al original)', 'warning');
             return;
         }
-        
-        // Validar que el usuario tenga permisos para aplicar descuentos
-        if (LIMITE_DESCUENTO_ROL === 0) {
-            mostrarNotificacion('❌ No tienes permisos para aplicar descuentos. Contacta al administrador.', 'error');
+
+        // El % se valida contra el límite del rol una vez que sabemos quién autoriza:
+        // el propio usuario (contraseña) o el supervisor dueño del código.
+        const porcentajeDescuento = precioOriginal > 0 ? (montoDescuento / precioOriginal * 100) : 0;
+
+        if (metodoAuth === 'CODIGO') {
+            const codigo = document.getElementById('codigoDescuentoProducto').value.trim();
+            if (!codigo || codigo.length !== 6) {
+                mostrarNotificacion('Ingrese el código de 6 dígitos del supervisor', 'warning');
+                document.getElementById('codigoDescuentoProducto').focus();
+                return;
+            }
+            try {
+                const response = await fetch('/app/ventas/api/codigo-autorizacion/validar/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: JSON.stringify({ codigo: codigo, tipo_operacion: 'DESCUENTO_ESPECIAL' })
+                });
+                const data = await response.json();
+                if (!data.success) {
+                    mostrarNotificacion(`❌ ${data.error || 'Código inválido'}`, 'error');
+                    document.getElementById('codigoDescuentoProducto').value = '';
+                    document.getElementById('codigoDescuentoProducto').focus();
+                    return;
+                }
+                const limiteSupervisor = data.codigo?.limite_descuento ?? 0;
+                if (limiteSupervisor === 0) {
+                    mostrarNotificacion('❌ El supervisor del código no tiene permisos para aplicar descuentos', 'error');
+                    return;
+                }
+                if (porcentajeDescuento > limiteSupervisor) {
+                    mostrarNotificacion(`❌ Este descuento equivale a ${porcentajeDescuento.toFixed(1)}%, excede el límite del rol del supervisor (${limiteSupervisor}%)`, 'error');
+                    return;
+                }
+                aplicarDescuentoLineaProducto(producto, montoDescuento, precioOriginal, data.codigo?.supervisor || 'Supervisor', codigo);
+            } catch (error) {
+                console.error('Error validando código de autorización:', error);
+                mostrarNotificacion('Error al validar el código. Intente nuevamente.', 'error');
+            }
             return;
         }
 
-        // ========== OBTENER CONTRASEÑA DEL CAMPO DEL MODAL ==========
+        // Método: contraseña propia
+        if (LIMITE_DESCUENTO_ROL === 0) {
+            mostrarNotificacion('❌ No tienes permisos para aplicar descuentos. Usa "Código de supervisor" o contacta a un supervisor.', 'error');
+            return;
+        }
+        if (porcentajeDescuento > LIMITE_DESCUENTO_ROL) {
+            mostrarNotificacion(`❌ Este descuento equivale a ${porcentajeDescuento.toFixed(1)}%, excede el límite permitido para tu rol (${LIMITE_DESCUENTO_ROL}%). Usa "Código de supervisor" para superarlo.`, 'error');
+            return;
+        }
+
         const password = document.getElementById('passwordDescuento').value.trim();
-        
         if (!password) {
             mostrarNotificacion('Debe ingresar su contraseña para autorizar el descuento', 'warning');
             document.getElementById('passwordDescuento').focus();
             return;
         }
-        
-        // Validar contraseña con el backend
+
         try {
             const response = await fetch('/app/api/validar-password/', {
                 method: 'POST',
@@ -8210,65 +8357,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     password: password
                 })
             });
-            
+
             const data = await response.json();
-            
+
             if (!data.success) {
-                // Contraseña incorrecta
                 mostrarNotificacion('❌ Contraseña incorrecta. Intente nuevamente.', 'error');
                 document.getElementById('passwordDescuento').value = '';
                 document.getElementById('passwordDescuento').focus();
                 return;
             }
-            
-            // Aplicar descuento
-            producto.descuento_unitario = montoDescuento;
-            producto.precio_original = precioOriginal;
-            producto.subtotal = (precioOriginal - montoDescuento) * producto.cantidad;
-            producto.usuario_descuento = data.usuario;
-            producto.fecha_descuento = new Date().toISOString();
 
-            recalcularTotalesTicket();
-            cargarProductosTicket(ticketActual.productos);
-            actualizarResumenVenta();
+            aplicarDescuentoLineaProducto(producto, montoDescuento, precioOriginal, data.usuario, null);
 
-            bootstrap.Modal.getInstance(document.getElementById('modalDescuento'))?.hide();
-            mostrarNotificacion(`Descuento de ${formatearMoneda(montoDescuento)} aplicado (${data.usuario})`, 'success');
-            guardarEstadoPOS();
-            
-            // Verificar si los pagos ahora exceden el nuevo total
-            const totalPagadoActual = pagosActuales.reduce((sum, p) => sum + (p.monto || 0), 0);
-            const nuevoTotal = ticketActual.totales?.total || 0;
-            if (totalPagadoActual > 0 && totalPagadoActual > nuevoTotal) {
-                const exceso = totalPagadoActual - nuevoTotal;
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Pagos Exceden el Nuevo Total',
-                    html: `
-                        <div class="text-start">
-                            <p>Al aplicar el descuento, los pagos registrados ahora <strong>exceden</strong> el total de la venta.</p>
-                            <div class="d-flex justify-content-between mb-2 border-bottom pb-2">
-                                <span>Nuevo total:</span>
-                                <strong class="text-primary">${formatearMoneda(nuevoTotal)}</strong>
-                            </div>
-                            <div class="d-flex justify-content-between mb-2 border-bottom pb-2">
-                                <span>Pagos registrados:</span>
-                                <strong class="text-danger">${formatearMoneda(totalPagadoActual)}</strong>
-                            </div>
-                            <div class="d-flex justify-content-between bg-danger bg-opacity-10 rounded p-2">
-                                <span class="fw-bold text-danger">Exceso:</span>
-                                <strong class="text-danger fs-5">+${formatearMoneda(exceso)}</strong>
-                            </div>
-                            <p class="text-muted small mt-2 mb-0"><i class="ri-information-line"></i> Debe eliminar o ajustar los pagos antes de continuar.</p>
-                        </div>
-                    `,
-                    confirmButtonText: 'Entendido',
-                    confirmButtonColor: '#ffc107'
-                });
-            }
-            
-            productoDescuentoIndex = null;
-            
         } catch (error) {
             console.error('Error validando contraseña:', error);
             mostrarNotificacion('Error al validar la contraseña. Intente nuevamente.', 'error');
@@ -8288,6 +8388,7 @@ document.addEventListener('DOMContentLoaded', function() {
         producto.descuento_unitario = 0;
         producto.precio_original = 0;
         producto.subtotal = precioOriginal * producto.cantidad;
+        producto.codigo_autorizacion_descuento = null;
 
         // Recalcular totales
         recalcularTotalesTicket();
@@ -8316,10 +8417,8 @@ document.addEventListener('DOMContentLoaded', function() {
             mostrarNotificacion('No hay productos en el ticket', 'warning');
             return;
         }
-        if (LIMITE_DESCUENTO_ROL === 0) {
-            mostrarNotificacion('No tienes permisos para aplicar descuentos', 'error');
-            return;
-        }
+        // Nota: ya no bloqueamos la apertura del modal cuando LIMITE_DESCUENTO_ROL es 0:
+        // el cajero puede seguir usando el código de un supervisor para autorizar.
 
         const totales = ticketActual.totales || {};
         document.getElementById('descGlobalSubtotal').textContent = formatearMoneda(totales.subtotal || 0);
@@ -8328,6 +8427,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         document.getElementById('valorDescuentoGlobal').value = '';
         document.getElementById('passwordDescuentoGlobal').value = '';
+        document.getElementById('codigoDescuentoGlobal').value = '';
+        document.getElementById('authMetodoPasswordGlobal').checked = true;
+        toggleMetodoAutorizacionDescuento('Global');
         document.getElementById('descGlobalPorcentaje').checked = true;
 
         document.querySelectorAll('input[name="tipoDescuentoGlobal"]').forEach(radio => {
@@ -8452,13 +8554,32 @@ document.addEventListener('DOMContentLoaded', function() {
         return distribucion;
     }
 
+    // Aplica un descuento ya autorizado a la distribución completa de líneas.
+    // codigoUsado es null cuando se autorizó con contraseña propia.
+    function aplicarDescuentoGlobalADistribucion(productos, distribucion, montoDescuentoTotal, usuarioResponsable, codigoUsado) {
+        distribucion.forEach(d => {
+            const producto = productos[d.index];
+            const precioOriginal = producto.precio_unitario || producto.precio;
+            producto.descuento_unitario = d.dctoUnit;
+            producto.precio_original = precioOriginal;
+            producto.subtotal = (precioOriginal - d.dctoUnit) * producto.cantidad;
+            producto.usuario_descuento = usuarioResponsable;
+            producto.fecha_descuento = new Date().toISOString();
+            producto.codigo_autorizacion_descuento = codigoUsado;
+        });
+
+        recalcularTotalesTicket();
+        cargarProductosTicket(ticketActual.productos);
+        actualizarResumenVenta();
+
+        bootstrap.Modal.getInstance(document.getElementById('modalDescuentoGlobal'))?.hide();
+        mostrarNotificacion(`Descuento global de ${formatearMoneda(montoDescuentoTotal)} distribuido en ${productos.length} productos (${usuarioResponsable})`, 'success');
+        guardarEstadoPOS();
+    }
+
     async function confirmarDescuentoGlobal() {
         if (!ticketActual || !ticketActual.productos || ticketActual.productos.length === 0) {
             mostrarNotificacion('No hay productos para aplicar descuento', 'error');
-            return;
-        }
-        if (LIMITE_DESCUENTO_ROL === 0) {
-            mostrarNotificacion('No tienes permisos para aplicar descuentos', 'error');
             return;
         }
 
@@ -8466,6 +8587,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const tipoDesc = document.querySelector('input[name="tipoDescuentoGlobal"]:checked').value;
         const valorInput = parseFloat(document.getElementById('valorDescuentoGlobal').value) || 0;
         const subtotalBruto = productos.reduce((sum, p) => sum + ((p.precio_unitario || p.precio) * p.cantidad), 0);
+        const metodoAuth = document.querySelector('input[name="authMetodoDescuentoGlobal"]:checked')?.value || 'PASSWORD';
 
         let montoDescuentoTotal = 0;
         if (tipoDesc === 'PORCENTAJE') {
@@ -8484,9 +8606,57 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // El % se valida contra el límite del rol una vez que sabemos quién autoriza.
         const porcEquiv = subtotalBruto > 0 ? (montoDescuentoTotal / subtotalBruto * 100) : 0;
-        if (porcEquiv > LIMITE_DESCUENTO_ROL && LIMITE_DESCUENTO_ROL > 0) {
-            mostrarNotificacion(`El descuento equivale a ${porcEquiv.toFixed(1)}%, excede el límite de ${LIMITE_DESCUENTO_ROL}%`, 'error');
+
+        if (metodoAuth === 'CODIGO') {
+            const codigo = document.getElementById('codigoDescuentoGlobal').value.trim();
+            if (!codigo || codigo.length !== 6) {
+                mostrarNotificacion('Ingrese el código de 6 dígitos del supervisor', 'warning');
+                document.getElementById('codigoDescuentoGlobal').focus();
+                return;
+            }
+            try {
+                const response = await fetch('/app/ventas/api/codigo-autorizacion/validar/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: JSON.stringify({ codigo: codigo, tipo_operacion: 'DESCUENTO_ESPECIAL' })
+                });
+                const data = await response.json();
+                if (!data.success) {
+                    mostrarNotificacion(`❌ ${data.error || 'Código inválido'}`, 'error');
+                    document.getElementById('codigoDescuentoGlobal').value = '';
+                    document.getElementById('codigoDescuentoGlobal').focus();
+                    return;
+                }
+                const limiteSupervisor = data.codigo?.limite_descuento ?? 0;
+                if (limiteSupervisor === 0) {
+                    mostrarNotificacion('❌ El supervisor del código no tiene permisos para aplicar descuentos', 'error');
+                    return;
+                }
+                if (porcEquiv > limiteSupervisor) {
+                    mostrarNotificacion(`❌ El descuento equivale a ${porcEquiv.toFixed(1)}%, excede el límite del rol del supervisor (${limiteSupervisor}%)`, 'error');
+                    return;
+                }
+                const distribucion = calcularDistribucionDescuento(productos, montoDescuentoTotal, subtotalBruto);
+                aplicarDescuentoGlobalADistribucion(productos, distribucion, montoDescuentoTotal, data.codigo?.supervisor || 'Supervisor', codigo);
+            } catch (error) {
+                console.error('Error validando código de autorización:', error);
+                mostrarNotificacion('Error al validar el código. Intente nuevamente.', 'error');
+            }
+            return;
+        }
+
+        // Método: contraseña propia
+        if (LIMITE_DESCUENTO_ROL === 0) {
+            mostrarNotificacion('No tienes permisos para aplicar descuentos. Usa "Código de supervisor" o contacta a un supervisor.', 'error');
+            return;
+        }
+        if (porcEquiv > LIMITE_DESCUENTO_ROL) {
+            mostrarNotificacion(`El descuento equivale a ${porcEquiv.toFixed(1)}%, excede el límite de ${LIMITE_DESCUENTO_ROL}%. Usa "Código de supervisor" para superarlo.`, 'error');
             return;
         }
 
@@ -8514,25 +8684,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Aplicar distribución
             const distribucion = calcularDistribucionDescuento(productos, montoDescuentoTotal, subtotalBruto);
-            distribucion.forEach(d => {
-                const producto = productos[d.index];
-                const precioOriginal = producto.precio_unitario || producto.precio;
-                producto.descuento_unitario = d.dctoUnit;
-                producto.precio_original = precioOriginal;
-                producto.subtotal = (precioOriginal - d.dctoUnit) * producto.cantidad;
-                producto.usuario_descuento = data.usuario;
-                producto.fecha_descuento = new Date().toISOString();
-            });
-
-            recalcularTotalesTicket();
-            cargarProductosTicket(ticketActual.productos);
-            actualizarResumenVenta();
-
-            bootstrap.Modal.getInstance(document.getElementById('modalDescuentoGlobal'))?.hide();
-            mostrarNotificacion(`Descuento global de ${formatearMoneda(montoDescuentoTotal)} distribuido en ${productos.length} productos (${data.usuario})`, 'success');
-            guardarEstadoPOS();
+            aplicarDescuentoGlobalADistribucion(productos, distribucion, montoDescuentoTotal, data.usuario, null);
 
         } catch (error) {
             console.error('Error validando contraseña:', error);
@@ -8559,6 +8712,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     producto.descuento_unitario = 0;
                     producto.precio_original = 0;
                     producto.subtotal = precioOriginal * producto.cantidad;
+                    producto.codigo_autorizacion_descuento = null;
                 });
                 recalcularTotalesTicket();
                 cargarProductosTicket(ticketActual.productos);
@@ -8904,6 +9058,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 precio_original: precioOrig,
                 descuento_unitario: dcto,
                 subtotal: (p.subtotal != null && p.subtotal !== undefined) ? p.subtotal : ((precio - dcto) * qty),
+                codigo_autorizacion_descuento: p.codigo_autorizacion_descuento || null,
                 es_pendiente_despacho: p.es_pendiente_despacho || false,
                 cotizacion_item_id: p.cotizacion_item_id || null,
                 es_promo_nxm: p.es_promo_nxm || false,
