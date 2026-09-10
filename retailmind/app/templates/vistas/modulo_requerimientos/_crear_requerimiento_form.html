@@ -20,6 +20,7 @@ ve ningún mensaje.
         <input type="hidden" id="numero_factura_compra" name="numero_factura_compra">
         <input type="hidden" id="fecha_factura_compra" name="fecha_factura_compra">
         <input type="hidden" id="dte_compra_id" name="dte_compra_id">
+        <input type="hidden" id="proveedor_id" name="proveedor_id" value="">
 
         <!-- ══════════ PASO 1 · QUÉ PASÓ ══════════ -->
         <div class="req-paso activo" id="req-paso-1">
@@ -61,7 +62,7 @@ ve ningún mensaje.
             <div class="req-bloque" id="seccion-defecto" style="display:none;">
                 <h6 class="req-bloque-titulo"><i class="ri-error-warning-line text-danger"></i>Clasificación del defecto</h6>
                 <div class="row g-2">
-                    <div class="col-md-5">
+                    <div class="col-md-8">
                         <label class="form-label">Tipo de defecto</label>
                         <select class="form-select form-select-sm" id="subtipo_defecto" name="subtipo">
                             <option value="">Seleccione...</option>
@@ -74,25 +75,8 @@ ve ningún mensaje.
                             <option value="OTRO_DEFECTO">Otro</option>
                         </select>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Severidad</label>
-                        <select class="form-select form-select-sm" id="severidad_defecto" name="severidad_defecto">
-                            <option value="">Seleccione...</option>
-                            <option value="LEVE">Leve (estético)</option>
-                            <option value="MODERADO">Moderado</option>
-                            <option value="GRAVE">Grave (inutilizable)</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Condición</label>
-                        <select class="form-select form-select-sm" id="condicion_producto" name="condicion_producto">
-                            <option value="">Seleccione...</option>
-                            <option value="NUEVO_SIN_USO">Nuevo</option>
-                            <option value="USADO_POCO">Poco uso</option>
-                            <option value="USADO_NORMAL">Uso normal</option>
-                        </select>
-                    </div>
                 </div>
+                <div class="form-text mt-1" style="font-size:.72rem;">Severidad y condición del producto se registran más adelante, al revisar el caso.</div>
             </div>
 
             <div class="req-bloque" id="seccion-error-despacho" style="display:none;">
@@ -116,20 +100,6 @@ ve ningún mensaje.
                 </div>
             </div>
 
-            <div class="req-bloque" id="seccion-garantia" style="display:none;">
-                <h6 class="req-bloque-titulo"><i class="ri-shield-check-line text-info"></i>Garantía</h6>
-                <div class="row g-2">
-                    <div class="col-md-5">
-                        <label class="form-label">Condición del producto</label>
-                        <select class="form-select form-select-sm" id="condicion_producto_garantia" name="condicion_producto">
-                            <option value="">Seleccione...</option>
-                            <option value="NUEVO_SIN_USO">Nuevo</option>
-                            <option value="USADO_POCO">Poco uso</option>
-                            <option value="USADO_NORMAL">Uso normal</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <!-- ══════════ PASO 2 · PRODUCTO ══════════ -->
@@ -161,26 +131,29 @@ ve ningún mensaje.
                     </div>
                 </div>
 
-                <div class="row g-2 mt-1">
-                    <div class="col-md-4">
-                        <label class="form-label">Tipo de documento</label>
-                        <select class="form-select form-select-sm" id="tipo_documento_visible" onchange="document.getElementById('tipo_documento').value=this.value">
-                            <option value="">Sin documento</option>
-                            <option value="Boleta">Boleta</option>
-                            <option value="Factura">Factura</option>
-                            <option value="Guia">Guía de despacho</option>
-                            <option value="Ticket">Ticket interno</option>
-                        </select>
+                <details class="mt-2">
+                    <summary class="text-muted small" style="cursor:pointer;font-size:.75rem;">Detalle del documento (opcional)</summary>
+                    <div class="row g-2 mt-1">
+                        <div class="col-md-4">
+                            <label class="form-label">Tipo de documento</label>
+                            <select class="form-select form-select-sm" id="tipo_documento_visible" onchange="document.getElementById('tipo_documento').value=this.value">
+                                <option value="">Sin documento</option>
+                                <option value="Boleta">Boleta</option>
+                                <option value="Factura">Factura</option>
+                                <option value="Guia">Guía de despacho</option>
+                                <option value="Ticket">Ticket interno</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">N° documento</label>
+                            <input type="text" class="form-control form-control-sm" id="numero_boleta" name="numero_boleta" placeholder="N° boleta / factura">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Fecha de compra</label>
+                            <input type="date" class="form-control form-control-sm" id="fecha_compra" name="fecha_compra">
+                        </div>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">N° documento</label>
-                        <input type="text" class="form-control form-control-sm" id="numero_boleta" name="numero_boleta" placeholder="N° boleta / factura">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Fecha de compra</label>
-                        <input type="date" class="form-control form-control-sm" id="fecha_compra" name="fecha_compra">
-                    </div>
-                </div>
+                </details>
             </div>
 
             <div class="req-bloque">
@@ -199,42 +172,21 @@ ve ningún mensaje.
 
                 <div id="entrada-manual-producto">
                     <div class="row g-2">
-                        <div class="col-md-5">
+                        <div class="col-md-4">
                             <label class="form-label">SKU <span class="text-danger">*</span></label>
                             <div class="input-group input-group-sm">
                                 <input type="text" class="form-control" id="sku" name="sku" placeholder="SKU del producto">
                                 <button class="btn btn-outline-secondary" type="button" onclick="buscarProducto()" title="Buscar producto"><i class="ri-search-line"></i></button>
                             </div>
                         </div>
-                        <div class="col-md-7">
+                        <div class="col-md-6">
                             <label class="form-label">Producto <span class="text-danger">*</span></label>
                             <input type="text" class="form-control form-control-sm" id="nombre_producto" name="nombre_producto" placeholder="Nombre del producto">
                         </div>
-                    </div>
-                </div>
-
-                <div class="row g-2 mt-1">
-                    <div class="col-md-3">
-                        <label class="form-label">Cantidad <span class="text-danger">*</span></label>
-                        <input type="number" class="form-control form-control-sm" id="cantidad" name="cantidad" value="1" min="1" step="1">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Prioridad</label>
-                        <select class="form-select form-select-sm" id="prioridad" name="prioridad">
-                            <option value="BAJA">Baja</option>
-                            <option value="MEDIA" selected>Media</option>
-                            <option value="ALTA">Alta</option>
-                            <option value="URGENTE">Urgente</option>
-                        </select>
-                    </div>
-                    <div class="col-md-5">
-                        <label class="form-label">Proveedor <small class="text-muted">— lo confirma quien revise</small></label>
-                        <select class="form-select form-select-sm" id="proveedor_id" name="proveedor_id">
-                            <option value="">Se detecta automáticamente</option>
-                            {% for proveedor in proveedores %}
-                            <option value="{{ proveedor.id }}">{{ proveedor.nombre }}</option>
-                            {% endfor %}
-                        </select>
+                        <div class="col-md-2">
+                            <label class="form-label">Cantidad</label>
+                            <input type="number" class="form-control form-control-sm" id="cantidad" name="cantidad" value="1" min="1" step="1">
+                        </div>
                     </div>
                 </div>
                 <div id="aviso-proveedor-sugerido" class="alert alert-info border-0 py-1 px-2 mt-2 mb-0 small" style="display:none;"></div>

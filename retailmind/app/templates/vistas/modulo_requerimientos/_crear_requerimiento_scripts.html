@@ -111,7 +111,6 @@ function actualizarSeccionesCondicionales(tipo) {
     // Ocultar todas las secciones condicionales
     document.getElementById('seccion-defecto').style.display = 'none';
     document.getElementById('seccion-error-despacho').style.display = 'none';
-    document.getElementById('seccion-garantia').style.display = 'none';
 
     // Limpiar campos de subtipo para evitar enviar datos del tipo anterior
     document.getElementById('subtipo_defecto').value = '';
@@ -123,16 +122,10 @@ function actualizarSeccionesCondicionales(tipo) {
         // Deshabilitar el name del subtipo de error para que no se envie
         document.getElementById('subtipo_error').removeAttribute('name');
         document.getElementById('subtipo_defecto').setAttribute('name', 'subtipo');
-        document.getElementById('condicion_producto_garantia').removeAttribute('name');
-        document.getElementById('condicion_producto').setAttribute('name', 'condicion_producto');
     } else if (tipo === 'ERROR_DESPACHO') {
         document.getElementById('seccion-error-despacho').style.display = 'block';
         document.getElementById('subtipo_defecto').removeAttribute('name');
         document.getElementById('subtipo_error').setAttribute('name', 'subtipo');
-    } else if (tipo === 'GARANTIA') {
-        document.getElementById('seccion-garantia').style.display = 'block';
-        document.getElementById('condicion_producto').removeAttribute('name');
-        document.getElementById('condicion_producto_garantia').setAttribute('name', 'condicion_producto');
     }
 }
 
@@ -789,24 +782,9 @@ function guardarNuevoCliente() {
 
 // ========== INICIALIZACION ==========
 document.addEventListener('DOMContentLoaded', function() {
-    // Select2 lo carga el footer. `dropdownParent` es imprescindible dentro de
-    // un modal: si no, el desplegable se dibuja detrás del backdrop y no se
-    // puede escribir en el buscador.
-    if (window.jQuery && jQuery.fn.select2) {
-        const opciones = {
-            theme: 'bootstrap-5',
-            placeholder: 'Se detecta automáticamente',
-            allowClear: true,
-            language: {
-                noResults: function() { return 'No se encontraron proveedores'; },
-                searching: function() { return 'Buscando...'; }
-            }
-        };
-        const modal = document.getElementById('modalCrearRequerimiento');
-        if (modal) opciones.dropdownParent = jQuery(modal);
-        jQuery('#proveedor_id').select2(opciones);
-    }
-
+    // El proveedor ya no se elige a mano en el alta (input oculto, se
+    // autocompleta por sugerirProveedor() a partir del SKU) — sin select
+    // visible no hace falta inicializar Select2 aquí.
     irAPaso(1);
 });
 </script>

@@ -278,151 +278,159 @@
                      campos bloquean el envío, en vez de recorrer el formulario. -->
                 <div id="ed-checklist" class="mb-3"></div>
 
-                <h6 class="req-bloque-titulo">
-                    <i class="ri-building-line"></i>Proveedor y respaldo de compra
-                    <button type="button" class="btn btn-primary btn-sm ms-auto py-0 px-2" style="font-size:.72rem" onclick="alternarBuscadorCompras()">
-                        <i class="ri-search-2-line me-1"></i><span id="ed-btn-buscador-txt">Buscar la factura</span>
-                    </button>
-                </h6>
+                <div class="req-bloque">
+                    <h6 class="req-bloque-titulo">
+                        <i class="ri-building-line"></i>Proveedor y respaldo de compra
+                        <button type="button" class="btn btn-primary btn-sm ms-auto py-0 px-2" style="font-size:.72rem" onclick="alternarBuscadorCompras()">
+                            <i class="ri-search-2-line me-1"></i><span id="ed-btn-buscador-txt">Buscar la factura</span>
+                        </button>
+                    </h6>
 
-                <!-- Buscador de compras: panel EN LÍNEA, no un modal anidado.
-                     Bootstrap 5 no apila modales y el segundo backdrop deja la
-                     pantalla negra al cerrar. -->
-                <div id="ed-buscador-compras" class="req-resumen mb-3" style="display:none;">
-                    <ul class="nav nav-pills nav-sm mb-2" style="font-size:.75rem">
-                        <li class="nav-item"><a class="nav-link active py-1 px-2" href="javascript:void(0)"
-                            onclick="cambiarPestanaBuscador('producto', this)">Por producto</a></li>
-                        <li class="nav-item"><a class="nav-link py-1 px-2" href="javascript:void(0)"
-                            onclick="cambiarPestanaBuscador('numero', this)">Por N° de factura</a></li>
-                    </ul>
+                    <!-- Buscador de compras: panel EN LÍNEA, no un modal anidado.
+                         Bootstrap 5 no apila modales y el segundo backdrop deja la
+                         pantalla negra al cerrar. -->
+                    <div id="ed-buscador-compras" class="req-resumen mb-3" style="display:none;">
+                        <ul class="nav nav-pills nav-sm mb-2" style="font-size:.75rem">
+                            <li class="nav-item"><a class="nav-link active py-1 px-2" href="javascript:void(0)"
+                                onclick="cambiarPestanaBuscador('producto', this)">Por producto</a></li>
+                            <li class="nav-item"><a class="nav-link py-1 px-2" href="javascript:void(0)"
+                                onclick="cambiarPestanaBuscador('numero', this)">Por N° de factura</a></li>
+                        </ul>
 
-                    <div id="buscador-por-producto">
-                        <div class="input-group input-group-sm mb-2">
-                            <span class="input-group-text bg-white"><i class="ri-search-line"></i></span>
-                            <input type="text" class="form-control" id="ed-busqueda-compras"
-                                   placeholder="SKU o nombre del artículo (ej: 418284 o PLATAFORM)"
-                                   onkeydown="if(event.key==='Enter'){event.preventDefault();buscarCompras();}">
-                            <button class="btn btn-primary" type="button" onclick="buscarCompras()">Buscar</button>
+                        <div id="buscador-por-producto">
+                            <div class="input-group input-group-sm mb-2">
+                                <span class="input-group-text bg-white"><i class="ri-search-line"></i></span>
+                                <input type="text" class="form-control" id="ed-busqueda-compras"
+                                       placeholder="SKU o nombre del artículo (ej: 418284 o PLATAFORM)"
+                                       onkeydown="if(event.key==='Enter'){event.preventDefault();buscarCompras();}">
+                                <button class="btn btn-primary" type="button" onclick="buscarCompras()">Buscar</button>
+                            </div>
+                            <div class="text-muted mb-2" style="font-size:.7rem">
+                                <i class="ri-information-line me-1"></i>Busca en las líneas de las facturas de compra,
+                                en los lotes FIFO y en el kardex — incluidos los ingresos traídos del sistema anterior.
+                                Haz clic en una fila para usarla.
+                            </div>
                         </div>
-                        <div class="text-muted mb-2" style="font-size:.7rem">
-                            <i class="ri-information-line me-1"></i>Busca en las líneas de las facturas de compra,
-                            en los lotes FIFO y en el kardex — incluidos los ingresos traídos del sistema anterior.
-                            Haz clic en una fila para usarla.
+
+                        <div id="buscador-por-numero" style="display:none">
+                            <div class="input-group input-group-sm mb-2">
+                                <span class="input-group-text bg-white"><i class="ri-file-list-3-line"></i></span>
+                                <input type="text" class="form-control" id="ed-busqueda-numero" inputmode="numeric"
+                                       placeholder="N° de la factura de compra (ej: 84512)"
+                                       onkeydown="if(event.key==='Enter'){event.preventDefault();buscarPorNumeroFactura();}">
+                                <button class="btn btn-primary" type="button" onclick="buscarPorNumeroFactura()">Verificar</button>
+                            </div>
+                            <div class="text-muted mb-2" style="font-size:.7rem">
+                                <i class="ri-information-line me-1"></i>Si tienes la factura física, escribe su número:
+                                se comprueba contra el sistema y se completa solo el proveedor y la fecha.
+                            </div>
+                        </div>
+
+                        <div id="ed-resultado-compras" style="max-height:260px;overflow-y:auto"></div>
+                    </div>
+
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label small mb-0">Proveedor <span class="text-danger">*</span></label>
+                            <select class="form-select form-select-sm" id="ed-proveedor">
+                                <option value="">Sin asignar</option>
+                                {% for proveedor in proveedores %}
+                                <option value="{{ proveedor.id }}">{{ proveedor.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted" id="ed-proveedor-sugerido" style="font-size:.7rem"></small>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-0">N° factura de compra</label>
+                            <input type="text" class="form-control form-control-sm" id="ed-factura" placeholder="Ej: 84512">
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-0">Fecha factura</label>
+                            <input type="date" class="form-control form-control-sm" id="ed-fecha-factura">
                         </div>
                     </div>
+                </div>
 
-                    <div id="buscador-por-numero" style="display:none">
-                        <div class="input-group input-group-sm mb-2">
-                            <span class="input-group-text bg-white"><i class="ri-file-list-3-line"></i></span>
-                            <input type="text" class="form-control" id="ed-busqueda-numero" inputmode="numeric"
-                                   placeholder="N° de la factura de compra (ej: 84512)"
-                                   onkeydown="if(event.key==='Enter'){event.preventDefault();buscarPorNumeroFactura();}">
-                            <button class="btn btn-primary" type="button" onclick="buscarPorNumeroFactura()">Verificar</button>
+                <div class="req-bloque">
+                    <h6 class="req-bloque-titulo"><i class="ri-shopping-bag-line"></i>Producto y clasificación</h6>
+                    <div class="row g-2">
+                        <div class="col-4 col-md-2">
+                            <label class="form-label small mb-0">Cantidad</label>
+                            <input type="number" class="form-control form-control-sm" id="ed-cantidad" min="1" step="1">
                         </div>
-                        <div class="text-muted mb-2" style="font-size:.7rem">
-                            <i class="ri-information-line me-1"></i>Si tienes la factura física, escribe su número:
-                            se comprueba contra el sistema y se completa solo el proveedor y la fecha.
+                        <div class="col-8 col-md-3">
+                            <label class="form-label small mb-0">Prioridad</label>
+                            <select class="form-select form-select-sm" id="ed-prioridad">
+                                <option value="BAJA">Baja</option>
+                                <option value="MEDIA">Media</option>
+                                <option value="ALTA">Alta</option>
+                                <option value="URGENTE">Urgente</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-0">Severidad</label>
+                            <select class="form-select form-select-sm" id="ed-severidad">
+                                <option value="">Sin definir</option>
+                                <option value="LEVE">Leve — estético, no afecta el uso</option>
+                                <option value="MODERADO">Moderado — afecta el uso parcialmente</option>
+                                <option value="GRAVE">Grave — producto inutilizable</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small mb-0">Condición</label>
+                            <select class="form-select form-select-sm" id="ed-condicion">
+                                <option value="">Sin definir</option>
+                                <option value="NUEVO_SIN_USO">Nuevo sin uso</option>
+                                <option value="USADO_POCO">Usado poco tiempo</option>
+                                <option value="USADO_NORMAL">Uso normal</option>
+                            </select>
                         </div>
                     </div>
-
-                    <div id="ed-resultado-compras" style="max-height:260px;overflow-y:auto"></div>
                 </div>
 
-                <div class="row g-2 mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label small mb-0">Proveedor <span class="text-danger">*</span></label>
-                        <select class="form-select form-select-sm" id="ed-proveedor">
-                            <option value="">Sin asignar</option>
-                            {% for proveedor in proveedores %}
-                            <option value="{{ proveedor.id }}">{{ proveedor.nombre }}</option>
-                            {% endfor %}
-                        </select>
-                        <small class="text-muted" id="ed-proveedor-sugerido" style="font-size:.7rem"></small>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label small mb-0">N° factura de compra</label>
-                        <input type="text" class="form-control form-control-sm" id="ed-factura" placeholder="Ej: 84512">
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label small mb-0">Fecha factura</label>
-                        <input type="date" class="form-control form-control-sm" id="ed-fecha-factura">
-                    </div>
-                </div>
-
-                <h6 class="req-bloque-titulo"><i class="ri-shopping-bag-line"></i>Producto y clasificación</h6>
-                <div class="row g-2 mb-3">
-                    <div class="col-4 col-md-2">
-                        <label class="form-label small mb-0">Cantidad</label>
-                        <input type="number" class="form-control form-control-sm" id="ed-cantidad" min="1" step="1">
-                    </div>
-                    <div class="col-8 col-md-3">
-                        <label class="form-label small mb-0">Prioridad</label>
-                        <select class="form-select form-select-sm" id="ed-prioridad">
-                            <option value="BAJA">Baja</option>
-                            <option value="MEDIA">Media</option>
-                            <option value="ALTA">Alta</option>
-                            <option value="URGENTE">Urgente</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small mb-0">Severidad</label>
-                        <select class="form-select form-select-sm" id="ed-severidad">
-                            <option value="">Sin definir</option>
-                            <option value="LEVE">Leve — estético, no afecta el uso</option>
-                            <option value="MODERADO">Moderado — afecta el uso parcialmente</option>
-                            <option value="GRAVE">Grave — producto inutilizable</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small mb-0">Condición</label>
-                        <select class="form-select form-select-sm" id="ed-condicion">
-                            <option value="">Sin definir</option>
-                            <option value="NUEVO_SIN_USO">Nuevo sin uso</option>
-                            <option value="USADO_POCO">Usado poco tiempo</option>
-                            <option value="USADO_NORMAL">Uso normal</option>
-                        </select>
-                    </div>
-                </div>
-
-                <h6 class="req-bloque-titulo">
-                    <i class="ri-user-line"></i>Cliente
-                    <span class="badge bg-secondary ms-2" id="ed-badge-origen" style="font-size:.6rem"></span>
-                </h6>
-                <div class="row g-2 mb-3">
-                    <div class="col-md-3">
-                        <label class="form-label small mb-0">RUT</label>
-                        <div class="input-group input-group-sm">
-                            <input type="text" class="form-control" id="ed-cliente-rut" placeholder="12345678-9">
-                            <button class="btn btn-outline-info" type="button" onclick="buscarClienteEnEdicion()" title="Buscar en la ficha de clientes"><i class="ri-search-line"></i></button>
+                <div class="req-bloque">
+                    <h6 class="req-bloque-titulo">
+                        <i class="ri-user-line"></i>Cliente
+                        <span class="badge bg-secondary ms-2" id="ed-badge-origen" style="font-size:.6rem"></span>
+                    </h6>
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <label class="form-label small mb-0">RUT</label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" class="form-control" id="ed-cliente-rut" placeholder="12345678-9">
+                                <button class="btn btn-outline-info" type="button" onclick="buscarClienteEnEdicion()" title="Buscar en la ficha de clientes"><i class="ri-search-line"></i></button>
+                            </div>
+                            <small id="ed-rut-aviso" style="font-size:.68rem"></small>
                         </div>
-                        <small id="ed-rut-aviso" style="font-size:.68rem"></small>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small mb-0">Nombre</label>
-                        <input type="text" class="form-control form-control-sm" id="ed-cliente-nombre">
-                    </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label small mb-0">Teléfono</label>
-                        <input type="text" class="form-control form-control-sm" id="ed-cliente-telefono">
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label small mb-0">Email</label>
-                        <input type="email" class="form-control form-control-sm" id="ed-cliente-email">
+                        <div class="col-md-4">
+                            <label class="form-label small mb-0">Nombre</label>
+                            <input type="text" class="form-control form-control-sm" id="ed-cliente-nombre">
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="form-label small mb-0">Teléfono</label>
+                            <input type="text" class="form-control form-control-sm" id="ed-cliente-telefono">
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label small mb-0">Email</label>
+                            <input type="email" class="form-control form-control-sm" id="ed-cliente-email">
+                        </div>
                     </div>
                 </div>
 
-                <h6 class="req-bloque-titulo"><i class="ri-file-text-line"></i>Descripción</h6>
-                <div class="mb-2">
-                    <label class="form-label small mb-0">Motivo</label>
-                    <textarea class="form-control form-control-sm" id="ed-motivo" rows="2"></textarea>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label small mb-0">Detalle del problema</label>
-                    <textarea class="form-control form-control-sm" id="ed-descripcion" rows="2"></textarea>
-                </div>
-                <div class="mb-0" id="ed-bloque-notas">
-                    <label class="form-label small mb-0">Notas internas <small class="text-muted">(no se envían al proveedor)</small></label>
-                    <textarea class="form-control form-control-sm" id="ed-notas" rows="2"></textarea>
+                <div class="req-bloque mb-0">
+                    <h6 class="req-bloque-titulo"><i class="ri-file-text-line"></i>Descripción</h6>
+                    <div class="mb-2">
+                        <label class="form-label small mb-0">Motivo</label>
+                        <textarea class="form-control form-control-sm" id="ed-motivo" rows="2"></textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small mb-0">Detalle del problema</label>
+                        <textarea class="form-control form-control-sm" id="ed-descripcion" rows="2"></textarea>
+                    </div>
+                    <div class="mb-0" id="ed-bloque-notas">
+                        <label class="form-label small mb-0">Notas internas <small class="text-muted">(no se envían al proveedor)</small></label>
+                        <textarea class="form-control form-control-sm" id="ed-notas" rows="2"></textarea>
+                    </div>
                 </div>
             </div>
             <div class="req-modal-footer justify-content-end">
