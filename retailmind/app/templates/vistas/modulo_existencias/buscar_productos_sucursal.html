@@ -29,10 +29,12 @@ html, body,
     --np-primary-lt:    #E6F0FF;
     --np-success:       #00D4AA;
     --np-success-dk:    #00895A;
+    --np-success-lt:    #7CFFCD;
     --np-warning:       #FFB020;
     --np-warning-dk:    #8B5E00;
     --np-danger:        #FF4D4D;
     --np-danger-dk:     #CC0000;
+    --np-danger-lt:     #FF9999;
     --np-gray-900:      #1A1A2E;
     --np-gray-700:      #4A4A5A;
     --np-gray-500:      #8A8A9A;
@@ -51,9 +53,6 @@ html, body,
     --pos-font-sm:      0.8125rem;
     --pos-font-xs:      0.75rem;
 }
-
-/* ===== Fullscreen loader ===== */
-#fullscreenLoader { backdrop-filter: blur(4px); }
 
 /* ===== Layout outer ===== */
 .pos-wrap {
@@ -200,6 +199,33 @@ kbd.sc {
     display: flex;
     align-items: center;
     gap: 0.25rem;
+}
+
+/* Switch "Con stock": el gráfico se mantiene compacto, pero la fila+label
+   completa es el target táctil real (>=44px), no solo el switch. */
+.pos-switch-row {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+}
+.pos-switch-input {
+    width: 2.5rem;
+    height: 1.25rem;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.pos-switch-label {
+    font-size: .8125rem;
+    cursor: pointer;
+    color: var(--np-gray-700);
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: .5rem 0;
+    margin-left: .25rem;
+}
+@media (pointer: coarse) {
+    .pos-switch-input { width: 2.75rem; height: 1.5rem; }
 }
 
 /* Select2 NEXO */
@@ -454,7 +480,8 @@ kbd.sc {
 }
 
 /* Column sizing */
-.tc-foto  { width: 86px; min-width: 86px; max-width: 86px; padding: 6px !important; text-align: center; }
+.tc-foto  { width: 86px; min-width: 86px; max-width: 86px; text-align: center; }
+.pos-table tbody td.tc-foto { padding: 6px; }
 .tc-foto img.producto-portada-img { width: 72px; height: 72px; border-radius: 8px; object-fit: cover; background: var(--np-gray-100, #F5F5F7); border: 1px solid var(--np-gray-300, #D1D1D9); }
 /* Sin drag nativo de imagen: rompía el drag-to-scroll al partir sobre la foto */
 .producto-portada-img { -webkit-user-drag: none; }
@@ -463,12 +490,12 @@ kbd.sc {
 .tc-attr  { min-width: 80px;  text-align: center; }
 .tc-clasif{ min-width: 150px; max-width: 220px; }
 .cls-wrap { display:flex; flex-direction:column; gap:3px; align-items:flex-start; }
-.cls-cat  { background:#e3f4f8; color:#0b7285; border-radius:6px; padding:1px 7px; font-size:.72rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px; }
-.cls-esp  { background:#f1ebfd; color:#6b3fd4; border-radius:6px; padding:1px 6px; font-size:.7rem; font-weight:700; display:inline-block; margin:1px 1px 0 0; }
-.cls-none { color:#9aa; font-size:.7rem; font-style:italic; }
+.cls-cat  { background:var(--np-primary-lt); color:var(--np-primary); border-radius:6px; padding:1px 7px; font-size:.72rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px; }
+.cls-esp  { background:rgba(108,92,231,.12); color:#6C5CE7; border-radius:6px; padding:1px 6px; font-size:.7rem; font-weight:700; display:inline-block; margin:1px 1px 0 0; }
+.cls-none { color:var(--np-gray-500); font-size:.7rem; font-style:italic; }
 .pos-chip { border:1px solid #cdd2e0; background:#fff; border-radius:999px; padding:4px 12px; font-size:.78rem; cursor:pointer; color:#334; display:inline-flex; align-items:center; gap:5px; }
-.pos-chip:hover { border-color:#8146e0; color:#6b3fd4; }
-.pos-chip.active { background:#f1ebfd; border-color:#8146e0; color:#6b3fd4; font-weight:700; }
+.pos-chip:hover { border-color:#6C5CE7; color:#6C5CE7; }
+.pos-chip.active { background:rgba(108,92,231,.12); border-color:#6C5CE7; color:#6C5CE7; font-weight:700; }
 .tc-talla { min-width: 130px; text-align: center; }
 .tc-stock { min-width: 64px;  text-align: center; }
 .tc-price { min-width: 95px;  text-align: right; }
@@ -532,13 +559,18 @@ kbd.sc {
     border-radius: 6px;
     padding: 2px 5px;
     min-width: 28px;
-    cursor: pointer;
     transition: all var(--np-t);
     line-height: 1.2;
 }
-.talla-chip:hover {
-    background: var(--np-primary-lt);
-    border-color: var(--np-primary);
+/* No tiene click propio (abre el mismo modal que el resto de la fila): en
+   touch, bajo 44px, no debe parecer un target aparte — solo se ve "tocable"
+   con mouse real. */
+@media (hover: hover) {
+    .talla-chip { cursor: pointer; }
+    .talla-chip:hover {
+        background: var(--np-primary-lt);
+        border-color: var(--np-primary);
+    }
 }
 .talla-chip .tc-t {
     font-size: 0.625rem;
@@ -586,6 +618,7 @@ kbd.sc {
     text-transform: uppercase;
     letter-spacing: .4px;
 }
+.tc-price > div { align-items: flex-end; }
 
 /* Sucursal badge */
 .suc-badge {
@@ -739,18 +772,6 @@ kbd.sc {
     margin-bottom: 1rem;
 }
 .modal-prod-hdr { display: flex; align-items: center; gap: .875rem; margin-bottom: .75rem; }
-.modal-prod-ico {
-    width: 48px;
-    height: 48px;
-    background: linear-gradient(135deg, var(--np-primary) 0%, var(--np-primary-dk) 100%);
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-size: 1.25rem;
-    flex-shrink: 0;
-}
 .modal-prod-name { font-size: 1.0625rem; font-weight: 700; color: var(--np-gray-900); margin: 0 0 .2rem; }
 .modal-prod-desc { font-size: .875rem; color: var(--np-gray-500); margin: 0; }
 
@@ -836,8 +857,8 @@ kbd.sc {
 }
 .ms-lbl { font-size: .65rem; text-transform: uppercase; letter-spacing: .5px; opacity: .8; margin-bottom: .15rem; }
 .ms-val { font-size: 1.375rem; font-weight: 700; }
-.ms-val.g { color: #7CFFCD; }
-.ms-val.r { color: #FF9999; }
+.ms-val.g { color: var(--np-success-lt); }
+.ms-val.r { color: var(--np-danger-lt); }
 
 /* Nexo badges */
 .nexo-badge-ok  { display:inline-flex;align-items:center;gap:.3rem;background:rgba(0,212,170,.14);color:var(--np-success-dk);border:1px solid rgba(0,212,170,.3);border-radius:9999px;font-size:.6875rem;font-weight:600;padding:.2rem .55rem; }
@@ -863,6 +884,17 @@ kbd.sc {
     .talla-chip .tc-t { font-size: .5625rem; }
     .talla-chip .tc-s { font-size: .5rem; }
 }
+/* ===== POS 15" corto (1366×768 / 1280×800 / 1024×768): compactar cabecera
+   y filtros para dejarle más alto real al scroll de la tabla — mismo
+   criterio de altura que ticket_venta.html. ===== */
+@media (max-height: 800px) {
+    .pos-wrap { padding: 0.4rem 0.625rem 0.5rem; gap: 0.375rem; }
+    .pos-shortcuts { display: none; }
+    .pos-search-row { padding: 0.45rem 0.75rem; }
+    .pos-filters-body { padding: 0.45rem 0.75rem 0.55rem; }
+    .pos-results-bar { padding: 0.4rem 0.75rem; }
+}
+
 /* ===== Vista tarjeta (tablet vertical / móvil): la tabla se vuelve cards ===== */
 @media screen and (max-width: 767.98px) {
     .pos-search-row { flex-wrap: wrap; }
@@ -940,7 +972,7 @@ kbd.sc {
         letter-spacing: .4px;
         margin-bottom: .15rem;
     }
-    .tc-price > div { align-items: flex-start !important; }
+    .tc-price > div { align-items: flex-start; }
     .tc-act .d-flex { flex-direction: row !important; }
     .tc-act .btn-detalle { flex: 1; justify-content: center; }
     /* Sin overflow horizontal en cards: fuera sombras y hint */
@@ -956,7 +988,7 @@ kbd.sc {
     .pos-search-input { min-height: 52px; font-size: 1.0625rem; }
     .pos-btn { min-height: 52px; }
     .pos-btn-icon { min-width: 52px; }
-    .pos-chip { min-height: 42px; padding: 8px 16px; font-size: .875rem; }
+    .pos-chip { min-height: 44px; padding: 8px 16px; font-size: .875rem; }
     .pos-filters-body .form-select { min-height: 46px; font-size: .9375rem; }
     .select2-container--default .select2-selection--single { height: 46px !important; }
     .select2-container--default .select2-selection--single .select2-selection__rendered { line-height: 44px !important; font-size: .875rem !important; }
@@ -980,6 +1012,11 @@ kbd.sc {
     .btn-detalle:active { transform: scale(.96); }
     .pos-btn:active { transform: scale(.97); }
     .pos-pg-btn:active { background: var(--np-primary); border-color: var(--np-primary); color: #fff; }
+    /* Resto de :hover que queda pegado tras un tap (sin equivalente :active
+       propio más arriba): se neutraliza al estado base. */
+    .pos-chip:hover:not(.active) { border-color: #cdd2e0; color: #334; }
+    .talla-chip:hover { background: var(--np-gray-100); border-color: var(--np-gray-200); }
+    .stock-badge:hover { transform: none; }
     .pos-table-wrap::-webkit-scrollbar, #mtTablaWrap::-webkit-scrollbar { width: 14px; height: 14px; }
 }
 
@@ -989,15 +1026,6 @@ kbd.sc {
 }
 </style>
 
-<!-- Loader -->
-<div id="fullscreenLoader" style="display:none;position:fixed;z-index:1060;top:0;left:0;width:100%;height:100%;background:rgba(26,26,46,.35);text-align:center;">
-    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:2rem 3rem;border-radius:20px;box-shadow:0 20px 60px rgba(64,81,137,.35);">
-        <div class="pos-spinner" style="margin:0 auto 1rem;"></div>
-        <p class="mb-0 fw-bold" style="color:var(--np-primary);">Buscando productos...</p>
-        <small class="text-muted">Por favor espera un momento</small>
-    </div>
-</div>
-
 {% comment %} menu.html ya abre <div class="main-content">; anidar otro duplicaba el
    margin-left:250px del layout. Como el resto de los modulos, solo .page-content. {% endcomment %}
     <div class="page-content">
@@ -1006,10 +1034,10 @@ kbd.sc {
 
             <!-- ===== HEADER ===== -->
             <div class="pos-page-header">
-                <h1 class="pos-page-title">
+                <h5 class="pos-page-title">
                     <i class="bi bi-search"></i>
                     Búsqueda de Productos
-                </h1>
+                </h5>
                 <div class="pos-shortcuts">
                     <kbd class="sc">F3</kbd> Enfocar búsqueda &nbsp;·&nbsp;
                     <kbd class="sc">Esc</kbd> Limpiar
@@ -1025,6 +1053,7 @@ kbd.sc {
                         <div class="pos-search-wrap">
                             <i class="bi bi-search ico"></i>
                             <input type="text" class="pos-search-input" id="search_input" name="search"
+                                   aria-label="Buscar productos"
                                    placeholder="Buscar por artículo, SKU, descripción, marca, color..."
                                    autocomplete="off" autocorrect="off" spellcheck="false">
                         </div>
@@ -1032,7 +1061,8 @@ kbd.sc {
                             <i class="bi bi-search"></i>
                             Buscar
                         </button>
-                        <button type="button" class="pos-btn pos-btn-outline" id="btnToggleFiltros">
+                        <button type="button" class="pos-btn pos-btn-outline" id="btnToggleFiltros"
+                                aria-expanded="false" aria-controls="advancedFilters">
                             <i class="bi bi-funnel"></i>
                             Filtros
                             <i class="bi bi-chevron-down" id="filtrosChevron" style="font-size:.75rem;transition:transform .2s;"></i>
@@ -1047,8 +1077,8 @@ kbd.sc {
                         <div class="pos-filters-body">
                             <div class="row g-2">
                                 <div class="col-xl-2 col-lg-3 col-md-4 col-6">
-                                    <label class="filter-label"><i class="bi bi-building"></i> Sucursal</label>
-                                    <select class="form-select form-select-sm" id="sucursal_select" name="sucursal_id">
+                                    <label class="filter-label" for="sucursal_select"><i class="bi bi-building"></i> Sucursal</label>
+                                    <select class="form-select form-select-sm" id="sucursal_select" name="sucursal_id" aria-label="Sucursal">
                                         <option value="">Todas</option>
                                         {% for sucursal in sucursales %}
                                         <option value="{{ sucursal.id }}">{{ sucursal.alias }}</option>
@@ -1056,8 +1086,8 @@ kbd.sc {
                                     </select>
                                 </div>
                                 <div class="col-xl-2 col-lg-3 col-md-4 col-6">
-                                    <label class="filter-label"><i class="bi bi-award"></i> Marca</label>
-                                    <select class="form-select form-select-sm" id="marca_select" name="atributo1_id">
+                                    <label class="filter-label" for="marca_select"><i class="bi bi-award"></i> Marca</label>
+                                    <select class="form-select form-select-sm" id="marca_select" name="atributo1_id" aria-label="Marca">
                                         <option value="">Todas</option>
                                         {% for atributo in atributos %}
                                             {% if atributo.nombre == 'Marca' %}
@@ -1069,8 +1099,8 @@ kbd.sc {
                                     </select>
                                 </div>
                                 <div class="col-xl-2 col-lg-3 col-md-4 col-6">
-                                    <label class="filter-label"><i class="bi bi-palette"></i> Color</label>
-                                    <select class="form-select form-select-sm" id="color_select" name="atributo2_id">
+                                    <label class="filter-label" for="color_select"><i class="bi bi-palette"></i> Color</label>
+                                    <select class="form-select form-select-sm" id="color_select" name="atributo2_id" aria-label="Color">
                                         <option value="">Todos</option>
                                         {% for atributo in atributos %}
                                             {% if atributo.nombre == 'Color' %}
@@ -1082,8 +1112,8 @@ kbd.sc {
                                     </select>
                                 </div>
                                 <div class="col-xl-2 col-lg-3 col-md-4 col-6">
-                                    <label class="filter-label"><i class="bi bi-person"></i> Género</label>
-                                    <select class="form-select form-select-sm" id="genero_select" name="atributo3_id">
+                                    <label class="filter-label" for="genero_select"><i class="bi bi-person"></i> Género</label>
+                                    <select class="form-select form-select-sm" id="genero_select" name="atributo3_id" aria-label="Género">
                                         <option value="">Todos</option>
                                         {% for atributo in atributos %}
                                             {% if atributo.nombre == 'Género' %}
@@ -1097,8 +1127,8 @@ kbd.sc {
                                     </select>
                                 </div>
                                 <div class="col-xl-2 col-lg-3 col-md-4 col-6">
-                                    <label class="filter-label"><i class="bi bi-tag"></i> Categoría</label>
-                                    <select class="form-select form-select-sm" id="categoria_select" name="categoria_id">
+                                    <label class="filter-label" for="categoria_select"><i class="bi bi-tag"></i> Categoría</label>
+                                    <select class="form-select form-select-sm" id="categoria_select" name="categoria_id" aria-label="Categoría">
                                         <option value="">Todas</option>
                                         {% for categoria in categorias %}
                                         <option value="{{ categoria.id }}">{{ categoria.nombre }}</option>
@@ -1106,8 +1136,8 @@ kbd.sc {
                                     </select>
                                 </div>
                                 <div class="col-xl-2 col-lg-3 col-md-4 col-6">
-                                    <label class="filter-label"><i class="bi bi-tags"></i> Especialidad</label>
-                                    <select class="form-select form-select-sm" id="especialidad_select" name="especialidad_id">
+                                    <label class="filter-label" for="especialidad_select"><i class="bi bi-tags"></i> Especialidad</label>
+                                    <select class="form-select form-select-sm" id="especialidad_select" name="especialidad_id" aria-label="Especialidad">
                                         <option value="">Todas</option>
                                         {% for esp in especialidades %}
                                         <option value="{{ esp.id }}" data-valor="{{ esp.valor }}">{{ esp.valor }}</option>
@@ -1116,11 +1146,9 @@ kbd.sc {
                                 </div>
                                 <div class="col-xl-2 col-lg-3 col-md-4 col-6">
                                     <label class="filter-label"><i class="bi bi-boxes"></i> Stock</label>
-                                    <div class="form-check form-switch" style="padding-top:.375rem;">
-                                        <input class="form-check-input" type="checkbox" id="solo_con_stock" name="solo_con_stock"
-                                               style="width:2.5rem;height:1.25rem;cursor:pointer;">
-                                        <label class="form-check-label" for="solo_con_stock"
-                                               style="font-size:.8125rem;cursor:pointer;color:var(--np-gray-700);">
+                                    <div class="form-check form-switch pos-switch-row">
+                                        <input class="form-check-input pos-switch-input" type="checkbox" id="solo_con_stock" name="solo_con_stock">
+                                        <label class="form-check-label pos-switch-label" for="solo_con_stock">
                                             Con stock
                                         </label>
                                     </div>
@@ -1128,10 +1156,10 @@ kbd.sc {
                                 <div class="col-12">
                                     <label class="filter-label"><i class="bi bi-lightbulb"></i> Filtros inteligentes</label>
                                     <div class="d-flex gap-2 flex-wrap">
-                                        <button type="button" class="pos-chip" id="chipSinCategoria" data-flag="sin_categoria">
+                                        <button type="button" class="pos-chip" id="chipSinCategoria" data-flag="sin_categoria" aria-pressed="false">
                                             <i class="bi bi-diagram-3"></i> Sin categoría v1.2
                                         </button>
-                                        <button type="button" class="pos-chip" id="chipSinEspecialidad" data-flag="sin_especialidad">
+                                        <button type="button" class="pos-chip" id="chipSinEspecialidad" data-flag="sin_especialidad" aria-pressed="false">
                                             <i class="bi bi-tags"></i> Sin especialidad
                                         </button>
                                     </div>
@@ -1193,17 +1221,17 @@ kbd.sc {
                     <table class="pos-table">
                         <thead>
                             <tr>
-                                <th class="tc-foto"><i class="bi bi-image"></i></th>
-                                <th class="tc-art"><i class="bi bi-box-seam me-1"></i>Artículo</th>
-                                <th class="tc-desc"><i class="bi bi-card-text me-1"></i>Descripción</th>
-                                <th class="tc-attr"><i class="bi bi-award me-1"></i>Marca</th>
-                                <th class="tc-attr"><i class="bi bi-palette me-1"></i>Color</th>
-                                <th class="tc-clasif"><i class="bi bi-diagram-3 me-1"></i>Categoría · Especialidad</th>
-                                <th class="tc-talla"><i class="bi bi-rulers me-1"></i>Tallas · Stock</th>
-                                <th class="tc-stock"><i class="bi bi-boxes me-1"></i>Total</th>
-                                <th class="tc-price"><i class="bi bi-currency-dollar me-1"></i>Precio</th>
-                                <th class="tc-suc"><i class="bi bi-building me-1"></i>Sucursal</th>
-                                <th class="tc-act">Detalle</th>
+                                <th class="tc-foto" scope="col"><i class="bi bi-image"></i></th>
+                                <th class="tc-art" scope="col"><i class="bi bi-box-seam me-1"></i>Artículo</th>
+                                <th class="tc-desc" scope="col"><i class="bi bi-card-text me-1"></i>Descripción</th>
+                                <th class="tc-attr" scope="col"><i class="bi bi-award me-1"></i>Marca</th>
+                                <th class="tc-attr" scope="col"><i class="bi bi-palette me-1"></i>Color</th>
+                                <th class="tc-clasif" scope="col"><i class="bi bi-diagram-3 me-1"></i>Categoría · Especialidad</th>
+                                <th class="tc-talla" scope="col"><i class="bi bi-rulers me-1"></i>Tallas · Stock</th>
+                                <th class="tc-stock" scope="col"><i class="bi bi-boxes me-1"></i>Total</th>
+                                <th class="tc-price" scope="col"><i class="bi bi-currency-dollar me-1"></i>Precio</th>
+                                <th class="tc-suc" scope="col"><i class="bi bi-building me-1"></i>Sucursal</th>
+                                <th class="tc-act" scope="col">Detalle</th>
                             </tr>
                         </thead>
                         <tbody id="productosTableBody"></tbody>
@@ -1241,7 +1269,7 @@ kbd.sc {
                     <i class="bi bi-rulers"></i>
                     Detalle de Tallas y Stock
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
                 <!-- Info del producto -->
@@ -1283,10 +1311,10 @@ kbd.sc {
                     <table style="width:100%;border-collapse:collapse;margin:0;">
                         <thead>
                             <tr>
-                                <th style="width:18%;">Talla</th>
-                                <th style="width:44%;">SKU</th>
-                                <th style="width:16%;text-align:center;">Stock</th>
-                                <th style="width:22%;text-align:center;">Estado</th>
+                                <th scope="col" style="width:18%;">Talla</th>
+                                <th scope="col" style="width:44%;">SKU</th>
+                                <th scope="col" style="width:16%;text-align:center;">Stock</th>
+                                <th scope="col" style="width:22%;text-align:center;">Estado</th>
                             </tr>
                         </thead>
                         <tbody id="tablaTallasModal"></tbody>
@@ -1311,7 +1339,7 @@ kbd.sc {
             </div>
             <div class="modal-footer">
                 <button type="button" class="pos-btn pos-btn-outline" data-bs-dismiss="modal"
-                        style="min-height:38px;padding:0 1rem;">
+                        style="padding:0 1rem;">
                     <i class="bi bi-x-lg"></i>
                     Cerrar
                 </button>
@@ -1329,7 +1357,7 @@ kbd.sc {
                     <i class="bi bi-shop"></i>
                     ¿Lo tienen en otra tienda?
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
                 <div class="modal-prod-card mb-2">
@@ -1358,7 +1386,7 @@ kbd.sc {
             </div>
             <div class="modal-footer">
                 <button type="button" class="pos-btn pos-btn-outline" data-bs-dismiss="modal"
-                        style="min-height:38px;padding:0 1rem;">
+                        style="padding:0 1rem;">
                     <i class="bi bi-x-lg"></i>
                     Cerrar
                 </button>
@@ -1423,7 +1451,7 @@ $(document).ready(function () {
     $('#btnToggleFiltros').on('click', function () {
         filtrosAbiertos = !filtrosAbiertos;
         $('#advancedFilters').slideToggle(200);
-        $(this).toggleClass('is-active', filtrosAbiertos);
+        $(this).toggleClass('is-active', filtrosAbiertos).attr('aria-expanded', filtrosAbiertos ? 'true' : 'false');
         $('#filtrosChevron').css('transform', filtrosAbiertos ? 'rotate(180deg)' : 'rotate(0deg)');
         if (filtrosAbiertos) {
             // re-init Select2 after showing (DOM must be visible)
@@ -1475,6 +1503,7 @@ $(document).ready(function () {
     // Chips inteligentes: alternan estado y re-buscan
     $('.pos-chip').on('click', function () {
         $(this).toggleClass('active');
+        $(this).attr('aria-pressed', $(this).hasClass('active') ? 'true' : 'false');
         paginaActual = 1;
         buscarProductos();
     });
@@ -1562,12 +1591,14 @@ $(document).ready(function () {
         }
         if ($('#solo_con_stock').is(':checked')) params.append('solo_con_stock', 'on');
 
+        const $chipsActivos = $('.pos-chip.active');
+
         // Sin ningún criterio la consulta recorre el catálogo completo (más de
         // 130.000 productos) y devuelve un listado inútil de miles de páginas.
         const hayCriterio = params.has('search') || params.has('sucursal_id') ||
             params.has('atributo1_id') || params.has('atributo2_id') || params.has('atributo3_id') ||
             params.has('categoria_id') || params.has('especialidad_id') ||
-            $('.pos-chip.active').length > 0;
+            $chipsActivos.length > 0;
         if (!hayCriterio) {
             setEstadoInicial();
             Swal.fire({
@@ -1581,7 +1612,7 @@ $(document).ready(function () {
         }
 
         // Chips inteligentes (botones, no van en el FormData)
-        $('.pos-chip.active').each(function () {
+        $chipsActivos.each(function () {
             const flag = $(this).data('flag');
             if (flag) params.append(flag, 'on');
         });
@@ -1639,6 +1670,7 @@ $(document).ready(function () {
         tbody.empty();
         $('#totalProductos').text(resp.pagination.total_items);
 
+        const filas = [];
         resp.productos.forEach(function (p) {
             const precioFmt = new Intl.NumberFormat('es-CL', {
                 style: 'currency', currency: 'CLP',
@@ -1665,7 +1697,7 @@ $(document).ready(function () {
                                   </span>`;
                 }
             } else {
-                tallasHtml = '<span style="color:var(--np-gray-400);font-size:.75rem;">—</span>';
+                tallasHtml = '<span style="color:var(--np-gray-500);font-size:.75rem;">—</span>';
             }
 
             const marcaHtml    = p.marca    ? `<span class="attr-pill" title="${escHtml(p.marca)}">${escHtml(p.marca)}</span>`    : '<span style="color:var(--np-gray-300);">—</span>';
@@ -1689,7 +1721,7 @@ $(document).ready(function () {
             const fotoUrl = p.foto_portada_url || '{% static "images/producto_placeholder.svg" %}';
             const fotoHtml = `<img class="producto-portada-img" src="${escAttr(fotoUrl)}" alt="" loading="lazy" draggable="false" onerror="this.src='{% static "images/producto_placeholder.svg" %}';">`;
 
-            tbody.append(`
+            filas.push(`
                 <tr>
                     <td class="tc-foto">${fotoHtml}</td>
                     <td class="tc-art">
@@ -1711,7 +1743,7 @@ $(document).ready(function () {
                         <span class="stock-badge ${stockClass(p.stock_total)}">${p.stock_total}</span>
                     </td>
                     <td class="tc-price">
-                        <div style="display:flex;flex-direction:column;align-items:flex-end;">
+                        <div style="display:flex;flex-direction:column;">
                             <span class="precio-monto">${precioFmt}</span>
                             <span class="precio-label">venta</span>
                         </div>
@@ -1736,6 +1768,7 @@ $(document).ready(function () {
                 </tr>
             `);
         });
+        tbody.html(filas.join(''));
     }
 
     /* ---------- Render paginación ---------- */
@@ -1747,8 +1780,9 @@ $(document).ready(function () {
         if (pg.total_pages <= 1) { $('#paginacionContainer').hide(); return; }
         $('#paginacionContainer').show();
 
+        const items = [];
         const append = (label, page, active) => {
-            $ul.append(`<li><a class="pos-pg-btn ${active ? 'active' : ''}" href="#" data-page="${page}">${label}</a></li>`);
+            items.push(`<li><button type="button" class="pos-pg-btn ${active ? 'active' : ''}" data-page="${page}">${label}</button></li>`);
         };
 
         if (pg.current_page > 1)
@@ -1757,19 +1791,19 @@ $(document).ready(function () {
         const start = Math.max(1, pg.current_page - 2);
         const end   = Math.min(pg.total_pages, pg.current_page + 2);
 
-        if (start > 1) { append('1', 1, false); if (start > 2) $ul.append('<li><span class="pos-pg-info">…</span></li>'); }
+        if (start > 1) { append('1', 1, false); if (start > 2) items.push('<li><span class="pos-pg-info">…</span></li>'); }
         for (let i = start; i <= end; i++) append(i, i, i === pg.current_page);
-        if (end < pg.total_pages) { if (end < pg.total_pages - 1) $ul.append('<li><span class="pos-pg-info">…</span></li>'); append(pg.total_pages, pg.total_pages, false); }
+        if (end < pg.total_pages) { if (end < pg.total_pages - 1) items.push('<li><span class="pos-pg-info">…</span></li>'); append(pg.total_pages, pg.total_pages, false); }
 
         if (pg.current_page < pg.total_pages)
             append('<i class="bi bi-chevron-right"></i>', pg.current_page + 1, false);
 
-        $ul.append(`<li><span class="pos-pg-info">Pág. ${pg.current_page} / ${pg.total_pages}</span></li>`);
+        items.push(`<li><span class="pos-pg-info">Pág. ${pg.current_page} / ${pg.total_pages}</span></li>`);
+        $ul.html(items.join(''));
     }
 
     /* ---------- Click paginación ---------- */
     $(document).on('click', '#paginacion .pos-pg-btn', function (e) {
-        e.preventDefault();
         const p = parseInt($(this).data('page'));
         if (p && p !== paginaActual) { paginaActual = p; buscarProductos(); }
     });
@@ -1800,6 +1834,7 @@ $(document).ready(function () {
         tbody.empty();
 
         let conStock = 0, sinStock = 0;
+        const filasTallas = [];
         if (p.tallas_stock && p.tallas_stock.length > 0) {
             p.tallas_stock.forEach(function (t) {
                 const tiene = t.stock > 0;
@@ -1808,7 +1843,7 @@ $(document).ready(function () {
                 const est = tiene
                     ? `<span class="nexo-badge-ok"><i class="bi bi-check-circle-fill"></i>Disponible</span>`
                     : `<span class="nexo-badge-err"><i class="bi bi-x-circle-fill"></i>Agotado</span>`;
-                tbody.append(`
+                filasTallas.push(`
                     <tr class="${tiene ? '' : 'sin-stock'}">
                         <td><span class="talla-big">${escHtml(t.talla)}</span></td>
                         <td><span class="sku-mono">${escHtml(t.sku)}</span></td>
@@ -1818,7 +1853,7 @@ $(document).ready(function () {
                 `);
             });
         } else {
-            tbody.append(`
+            filasTallas.push(`
                 <tr>
                     <td colspan="4" style="text-align:center;padding:2.5rem;color:var(--np-gray-500);">
                         <i class="bi bi-inbox" style="font-size:2rem;color:var(--np-gray-300);display:block;margin-bottom:.5rem;"></i>
@@ -1827,6 +1862,7 @@ $(document).ready(function () {
                 </tr>
             `);
         }
+        tbody.html(filasTallas.join(''));
 
         $('#totalTallas').text(p.tallas_stock ? p.tallas_stock.length : 0);
         $('#tallasConStock').text(conStock);
@@ -1920,9 +1956,9 @@ $(document).ready(function () {
             return b.total - a.total;
         });
 
-        let head = '<th style="text-align:left;">Sucursal</th>';
-        tallas.forEach(function (t) { head += `<th style="text-align:center;">${escHtml(t)}</th>`; });
-        head += '<th style="text-align:center;">Total</th>';
+        let head = '<th scope="col" style="text-align:left;">Sucursal</th>';
+        tallas.forEach(function (t) { head += `<th scope="col" style="text-align:center;">${escHtml(t)}</th>`; });
+        head += '<th scope="col" style="text-align:center;">Total</th>';
         $('#mtHead').html(head);
 
         let body = '';
@@ -2046,6 +2082,68 @@ $(document).ready(function () {
 
     enableDragScroll(document.getElementById('tablaWrapper'));
     enableDragScroll(document.getElementById('mtTablaWrap'));
+
+    /* ---------- Extender la zona de swipe/scroll vertical más allá de la
+       tabla: en pantallas 15" cortas, con los filtros avanzados abiertos,
+       el recuadro visible de #tablaWrapper puede quedar chico. Un swipe (o
+       rueda de mouse) que empieza en el panel de filtros o en la barra de
+       resultados también mueve el scroll de la tabla — sin tocar el header
+       sticky ni las columnas fijas, que siguen ancladas a #tablaWrapper
+       como siempre (eso es lo que hace fallar el rediseño "todo el panel
+       scrollea": aquí no se cambia el dueño del scroll, solo se agranda la
+       zona que puede iniciarlo). Los taps normales (sin arrastre) no se
+       tocan: selects, chips y checkboxes de los filtros siguen andando. */
+    function enableScrollForward(el, targetEl) {
+        if (!el || !targetEl || el.__scrollForward) return;
+        el.__scrollForward = true;
+
+        el.addEventListener('wheel', function (e) {
+            if (targetEl.scrollHeight <= targetEl.clientHeight) return;
+            targetEl.scrollTop += e.deltaY;
+            e.preventDefault();
+        }, { passive: false });
+
+        let down = false, moved = false, startY = 0, startTop = 0;
+        el.addEventListener('pointerdown', function (e) {
+            if (e.pointerType !== 'touch') return;
+            down = true; moved = false;
+            startY = e.clientY;
+            startTop = targetEl.scrollTop;
+        });
+        el.addEventListener('pointermove', function (e) {
+            if (!down || e.pointerType !== 'touch') return;
+            const dy = e.clientY - startY;
+            if (!moved && Math.abs(dy) > 8) moved = true;
+            if (!moved) return;
+            targetEl.scrollTop = startTop - dy;
+            e.preventDefault();
+        }, { passive: false });
+        function endForward() {
+            if (!down) return;
+            down = false;
+            if (moved) {
+                // Reusa la supresión de click-fantasma del drag-to-scroll de mouse
+                // (declarada más arriba) para que soltar el dedo tras arrastrar
+                // no dispare el tap de un chip/checkbox que quedó bajo el dedo.
+                dragSuppressUntil = Date.now() + 250;
+                dragSuppressEl = el;
+            }
+        }
+        el.addEventListener('pointerup', endForward);
+        el.addEventListener('pointercancel', endForward);
+    }
+
+    (function () {
+        const targetEl = document.getElementById('tablaWrapper');
+        enableScrollForward(document.querySelector('.pos-filter-panel'), targetEl);
+        enableScrollForward(document.getElementById('resultsBar'), targetEl);
+
+        // Modal "¿Lo tienen en otra tienda?": #mtTablaWrap es un segundo scroll
+        // corto (52vh) que no recibía este mismo arreglo. La tarjeta de
+        // producto es hermana (no ancestro) de #mtTablaWrap, así que reenviar
+        // desde ahí no compite con el scroll nativo de la tabla.
+        enableScrollForward(document.querySelector('#modalOtrasTiendas .modal-prod-card'), document.getElementById('mtTablaWrap'));
+    })();
 
     /* ---------- Indicadores de scroll horizontal (sombra + pastilla) ---------- */
     const tablaShellEl = document.getElementById('tablaShell');

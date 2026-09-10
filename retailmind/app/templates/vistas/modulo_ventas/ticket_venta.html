@@ -88,15 +88,15 @@ html {
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    background: var(--nexo-gradient-primary);
     opacity: 0;
     transition: opacity 0.3s ease;
 }
 
 .vendedor-card:hover {
     transform: translateY(-6px);
-    box-shadow: 0 12px 30px rgba(99, 102, 241, 0.2);
-    border-color: #6366f1;
+    box-shadow: 0 12px 30px rgba(0, 102, 255, 0.2);
+    border-color: var(--nexo-primary);
 }
 
 .vendedor-card:hover::before {
@@ -104,13 +104,13 @@ html {
 }
 
 .vendedor-card.selected {
-    background: linear-gradient(145deg, #10b981, #059669) !important;
-    border-color: #059669;
-    box-shadow: 0 8px 25px rgba(16, 185, 129, 0.35);
+    background: linear-gradient(145deg, var(--nexo-success), #00B38A) !important;
+    border-color: #00B38A;
+    box-shadow: 0 8px 25px rgba(0, 212, 170, 0.35);
 }
 
 .vendedor-card.selected::before {
-    background: linear-gradient(90deg, #34d399, #6ee7b7);
+    background: linear-gradient(90deg, var(--nexo-success), #5EEAD4);
     opacity: 1;
 }
 
@@ -134,7 +134,7 @@ html {
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    background: var(--nexo-gradient-primary);
     color: white;
     display: flex;
     align-items: center;
@@ -143,19 +143,19 @@ html {
     font-weight: 700;
     margin: 0 auto 0.75rem;
     text-transform: uppercase;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
     transition: all 0.3s ease;
 }
 
 .vendedor-card:hover .vendedor-avatar {
     transform: scale(1.1);
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 6px 20px rgba(0, 102, 255, 0.4);
 }
 
 .vendedor-nombre {
     font-size: 0.95rem;
     font-weight: 600;
-    color: #1f2937;
+    color: var(--nexo-gray-900);
     margin-bottom: 0.25rem;
     line-height: 1.3;
     display: -webkit-box;
@@ -166,9 +166,9 @@ html {
 
 .vendedor-codigo {
     font-size: 0.8rem;
-    color: #6b7280;
+    color: var(--nexo-gray-700);
     font-family: 'Monaco', 'Consolas', monospace;
-    background: #f3f4f6;
+    background: var(--nexo-gray-100);
     padding: 0.25rem 0.5rem;
     border-radius: 6px;
     display: inline-block;
@@ -181,9 +181,9 @@ html {
     right: 12px;
     width: 10px;
     height: 10px;
-    background: #10b981;
+    background: var(--nexo-success);
     border-radius: 50%;
-    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+    box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.2);
 }
 
 .vendedor-card.selected .vendedor-codigo {
@@ -192,7 +192,7 @@ html {
 
 /* Contenedor de vendedores */
 .vendedores-container {
-    background: #f8fafc;
+    background: var(--nexo-gray-100);
     border-radius: 12px;
     padding: 1rem;
     max-height: 400px;
@@ -204,17 +204,17 @@ html {
 }
 
 .vendedores-container::-webkit-scrollbar-track {
-    background: #e5e7eb;
+    background: var(--nexo-gray-300);
     border-radius: 3px;
 }
 
 .vendedores-container::-webkit-scrollbar-thumb {
-    background: #9ca3af;
+    background: var(--nexo-gray-500);
     border-radius: 3px;
 }
 
 .vendedores-container::-webkit-scrollbar-thumb:hover {
-    background: #6b7280;
+    background: var(--nexo-gray-700);
 }
 
 /* Estado vacío */
@@ -225,17 +225,17 @@ html {
 
 .vendedores-empty i {
     font-size: 4rem;
-    color: #d1d5db;
+    color: var(--nexo-gray-300);
     margin-bottom: 1rem;
 }
 
 .vendedores-empty h6 {
-    color: #6b7280;
+    color: var(--nexo-gray-700);
     font-weight: 600;
 }
 
 .vendedores-empty p {
-    color: #9ca3af;
+    color: var(--nexo-gray-500);
     font-size: 0.875rem;
 }
 
@@ -243,30 +243,30 @@ html {
 
 /* Controles inferiores mejorados */
 .vendedores-bottom-controls {
-    background: #f8fafc;
-    border-top: 1px solid #e9ecef;
+    background: var(--nexo-gray-100);
+    border-top: 1px solid var(--nexo-gray-300);
     border-radius: 0 0 12px 12px;
     padding: 0.85rem 1rem;
     margin: 0 -1px -1px;
 }
 
 .vendedores-bottom-controls .input-group-text {
-    background: #6366f1;
-    border-color: #6366f1;
+    background: var(--nexo-primary);
+    border-color: var(--nexo-primary);
     color: #fff;
     font-size: 0.85rem;
 }
 
 .vendedores-bottom-controls #codigoVendedor {
-    border: 1.5px solid #e5e7eb;
+    border: 1.5px solid var(--nexo-gray-300);
     border-left: none;
     font-size: 0.9rem;
     font-family: 'Monaco', 'Consolas', monospace;
 }
 
 .vendedores-bottom-controls #codigoVendedor:focus {
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+    border-color: var(--nexo-primary);
+    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.12);
 }
 
 .vendedores-bottom-controls #btnBuscarVendedor {
@@ -278,7 +278,7 @@ html {
 
 .vendedores-kbd-hint {
     font-size: 0.72rem;
-    color: #9ca3af;
+    color: var(--nexo-gray-500);
     margin-top: 0.4rem;
     display: flex;
     align-items: center;
@@ -286,8 +286,8 @@ html {
 }
 
 .vendedores-kbd-hint kbd {
-    background: #e5e7eb;
-    border: 1px solid #d1d5db;
+    background: var(--nexo-gray-300);
+    border: 1px solid var(--nexo-gray-300);
     border-radius: 4px;
     padding: 1px 5px;
     font-size: 0.68rem;
@@ -423,20 +423,6 @@ html {
     font-weight: 600;
     color: var(--nexo-gray-700);
     font-size: 0.9rem;
-}
-
-/* Info labels (bg-dark) con estilo NEXO */
-label.form-control.bg-dark {
-    background: linear-gradient(135deg, var(--nexo-secondary), var(--nexo-gray-700)) !important;
-    border: none !important;
-    border-radius: var(--nexo-radius-md) !important;
-    color: var(--nexo-white) !important;
-}
-
-label.form-control.bg-dark b,
-label.form-control.bg-dark h6,
-label.form-control.bg-dark span {
-    color: var(--nexo-white) !important;
 }
 
 /* ========== TABLAS NEXO ========== */
@@ -577,6 +563,17 @@ label.form-control.bg-dark span {
     border-color: var(--nexo-primary);
 }
 
+/* Paginación del modal de búsqueda: sin esto se queda en el tamaño chico
+   de Bootstrap .pagination-sm, un target táctil de menos de 44px. */
+#paginacionProductos .page-link {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.375rem 0.75rem;
+}
+
 /* ========== TEXT COLORS NEXO ========== */
 .text-primary {
     color: var(--nexo-primary) !important;
@@ -617,12 +614,6 @@ label.form-control.bg-dark span {
     border-radius: var(--nexo-radius-md) !important;
 }
 
-/* Section border styling */
-div[style*="border: 1px solid #000"] {
-    border: 2px solid var(--nexo-gray-300) !important;
-    border-radius: var(--nexo-radius-lg) !important;
-}
-
 /* ========== FORM CHECK (CHECKBOX) NEXO ========== */
 .form-check-input:checked {
     background-color: var(--nexo-primary);
@@ -646,6 +637,13 @@ div[style*="border: 1px solid #000"] {
     flex-direction: column;
     gap: 0.5rem;
     padding-bottom: 12px;
+    /* Ancla el alto real disponible del viewport (padding de .page-content:
+       70px+1.5rem arriba / 60px abajo, ver app.css, más el mt-3 de este
+       contenedor) para que .pos-table-wrapper reparta el sobrante por
+       flexbox en vez de un cálculo a ojo. Si algo mide más de lo estimado
+       no se recorta nada: la página cae a su scroll normal como red de
+       seguridad (nunca oculta la barra de totales). */
+    min-height: calc(100vh - 170px);
 }
 
 /* --- Barra unificada info + accesos rápidos --- */
@@ -780,7 +778,8 @@ div[style*="border: 1px solid #000"] {
     transition: all 0.15s ease;
     min-width: 64px;
     max-width: 80px;
-    height: 34px;
+    min-height: 44px;
+    height: auto;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1106,14 +1105,21 @@ div[style*="border: 1px solid #000"] {
 }
 
 /* --- Panel unificado: contenedor de tabla --- */
-.pos-unified-panel .card { width: 100%; }
+/* En vez de restarle a la tabla el alto estimado de todo lo que la rodea
+   (topbar, accesos rápidos, header de entrada, card Cliente, barra de
+   totales), .pos-container ancla el alto real del viewport y esta cadena
+   flex le reparte el sobrante a .pos-table-wrapper automáticamente — así
+   no hay que recalcular el "descuento" cada vez que algo de arriba cambia
+   de alto (form a 2 filas, banner de producto, panel Cliente abierto…). */
+.pos-unified-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.pos-unified-panel .card { width: 100%; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.pos-unified-panel .card-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
-/* El descuento es todo lo que rodea la tabla: topbar del layout, accesos
-   rápidos, header de entrada, card Cliente colapsada y barra de totales. */
 .pos-table-wrapper {
+    flex: 1 1 auto;
     overflow-y: auto;
-    max-height: calc(100vh - 390px);
-    min-height: 220px;
+    overscroll-behavior: contain;
+    min-height: 180px;
 }
 
 .pos-table th,
@@ -1131,6 +1137,7 @@ div[style*="border: 1px solid #000"] {
 .pos-table .eliminar-producto {
     padding: 3px 7px !important;
     font-size: 0.75rem !important;
+    min-width: 44px !important;
 }
 
 /* --- Barra inferior sticky: totales + imprimir --- */
@@ -1143,7 +1150,7 @@ div[style*="border: 1px solid #000"] {
 .pos-cliente-header:hover { background:linear-gradient(90deg,#e4eeff,#dff7f0); }
 .pos-cliente-icon {
     width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center;
-    background:linear-gradient(135deg,#0066FF,#00D4AA); color:#fff; font-size:1.1rem;
+    background:var(--nexo-gradient-primary); color:#fff; font-size:1.1rem;
 }
 .pos-cliente-header.abierto #posClienteChevron { transform:rotate(180deg); }
 .pos-cli-label { font-size:0.7rem; font-weight:600; color:#475569; margin-bottom:2px; }
@@ -1161,9 +1168,9 @@ div[style*="border: 1px solid #000"] {
     transition:all .15s; cursor:default;
 }
 .tk-chip i { font-size:0.8rem; }
-.tk-chip.falta { background:#fff4e5; color:#b45309; border-color:#fcd9a8; }
-.tk-chip.ok    { background:#e8fbf4; color:#047857; border-color:#9be8cf; }
-.tk-chip.falta:hover { background:#ffe9cc; }
+.tk-chip.falta { background:rgba(255,176,32,.12); color:#996B00; border-color:var(--nexo-warning); }
+.tk-chip.ok    { background:rgba(0,212,170,.12); color:#006B55; border-color:var(--nexo-success); }
+.tk-chip.falta:hover { background:rgba(255,176,32,.2); }
 #tkFidelizaFaltan { font-size:0.68rem; font-weight:600; }
 
 .pos-bottom-bar {
@@ -1189,11 +1196,6 @@ div[style*="border: 1px solid #000"] {
     color: var(--nexo-gray-500);
     font-weight: 600;
     letter-spacing: 0.5px;
-}
-.pos-total-value {
-    font-size: 1rem;
-    font-weight: 800;
-    color: var(--nexo-secondary);
 }
 .pos-total-money {
     font-size: 1.8rem;
@@ -1263,6 +1265,10 @@ div[style*="border: 1px solid #000"] {
 
 /* POS 15" (1366×768): todo visible sin scroll vertical */
 @media screen and (max-height: 800px) {
+    /* Recupera el padding genérico del admin-template (94px arriba / 60px
+       abajo, ver app.css:738) para dejarle más alto real al panel POS. */
+    .page-content { padding: calc(70px + 0.5rem) 0.75rem 0.5rem 0.75rem !important; }
+    .pos-container { min-height: calc(100vh - 94px); }
     .pos-container.mt-3 { margin-top: 0.5rem !important; }
     .pos-topbar-unified { margin-bottom: 0.35rem !important; }
     .pos-topbar-body { padding: 6px 10px !important; }
@@ -1273,7 +1279,7 @@ div[style*="border: 1px solid #000"] {
     .pos-unified-form .pos-sku-input { height: 34px !important; }
     .pos-unified-actions .pos-add-btn,
     .pos-unified-actions .btn-outline-secondary { height: 34px !important; }
-    .pos-table-wrapper { max-height: calc(100vh - 350px); min-height: 180px; }
+    .pos-table-wrapper { min-height: 160px; }
     .pos-bottom-bar .card-body { padding: 6px 12px !important; }
     .pos-print-btn { height: 46px !important; }
     .pos-reprint-btn { height: 46px !important; font-size: 0.82rem !important; }
@@ -1281,42 +1287,24 @@ div[style*="border: 1px solid #000"] {
 
 /* Stack vertical en pantallas muy pequeñas */
 @media screen and (max-width: 1024px) {
-    .pos-table-wrapper { max-height: 320px; }
     .pos-bottom-bar { position: relative !important; }
 }
 
 /* ===== ACCESOS RÁPIDOS ===== */
-/* accesos-grid kept for backward compat; active layout is .accesos-strip */
-.accesos-grid {
-    display: flex;
-    flex-direction: row;
-    gap: 4px;
-    flex-wrap: nowrap;
-}
-@media screen and (max-width: 1400px) { .accesos-grid { } }
-
 @media screen and (max-width: 900px) {
-    .accesos-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 0.5rem; }
     .vendedores-grid { grid-template-columns: repeat(2, 1fr) !important; }
 }
 
 @media screen and (max-width: 768px) {
-    .pos-sidebar, .pos-left-panel { min-width: 0 !important; }
-    .ticket-header { flex-direction: column; gap: 0.5rem; }
-    .ticket-header .btn { width: 100%; }
-    .ticket-total { font-size: 1.25rem; }
     .accesos-strip { flex-wrap: wrap; gap: 0.5rem; }
 }
 
 @media screen and (max-width: 600px) {
-    .accesos-grid { grid-template-columns: 1fr !important; }
     .vendedores-grid { grid-template-columns: 1fr !important; }
     .vendedor-card { padding: 0.5rem; font-size: 0.813rem; }
 }
 
 @media screen and (max-width: 576px) {
-    .ticket-items { max-height: 35vh; }
-    .ticket-total { font-size: 1.125rem; }
     .accesos-strip .btn { font-size: 0.75rem; padding: 0.375rem 0.5rem; }
 }
 
@@ -1380,7 +1368,9 @@ div[style*="border: 1px solid #000"] {
                                     <div class="vendedor-card"
                                          data-vendedor-id="{{ vendedor.id }}"
                                          data-vendedor-codigo="{{ vendedor.codigo_vendedor }}"
-                                         data-vendedor-nombre="{{ vendedor.nombre|lower }}">
+                                         data-vendedor-nombre="{{ vendedor.nombre|lower }}"
+                                         tabindex="0" role="button"
+                                         aria-label="Vendedor {{ vendedor.nombre|default:'Sin nombre' }}, código {{ vendedor.codigo_vendedor }}">
                                         <span class="vendedor-badge" title="Activo"></span>
                                         <div class="vendedor-card-body">
                                             <div class="vendedor-avatar">
@@ -1524,7 +1514,7 @@ div[style*="border: 1px solid #000"] {
                                 </div>
 
                                 <div class="pos-unified-input">
-                                    <label class="pos-unified-label" style="color:var(--nexo-success);">
+                                    <label class="pos-unified-label" for="precioProducto" style="color:var(--nexo-success);">
                                         <i class="ri-price-tag-3-line"></i> Precio
                                     </label>
                                     <input type="number" class="form-control fw-bold text-center pos-input-precio"
@@ -1535,7 +1525,7 @@ div[style*="border: 1px solid #000"] {
                                 </div>
 
                                 <div class="pos-unified-input">
-                                    <label class="pos-unified-label" style="color:var(--nexo-primary);">
+                                    <label class="pos-unified-label" for="cantidadProducto" style="color:var(--nexo-primary);">
                                         <i class="ri-add-line"></i> Cant.
                                     </label>
                                     <input type="number" class="form-control fw-bold text-center pos-input-cantidad"
@@ -1543,7 +1533,7 @@ div[style*="border: 1px solid #000"] {
                                 </div>
 
                                 <div class="pos-unified-input pos-unified-stock">
-                                    <label class="pos-unified-label text-muted">
+                                    <label class="pos-unified-label text-muted" for="stockProducto">
                                         <i class="ri-archive-line"></i> Stock
                                     </label>
                                     <input type="number" class="form-control text-center pos-input-stock"
@@ -1596,16 +1586,16 @@ div[style*="border: 1px solid #000"] {
                                     <table class="table table-sm table-striped table-bordered mb-0 pos-table">
                                         <thead class="table-dark" style="position:sticky;top:0;z-index:2;">
                                             <tr>
-                                                <th class="text-center">SKU</th>
-                                                <th>Artículo</th>
-                                                <th class="d-none d-xxl-table-cell">Descripción</th>
-                                                <th class="d-none d-xl-table-cell">Marca</th>
-                                                <th class="text-center">Talla</th>
-                                                <th class="d-none d-xl-table-cell text-center">Stock</th>
-                                                <th class="text-end">Precio</th>
-                                                <th class="text-center">Cant.</th>
-                                                <th class="text-end">Subtotal</th>
-                                                <th class="text-center" style="width:40px;"></th>
+                                                <th scope="col" class="text-center">SKU</th>
+                                                <th scope="col">Artículo</th>
+                                                <th scope="col" class="d-none d-xxl-table-cell">Descripción</th>
+                                                <th scope="col" class="d-none d-xl-table-cell">Marca</th>
+                                                <th scope="col" class="text-center">Talla</th>
+                                                <th scope="col" class="d-none d-xl-table-cell text-center">Stock</th>
+                                                <th scope="col" class="text-end">Precio</th>
+                                                <th scope="col" class="text-center">Cant.</th>
+                                                <th scope="col" class="text-end">Subtotal</th>
+                                                <th scope="col" class="text-center" style="width:48px;"></th>
                                             </tr>
                                         </thead>
                                         <tbody id="tbodyTicket">
@@ -1626,19 +1616,20 @@ div[style*="border: 1px solid #000"] {
                 <!-- ===== PANEL CLIENTE (FIDELIZACIÓN) — RUT FIRST ===== -->
                 <div class="card mt-2 pos-cliente-card">
                     <div class="card-header py-2 pos-cliente-header" id="posClienteToggle" role="button"
-                         onclick="togglePanelCliente()">
+                         tabindex="0" aria-expanded="false" aria-controls="posClienteBody"
+                         onclick="togglePanelCliente()"
+                         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();togglePanelCliente();}">
                         <div class="d-flex align-items-center justify-content-between">
                             <div class="d-flex align-items-center gap-2">
                                 <span class="pos-cliente-icon"><i class="ri-user-star-line"></i></span>
                                 <div>
                                     <h6 class="mb-0" style="font-size:0.85rem;font-weight:700;">Cliente
-                                        <span class="badge ms-1" style="background:linear-gradient(135deg,#0066FF,#00D4AA);font-size:0.6rem;">FIDELIZACIÓN</span>
+                                        <span class="badge ms-1" style="background:var(--nexo-gradient-primary);font-size:0.6rem;">FIDELIZACIÓN</span>
                                         <!-- Tipo de cliente: lo resuelve la ficha rápida por RUT
                                              (api_consultar_saldo_puntos); color/icono vienen del backend. -->
                                         <span class="pos-cliente-tipo ms-1 d-none" id="posClienteTipo" title=""></span>
                                         <span class="nexo-badge nexo-badge-success ms-1 d-none" id="posClientePuntos" title=""></span>
-                                        <span class="nexo-badge ms-1 d-none" id="posClienteGiftcards" title=""
-                                              style="background:#fff8e1;color:#f9a825;"></span>
+                                        <span class="nexo-badge nexo-badge-warning ms-1 d-none" id="posClienteGiftcards" title=""></span>
                                     </h6>
                                     <small class="text-muted" id="posClienteResumen" style="font-size:0.7rem;">
                                         Ingresa el RUT del cliente para sumar puntos
@@ -1826,17 +1817,17 @@ div[style*="border: 1px solid #000"] {
 
                 <div class="row g-3 mb-3">
                     <div class="col-md-4">
-                        <label class="form-label mb-1"><small>Búsqueda General (Artículo, Descripción o SKU)</small></label>
+                        <label class="form-label mb-1" for="filtroBusqueda"><small>Búsqueda General (Artículo, Descripción o SKU)</small></label>
                         <input type="text" class="form-control form-control-sm" id="filtroBusqueda" placeholder="Ej: Polera, Nike, 123456...">
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label mb-1"><small><i class="ri-price-tag-3-line me-1"></i>Filtrar por Marca</small></label>
+                        <label class="form-label mb-1" for="selectMarca"><small><i class="ri-price-tag-3-line me-1"></i>Filtrar por Marca</small></label>
                         <select class="form-select form-select-sm" id="selectMarca" style="width:100%">
                             <option value="">Todas las marcas</option>
                         </select>
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label mb-1"><small>Ordenar por</small></label>
+                        <label class="form-label mb-1" for="selectOrdenar"><small>Ordenar por</small></label>
                         <select class="form-select form-select-sm" id="selectOrdenar">
                             <option value="">Sin orden específico</option>
                             <option value="stock_desc">Stock: Mayor a Menor ⬇️</option>
@@ -1883,27 +1874,27 @@ div[style*="border: 1px solid #000"] {
                     <table class="table table-hover table-sm mb-0">
                         <thead class="table-light text-center" id="theadBusquedaProductos">
                             <tr>
-                                <th style="width:110px;"><i class="ri-image-line"></i> Foto</th>
-                                <th class="sortable" data-sort="sku" style="cursor: pointer;">
+                                <th scope="col" style="width:110px;"><i class="ri-image-line"></i> Foto</th>
+                                <th class="sortable" scope="col" data-sort="sku" tabindex="0" role="button" style="cursor: pointer;">
                                     SKU <i class="ri-arrow-up-down-line"></i>
                                 </th>
-                                <th class="sortable" data-sort="articulo" style="cursor: pointer;">
+                                <th class="sortable" scope="col" data-sort="articulo" tabindex="0" role="button" style="cursor: pointer;">
                                     Artículo <i class="ri-arrow-up-down-line"></i>
                                 </th>
-                                <th class="sortable" data-sort="color" style="cursor: pointer;">
+                                <th class="sortable" scope="col" data-sort="color" tabindex="0" role="button" style="cursor: pointer;">
                                     Color <i class="ri-arrow-up-down-line"></i>
                                 </th>
-                                <th class="sortable" data-sort="descripcion" style="cursor: pointer;">
+                                <th class="sortable" scope="col" data-sort="descripcion" tabindex="0" role="button" style="cursor: pointer;">
                                     Descripción · Marca <i class="ri-arrow-up-down-line"></i>
                                 </th>
-                                <th class="col-sucursal" style="display: none;">Sucursal</th>
-                                <th class="sortable" data-sort="stock" style="cursor: pointer;">
+                                <th class="col-sucursal" scope="col" style="display: none;">Sucursal</th>
+                                <th class="sortable" scope="col" data-sort="stock" tabindex="0" role="button" style="cursor: pointer;">
                                     Stock <i class="ri-arrow-up-down-line"></i>
                                 </th>
-                                <th class="sortable" data-sort="precio" style="cursor: pointer;">
+                                <th class="sortable" scope="col" data-sort="precio" tabindex="0" role="button" style="cursor: pointer;">
                                     Precio <i class="ri-arrow-up-down-line"></i>
                                 </th>
-                                <th>Acción</th>
+                                <th scope="col">Acción</th>
                             </tr>
                         </thead>
                         <tbody id="tbodyBusquedaProductos">
@@ -1973,6 +1964,14 @@ $(document).ready(function() {
     // Manejar click en botón Enter
     $('#btnBuscarVendedor').on('click', function() {
         buscarVendedorPorCodigo();
+    });
+
+    // Equivalente de teclado del click (tabindex=0 role=button en el markup)
+    $(document).on('keydown', '.vendedor-card', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            $(this).trigger('click');
+        }
     });
 
     // Manejar click en tarjetas de vendedores
@@ -2181,16 +2180,6 @@ $(document).ready(function() {
         $('#codigoVendedor').val('');
 
         console.log('Vendedor seleccionado:', vendedor);
-    }
-
-    // Función adicional para resaltar tarjeta por código
-    function resaltarTarjetaPorCodigo(codigo) {
-        $('.vendedor-card').each(function() {
-            if ($(this).data('vendedor-codigo') == codigo) {
-                $('.vendedor-card').removeClass('selected');
-                $(this).addClass('selected');
-            }
-        });
     }
 
     // Nota: el buscador inline de vendedores fue eliminado del UI — el usuario
@@ -2594,7 +2583,6 @@ $(document).ready(function() {
                 }).then((result) => {
                     if (result.isConfirmed) {
                         agregarNuevoProductoAlTicket(sku, articulo, descripcion, marca, talla, precio, cantidad, stock, fotoPortadaUrl);
-                        actualizarTablaTicket();
                         actualizarTotales();
                         limpiarFormularioProducto();
                         setTimeout(function() { $('#skuProducto').trigger('focus').select(); }, 50);
@@ -2607,7 +2595,6 @@ $(document).ready(function() {
             agregarNuevoProductoAlTicket(sku, articulo, descripcion, marca, talla, precio, cantidad, stock, fotoPortadaUrl);
         }
 
-        actualizarTablaTicket();
         actualizarTotales();
         limpiarFormularioProducto();
         setTimeout(function() { $('#skuProducto').trigger('focus').select(); }, 50);
@@ -2704,6 +2691,7 @@ $(document).ready(function() {
             return;
         }
 
+        const filas = [];
         productosTicket.forEach(producto => {
             const portadaImg = producto.foto_portada_url
                 ? `<img src="${producto.foto_portada_url}" class="producto-portada-img" loading="lazy" alt=""
@@ -2711,7 +2699,7 @@ $(document).ready(function() {
                 : '';
             if (producto.es_promo_nxm) {
                 // Línea gratis de la promo NxM: bloqueada, subtotal $0.
-                tbody.append(`
+                filas.push(`
                     <tr class="table-success">
                         <td class="text-center"><small>${producto.sku}</small></td>
                         <td>
@@ -2735,6 +2723,7 @@ $(document).ready(function() {
                     </tr>`);
                 return;
             }
+
             const esOferta = producto.es_oferta && producto.precio_original > producto.precio;
             const badgeOferta = esOferta
                 ? `<span class="badge bg-danger ms-1">${producto.oferta_label || 'LIQUIDACIÓN'}</span>` : '';
@@ -2761,7 +2750,7 @@ $(document).ready(function() {
                     <td class="text-center">
                         <input type="number" class="form-control form-control-sm text-center cantidad-producto"
                                data-id="${producto.id}" value="${producto.cantidad}" min="1" max="${producto.stock}"
-                               style="width:64px;">
+                               aria-label="Cantidad de ${producto.articulo}" style="width:64px;">
                     </td>
                     <td class="text-end fw-bold">$${producto.subtotal.toLocaleString()}</td>
                     <td class="text-center">
@@ -2771,8 +2760,9 @@ $(document).ready(function() {
                     </td>
                 </tr>
             `;
-            tbody.append(fila);
+            filas.push(fila);
         });
+        tbody.html(filas.join(''));
     }
 
     // Cambiar cantidad de producto en la tabla
@@ -2823,7 +2813,6 @@ $(document).ready(function() {
             
             producto.cantidad = nuevaCantidad;
             producto.subtotal = producto.precio * nuevaCantidad;
-            actualizarTablaTicket();
             actualizarTotales();
         }
     });
@@ -2870,7 +2859,6 @@ $(document).ready(function() {
     $(document).on('click', '.eliminar-producto', function() {
         const id = $(this).data('id');
         productosTicket = productosTicket.filter(p => p.id !== id);
-        actualizarTablaTicket();
         actualizarTotales();
     });
 
@@ -3018,7 +3006,9 @@ $(document).ready(function() {
                 const precio = parseFloat(slot.precio || 0).toLocaleString('es-CL');
                 const talla = slot.talla && slot.talla !== 'Sin talla' ? slot.talla : '';
                 card = `
-                <div class="acceso-card con-producto" data-slot="${idx}" title="${slot.articulo}${talla ? ' — ' + talla : ''} · $${precio}">
+                <div class="acceso-card con-producto" data-slot="${idx}" tabindex="0" role="button"
+                     title="${slot.articulo}${talla ? ' — ' + talla : ''} · $${precio}"
+                     aria-label="Acceso rápido ${idx + 1}: ${slot.articulo}${talla ? ' — ' + talla : ''}, $${precio}">
                     <span class="acceso-num">${idx + 1}</span>
                     <i class="ri-edit-2-line acceso-config-icon"></i>
                     <div class="acceso-nombre">${slot.articulo}</div>
@@ -3027,7 +3017,9 @@ $(document).ready(function() {
                 </div>`;
             } else {
                 card = `
-                <div class="acceso-card sin-producto" data-slot="${idx}" title="Slot ${idx + 1} — Click para asignar producto">
+                <div class="acceso-card sin-producto" data-slot="${idx}" tabindex="0" role="button"
+                     title="Slot ${idx + 1} — Click para asignar producto"
+                     aria-label="Acceso rápido ${idx + 1}: slot vacío">
                     <span class="acceso-num">${idx + 1}</span>
                     <i class="ri-edit-2-line acceso-config-icon"></i>
                     <i class="ri-add-circle-line acceso-sin-icon"></i>
@@ -3042,6 +3034,14 @@ $(document).ready(function() {
             grid.removeClass('modo-config-activo');
         }
     }
+
+    // --- Equivalente de teclado del click (tabindex=0 role=button arriba) ---
+    $(document).on('keydown', '.acceso-card', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            $(this).trigger('click');
+        }
+    });
 
     // --- Click en tarjeta ---
     $(document).on('click', '.acceso-card', function() {
@@ -3084,7 +3084,6 @@ $(document).ready(function() {
                             p.stock,
                             p.foto_portada_url || ''
                         );
-                        actualizarTablaTicket();
                         actualizarTotales();
                     } else {
                         Swal.fire({
@@ -3258,6 +3257,16 @@ $(document).ready(function() {
     // Ordenamiento de columnas al hacer clic en el encabezado
     let ordenamientoActual = { campo: '', direccion: '' };
     
+    // Equivalente de teclado del click: Enter/Espacio disparan el mismo orden
+    // que un click, para que las cabeceras "sortable" (tabindex=0 role=button)
+    // sean operables sin mouse.
+    $(document).on('keydown', '.sortable', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            $(this).trigger('click');
+        }
+    });
+
     $(document).on('click', '.sortable', function() {
         const campo = $(this).data('sort');
         
@@ -3311,16 +3320,6 @@ $(document).ready(function() {
         // Obtener sucursal actual de la sesión
         const sucursalActualId = {% if sucursal_actual %}{{ sucursal_actual.id }}{% else %}null{% endif %};
 
-        // Debug: Mostrar información en consola
-        console.log('===== BÚSQUEDA DE PRODUCTOS =====');
-        console.log('Sucursal Actual ID:', sucursalActualId);
-        console.log('Búsqueda:', filtroBusqueda);
-        console.log('Marca ID:', marcaId || 'Todas');
-        console.log('Solo con stock:', soloConStock);
-        console.log('Buscar en todas:', buscarTodas);
-        console.log('Ordenar por:', ordenar || 'Sin orden');
-        console.log('Filtro tabla:', filtroTabla || 'Sin filtro');
-
         const filtros = {
             search: filtroBusqueda,
             solo_con_stock: soloConStock ? 'on' : 'off',
@@ -3340,15 +3339,11 @@ $(document).ready(function() {
         // Agregar filtro de tabla si existe
         if (filtroTabla) {
             filtros.filtro_tabla = filtroTabla;
-            console.log('✓ Aplicando filtro de tabla:', filtroTabla);
         }
 
         // Si NO está marcado "buscar en todas", filtrar por sucursal actual
         if (!buscarTodas && sucursalActualId) {
             filtros.sucursal_id = sucursalActualId;
-            console.log('Filtrando por sucursal ID:', sucursalActualId);
-        } else if (!sucursalActualId) {
-            console.warn('⚠️ No hay sucursal seleccionada!');
         }
 
         // Validar que al menos tenga un criterio de búsqueda
@@ -3375,8 +3370,6 @@ $(document).ready(function() {
                 </td>
             </tr>
         `);
-
-        console.log('Enviando petición con filtros:', filtros);
 
         $.ajax({
             url: '{% url "obtener_productos_sucursal" %}',
@@ -3439,6 +3432,7 @@ $(document).ready(function() {
         $('#filtroTablaResultados').prop('disabled', false);
 
         // Crear filas por cada combinación Producto/Talla
+        const filas = [];
         productos.forEach(producto => {
             // La API ya devuelve 'marca' como string, no como objeto
             const marca = producto.marca || '-';
@@ -3515,10 +3509,10 @@ $(document).ready(function() {
                             </td>
                         </tr>
                     `;
-                    tbody.append(fila);
+                    filas.push(fila);
                 });
             } else {
-                tbody.append(`
+                filas.push(`
                     <tr>
                         <td colspan="9" class="text-center text-muted py-2">
                             <small>El producto ${producto.articulo || ''} no tiene tallas con stock en esta sucursal</small>
@@ -3527,6 +3521,7 @@ $(document).ready(function() {
                 `);
             }
         });
+        tbody.html(filas.join(''));
 
         // Actualizar información de paginación
         actualizarPaginacionModal(pagination);
@@ -3552,7 +3547,7 @@ $(document).ready(function() {
             // Botón anterior
             paginacion.append(`
                 <li class="page-item ${paginaActual <= 1 ? 'disabled' : ''}">
-                    <a class="page-link" href="#" data-page="${paginaActual - 1}">
+                    <a class="page-link" href="#" data-page="${paginaActual - 1}" aria-label="Página anterior">
                         <i class="ri-arrow-left-line"></i>
                     </a>
                 </li>
@@ -3573,7 +3568,7 @@ $(document).ready(function() {
             // Botón siguiente
             paginacion.append(`
                 <li class="page-item ${paginaActual >= totalPaginas ? 'disabled' : ''}">
-                    <a class="page-link" href="#" data-page="${paginaActual + 1}">
+                    <a class="page-link" href="#" data-page="${paginaActual + 1}" aria-label="Página siguiente">
                         <i class="ri-arrow-right-line"></i>
                     </a>
                 </li>
@@ -3892,12 +3887,6 @@ $(document).ready(function() {
         return dv === dvc;
     }
     function tkValidarEmail(e) { return !e || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim()); }
-    function tkNormalizarCelular(c) {
-        if (!c) return '';
-        let n = String(c).replace(/[^0-9]/g, '');
-        if (n.length === 11 && n.startsWith('56')) n = n.slice(2);
-        return (n.length === 9 && n.startsWith('9')) ? n : '';
-    }
     // Validación TOLERANTE del celular: el campo es opcional, no se obliga a
     // escribir +56 9 y se aceptan números de otros países. Solo se rechaza lo que
     // claramente no es un teléfono. Rango E.164: 8 a 15 dígitos (sin contar '+').
@@ -3930,6 +3919,7 @@ $(document).ready(function() {
         body.classList.toggle('d-none');
         const abierto = !body.classList.contains('d-none');
         header.classList.toggle('abierto', abierto);
+        header.setAttribute('aria-expanded', abierto ? 'true' : 'false');
         // Al abrir, foco al RUT (RUT-first). No se hace en el arranque para no
         // robarle el foco al input de SKU/escáner.
         if (abierto) setTimeout(() => document.getElementById('tkClienteRut')?.focus(), 50);
@@ -4084,7 +4074,7 @@ $(document).ready(function() {
     // "ReferenceError: togglePanelCliente is not defined" y el panel no fideliza.
     Object.assign(window, {
         togglePanelCliente, actualizarResumenCliente, tkBuscarClientePorRut,
-        limpiarClienteTicket, tkMarcar, tkValidarRut, tkNormalizarCelular,
+        limpiarClienteTicket, tkMarcar, tkValidarRut,
         tkValidarCelular, tkValidarEmail, tkValidarFecha,
         tkFormatearRut, tkNormRut, tkOnInputRut, tkOnBlurRut,
         tkConsultarSaldo, tkSetCamposBloqueados, tkActualizarCompletitud,

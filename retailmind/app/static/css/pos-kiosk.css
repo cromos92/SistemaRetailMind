@@ -294,6 +294,21 @@ body.pos-kiosk .vendedor-card .vendedor-avatar {
     font-size: 1.375rem;
 }
 
+/* acceso-card (accesos rápidos de ticket_venta.html): mismo problema que
+   vendedor-card arriba — su :hover con translateY(-1px) queda pegado tras
+   un tap en touch. Neutralizamos y devolvemos el feedback con :active. */
+body.pos-kiosk .acceso-card {
+    transition: box-shadow 120ms ease, border-color 120ms ease !important;
+}
+body.pos-kiosk .acceso-card:hover,
+body.pos-kiosk .acceso-card.con-producto:hover,
+body.pos-kiosk .acceso-card.sin-producto:hover {
+    transform: none !important;
+}
+body.pos-kiosk .acceso-card:active {
+    transform: scale(0.96) !important;
+}
+
 /* Montos y totales en líneas de ticket: subir de 10-12px a legibles */
 body.pos-kiosk .ticket-linea,
 body.pos-kiosk .ticket-item,
