@@ -4697,7 +4697,10 @@ def asociar_documento_emitido_compensacion(request):
 
         with transaction.atomic():
             try:
-                objetivo = Dte.objects.select_for_update().select_related('emisor').get(id=dte_id)
+                # of=('self',): Dte.receptor es nullable, y select_related sobre un FK
+                # nullable genera LEFT OUTER JOIN -> PostgreSQL rechaza FOR UPDATE sobre
+                # el lado nullable del join. Con `of` sólo se bloquea la fila de app_dte.
+                objetivo = Dte.objects.select_for_update(of=('self',)).select_related('emisor').get(id=dte_id)
             except Dte.DoesNotExist:
                 return JsonResponse({'success': False, 'error': 'Factura objetivo no encontrada'}, status=404)
 
@@ -4723,7 +4726,7 @@ def asociar_documento_emitido_compensacion(request):
                 if not instrumento_id:
                     return JsonResponse({'success': False, 'error': 'Debe seleccionar la factura emitida'}, status=400)
                 try:
-                    instrumento = Dte.objects.select_for_update().select_related('emisor', 'receptor').get(
+                    instrumento = Dte.objects.select_for_update(of=('self',)).select_related('emisor', 'receptor').get(
                         id=instrumento_id, tipo_transaccion='VENTA',
                     )
                 except Dte.DoesNotExist:
