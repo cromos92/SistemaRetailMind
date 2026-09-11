@@ -8949,6 +8949,75 @@ def _acumular_desglose_mercadopago_pos(cuadratura_data, metodo, tipo_tarjeta, mo
     cuadratura_data['total_mercadopago_pos_' + bucket] += monto
 
 
+# ── VENTA INTERNET: clasificación por plataforma ────────────────────────────
+#
+# `TicketDetallePago.tipo_tarjeta` / `Dte_Detalle_Pago.tipo_tarjeta` guardan la
+# plataforma del pago internet como TEXTO LIBRE ('Paris', 'Ripley', 'Ecommerce
+# Webpay'...). Lo escribe `views_ecommerce.tipo_tarjeta_venta_internet` al
+# facturar un pedido, y el POS al registrar una venta internet a mano.
+#
+# Antes esta clasificación estaba DUPLICADA (una cadena de if/elif en el loop de
+# tickets y otra en el de DTEs) y las dos ramas no coincidían: la de tickets
+# tenía un `else` que mandaba TODO lo no reconocido a `total_mercadopago`, y la
+# de DTEs no tenía `else` (esa plata sumaba al total de internet sin caer en
+# ningún sub-bucket). Como los ecommerce propios (REALSPORT/PAOLA) no tenían
+# plataforma asignada y llegaban como el literal 'Internet', el `else` los
+# contaba a TODOS como Mercado Pago aunque se hubieran pagado con Webpay.
+
+# Prefijo que `views_ecommerce` le pone al `tipo_tarjeta` del ecommerce propio.
+_PREFIJO_ECOMMERCE = 'ECOMMERCE'
+
+# Sufijo del `tipo_tarjeta` de ecommerce propio -> sub-bucket de la cuadratura.
+# Lo que no esté acá (TRANSFERENCIA, OTRO, o sin sufijo) cae en 'otros'.
+_SUB_BUCKET_ECOMMERCE = {
+    'WEBPAY': 'ecommerce_webpay',
+    'MERCADO PAGO': 'ecommerce_mercadopago',
+}
+
+
+def _bucket_venta_internet(tipo_tarjeta):
+    """Sub-bucket de Venta Internet para una plataforma de pago.
+
+    Devuelve el sufijo de la clave `total_*` que corresponde. NUNCA devuelve
+    None: lo no clasificable cae en 'ecommerce_otros' (la fila "OTROS / S/DEF."
+    del Resumen), de modo que
+    ``falabella + paris + ripley + mercadopago + klap + ecommerce_* ==
+    total_venta_internet`` se cumpla siempre y ninguna venta desaparezca ni se
+    le invente un medio.
+    """
+    tarjeta = (tipo_tarjeta or '').upper().strip()
+
+    # Ecommerce propio: se evalúa PRIMERO y por prefijo. Si no, 'ECOMMERCE
+    # MERCADO PAGO' contendría 'MERCADO' y volvería a caer en el bucket de
+    # Mercado Pago marketplace — exactamente el bug que este desglose corrige.
+    if tarjeta.startswith(_PREFIJO_ECOMMERCE):
+        sufijo = tarjeta[len(_PREFIJO_ECOMMERCE):].strip()
+        return _SUB_BUCKET_ECOMMERCE.get(sufijo, 'ecommerce_otros')
+
+    if 'FALABELLA' in tarjeta or 'WALMART' in tarjeta:
+        return 'falabella'
+    if 'PARIS' in tarjeta:
+        return 'paris'
+    if 'RIPLEY' in tarjeta:
+        return 'ripley'
+    if 'MERCADO' in tarjeta or 'SHOPIFY' in tarjeta:
+        return 'mercadopago'
+    if 'KLAP' in tarjeta:
+        return 'klap'
+
+    # 'Internet' es el literal que llevaban los pedidos de ecommerce propio
+    # ANTES de que existiera `PedidoEcommerce.medio_pago`, y el fallback de
+    # cualquier plataforma escrita a mano que no reconozcamos. Va a la fila de
+    # sin definir: es venta internet real, pero no sabemos con qué se pagó.
+    return 'ecommerce_otros'
+
+
+def _acumular_venta_internet(cuadratura_data, tipo_tarjeta, monto):
+    """Suma `monto` al total de Venta Internet y a su sub-bucket."""
+    cuadratura_data['total_venta_internet'] += monto
+    cuadratura_data['total_' + _bucket_venta_internet(tipo_tarjeta)] += monto
+
+
 def _calcular_cuadratura_data(sucursal, fecha_str):
     """
     Función helper para calcular datos de cuadratura.
@@ -8989,6 +9058,16 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         'total_mercadopago': 0,
         'total_klap': 0,
         'total_venta_internet': 0,
+        # Ecommerce PROPIO (realsport.cl / calzadospaola.cl), desglosado por la
+        # pasarela con que pagó el cliente. Antes no existía: todo el ecommerce
+        # propio llegaba como el literal 'Internet' y el clasificador lo metía
+        # en `total_mercadopago`, así que un pedido pagado con Webpay se
+        # reportaba como venta Mercado Pago. Ver `_bucket_venta_internet`.
+        # Invariante: webpay + mercadopago + otros == total_ecommerce_propio.
+        'total_ecommerce_webpay': 0,
+        'total_ecommerce_mercadopago': 0,
+        'total_ecommerce_otros': 0,
+        'total_ecommerce_propio': 0,
         # Otros
         'total_transferencia': 0,
         'total_cheque': 0,
@@ -9129,20 +9208,7 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
                 elif 'PRESTO' in tipo_tarjeta:
                     cuadratura_data['total_presto'] += monto
             elif metodo == 'VENTA_INTERNET':
-                cuadratura_data['total_venta_internet'] += monto
-                # ✅ Clasificar por tipo_tarjeta (igual que con DTEs)
-                if 'FALABELLA' in tipo_tarjeta or 'WALMART' in tipo_tarjeta:
-                    cuadratura_data['total_falabella'] += monto
-                elif 'PARIS' in tipo_tarjeta:
-                    cuadratura_data['total_paris'] += monto
-                elif 'RIPLEY' in tipo_tarjeta:
-                    cuadratura_data['total_ripley'] += monto
-                elif 'MERCADO' in tipo_tarjeta or 'MERCADOPAGO' in tipo_tarjeta or 'SHOPIFY' in tipo_tarjeta:
-                    cuadratura_data['total_mercadopago'] += monto
-                elif 'KLAP' in tipo_tarjeta:
-                    cuadratura_data['total_klap'] += monto
-                else:
-                    cuadratura_data['total_mercadopago'] += monto
+                _acumular_venta_internet(cuadratura_data, tipo_tarjeta, monto)
     
     # ========== PROCESAR DTEs (FACTURAS/BOLETAS ELECTRÓNICAS) ==========
     # Obtener folios de DTEs que ya tienen ticket asociado para evitar duplicar pagos
@@ -9338,18 +9404,7 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
                 
                 # Venta Internet - buscar en tipo_tarjeta para clasificar
                 elif metodo_upper == 'VENTA_INTERNET':
-                    cuadratura_data['total_venta_internet'] += monto
-                    # Clasificar por tipo_tarjeta
-                    if 'FALABELLA' in tarjeta_upper or 'WALMART' in tarjeta_upper:
-                        cuadratura_data['total_falabella'] += monto
-                    elif 'PARIS' in tarjeta_upper:
-                        cuadratura_data['total_paris'] += monto
-                    elif 'RIPLEY' in tarjeta_upper:
-                        cuadratura_data['total_ripley'] += monto
-                    elif 'MERCADO' in tarjeta_upper or 'SHOPIFY' in tarjeta_upper:
-                        cuadratura_data['total_mercadopago'] += monto
-                    elif 'KLAP' in tarjeta_upper:
-                        cuadratura_data['total_klap'] += monto
+                    _acumular_venta_internet(cuadratura_data, tarjeta_upper, monto)
     
     # ========== NC DE DEVOLUCIÓN: EFECTO POR FECHA DE CUADRATURA ==========
     # A diferencia del resto de DTEs (que se imputan por `fecha_emision`), las
@@ -9445,6 +9500,17 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         cuadratura_data['total_notas_credito']
     )
 
+    # Efectivo ANTES de descontar la NC. La fila EFECTIVO del Resumen muestra el
+    # neto (lo que debe estar en la caja), pero al lado se lista "NC Efectivo",
+    # y sin el bruto era imposible saber si esa NC ya estaba restada o no: el
+    # operador terminaba restándola otra vez a mano al contar. Con los tres
+    # números (bruto − NC = neto) la resta queda explícita en pantalla.
+    cuadratura_data['total_efectivo_bruto'] = cuadratura_data['total_efectivo']
+    # Mismo problema, mismos brutos: transferencia y crédito externo también
+    # salen NETOS de su NC (ver las restas de más abajo).
+    cuadratura_data['total_transferencia_bruta'] = cuadratura_data['total_transferencia']
+    cuadratura_data['total_credito_externo_bruto'] = cuadratura_data['total_credito_externo']
+
     # NC en efectivo resta del efectivo teórico de caja
     cuadratura_data['total_efectivo'] -= cuadratura_data['total_nc_efectivo']
     # NC por transferencia resta del teórico de transferencias (simétrico
@@ -9461,6 +9527,25 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
     cuadratura_data['total_credito_externo'] -= cuadratura_data['total_nc_credito']
     # NC devueltas vía API de Mercado Pago restan del teórico MP presencial.
     cuadratura_data['total_mercadopago_pos'] -= cuadratura_data['total_nc_mercadopago_pos']
+
+    # Ecommerce propio: total del bloque. Se calcula acá (y no en el loop) para
+    # que sea imposible que se desincronice de sus tres sub-buckets.
+    cuadratura_data['total_ecommerce_propio'] = (
+        cuadratura_data['total_ecommerce_webpay'] +
+        cuadratura_data['total_ecommerce_mercadopago'] +
+        cuadratura_data['total_ecommerce_otros']
+    )
+
+    # TODO lo que entró por Mercado Pago, sin importar el canal: la máquina
+    # Point/QR del mesón + el MP de marketplace + el MP del ecommerce propio.
+    # Es un total de LECTURA para el operador (¿cuánto me liquida MP hoy?): NO
+    # se suma al VENTA TOTAL, que sigue armándose de los buckets individuales
+    # para no contar la misma plata dos veces.
+    cuadratura_data['total_mercadopago_consolidado'] = (
+        cuadratura_data['total_mercadopago_pos'] +
+        cuadratura_data['total_mercadopago'] +
+        cuadratura_data['total_ecommerce_mercadopago']
+    )
 
     return cuadratura_data
 
@@ -12462,7 +12547,9 @@ def exportar_cuadratura_excel(request):
         row += 1
         
         metodos_pago = [
-            ('Efectivo', cuadratura_data.get('total_efectivo', 0)),
+            ('Efectivo (bruto)', cuadratura_data.get('total_efectivo_bruto', 0)),
+            ('NC Efectivo (resta)', -cuadratura_data.get('total_nc_efectivo', 0)),
+            ('Efectivo (neto en caja)', cuadratura_data.get('total_efectivo', 0)),
             ('Tarjeta Débito', cuadratura_data.get('total_tarjeta_debito', 0)),
             ('Tarjeta Crédito', cuadratura_data.get('total_tarjeta_credito', 0)),
             ('Transferencia', cuadratura_data.get('total_transferencia', 0)),
@@ -12479,9 +12566,14 @@ def exportar_cuadratura_excel(request):
             ('Ripley', cuadratura_data.get('total_ripley', 0)),
             ('Falabella', cuadratura_data.get('total_falabella', 0)),
             ('Paris', cuadratura_data.get('total_paris', 0)),
-            ('Mercado Pago (internet)', cuadratura_data.get('total_mercadopago', 0)),
+            ('Mercado Pago (marketplace)', cuadratura_data.get('total_mercadopago', 0)),
             ('Klap', cuadratura_data.get('total_klap', 0)),
+            ('Ecommerce propio — Webpay', cuadratura_data.get('total_ecommerce_webpay', 0)),
+            ('Ecommerce propio — Mercado Pago', cuadratura_data.get('total_ecommerce_mercadopago', 0)),
+            ('Ecommerce propio — Otros / sin definir', cuadratura_data.get('total_ecommerce_otros', 0)),
             ('Venta Internet (total)', cuadratura_data.get('total_venta_internet', 0)),
+            ('TOTAL Mercado Pago (POS + marketplace + ecommerce)',
+             cuadratura_data.get('total_mercadopago_consolidado', 0)),
             ('Crédito Trabajador', cuadratura_data.get('total_credito_trabajador', 0)),
             ('Crédito Externo', cuadratura_data.get('total_credito_externo', 0)),
             ('Orden de Compra', cuadratura_data.get('total_orden_compra', 0)),

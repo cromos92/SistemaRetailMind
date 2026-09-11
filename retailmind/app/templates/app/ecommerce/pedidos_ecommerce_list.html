@@ -65,6 +65,21 @@
 .tbl .col-fecha{font-size:.78rem;color:#475569;white-space:nowrap;}
 .tbl .col-num-pedido{font-size:.78rem;color:#334155;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .tbl .col-sucursal{font-size:.82rem;font-weight:600;color:#334155;}
+
+/* Medio de pago editable inline. El estado "sin definir" se marca en ámbar
+   porque es accionable: mientras siga así, esa venta no se puede atribuir ni a
+   Webpay ni a Mercado Pago en la cuadratura de caja. */
+.tbl .col-medio-pago{white-space:nowrap;}
+.tbl .sel-medio-pago{
+  font-size:.78rem;padding:.2rem 1.35rem .2rem .4rem;border:1px solid #cbd5e1;border-radius:6px;
+  background:#fff;color:#334155;max-width:150px;cursor:pointer;min-height:30px;
+  appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%2364748b'%3e%3cpath d='M4.5 6l3.5 4 3.5-4z'/%3e%3c/svg%3e");
+  background-repeat:no-repeat;background-position:right .3rem center;background-size:14px;
+}
+.tbl .sel-medio-pago:focus{outline:none;border-color:#405189;box-shadow:0 0 0 3px rgba(64,81,137,.15);}
+.tbl .sel-medio-pago:disabled{opacity:.55;cursor:progress;}
+.tbl .sel-medio-pago-vacio{border-color:#f0ad4e;background-color:#fff8e6;color:#8a6100;font-weight:600;}
 .tbl .col-cliente-nombre{font-weight:600;font-size:.87rem;color:#0f172a;}
 .tbl .col-cliente-doc{font-size:.74rem;color:#64748b;}
 
@@ -461,6 +476,18 @@
             </select>
           </div>
           <div class="col-md-2 col-6">
+            <label class="filtro-label">Medio pago</label>
+            <select name="medio_pago" class="form-select form-select-sm" title="Con qué pagó el cliente en el canal">
+              <option value="">Todos</option>
+              {# Centinela: '' es un valor válido del campo, así que "sin definir" #}
+              {# necesita una clave propia para no confundirse con "sin filtro".   #}
+              <option value="SIN_DEFINIR" {% if medio_pago_filtro == 'SIN_DEFINIR' %}selected{% endif %}>⚠ Sin definir</option>
+              {% for val, lbl in medios_pago_choices %}{% if val %}
+                <option value="{{ val }}" {% if medio_pago_filtro == val %}selected{% endif %}>{{ lbl }}</option>
+              {% endif %}{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2 col-6">
             <label class="filtro-label">Sucursal</label>
             <select name="sucursal_id" class="form-select form-select-sm" id="filtro-sucursal">
               <option value="" {% if sucursal_filtro == '' and not ver_todas %}selected{% endif %}>Mi sucursal</option>
@@ -492,7 +519,7 @@
             <button type="button" class="btn btn-sm text-white" style="background:#405189;" onclick="aplicarFiltros(1)"><i class="bi bi-funnel me-1"></i>Filtrar</button>
             <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limpiarFiltros()" title="Limpiar todos los filtros"><i class="bi bi-arrow-counterclockwise me-1"></i>Limpiar</button>
             <a id="btn-export-csv" data-base="{% url 'exportar_pedidos_csv' %}"
-               href="{% url 'exportar_pedidos_csv' %}?estado={{ estado_filtro }}&canal={{ canal_filtro }}&sub_estado={{ sub_estado_filtro }}&sucursal_id={{ sucursal_filtro }}&q={{ q }}{% if ver_todas %}&ver_todas=1{% endif %}"
+               href="{% url 'exportar_pedidos_csv' %}?estado={{ estado_filtro }}&canal={{ canal_filtro }}&sub_estado={{ sub_estado_filtro }}&medio_pago={{ medio_pago_filtro }}&sucursal_id={{ sucursal_filtro }}&q={{ q }}{% if ver_todas %}&ver_todas=1{% endif %}"
                class="btn btn-outline-success btn-sm" title="Exportar a CSV lo que estás viendo">
               <i class="bi bi-file-earmark-spreadsheet me-1"></i>CSV
             </a>
@@ -1109,8 +1136,61 @@ tablaContainer.addEventListener('change', function(e){
   } else if(e.target.classList.contains('cb-pedido-row')){
     _setSeleccion(e.target, e.target.checked);
     actualizarContador();
+  } else if(e.target.classList.contains('sel-medio-pago')){
+    guardarMedioPago(e.target);
   }
 });
+
+/* ─────────────────────────────────────────────────────
+   Medio de pago del pedido (Webpay / Mercado Pago / ...)
+
+   AllConnected no manda este dato todavía, así que el operador lo fija acá.
+   Sin él, la cuadratura de caja no puede distinguir un pedido pagado con
+   Webpay de uno pagado con Mercado Pago: los mete a todos en el mismo
+   bucket. Guardado inline (sin modal ni botón Guardar) porque es un campo
+   que se corrige de a decenas al revisar el día.
+
+   Si el pedido ya está facturado, el backend además reescribe el
+   `tipo_tarjeta` del pago del ticket — que es de donde lee la cuadratura —
+   así que corregir acá arregla el Resumen de Caja al regenerarlo.
+   ───────────────────────────────────────────────────── */
+function guardarMedioPago(sel){
+  const id = sel.dataset.pedidoId;
+  const previo = sel.dataset.original || '';
+  const valor = sel.value;
+  if(!id || valor === previo) return;
+
+  const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  sel.disabled = true;
+  fetch(`/app/ecommerce/pedidos/${id}/medio-pago/`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json', 'X-CSRFToken': csrfToken},
+    body: JSON.stringify({medio_pago: valor}),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if(!d.ok){
+        sel.value = previo;   // revertir: el select no puede mentir sobre la BD
+        Swal.fire('No se pudo guardar', d.error || 'Error desconocido', 'error');
+        return;
+      }
+      sel.dataset.original = d.medio_pago || '';
+      sel.classList.toggle('sel-medio-pago-vacio', !d.medio_pago);
+      const extra = d.pagos_actualizados
+        ? ' El pago del ticket ya facturado se reclasificó.'
+        : '';
+      Swal.fire({
+        toast: true, position: 'top-end', icon: 'success', timer: 2600,
+        showConfirmButton: false,
+        title: `Medio de pago: ${d.medio_pago_display}.${extra}`,
+      });
+    })
+    .catch(e => {
+      sel.value = previo;
+      Swal.fire('Error de conexión', String(e), 'error');
+    })
+    .finally(() => { sel.disabled = false; });
+}
 
 // Paginación AJAX: links con data-page dentro del parcial
 tablaContainer.addEventListener('click', function(e){

@@ -31,7 +31,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from app.models import PedidoEcommerce, TicketDetallePago
-from app.views_ecommerce import _normalizar_canal, PLATAFORMA_INTERNET_POR_CANAL
+from app.views_ecommerce import _normalizar_canal, tipo_tarjeta_venta_internet
 
 
 class Command(BaseCommand):
@@ -75,7 +75,7 @@ class Command(BaseCommand):
         """Actualiza tipo_tarjeta del pago VENTA_INTERNET del ticket facturado."""
         if not pedido.ticket_id:
             return 0
-        plataforma = PLATAFORMA_INTERNET_POR_CANAL.get(nuevo_canal, 'Internet')
+        plataforma = tipo_tarjeta_venta_internet(nuevo_canal, pedido.medio_pago)
         qs = TicketDetallePago.objects.filter(
             ticket_id=pedido.ticket_id, metodo_pago='VENTA_INTERNET'
         )

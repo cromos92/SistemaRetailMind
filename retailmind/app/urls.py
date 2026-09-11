@@ -1825,6 +1825,7 @@ urlpatterns = [
     path('ecommerce/pedidos/<int:pedido_id>/guardar-match/', views_ecommerce.api_guardar_match_sku, name='api_guardar_match_sku'),
     path('ecommerce/pedidos/<int:pedido_id>/facturar/', views_ecommerce.api_facturar_pedido_individual, name='api_facturar_pedido_individual'),
     path('ecommerce/pedidos/<int:pedido_id>/sub-estado/', views_ecommerce.api_cambiar_sub_estado, name='api_cambiar_sub_estado_pedido'),
+    path('ecommerce/pedidos/<int:pedido_id>/medio-pago/', views_ecommerce.api_fijar_medio_pago, name='api_fijar_medio_pago_pedido'),
     path('ecommerce/pedidos/<int:pedido_id>/imprimir-guia/', views_ecommerce.api_imprimir_guia_preparacion, name='api_imprimir_guia_preparacion'),
     path('ecommerce/pedidos/imprimir-guias-sucursal/', views_ecommerce.api_imprimir_guias_sucursal, name='api_imprimir_guias_sucursal'),
     path('ecommerce/pedidos/<int:pedido_id>/guia-pdf/', views_ecommerce.api_guia_preparacion_pdf, name='api_guia_preparacion_pdf'),

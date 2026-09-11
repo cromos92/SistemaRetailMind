@@ -16,6 +16,7 @@
             <th>Cliente</th>
             <th>Sucursal</th>
             <th class="text-end">Total</th>
+            <th title="Con qué pagó el cliente en el canal. Define cómo se clasifica la venta en la cuadratura de caja.">Medio pago</th>
             <th>Fecha</th>
             <th>Estado</th>
             <th>Sub-estado</th>
@@ -64,7 +65,21 @@
                 <br><span class="badge-sin-stock"><i class="bi bi-exclamation-triangle-fill me-1"></i>Stock insuf.</span>
               {% endif %}
             </td>
-            <td class="text-end col-total"><span class="fmt-miles" data-val="{{ p.total|floatformat:0 }}">${{ p.total|floatformat:0 }}</span></td>
+            <td class="col-total text-end"><span class="fmt-miles" data-val="{{ p.total|floatformat:0 }}">${{ p.total|floatformat:0 }}</span></td>
+            <td class="col-medio-pago">
+              {# Editable siempre (incluso facturado): corregirlo reescribe el     #}
+              {# tipo_tarjeta del pago del ticket, que es de donde lee la          #}
+              {# cuadratura. Un pedido mal clasificado hoy se arregla acá y el     #}
+              {# Resumen de Caja del día se corrige al regenerarlo.                #}
+              <select class="sel-medio-pago{% if not p.medio_pago %} sel-medio-pago-vacio{% endif %}"
+                      data-pedido-id="{{ p.id }}"
+                      data-original="{{ p.medio_pago }}"
+                      title="{% if p.medio_pago_origen == 'MANUAL' %}Fijado a mano{% elif p.medio_pago_origen == 'CANAL' %}Informado por el canal{% else %}Sin definir: la venta cae en “Ecommerce otros / s-def.” de la cuadratura{% endif %}">
+                {% for valor, etiqueta in medios_pago_choices %}
+                <option value="{{ valor }}"{% if p.medio_pago == valor %} selected{% endif %}>{{ etiqueta }}</option>
+                {% endfor %}
+              </select>
+            </td>
             <td class="col-fecha">{{ p.fecha_recepcion|date:"d/m/Y H:i" }}</td>
             <td>
               {% if p.estado == 'PENDIENTE' %}<span class="badge-p">Pendiente</span>

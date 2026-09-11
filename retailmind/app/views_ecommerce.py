@@ -54,8 +54,127 @@ PLATAFORMA_INTERNET_POR_CANAL = {
     'PARIS': 'Paris',
     'RIPLEY': 'Ripley',
     'WALMART': 'Walmart',
-    'OTRO': 'Internet',
 }
+
+# Todo canal AUSENTE del mapa de arriba se trata como ECOMMERCE PROPIO: los
+# sitios Django de la casa (REALSPORT / PAOLA), el cajón de sastre 'OTRO' y
+# cualquier canal nuevo que AllConnected empiece a mandar. La diferencia con un
+# marketplace es de dónde sale la plata: ahí la liquida Paris/Ripley/Walmart y
+# el medio con que pagó el cliente da lo mismo para la caja; acá el cobro entra
+# por la pasarela del propio sitio, que puede ser Webpay o Mercado Pago SEGÚN EL
+# PEDIDO. Por eso su `tipo_tarjeta` se arma con el `medio_pago` del pedido y no
+# con el nombre del canal. 'OTRO' salió del mapa (antes valía 'Internet') por lo
+# mismo: ese literal era justamente el que la cuadratura no sabía clasificar.
+
+# Prefijo de `tipo_tarjeta` con que se marcan los pagos de ecommerce propio.
+# La cuadratura de caja lo detecta por prefijo ANTES de sus reglas por
+# substring: sin él, 'Ecommerce Mercado Pago' contendría 'MERCADO' y volvería a
+# caer en el bucket de Mercado Pago marketplace, que es justo el bug que este
+# desglose corrige.
+PREFIJO_TIPO_TARJETA_ECOMMERCE = 'Ecommerce'
+
+# `medio_pago` del pedido -> sufijo del `tipo_tarjeta` que se graba en el pago.
+# '' (sin definir) queda como 'Ecommerce' pelado: la cuadratura lo muestra en
+# su propia fila "S/DEF." en vez de inventarle un medio.
+SUFIJO_TIPO_TARJETA_POR_MEDIO = {
+    'WEBPAY': 'Webpay',
+    'MERCADO_PAGO': 'Mercado Pago',
+    'TRANSFERENCIA': 'Transferencia',
+    'OTRO': 'Otro',
+}
+
+# Alias entrantes -> código de MEDIO_PAGO_ECOMMERCE_CHOICES. AllConnected (y
+# cada tienda detrás) nombra la pasarela a su manera; la ingesta es tolerante a
+# propósito para que el dato sirva apenas empiecen a mandarlo, sin coordinar un
+# deploy conjunto. Lo que no matchea queda '' (sin definir) — NO se adivina.
+MEDIO_PAGO_ALIAS = {
+    # Webpay / Transbank
+    'WEBPAY': 'WEBPAY',
+    'WEBPAYPLUS': 'WEBPAY',
+    'WEBPAYONECLICK': 'WEBPAY',
+    'TRANSBANK': 'WEBPAY',
+    'TBK': 'WEBPAY',
+    'ONECLICK': 'WEBPAY',
+    'REDCOMPRA': 'WEBPAY',
+    'TARJETA': 'WEBPAY',
+    'TARJETACREDITO': 'WEBPAY',
+    'TARJETADEBITO': 'WEBPAY',
+    # Mercado Pago
+    'MERCADOPAGO': 'MERCADO_PAGO',
+    'MERCADOPAGOCHECKOUTPRO': 'MERCADO_PAGO',
+    'MP': 'MERCADO_PAGO',
+    'MERCADOLIBRE': 'MERCADO_PAGO',
+    'CHECKOUTPRO': 'MERCADO_PAGO',
+    # Transferencia
+    'TRANSFERENCIA': 'TRANSFERENCIA',
+    'TRANSFERENCIABANCARIA': 'TRANSFERENCIA',
+    'DEPOSITO': 'TRANSFERENCIA',
+    'KHIPU': 'TRANSFERENCIA',
+    'BANCOESTADO': 'TRANSFERENCIA',
+    # Otros medios reconocidos pero sin bucket propio
+    'OTRO': 'OTRO',
+    'FLOW': 'OTRO',
+    'KLAP': 'OTRO',
+    'ETPAY': 'OTRO',
+    'PAYPAL': 'OTRO',
+    'EFECTIVO': 'OTRO',
+}
+
+# Claves con que el medio de pago puede venir en el payload de AllConnected.
+# Se prueban en orden; la primera con valor no vacío gana.
+CLAVES_MEDIO_PAGO_PAYLOAD = (
+    'medio_pago', 'metodo_pago', 'forma_pago', 'tipo_pago',
+    'payment_method', 'payment_type', 'gateway', 'pasarela',
+)
+
+
+def normalizar_medio_pago_ecommerce(valor):
+    """Normaliza un medio de pago entrante al código canónico, o '' si no matchea.
+
+    Acepta el código exacto ('MERCADO_PAGO'), el nombre de la pasarela
+    ('webpay_plus', 'Mercado Pago', 'transbank') o cualquier alias de
+    :data:`MEDIO_PAGO_ALIAS`. Nunca adivina: lo desconocido vuelve ''.
+    """
+    base = (valor or '').strip().upper()
+    if not base:
+        return ''
+    if base in SUFIJO_TIPO_TARJETA_POR_MEDIO:
+        return base
+    clave = base.replace(' ', '').replace('-', '').replace('_', '').replace('.', '')
+    return MEDIO_PAGO_ALIAS.get(clave, '')
+
+
+def _extraer_medio_pago(data):
+    """Saca el medio de pago del payload de ingesta probando varios nombres."""
+    if not isinstance(data, dict):
+        return ''
+    for clave in CLAVES_MEDIO_PAGO_PAYLOAD:
+        medio = normalizar_medio_pago_ecommerce(data.get(clave))
+        if medio:
+            return medio
+    return ''
+
+
+def tipo_tarjeta_venta_internet(canal_origen, medio_pago=''):
+    """`tipo_tarjeta` con que se graba un pago VENTA_INTERNET.
+
+    Marketplace -> el nombre de la plataforma ('Paris', 'Ripley'...), que es
+    quien liquida la plata. Ecommerce propio -> 'Ecommerce <medio>', para que la
+    cuadratura separe Webpay de Mercado Pago en vez de meterlos a todos en el
+    mismo bucket.
+    """
+    plataforma = PLATAFORMA_INTERNET_POR_CANAL.get((canal_origen or '').upper().strip())
+    if plataforma:
+        return plataforma
+    sufijo = SUFIJO_TIPO_TARJETA_POR_MEDIO.get(medio_pago or '')
+    if sufijo:
+        return f'{PREFIJO_TIPO_TARJETA_ECOMMERCE} {sufijo}'
+    return PREFIJO_TIPO_TARJETA_ECOMMERCE
+
+
+def tipo_tarjeta_para_pedido(pedido):
+    """Atajo de :func:`tipo_tarjeta_venta_internet` para un PedidoEcommerce."""
+    return tipo_tarjeta_venta_internet(pedido.canal_origen, pedido.medio_pago)
 
 # Tipos de documento de VENTA (mismos que VentasView._TIPOS_VENTA en
 # api/external/views.py). Se usan al resolver el DTE de un ticket por folio:
@@ -107,15 +226,20 @@ def _crear_pago_ecommerce(ticket, pedido):
     `voucher`. Así el DTE y la cuadratura de caja lo registran como venta por
     internet del canal correspondiente (Paris/Ripley/Walmart/Shopify) y no como
     una transferencia genérica.
+
+    En los ecommerce PROPIOS no hay marketplace que liquide: `tipo_tarjeta` sale
+    del `medio_pago` del pedido ('Ecommerce Webpay' / 'Ecommerce Mercado Pago'),
+    que es lo que permite a la cuadratura no contarlos todos como Mercado Pago.
     """
-    plataforma = PLATAFORMA_INTERNET_POR_CANAL.get(pedido.canal_origen, 'Internet')
+    plataforma = tipo_tarjeta_para_pedido(pedido)
+    medio = pedido.get_medio_pago_display() if pedido.medio_pago else 'medio sin definir'
     return TicketDetallePago.objects.create(
         ticket=ticket,
         metodo_pago='VENTA_INTERNET',
         tipo_tarjeta=plataforma,
         voucher=(pedido.numero_pedido_canal or '')[:100],
         monto=int(pedido.total or 0),
-        notas=f'Pago {pedido.canal_origen} #{pedido.numero_pedido_canal}',
+        notas=f'Pago {pedido.canal_origen} #{pedido.numero_pedido_canal} ({medio})',
     )
 
 
@@ -325,7 +449,7 @@ def _generar_numero_ticket_rm():
 
 
 def _respuesta_pedido_existente(existente, correlativo_in='', correlativo_numero_in=None,
-                                es_retiro_local_in=None):
+                                es_retiro_local_in=None, medio_pago_in=''):
     """Respuesta idempotente para un pedido ya ingresado."""
     if correlativo_in and correlativo_in != (existente.correlativo or ''):
         existente.correlativo = correlativo_in
@@ -337,6 +461,15 @@ def _respuesta_pedido_existente(existente, correlativo_in='', correlativo_numero
     if es_retiro_local_in is not None and bool(es_retiro_local_in) != existente.es_retiro_local:
         existente.es_retiro_local = bool(es_retiro_local_in)
         existente.save(update_fields=['es_retiro_local'])
+    # Medio de pago: mismo criterio que el correlativo — se rellena cuando el
+    # canal empieza a informarlo, pero NUNCA pisa lo que un operador ya fijó a
+    # mano (`medio_pago_origen == 'MANUAL'`), que es el dato con dueño.
+    if (medio_pago_in
+            and medio_pago_in != existente.medio_pago
+            and existente.medio_pago_origen != 'MANUAL'):
+        existente.medio_pago = medio_pago_in
+        existente.medio_pago_origen = 'CANAL'
+        existente.save(update_fields=['medio_pago', 'medio_pago_origen'])
     return {
         'ok': True,
         'numero_ticket_rm': existente.numero_ticket_rm,
@@ -410,6 +543,11 @@ def _ingestar_pedido_dict(data):
     # pedido se crea con el default False, sin romper la ingesta.
     es_retiro_local_in = data.get('es_retiro_local', None)
 
+    # Medio de pago del canal (Webpay / Mercado Pago / ...). Opcional y
+    # tolerante: si AllConnected todavía no lo manda queda '' y el operador lo
+    # fija desde el listado de pedidos. Ver `CLAVES_MEDIO_PAGO_PAYLOAD`.
+    medio_pago_in = _extraer_medio_pago(data)
+
     # Verificar si ya existe un pedido para este canal+número (idempotente)
     existente = PedidoEcommerce.objects.filter(
         numero_pedido_canal=numero_pedido_canal,
@@ -419,7 +557,7 @@ def _ingestar_pedido_dict(data):
         # Actualizar el folio si AllConnected ya lo asignó y antes estaba vacío
         # (o cambió). NUNCA pisar un folio ya seteado con un valor vacío entrante.
         return _respuesta_pedido_existente(existente, correlativo_in, correlativo_numero_in,
-                                           es_retiro_local_in)
+                                           es_retiro_local_in, medio_pago_in)
 
     try:
         # Validar stock en la sucursal para determinar sub-estado inicial
@@ -440,6 +578,8 @@ def _ingestar_pedido_dict(data):
             coupon_code=(data.get('coupon_code', '') or ''),
             from_app=bool(data.get('from_app')),
             es_retiro_local=bool(es_retiro_local_in),
+            medio_pago=medio_pago_in,
+            medio_pago_origen='CANAL' if medio_pago_in else '',
             subtotal=data.get('subtotal', 0),
             descuento=data.get('descuento', 0),
             impuestos=data.get('impuestos', 0),
@@ -503,7 +643,7 @@ def _ingestar_pedido_dict(data):
         ).first()
         if existente:
             return _respuesta_pedido_existente(existente, correlativo_in, correlativo_numero_in,
-                                               es_retiro_local_in)
+                                               es_retiro_local_in, medio_pago_in)
         return {'ok': False, 'error': 'Pedido duplicado no pudo recuperarse', 'status': 409}
     except Exception as e:
         return {'ok': False, 'error': str(e), 'status': 500}
@@ -1263,6 +1403,17 @@ def _aplicar_filtros_pedidos(qs, params):
     if sub_estado:
         qs = qs.filter(sub_estado=sub_estado)
 
+    # Medio de pago. El centinela 'SIN_DEFINIR' filtra los que todavía no
+    # tienen medio: son los que la cuadratura no puede atribuir ni a Webpay ni
+    # a Mercado Pago, y el aviso del Resumen de Caja enlaza directo a esta
+    # vista para poder cerrarlos. Como '' es un valor VÁLIDO del campo, no
+    # sirve pasarlo tal cual: se confundiría con "sin filtro".
+    medio_pago = params.get('medio_pago', '')
+    if medio_pago == 'SIN_DEFINIR':
+        qs = qs.filter(medio_pago='')
+    elif medio_pago:
+        qs = qs.filter(medio_pago=medio_pago)
+
     desde = _parse_fecha_param(params.get('desde', ''))
     if desde:
         qs = qs.filter(fecha_recepcion__date__gte=desde)
@@ -1431,6 +1582,9 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
         context['estados_choices'] = ESTADO_PEDIDO_ECOMMERCE_CHOICES
         context['sub_estados_choices'] = SUB_ESTADO_PEDIDO_CHOICES
         context['sub_estado_filtro'] = self.request.GET.get('sub_estado', '')
+        from app.models import MEDIO_PAGO_ECOMMERCE_CHOICES
+        context['medios_pago_choices'] = MEDIO_PAGO_ECOMMERCE_CHOICES
+        context['medio_pago_filtro'] = self.request.GET.get('medio_pago', '')
 
         # KPIs del encabezado — solo en render completo (el parcial AJAX no los usa).
         # Cuentan sobre el MISMO scope de empresa + sucursal que el listado, en
@@ -2803,6 +2957,82 @@ def api_cambiar_sub_estado(request, pedido_id):
 
 
 # ---------------------------------------------------------------------------
+# API — Fijar el medio de pago del pedido (Webpay / Mercado Pago / ...)
+# ---------------------------------------------------------------------------
+
+@login_required
+@csrf_exempt
+def api_fijar_medio_pago(request, pedido_id):
+    """POST /app/ecommerce/pedidos/<id>/medio-pago/  ``{"medio_pago": "WEBPAY"}``
+
+    Fija a mano con qué pagó el cliente cuando el canal no lo informa. Queda
+    marcado con ``medio_pago_origen='MANUAL'`` para que un pull posterior de
+    AllConnected no lo pise (ver `_respuesta_pedido_existente`).
+
+    Un pedido YA FACTURADO también se puede corregir: además del pedido se
+    reescribe el `tipo_tarjeta` del pago del ticket, que es de donde la
+    cuadratura de caja lee la clasificación. Sin eso, corregir el pedido no
+    movería un peso en el Resumen de Caja.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'POST requerido'}, status=405)
+    denegado = _verificar_permiso_ecommerce(request, 'puede_editar')
+    if denegado:
+        return denegado
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'JSON inválido'}, status=400)
+
+    crudo = (data.get('medio_pago') or '').strip()
+    medio = normalizar_medio_pago_ecommerce(crudo)
+    # '' entrante = "volver a Sin definir" (válido). '' resultante de un valor
+    # que no matchea ningún alias = error, para no borrar el dato en silencio.
+    if crudo and not medio:
+        validos = ', '.join(SUFIJO_TIPO_TARJETA_POR_MEDIO)
+        return JsonResponse(
+            {'ok': False, 'error': f"Medio de pago no reconocido: '{crudo}'. Válidos: {validos}."},
+            status=400)
+
+    pedido = get_object_or_404(
+        _scope_empresa_pedidos(PedidoEcommerce.objects.select_related('ticket'), request.user),
+        id=pedido_id,
+    )
+    anterior = pedido.medio_pago
+    pedido.medio_pago = medio
+    pedido.medio_pago_origen = 'MANUAL' if medio else ''
+    pedido.save(update_fields=['medio_pago', 'medio_pago_origen'])
+
+    # Reclasificar el pago del ticket si el pedido ya se facturó.
+    pagos_actualizados = 0
+    if pedido.ticket_id:
+        pagos_actualizados = TicketDetallePago.objects.filter(
+            ticket_id=pedido.ticket_id, metodo_pago='VENTA_INTERNET',
+        ).update(tipo_tarjeta=tipo_tarjeta_para_pedido(pedido))
+
+    HistorialPedidoEcommerce.objects.create(
+        pedido=pedido,
+        estado_anterior=pedido.estado,
+        estado_nuevo=pedido.estado,
+        sub_estado_anterior=pedido.sub_estado,
+        sub_estado_nuevo=pedido.sub_estado,
+        usuario=request.user,
+        tipo_evento='CAMBIO_ESTADO',
+        motivo=f"Medio de pago: {anterior or 'sin definir'} -> {medio or 'sin definir'}",
+    )
+    logger.info('Pedido %s: medio de pago %r -> %r por %s (%s pago(s) reclasificado(s))',
+                pedido.numero_ticket_rm, anterior, medio, request.user, pagos_actualizados)
+
+    return JsonResponse({
+        'ok': True,
+        'medio_pago': pedido.medio_pago,
+        'medio_pago_display': pedido.get_medio_pago_display() if pedido.medio_pago else 'Sin definir',
+        'pagos_actualizados': pagos_actualizados,
+    })
+
+
+# ---------------------------------------------------------------------------
 # API — Imprimir guía de preparación (picking en tienda)
 # ---------------------------------------------------------------------------
 
@@ -3901,7 +4131,8 @@ def exportar_pedidos_csv(request):
     writer = csv.writer(response, delimiter=';')
     writer.writerow([
         'N Ticket RM', 'Folio Despacho', 'N Pedido Canal', 'Canal', 'Cliente', 'RUT/Doc',
-        'Sucursal', 'Total', 'Estado', 'Sub-estado', 'Fecha Recepcion',
+        'Sucursal', 'Total', 'Medio Pago', 'Origen Medio Pago',
+        'Estado', 'Sub-estado', 'Fecha Recepcion',
         'Fecha Facturacion', 'Ticket #', 'DTE #',
         # Cabecera del DTE: permite detectar en Excel las boletas emitidas con
         # unidades y/o monto en 0 (ver alerta del listado).
@@ -3925,6 +4156,8 @@ def exportar_pedidos_csv(request):
             p.cliente_documento,
             p.sucursal.nombre or p.sucursal.alias if p.sucursal else '',
             int(p.total or 0),
+            p.get_medio_pago_display() if p.medio_pago else 'Sin definir',
+            p.medio_pago_origen,
             p.estado,
             p.sub_estado,
             _f(p.fecha_recepcion),

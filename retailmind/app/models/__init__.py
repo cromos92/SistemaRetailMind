@@ -220,6 +220,7 @@ from .predicciones import (  # noqa: F401
 
 from .ecommerce import (  # noqa: F401
     CANAL_ECOMMERCE_CHOICES,
+    MEDIO_PAGO_ECOMMERCE_CHOICES,
     ESTADO_PEDIDO_ECOMMERCE_CHOICES,
     SUB_ESTADO_PEDIDO_CHOICES,
     PRIORIDAD_PEDIDO_CHOICES,

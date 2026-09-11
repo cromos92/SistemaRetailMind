@@ -21,6 +21,25 @@ CANAL_ECOMMERCE_CHOICES = [
     ('OTRO', 'Otro'),
 ]
 
+# Medio de pago REAL con que el cliente pagó el pedido online. Es dato del
+# CANAL (Webpay/Transbank, Mercado Pago, transferencia...), no del POS: la
+# tienda nunca ve la tarjeta. Lo informa AllConnected en la ingesta si lo
+# manda; si no, queda '' (SIN DEFINIR) y el operador lo fija desde el listado
+# de pedidos antes de facturar.
+#
+# Existe porque la cuadratura de caja clasificaba TODO el ecommerce propio
+# (REALSPORT/PAOLA) como "Mercado Pago": esos canales no estaban en
+# `PLATAFORMA_INTERNET_POR_CANAL`, caían al literal 'Internet' y de ahí al
+# `else` del clasificador de Venta Internet. Un pedido pagado con Webpay
+# aparecía como venta Mercado Pago.
+MEDIO_PAGO_ECOMMERCE_CHOICES = [
+    ('', 'Sin definir'),
+    ('WEBPAY', 'Webpay / Transbank'),
+    ('MERCADO_PAGO', 'Mercado Pago'),
+    ('TRANSFERENCIA', 'Transferencia'),
+    ('OTRO', 'Otro'),
+]
+
 ESTADO_PEDIDO_ECOMMERCE_CHOICES = [
     ('PENDIENTE', 'Pendiente de Facturar'),
     ('FACTURADO', 'Facturado'),
@@ -195,6 +214,27 @@ class PedidoEcommerce(models.Model):
         default=False, db_index=True,
         verbose_name='Compra desde app',
         help_text='El pedido se originó en la app móvil de fidelización (acumula puntos por la parte en dinero).',
+    )
+
+    # Medio de pago del canal (Webpay / Mercado Pago / ...). Ver
+    # MEDIO_PAGO_ECOMMERCE_CHOICES. '' = todavía sin informar ni fijar.
+    medio_pago = models.CharField(
+        max_length=20,
+        choices=MEDIO_PAGO_ECOMMERCE_CHOICES,
+        blank=True,
+        default='',
+        db_index=True,
+        verbose_name='Medio de pago',
+        help_text='Con qué pagó el cliente en el canal. Determina cómo se '
+                  'clasifica la venta en la cuadratura de caja.',
+    )
+    medio_pago_origen = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        verbose_name='Origen del medio de pago',
+        help_text="'CANAL' si lo informó AllConnected, 'MANUAL' si lo fijó un "
+                  "operador. Vacío = sin definir.",
     )
 
     # Montos
