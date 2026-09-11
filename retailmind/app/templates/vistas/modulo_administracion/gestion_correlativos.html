@@ -435,13 +435,6 @@
         outline-offset: 2px;
     }
 
-    .stats-card .kpi-subnota {
-        font-size: 0.6875rem;
-        opacity: 0.95;
-        margin: 0;
-        white-space: nowrap;
-    }
-
     /* Botones de acción más compactos */
     .acciones-cell .btn-action {
         width: 28px;
@@ -763,7 +756,7 @@
 
             <!-- Estadísticas (KPI cards: clic = aplica el filtro de estado) -->
             <div class="row mb-3 g-2">
-                <div class="col-md-3 col-sm-6">
+                <div class="col-md col-sm-6">
                     <div class="stats-card kpi-card stats-card-primary" role="button" tabindex="0"
                          data-filtro-estado="" title="Ver todos los correlativos">
                         <i class="ri-file-text-line"></i>
@@ -773,7 +766,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3 col-sm-6">
+                <div class="col-md col-sm-6">
                     <div class="stats-card kpi-card stats-card-success" role="button" tabindex="0"
                          data-filtro-estado="activo" title="Ver sólo los correlativos que todavía pueden emitir">
                         <i class="ri-play-circle-line"></i>
@@ -783,18 +776,27 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3 col-sm-6">
+                <div class="col-md col-sm-6">
                     <div class="stats-card kpi-card stats-card-warning" role="button" tabindex="0"
-                         data-filtro-estado="proximo_agotarse" title="Ver los correlativos con 100 folios o menos">
+                         data-filtro-estado="proximo_agotarse" title="Ver los correlativos con 100 folios o menos (incluye los en rojo)">
                         <i class="ri-error-warning-line"></i>
                         <div class="stats-card-body">
                             <h3 id="correlativosProximosAgotar">{{ correlativos_proximos_agotar }}</h3>
                             <p>Próximos a Agotar (≤100)</p>
-                            <p class="kpi-subnota" id="kpiMenos20"></p>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3 col-sm-6">
+                <div class="col-md col-sm-6">
+                    <div class="stats-card kpi-card stats-card-error" role="button" tabindex="0"
+                         title="Agotados o con menos de {{ correlativo_umbral_critico|default:20 }} folios — el mismo criterio que dispara el correo de alerta diario">
+                        <i class="ri-flashlight-line"></i>
+                        <div class="stats-card-body">
+                            <h3 id="correlativosEnRojo">{{ correlativos_en_rojo }}</h3>
+                            <p>En Rojo (crítico + agotado)</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md col-sm-6">
                     <div class="stats-card kpi-card stats-card-error" role="button" tabindex="0"
                          data-filtro-estado="agotado" title="Ver los correlativos sin folios disponibles">
                         <i class="ri-close-circle-line"></i>
@@ -836,7 +838,7 @@
                                         {% for correlativo in correlativos|dictsort:"disponibles" %}
                                         <tr data-correlativo-id="{{ correlativo.id }}"
                                             data-disponibles="{{ correlativo.disponibles }}"
-                                            class="{% if correlativo.disponibles <= 0 %}fila-folios-agotado{% elif correlativo.disponibles < 20 %}fila-folios-critico{% elif correlativo.disponibles < 100 %}fila-folios-alerta{% endif %}">
+                                            class="{% if correlativo.nivel_alerta == 'agotado' %}fila-folios-agotado{% elif correlativo.nivel_alerta == 'critico' %}fila-folios-critico{% elif correlativo.nivel_alerta == 'alerta' %}fila-folios-alerta{% endif %}">
                                             <td>
                                                 <div class="d-flex align-items-center gap-1">
                                                     <i class="ri-building-line text-nexo-primary"></i>
@@ -868,22 +870,22 @@
                                                 </div>
                                             </td>
                                             <td class="text-end text-nowrap disponibles-cell" data-order="{{ correlativo.disponibles }}">
-                                                <span class="disponibles-num {% if correlativo.disponibles < 20 %}text-nexo-error{% elif correlativo.disponibles < 100 %}text-nexo-warning{% else %}text-nexo-success{% endif %}"
+                                                <span class="disponibles-num {% if correlativo.nivel_alerta == 'critico' or correlativo.nivel_alerta == 'agotado' %}text-nexo-error{% elif correlativo.nivel_alerta == 'alerta' %}text-nexo-warning{% else %}text-nexo-success{% endif %}"
                                                       data-num="{{ correlativo.disponibles }}">{{ correlativo.disponibles }}</span>
-                                                {% if correlativo.disponibles <= 0 %}
+                                                {% if correlativo.nivel_alerta == 'agotado' %}
                                                     <div class="disponibles-tag tag-agotado">Sin folios</div>
-                                                {% elif correlativo.disponibles < 20 %}
+                                                {% elif correlativo.nivel_alerta == 'critico' %}
                                                     <div class="disponibles-tag tag-critico">¡Pedir folios ya!</div>
-                                                {% elif correlativo.disponibles < 100 %}
+                                                {% elif correlativo.nivel_alerta == 'alerta' %}
                                                     <div class="disponibles-tag tag-alerta">Pedir folios</div>
                                                 {% endif %}
                                             </td>
                                             <td>
-                                                {% if correlativo.disponibles <= 0 %}
+                                                {% if correlativo.nivel_alerta == 'agotado' %}
                                                     <span class="badge-nexo badge-nexo-error">Agotado</span>
-                                                {% elif correlativo.disponibles < 20 %}
+                                                {% elif correlativo.nivel_alerta == 'critico' %}
                                                     <span class="badge-nexo badge-nexo-error">Crítico</span>
-                                                {% elif correlativo.disponibles < 100 %}
+                                                {% elif correlativo.nivel_alerta == 'alerta' %}
                                                     <span class="badge-nexo badge-nexo-warning">Por agotarse</span>
                                                 {% else %}
                                                     <span class="badge-nexo badge-nexo-success">Activo</span>
@@ -1182,13 +1184,12 @@
             return new bootstrap.Tooltip(tooltipTriggerEl);
         });
 
-        // Formato de miles chileno (4.810) y contador de críticos.
-        // OJO: ambos se ejecutan ANTES de inicializar DataTables, porque
-        // DataTables saca del DOM las filas de las páginas no visibles.
-        // El separador de miles del locale es-CL de Django es un espacio
-        // duro, no el punto, así que el formato se hace acá.
+        // Formato de miles chileno (4.810).
+        // OJO: se ejecuta ANTES de inicializar DataTables, porque DataTables
+        // saca del DOM las filas de las páginas no visibles. El separador de
+        // miles del locale es-CL de Django es un espacio duro, no el punto,
+        // así que el formato se hace acá.
         formatearNumerosTabla();
-        actualizarSubcontadorCriticos();
 
         // Verificar si hay datos válidos en la tabla
         initDataTable();
@@ -1214,27 +1215,6 @@
             const n = Number(el.getAttribute('data-num'));
             if (!isNaN(n)) el.textContent = n.toLocaleString('es-CL');
         });
-    }
-
-    // Cuenta las filas con menos de 20 folios disponibles y lo muestra bajo el
-    // KPI "Próximos a Agotar". Se calcula sobre la lista mostrada (si hay un
-    // filtro activo, es el conteo de esa lista) y se rotula así explícitamente.
-    function actualizarSubcontadorCriticos() {
-        const $sub = $('#kpiMenos20');
-        if (!$sub.length) return;
-
-        let criticos = 0;
-        $('#tablaCorrelativos tbody tr[data-disponibles]').each(function() {
-            const d = parseInt($(this).attr('data-disponibles'), 10);
-            if (!isNaN(d) && d > 0 && d < 20) criticos += 1;
-        });
-
-        if (criticos > 0) {
-            $sub.html('<i class="ri-alarm-warning-line me-1"></i>' + criticos +
-                      ' con menos de 20 folios (en esta lista)');
-        } else {
-            $sub.text('');
-        }
     }
 
     function initDataTable() {

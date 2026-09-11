@@ -8981,9 +8981,9 @@ def _bucket_venta_internet(tipo_tarjeta):
     Devuelve el sufijo de la clave `total_*` que corresponde. NUNCA devuelve
     None: lo no clasificable cae en 'ecommerce_otros' (la fila "OTROS / S/DEF."
     del Resumen), de modo que
-    ``falabella + paris + ripley + mercadopago + klap + ecommerce_* ==
-    total_venta_internet`` se cumpla siempre y ninguna venta desaparezca ni se
-    le invente un medio.
+    ``falabella + paris + ripley + mercadolibre + mercadopago + klap +
+    ecommerce_* == total_venta_internet`` se cumpla siempre y ninguna venta
+    desaparezca ni se le invente un medio.
     """
     tarjeta = (tipo_tarjeta or '').upper().strip()
 
@@ -9000,6 +9000,11 @@ def _bucket_venta_internet(tipo_tarjeta):
         return 'paris'
     if 'RIPLEY' in tarjeta:
         return 'ripley'
+    # MercadoLibre ANTES que Mercado Pago: 'MERCADO LIBRE' contiene 'MERCADO' y
+    # si no se evaluara primero volvería a mezclarse con el MP de marketplace
+    # (que es donde estuvo todo el histórico migrado de Laravel hasta ahora).
+    if 'MERCADO LIBRE' in tarjeta or 'MERCADOLIBRE' in tarjeta:
+        return 'mercadolibre'
     if 'MERCADO' in tarjeta or 'SHOPIFY' in tarjeta:
         return 'mercadopago'
     if 'KLAP' in tarjeta:
@@ -9051,11 +9056,17 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
         'total_hites': 0,
         'total_presto': 0,
         'total_tarjetas_comerciales': 0,
-        # Venta Internet (Falabella, Paris, Ripley, MercadoPago, Klap)
+        # Venta Internet (Falabella, Paris, Ripley, MercadoLibre, MercadoPago, Klap)
         'total_falabella': 0,
         'total_paris': 0,
         'total_ripley': 0,
         'total_mercadopago': 0,
+        # MercadoLibre: bucket propio. Antes su venta se repartía en dos filas
+        # equivocadas — el histórico migrado de Laravel (tipo_tarjeta 'Mercado
+        # Libre') caía en `total_mercadopago` por el substring 'MERCADO', y los
+        # pedidos nuevos que manda AllConnected caían en `total_ecommerce_otros`
+        # porque el canal no estaba declarado como marketplace.
+        'total_mercadolibre': 0,
         'total_klap': 0,
         'total_venta_internet': 0,
         # Ecommerce PROPIO (realsport.cl / calzadospaola.cl), desglosado por la
@@ -9537,13 +9548,17 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
     )
 
     # TODO lo que entró por Mercado Pago, sin importar el canal: la máquina
-    # Point/QR del mesón + el MP de marketplace + el MP del ecommerce propio.
-    # Es un total de LECTURA para el operador (¿cuánto me liquida MP hoy?): NO
-    # se suma al VENTA TOTAL, que sigue armándose de los buckets individuales
-    # para no contar la misma plata dos veces.
+    # Point/QR del mesón + el MP de marketplace + MercadoLibre (ML liquida al
+    # vendedor vía Mercado Pago) + el MP del ecommerce propio. Es un total de
+    # LECTURA para el operador (¿cuánto me liquida MP hoy?): NO se suma al VENTA
+    # TOTAL, que sigue armándose de los buckets individuales para no contar la
+    # misma plata dos veces.
+    # MercadoLibre se suma explícitamente para no perderlo al sacarlo de
+    # `total_mercadopago`: antes vivía dentro de ese bucket y ya entraba acá.
     cuadratura_data['total_mercadopago_consolidado'] = (
         cuadratura_data['total_mercadopago_pos'] +
         cuadratura_data['total_mercadopago'] +
+        cuadratura_data['total_mercadolibre'] +
         cuadratura_data['total_ecommerce_mercadopago']
     )
 
@@ -12566,13 +12581,14 @@ def exportar_cuadratura_excel(request):
             ('Ripley', cuadratura_data.get('total_ripley', 0)),
             ('Falabella', cuadratura_data.get('total_falabella', 0)),
             ('Paris', cuadratura_data.get('total_paris', 0)),
+            ('Mercado Libre', cuadratura_data.get('total_mercadolibre', 0)),
             ('Mercado Pago (marketplace)', cuadratura_data.get('total_mercadopago', 0)),
             ('Klap', cuadratura_data.get('total_klap', 0)),
             ('Ecommerce propio — Webpay', cuadratura_data.get('total_ecommerce_webpay', 0)),
             ('Ecommerce propio — Mercado Pago', cuadratura_data.get('total_ecommerce_mercadopago', 0)),
             ('Ecommerce propio — Otros / sin definir', cuadratura_data.get('total_ecommerce_otros', 0)),
             ('Venta Internet (total)', cuadratura_data.get('total_venta_internet', 0)),
-            ('TOTAL Mercado Pago (POS + marketplace + ecommerce)',
+            ('TOTAL Mercado Pago (POS + marketplace + Mercado Libre + ecommerce)',
              cuadratura_data.get('total_mercadopago_consolidado', 0)),
             ('Crédito Trabajador', cuadratura_data.get('total_credito_trabajador', 0)),
             ('Crédito Externo', cuadratura_data.get('total_credito_externo', 0)),

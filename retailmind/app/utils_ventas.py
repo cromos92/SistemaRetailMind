@@ -120,6 +120,11 @@ PLATAFORMA_PAGO_A_CANAL = {
     'WALLMART': 'WALMART',
     'LIDER': 'WALMART',
     'SHOPIFY': 'SHOPIFY',
+    # 'Mercado Libre' (la clave se busca sin espacios) -> canal 'MERCADO', que es
+    # el código con que AllConnected manda los pedidos de ML. OJO: 'Mercado Pago'
+    # NO va acá — es una pasarela, no un canal que AllConnected administre, y
+    # debe seguir cayendo en 'OTRO'.
+    'MERCADOLIBRE': 'MERCADO',
 }
 
 

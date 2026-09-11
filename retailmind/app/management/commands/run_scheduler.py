@@ -27,7 +27,7 @@ import time
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from app.services import campanas_service, fidelizacion_service
+from app.services import campanas_service, correlativos_service, fidelizacion_service
 
 logger = logging.getLogger('app')
 
@@ -87,3 +87,13 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(
                 f'   pasada diaria: {lotes} puntos expirados.'
             ))
+            try:
+                alerta = correlativos_service.alertar_correlativos_en_rojo(enviar=True)
+                logger.info(
+                    'Scheduler (diario): correlativos en rojo=%s, correo=%s.',
+                    alerta['total_en_rojo'], alerta['motivo'],
+                )
+            except Exception:
+                # Un fallo acá (SMTP caído, etc.) no debe tumbar el resto del
+                # scheduler ni impedir que mañana se vuelva a intentar.
+                logger.exception('Scheduler (diario): falló la alerta de correlativos en rojo')

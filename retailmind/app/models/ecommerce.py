@@ -14,6 +14,12 @@ CANAL_ECOMMERCE_CHOICES = [
     ('PARIS', 'Paris'),
     ('RIPLEY', 'Ripley'),
     ('WALMART', 'Walmart'),
+    # MercadoLibre. El código es 'MERCADO' (no 'MERCADOLIBRE') porque es lo que
+    # deja `CANAL_ALIAS` en views_ecommerce: AllConnected manda 'MERCADOLIBRE'
+    # (tipo_marketplace de los canales 32/33) y el alias lo normaliza a
+    # 'MERCADO'. Los pedidos ya guardados en prod usan ese código, así que se
+    # adopta como canónico en vez de migrar datos.
+    ('MERCADO', 'Mercado Libre'),
     # Ecommerces propios Django: AllConnected manda el código del tipo_marketplace
     # en MAYÚSCULAS (REALSPORT = realsport.cl, PAOLA = calzadospaola.cl).
     ('REALSPORT', 'Realsport'),
@@ -32,6 +38,26 @@ CANAL_ECOMMERCE_CHOICES = [
 # `PLATAFORMA_INTERNET_POR_CANAL`, caían al literal 'Internet' y de ahí al
 # `else` del clasificador de Venta Internet. Un pedido pagado con Webpay
 # aparecía como venta Mercado Pago.
+# Canal ecommerce -> plataforma de "Venta por Internet" que se graba en
+# `tipo_tarjeta` del pago (TicketDetallePago / Dte_Detalle_Pago). Estar en este
+# mapa es LA definición de "marketplace": la plata la liquida el canal, así que
+# el `medio_pago` con que pagó el cliente no cambia cómo cuadra la caja. Todo
+# canal AUSENTE es ecommerce propio y sí usa `medio_pago`.
+#
+# Vive acá (y no en views_ecommerce) para que el modelo pueda exponer
+# `PedidoEcommerce.es_marketplace` sin importar una vista: la cuadratura, la
+# facturación y el listado de pedidos tienen que coincidir en quién es
+# marketplace o vuelven a aparecer bugs como el de MercadoLibre, que se
+# facturaba como ecommerce propio y caía en "OTROS / S/DEF.".
+PLATAFORMA_INTERNET_POR_CANAL = {
+    'SHOPIFY': 'Shopify',
+    'PARIS': 'Paris',
+    'RIPLEY': 'Ripley',
+    'WALMART': 'Walmart',
+    'MERCADO': 'Mercado Libre',
+}
+
+
 MEDIO_PAGO_ECOMMERCE_CHOICES = [
     ('', 'Sin definir'),
     ('WEBPAY', 'Webpay / Transbank'),
@@ -439,6 +465,18 @@ class PedidoEcommerce(models.Model):
     @property
     def esta_pendiente(self):
         return self.estado == 'PENDIENTE'
+
+    @property
+    def es_marketplace(self):
+        """True si el canal liquida la plata él mismo (Paris, Ripley, Walmart,
+        MercadoLibre, Shopify).
+
+        En un marketplace `medio_pago` es irrelevante: la cuadratura clasifica
+        la venta por la plataforma, no por la pasarela con que pagó el cliente.
+        El listado de pedidos lo usa para no pedirle al operador que "fije el
+        medio de pago" de una venta donde ese dato no cambia nada.
+        """
+        return (self.canal_origen or '').upper().strip() in PLATAFORMA_INTERNET_POR_CANAL
 
     def puede_transicionar_sub_estado(self, nuevo_sub_estado):
         """Verifica si la transición de sub-estado es válida."""

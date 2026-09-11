@@ -21,6 +21,7 @@ from django.views.decorators.http import require_http_methods
 from django.db import models as django_models
 
 from app.models import (
+    PLATAFORMA_INTERNET_POR_CANAL,
     PedidoEcommerce, Sucursal, Ticket, Dte,
     Ticket_Productos, TicketDetallePago, Producto_Talla, Vendedor,
     HistorialPedidoEcommerce, MetricaAsignacionPedido,
@@ -49,14 +50,12 @@ def _verificar_permiso_ecommerce(request, tipo_permiso):
 # El POS registra estas ventas como VENTA_INTERNET + plataforma; la cuadratura de
 # caja las categoriza por tipo_tarjeta (case-insensitive). NO usar TRANSFERENCIA.
 # Ver generacionVentas.html (opciones) y cuadraturaCaja.html (categorías).
-PLATAFORMA_INTERNET_POR_CANAL = {
-    'SHOPIFY': 'Shopify',
-    'PARIS': 'Paris',
-    'RIPLEY': 'Ripley',
-    'WALMART': 'Walmart',
-}
+#
+# El mapa VIVE EN `app/models/ecommerce.py` (junto a CANAL_ECOMMERCE_CHOICES) para
+# que `PedidoEcommerce.es_marketplace` pueda leerlo sin importar esta vista. Se
+# re-exporta acá porque este módulo era su casa histórica.
 
-# Todo canal AUSENTE del mapa de arriba se trata como ECOMMERCE PROPIO: los
+# Todo canal AUSENTE de ese mapa se trata como ECOMMERCE PROPIO: los
 # sitios Django de la casa (REALSPORT / PAOLA), el cajón de sastre 'OTRO' y
 # cualquier canal nuevo que AllConnected empiece a mandar. La diferencia con un
 # marketplace es de dónde sale la plata: ahí la liquida Paris/Ripley/Walmart y

@@ -1462,10 +1462,14 @@
                                         <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="WALMART,FALABELLA" title="Ver detalle"><td class="rc-label">WALMART</td><td class="rc-monto"><span id="falabella">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="PARIS" title="Ver detalle"><td class="rc-label">PARIS</td><td class="rc-monto"><span id="paris">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="RIPLEY" title="Ver detalle"><td class="rc-label">RIPLEY</td><td class="rc-monto"><span id="ripley">$0</span></td></tr>
+                                        <!-- MercadoLibre: marketplace propio, va ANTES que MP para que se lea
+                                             como una plataforma más (Paris/Ripley/Walmart/ML). -->
+                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="MERCADO LIBRE,MERCADOLIBRE" title="Ver detalle — ventas de MercadoLibre"><td class="rc-label">MERCADO LIBRE</td><td class="rc-monto"><span id="mercadolibre">$0</span></td></tr>
                                         <!-- MP marketplace. `data-tipo-tarjeta-excluir` es obligatorio: el filtro
                                              del drill-down es por substring, y sin él "MERCADO" pescaría también
-                                             los pagos "Ecommerce Mercado Pago" de la fila de más abajo. -->
-                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="MERCADO,SHOPIFY" data-tipo-tarjeta-excluir="ECOMMERCE" title="Ver detalle — Mercado Pago de marketplace, no el del ecommerce propio"><td class="rc-label">MERCADO PAGO <span class="rc-c-muted" style="font-size:.75rem;">(marketplace)</span></td><td class="rc-monto"><span id="mercadopago">$0</span></td></tr>
+                                             los pagos "Ecommerce Mercado Pago" de la fila de más abajo y los
+                                             "Mercado Libre" de la fila de más arriba. -->
+                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="MERCADO,SHOPIFY" data-tipo-tarjeta-excluir="ECOMMERCE,MERCADO LIBRE,MERCADOLIBRE" title="Ver detalle — Mercado Pago de marketplace, no MercadoLibre ni el del ecommerce propio"><td class="rc-label">MERCADO PAGO <span class="rc-c-muted" style="font-size:.75rem;">(marketplace)</span></td><td class="rc-monto"><span id="mercadopago">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="KLAP" title="Ver detalle"><td class="rc-label">KLAP</td><td class="rc-monto"><span id="klap">$0</span></td></tr>
                                         <!-- Ecommerce propio (realsport.cl / calzadospaola.cl), desglosado por la
                                              pasarela con que pagó el cliente. Antes TODO esto se contaba como
@@ -3820,7 +3824,7 @@ function limpiarCamposCuadratura() {
     ['visa','debito','presto','hites','efectivo','efectivo_bruto','transferencia','transferencia_bruta',
      'nota_credito','nc_efectivo','nc_transferencia','nc_credito','convenio','credito_trabajador','credito_externo','credito_externo_bruto','giftcard',
      'mercadopago_pos','mercadopago_pos_debito','mercadopago_pos_credito','mercadopago_pos_otros','cheque','orden_compra',
-     'falabella','paris','ripley','mercadopago','klap',
+     'falabella','paris','ripley','mercadolibre','mercadopago','klap',
      'ecommerce_webpay','ecommerce_mercadopago','ecommerce_otros','ecommerce_propio','mp_consolidado',
      'totalboletaelectronica','totalboletapapel','totalfactura','totalfacturaexenta','totalnotascredito','totalncefectivo','totalnctransferencia',
      'ventatotal','totalefectivo','totaltbk','totalcomercial','totalinternet',
@@ -3896,6 +3900,7 @@ function cargarDatosCuadratura(c) {
     $('#cheque').text(fmCLP(c.total_cheque||0)); $('#orden_compra').text(fmCLP(c.total_orden_compra||0));
     $('#falabella').text(fmCLP(c.total_falabella||0)); $('#paris').text(fmCLP(c.total_paris||0));
     $('#ripley').text(fmCLP(c.total_ripley||0)); $('#mercadopago').text(fmCLP(c.total_mercadopago||0));
+    $('#mercadolibre').text(fmCLP(c.total_mercadolibre||0));
     $('#klap').text(fmCLP(c.total_klap||0));
     // Ecommerce propio desglosado por pasarela. Las filas en 0 se atenúan (mismo
     // criterio que el desglose MP presencial) para que el ojo caiga en la que
@@ -3960,7 +3965,8 @@ function cargarDatosCuadratura(c) {
     // Webpay y "sin definir" tienen bucket propio hay que sumarlos o el VENTA
     // TOTAL perdería exactamente el ecommerce que no se pagó con Mercado Pago.
     const sumInternet = _n(c.total_falabella) + _n(c.total_paris) + _n(c.total_ripley)
-        + _n(c.total_mercadopago) + _n(c.total_klap) + _n(c.total_ecommerce_propio);
+        + _n(c.total_mercadolibre) + _n(c.total_mercadopago) + _n(c.total_klap)
+        + _n(c.total_ecommerce_propio);
     const sumTotal    = sumTarjetas + sumEfectivo + sumInternet;
 
     $('#sum_tarjetas').text(fmCLP(sumTarjetas));
@@ -3974,11 +3980,12 @@ function cargarDatosCuadratura(c) {
     // cuarto grupo de venta.
     const mpPos    = _n(c.total_mercadopago_pos);
     const mpMkt    = _n(c.total_mercadopago);
+    const mpMeli   = _n(c.total_mercadolibre);
     const mpEcom   = _n(c.total_ecommerce_mercadopago);
-    const mpTotal  = _n(c.total_mercadopago_consolidado) || (mpPos + mpMkt + mpEcom);
+    const mpTotal  = _n(c.total_mercadopago_consolidado) || (mpPos + mpMkt + mpMeli + mpEcom);
     $('#mp_consolidado').text(fmCLP(mpTotal));
     $('#mp_consolidado_detalle').text(
-        `POS ${fmCLP(mpPos)} + marketplace ${fmCLP(mpMkt)} + ecommerce ${fmCLP(mpEcom)}`);
+        `POS ${fmCLP(mpPos)} + marketplace ${fmCLP(mpMkt)} + Mercado Libre ${fmCLP(mpMeli)} + ecommerce ${fmCLP(mpEcom)}`);
     $('#bloqueMpConsolidado').toggle(mpTotal !== 0);
 
     // Control de consistencia documentos vs medios de pago.
@@ -4018,7 +4025,7 @@ async function imprimirResumenTermica() {
     const datos = { fecha:new Date(f+'T12:00:00').toLocaleDateString('es-CL'), efectivo:$('#efectivo').text(), transbank:$('#sum_tarjetas').text(),
         tarjetas_comerciales:$('#sum_efectivo').text(), venta_internet:$('#sum_internet').text(), venta_total:$('#ventatotal').text(),
         visa:$('#visa').text(), debito:$('#debito').text(), presto:$('#presto').text(), hites:$('#hites').text(),
-        falabella:$('#falabella').text(), paris:$('#paris').text(), ripley:$('#ripley').text(), mercadopago:$('#mercadopago').text(), klap:$('#klap').text(),
+        falabella:$('#falabella').text(), paris:$('#paris').text(), ripley:$('#ripley').text(), mercadolibre:$('#mercadolibre').text(), mercadopago:$('#mercadopago').text(), klap:$('#klap').text(),
         transferencia:$('#transferencia').text(),
         // El ticket sólo imprimía tarjetas Transbank, internet y documentos:
         // faltaban Mercado Pago POS y todo el bloque de "Efectivo y Otros",
@@ -4138,6 +4145,7 @@ function _filasVentaInternetTermica(d) {
         ['WALMART', d.falabella],
         ['PARIS', d.paris],
         ['RIPLEY', d.ripley],
+        ['MERCADO LIBRE', d.mercadolibre],
         ['MERCADO PAGO (MKT)', d.mercadopago],
         ['KLAP', d.klap],
     ].filter(([, v]) => v && v !== '$0');
@@ -5647,6 +5655,7 @@ function _generarEscPosCuadratura(datos) {
         // se cortaba a la mitad en el papel.
         c.push(_col2('  Point / QR (mesón)', datos.mercadopago_pos || '$0'));
         c.push(_col2('  Marketplace', datos.mercadopago || '$0'));
+        c.push(_col2('  Mercado Libre', datos.mercadolibre || '$0'));
         c.push(_col2('  Ecommerce propio', datos.ecommerce_mercadopago || '$0'));
         c.push(_pL('Ya incluido arriba, no suma aparte.', _COLS) + _N);
         c.push(_sep('-'));

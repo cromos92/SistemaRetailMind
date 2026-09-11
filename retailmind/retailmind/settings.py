@@ -389,6 +389,14 @@ REQUERIMIENTOS_FROM_EMAIL = os.environ.get(
     'REQUERIMIENTOS_FROM_EMAIL', DEFAULT_FROM_EMAIL or ''
 )
 
+# Destinatarios del correo diario de correlativos en rojo (agotados o con
+# menos de Correlativo.UMBRAL_CRITICO folios disponibles). Lista separada por
+# comas. Ver app/services/correlativos_service.py y el comando de management
+# `alertar_correlativos_rojo` (corre desde run_scheduler.py una vez al día).
+CORRELATIVOS_ALERTA_EMAILS = os.environ.get(
+    'CORRELATIVOS_ALERTA_EMAILS', 'jav.teb@gmail.com'
+)
+
 # ===== Lectura del buzón de respuestas (comando capturar_respuestas_correo) =====
 # El buzón puede ser un Gmail común: el plus-addressing funciona igual que en
 # Workspace, así que el token viaja en la dirección sin configurar alias.

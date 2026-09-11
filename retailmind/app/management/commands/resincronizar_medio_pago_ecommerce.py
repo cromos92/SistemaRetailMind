@@ -13,12 +13,20 @@ cuadratura de caja lee de ahí. Sin este comando, el día que AllConnected empie
 a informar el medio, todo el histórico seguiría cayendo en la fila
 "ECOMMERCE OTROS / S/DEF." del Resumen de Caja.
 
+También repara los pedidos de MARKETPLACE mal clasificados: cuando un canal se
+declara marketplace después de que ya entraron pedidos (caso MercadoLibre), esos
+pagos quedaron grabados como ecommerce propio y siguen cayendo en "OTROS /
+S/DEF." hasta que se les reescribe el `tipo_tarjeta`.
+
 Qué NO hace
 -----------
-NO adivina el medio de pago. Un pedido con `medio_pago=''` se salta (queda como
-'Ecommerce' pelado, que es la verdad: no sabemos con qué se pagó). El único modo
-de resolverlos es que el canal lo informe o que alguien lo fije en
-Ecommerce → Pedidos (filtro "⚠ Sin definir").
+NO adivina el medio de pago. Un pedido de ECOMMERCE PROPIO sin `medio_pago` se
+salta (queda como 'Ecommerce' pelado, que es la verdad: no sabemos con qué se
+pagó). El único modo de resolverlos es que el canal lo informe o que alguien lo
+fije en Ecommerce → Pedidos (filtro "⚠ Sin definir").
+
+En un MARKETPLACE, en cambio, `medio_pago` es irrelevante — la plataforma manda
+—, así que esos pedidos SÍ se procesan aunque lo tengan vacío.
 
 Por seguridad NO escribe por defecto (la BD local apunta a producción):
 muestra el preview y sólo aplica con --apply.
@@ -34,7 +42,10 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from app.models import PedidoEcommerce, TicketDetallePago
-from app.views_ecommerce import tipo_tarjeta_para_pedido
+from app.views_ecommerce import (
+    PREFIJO_TIPO_TARJETA_ECOMMERCE,
+    tipo_tarjeta_para_pedido,
+)
 
 
 class Command(BaseCommand):
@@ -54,9 +65,12 @@ class Command(BaseCommand):
     def handle(self, *args, **opts):
         aplicar = opts['apply']
 
+        # No se filtra por `medio_pago` en la query: un pedido de marketplace lo
+        # tiene vacío por diseño y aun así hay que reclasificarlo. El descarte
+        # de "no sabemos con qué se pagó" se hace abajo, mirando el
+        # `tipo_tarjeta` esperado.
         qs = (PedidoEcommerce.objects
               .filter(ticket__isnull=False)
-              .exclude(medio_pago='')
               .select_related('ticket')
               .order_by('fecha_recepcion'))
 
@@ -72,8 +86,15 @@ class Command(BaseCommand):
             qs = qs[:opts['limite']]
 
         cambios = []
+        candidatos = 0
         for pedido in qs:
             esperado = tipo_tarjeta_para_pedido(pedido)
+            # 'Ecommerce' pelado = ecommerce propio sin medio informado. No se
+            # toca: reescribirlo no aportaría nada y borraría un dato mejor si
+            # alguien ya lo había corregido a mano.
+            if esperado == PREFIJO_TIPO_TARJETA_ECOMMERCE:
+                continue
+            candidatos += 1
             pagos = TicketDetallePago.objects.filter(
                 ticket_id=pedido.ticket_id, metodo_pago='VENTA_INTERNET',
             ).exclude(tipo_tarjeta=esperado)
@@ -82,14 +103,14 @@ class Command(BaseCommand):
 
         self.stdout.write('=' * 78)
         self.stdout.write(
-            f'Pedidos facturados con medio_pago definido: {qs.count()}')
+            f'Pedidos facturados con plataforma resoluble: {candidatos}')
         self.stdout.write(f'Pagos con tipo_tarjeta desactualizado: {len(cambios)}')
         self.stdout.write('=' * 78)
 
         for pedido, pago, actual, esperado in cambios[:40]:
             self.stdout.write(
                 f'  {pedido.numero_ticket_rm:>14}  {pedido.canal_origen:<10} '
-                f'{pedido.medio_pago:<14} "{actual}" -> "{esperado}"')
+                f'{(pedido.medio_pago or "-"):<14} "{actual}" -> "{esperado}"')
         if len(cambios) > 40:
             self.stdout.write(f'  ... y {len(cambios) - 40} mas.')
 

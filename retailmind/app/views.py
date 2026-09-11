@@ -34502,6 +34502,13 @@ def gestion_correlativos(request):
         correlativos_proximos_agotar = Correlativo.objects.annotate(
             disponibles=F('termino') - F('inicio') + 1
         ).filter(disponibles__lte=100, disponibles__gt=0).count()
+        # "En rojo" = agotado O crítico (Correlativo.en_rojo / UMBRAL_CRITICO
+        # en app/models/organizacion.py) — disponibles < 20, incluye a los
+        # agotados (disponibles <= 0) porque 0 < 20 siempre. Es el mismo
+        # criterio que dispara el correo diario de alerta.
+        correlativos_en_rojo = Correlativo.objects.annotate(
+            disponibles=F('termino') - F('inicio') + 1
+        ).filter(disponibles__lt=Correlativo.UMBRAL_CRITICO).count()
         sucursales = Sucursal.objects.all().order_by('alias')
         
         tipos_documento = TIPO_DOCUMENTO_CHOICES
@@ -34517,6 +34524,7 @@ def gestion_correlativos(request):
             'correlativos_activos': correlativos_activos,
             'correlativos_agotados': correlativos_agotados,
             'correlativos_proximos_agotar': correlativos_proximos_agotar,
+            'correlativos_en_rojo': correlativos_en_rojo,
             'filtros': {
                 'sucursal': sucursal_filtro,
                 'tipo_documento': tipo_documento_filtro,
@@ -34541,7 +34549,8 @@ def gestion_correlativos(request):
             'total_correlativos': 0,
             'correlativos_activos': 0,
             'correlativos_agotados': 0,
-            'correlativos_proximos_agotar': 0
+            'correlativos_proximos_agotar': 0,
+            'correlativos_en_rojo': 0
         })
 
 @login_required

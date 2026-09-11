@@ -292,6 +292,43 @@ class Correlativo(models.Model):
         else:
             return 'activo'
 
+    #: Umbral de folios disponibles bajo el cual se considera "crítico" (rojo).
+    #: Mismo valor que ya usaba, repetido a mano, la plantilla de gestión de
+    #: correlativos (fila-folios-critico, badge Crítico, etc.) — consolidado
+    #: acá para que la plantilla y la alerta por correo usen un solo criterio.
+    UMBRAL_CRITICO = 20
+    #: Umbral de folios disponibles bajo el cual se considera "por agotarse"
+    #: (ámbar) — mismo valor que ya usaba la plantilla.
+    UMBRAL_ALERTA = 100
+
+    @property
+    def nivel_alerta(self):
+        """Nivel visual: 'agotado' | 'critico' | 'alerta' | 'activo'.
+
+        Distinto de `estado` (arriba, legacy, solo 3 valores con umbral 100)
+        porque la plantilla ya diferenciaba 4 niveles a mano con 3 comparaciones
+        numéricas repetidas en 4 lugares distintos del HTML. Se agrega esta
+        property en vez de tocar `estado` por compatibilidad con quien ya lo
+        use con su semántica actual.
+        """
+        disponibles = self.disponibles
+        if disponibles <= 0:
+            return 'agotado'
+        elif disponibles < self.UMBRAL_CRITICO:
+            return 'critico'
+        elif disponibles < self.UMBRAL_ALERTA:
+            return 'alerta'
+        return 'activo'
+
+    @property
+    def en_rojo(self):
+        """True si está agotado o crítico (disponibles < UMBRAL_CRITICO).
+
+        Es el criterio que dispara el correo diario de alerta — ver
+        `app.services.correlativos_service.alertar_correlativos_en_rojo`.
+        """
+        return self.nivel_alerta in ('agotado', 'critico')
+
     def puede_emitir(self):
         return self.inicio <= self.termino
 

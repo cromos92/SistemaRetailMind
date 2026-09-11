@@ -13,12 +13,16 @@ Estos tests fijan el contrato nuevo:
   * El efectivo expone bruto y neto por separado, para que la NC en efectivo no
     se pueda restar dos veces.
 """
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
-from app.models import PedidoEcommerce, Ticket, TicketDetallePago
+from app.models import (
+    CANAL_ECOMMERCE_CHOICES, PedidoEcommerce, Ticket, TicketDetallePago,
+)
 from app.tests.factories import crear_empresa, crear_sucursal, crear_vendedor
+from app.utils_ventas import canal_desde_plataforma_pago
 from app.views_ecommerce import (
+    _normalizar_canal,
     normalizar_medio_pago_ecommerce,
     tipo_tarjeta_venta_internet,
 )
@@ -63,6 +67,65 @@ class BucketVentaInternetTests(TestCase):
         `total_mercadopago`, inventándole un medio de pago a esa venta."""
         for valor in ('Internet', '', None, 'Plataforma Rara'):
             self.assertEqual(_bucket_venta_internet(valor), 'ecommerce_otros')
+
+
+class MercadoLibreVentaInternetTests(SimpleTestCase):
+    """MercadoLibre es un MARKETPLACE, no ecommerce propio.
+
+    Regresión de dos bugs distintos que mandaban su venta a filas equivocadas
+    del Resumen de Caja:
+
+    1. El canal no estaba en `PLATAFORMA_INTERNET_POR_CANAL`, así que al
+       facturar desde Ecommerce → Pedidos el pago se grababa como 'Ecommerce'
+       pelado y caía en "OTROS / S/DEF." — pidiéndole además al operador que
+       fijara un medio de pago que en un marketplace no aplica.
+    2. El histórico migrado de Laravel sí traía `tipo_tarjeta='Mercado Libre'`,
+       pero el clasificador lo pescaba con el substring 'MERCADO' y lo sumaba a
+       "MERCADO PAGO (marketplace)".
+    """
+
+    def test_el_canal_se_graba_con_su_plataforma(self):
+        """AllConnected manda 'MERCADOLIBRE'; CANAL_ALIAS lo deja en 'MERCADO'."""
+        self.assertEqual(_normalizar_canal('MERCADOLIBRE'), 'MERCADO')
+        self.assertEqual(_normalizar_canal('Mercado Libre'), 'MERCADO')
+        self.assertEqual(tipo_tarjeta_venta_internet('MERCADO', ''), 'Mercado Libre')
+
+    def test_el_medio_de_pago_no_lo_cambia(self):
+        """Como en Paris/Ripley: la plata la liquida el canal."""
+        for medio in ('', 'WEBPAY', 'MERCADO_PAGO', 'TRANSFERENCIA'):
+            self.assertEqual(
+                tipo_tarjeta_venta_internet('MERCADO', medio), 'Mercado Libre', medio)
+
+    def test_cae_en_su_propia_fila_y_no_en_mercado_pago(self):
+        for valor in ('Mercado Libre', 'MERCADO LIBRE', 'mercadolibre'):
+            self.assertEqual(_bucket_venta_internet(valor), 'mercadolibre', valor)
+
+    def test_no_cae_en_ecommerce_otros(self):
+        """REGRESIÓN bug 1: era la fila donde aparecía la venta de ML."""
+        self.assertNotEqual(_bucket_venta_internet('Mercado Libre'), 'ecommerce_otros')
+
+    def test_mercado_pago_sigue_en_su_bucket(self):
+        """El orden de los `if` no puede robarle la venta a Mercado Pago."""
+        self.assertEqual(_bucket_venta_internet('Mercado Pago'), 'mercadopago')
+        self.assertEqual(
+            _bucket_venta_internet('Ecommerce Mercado Pago'), 'ecommerce_mercadopago')
+
+    def test_es_marketplace(self):
+        """El listado de pedidos usa esto para no exigir medio de pago."""
+        for canal in ('MERCADO', 'PARIS', 'RIPLEY', 'WALMART', 'SHOPIFY'):
+            self.assertTrue(PedidoEcommerce(canal_origen=canal).es_marketplace, canal)
+        for canal in ('REALSPORT', 'PAOLA', 'OTRO', ''):
+            self.assertFalse(PedidoEcommerce(canal_origen=canal).es_marketplace, canal)
+
+    def test_la_plataforma_vuelve_a_su_canal(self):
+        """`canal_desde_plataforma_pago` es el camino inverso: lo usa el aviso de
+        factura a AllConnected cuando la boleta se emitió desde el POS."""
+        self.assertEqual(canal_desde_plataforma_pago('Mercado Libre'), 'MERCADO')
+        # Mercado PAGO es una pasarela, no un canal de AllConnected.
+        self.assertEqual(canal_desde_plataforma_pago('Mercado Pago'), 'OTRO')
+
+    def test_el_canal_es_una_opcion_valida(self):
+        self.assertIn(('MERCADO', 'Mercado Libre'), CANAL_ECOMMERCE_CHOICES)
 
 
 class TipoTarjetaVentaInternetTests(TestCase):

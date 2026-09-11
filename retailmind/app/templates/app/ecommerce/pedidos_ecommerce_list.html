@@ -52,6 +52,12 @@
 .canal-paris{background:#0033a0;color:#fff;}
 .canal-ripley{background:#6f42c1;color:#fff;}
 .canal-walmart{background:#0071ce;color:#fff;}
+/* MercadoLibre llega como canal_origen='MERCADO' (lo normaliza CANAL_ALIAS).
+   Amarillo de marca, texto oscuro para contraste. Sin esta regla el badge
+   quedaba sin fondo, igual que pasaba con los ecommerce propios. */
+.canal-mercado{background:#ffe600;color:#2d3277;}
+.canal-realsport{background:#111827;color:#fff;}
+.canal-paola{background:#be185d;color:#fff;}
 .canal-otro{background:#6b7280;color:#fff;}
 .canal-b{font-size:.68rem;padding:2px 7px;border-radius:4px;font-weight:600;letter-spacing:.02em;}
 
@@ -1175,7 +1181,10 @@ function guardarMedioPago(sel){
         return;
       }
       sel.dataset.original = d.medio_pago || '';
-      sel.classList.toggle('sel-medio-pago-vacio', !d.medio_pago);
+      // En marketplace el medio de pago no se exige (lo liquida el canal), así
+      // que vaciarlo no debe encender el resalte ámbar de "falta llenar".
+      sel.classList.toggle(
+        'sel-medio-pago-vacio', !d.medio_pago && sel.dataset.marketplace !== '1');
       const extra = d.pagos_actualizados
         ? ' El pago del ticket ya facturado se reclasificó.'
         : '';
