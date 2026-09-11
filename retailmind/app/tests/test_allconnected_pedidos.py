@@ -53,6 +53,42 @@ class AllConnectedPedidosIngestaTest(TestCase):
         self.assertEqual(pedido.impuestos, Decimal('1900.00'))
         self.assertEqual(pedido.total, Decimal('11900.00'))
 
+    def test_ingesta_toma_el_payment_method_de_la_tienda(self):
+        """AllConnected reenvía la pasarela cruda de la tienda; el pedido tiene
+        que quedar con el medio normalizado y marcado como informado por el
+        canal — si esto se rompe, alguien vuelve a fijarlo a mano."""
+        resultado = _ingestar_pedido_dict(self.payload(
+            numero_pedido_canal='RS-2001',
+            canal_origen='REALSPORT',
+            payment_method='mercadopago',
+        ))
+
+        pedido = PedidoEcommerce.objects.get(id=resultado['pedido_ecommerce_id'])
+        self.assertEqual(pedido.medio_pago, 'MERCADO_PAGO')
+        self.assertEqual(pedido.medio_pago_origen, 'CANAL')
+
+    def test_pull_posterior_no_pisa_un_medio_fijado_a_mano(self):
+        """El override manual (por script) tiene dueño: un pull que traiga otra
+        cosa no puede borrarlo."""
+        resultado = _ingestar_pedido_dict(self.payload(
+            numero_pedido_canal='RS-2002',
+            canal_origen='REALSPORT',
+        ))
+        pedido = PedidoEcommerce.objects.get(id=resultado['pedido_ecommerce_id'])
+        pedido.medio_pago = 'TRANSFERENCIA'
+        pedido.medio_pago_origen = 'MANUAL'
+        pedido.save(update_fields=['medio_pago', 'medio_pago_origen'])
+
+        _ingestar_pedido_dict(self.payload(
+            numero_pedido_canal='RS-2002',
+            canal_origen='REALSPORT',
+            payment_method='transbank',
+        ))
+
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.medio_pago, 'TRANSFERENCIA')
+        self.assertEqual(pedido.medio_pago_origen, 'MANUAL')
+
     def test_reintento_mismo_canal_y_numero_no_duplica(self):
         primero = _ingestar_pedido_dict(self.payload(correlativo='RE30000001', correlativo_numero=30000001))
         segundo = _ingestar_pedido_dict(self.payload(correlativo='RE30000002', correlativo_numero=30000002))

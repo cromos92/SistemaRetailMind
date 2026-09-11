@@ -73,9 +73,32 @@ Cada `{pedido}` debe tener el **mismo shape** que el body del push
   "descuento": 0,
   "costo_envio": 2990,
   "total": 22980,
-  "rut_empresa": "76.123.456-7"
+  "rut_empresa": "76.123.456-7",
+  "payment_method": "transbank"       // pasarela con que pagó el cliente
 }
 ```
+
+#### `payment_method` — medio de pago del canal
+
+Valor **crudo** de la tienda (`OrderPayment.GATEWAY_*`): `transbank`,
+`mercadopago`, `bank_transfer`, `stripe`. AllConnected lo guarda al importar el
+pedido (`metadatos['payment_method']`, ver `django_ecommerce/order_sync.py`) y lo
+reenvía en `construir_payload_pedido_rm`.
+
+RetailMind lo normaliza a `PedidoEcommerce.medio_pago`
+(`WEBPAY` / `MERCADO_PAGO` / `TRANSFERENCIA` / `OTRO`) con
+`normalizar_medio_pago_ecommerce`, tolerante a alias — también acepta las claves
+`metodo_pago`, `forma_pago`, `tipo_pago`, `payment_type`, `gateway` y `pasarela`.
+
+**Para qué sirve:** en el **ecommerce propio** (REALSPORT / PAOLA) el mismo sitio
+cobra por Webpay *o* por Mercado Pago según el pedido, así que sin este dato la
+cuadratura de caja no puede separar los buckets y la venta cae en
+"Ecommerce otros / s-def.". En **marketplace** es irrelevante (la plata la
+liquida el canal y la venta se clasifica por plataforma): ahí puede viajar vacío.
+
+Es **opcional y aditivo** — si no viene, la ingesta no falla; el pedido queda con
+`medio_pago=''`. Un pull posterior lo rellena, pero **nunca pisa** un valor con
+`medio_pago_origen='MANUAL'`.
 
 ### Shape REAL observado en producción (2026-06-03)
 

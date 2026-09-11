@@ -147,8 +147,8 @@ class TipoTarjetaVentaInternetTests(TestCase):
 
 
 class NormalizarMedioPagoTests(TestCase):
-    """La ingesta es tolerante a propósito: AllConnected todavía no manda este
-    dato y cada tienda nombra su pasarela distinto."""
+    """La ingesta es tolerante a propósito: cada tienda nombra su pasarela
+    distinto y el contrato no se renegocia por un nombre nuevo."""
 
     def test_alias_conocidos(self):
         for entrada in ('webpay', 'WEBPAY_PLUS', 'Transbank', 'tbk', 'oneclick'):
@@ -157,6 +157,18 @@ class NormalizarMedioPagoTests(TestCase):
             self.assertEqual(
                 normalizar_medio_pago_ecommerce(entrada), 'MERCADO_PAGO', entrada)
         self.assertEqual(normalizar_medio_pago_ecommerce('khipu'), 'TRANSFERENCIA')
+
+    def test_gateways_de_la_tienda(self):
+        """Los 4 valores que manda el ecommerce propio (`OrderPayment.GATEWAY_*`)
+        tienen que mapear TODOS: si uno cae a '' vuelve el trabajo manual."""
+        esperado = {
+            'transbank': 'WEBPAY',
+            'mercadopago': 'MERCADO_PAGO',
+            'bank_transfer': 'TRANSFERENCIA',
+            'stripe': 'OTRO',
+        }
+        for crudo, codigo in esperado.items():
+            self.assertEqual(normalizar_medio_pago_ecommerce(crudo), codigo, crudo)
 
     def test_no_adivina(self):
         """Lo que no matchea vuelve '' (sin definir), NO se asume un medio."""

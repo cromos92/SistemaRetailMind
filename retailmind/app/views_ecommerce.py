@@ -84,8 +84,10 @@ SUFIJO_TIPO_TARJETA_POR_MEDIO = {
 
 # Alias entrantes -> código de MEDIO_PAGO_ECOMMERCE_CHOICES. AllConnected (y
 # cada tienda detrás) nombra la pasarela a su manera; la ingesta es tolerante a
-# propósito para que el dato sirva apenas empiecen a mandarlo, sin coordinar un
-# deploy conjunto. Lo que no matchea queda '' (sin definir) — NO se adivina.
+# propósito para absorber nombres nuevos sin coordinar un deploy conjunto. Lo
+# que no matchea queda '' (sin definir) — NO se adivina. Los valores que manda
+# hoy el ecommerce propio son los `OrderPayment.GATEWAY_*` de la tienda:
+# 'transbank', 'mercadopago', 'bank_transfer' y 'stripe'.
 MEDIO_PAGO_ALIAS = {
     # Webpay / Transbank
     'WEBPAY': 'WEBPAY',
@@ -107,6 +109,7 @@ MEDIO_PAGO_ALIAS = {
     # Transferencia
     'TRANSFERENCIA': 'TRANSFERENCIA',
     'TRANSFERENCIABANCARIA': 'TRANSFERENCIA',
+    'BANKTRANSFER': 'TRANSFERENCIA',
     'DEPOSITO': 'TRANSFERENCIA',
     'KHIPU': 'TRANSFERENCIA',
     'BANCOESTADO': 'TRANSFERENCIA',
@@ -116,6 +119,7 @@ MEDIO_PAGO_ALIAS = {
     'KLAP': 'OTRO',
     'ETPAY': 'OTRO',
     'PAYPAL': 'OTRO',
+    'STRIPE': 'OTRO',
     'EFECTIVO': 'OTRO',
 }
 
@@ -542,9 +546,12 @@ def _ingestar_pedido_dict(data):
     # pedido se crea con el default False, sin romper la ingesta.
     es_retiro_local_in = data.get('es_retiro_local', None)
 
-    # Medio de pago del canal (Webpay / Mercado Pago / ...). Opcional y
-    # tolerante: si AllConnected todavía no lo manda queda '' y el operador lo
-    # fija desde el listado de pedidos. Ver `CLAVES_MEDIO_PAGO_PAYLOAD`.
+    # Medio de pago del canal (Webpay / Mercado Pago / ...). AllConnected lo
+    # manda como `payment_method` (nace del `Order.payment_method` de la tienda
+    # y viaja en `Pedido.metadatos`). Sigue siendo opcional y tolerante: si un
+    # canal no lo informa queda '' y la venta cae en "Ecommerce otros / s-def."
+    # de la cuadratura — eso es una señal a revisar, no una tarea del operador.
+    # Ver `CLAVES_MEDIO_PAGO_PAYLOAD`.
     medio_pago_in = _extraer_medio_pago(data)
 
     # Verificar si ya existe un pedido para este canal+número (idempotente)
@@ -2967,6 +2974,11 @@ def api_fijar_medio_pago(request, pedido_id):
     Fija a mano con qué pagó el cliente cuando el canal no lo informa. Queda
     marcado con ``medio_pago_origen='MANUAL'`` para que un pull posterior de
     AllConnected no lo pise (ver `_respuesta_pedido_existente`).
+
+    SIN UI desde que AllConnected manda el medio en la ingesta: el listado de
+    pedidos muestra el dato como solo lectura. Este endpoint queda vivo para
+    corregir casos puntuales por script (una pasarela que no matchea ningún
+    alias, o backfill del histórico previo al campo).
 
     Un pedido YA FACTURADO también se puede corregir: además del pedido se
     reescribe el `tipo_tarjeta` del pago del ticket, que es de donde la

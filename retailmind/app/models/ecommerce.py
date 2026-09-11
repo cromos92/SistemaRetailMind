@@ -29,9 +29,12 @@ CANAL_ECOMMERCE_CHOICES = [
 
 # Medio de pago REAL con que el cliente pagó el pedido online. Es dato del
 # CANAL (Webpay/Transbank, Mercado Pago, transferencia...), no del POS: la
-# tienda nunca ve la tarjeta. Lo informa AllConnected en la ingesta si lo
-# manda; si no, queda '' (SIN DEFINIR) y el operador lo fija desde el listado
-# de pedidos antes de facturar.
+# tienda nunca ve la tarjeta. Lo informa AllConnected en la ingesta
+# (`payment_method`, que nace del `Order.payment_method` de la tienda). Si no
+# viene queda '' (SIN DEFINIR) y la venta cae en "Ecommerce otros / s-def." de
+# la cuadratura. La columna del listado de pedidos es de SOLO LECTURA: un ''
+# en un pedido nuevo es señal de que el canal dejó de mandarlo, no una tarea
+# pendiente del operador.
 #
 # Existe porque la cuadratura de caja clasificaba TODO el ecommerce propio
 # (REALSPORT/PAOLA) como "Mercado Pago": esos canales no estaban en
@@ -259,8 +262,8 @@ class PedidoEcommerce(models.Model):
         blank=True,
         default='',
         verbose_name='Origen del medio de pago',
-        help_text="'CANAL' si lo informó AllConnected, 'MANUAL' si lo fijó un "
-                  "operador. Vacío = sin definir.",
+        help_text="'CANAL' si lo informó AllConnected, 'MANUAL' si se corrigió "
+                  "por script vía api_fijar_medio_pago. Vacío = sin definir.",
     )
 
     # Montos

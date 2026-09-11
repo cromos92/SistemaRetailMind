@@ -1477,7 +1477,7 @@
                                         <tr class="rc-neto"><td class="rc-neto-label" colspan="2" style="padding-top:.5rem !important;"><i class="ri-store-2-line me-1"></i>Ecommerce propio</td></tr>
                                         <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="ECOMMERCE WEBPAY" title="Ver detalle — pedidos del ecommerce propio pagados con Webpay / Transbank"><td class="rc-sub-label">└ WEBPAY</td><td class="rc-sub-monto rc-c-primary"><span id="ecommerce_webpay">$0</span></td></tr>
                                         <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="ECOMMERCE MERCADO PAGO" title="Ver detalle — pedidos del ecommerce propio pagados con Mercado Pago"><td class="rc-sub-label">└ MERCADO PAGO</td><td class="rc-sub-monto rc-c-primary"><span id="ecommerce_mercadopago">$0</span></td></tr>
-                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta-excluir="ECOMMERCE WEBPAY,ECOMMERCE MERCADO PAGO,PARIS,RIPLEY,WALMART,FALABELLA,KLAP,MERCADO,SHOPIFY" title="Ver detalle — venta internet que no cae en ninguna plataforma conocida: pedidos sin medio de pago informado y el histórico anterior al campo. Fíjalo en Ecommerce → Pedidos para que dejen de caer acá."><td class="rc-sub-label rc-c-warning">└ OTROS / S/DEF.</td><td class="rc-sub-monto rc-c-warning"><span id="ecommerce_otros">$0</span></td></tr>
+                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta-excluir="ECOMMERCE WEBPAY,ECOMMERCE MERCADO PAGO,PARIS,RIPLEY,WALMART,FALABELLA,KLAP,MERCADO,SHOPIFY" title="Ver detalle — venta internet que no cae en ninguna plataforma conocida: pedidos sin medio de pago informado y el histórico anterior al campo. Revísalos en Ecommerce → Pedidos (filtro “Sin definir”): si hay pedidos nuevos acá, la tienda no está mandando su medio de pago en la ingesta."><td class="rc-sub-label rc-c-warning">└ OTROS / S/DEF.</td><td class="rc-sub-monto rc-c-warning"><span id="ecommerce_otros">$0</span></td></tr>
                                         <tr class="rc-neto"><td class="rc-neto-label">Total ecommerce</td><td class="rc-neto-monto"><span id="ecommerce_propio">$0</span></td></tr>
                                     </tbody>
                                 </table>
@@ -1485,7 +1485,7 @@
                                      esconde solo cuando el bucket "otros" queda en 0. -->
                                 <div id="avisoEcommerceSinMedio" class="alert alert-warning py-2 px-2 mb-0 mt-2" style="display:none;font-size:.8125rem;">
                                     <i class="ri-error-warning-line me-1"></i><span id="avisoEcommerceSinMedioTexto"></span>
-                                    <a href="/app/ecommerce/pedidos/?estado=&medio_pago=SIN_DEFINIR" target="_blank" class="alert-link ms-1">Fijar medio de pago →</a>
+                                    <a href="/app/ecommerce/pedidos/?estado=&medio_pago=SIN_DEFINIR" target="_blank" class="alert-link ms-1">Ver pedidos sin medio →</a>
                                 </div>
                             </div>
                         </div>

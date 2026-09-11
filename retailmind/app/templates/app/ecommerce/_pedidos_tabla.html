@@ -67,23 +67,23 @@
             </td>
             <td class="col-total text-end"><span class="fmt-miles" data-val="{{ p.total|floatformat:0 }}">${{ p.total|floatformat:0 }}</span></td>
             <td class="col-medio-pago">
-              {# Editable siempre (incluso facturado): corregirlo reescribe el     #}
-              {# tipo_tarjeta del pago del ticket, que es de donde lee la          #}
-              {# cuadratura. Un pedido mal clasificado hoy se arregla acá y el     #}
-              {# Resumen de Caja del día se corrige al regenerarlo.                #}
+              {# SOLO LECTURA: lo informa la tienda en la ingesta (`payment_method` #}
+              {# del payload) y RetailMind lo normaliza. Antes había un <select>    #}
+              {# porque AllConnected no mandaba el dato y alguien tenía que fijarlo #}
+              {# a mano; ahora viaja solo. La corrección puntual sigue existiendo   #}
+              {# en el backend (`api_fijar_medio_pago`), sin UI.                    #}
               {# En un MARKETPLACE (Paris, Ripley, Walmart, MercadoLibre, Shopify)  #}
-              {# la plata la liquida el canal y la cuadratura clasifica la venta   #}
-              {# por la plataforma: `medio_pago` no cambia nada, así que no se     #}
-              {# resalta como "falta llenar" ni se amenaza con "OTROS / S-DEF.".   #}
-              <select class="sel-medio-pago{% if not p.medio_pago and not p.es_marketplace %} sel-medio-pago-vacio{% endif %}"
-                      data-pedido-id="{{ p.id }}"
-                      data-original="{{ p.medio_pago }}"
-                      data-marketplace="{{ p.es_marketplace|yesno:'1,0' }}"
-                      title="{% if p.medio_pago_origen == 'MANUAL' %}Fijado a mano{% elif p.medio_pago_origen == 'CANAL' %}Informado por el canal{% elif p.es_marketplace %}No aplica: {{ p.canal_origen }} liquida la venta y la cuadratura la clasifica por plataforma{% else %}Sin definir: la venta cae en “Ecommerce otros / s-def.” de la cuadratura{% endif %}">
-                {% for valor, etiqueta in medios_pago_choices %}
-                <option value="{{ valor }}"{% if p.medio_pago == valor %} selected{% endif %}>{{ etiqueta }}</option>
-                {% endfor %}
-              </select>
+              {# la plata la liquida el canal y la cuadratura clasifica la venta    #}
+              {# por la plataforma: `medio_pago` no cambia nada, así que no se      #}
+              {# muestra como "falta" ni se amenaza con "OTROS / S-DEF.".           #}
+              {% if p.medio_pago %}
+                <span class="mp-valor" title="{% if p.medio_pago_origen == 'MANUAL' %}Fijado a mano{% else %}Informado por el canal{% endif %}">{{ p.get_medio_pago_display }}</span>
+                {% if p.medio_pago_origen == 'MANUAL' %}<span class="mp-origen">fijado a mano</span>{% endif %}
+              {% elif p.es_marketplace %}
+                <span class="mp-na" title="No aplica: {{ p.canal_origen }} liquida la venta y la cuadratura la clasifica por plataforma">—</span>
+              {% else %}
+                <span class="mp-sin-definir" title="El canal no informó el medio de pago: la venta cae en “Ecommerce otros / s-def.” de la cuadratura">⚠ Sin definir</span>
+              {% endif %}
             </td>
             <td class="col-fecha">{{ p.fecha_recepcion|date:"d/m/Y H:i" }}</td>
             <td>
