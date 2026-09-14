@@ -362,6 +362,58 @@
         color: #4b5563;
     }
 
+    /* Validación inline: el campo que falla se marca y explica el motivo debajo */
+    .rm-field-error .form-control,
+    .rm-field-error .form-select,
+    .rm-field-error .select2-selection {
+        border-color: #ef4444 !important;
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.10) !important;
+    }
+    .rm-field-msg {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: #dc2626;
+        margin-top: 4px;
+    }
+    .rm-field-msg i {
+        font-size: 0.8rem;
+    }
+
+    /* Avisos contextuales dentro del formulario (folio repetido, vencimiento) */
+    .rm-inline-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        border-radius: 8px;
+        padding: 9px 12px;
+        font-size: 0.78rem;
+        line-height: 1.45;
+    }
+    .rm-inline-note i {
+        font-size: 0.9rem;
+        line-height: 1.4;
+        flex-shrink: 0;
+    }
+    .rm-inline-note--info  { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+    .rm-inline-note--warn  { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+    .rm-inline-note--error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .rm-inline-note .rm-note-list {
+        margin: 6px 0 0;
+        padding-left: 0;
+        list-style: none;
+    }
+    .rm-inline-note .rm-note-list li {
+        font-size: 0.75rem;
+        padding: 2px 0;
+        border-top: 1px dashed rgba(0, 0, 0, 0.12);
+    }
+    .rm-inline-note .rm-note-list li:first-child {
+        border-top: none;
+    }
+
     /* Read-only summary row inside modals */
     .rm-summary-row {
         display: flex;
@@ -1364,7 +1416,9 @@
                                 <label for="numeroDocumento" class="form-label">
                                     N° Documento <span class="text-danger">*</span>
                                 </label>
-                                <input type="number" class="form-control" id="numeroDocumento" placeholder="Ej: 12345" required>
+                                <input type="text" class="form-control" id="numeroDocumento"
+                                    inputmode="numeric" maxlength="12" autocomplete="off"
+                                    placeholder="Ej: 12345" required>
                             </div>
                             <div class="col-md-4">
                                 <label for="estadoDTE" class="form-label">
@@ -1376,6 +1430,8 @@
                                 </select>
                             </div>
                             <input type="hidden" id="estadoPago" value="Pendiente">
+
+                            <div class="col-12" id="avisoFolioDuplicado" style="display: none;"></div>
 
                             <div class="col-12" id="divMotivoRechazo" style="display: none;">
                                 <label for="motivoRechazo" class="form-label">
@@ -1537,12 +1593,14 @@
                             <div class="col-md-4">
                                 <label for="diasCredito" class="form-label">Días de Crédito</label>
                                 <input type="number" class="form-control" id="diasCredito" min="0" value="30" placeholder="30">
-                                <div class="mt-2 d-flex gap-1">
+                                <div class="mt-2 d-flex flex-wrap gap-1">
+                                    <button type="button" class="btn btn-sm btn-outline-primary dias-credito-shortcut" data-dias="0">Contado</button>
                                     <button type="button" class="btn btn-sm btn-outline-primary dias-credito-shortcut" data-dias="30">30d</button>
                                     <button type="button" class="btn btn-sm btn-outline-primary dias-credito-shortcut" data-dias="60">60d</button>
                                     <button type="button" class="btn btn-sm btn-outline-primary dias-credito-shortcut" data-dias="90">90d</button>
                                 </div>
                             </div>
+                            <div class="col-12" id="previewVencimiento" style="display: none;"></div>
                         </div>
                     </div>
 
@@ -1567,8 +1625,11 @@
                 </div>
 
                 <div class="rm-modal-footer">
+                    <span class="me-auto text-muted d-none d-md-inline" style="font-size: 0.72rem;">
+                        <i class="bi bi-keyboard me-1"></i>Ctrl + Enter para guardar
+                    </span>
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success">
+                    <button type="submit" class="btn btn-success" id="btnGuardarDTE">
                         <i class="bi bi-save me-1"></i>Guardar DTE
                     </button>
                 </div>
@@ -3089,7 +3150,9 @@
         modal.removeData('empresa-recepcion-value');
 
         toggleMotivoRechazo();
-        
+        limpiarErroresDTE();
+        $('#avisoFolioDuplicado').stop(true, true).hide().empty();
+
         setTimeout(function() {
             if (!$('#tipoDocumento').hasClass('select2-hidden-accessible')) {
                 $('#tipoDocumento').select2({
@@ -3662,10 +3725,11 @@
                         $('#diasCredito').val(dte.diasCredito || 0);
                         $('#bultos').val(dte.bultos || 0);
                         $('#unidadesProductos').val(dte.unidades_productos || 0);
+                        actualizarPreviewVencimiento();
 
                         $('.dias-credito-shortcut').removeClass('btn-primary').addClass('btn-outline-primary');
                         const diasVal = dte.diasCredito || 0;
-                        if ([30, 60, 90].includes(diasVal)) {
+                        if ([0, 30, 60, 90].includes(diasVal)) {
                             $(`.dias-credito-shortcut[data-dias="${diasVal}"]`).removeClass('btn-outline-primary').addClass('btn-primary');
                         }
 
@@ -4004,6 +4068,257 @@
                 <ul class="dropdown-menu dropdown-menu-end">${items.join('')}</ul>
             </div>`;
     }
+    // ==================== MODAL NUEVO/EDITAR DTE: UX DE CAPTURA ====================
+    // La rueda del mouse sobre un <input type="number"> ENFOCADO cambia su valor:
+    // es comportamiento nativo del navegador, no un bug de la página. Al scrollear
+    // el modal después de tipear un número (folio, bultos, días de crédito) el
+    // valor se reescribía solo. Se suelta el foco al detectar la rueda: la página
+    // sigue scrolleando normal y el número queda intacto.
+    document.addEventListener('wheel', function (e) {
+        const activo = document.activeElement;
+        if (activo && activo.tagName === 'INPUT' && activo.type === 'number' && activo === e.target) {
+            activo.blur();
+        }
+    }, { passive: true });
+
+    // El folio es un identificador, no una cantidad: sólo dígitos.
+    $(document).on('input', '#numeroDocumento', function () {
+        const limpio = this.value.replace(/\D/g, '');
+        if (this.value === limpio) return;
+        const pos = Math.max(0, this.selectionStart - (this.value.length - limpio.length));
+        this.value = limpio;
+        try { this.setSelectionRange(pos, pos); } catch (err) { /* input no editable */ }
+    });
+
+    // ---------- Validación inline ----------
+    function limpiarErroresDTE() {
+        $('#formNuevoDTE .rm-field-error').removeClass('rm-field-error');
+        $('#formNuevoDTE .rm-field-msg').remove();
+    }
+
+    function marcarErrorDTE(selectorCampo, mensaje) {
+        const $campo = $(selectorCampo);
+        const $col = $campo.closest('[class*="col-"]');
+        const $destino = $col.length ? $col : $campo.parent();
+        $destino.addClass('rm-field-error');
+        if (!$destino.children('.rm-field-msg').length) {
+            $destino.append('<div class="rm-field-msg"><i class="bi bi-exclamation-circle"></i><span></span></div>');
+        }
+        $destino.children('.rm-field-msg').find('span').text(mensaje);
+        return $destino;
+    }
+
+    // Al corregir un campo se apaga su marca (no esperar al próximo submit).
+    $(document).on('input change', '#formNuevoDTE .form-control, #formNuevoDTE .form-select', function () {
+        const $col = $(this).closest('.rm-field-error');
+        if (!$col.length) return;
+        $col.removeClass('rm-field-error');
+        $col.children('.rm-field-msg').remove();
+    });
+
+    function validarFormularioDTE(v) {
+        limpiarErroresDTE();
+        const errores = [];
+        const hoyISO = new Date().toISOString().split('T')[0];
+
+        if (!v.receptor_id) errores.push(['#receptor', 'Selecciona el proveedor que emite el DTE.']);
+        if (!v.empresaReceptoraId) errores.push(['#empresaReceptora', 'Selecciona la empresa que recibe el DTE.']);
+        if (v.receptor_id && v.empresaReceptoraId && String(v.receptor_id) === String(v.empresaReceptoraId)) {
+            errores.push(['#empresaReceptora', 'Emisor y receptor no pueden ser la misma empresa.']);
+        }
+        if (!v.tipoDocumento) errores.push(['#tipoDocumento', 'Selecciona el tipo de documento.']);
+        if (!v.numero) errores.push(['#numeroDocumento', 'Ingresa el número de documento (folio).']);
+        else if (!/^\d+$/.test(v.numero)) errores.push(['#numeroDocumento', 'El folio sólo admite dígitos.']);
+        if (!v.estadoDTE) errores.push(['#estadoDTE', 'Selecciona el estado del DTE.']);
+        if (v.estadoDTE === 'RECHAZADO') {
+            if (!v.motivoRechazo) errores.push(['#motivoRechazo', 'Indica el motivo del rechazo.']);
+            else if (v.motivoRechazo.length > 100) errores.push(['#motivoRechazo', 'El motivo no puede superar los 100 caracteres.']);
+        }
+        if (v.tipoDocumento === 'NOTA DE DEBITO' && !v.notaCreditoBaseId) {
+            errores.push(['#notaCreditoBase', 'Selecciona la Nota de Crédito que corrige esta ND.']);
+        }
+        if (!v.monto || v.monto <= 0) errores.push(['#montoConIVA', 'Ingresa el monto total con IVA.']);
+        else if (v.descuentoEquivalenteConIVA >= v.monto) {
+            errores.push(['#descuento', 'El descuento no puede igualar ni superar el monto total.']);
+        }
+        if (!v.fechaEmision) errores.push(['#fechaEmision', 'Ingresa la fecha de emisión.']);
+        else if (v.fechaEmision > hoyISO) errores.push(['#fechaEmision', 'La fecha de emisión no puede ser futura.']);
+        if (v.fechaRecepcion && v.fechaEmision && v.fechaRecepcion < v.fechaEmision) {
+            errores.push(['#fechaRecepcion', 'La recepción no puede ser anterior a la emisión.']);
+        }
+
+        if (!errores.length) return true;
+
+        errores.forEach(function (err) { marcarErrorDTE(err[0], err[1]); });
+
+        const $primero = $(errores[0][0]).closest('[class*="col-"]');
+        if ($primero.length && $primero[0].scrollIntoView) {
+            $primero[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+        const $campoFoco = $(errores[0][0]);
+        if ($campoFoco.length && !$campoFoco.hasClass('select2-hidden-accessible') && $campoFoco.is(':visible')) {
+            setTimeout(function () { $campoFoco.trigger('focus'); }, 250);
+        }
+        return false;
+    }
+
+    // ---------- Aviso de folio ya cargado para ese proveedor ----------
+    // crearDteCompras rechaza el duplicado exacto (proveedor + folio + fecha) recién
+    // al guardar, con el formulario entero ya tipeado. Esto adelanta el aviso y además
+    // reporta el mismo folio con OTRA fecha, que el backend deja pasar y casi siempre
+    // es la misma factura cargada dos veces con la fecha mal escrita.
+    let _timerFolioDte = null;
+    let _reqFolioDte = null;
+
+    function verificarFolioDuplicado() {
+        const $aviso = $('#avisoFolioDuplicado');
+        const emisorId = $('#receptor').val();
+        const numero = ($('#numeroDocumento').val() || '').replace(/\D/g, '');
+
+        if (!emisorId || !numero) {
+            $aviso.stop(true, true).hide().empty();
+            return;
+        }
+
+        if (_reqFolioDte && _reqFolioDte.readyState !== 4) {
+            _reqFolioDte.abort();
+        }
+
+        _reqFolioDte = $.ajax({
+            url: '/app/verificar_dte_duplicado/',
+            method: 'GET',
+            data: {
+                emisor_id: emisorId,
+                numero_documento: numero,
+                fecha_emision: $('#fechaEmision').val() || '',
+                dte_id: $('#modalNuevoDTE').data('dte-id') || ''
+            },
+            success: function (resp) {
+                if (!resp || !resp.success || !resp.existe) {
+                    $aviso.stop(true, true).hide().empty();
+                    return;
+                }
+
+                const fmt = (n) => '$' + Number(n || 0).toLocaleString('es-CL');
+                const filas = resp.coincidencias.map(function (c) {
+                    const descartado = c.descartado
+                        ? ' <span class="badge bg-secondary" style="font-size:0.62rem;">descartado</span>'
+                        : '';
+                    const receptor = c.receptor ? ' &middot; recibido por ' + c.receptor : '';
+                    const mismoDia = c.mismo_dia ? ' <strong>(misma fecha)</strong>' : '';
+                    // El listado sólo trae los DTE de la empresa en sesión: si el
+                    // duplicado es de otra receptora, buscarlo ahí no lo encontrará.
+                    const fueraDeListado = c.visible_en_listado
+                        ? ''
+                        : ' <span class="badge bg-light text-dark" style="font-size:0.62rem;">fuera de tu listado</span>';
+                    return '<li>' + c.tipo_documento + ' N&deg; ' + c.numero_documento +
+                        ' &middot; ' + c.fecha_emision + mismoDia +
+                        ' &middot; ' + fmt(c.monto_con_iva) +
+                        ' &middot; ' + c.estado_pago + receptor + descartado + fueraDeListado + '</li>';
+                }).join('');
+
+                const tono = resp.bloqueante ? 'error' : 'warn';
+                const icono = resp.bloqueante ? 'bi-x-octagon-fill' : 'bi-exclamation-triangle-fill';
+                const titulo = resp.bloqueante
+                    ? 'Este folio ya está cargado para este proveedor con la misma fecha de emisión: el sistema rechazará el guardado.'
+                    : 'Este proveedor ya tiene otro documento con este folio (distinta fecha). Verifica antes de guardar.';
+
+                $aviso.html(
+                    '<div class="rm-inline-note rm-inline-note--' + tono + '">' +
+                        '<i class="bi ' + icono + '"></i>' +
+                        '<div><span>' + titulo + '</span>' +
+                            '<ul class="rm-note-list">' + filas + '</ul>' +
+                        '</div>' +
+                    '</div>'
+                ).stop(true, true).slideDown(180);
+            },
+            error: function (xhr, estado) {
+                if (estado === 'abort') return;
+                $aviso.stop(true, true).hide().empty();
+            }
+        });
+    }
+
+    $(document).on('change', '#receptor, #fechaEmision', verificarFolioDuplicado);
+    $(document).on('input', '#numeroDocumento', function () {
+        clearTimeout(_timerFolioDte);
+        _timerFolioDte = setTimeout(verificarFolioDuplicado, 450);
+    });
+
+    // ---------- Vencimiento calculado en vivo (emisión + días de crédito) ----------
+    function actualizarPreviewVencimiento() {
+        const $box = $('#previewVencimiento');
+        const fecha = $('#fechaEmision').val();
+        const dias = parseInt($('#diasCredito').val(), 10);
+
+        if (!fecha) {
+            $box.hide().empty();
+            return;
+        }
+
+        const vence = new Date(fecha + 'T00:00:00');
+        if (isNaN(vence.getTime())) {
+            $box.hide().empty();
+            return;
+        }
+        vence.setDate(vence.getDate() + (isNaN(dias) ? 0 : dias));
+
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        const diff = Math.round((vence - hoy) / 86400000);
+
+        let detalle, tono;
+        if (diff < 0) {
+            detalle = 'nace <strong>vencida hace ' + Math.abs(diff) + ' día(s)</strong>';
+            tono = 'warn';
+        } else if (diff === 0) {
+            detalle = '<strong>vence hoy</strong>';
+            tono = 'warn';
+        } else {
+            detalle = 'faltan ' + diff + ' día(s)';
+            tono = 'info';
+        }
+
+        const texto = vence.toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' });
+        const contado = (!isNaN(dias) && dias === 0)
+            ? ' <span class="badge bg-light text-dark" style="font-size:0.62rem;">contado</span>'
+            : '';
+
+        $box.html(
+            '<div class="rm-inline-note rm-inline-note--' + tono + '">' +
+                '<i class="bi bi-calendar-check"></i>' +
+                '<span>Vence el <strong>' + texto + '</strong> &middot; ' + detalle + contado + '</span>' +
+            '</div>'
+        ).show();
+    }
+
+    $(document).on('change input', '#fechaEmision, #diasCredito', actualizarPreviewVencimiento);
+
+    // Ctrl/Cmd + Enter guarda sin tener que bajar hasta el botón.
+    $('#modalNuevoDTE').on('keydown', function (e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            $('#formNuevoDTE').trigger('submit');
+        }
+    });
+
+    // Al abrir en modo creación, el cursor arranca en el proveedor (primer requerido).
+    $('#modalNuevoDTE').on('shown.bs.modal', function () {
+        const modal = $(this);
+        const isEditing = modal.data('dte-id') !== undefined && modal.data('dte-id') !== null;
+        actualizarPreviewVencimiento();
+        if (isEditing) return;
+        $.when(_promiseProveedores).always(function () {
+            setTimeout(function () {
+                try {
+                    if ($('#receptor').hasClass('select2-hidden-accessible')) {
+                        $('#receptor').select2('open');
+                    }
+                } catch (err) { /* select2 aún no montado */ }
+            }, 120);
+        });
+    });
+
     $(document).on('submit', '#formNuevoDTE', function (e) {
         e.preventDefault();
 
@@ -4026,47 +4341,24 @@
         const nota_credito_base_id = $('#notaCreditoBase').val();
         const empresaRecepcionSeleccion = obtenerEmpresaRecepcionSeleccionada();
 
-        // Validar campos obligatorios
-        if (!receptor_id || !numero || !monto || !fechaEmision || !estadoDTE || !estadoPago || !tipoDocumento) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Campos incompletos',
-                text: 'Por favor completa todos los campos obligatorios.'
-            });
-            return;
-        }
-
-        // Validar que si es Nota de Débito, tenga una NC seleccionada
-        if (tipoDocumento === 'NOTA DE DEBITO' && !nota_credito_base_id) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Nota de Crédito requerida',
-                text: 'Debes seleccionar una Nota de Crédito para corregir con esta Nota de Débito.'
-            });
-            return;
-        }
-
-        // Validar motivo de rechazo si el estado es Rechazado
-        if (estadoDTE === 'RECHAZADO') {
-            if (!motivoRechazo || motivoRechazo.length === 0) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Motivo de rechazo requerido',
-                    text: 'Debes especificar el motivo del rechazo del DTE.'
-                });
-                $('#motivoRechazo').focus();
-                return;
-            }
-            if (motivoRechazo.length > 100) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Motivo muy largo',
-                    text: 'El motivo de rechazo no puede exceder 100 caracteres.'
-                });
-                $('#motivoRechazo').focus();
-                return;
-            }
-        }
+        // Validación inline: marca el campo que falla y hace scroll hasta él, en vez
+        // del Swal genérico que no decía cuál de los 14 campos faltaba.
+        const esValido = validarFormularioDTE({
+            receptor_id: receptor_id,
+            empresaReceptoraId: empresaRecepcionSeleccion.empresa_id,
+            tipoDocumento: tipoDocumento,
+            numero: numero,
+            estadoDTE: estadoDTE,
+            motivoRechazo: motivoRechazo,
+            notaCreditoBaseId: nota_credito_base_id,
+            monto: monto,
+            // El descuento se ingresa neto o con IVA según el check: se lleva a bruto
+            // para poder compararlo contra el total, que siempre es con IVA.
+            descuentoEquivalenteConIVA: descuento_con_iva ? descuento : Math.round(descuento * 1.19),
+            fechaEmision: fechaEmision,
+            fechaRecepcion: fechaRecepcion
+        });
+        if (!esValido) return;
 
         // Armar payload
         const data = {
@@ -4091,21 +4383,18 @@
         data.empresa_receptora_id = empresaRecepcionSeleccion.empresa_id;
         data.sucursal_receptora_id = empresaRecepcionSeleccion.sucursal_id;
 
-        // Debug: mostrar datos que se van a enviar
-        console.log('🆕 DEBUG - Datos del formulario:', data);
-
         // Detectar si estamos editando o creando
         const dteId = $('#modalNuevoDTE').data('dte-id');
         const isEditing = dteId !== undefined && dteId !== null;
         const url = isEditing ? `/app/actualizarDteCompras/${dteId}/` : '/app/crearDteCompras/';
         const method = isEditing ? 'PUT' : 'POST';
-
-        console.log(`🆕 DEBUG - ${isEditing ? 'Editando' : 'Creando'} DTE:`, {
-            url: url,
-            method: method,
-            dteId: dteId
-        });
         const mensajeExito = isEditing ? 'DTE actualizado' : 'DTE registrado';
+
+        // Candado anti doble envío: sin esto, dos clicks (o dos Ctrl+Enter) mandan
+        // dos POST y el segundo sólo muere si el backend detecta el duplicado exacto.
+        const $btnGuardar = $('#btnGuardarDTE');
+        if ($btnGuardar.prop('disabled')) return;
+        const htmlBtnGuardar = $btnGuardar.html();
 
         // Enviar AJAX
         $.ajax({
@@ -4117,20 +4406,13 @@
             },
             data: JSON.stringify(data),
             beforeSend: function () {
-                console.log('🚀 DEBUG - Enviando datos al servidor...');
-                // Comentamos el SweetAlert para poder ver errores en consola
-                /*
-                Swal.fire({
-                    title: 'Guardando...',
-                    text: 'Por favor espera',
-                    allowOutsideClick: false,
-                    didOpen: () => Swal.showLoading()
-                });
-                */
+                $btnGuardar.prop('disabled', true)
+                    .html('<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Guardando...');
+            },
+            complete: function () {
+                $btnGuardar.prop('disabled', false).html(htmlBtnGuardar);
             },
             success: function (resp) {
-                console.log('✅ DEBUG - Respuesta exitosa:', resp);
-
                 if (resp.success) {
                     Swal.fire({
                         icon: 'success',
@@ -4144,7 +4426,6 @@
                     $('#formNuevoDTE')[0].reset();
                     cargarDTEs(currentPageDTE, currentSearchDTE); // Recargar tabla o vista
                 } else {
-                    console.error('❌ DEBUG - Error en respuesta:', resp.error);
                     Swal.fire({
                         icon: 'error',
                         title: 'Error al guardar',
@@ -4153,11 +4434,6 @@
                 }
             },
             error: function (xhr) {
-                console.error('❌ DEBUG - Error AJAX completo:', xhr);
-                console.error('❌ DEBUG - Status:', xhr.status);
-                console.error('❌ DEBUG - Response Text:', xhr.responseText);
-                console.error('❌ DEBUG - Response JSON:', xhr.responseJSON);
-
                 let errorMessage = 'Error de conexión';
                 try {
                     const resp = xhr.responseJSON;
@@ -4243,6 +4519,16 @@
         $('#accionesAsociacionNC').empty();
         $('#empresaReceptora').empty().append('<option value="">Selecciona la empresa que recibirá el DTE</option>');
         $('#empresaReceptora').prop('disabled', false);
+
+        // Validación inline, avisos calculados y candado del botón
+        limpiarErroresDTE();
+        clearTimeout(_timerFolioDte);
+        if (_reqFolioDte && _reqFolioDte.readyState !== 4) {
+            _reqFolioDte.abort();
+        }
+        $('#avisoFolioDuplicado').stop(true, true).hide().empty();
+        $('#previewVencimiento').hide().empty();
+        $('#btnGuardarDTE').prop('disabled', false);
     });
 
     // Limpiar modal de asociar NC cuando se cierre
@@ -4386,6 +4672,7 @@
         // Resaltar el botón seleccionado
         $('.dias-credito-shortcut').removeClass('btn-primary').addClass('btn-outline-primary');
         $(this).removeClass('btn-outline-primary').addClass('btn-primary');
+        actualizarPreviewVencimiento();
     });
 
     // Cargar información completa del DTE (pagos, incidencias, relaciones)

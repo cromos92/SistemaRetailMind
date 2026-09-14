@@ -588,6 +588,83 @@ def empresas_proveedoras(request):
         })
 
 
+@login_required
+@require_GET
+def verificar_dte_duplicado(request):
+    """Chequeo previo (read-only) de folio repetido para el modal 'Nuevo DTE Compra'.
+
+    `crearDteCompras` / `actualizarDteCompras` ya rechazan el duplicado exacto
+    (emisor + numero_documento + fecha_emision, SIN mirar tipo_documento ni
+    `descartado`), pero recién al guardar, con el formulario entero ya tipeado.
+    Esta vista adelanta ese aviso y además reporta las coincidencias de folio con
+    OTRA fecha de emisión, que el backend deja pasar y suelen ser el mismo
+    documento cargado dos veces con la fecha mal escrita.
+
+    Parámetros GET: emisor_id, numero_documento, fecha_emision (opcional),
+    dte_id (opcional, para excluirse a sí mismo en modo edición).
+    """
+    from django.utils.dateparse import parse_date
+
+    emisor_id = request.GET.get('emisor_id')
+    numero_documento = request.GET.get('numero_documento')
+
+    try:
+        emisor_id = int(emisor_id)
+        numero_documento = int(numero_documento)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'error': 'Parámetros inválidos.'}, status=400)
+
+    fecha_emision = parse_date(request.GET.get('fecha_emision') or '')
+
+    try:
+        excluir_id = int(request.GET.get('dte_id'))
+    except (TypeError, ValueError):
+        excluir_id = None
+
+    empresa_session_id = request.session.get('idEmpresaActual')
+
+    qs = Dte.objects.filter(
+        tipo_transaccion='COMPRA',
+        emisor_id=emisor_id,
+        numero_documento=numero_documento,
+    ).select_related('receptor').order_by('-fecha_emision', '-id')
+
+    if excluir_id:
+        qs = qs.exclude(id=excluir_id)
+
+    # `bloqueante` se mide sobre TODO el queryset, no sobre las 5 filas que se
+    # muestran: es exactamente la condición que hará fallar el guardado.
+    bloqueante = bool(fecha_emision) and qs.filter(fecha_emision=fecha_emision).exists()
+
+    coincidencias = []
+
+    for d in qs[:5]:
+        mismo_dia = bool(fecha_emision and d.fecha_emision == fecha_emision)
+        coincidencias.append({
+            'id': d.id,
+            'numero_documento': d.numero_documento,
+            'tipo_documento': d.tipo_documento,
+            'fecha_emision': d.fecha_emision.strftime('%d-%m-%Y') if d.fecha_emision else '',
+            'monto_con_iva': float(d.monto_con_iva or 0),
+            'estado_pago': d.estado_pago,
+            'descartado': d.descartado,
+            'mismo_dia': mismo_dia,
+            'receptor': (d.receptor.nombre or '') if d.receptor else '',
+            # El listado del módulo sólo muestra DTEs de la empresa en sesión; si
+            # el duplicado es de otra receptora el usuario no podrá abrirlo.
+            'visible_en_listado': bool(
+                empresa_session_id and d.receptor_id and str(d.receptor_id) == str(empresa_session_id)
+            ),
+        })
+
+    return JsonResponse({
+        'success': True,
+        'existe': bool(coincidencias),
+        'bloqueante': bloqueante,
+        'coincidencias': coincidencias,
+    })
+
+
 def cargarDteCompra(request):
     """Cargar DTE de compra desde archivo XML"""
     if request.method == 'POST':

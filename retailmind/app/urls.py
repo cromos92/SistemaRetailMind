@@ -651,6 +651,7 @@ urlpatterns = [
      path('api/resumen-pendientes-anio/', views_modulo_compras.obtener_resumen_pendientes_anio, name='obtener_resumen_pendientes_anio'),
      path('crearDteCompras/', views.crearDteCompras, name='crearDteCompras'),
      path('actualizarDteCompras/<int:dte_id>/', views.actualizarDteCompras, name='actualizarDteCompras'),
+     path('verificar_dte_duplicado/', views_modulo_compras.verificar_dte_duplicado, name='verificar_dte_duplicado'),
     path('empresas_proveedoras/', views_modulo_compras.empresas_proveedoras, name='empresas_proveedoras'),
     path('empresas_receptoras/', views.empresas_receptoras, name='empresas_receptoras'),
      path('cargarDteCompra/', views.cargarDteCompra, name='cargarDteCompra'),

@@ -223,6 +223,7 @@ URL_PERMISO_MAP = {
     '/app/verGestionCompras/': 'gestion_compras',
     '/app/eliminar_compra/': 'gestion_compras',
     '/app/verGestionDteCompras/': 'gestion_dte_compras',
+    '/app/verificar_dte_duplicado/': 'gestion_dte_compras',
     
     # Requerimientos
     '/app/requerimientos/': 'lista_requerimientos',
