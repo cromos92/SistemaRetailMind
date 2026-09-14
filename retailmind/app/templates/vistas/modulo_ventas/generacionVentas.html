@@ -9428,6 +9428,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 _mpModalCobroSinUsar(errData);
             } else if (errData.error_tipo === 'MP_COBRO_EN_CURSO') {
                 _mpModalCobroEnCurso(errData);
+            } else if (errData.error_tipo === 'MP_COBRO_INCIERTO') {
+                _mpModalCobroIncierto(errData);
             } else {
                 mostrarNotificacion(error.message || 'Error al finalizar la venta', 'error');
             }
@@ -9517,7 +9519,39 @@ document.addEventListener('DOMContentLoaded', function() {
             confirmButtonColor: '#dc3545',
             focusCancel: true
         }).then(r => {
-            if (r.isConfirmed) finalizarVenta({ mp_confirmado_sin_cobro: true });
+            // El servidor manda: si dice que este cobro no se puede saltar, no
+            // se ofrece el bypass aunque el cajero confirme.
+            if (r.isConfirmed && errData.permite_forzar !== false) {
+                finalizarVenta({ mp_confirmado_sin_cobro: true });
+            }
+        });
+    }
+
+    /**
+     * Cobro SIN CONFIRMAR: Mercado Pago no respondió al crearlo y nadie sabe si
+     * llegó a la máquina. A diferencia del anterior, acá NO se ofrece "ya lo
+     * cancelé": el cajero no puede saber lo que el sistema no sabe, y el
+     * servidor rechaza el bypass. Se destraba solo cuando se resuelve o vence.
+     */
+    function _mpModalCobroIncierto(errData) {
+        const c = (errData.cobros_mp || [])[0] || {};
+        Swal.fire({
+            icon: 'warning',
+            title: '⏳ Cobro sin confirmar en Mercado Pago',
+            html: `<div class="text-start">
+                <p>${errData.error || ''}</p>
+                <p class="mb-1"><strong>${formatearMoneda(c.monto || 0)}</strong> — ${c.canal || 'POINT'}
+                   · enviado ${c.creado_en || ''}</p>
+                <p class="mb-1"><strong>Mira la pantalla de la máquina:</strong></p>
+                <ul class="mb-2 ps-3">
+                    <li>Si muestra el cobro, deja que el cliente pague y se registra solo.</li>
+                    <li>Si no muestra nada, espera unos segundos y vuelve a finalizar.</li>
+                </ul>
+                <p class="small text-muted mb-0">No cobres de nuevo por Mercado Pago mientras esto no se aclare.</p>
+            </div>`,
+            width: '560px',
+            confirmButtonText: 'Entendido',
+            confirmButtonColor: '#f7b924'
         });
     }
 
