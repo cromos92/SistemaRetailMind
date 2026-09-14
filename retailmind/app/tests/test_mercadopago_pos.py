@@ -10,7 +10,10 @@ Sin red: toda llamada a la API de MP se mockea.
 import hashlib
 import hmac
 import time
+from datetime import timedelta
 from unittest import mock
+
+import requests
 
 from django.db.models import Q
 from django.test import TestCase
@@ -57,12 +60,26 @@ def _transaccion(config, correlativo='100', monto=10000, estado='APROBADA', **kw
     return TransaccionMercadoPago.objects.create(config=config, **defaults)
 
 
+def _envejecer(trx, segundos):
+    """Mueve creado_en hacia atrás (auto_now_add no admite asignación directa)."""
+    nuevo = timezone.now() - timedelta(seconds=segundos)
+    TransaccionMercadoPago.objects.filter(pk=trx.pk).update(creado_en=nuevo)
+    trx.refresh_from_db()
+    return trx
+
+
 class BaseMPTest(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.empresa = crear_empresa()
         cls.sucursal = crear_sucursal(empresa=cls.empresa)
         cls.config = _config(cls.sucursal)
+
+    def setUp(self):
+        super().setUp()
+        # El circuit breaker vive en globales de módulo: un test que simule
+        # caída de red lo dejaría abierto y haría fallar a los siguientes.
+        mp._breaker_registrar_exito()
 
 
 # ==================== CREACIÓN DE ORDEN ====================
@@ -100,11 +117,19 @@ class CrearOrdenTests(BaseMPTest):
         self.assertEqual(body['config']['qr']['external_pos_id'], 'POS001')
 
     @mock.patch('app.services.mercadopago_service.requests.request')
-    def test_orden_sin_qr_data_falla_sin_crear_transaccion(self, m_req):
+    def test_orden_sin_qr_data_deja_la_fila_con_order_id(self, m_req):
+        """MP respondió 201: la orden EXISTE aunque no haya venido el QR.
+
+        Antes se lanzaba sin dejar rastro local y esa orden quedaba cobrable
+        sin que el sistema supiera de ella. Ahora la fila queda con su order_id
+        para poder consultarla y cancelarla.
+        """
         m_req.return_value = self._mock_resp(payload={'id': 'ORD-2', 'status': 'created'})
         with self.assertRaises(mp.MercadoPagoError):
             mp.crear_orden(self.config, '124', 5000)
-        self.assertFalse(TransaccionMercadoPago.objects.filter(order_id='ORD-2').exists())
+        trx = TransaccionMercadoPago.objects.get(order_id='ORD-2')
+        self.assertEqual(trx.correlativo_ticket, '124')
+        self.assertFalse(mp.es_incierta(trx))  # MP contestó: no hay incertidumbre
 
     def test_monto_invalido(self):
         with self.assertRaises(mp.MercadoPagoError):
@@ -1568,3 +1593,457 @@ class BloqueControlImpresoTests(BaseMPTest):
         texto = mp.contenido_cierre_terminal(caja, '2026-09-05')
         self.assertIn('CIERRE MERCADO PAGO', texto)
         self.assertNotIn('CONTROL vs MERCADO PAGO', texto)
+
+
+# ==================== COBRO INCIERTO (incidente 13-09-2026) ====================
+#
+# Con internet intermitente el POST /v1/orders llegaba a MP pero la respuesta no
+# volvía. La fila local se escribía DESPUÉS, así que no quedaba rastro: el guard
+# no veía nada, el cajero reintentaba y —como el external_reference (=
+# X-Idempotency-Key) llevaba un uuid4 nuevo— MP creaba una SEGUNDA orden.
+# El cliente pagaba dos veces.
+
+@mock.patch.dict('os.environ', ENV_TEST)
+class CobroInciertoTests(BaseMPTest):
+
+    def setUp(self):
+        super().setUp()
+        # El canal POINT exige una máquina asociada (device_id).
+        self.config = _config(self.sucursal, nombre='CajaPoint', modo='POINT',
+                              external_pos_id='POS-PT', device_id='N950NCD400023750')
+
+    def _ok(self, order_id='ORD-OK', status='created', qr=True):
+        resp = mock.MagicMock()
+        resp.status_code = 201
+        payload = {'id': order_id, 'status': status}
+        if qr:
+            payload['type_response'] = {'qr_data': '00020101021243...'}
+        resp.json.return_value = payload
+        return resp
+
+    def _timeout(self):
+        return requests.exceptions.ReadTimeout('read timeout')
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_timeout_deja_fila_incierta_y_no_lanza(self, m_req):
+        m_req.side_effect = self._timeout()
+        trx, qr = mp.crear_orden(self.config, '1300', 20000, canal='POINT')
+        self.assertIsNone(qr)
+        self.assertEqual(trx.estado, 'CREADA')
+        self.assertEqual(trx.order_id, '')
+        self.assertTrue(mp.es_incierta(trx))
+        self.assertEqual(mp.fase_cobro(trx), mp.FASE_ENVIADA)
+        self.assertEqual(
+            TransaccionMercadoPago.objects.filter(correlativo_ticket='1300').count(), 1)
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_reintento_reusa_la_misma_idempotency_key(self, m_req):
+        """EL CORAZÓN DEL ARREGLO: reintentar es un REPLAY, no una orden nueva."""
+        # 1: POST original (timeout) | 2: replay OK | 3: GET de la orden que
+        # dispara consultar_estado al recuperar el order_id.
+        m_req.side_effect = [self._timeout(), self._ok(order_id='ORD-REPLAY'),
+                             self._ok(order_id='ORD-REPLAY', status='at_terminal', qr=False)]
+        trx, _ = mp.crear_orden(self.config, '1301', 9000, canal='POINT')
+        self.assertTrue(mp.es_incierta(trx))
+
+        # El cajero vuelve a apretar: se resuelve la incierta con la MISMA clave.
+        trx = mp.resolver_incierta(trx)
+
+        keys = [c.kwargs['headers'].get('X-Idempotency-Key')
+                for c in m_req.call_args_list]
+        self.assertEqual(keys[0], keys[1], 'el replay debe usar la MISMA key')
+        self.assertEqual(trx.order_id, 'ORD-REPLAY')
+        # Y sobre todo: UNA sola fila, o sea una sola orden en Mercado Pago.
+        self.assertEqual(
+            TransaccionMercadoPago.objects.filter(correlativo_ticket='1301').count(), 1)
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_incierta_bloquea_un_cobro_nuevo_del_mismo_ticket(self, m_req):
+        m_req.side_effect = self._timeout()
+        mp.crear_orden(self.config, '1302', 5000, canal='POINT')
+        m_req.side_effect = self._timeout()  # sigue sin red: no se puede resolver
+        with self.assertRaises(mp.CobroEnCursoError):
+            mp.crear_orden(self.config, '1302', 5000, canal='POINT')
+        self.assertEqual(
+            TransaccionMercadoPago.objects.filter(correlativo_ticket='1302').count(), 1)
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_incierta_que_ya_se_pago_se_detecta_por_payments_search(self, m_req):
+        m_req.side_effect = self._timeout()
+        trx, _ = mp.crear_orden(self.config, '1303', 7000, canal='POINT')
+
+        # Replay falla, pero payments/search encuentra el pago aprobado.
+        busqueda = mock.MagicMock()
+        busqueda.status_code = 200
+        busqueda.json.return_value = {'results': [{
+            'id': 177422093000, 'status': 'approved', 'payment_type_id': 'debit_card',
+            'external_reference': trx.external_reference,
+        }]}
+        m_req.side_effect = [self._timeout(), busqueda]
+        trx = _envejecer(trx, mp.MP_RESOLVER_MIN_SEG + 1)
+        # Dos fallos de red seguidos abren el circuit breaker y cortan incluso
+        # la recuperacion. En produccion se cierra solo a los MP_BREAKER_SEG (o
+        # en cuanto otra llamada responde); aca se simula esa vuelta de la red.
+        mp._breaker_registrar_exito()
+        trx = mp.resolver_incierta(trx)
+        self.assertEqual(trx.estado, 'APROBADA')
+        self.assertEqual(trx.payment_id_mp, '177422093000')
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_payments_search_ignora_pagos_de_otra_referencia(self, m_req):
+        """Si MP ignorara el filtro, imputaríamos plata de OTRA venta."""
+        m_req.side_effect = self._timeout()
+        trx, _ = mp.crear_orden(self.config, '1304', 7000, canal='POINT')
+        ajeno = mock.MagicMock()
+        ajeno.status_code = 200
+        ajeno.json.return_value = {'results': [{
+            'id': 999, 'status': 'approved', 'external_reference': 'RM-9-OTRO-c1i01',
+        }]}
+        m_req.side_effect = [self._timeout(), ajeno]
+        trx = _envejecer(trx, mp.MP_RESOLVER_MIN_SEG + 1)
+        mp._breaker_registrar_exito()   # que la busqueda SI se ejecute
+        trx = mp.resolver_incierta(trx)
+        self.assertNotEqual(trx.estado, 'APROBADA')
+        # Se consulto de verdad y aun asi no se imputo el pago ajeno.
+        self.assertTrue(any('/v1/payments/search' in str(c.args)
+                            for c in m_req.call_args_list))
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_reserva_fantasma_se_cierra_sin_red(self, m_req):
+        """Un request que murió antes de postear no existe en MP: cero llamadas."""
+        trx = _transaccion(self.config, correlativo='1305', monto=1000,
+                           estado='CREADA', order_id='',
+                           raw_response={'_rm': {'fase': mp.FASE_RESERVADA}})
+        trx = _envejecer(trx, mp.MP_RESERVA_MAX_SEG + 10)
+        trx = mp.resolver_incierta(trx)
+        self.assertEqual(trx.estado, 'ERROR')
+        self.assertEqual(m_req.call_count, 0)
+
+    def test_reserva_fresca_cuenta_como_viva(self):
+        """Es lo que serializa dos cobros simultáneos del mismo ticket."""
+        _transaccion(self.config, correlativo='1306', monto=1000, estado='CREADA',
+                     order_id='', raw_response={'_rm': {'fase': mp.FASE_RESERVADA}})
+        vivos = mp.cobros_vivos_de_ticket(self.sucursal.id, '1306', refrescar=False)
+        self.assertEqual(len(vivos), 1)
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_incierta_vencida_se_cierra_y_libera_el_ticket(self, m_req):
+        """Nunca dejar la caja trabada para siempre."""
+        m_req.side_effect = self._timeout()
+        trx, _ = mp.crear_orden(self.config, '1307', 4000, canal='POINT')
+        trx = _envejecer(trx, mp.MP_INCIERTA_TTL_SEG + 60)
+        vivos = mp.cobros_vivos_de_ticket(self.sucursal.id, '1307', refrescar=False)
+        self.assertEqual(vivos, [])
+        trx.refresh_from_db()
+        self.assertEqual(trx.estado, 'ERROR')
+
+    def test_cerrada_por_ttl_igual_puede_aprobarse_despues(self):
+        """Cerrar por TTL NO pierde plata: el webhook la resucita.
+
+        Es la propiedad que hace aceptable "fallar abierto" y desbloquear la
+        caja. Si alguien agregara ERROR a una lista de "no resucitar", el cierre
+        por TTL pasaría a perder plata de verdad.
+        """
+        trx = _transaccion(self.config, correlativo='1308', monto=3000, estado='ERROR')
+        mp._aplicar_estado(trx, 'APROBADA', detalle='webhook tardio',
+                           payment={'id': 123456789, 'status': 'approved'})
+        trx.refresh_from_db()
+        self.assertEqual(trx.estado, 'APROBADA')
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_cancelar_no_cierra_a_ciegas_una_incierta(self, m_req):
+        """El agujero que habría dejado el arreglo sin efecto.
+
+        CANCELADA es final: sacaría la fila de los cobros vivos y el guard
+        emitiría una orden nueva — el doble cobro reintroducido por atrás.
+        """
+        m_req.side_effect = self._timeout()
+        trx, _ = mp.crear_orden(self.config, '1309', 6000, canal='POINT')
+        trx = _envejecer(trx, mp.MP_RESOLVER_MIN_SEG + 1)
+        m_req.side_effect = self._timeout()
+        with self.assertRaises(mp.MercadoPagoError):
+            mp.cancelar(trx)
+        trx.refresh_from_db()
+        self.assertNotIn(trx.estado, mp.ESTADOS_FINALES_MP)
+
+    def test_cancelar_si_puede_cerrar_una_reserva(self):
+        """Una reserva nunca se envió: cerrarla es seguro y no cuesta red."""
+        trx = _transaccion(self.config, correlativo='1310', monto=1000,
+                           estado='CREADA', order_id='',
+                           raw_response={'_rm': {'fase': mp.FASE_RESERVADA}})
+        trx = mp.cancelar(trx)
+        self.assertEqual(trx.estado, 'CANCELADA')
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_error_de_configuracion_no_deja_fila(self, m_req):
+        """Si dejara fila, bloquearía el cierre de la venta sin que jamás haya
+        existido un cobro."""
+        with self.assertRaises(mp.MercadoPagoError):
+            mp.crear_orden(self.config, '1311', 0)
+        config_sin_device = _config(self.sucursal, nombre='SinDevice', modo='POINT')
+        with self.assertRaises(mp.MercadoPagoError):
+            mp.crear_orden(config_sin_device, '1312', 5000, canal='POINT')
+        config_malo = _config(self.sucursal, nombre='SinToken', token_env='NO_EXISTE_ENV')
+        with self.assertRaises(mp.MercadoPagoError):
+            mp.crear_orden(config_malo, '1313', 5000)
+        self.assertEqual(TransaccionMercadoPago.objects.count(), 0)
+        self.assertEqual(m_req.call_count, 0)
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_reintento_minimizado_persiste_sufijo_y_body(self, m_req):
+        """Sin esto, la recuperación re-postearía el body original con la key
+        original mientras MP tiene la orden bajo la key -r → segunda orden."""
+        rechazo = mock.MagicMock()
+        rechazo.status_code = 400
+        rechazo.json.return_value = {'errors': [{
+            'code': 'unsupported_properties', 'message': 'no',
+            'details': ['expiration_time']}]}
+        m_req.side_effect = [rechazo, self._timeout()]
+        trx, _ = mp.crear_orden(self.config, '1314', 5000)
+        self.assertTrue(mp.es_incierta(trx))
+        meta = mp._rm(trx)
+        self.assertEqual(meta['sufijo'], '-r')
+        self.assertNotIn('expiration_time', meta['body'])
+        # Y el replay usa esa clave, no la original.
+        m_req.side_effect = [self._ok(order_id='ORD-R'),
+                             self._ok(order_id='ORD-R', status='created')]
+        trx = _envejecer(trx, mp.MP_RESOLVER_MIN_SEG + 1)
+        mp.resolver_incierta(trx)
+        # El POST del replay es la PRIMERA de las dos llamadas.
+        self.assertTrue(
+            m_req.call_args_list[-2].kwargs['headers']['X-Idempotency-Key'].endswith('-r'))
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_rechazo_determinista_libera_la_caja(self, m_req):
+        """Un 4xx de validación con el mismo body prueba que nunca se creó."""
+        m_req.side_effect = self._timeout()
+        trx, _ = mp.crear_orden(self.config, '1315', 5000, canal='POINT')
+        rechazo = mock.MagicMock()
+        rechazo.status_code = 400
+        rechazo.json.return_value = {'message': 'invalid terminal_id'}
+        vacio = mock.MagicMock()
+        vacio.status_code = 200
+        vacio.json.return_value = {'results': []}
+        m_req.side_effect = [rechazo, vacio]
+        trx = _envejecer(trx, mp.MP_RESOLVER_MIN_SEG + 1)
+        trx = mp.resolver_incierta(trx)
+        self.assertEqual(trx.estado, 'ERROR')
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_breaker_deja_de_salir_a_la_red(self, m_req):
+        """MP caído no puede matar workers ni trabar la caja entera."""
+        m_req.side_effect = requests.exceptions.ConnectionError('sin red')
+        for correlativo in ('1320', '1321', '1322', '1323'):
+            try:
+                mp.crear_orden(self.config, correlativo, 1000, canal='POINT')
+            except mp.MercadoPagoError:
+                pass
+        self.assertLess(m_req.call_count, 4,
+                        'el breaker debe cortar las llamadas tras los primeros fallos')
+
+
+@mock.patch.dict('os.environ', ENV_TEST)
+class ReferenciaDeterministaTests(BaseMPTest):
+
+    def test_formato_y_atribucion_de_sucursal(self):
+        ref = mp._ref_cobro(self.config, '10046', 1)
+        self.assertEqual(ref, f'RM-{self.sucursal.id}-10046-c{self.config.id}i01')
+        # La cabeza RM-{sucursal}- es lo único que permite atribuir a una caja
+        # un cobro que MP reporta y del que no hay fila local.
+        self.assertEqual(mp._sucursal_de_referencia(ref), self.sucursal.id)
+
+    def test_correlativos_con_guiones(self):
+        for correlativo in ('COT-202601-0001', 'DIRECTO-1409-153000', 'PRUEBA-14153000'):
+            ref = mp._ref_cobro(self.config, correlativo, 3)
+            self.assertEqual(mp._sucursal_de_referencia(ref), self.sucursal.id)
+            self.assertLessEqual(len(ref) + len('-REF-abcdef'), 80)
+
+    def test_ningun_intento_es_prefijo_de_otro(self):
+        """Sin el padding, i1 sería prefijo de i10 y el webhook se aplicaría
+        sobre la fila equivocada."""
+        refs = [mp._ref_cobro(self.config, '77', n) for n in range(1, 21)]
+        for a in refs:
+            for b in refs:
+                if a != b:
+                    self.assertFalse(b.startswith(a))
+
+    def test_dos_cajas_de_la_misma_sucursal_no_colisionan(self):
+        otra = _config(self.sucursal, nombre='Caja2', external_pos_id='POS002')
+        self.assertNotEqual(mp._ref_cobro(self.config, '10046', 1),
+                            mp._ref_cobro(otra, '10046', 1))
+
+    def test_clave_del_lock_es_estable_entre_procesos(self):
+        """hashlib y NUNCA hash(): PYTHONHASHSEED difiere por worker de gunicorn
+        y el candado no serializaría nada."""
+        self.assertEqual(mp._clave_lock_cobro(7, '10046'),
+                         mp._clave_lock_cobro(7, '10046'))
+        self.assertNotEqual(mp._clave_lock_cobro(7, '10046'),
+                            mp._clave_lock_cobro(8, '10046'))
+        self.assertTrue(-2**63 <= mp._clave_lock_cobro(7, '10046') < 2**63)
+
+
+# ============ REGRESIONES DE LA REVISION ADVERSARIAL (14-09-2026) ============
+#
+# Siete agujeros que la revision encontro en la primera version del arreglo.
+# Todos comparten la misma raiz: el sistema tiene que distinguir "Mercado Pago
+# dijo que no" de "no se si Mercado Pago lo recibio", y cualquier confusion
+# entre las dos termina en un segundo cobro al cliente.
+
+@mock.patch.dict('os.environ', ENV_TEST)
+class RegresionesRevisionTests(BaseMPTest):
+
+    def setUp(self):
+        super().setUp()
+        self.config = _config(self.sucursal, nombre='CajaPointR', modo='POINT',
+                              external_pos_id='POS-PTR', device_id='N950-R')
+
+    def _resp(self, status, payload):
+        resp = mock.MagicMock()
+        resp.status_code = status
+        resp.json.return_value = payload
+        return resp
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_5xx_al_crear_deja_la_fila_incierta(self, m_req):
+        """Un 502 del edge de MP NO prueba que la orden no se creo.
+
+        Tratarlo como rechazo dejaba la fila en ERROR (final), el guard liberado
+        y al cajero reintentando: segunda orden.
+        """
+        m_req.return_value = self._resp(502, {'message': 'Bad gateway'})
+        trx, qr = mp.crear_orden(self.config, '1400', 12000, canal='POINT')
+        self.assertIsNone(qr)
+        self.assertTrue(mp.es_incierta(trx))
+        self.assertNotIn(trx.estado, mp.ESTADOS_FINALES_MP)
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_4xx_de_validacion_si_cierra_la_fila(self, m_req):
+        """El contraste del anterior: un 400 si prueba que no se creo nada."""
+        m_req.return_value = self._resp(400, {'message': 'invalid terminal_id'})
+        with self.assertRaises(mp.MercadoPagoError):
+            mp.crear_orden(self.config, '1401', 12000, canal='POINT')
+        trx = TransaccionMercadoPago.objects.get(correlativo_ticket='1401')
+        self.assertEqual(trx.estado, 'ERROR')
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_pendiente_sin_order_id_sigue_siendo_incierta(self, m_req):
+        """Un pago in_process mueve la fila a PENDIENTE pero sigue SIN order_id.
+
+        Atar la incertidumbre al estado 'CREADA' hacia que cancelar() la cerrara
+        a ciegas justo cuando MP ya habia confirmado un pago en vuelo.
+        """
+        m_req.side_effect = requests.exceptions.ReadTimeout('t')
+        trx, _ = mp.crear_orden(self.config, '1402', 8000, canal='POINT')
+        # MP responde que hay un pago en curso: la fila pasa a PENDIENTE.
+        mp._aplicar_estado(trx, 'PENDIENTE', detalle='in_process',
+                           payment={'id': 177422093001, 'status': 'in_process'})
+        trx.refresh_from_db()
+        self.assertEqual(trx.estado, 'PENDIENTE')
+        self.assertEqual(trx.order_id, '')
+        self.assertTrue(mp.es_incierta(trx), 'PENDIENTE sin order_id es incierta')
+
+        # Y cancelar() se niega en vez de cerrarla a ciegas.
+        m_req.side_effect = requests.exceptions.ReadTimeout('t')
+        trx = _envejecer(trx, mp.MP_RESOLVER_MIN_SEG + 1)
+        with self.assertRaises(mp.MercadoPagoError):
+            mp.cancelar(trx)
+        trx.refresh_from_db()
+        self.assertNotIn(trx.estado, mp.ESTADOS_FINALES_MP)
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_pendiente_sin_order_id_igual_se_libera_por_ttl(self, m_req):
+        """INVARIANTE B: negarse a cancelar a ciegas no puede dejar el ticket
+        trabado para siempre. La salida ahora es el TTL (reversible por webhook),
+        no una cancelacion que mentia sobre lo que Mercado Pago hizo."""
+        m_req.side_effect = requests.exceptions.ReadTimeout('t')
+        trx, _ = mp.crear_orden(self.config, '1410', 8000, canal='POINT')
+        mp._aplicar_estado(trx, 'PENDIENTE', detalle='in_process',
+                           payment={'id': 177422093003, 'status': 'in_process'})
+        trx.refresh_from_db()
+        self.assertTrue(mp.es_incierta(trx))
+        trx = _envejecer(trx, mp.MP_INCIERTA_TTL_SEG + 60)
+        vivos = mp.cobros_vivos_de_ticket(self.sucursal.id, '1410', refrescar=False)
+        self.assertEqual(vivos, [], 'pasado el TTL el ticket queda libre')
+        trx.refresh_from_db()
+        self.assertIn(trx.estado, mp.ESTADOS_FINALES_MP)
+
+    def test_no_pisa_una_aprobada_escrita_por_otro_worker(self):
+        """La carrera del webhook contra la resolucion lenta.
+
+        resolver_incierta sostiene su instancia hasta 20s haciendo red; si el
+        webhook escribe APROBADA en esa ventana, el hilo lento NO puede pisarla
+        con EXPIRADA/ERROR: eso sacaba la fila de los cobros vivos y habilitaba
+        una segunda orden.
+        """
+        trx = _transaccion(self.config, correlativo='1403', monto=5000,
+                           estado='CREADA', order_id='',
+                           raw_response={'_rm': {'fase': mp.FASE_ENVIADA}})
+        obsoleta = TransaccionMercadoPago.objects.get(pk=trx.pk)   # instancia vieja
+        # El webhook aprueba mientras la otra instancia esta "en la red".
+        mp._aplicar_estado(trx, 'APROBADA', detalle='webhook',
+                           payment={'id': 177422093002, 'status': 'approved'})
+        # El hilo lento intenta cerrarla por TTL con su copia obsoleta.
+        mp._aplicar_estado(obsoleta, 'EXPIRADA', detalle='ttl')
+        trx.refresh_from_db()
+        self.assertEqual(trx.estado, 'APROBADA')
+        self.assertEqual(trx.payment_id_mp, '177422093002')
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_breaker_abierto_no_marca_la_fila_como_enviada(self, m_req):
+        """Con el breaker abierto el POST corta antes del socket: la orden
+        PROBADAMENTE no existe. Marcarla ENVIADA trababa el cierre 180s por un
+        cobro inexistente y el replay posterior la creaba de verdad."""
+        m_req.side_effect = requests.exceptions.ConnectionError('sin red')
+        for correlativo in ('1404', '1405'):
+            try:
+                mp.crear_orden(self.config, correlativo, 3000, canal='POINT')
+            except mp.MercadoPagoError:
+                pass
+        self.assertTrue(mp._breaker_abierto(), 'el breaker deberia estar abierto')
+        with self.assertRaises(mp.MercadoPagoError):
+            mp.crear_orden(self.config, '1406', 3000, canal='POINT')
+        trx = TransaccionMercadoPago.objects.get(correlativo_ticket='1406')
+        self.assertFalse(mp.es_incierta(trx))
+        self.assertEqual(trx.estado, 'ERROR')
+        # Y no traba el cierre de la venta.
+        self.assertEqual(
+            mp.cobros_vivos_de_ticket(self.sucursal.id, '1406', refrescar=False), [])
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_replay_con_5xx_no_cierra_la_incierta(self, m_req):
+        """Un 503 en el replay no prueba rechazo: la fila sigue bloqueando."""
+        m_req.side_effect = requests.exceptions.ReadTimeout('t')
+        trx, _ = mp.crear_orden(self.config, '1407', 6000, canal='POINT')
+        m_req.side_effect = [self._resp(503, {'message': 'unavailable'}),
+                             self._resp(200, {'results': []})]
+        trx = _envejecer(trx, mp.MP_RESOLVER_MIN_SEG + 1)
+        mp._breaker_registrar_exito()
+        trx = mp.resolver_incierta(trx)
+        self.assertTrue(mp.es_incierta(trx))
+        self.assertNotIn(trx.estado, mp.ESTADOS_FINALES_MP)
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_point_at_terminal_no_expira_a_los_150_segundos(self, m_req):
+        """El cobro Point que demora mas de 2,5 min seguia vivo en la maquina
+        pero el sistema lo marcaba EXPIRADA: el guard se apagaba y el POS
+        ofrecia Reintentar. La orden Point no lleva expiration_time."""
+        trx = _transaccion(self.config, correlativo='1408', monto=90000,
+                           estado='PENDIENTE', canal='POINT', order_id='ORD-PT')
+        trx = _envejecer(trx, mp.QR_TIMEOUT_SEGUNDOS + 60)
+        m_req.return_value = self._resp(200, {'id': 'ORD-PT', 'status': 'at_terminal'})
+        trx = mp.consultar_estado(trx, forzar=True)
+        self.assertEqual(trx.estado, 'PENDIENTE')
+        # Y sigue bloqueando un cobro nuevo del mismo ticket.
+        vivos = mp.cobros_vivos_de_ticket(self.sucursal.id, '1408', refrescar=False)
+        self.assertEqual(len(vivos), 1)
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_qr_si_expira_por_edad(self, m_req):
+        """El contraste: el QR si lleva expiration_time, y ahi cerrar es fiel."""
+        config_qr = _config(self.sucursal, nombre='CajaQR', external_pos_id='POS-QR')
+        trx = _transaccion(config_qr, correlativo='1409', monto=5000,
+                           estado='PENDIENTE', canal='QR', order_id='ORD-QR')
+        trx = _envejecer(trx, mp.QR_TIMEOUT_SEGUNDOS + 60)
+        m_req.return_value = self._resp(200, {'id': 'ORD-QR', 'status': 'created'})
+        trx = mp.consultar_estado(trx, forzar=True)
+        self.assertEqual(trx.estado, 'EXPIRADA')

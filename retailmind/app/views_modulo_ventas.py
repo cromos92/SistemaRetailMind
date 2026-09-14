@@ -4886,19 +4886,32 @@ def registrar_pagos_ticket(request, correlativo):
         # cierra hasta que el cajero resuelva —o confirme explícitamente que lo
         # canceló en la máquina, lo que queda registrado en el log.
         from .services import mercadopago_service as _mp_guard
+        # Presupuesto de red: este guard corre en TODA venta (incluso 100%
+        # efectivo) y cada cobro en vuelo cuesta hasta 15s contra MP. Sin techo,
+        # con la red mala, gunicorn mata el worker a los 60s en medio del cierre
+        # y el cajero ve un 502 sin saber si la venta quedó grabada.
         _mp_vivos = _mp_guard.cobros_no_respaldados(
             ticket.sucursal_id, correlativo, _pagos_mp, refrescar=True,
+            presupuesto=_mp_guard._Presupuesto(20),
         )
         if _mp_vivos:
             _detalles_mp = [_mp_guard.resumen_cobro(t) for t in _mp_vivos]
             _aprobados_mp = [d for d in _detalles_mp if d['aprobada']]
+            _inciertos_mp = [d for d in _detalles_mp if d.get('incierto')]
             _forzar_mp = bool(payload.get('mp_confirmado_sin_cobro'))
-            if _aprobados_mp or not _forzar_mp:
+            # Ni un cobro APROBADO ni uno SIN CONFIRMAR se pueden saltar con la
+            # confirmación del cajero: en el primero la plata ya existe, y en el
+            # segundo nadie —ni el cajero— puede saber si existe. El incierto se
+            # destraba solo pasados MP_INCIERTA_BLOQUEO_CIERRE_SEG, que es lo que
+            # impide que la caja quede trabada.
+            if _aprobados_mp or _inciertos_mp or not _forzar_mp:
                 # Un cobro YA APROBADO no se puede saltar con la confirmación
                 # del cajero: la plata existe en Mercado Pago y tiene que
                 # quedar registrada como pago MP (o devolverse), nunca como
                 # tarjeta manual.
-                _primero = (_aprobados_mp or _detalles_mp)[0]
+                # Orden de prioridad del mensaje: lo aprobado manda, después lo
+                # incierto (que tampoco se puede forzar) y al final lo en vuelo.
+                _primero = (_aprobados_mp or _inciertos_mp or _detalles_mp)[0]
                 logger.warning(
                     "Cobro MP vivo sin usar ticket=%s cobros=%s usuario=%s forzar=%s",
                     correlativo,
@@ -4913,6 +4926,20 @@ def registrar_pagos_ticket(request, correlativo):
                         'o devuélvelo antes de cerrar la venta.'
                     ).replace(',', '.')
                     _tipo = 'MP_COBRO_SIN_USAR'
+                elif _primero.get('incierto'):
+                    # Mensaje DISTINTO del de "cobro en la pantalla": acá nadie
+                    # sabe si la orden existe, así que "ya lo cancelé en la
+                    # máquina" no es una respuesta válida. Si los dos casos
+                    # dijeran lo mismo, el cajero aprende a apretar el bypass y
+                    # se pierde la protección del caso real.
+                    _msg = (
+                        f'Hay un cobro SIN CONFIRMAR de ${_primero["monto"]:,} en este '
+                        'ticket: Mercado Pago no respondió al crearlo y estamos '
+                        'verificando si alcanzó a llegar a la máquina. Espera unos '
+                        'segundos y reintenta el cierre; si el terminal muestra el '
+                        'cobro, cóbralo por Mercado Pago.'
+                    ).replace(',', '.')
+                    _tipo = 'MP_COBRO_INCIERTO'
                 else:
                     _msg = (
                         f'Hay un cobro de ${_primero["monto"]:,} en curso en Mercado Pago '
@@ -4926,6 +4953,10 @@ def registrar_pagos_ticket(request, correlativo):
                     'error': _msg,
                     'error_tipo': _tipo,
                     'cobros_mp': _detalles_mp,
+                    # Un cobro APROBADO nunca se puede saltar (la plata existe);
+                    # uno SIN CONFIRMAR tampoco a ciegas — se destraba solo a los
+                    # MP_INCIERTA_BLOQUEO_CIERRE_SEG.
+                    'permite_forzar': not _aprobados_mp and _tipo != 'MP_COBRO_INCIERTO',
                 }, status=400)
             logger.warning(
                 "Venta cerrada con cobro MP en curso IGNORADO por %s ticket=%s cobros=%s",

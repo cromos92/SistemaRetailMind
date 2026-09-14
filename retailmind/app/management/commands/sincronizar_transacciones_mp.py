@@ -47,7 +47,16 @@ class Command(BaseCommand):
                      'sin_cambio': 0, 'error': 0}
         for trx in colgadas:
             try:
-                actualizada = mp.consultar_estado(trx, forzar=True)
+                if not trx.order_id:
+                    # Cobro sin confirmar (el POST salió y no volvió respuesta).
+                    # permitir_replay=False A PROPÓSITO: re-postear la orden con
+                    # una X-Idempotency-Key vieja puede hacer que MP la trate
+                    # como nueva y CREE una segunda orden. Un cron que cobre de
+                    # nuevo sería peor que el bug que este comando ayuda a
+                    # cerrar. Acá solo se CONSULTA (payments/search) y se caduca.
+                    actualizada = mp.resolver_incierta(trx, permitir_replay=False)
+                else:
+                    actualizada = mp.consultar_estado(trx, forzar=True)
             except Exception as e:  # noqa: BLE001 — una que falle no corta el barrido
                 resueltas['error'] += 1
                 self.stderr.write(f'  ERROR {trx.external_reference}: {e}')

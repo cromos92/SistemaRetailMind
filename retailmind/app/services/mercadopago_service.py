@@ -24,7 +24,10 @@ import time
 import uuid
 
 import requests
-from django.db import transaction
+from contextlib import contextmanager
+
+from django.db import IntegrityError, connection, transaction
+from django.db.utils import OperationalError
 from django.utils import timezone
 
 from app.models import (
@@ -45,6 +48,66 @@ QR_TIMEOUT_SEGUNDOS = int(os.environ.get('MP_QR_TIMEOUT_SEGUNDOS', '120'))
 WEBHOOK_TS_TOLERANCIA_SEG = 300
 # Edad mínima antes de que el polling consulte directo a MP (deja actuar al webhook)
 POLL_CONSULTA_DIRECTA_SEG = 5
+
+# ==================== COBRO INCIERTO (anti doble cobro por corte de red) ====
+#
+# Incidente 13-09-2026: con internet intermitente, el POST /v1/orders llegaba a
+# MP pero la respuesta no volvía dentro del read timeout. La fila local se
+# escribía DESPUÉS del POST, así que no quedaba rastro: el guard no veía nada,
+# el cajero reintentaba y, como el external_reference (= X-Idempotency-Key)
+# llevaba un uuid4 nuevo, MP creaba una SEGUNDA orden. El cliente pagaba dos
+# veces.
+#
+# El arreglo es invertir el orden y hacer la referencia determinista, de modo
+# que un reintento sea un REPLAY de la misma orden en vez de una orden nueva.
+# La fila pre-creada pasa por dos sub-fases, ambas dentro del estado 'CREADA'
+# que ya existe (sin migración), guardadas en raw_response['_rm']:
+#
+#   RESERVADA → la fila existe pero el POST TODAVÍA NO SALIÓ. Por construcción
+#               no puede existir en MP: se cierra sin gastar red y NUNCA
+#               bloquea una venta.
+#   ENVIADA   → el POST salió y no volvió una respuesta usable. PUEDE existir
+#               en MP y estar cobrando en la pantalla del terminal: bloquea un
+#               cobro MP nuevo del mismo ticket hasta resolverse o caducar.
+#
+# Regla de oro: el commit de ENVIADA va ANTES del socket. Si el worker muere en
+# el medio queda una falsa ENVIADA (cuesta una consulta resolverla), nunca un
+# POST enviado bajo una fila RESERVADA (que se cerraría a ciegas y habilitaría
+# el segundo cobro).
+
+# Una RESERVADA más vieja que esto es un request que murió antes de postear.
+MP_RESERVA_MAX_SEG = int(os.environ.get('MP_RESERVA_MAX_SEG', '30'))
+# Desde cuándo una incierta deja de bloquear el CIERRE de la venta (no el cobro).
+MP_INCIERTA_BLOQUEO_CIERRE_SEG = int(os.environ.get('MP_INCIERTA_BLOQUEO_CIERRE_SEG', '180'))
+# Edad a la que una incierta de canal POINT se cierra localmente.
+MP_INCIERTA_TTL_SEG = int(os.environ.get('MP_INCIERTA_TTL_SEG', '900'))
+# Piso entre dos intentos de resolver la MISMA fila (evita martillar a MP).
+MP_RESOLVER_MIN_SEG = int(os.environ.get('MP_RESOLVER_MIN_SEG', '8'))
+# Ventana en la que un re-POST con la misma X-Idempotency-Key es un REPLAY
+# seguro. Pasada esta edad MP puede tratar la clave como nueva y CREAR otra
+# orden, así que la recuperación se limita a consultar (payments/search).
+MP_REPLAY_MAX_EDAD_SEG = int(os.environ.get('MP_REPLAY_MAX_EDAD_SEG', '180'))
+# Circuit breaker: tras N fallos de red seguidos, no se sale a la red por M seg.
+MP_BREAKER_FALLOS = int(os.environ.get('MP_BREAKER_FALLOS', '2'))
+MP_BREAKER_SEG = int(os.environ.get('MP_BREAKER_SEG', '30'))
+# Espera máxima por el candado de cobro de un ticket.
+MP_LOCK_ESPERA_SEG = int(os.environ.get('MP_LOCK_ESPERA_SEG', '3'))
+# Timeouts recortados para las llamadas de RECUPERACIÓN (se encadenan varias).
+MP_RECUPERACION_TIMEOUT = (3, 7)
+# Presupuesto de red de un request de creación (gunicorn corta a los 60s).
+MP_PRESUPUESTO_CREAR_SEG = int(os.environ.get('MP_PRESUPUESTO_CREAR_SEG', '35'))
+# Tope de intentos por (sucursal, correlativo). 99 y no más: 'i100' volvería a
+# hacer que 'i10' sea prefijo de otra referencia (ver _resolver_transaccion_por_payment).
+MP_MAX_INTENTOS_TICKET = 99
+# Largo máximo del correlativo admitido (external_reference es unique/80).
+MP_CORRELATIVO_MAX_LEN = 45
+
+FASE_RESERVADA = 'RESERVADA'
+FASE_ENVIADA = 'ENVIADA'
+FASE_RESUELTA = 'RESUELTA'
+
+DET_RESERVADA = 'Preparando el cobro (aún no enviado a Mercado Pago)'
+DET_INCIERTA = 'SIN CONFIRMAR: Mercado Pago no respondió al crear el cobro'
 
 # Mapeo estado del recurso *payment* de MP -> estado local
 _ESTADO_DESDE_PAYMENT = {
@@ -76,12 +139,28 @@ _ESTADO_DESDE_ORDEN = {
 
 
 class MercadoPagoError(Exception):
-    """Error de negocio/comunicación con mensaje apto para mostrar al cajero."""
+    """Error de negocio/comunicación con mensaje apto para mostrar al cajero.
 
-    def __init__(self, mensaje, detalle=None):
+    `red=True` marca los fallos de TRANSPORTE (timeout, conexión cortada,
+    breaker abierto): son los únicos en los que NO se sabe si MP recibió la
+    operación. Todo el diseño anti doble cobro cuelga de esa distinción — un
+    4xx de MP significa "no se creó nada"; un timeout significa "no sé".
+    """
+
+    def __init__(self, mensaje, detalle=None, red=False):
         super().__init__(mensaje)
         self.mensaje = mensaje
         self.detalle = detalle
+        self.red = red
+
+
+class CobroEnCursoError(MercadoPagoError):
+    """Ya hay un cobro vivo/incierto para ese ticket. Subclase a propósito: los
+    tres llamadores hacen `except MercadoPagoError` y siguen funcionando."""
+
+    def __init__(self, mensaje, detalle=None, transaccion=None):
+        super().__init__(mensaje, detalle=detalle)
+        self.transaccion = transaccion
 
 
 # ==================== CREDENCIALES / HTTP ====================
@@ -116,7 +195,43 @@ def _token(config):
     return token
 
 
-def _request(config, metodo, path, json_body=None, idempotency_key=None, params=None):
+# Circuit breaker POR PROCESO (cada worker de gunicorn tiene el suyo). Con MP
+# caído, cada llamada cuesta hasta 15s y el guard puede encadenar varias: sin
+# esto un corte largo mata workers por el --timeout 60 del Dockerfile y la caja
+# no puede ni cobrar en efectivo.
+_mp_fallos_red = 0
+_mp_breaker_hasta = 0.0
+
+
+def _breaker_abierto():
+    return time.monotonic() < _mp_breaker_hasta
+
+
+def _breaker_registrar_fallo():
+    global _mp_fallos_red, _mp_breaker_hasta
+    _mp_fallos_red += 1
+    if _mp_fallos_red >= MP_BREAKER_FALLOS:
+        _mp_breaker_hasta = time.monotonic() + MP_BREAKER_SEG
+        logger.warning(
+            "MP: circuit breaker ABIERTO por %ss tras %s fallos de red seguidos",
+            MP_BREAKER_SEG, _mp_fallos_red,
+        )
+
+
+def _breaker_registrar_exito():
+    global _mp_fallos_red, _mp_breaker_hasta
+    _mp_fallos_red = 0
+    _mp_breaker_hasta = 0.0
+
+
+def _request(config, metodo, path, json_body=None, idempotency_key=None, params=None,
+             timeout=None):
+    if _breaker_abierto():
+        # No se envió NADA: es seguro decirlo, no hay incertidumbre que resolver.
+        raise MercadoPagoError(
+            'Mercado Pago no está respondiendo. No se envió el cobro.',
+            detalle='circuit breaker abierto', red=True,
+        )
     headers = {
         'Authorization': f'Bearer {_token(config)}',
         'Content-Type': 'application/json',
@@ -127,11 +242,20 @@ def _request(config, metodo, path, json_body=None, idempotency_key=None, params=
         resp = requests.request(
             metodo, MP_API_BASE + path,
             headers=headers, json=json_body, params=params,
-            timeout=REQUEST_TIMEOUT,
+            timeout=timeout or REQUEST_TIMEOUT,
         )
     except requests.RequestException as e:
         logger.error(f"MP: error de red en {metodo} {path}: {e}")
-        raise MercadoPagoError('No se pudo contactar a Mercado Pago. Reintente.', detalle=str(e))
+        _breaker_registrar_fallo()
+        # OJO: sin la palabra "Reintente". Ese texto es literalmente la
+        # instrucción que produjo el doble cobro del 13-09: ante un timeout NO
+        # se sabe si MP recibió la orden, así que reintentar a ciegas es lo peor
+        # que puede hacer el cajero.
+        raise MercadoPagoError(
+            'Mercado Pago no respondió a tiempo.', detalle=str(e), red=True,
+        )
+    # Una respuesta HTTP (aunque sea 4xx/5xx) prueba que hay camino hasta MP.
+    _breaker_registrar_exito()
     return resp
 
 
@@ -162,7 +286,14 @@ def _json_o_error(resp, contexto):
             partes.append(str(data['cause'])[:200])
         mensaje_api = ' | '.join(partes) or f'HTTP {resp.status_code}'
         logger.error(f"MP: {contexto} falló ({resp.status_code}): {json.dumps(data)[:800]}")
-        raise MercadoPagoError(f'Mercado Pago rechazó la operación: {mensaje_api}', detalle=data)
+        # Un 4xx de validación prueba que MP NO hizo nada. Un 5xx/429/408 NO
+        # prueba nada: la operación pudo haberse ejecutado del otro lado y
+        # perderse la respuesta — exactamente la misma incertidumbre que un
+        # timeout. Marcarlos red=True es lo que evita que un 502 del edge de MP
+        # cierre el cobro como "rechazado" y habilite un segundo cobro.
+        incierto = resp.status_code >= 500 or resp.status_code in (408, 429)
+        raise MercadoPagoError(f'Mercado Pago rechazó la operación: {mensaje_api}',
+                               detalle=data, red=incierto)
     return data
 
 
@@ -589,6 +720,11 @@ def conciliar_cierre_mp(config, fecha, pagos=None):
         t.external_reference: t
         for t in TransaccionMercadoPago.objects.filter(
             external_reference__in=[r for r in refs if r]).select_related('config')
+        # Las filas CREADA (reserva / cobro sin confirmar) NO cuentan como
+        # registro local: si un pago real de MP calzara con una de ellas
+        # desaparecería de `sin_registro` y el cierre reportaría una diferencia
+        # sin ninguna fila que la explique. Justo al revés de lo que se necesita.
+        if t.estado != 'CREADA'
     }
 
     # PASADA 1: de los pagos que calzan por external_reference se aprenden los
@@ -917,56 +1053,169 @@ def qr_png_base64(qr_data):
 
 # ==================== CREACIÓN / CONSULTA / CANCELACIÓN ====================
 
-def crear_orden(config, correlativo, monto, descripcion='', canal='QR', usuario=None,
-                permitir_en_curso=False):
-    """Crea la orden en MP (Orders API, processing_mode automatic) y la
-    TransaccionMercadoPago local en PENDIENTE. Devuelve (transaccion, qr_data).
+# ==================== FASES, PRESUPUESTO Y CANDADO ====================
 
-    `permitir_en_curso=True` salta el guard de cobro previo vivo (lo usan los
-    cobros de prueba/directos de la pestaña de gestión, que no son tickets).
+def _rm(trx):
+    """Metadatos de máquina de la fila (fase, intento, idem key, body enviado).
+
+    Viven en raw_response['_rm'] para no agregar columnas: raw_response ya es
+    un JSONField y ya se reescribe en cada transición.
     """
-    monto = int(monto)
-    if monto <= 0:
-        raise MercadoPagoError('El monto a cobrar debe ser mayor que cero.')
-    canal = (canal or 'QR').upper()
-    if canal not in ('QR', 'POINT'):
-        raise MercadoPagoError('Canal inválido (QR o POINT).')
-    if canal == 'QR' and not config.external_pos_id:
-        raise MercadoPagoError('La configuración MP de la sucursal no tiene caja (external_pos_id).')
-    if canal == 'POINT' and not config.device_id:
-        raise MercadoPagoError('La caja no tiene una máquina Point asociada (device). '
-                               'Asóciala en la pestaña Mercado Pago (requiere la máquina en modo PDV).')
+    datos = trx.raw_response if isinstance(trx.raw_response, dict) else {}
+    meta = datos.get('_rm')
+    return meta if isinstance(meta, dict) else {}
 
-    # ── No dejar DOS cobros vivos para el mismo ticket ──────────────────────
-    # El "Reintentar" del POS crea una orden nueva; si la anterior seguía en la
-    # pantalla del terminal, el cliente podía pagar las dos. Antes de crear,
-    # se cierra o se denuncia lo que haya vivo.
-    if not permitir_en_curso:
-        for previa in cobros_vivos_de_ticket(config.sucursal_id, correlativo, refrescar=True):
-            if previa.estado == 'APROBADA':
-                raise MercadoPagoError(
-                    f'Ya hay un cobro APROBADO de ${previa.monto:,} en Mercado Pago para '
-                    f'este ticket (pago {previa.payment_id or previa.external_reference}). '
-                    'Regístralo como pago Mercado Pago o devuélvelo; no cobres de nuevo.'
-                    .replace(',', '.'))
-            try:
-                cancelar(previa)
-            except MercadoPagoError as e:
-                raise MercadoPagoError(
-                    f'Hay un cobro anterior de ${previa.monto:,} todavía en curso para este '
-                    f'ticket. {e.mensaje}'.replace(',', '.'))
 
-    external_reference = f"RM-{config.sucursal_id}-{correlativo}-{uuid.uuid4().hex[:8]}"
-    # Payload mínimo del create-order. OJO: la Orders API presencial rechaza
-    # propiedades extra con 'unsupported_properties' (processing_mode, p.ej.,
-    # es de pagos online y NO va aquí — comprobado contra prod CL). El
-    # auto-reintento de abajo quita lo que MP no acepte.
+def _marcar_rm(trx, detalle=None, **kv):
+    """Merge sobre raw_response['_rm'] + espejo legible en estado_detalle."""
+    datos = dict(trx.raw_response) if isinstance(trx.raw_response, dict) else {}
+    meta = dict(_rm(trx))
+    meta.update(kv)
+    datos['_rm'] = meta
+    trx.raw_response = datos
+    campos = ['raw_response', 'actualizado_en']
+    if detalle is not None:
+        trx.estado_detalle = detalle[:120]
+        campos.append('estado_detalle')
+    trx.save(update_fields=campos)
+    return trx
+
+
+def fase_cobro(trx):
+    """RESERVADA / ENVIADA / RESUELTA / '' — solo significa algo en 'CREADA'."""
+    return _rm(trx).get('fase') or ''
+
+
+def es_incierta(trx):
+    """El POST salió y no volvió respuesta usable: PUEDE existir en MP.
+
+    NO se ata al estado 'CREADA'. Un pago no final que ya movió la fila a
+    PENDIENTE (pending / in_process / authorized, sea por payments/search o por
+    el webhook) sigue sin order_id y sigue sin poder cancelarse en MP: es el
+    caso en que MÁS peligroso sería darla por muerta, porque es justo cuando MP
+    ya confirmó que hay un pago en vuelo.
+    """
+    return (trx.estado not in ESTADOS_FINALES_MP
+            and trx.estado != 'APROBADA'
+            and fase_cobro(trx) == FASE_ENVIADA
+            and not trx.order_id)
+
+
+def es_reserva(trx):
+    """La fila existe pero el POST no salió: por construcción NO existe en MP."""
+    return trx.estado == 'CREADA' and fase_cobro(trx) == FASE_RESERVADA and not trx.order_id
+
+
+def _edad_seg(trx):
+    return (timezone.now() - trx.creado_en).total_seconds()
+
+
+def ttl_incierta(trx):
+    """Cuándo se cierra localmente una incierta que nadie pudo resolver.
+
+    En QR la orden lleva expiration_time, así que pasado ese plazo MP ya no la
+    puede cobrar. En Point no hay expiración por API (el cobro vive en la
+    pantalla del terminal), por eso el plazo es mucho más largo.
+    """
+    if trx.canal == 'QR':
+        return QR_TIMEOUT_SEGUNDOS + 60
+    return MP_INCIERTA_TTL_SEG
+
+
+class _Presupuesto:
+    """Techo de segundos de red por request, bien debajo del --timeout 60 de
+    gunicorn. Sin esto, tres cobros en vuelo alcanzan para matar el worker en
+    medio del cierre de una venta — y un worker muerto es la forma más brutal
+    de caja bloqueada (el cajero ve un 502 y no sabe si la venta se grabó)."""
+
+    def __init__(self, segundos):
+        self.fin = time.monotonic() + segundos
+
+    def queda(self):
+        return max(0.0, self.fin - time.monotonic())
+
+    def hay(self, minimo=6):
+        return self.queda() >= minimo
+
+
+def _clave_lock_cobro(sucursal_id, correlativo):
+    """Clave int64 estable para el advisory lock.
+
+    hashlib y JAMÁS hash(): PYTHONHASHSEED es distinto en cada worker de
+    gunicorn, así que hash() daría claves distintas para el mismo ticket en
+    cada proceso y el candado no serializaría absolutamente nada.
+    """
+    semilla = f'mp:cobro:{int(sucursal_id)}:{str(correlativo).strip().upper()}'
+    digest = hashlib.blake2b(semilla.encode('utf-8'), digest_size=8).digest()
+    return int.from_bytes(digest, 'big', signed=True)
+
+
+@contextmanager
+def _lock_cobro(sucursal_id, correlativo, espera_seg=None):
+    """Candado por (sucursal, correlativo) para leer-decidir-insertar.
+
+    REGLA DURA: adentro NO puede haber ni una llamada HTTP. El tramo lento (el
+    POST a MP, hasta 15s) no lo protege este candado sino la propia fila
+    pre-creada, que es un mutex persistente: sobrevive al timeout, al F5, a la
+    segunda pestaña y al worker que se muera.
+
+    Es `xact` y no de sesión porque settings usa conn_max_age>0: la conexión se
+    reusa entre requests y un lock de sesión que no se libere dejaría ese worker
+    bloqueando el ticket para siempre. El xact se suelta en COMMIT/ROLLBACK
+    pase lo que pase.
+
+    Es advisory y no select_for_update porque en el PRIMER cobro de un ticket
+    NO EXISTE fila que bloquear: un FOR UPDATE sobre un queryset vacío no
+    bloquea nada y los dos POST simultáneos pasan los dos (el bug de hoy).
+    """
+    espera = MP_LOCK_ESPERA_SEG if espera_seg is None else espera_seg
+    if connection.vendor != 'postgresql':
+        # SQLite (tests) / otros motores: degradación limpia, sin candado.
+        with transaction.atomic():
+            yield True
+        return
+    clave = _clave_lock_cobro(sucursal_id, correlativo)
+    try:
+        with transaction.atomic():
+            with connection.cursor() as cur:
+                cur.execute("SET LOCAL lock_timeout = %s", [f'{int(espera * 1000)}ms'])
+                cur.execute("SELECT pg_advisory_xact_lock(%s)", [clave])
+            yield True
+    except OperationalError as e:
+        # 55P03 lock_not_available: otro request está creando este mismo cobro.
+        logger.warning("MP: no se obtuvo el candado de cobro (%s/%s): %s",
+                       sucursal_id, correlativo, e)
+        raise CobroEnCursoError(
+            'Ya se está iniciando un cobro para este ticket. Espera unos segundos.')
+
+
+def _ref_cobro(config, correlativo, intento):
+    """external_reference determinista = X-Idempotency-Key.
+
+    Formato: RM-{sucursal_id}-{correlativo}-c{config_id}i{intento:02d}
+
+    - La cabeza 'RM-{sucursal_id}-' NO se toca: _sucursal_de_referencia() es lo
+      único que permite atribuir a una caja un cobro que MP reporta y del que no
+      hay fila local.
+    - c{config_id} separa dos cajas de la MISMA sucursal cobrando el mismo
+      correlativo (el unique de external_reference es global).
+    - i{intento:02d} con padding: sin él 'i1' sería prefijo literal de 'i10' y
+      _resolver_transaccion_por_payment aplicaría el webhook del intento 1 sobre
+      la fila del intento 10.
+    """
+    return f'RM-{config.sucursal_id}-{correlativo}-c{config.id}i{int(intento):02d}'
+
+
+def _armar_body_orden(config, correlativo, monto, descripcion, canal, external_reference):
+    """Body del create-order. Extraído a propósito: la recuperación tiene que
+    re-postear el body EXACTAMENTE igual con la MISMA idempotency key. Si se
+    armara en dos lugares distintos, algún día divergen y MP responde 400 por
+    conflicto de idempotencia justo en el momento en que más falta hace."""
     if canal == 'POINT':
-        # El cobro viaja a la máquina Point (modo PDV): el cliente pasa la
-        # tarjeta en el terminal. PROBADO EN VIVO contra una Point Smart 2 CL:
-        # total_amount en la raíz NO va (unsupported_properties) — el monto
-        # vive solo en transactions.payments.
-        body = {
+        # PROBADO EN VIVO contra una Point Smart 2 CL: total_amount en la raíz
+        # NO va (unsupported_properties) — el monto vive solo en
+        # transactions.payments.
+        return {
             'type': 'point',
             'external_reference': external_reference,
             'description': (descripcion or f'Venta {correlativo}')[:120],
@@ -979,77 +1228,288 @@ def crear_orden(config, correlativo, monto, descripcion='', canal='QR', usuario=
                 'payments': [{'amount': str(monto)}],
             },
         }
-    else:
-        body = {
-            'type': 'qr',
-            'external_reference': external_reference,
-            'description': (descripcion or f'Venta {correlativo}')[:120],
-            'expiration_time': f'PT{QR_TIMEOUT_SEGUNDOS}S',
-            'total_amount': str(monto),
-            'config': {
-                'qr': {
-                    'external_pos_id': config.external_pos_id,
-                    'mode': 'dynamic',
-                }
-            },
-            'transactions': {
-                'payments': [{'amount': str(monto)}],
-            },
-        }
+    return {
+        'type': 'qr',
+        'external_reference': external_reference,
+        'description': (descripcion or f'Venta {correlativo}')[:120],
+        'expiration_time': f'PT{QR_TIMEOUT_SEGUNDOS}S',
+        'total_amount': str(monto),
+        'config': {
+            'qr': {
+                'external_pos_id': config.external_pos_id,
+                'mode': 'dynamic',
+            }
+        },
+        'transactions': {
+            'payments': [{'amount': str(monto)}],
+        },
+    }
 
-    def _crear(cuerpo, sufijo=''):
-        resp = _request(config, 'POST', '/v1/orders', json_body=cuerpo,
-                        idempotency_key=external_reference + sufijo)
-        return _json_o_error(resp, f'crear orden QR {external_reference}')
 
+def _props_no_soportadas(error, body):
+    """Propiedades de primer nivel que MP rechazó con unsupported_properties."""
+    detalle = error.detalle if isinstance(error.detalle, dict) else {}
+    props = []
+    import re as _re
+    for err in (detalle.get('errors') or []):
+        if isinstance(err, dict) and err.get('code') == 'unsupported_properties':
+            for d in (err.get('details') or []):
+                texto = str(d)
+                # Dos formatos reales: "campo" a secas, o
+                # "additionalProperties '$.campo' not allowed"
+                encontrados = _re.findall(r'\$\.(\w+)', texto)
+                if encontrados:
+                    props.extend(encontrados)
+                else:
+                    props.append(texto.split('.')[0].strip())
+    return [p for p in props
+            if p and p in body and p not in ('type', 'transactions', 'config')]
+
+
+def _resolver_previos_antes_de_cobrar(config, correlativo, presupuesto):
+    """Antes de emitir una orden nueva, cerrar o denunciar lo que haya vivo.
+
+    Hace RED (consultas y cancelaciones a MP), así que corre FUERA del candado.
+    `cobros_vivos_de_ticket(refrescar=True)` ya resuelve las inciertas, cierra
+    las reservas fantasma y caduca lo vencido; lo que sobrevive acá es un cobro
+    que de verdad puede terminar en plata.
+
+    Devuelve los ids que ya quedaron atendidos, para que la revisión de adentro
+    del candado solo bloquee por filas que aparecieron DESPUÉS (que es su
+    verdadero trabajo: atrapar al otro request que está creando en paralelo).
+    """
+    atendidos = set()
+    for previa in cobros_vivos_de_ticket(config.sucursal_id, correlativo,
+                                         refrescar=True, presupuesto=presupuesto):
+        atendidos.add(previa.id)
+        if previa.estado == 'APROBADA':
+            raise CobroEnCursoError(
+                f'Ya hay un cobro APROBADO de ${previa.monto:,} en Mercado Pago para '
+                f'este ticket (pago {previa.payment_id_mp or previa.payment_id or previa.external_reference}). '
+                'Regístralo como pago Mercado Pago o devuélvelo; no cobres de nuevo.'
+                .replace(',', '.'), transaccion=previa)
+        if es_reserva(previa):
+            # Reserva fresca: otro request está creando este mismo cobro AHORA.
+            raise CobroEnCursoError(
+                'Ya se está iniciando un cobro para este ticket. Espera unos segundos.',
+                transaccion=previa)
+        if es_incierta(previa):
+            # No se pudo confirmar con MP si esa orden existe. Cancelarla a
+            # ciegas la sacaría de "vivos" y habilitaría una segunda orden:
+            # exactamente el doble cobro del 13-09. Se prefiere no cobrar.
+            raise CobroEnCursoError(
+                f'Hay un cobro SIN CONFIRMAR de ${previa.monto:,} para este ticket: '
+                'Mercado Pago no respondió al crearlo y puede estar en la pantalla de '
+                'la máquina. NO cobres de nuevo por Mercado Pago — revisa el terminal, '
+                'cobra por otro medio o espera unos minutos.'.replace(',', '.'),
+                transaccion=previa)
+        try:
+            cancelar(previa)
+        except MercadoPagoError as e:
+            raise CobroEnCursoError(
+                f'Hay un cobro anterior de ${previa.monto:,} todavía en curso para este '
+                f'ticket. {e.mensaje}'.replace(',', '.'), transaccion=previa)
+    return atendidos
+
+
+def _reservar_fila(config, correlativo, monto, canal, usuario, permitir_en_curso,
+                   ids_atendidos=None):
+    """Inserta la fila RESERVADA bajo candado corto. CERO llamadas HTTP acá.
+
+    La fila reservada es el mutex del tramo lento: mientras este request postea
+    a MP (hasta 15s), cualquier otro la ve y se retira. A diferencia de un lock
+    en memoria, sobrevive al timeout, al F5, a la segunda pestaña y al worker
+    que se muera.
+    """
+    ultimo_integrity = None
+    for _ in range(MP_MAX_INTENTOS_TICKET + 1):
+        try:
+            with _lock_cobro(config.sucursal_id, correlativo):
+                if not permitir_en_curso:
+                    # Relectura DENTRO del candado: es la que serializa de
+                    # verdad los dos POST simultáneos. Solo miran las filas que
+                    # NO atendió la fase anterior — si no, bloquearía por la
+                    # misma fila que acaba de cancelar.
+                    vivos = [t for t in cobros_vivos_de_ticket(
+                                config.sucursal_id, correlativo, refrescar=False)
+                             if t.id not in (ids_atendidos or set())]
+                    if vivos:
+                        raise CobroEnCursoError(
+                            'Ya se está iniciando un cobro para este ticket. '
+                            'Espera unos segundos.', transaccion=vivos[0])
+                intento = 1 + TransaccionMercadoPago.objects.filter(
+                    sucursal_id=config.sucursal_id,
+                    config_id=config.id,
+                    correlativo_ticket=correlativo,
+                    tipo='VENTA',
+                ).count()
+                if intento > MP_MAX_INTENTOS_TICKET:
+                    raise MercadoPagoError(
+                        f'Demasiados intentos de cobro Mercado Pago para este ticket '
+                        f'({MP_MAX_INTENTOS_TICKET}). Revisa Conciliación Mercado Pago '
+                        'antes de seguir cobrando.')
+                return TransaccionMercadoPago.objects.create(
+                    config=config,
+                    sucursal_id=config.sucursal_id,
+                    correlativo_ticket=correlativo,
+                    tipo='VENTA',
+                    canal=canal,
+                    external_reference=_ref_cobro(config, correlativo, intento),
+                    order_id='',
+                    monto=monto,
+                    estado='CREADA',
+                    estado_detalle=DET_RESERVADA,
+                    raw_response={'_rm': {'fase': FASE_RESERVADA, 'intento': intento}},
+                    usuario=usuario if getattr(usuario, 'is_authenticated', False) else None,
+                )
+        except IntegrityError as e:
+            # Colisión del unique de external_reference: otro request ganó la
+            # carrera con este mismo número de intento. Se reintenta con el
+            # siguiente libre. El atomic del candado ya hizo rollback al salir.
+            ultimo_integrity = e
+            continue
+    raise MercadoPagoError(
+        'No se pudo reservar el cobro en Mercado Pago (colisión de referencia).',
+        detalle=str(ultimo_integrity))
+
+
+def _enviar_orden(transaccion, body, sufijo='', _reintento=False):
+    """Marca la fila ENVIADA y postea. Devuelve (transaccion, qr_data).
+
+    NO lanza ante un fallo de RED: devuelve la fila incierta para que el POS la
+    vigile. Un timeout NO significa "no se creó" — significa "no sé", y la
+    única respuesta segura a "no sé" es no volver a cobrar.
+    """
+    # Breaker abierto = el POST corta ANTES del socket, o sea la orden
+    # PROBADAMENTE no existe en MP. Cerrarla acá es seguro (no habilita un
+    # segundo cobro porque no hubo primero) y evita trabar el cierre de la venta
+    # 180 s por un cobro que nunca salió — y, peor, que el replay posterior la
+    # crease de verdad.
+    if _breaker_abierto():
+        _aplicar_estado(transaccion, 'ERROR',
+                        detalle='No se envió a Mercado Pago (servicio sin responder)')
+        raise MercadoPagoError(
+            'Mercado Pago no está respondiendo. No se envió el cobro: '
+            'cobra por otro medio.', detalle='circuit breaker abierto')
+
+    # El commit de ENVIADA va ANTES del socket. La asimetría es deliberada: una
+    # falsa ENVIADA cuesta una consulta de más; un POST enviado bajo una fila
+    # RESERVADA se cerraría a ciegas y habilitaría el segundo cobro.
+    _marcar_rm(transaccion, detalle=DET_INCIERTA, fase=FASE_ENVIADA,
+               sufijo=sufijo, body=body,
+               enviada_en=timezone.now().isoformat())
+
+    idem = transaccion.external_reference + sufijo
     try:
-        data = _crear(body)
+        resp = _request(transaccion.config, 'POST', '/v1/orders',
+                        json_body=body, idempotency_key=idem)
+        data = _json_o_error(resp, f'crear orden {transaccion.external_reference}')
     except MercadoPagoError as e:
-        # Auto-corrección: si MP rechaza propiedades puntuales, quitarlas y
-        # reintentar UNA vez (la API cambia el contrato entre sitios/versiones).
-        detalle = e.detalle if isinstance(e.detalle, dict) else {}
-        props = []
-        import re as _re
-        for err in (detalle.get('errors') or []):
-            if isinstance(err, dict) and err.get('code') == 'unsupported_properties':
-                for d in (err.get('details') or []):
-                    texto = str(d)
-                    # Dos formatos reales: "campo" a secas, o
-                    # "additionalProperties '$.campo' not allowed"
-                    encontrados = _re.findall(r'\$\.(\w+)', texto)
-                    if encontrados:
-                        props.extend(encontrados)
-                    else:
-                        props.append(texto.split('.')[0].strip())
-        props = [p for p in props if p and p in body and p not in ('type', 'transactions', 'config')]
-        if not props:
-            raise
-        logger.warning(f"MP: reintento de orden sin propiedades no soportadas: {props}")
-        body_min = {k: v for k, v in body.items() if k not in props}
-        data = _crear(body_min, sufijo='-r')
+        if e.red:
+            # ── EL CASO DEL 13-09 ──────────────────────────────────────────
+            # MP puede haber recibido la orden. La fila queda ENVIADA (incierta)
+            # y el caller decide: el POS la vigila, el guard la respeta y
+            # resolver_incierta la cierra o la recupera más tarde.
+            logger.warning(
+                "MP: cobro INCIERTO %s ($%s, %s): %s",
+                transaccion.external_reference, transaccion.monto,
+                transaccion.canal, e.mensaje,
+            )
+            return transaccion, None
+        # Auto-corrección: MP rechaza propiedades puntuales según sitio/versión.
+        props = _props_no_soportadas(e, body) if not _reintento else []
+        if props:
+            logger.warning(f"MP: reintento de orden sin propiedades no soportadas: {props}")
+            body_min = {k: v for k, v in body.items() if k not in props}
+            # El sufijo y el body minimizado se PERSISTEN antes de postear: sin
+            # esto, la recuperación re-postearía el body original con la key
+            # original mientras MP tiene la orden bajo la key '-r' → 2ª orden.
+            return _enviar_orden(transaccion, body_min, sufijo='-r', _reintento=True)
+        # 4xx determinista: MP rechazó, la orden NUNCA se creó. Cerrar la fila
+        # para no dejarla bloqueando el ticket, y relanzar con el detalle crudo.
+        _aplicar_estado(transaccion, 'ERROR',
+                        detalle=f'Mercado Pago rechazó la orden: {e.mensaje[:80]}')
+        raise
 
+    order_id = str(data.get('id') or '')
     qr_data = (data.get('type_response') or {}).get('qr_data') or data.get('qr_data')
-    if canal == 'QR' and not qr_data:
-        logger.error(f"MP: orden creada sin qr_data: {json.dumps(data)[:500]}")
-        raise MercadoPagoError('Mercado Pago no devolvió el QR. Reintente.', detalle=data)
-    if canal == 'POINT':
+    if transaccion.canal == 'POINT':
         qr_data = None  # el cobro está EN la máquina, no hay QR que mostrar
 
-    transaccion = TransaccionMercadoPago.objects.create(
-        config=config,
-        sucursal_id=config.sucursal_id,
-        correlativo_ticket=str(correlativo),
-        tipo='VENTA',
-        canal=canal,
-        external_reference=external_reference,
-        order_id=str(data.get('id') or ''),
-        monto=monto,
-        estado='PENDIENTE',
-        raw_response=data,
-        usuario=usuario if getattr(usuario, 'is_authenticated', False) else None,
-    )
-    logger.info(f"MP: orden {transaccion.order_id} creada ({external_reference}, ${monto})")
+    if order_id:
+        transaccion.order_id = order_id
+        transaccion.save(update_fields=['order_id', 'actualizado_en'])
+    _marcar_rm(transaccion, fase=FASE_RESUELTA)
+
+    if transaccion.canal == 'QR' and not qr_data:
+        # La orden EXISTE en MP: la fila se queda (con su order_id) para poder
+        # cancelarla. Antes se perdía y quedaba cobrable sin rastro local.
+        logger.error(f"MP: orden creada sin qr_data: {json.dumps(data)[:500]}")
+        _aplicar_estado(transaccion, 'PENDIENTE', detalle='Orden sin QR', raw=data)
+        raise MercadoPagoError('Mercado Pago no devolvió el QR. Revisa el cobro antes '
+                               'de reintentar.', detalle=data)
+
+    _aplicar_estado(transaccion, 'PENDIENTE', detalle='Orden creada', raw=data)
+    logger.info(f"MP: orden {transaccion.order_id} creada "
+                f"({transaccion.external_reference}, ${transaccion.monto})")
     return transaccion, qr_data
+
+
+def crear_orden(config, correlativo, monto, descripcion='', canal='QR', usuario=None,
+                permitir_en_curso=False):
+    """Crea el cobro en MP (Orders API) y su TransaccionMercadoPago local.
+
+    Devuelve **(transaccion, qr_data)**, igual que siempre. Dos diferencias
+    importantes respecto de la versión anterior:
+
+    1. La fila local se escribe ANTES del POST (estado 'CREADA', fase
+       RESERVADA) y el external_reference es DETERMINISTA, así que es a la vez
+       la X-Idempotency-Key: un reintento del mismo intento es un replay de la
+       misma orden, no una orden nueva.
+    2. Ante un fallo de RED al postear NO se lanza excepción: se devuelve
+       `(transaccion_incierta, None)`. El caller debe preguntar `es_incierta(trx)`
+       antes de tratar el resultado como éxito. Lanzar ahí era lo que empujaba
+       al cajero a reintentar a ciegas y cobrar dos veces.
+
+    `permitir_en_curso=True` salta el guard de cobro previo. NOTA: ningún
+    llamador lo usa; los cobros PRUEBA-/DIRECTO- de la pestaña de gestión se
+    saltan el guard por PREFIJOS_CORRELATIVO_SIN_TICKET, no por este flag.
+    """
+    # ── FASE 0: validación pura. Sin fila, sin candado, sin red ─────────────
+    # Cualquier error de CONFIGURACIÓN tiene que reventar acá: si dejara fila,
+    # bloquearía el cierre de la venta con MP_COBRO_EN_CURSO sin que jamás haya
+    # existido un cobro.
+    monto = int(monto)
+    if monto <= 0:
+        raise MercadoPagoError('El monto a cobrar debe ser mayor que cero.')
+    canal = (canal or 'QR').upper()
+    if canal not in ('QR', 'POINT'):
+        raise MercadoPagoError('Canal inválido (QR o POINT).')
+    if canal == 'QR' and not config.external_pos_id:
+        raise MercadoPagoError('La configuración MP de la sucursal no tiene caja (external_pos_id).')
+    if canal == 'POINT' and not config.device_id:
+        raise MercadoPagoError('La caja no tiene una máquina Point asociada (device). '
+                               'Asóciala en la pestaña Mercado Pago (requiere la máquina en modo PDV).')
+    correlativo = str(correlativo)
+    if len(correlativo) > MP_CORRELATIVO_MAX_LEN:
+        raise MercadoPagoError('El identificador del ticket es demasiado largo para Mercado Pago.')
+    _token(config)  # token mal configurado → error acá, sin fila fantasma
+
+    presupuesto = _Presupuesto(MP_PRESUPUESTO_CREAR_SEG)
+
+    # ── FASE 1: resolver lo previo (hace red, va FUERA del candado) ─────────
+    ids_atendidos = set()
+    if not permitir_en_curso:
+        ids_atendidos = _resolver_previos_antes_de_cobrar(config, correlativo, presupuesto)
+
+    # ── FASE 2: reservar la fila (candado corto, sin red) ──────────────────
+    transaccion = _reservar_fila(config, correlativo, monto, canal, usuario,
+                                 permitir_en_curso, ids_atendidos)
+
+    # ── FASE 3: enviar ─────────────────────────────────────────────────────
+    body = _armar_body_orden(config, correlativo, monto, descripcion, canal,
+                             transaccion.external_reference)
+    return _enviar_orden(transaccion, body)
 
 
 def _extraer_payment_de_orden(data_orden):
@@ -1061,7 +1521,37 @@ def _extraer_payment_de_orden(data_orden):
 def _aplicar_estado(transaccion, estado_nuevo, detalle='', payment=None,
                     raw=None, via_webhook=False):
     """Transición de estado con protecciones: una APROBADA solo puede pasar a
-    DEVUELTA/CONTRACARGO; los estados finales no retroceden a PENDIENTE."""
+    DEVUELTA/CONTRACARGO; los estados finales no retroceden a PENDIENTE.
+
+    Embudo ÚNICO de todas las transiciones (webhook, polling, recuperación,
+    cancelación, cron), así que el guard anti-downgrade vive acá y tiene que
+    leer el estado AUTORITATIVO de la base, no el de la instancia en memoria:
+    `resolver_incierta` sostiene su instancia hasta 20 s mientras hace red, y en
+    esa ventana el webhook puede escribir APROBADA. Sin releer, el hilo lento
+    pisaba esa APROBADA con EXPIRADA/ERROR, la fila salía de los cobros vivos y
+    el siguiente intento emitía una segunda orden cobrable. Reproducido.
+
+    El bloqueo de fila es corto y adentro NO hay ninguna llamada HTTP.
+    """
+    with transaction.atomic():
+        if transaccion.pk:
+            fila = (TransaccionMercadoPago.objects.select_for_update()
+                    .filter(pk=transaccion.pk)
+                    .values('estado', 'raw_response').first())
+            if fila:
+                # La BD manda: si otro worker la movió, esa es la verdad.
+                transaccion.estado = fila['estado']
+                if isinstance(fila.get('raw_response'), dict):
+                    # Y su raw_response también, o el merge de _rm borraría el
+                    # payload del pago que acaba de guardar el webhook.
+                    transaccion.raw_response = fila['raw_response']
+        return _aplicar_estado_locked(transaccion, estado_nuevo, detalle,
+                                      payment, raw, via_webhook)
+
+
+def _aplicar_estado_locked(transaccion, estado_nuevo, detalle='', payment=None,
+                           raw=None, via_webhook=False):
+    """Cuerpo de _aplicar_estado, ya con la fila bloqueada y releída."""
     if transaccion.estado == 'APROBADA' and estado_nuevo not in ('DEVUELTA', 'CONTRACARGO', 'APROBADA'):
         logger.warning(
             f"MP: se ignoró downgrade {transaccion.estado} -> {estado_nuevo} en {transaccion.external_reference}"
@@ -1117,7 +1607,13 @@ def _aplicar_estado(transaccion, estado_nuevo, detalle='', payment=None,
                    'monto_neto', 'fee_mp', 'money_release_date']
 
     if raw is not None:
-        transaccion.raw_response = raw
+        # Preservar los metadatos de máquina (_rm): son la auditoría de cómo se
+        # creó y se recuperó el cobro, y la fase que usan los guards.
+        meta = _rm(transaccion)
+        nuevo_raw = dict(raw) if isinstance(raw, dict) else {'data': raw}
+        if meta:
+            nuevo_raw['_rm'] = meta
+        transaccion.raw_response = nuevo_raw
         campos.append('raw_response')
     if via_webhook:
         transaccion.webhook_recibido_en = timezone.now()
@@ -1137,7 +1633,14 @@ def consultar_estado(transaccion, forzar=False):
     if not forzar and edad < POLL_CONSULTA_DIRECTA_SEG:
         return transaccion
     if not transaccion.order_id:
-        return transaccion
+        # Sin order_id no hay orden que consultar... pero puede existir en MP
+        # igual (el POST salió y no volvió respuesta). Esta línea es el punto de
+        # apalancamiento del diseño: convierte en resolvedores al polling del
+        # POS, a cobros_vivos_de_ticket(refrescar=True), a cancelar(), al
+        # webhook topic=order y al comando sincronizar_transacciones_mp, sin
+        # tocar ninguno de ellos. Antes devolvía la fila intacta y la dejaba
+        # colgada para siempre.
+        return resolver_incierta(transaccion)
     try:
         resp = _request(transaccion.config, 'GET', f'/v1/orders/{transaccion.order_id}')
         data = _json_o_error(resp, f'consultar orden {transaccion.order_id}')
@@ -1150,12 +1653,171 @@ def consultar_estado(transaccion, forzar=False):
         logger.warning(f"MP: estado de orden desconocido '{estado_mp}' en {transaccion.external_reference}")
         return transaccion
     payment = _extraer_payment_de_orden(data)
-    if estado_local == 'PENDIENTE' and edad > QR_TIMEOUT_SEGUNDOS + 30:
-        # La orden debió expirar; si MP no lo dice aún, la cerramos localmente
+    if (estado_local == 'PENDIENTE' and transaccion.canal == 'QR'
+            and edad > QR_TIMEOUT_SEGUNDOS + 30):
+        # SOLO QR: su orden lleva expiration_time PT{QR_TIMEOUT}S, así que
+        # pasado el plazo ya no puede cobrarse y cerrarla local es fiel.
+        # En POINT el body NO lleva expiración y 'at_terminal' mapea a
+        # PENDIENTE: cerrarla por edad marcaba EXPIRADA (estado FINAL) un cobro
+        # que MP reporta VIVO en la pantalla del terminal — el guard dejaba de
+        # verlo y el POS ofrecía "Reintentar". Es el cobro que demora más de
+        # 2,5 min (cliente buscando la tarjeta, PIN malo, el "REINTENTE" del
+        # incidente NICK2). Un cobro Point solo se cierra por su propio TTL de
+        # incierta o porque MP lo diga.
         estado_local = 'EXPIRADA'
     return _aplicar_estado(transaccion, estado_local,
                            detalle=data.get('status_detail') or estado_mp,
                            payment=payment or None, raw=data)
+
+
+def _cerrar_incierta_si_vencida(trx):
+    """Cierra localmente una incierta que ya nadie va a poder resolver.
+
+    Cerrar NO es perder plata: `_aplicar_estado` solo bloquea APROBADA→otro y
+    FINAL→PENDIENTE, así que ERROR/EXPIRADA → APROBADA SÍ pasa. Si el cliente
+    paga 20 minutos después, el webhook topic=payment resucita la fila (matchea
+    por external_reference exacto) y la conciliación la muestra. Esa
+    reversibilidad es lo que hace aceptable "fallar abierto" y desbloquear la
+    caja en vez de dejarla trabada para siempre.
+    """
+    if _edad_seg(trx) <= ttl_incierta(trx):
+        return trx
+    minutos = int(_edad_seg(trx) // 60)
+    destino = 'EXPIRADA' if trx.canal == 'QR' else 'ERROR'
+    logger.warning(
+        "MP: cerrando cobro incierto %s ($%s, %s) como %s tras %s min sin confirmación",
+        trx.external_reference, trx.monto, trx.canal, destino, minutos,
+    )
+    return _aplicar_estado(
+        trx, destino,
+        detalle=f'Sin confirmación de Mercado Pago tras {minutos} min')
+
+
+def resolver_incierta(trx, presupuesto=None, permitir_replay=True):
+    """Averigua qué pasó de verdad con un cobro que quedó sin confirmar.
+
+    Es la contraparte obligatoria de pre-crear la fila: sin esto el arreglo
+    cambiaría "no queda rastro y se cobra dos veces" por "queda una fila zombi
+    que bloquea el ticket para siempre", que es peor.
+
+    Orden de los intentos, y por qué:
+      1. RESERVADA → el POST nunca salió. Se cierra sin gastar un byte de red.
+      2. REPLAY del POST con la MISMA X-Idempotency-Key → es lo ÚNICO que
+         recupera el order_id cuando todavía nadie pagó, y el order_id es lo que
+         desbloquea toda la maquinaria existente (consultar, cancelar, webhook
+         topic=order, sincronizar_transacciones_mp).
+      3. payments/search por external_reference → cubre el caso caro: el
+         cliente YA pagó.
+      4. TTL → si nada de lo anterior contestó, se cierra local (reversible).
+
+    `permitir_replay=False` para los barridos batch: la idempotencia de MP tiene
+    ventana, y un re-POST viejo puede CREAR una orden nueva en vez de devolver
+    la original. Un cron que cobre de nuevo sería peor que el bug original.
+    """
+    # Sin order_id y no cerrada: sigue siendo resoluble. Incluye PENDIENTE, que
+    # es donde queda una incierta cuyo pago MP reportó pending/in_process.
+    if trx.order_id or trx.estado in ESTADOS_FINALES_MP or trx.estado == 'APROBADA':
+        return trx
+
+    fase = fase_cobro(trx)
+    edad = _edad_seg(trx)
+
+    # ── (1) RESERVADA: por construcción no existe en MP ────────────────────
+    if fase == FASE_RESERVADA:
+        if edad > MP_RESERVA_MAX_SEG:
+            return _aplicar_estado(trx, 'ERROR',
+                                   detalle='No se alcanzó a enviar a Mercado Pago')
+        return trx  # request en vuelo ahora mismo: no tocar
+    if fase != FASE_ENVIADA:
+        return trx
+
+    # ── (2) piso entre resoluciones: no martillar a MP desde cada poll ─────
+    meta = _rm(trx)
+    ultimo = meta.get('ultimo_resolver')
+    if ultimo:
+        from django.utils.dateparse import parse_datetime
+        try:
+            previo = parse_datetime(ultimo)
+            if previo and (timezone.now() - previo).total_seconds() < MP_RESOLVER_MIN_SEG:
+                return trx
+        except (TypeError, ValueError):
+            pass
+    if presupuesto is not None and not presupuesto.hay(4):
+        return _cerrar_incierta_si_vencida(trx)
+    _marcar_rm(trx, ultimo_resolver=timezone.now().isoformat(),
+               resoluciones=int(meta.get('resoluciones') or 0) + 1)
+
+    rechazo_determinista = False
+
+    # ── (3) REPLAY con la misma idempotency key ────────────────────────────
+    body = meta.get('body')
+    sufijo = meta.get('sufijo') or ''
+    if permitir_replay and body and edad <= MP_REPLAY_MAX_EDAD_SEG:
+        try:
+            resp = _request(trx.config, 'POST', '/v1/orders', json_body=body,
+                            idempotency_key=trx.external_reference + sufijo,
+                            timeout=MP_RECUPERACION_TIMEOUT)
+        except MercadoPagoError:
+            resp = None
+        if resp is not None:
+            try:
+                data = resp.json()
+            except ValueError:
+                data = {}
+            if resp.status_code < 400 and data.get('id'):
+                trx.order_id = str(data['id'])
+                trx.save(update_fields=['order_id', 'actualizado_en'])
+                _marcar_rm(trx, fase=FASE_RESUELTA, recuperada='replay')
+                logger.warning("MP: cobro incierto %s RECUPERADO por replay → orden %s",
+                               trx.external_reference, trx.order_id)
+                return consultar_estado(trx, forzar=True)
+            if resp.status_code >= 400:
+                # Solo un 4xx de VALIDACIÓN con el MISMO body prueba que el POST
+                # original también fue rechazado y que la orden nunca existió.
+                # Un 5xx o un 429 no prueban nada (la orden pudo crearse y
+                # perderse la respuesta) y un 404/409 menos todavía: esos dejan
+                # la fila incierta hasta el TTL, que es el lado seguro.
+                texto = json.dumps(data).lower()
+                if (400 <= resp.status_code < 500
+                        and resp.status_code not in (404, 408, 409, 423, 425, 429)
+                        and not any(p in texto for p in ('idempotenc', 'conflict'))):
+                    rechazo_determinista = True
+                else:
+                    logger.warning(
+                        "MP: replay de %s devolvió %s — no prueba rechazo, la fila "
+                        "sigue sin confirmar", trx.external_reference, resp.status_code)
+
+    # ── (4) ¿hay plata? payments/search por referencia exacta ──────────────
+    # UNA sola página acotada. NUNCA buscar_pagos_dia acá: pagina hasta 20
+    # páginas × 15s = 300s contra los 60s de gunicorn.
+    try:
+        resp = _request(trx.config, 'GET', '/v1/payments/search',
+                        params={'external_reference': trx.external_reference, 'limit': 5},
+                        timeout=MP_RECUPERACION_TIMEOUT)
+        datos = resp.json() if resp.status_code < 400 else {}
+    except (MercadoPagoError, ValueError):
+        datos = {}
+    for pago in (datos.get('results') or []):
+        # Verificar en Python: si MP ignorara el filtro, un pago ajeno acá sería
+        # imputarle a este ticket plata de otra venta.
+        if str(pago.get('external_reference') or '') != trx.external_reference:
+            continue
+        estado_local = _ESTADO_DESDE_PAYMENT.get(str(pago.get('status') or '').lower())
+        if not estado_local:
+            continue
+        _marcar_rm(trx, recuperada='payments_search')
+        logger.warning("MP: cobro incierto %s RESUELTO por payments/search → %s",
+                       trx.external_reference, estado_local)
+        return _aplicar_estado(trx, estado_local,
+                               detalle=pago.get('status_detail') or 'Recuperado de Mercado Pago',
+                               payment=pago, raw=pago)
+
+    # ── (5)/(6) nada confirmó: cerrar si corresponde, si no seguir incierta ─
+    if rechazo_determinista:
+        return _aplicar_estado(
+            trx, 'ERROR',
+            detalle='Mercado Pago rechazó la orden: nunca se creó el cobro')
+    return _cerrar_incierta_si_vencida(trx)
 
 
 def cancelar(transaccion):
@@ -1167,6 +1829,35 @@ def cancelar(transaccion):
         raise MercadoPagoError('El pago ya fue aprobado: corresponde devolución, no cancelación.')
     if transaccion.estado in ESTADOS_FINALES_MP:
         return transaccion
+
+    # ── Fila sin order_id: JAMÁS cerrarla a ciegas ─────────────────────────
+    # Este era el agujero que habría dejado el arreglo sin efecto. CANCELADA es
+    # un estado FINAL: saca la fila de cobros_vivos_de_ticket y con eso el guard
+    # de crear_orden la da por muerta y emite una orden nueva. O sea, el doble
+    # cobro del 13-09 reintroducido por la puerta de atrás.
+    if not transaccion.order_id:
+        if es_reserva(transaccion):
+            # Nunca se envió a MP: cerrarla es seguro y no cuesta red.
+            return _aplicar_estado(transaccion, 'CANCELADA',
+                                   detalle='Nunca se envió a Mercado Pago')
+        if es_incierta(transaccion):
+            transaccion = resolver_incierta(transaccion)
+            if transaccion.estado == 'APROBADA':
+                raise MercadoPagoError('El cliente alcanzó a pagar: el cobro quedó APROBADO.')
+            if transaccion.estado in ESTADOS_FINALES_MP:
+                return transaccion
+            # Se recuperó el order_id: sigue por el camino normal de abajo.
+        if not transaccion.order_id:
+            # DEFAULT del bloque, a propósito: cualquier fila sin order_id que
+            # no sea una reserva probada se NIEGA a cerrarse. Si esto fuera un
+            # `if` por estado, un estado nuevo en el futuro volvería a caer en
+            # el `_aplicar_estado(..., 'CANCELADA')` del final y reabriría el
+            # doble cobro. El POS traduce este error a vigilancia del cobro.
+            raise MercadoPagoError(
+                'No pudimos confirmar con Mercado Pago si este cobro existe. '
+                'NO cobres de nuevo por Mercado Pago: revisa la pantalla de la '
+                'máquina, usa otro medio de pago o espera la confirmación.')
+
     if transaccion.order_id:
         try:
             resp = _request(transaccion.config, 'POST', f'/v1/orders/{transaccion.order_id}/cancel',
@@ -1426,7 +2117,7 @@ def metodo_pago_ticket_de(transaccion):
     return 'MP_POINT'
 
 
-def cobros_vivos_de_ticket(sucursal_id, correlativo, refrescar=False):
+def cobros_vivos_de_ticket(sucursal_id, correlativo, refrescar=False, presupuesto=None):
     """Cobros MP que aún pueden convertirse en (o ya son) plata de este ticket.
 
     Devuelve las transacciones EN VUELO (CREADA/PENDIENTE: el cobro sigue en
@@ -1449,14 +2140,40 @@ def cobros_vivos_de_ticket(sucursal_id, correlativo, refrescar=False):
     )
     vivos = []
     for trx in candidatas:
+        # ── Reserva: la fila existe pero el POST no salió ───────────────────
+        # Una reserva FRESCA sí cuenta como viva: es lo que serializa dos
+        # cobros simultáneos del mismo ticket (dos pestañas, doble click). Una
+        # reserva vieja es un request que murió antes de postear: no existe en
+        # MP y se cierra sin gastar red.
+        if es_reserva(trx):
+            if _edad_seg(trx) > MP_RESERVA_MAX_SEG:
+                _aplicar_estado(trx, 'ERROR',
+                                detalle='No se alcanzó a enviar a Mercado Pago')
+                continue
+            vivos.append(trx)
+            continue
+
         if refrescar and trx.estado in ESTADOS_EN_VUELO_MP:
-            try:
-                trx = consultar_estado(trx, forzar=True)
-            except Exception:  # noqa: BLE001 — sin red se decide con lo que hay en BD
+            if presupuesto is not None and not presupuesto.hay():
                 logger.warning(
-                    "MP: no se pudo refrescar %s al revisar cobros vivos",
+                    "MP: presupuesto de red agotado, se decide con la BD para %s",
                     trx.external_reference,
                 )
+            else:
+                try:
+                    trx = consultar_estado(trx, forzar=True)
+                except Exception:  # noqa: BLE001 — sin red se decide con lo que hay en BD
+                    logger.warning(
+                        "MP: no se pudo refrescar %s al revisar cobros vivos",
+                        trx.external_reference,
+                    )
+
+        # Incierta que nadie pudo resolver y ya venció: se cierra local para no
+        # dejar el ticket bloqueado para siempre (es reversible: si el cliente
+        # paga después, el webhook la resucita).
+        if es_incierta(trx):
+            trx = _cerrar_incierta_si_vencida(trx)
+
         if trx.estado in ESTADOS_FINALES_MP:
             continue
         if trx.estado == 'APROBADA':
@@ -1488,10 +2205,18 @@ def resumen_cobro(trx):
         'metodo_pago_ticket': metodo_pago_ticket_de(trx),
         'creado_en': timezone.localtime(trx.creado_en).strftime('%d-%m %H:%M'),
         'edad_segundos': int((timezone.now() - trx.creado_en).total_seconds()),
+        # Aditivas: el front las ignora si no las conoce. NO renombrar las de
+        # arriba — las consumen verificarCobrosMPPendientes y los dos modales
+        # del guard de cierre.
+        'incierto': es_incierta(trx),
+        'fase': fase_cobro(trx),
+        'bloquea_cierre': not (es_incierta(trx)
+                               and _edad_seg(trx) > MP_INCIERTA_BLOQUEO_CIERRE_SEG),
     }
 
 
-def cobros_no_respaldados(sucursal_id, correlativo, montos_mp, refrescar=True):
+def cobros_no_respaldados(sucursal_id, correlativo, montos_mp, refrescar=True,
+                          presupuesto=None):
     """Cobros vivos que los pagos MP del payload NO explican.
 
     `montos_mp` son los montos de los pagos MP integrados que el POS quiere
@@ -1499,12 +2224,35 @@ def cobros_no_respaldados(sucursal_id, correlativo, montos_mp, refrescar=True):
     grande, la transacción aprobada más chica que lo cubra); lo que sobra es
     exactamente lo que quedaría huérfano si la venta se cierra así.
     """
-    vivos = cobros_vivos_de_ticket(sucursal_id, correlativo, refrescar=refrescar)
+    vivos = cobros_vivos_de_ticket(sucursal_id, correlativo, refrescar=refrescar,
+                                   presupuesto=presupuesto)
     if not vivos:
         return []
     aprobados = sorted([t for t in vivos if t.estado == 'APROBADA'],
                        key=lambda t: t.monto)
     en_vuelo = [t for t in vivos if t.estado != 'APROBADA']
+
+    # ── Dos riesgos distintos, dos umbrales distintos ──────────────────────
+    # Bloquear un COBRO MP nuevo del mismo ticket (riesgo: doble cobro, caro e
+    # irreversible) se mantiene estricto hasta el TTL.
+    # Bloquear el CIERRE de la venta (riesgo: caja trabada con cola de clientes)
+    # se suelta a los 3 minutos. OJO: este guard corre en TODA venta, incluso
+    # 100% efectivo, así que una incierta colgada trabaría la caja entera.
+    # El riesgo residual —que el cliente pague después— cae en la maquinaria que
+    # YA existe: webhook → APROBADA sin consumir → pantalla Dineros MP,
+    # conciliar_mercadopago y reparar_cobro_mp_huerfano. Es detectable el mismo
+    # día y reparable; una caja trabada no.
+    sueltas = [t for t in en_vuelo
+               if es_incierta(t) and _edad_seg(t) > MP_INCIERTA_BLOQUEO_CIERRE_SEG]
+    if sueltas:
+        for t in sueltas:
+            logger.warning(
+                "MP: cobro incierto %s ($%s, %s min) deja de bloquear el cierre del "
+                "ticket %s — revisar en Conciliación Mercado Pago",
+                t.external_reference, t.monto, int(_edad_seg(t) // 60), correlativo,
+            )
+        ids_sueltas = {t.id for t in sueltas}
+        en_vuelo = [t for t in en_vuelo if t.id not in ids_sueltas]
     for monto in sorted((int(m) for m in montos_mp), reverse=True):
         idx = next((i for i, t in enumerate(aprobados) if t.monto >= monto), None)
         if idx is not None:
@@ -1597,9 +2345,14 @@ def _resolver_transaccion_por_payment(data_id):
         transaccion = TransaccionMercadoPago.objects.filter(external_reference=ext_ref).first()
         if transaccion:
             return transaccion, payment
-        # refund de un pago nuestro: el refund comparte external_reference base
+        # refund de un pago nuestro: el refund comparte external_reference base.
+        # Anclado al '-REF-' real (ver reembolsar): con el sufijo de intento
+        # determinista, un startswith suelto haría que 'RM-7-100-c3i01' matchee
+        # también a 'RM-7-100-c3i01x' y el webhook se aplicaría a la fila
+        # equivocada, escribiendo payment_id/monto_neto donde no corresponde.
         if ext_ref:
-            base = TransaccionMercadoPago.objects.filter(external_reference__startswith=ext_ref[:40]).first()
+            base = TransaccionMercadoPago.objects.filter(
+                external_reference__startswith=ext_ref + '-REF-').first()
             if base:
                 return base, payment
     return None, None
@@ -1628,7 +2381,11 @@ def procesar_notificacion(request_id, topic, data_id, payload, headers):
         transaccion, payment = None, None
         if topic in ('payment', 'payment.updated', 'payment.created'):
             transaccion, payment = _resolver_transaccion_por_payment(data_id)
-        elif topic in ('order', 'merchant_order', 'topic_merchant_order_wh'):
+        elif topic in ('order', 'merchant_order', 'topic_merchant_order_wh') and data_id:
+            # `and data_id`: sin eso, un webhook con data.id vacío hacía
+            # filter(order_id='') y enganchaba la fila SIN order_id más reciente
+            # (ahora hay muchas: las reservas/inciertas), estampándole
+            # webhook_recibido_en y dando el evento por procesado.
             transaccion = TransaccionMercadoPago.objects.filter(order_id=str(data_id)).first()
             if transaccion:
                 transaccion = consultar_estado(transaccion, forzar=True)

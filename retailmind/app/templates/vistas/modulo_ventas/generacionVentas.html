@@ -12625,6 +12625,54 @@ body {
     }
 
     /**
+     * Qué hacer con la respuesta de /pos/mercadopago/qr/crear/.
+     * Devuelve true solo si corresponde abrir el modal de espera normal.
+     *
+     * Los dos casos que NO son "éxito" ni "error" y que antes terminaban en un
+     * Swal seco con la caja libre para cobrar de nuevo (el doble cobro del
+     * 13-09):
+     *   - estado 'INCIERTO': el servidor no pudo confirmar el envío a MP. La
+     *     orden PUEDE estar en la pantalla de la máquina.
+     *   - 400 con transaccion_id: el servidor rechazó porque YA hay un cobro
+     *     vivo o sin confirmar para este ticket.
+     * En ambos el cobro queda VIGILADO: si se aprueba, el pago se agrega solo.
+     */
+    function _mpManejarCreacion(creacion, correlativo, monto, canalTxt) {
+        if (creacion && creacion.success && creacion.estado === 'INCIERTO') {
+            _mpVigilarCobro(creacion.transaccion_id, monto, correlativo, canalTxt);
+            Swal.fire({
+                icon: 'warning',
+                title: '⏳ Verificando con Mercado Pago',
+                html: `<div class="text-start">
+                    <p>${creacion.mensaje || 'No pudimos confirmar el envío del cobro.'}</p>
+                    <p class="mb-1"><strong>Mira la pantalla de la máquina:</strong></p>
+                    <ul class="mb-2 ps-3">
+                        <li>Si muestra el cobro de <strong>${formatearMoneda(monto)}</strong>, deja que el cliente pague: el pago se agrega solo.</li>
+                        <li>Si no muestra nada, espera unos segundos y vuelve a intentar.</li>
+                    </ul>
+                    <p class="mb-0 small text-muted">No cobres de nuevo por Mercado Pago hasta que esto se resuelva.</p>
+                </div>`,
+                confirmButtonText: 'Entendido', confirmButtonColor: '#f7b924', width: '520px'
+            });
+            return false;
+        }
+        if (!creacion || !creacion.success) {
+            if (creacion && creacion.transaccion_id) {
+                _mpVigilarCobro(creacion.transaccion_id,
+                                (creacion.cobro && creacion.cobro.monto) || monto,
+                                correlativo, canalTxt);
+            }
+            Swal.fire({
+                icon: 'error', title: 'Mercado Pago',
+                text: (creacion && creacion.error) || 'No se pudo enviar el cobro.',
+                confirmButtonColor: '#0066FF'
+            });
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * Avisa al entrar al paso de cobro si Mercado Pago tiene un cobro vivo para
      * este ticket. Cubre el caso de otro turno / otra pestaña: el cajero abre un
      * ticket pendiente sin saber que la máquina ya cobró.
@@ -12752,12 +12800,11 @@ body {
             });
             creacion = await resp.json();
         } catch (e) {
-            creacion = { success: false, error: 'No se pudo contactar al servidor' };
+            // Se cortó el enlace con NUESTRO servidor: puede haber alcanzado a
+            // crear el cobro. Al reintentar, el guard del servidor lo detecta.
+            creacion = { success: false, error: 'No se pudo contactar al servidor. Si la máquina muestra el cobro, NO cobres de nuevo.' };
         }
-        if (!creacion || !creacion.success) {
-            Swal.fire({ icon: 'error', title: 'Mercado Pago', text: (creacion && creacion.error) || 'Error al generar el QR' });
-            return;
-        }
+        if (!_mpManejarCreacion(creacion, correlativoMP, montoCobrar, 'QR')) return;
 
         const transaccionId = creacion.transaccion_id;
         const expiraEn = creacion.expira_en_segundos || 120;
@@ -12936,12 +12983,11 @@ body {
             });
             creacion = await resp.json();
         } catch (e) {
-            creacion = { success: false, error: 'No se pudo contactar al servidor' };
+            // Se cortó el enlace con NUESTRO servidor: puede haber alcanzado a
+            // mandar el cobro a la máquina. Al reintentar, el guard lo detecta.
+            creacion = { success: false, error: 'No se pudo contactar al servidor. Si la máquina muestra el cobro, NO cobres de nuevo.' };
         }
-        if (!creacion || !creacion.success) {
-            Swal.fire({ icon: 'error', title: 'Mercado Pago Point', text: (creacion && creacion.error) || 'Error al enviar el cobro' });
-            return;
-        }
+        if (!_mpManejarCreacion(creacion, correlativoMP, montoCobrar, 'Point')) return;
 
         const transaccionId = creacion.transaccion_id;
         let finalizado = false;

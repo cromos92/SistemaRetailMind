@@ -71,10 +71,39 @@ def crear_pago_qr_mp(request):
             descripcion=f'Venta {correlativo}', usuario=request.user,
         )
     except MercadoPagoError as e:
-        return Response({'success': False, 'error': e.mensaje},
-                        status=status.HTTP_400_BAD_REQUEST)
+        cuerpo = {'success': False, 'error': e.mensaje}
+        # Si el rechazo es porque ya hay un cobro vivo/incierto, el POS necesita
+        # su id para VIGILARLO en vez de dejar la caja libre para cobrar de nuevo.
+        previa = getattr(e, 'transaccion', None)
+        if previa is not None:
+            cuerpo['error_tipo'] = 'MP_COBRO_EN_CURSO'
+            cuerpo['transaccion_id'] = previa.id
+            cuerpo['cobro'] = mp.resumen_cobro(previa)
+        return Response(cuerpo, status=status.HTTP_400_BAD_REQUEST)
+
+    # ── Cobro SIN CONFIRMAR (corte de red al crear) ────────────────────────
+    # NO es un error: Mercado Pago pudo haber recibido la orden y estar
+    # cobrándola en la pantalla de la máquina. Se responde 200 con el
+    # transaccion_id para que el POS lo vigile. Devolver un 400 acá es lo que el
+    # 13-09 empujó al cajero a reintentar a ciegas y cobrar dos veces.
+    if mp.es_incierta(transaccion):
+        return Response({
+            'success': True,
+            'estado': 'INCIERTO',
+            'transaccion_id': transaccion.id,
+            'canal': canal,
+            'monto': transaccion.monto,
+            'external_reference': transaccion.external_reference,
+            'qr_data': None,
+            'qr_base64': None,
+            'expira_en_segundos': mp.QR_TIMEOUT_SEGUNDOS,
+            'mensaje': ('No pudimos confirmar el envío a Mercado Pago. Estamos '
+                        'verificando: NO cobres de nuevo todavía.'),
+        })
+
     return Response({
         'success': True,
+        'estado': 'OK',
         'transaccion_id': transaccion.id,
         'canal': canal,
         'external_reference': transaccion.external_reference,
@@ -108,6 +137,11 @@ def estado_pago_mp(request, transaccion_id):
     transaccion = mp.consultar_estado(transaccion)
     return Response({
         'success': True,
+        # OJO: `estado` NO puede salirse de {'CREADA','PENDIENTE'} mientras el
+        # cobro todavía pueda aprobarse. Los cuatro consumidores del polling
+        # tratan cualquier otro valor como TERMINAL: apagan la vigilancia y
+        # ofrecen "Reintentar", que es el gatillo exacto del doble cobro. La
+        # incertidumbre viaja en campos NUEVOS, nunca en `estado`.
         'estado': transaccion.estado,
         'estado_detalle': transaccion.estado_detalle,
         'payment_id': transaccion.payment_id,
@@ -115,6 +149,8 @@ def estado_pago_mp(request, transaccion_id):
         'ultimos_4_digitos': transaccion.ultimos_4_digitos,
         'codigo_autorizacion': transaccion.codigo_autorizacion,
         'monto': transaccion.monto,
+        'incierto': mp.es_incierta(transaccion),
+        'puede_reintentar': transaccion.estado in mp.ESTADOS_FINALES_MP,
     })
 
 

@@ -33,6 +33,7 @@ Contrato del webhook (idempotente: AllConnected deduplica por numero_documento):
         "folio_despacho": "RE30005376" | null,
         "canal_origen": "PARIS" | null,
         "nota_credito": "871" | null,
+        "monto_nota_credito": 19990 | null,   ← monto de la NC (no del original)
         "sucursal": "<alias>",
         "usuario_emisor": "caja1"
     }
@@ -101,7 +102,7 @@ def _es_documento_venta(dte) -> bool:
     )
 
 
-def _serializar_documento(dte, evento: str, nc_folio=None) -> dict:
+def _serializar_documento(dte, evento: str, nc_folio=None, nc_monto=None) -> dict:
     """Construye el payload del webhook para un documento de venta.
 
     `origen` usa la MISMA definición de venta internet que GET /api/ventas/
@@ -194,6 +195,10 @@ def _serializar_documento(dte, evento: str, nc_folio=None) -> dict:
         'folio_despacho': (pedido['correlativo'] or None) if pedido else None,
         'canal_origen': canal_origen,
         'nota_credito': str(nc_folio) if nc_folio else None,
+        # Monto de la NOTA DE CRÉDITO, no del documento original. Es la plata
+        # que efectivamente se le devolvió al cliente; en una devolución parcial
+        # difiere de `monto_total`. AllConnected lo escribe en la devolución.
+        'monto_nota_credito': int(nc_monto or 0) if nc_monto is not None else None,
         'sucursal': dte.sucursal.alias if dte.sucursal_id else None,
         'usuario_emisor': dte.responsable or None,
     }
@@ -242,16 +247,29 @@ def _notificar(dte_id: int, evento: str, nc_id=None) -> None:
         if not dte or not _es_documento_venta(dte):
             return
 
-        nc_folio = None
+        # Folio Y MONTO de la nota de crédito, en una sola query.
+        #
+        # El payload describe el documento ORIGINAL (la boleta afectada), así
+        # que su `monto_total` es el total de la venta completa, NO lo que se
+        # devolvió. Sin el monto de la NC, AllConnected no tenía con qué
+        # escribir cuánta plata volvió de verdad: dejaba la devolución cerrada
+        # con el monto que había cargado el operador al aprobarla, que en una
+        # devolución parcial es otro número.
+        nc_folio = nc_monto = None
         if nc_id:
-            nc_folio = (
-                Dte.objects.filter(id=nc_id).values_list('numero_documento', flat=True).first()
+            nc = (
+                Dte.objects.filter(id=nc_id)
+                .values('numero_documento', 'monto_con_iva')
+                .first()
             )
+            if nc:
+                nc_folio = nc['numero_documento']
+                nc_monto = nc['monto_con_iva']
 
         url, headers = _get_config()
         if not url:
             return
-        payload = _serializar_documento(dte, evento, nc_folio=nc_folio)
+        payload = _serializar_documento(dte, evento, nc_folio=nc_folio, nc_monto=nc_monto)
 
         threading.Thread(
             target=_do_post_con_reintentos,
