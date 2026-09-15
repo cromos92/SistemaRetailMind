@@ -947,12 +947,12 @@
             <h6><i class="bi bi-pc-display"></i> Asociación de máquinas (cajas QR / Point){% if es_admin_mp %}<span class="mp-chip-admin">EDICIÓN: SOLO ADMIN</span>{% endif %}</h6>
             <hr>
             <table class="table table-sm mb-2" style="font-size:.72rem;">
-                <thead><tr><th>Sucursal</th><th>Caja MP (external_pos_id)</th><th class="text-center">Habilitada</th>{% if es_admin_mp %}<th class="text-center">Acciones</th>{% endif %}</tr></thead>
+                <thead><tr><th>Sucursal · caja</th><th>Caja MP (external_pos_id)</th><th class="text-center">Habilitada</th>{% if es_admin_mp %}<th class="text-center">Acciones</th>{% endif %}</tr></thead>
                 <tbody id="mpConfigsBody">
                 {% for cfg in configs_mp %}
                     <tr {% if es_admin_mp %}style="cursor:pointer;" title="Clic para editar"
                         onclick="editarConfigMP({{ cfg.id }}, {{ cfg.sucursal_id }}, '{{ cfg.nombre|escapejs }}', '{{ cfg.external_store_id|escapejs }}', '{{ cfg.external_pos_id|escapejs }}', {{ cfg.habilitado|yesno:'true,false' }}, '{{ cfg.device_id|escapejs }}', '{{ cfg.cuenta_empresa_id|default:'' }}'){% endif %}">
-                        <td>{{ cfg.sucursal_alias }}{% if cfg.es_principal %} ⭐{% endif %}{% if cfg.device_id %} <i class="bi bi-phone" title="Con máquina Point asociada"></i>{% endif %}
+                        <td>{{ cfg.sucursal_alias }} · {{ cfg.nombre }}{% if cfg.es_principal %} <span title="Caja principal: la que usa el POS de la sucursal">⭐</span>{% endif %}{% if cfg.device_id %} <span title="Máquina Point {{ cfg.device_id }}"><i class="bi bi-phone"></i> …{{ cfg.device_id|slice:"-6:" }}</span>{% endif %}
                             <div class="text-muted" style="font-size:.62rem;white-space:nowrap;">{% if cfg.cuenta_efectiva %}cuenta: {{ cfg.cuenta_efectiva }}{% else %}<span class="text-danger">⚠ sin cuenta MP</span>{% endif %}</div></td>
                         <td class="font-monospace">{{ cfg.external_pos_id|default:'—' }}</td>
                         <td class="text-center">{% if cfg.habilitado %}✅{% else %}❌{% endif %}</td>
@@ -982,6 +982,10 @@
                 <i class="bi bi-cloud-download"></i> Buscar cajas creadas en Mercado Pago
             </button>
             <input type="hidden" id="mpCfgId" value="">
+            <div id="mpCfgModo" class="alert alert-light border py-1 px-2 mb-2" style="font-size:.74rem;">
+                <i class="bi bi-plus-circle"></i> <strong>Nueva caja</strong> — se creará al guardar.
+                Para modificar una existente, haz clic en su fila de la tabla.
+            </div>
             <label class="form-label-sm">Sucursal</label>
             <select class="form-control-sm-pos mb-2" id="mpCfgSucursal" onchange="_actualizarAyudaCuentaMP()">
                 {% for s in sucursales_mp %}<option value="{{ s.id }}" data-empresa="{{ s.empresa_id }}" data-empresa-nombre="{{ s.empresa.nombre|default:s.empresa.razon_social }}">{{ s.alias }}</option>{% endfor %}
@@ -1005,15 +1009,19 @@
                 <button class="btn btn-sm btn-outline-secondary py-0 px-2" type="button" style="font-size:.72rem;"
                         title="Elegir de las máquinas Point de la cuenta" onclick="elegirDeviceMP()"><i class="bi bi-phone"></i></button>
             </div>
-            <div class="form-check mb-2" style="font-size:.76rem;">
+            <div class="form-check mb-1" style="font-size:.76rem;">
                 <input class="form-check-input" type="checkbox" id="mpCfgHabilitado">
                 <label class="form-check-label" for="mpCfgHabilitado">Habilitada (muestra el botón M. Pago en el POS)</label>
             </div>
-            <button class="tbk-btn tbk-btn-primary" onclick="guardarConfigMP()">
-                <i class="bi bi-save"></i> Guardar asociación
+            <div class="form-check mb-2" style="font-size:.76rem;">
+                <input class="form-check-input" type="checkbox" id="mpCfgPrincipal">
+                <label class="form-check-label" for="mpCfgPrincipal">Caja principal de la sucursal (la que usa el POS) ⭐</label>
+            </div>
+            <button class="tbk-btn tbk-btn-primary" id="mpCfgBtnGuardar" onclick="guardarConfigMP()">
+                <i class="bi bi-save"></i> Crear caja
             </button>
             <button class="tbk-btn btn-secondary" onclick="limpiarFormConfigMP()">
-                <i class="bi bi-eraser"></i> Nueva
+                <i class="bi bi-eraser"></i> Cancelar / Nueva caja
             </button>
             {% endif %}
         </div>
@@ -1894,7 +1902,7 @@ function _renderConfigsMP(configs) {
     }
     body.innerHTML = configs.map((cfg, i) => `
         <tr ${MP_ES_ADMIN ? `style="cursor:pointer;" title="Clic para editar" onclick="configAccionMP(${i},'editar')"` : ''}>
-            <td>${_escMP(cfg.sucursal_alias)}${cfg.es_principal ? ' ⭐' : ''}${cfg.device_id ? ' <i class="bi bi-phone" title="Con máquina Point asociada"></i>' : ''}
+            <td>${_escMP(cfg.sucursal_alias)} · ${_escMP(cfg.nombre)}${cfg.es_principal ? ' <span title="Caja principal: la que usa el POS de la sucursal">⭐</span>' : ''}${cfg.device_id ? ' <span title="Máquina Point ' + _escMP(cfg.device_id) + '"><i class="bi bi-phone"></i> …' + _escMP(String(cfg.device_id).slice(-6)) + '</span>' : ''}
                 <div class="text-muted" style="font-size:.62rem;white-space:nowrap;">${cfg.cuenta_efectiva ? 'cuenta: ' + _escMP(cfg.cuenta_efectiva) : '<span class="text-danger">⚠ sin cuenta MP</span>'}</div></td>
             <td class="font-monospace">${_escMP(cfg.external_pos_id) || '—'}</td>
             <td class="text-center">${cfg.habilitado ? '✅' : '❌'}</td>
@@ -1946,6 +1954,12 @@ function _postGestionMP(url, datos, exitoMsg) {
                     if (uid) uid.value = String(v.user_id);
                 }
                 refrescarDatosMP();
+                // Tras guardar/eliminar una caja el formulario vuelve a "Nueva":
+                // si quedaba en modo edición, el siguiente Guardar pisaba la
+                // misma caja y parecía que "no dejaba crear más de una".
+                if (url.indexOf('/gestion/config/') !== -1 && typeof limpiarFormConfigMP === 'function') {
+                    limpiarFormConfigMP();
+                }
                 if (data.aviso) {
                     Swal.fire({ icon: 'warning', title: 'Guardado, con un aviso', text: data.aviso });
                 }
@@ -1977,8 +1991,9 @@ function guardarConfigMP() {
         external_pos_id: document.getElementById('mpCfgPos').value.trim(),
         device_id: document.getElementById('mpCfgDevice').value.trim(),
         habilitado: document.getElementById('mpCfgHabilitado').checked ? '1' : '0',
+        es_principal: document.getElementById('mpCfgPrincipal').checked ? '1' : '0',
         cuenta_empresa_id: (document.getElementById('mpCfgCuenta') || {}).value || ''
-    }, 'Asociación de caja guardada');
+    }, document.getElementById('mpCfgId').value ? 'Caja actualizada' : 'Caja creada');
 }
 
 function editarConfigMP(id, sucursalId, nombre, storeId, posId, habilitado, deviceId, cuentaEmpresaId) {
@@ -1995,6 +2010,12 @@ function editarConfigMP(id, sucursalId, nombre, storeId, posId, habilitado, devi
     document.getElementById('mpCfgHabilitado').checked = habilitado;
     const selCuenta = document.getElementById('mpCfgCuenta');
     if (selCuenta) selCuenta.value = cuentaEmpresaId ? String(cuentaEmpresaId) : '';
+    const cfgActual = (window.__mpConfigs || []).find(c => String(c.id) === String(id));
+    const chkPrincipal = document.getElementById('mpCfgPrincipal');
+    if (chkPrincipal) chkPrincipal.checked = !!(cfgActual && cfgActual.es_principal);
+    const selSuc = document.getElementById('mpCfgSucursal');
+    const aliasSuc = (selSuc && selSuc.options[selSuc.selectedIndex]) ? selSuc.options[selSuc.selectedIndex].text : '';
+    _setModoFormCajaMP({ id, alias: aliasSuc, nombre });
     _actualizarAyudaCuentaMP();
     document.getElementById('tab-mp-btn').click();
     // El formulario vive en la sección plegada: abrirla para que se vea
@@ -2013,7 +2034,30 @@ function limpiarFormConfigMP() {
     document.getElementById('mpCfgHabilitado').checked = false;
     const selCuenta = document.getElementById('mpCfgCuenta');
     if (selCuenta) selCuenta.value = '';
+    const chkPrincipal = document.getElementById('mpCfgPrincipal');
+    if (chkPrincipal) chkPrincipal.checked = false;
+    _setModoFormCajaMP(null);
     _actualizarAyudaCuentaMP();
+}
+
+/** Banner + botón del formulario de cajas: "Nueva caja" o "Editando X". */
+function _setModoFormCajaMP(cfg) {
+    const banner = document.getElementById('mpCfgModo');
+    const btn = document.getElementById('mpCfgBtnGuardar');
+    if (banner) {
+        banner.className = 'alert py-1 px-2 mb-2 ' + (cfg ? 'alert-warning' : 'alert-light border');
+        banner.innerHTML = cfg
+            ? `<i class="bi bi-pencil-square"></i> <strong>Editando</strong> la caja <strong>${_escMP(cfg.alias)} · ${_escMP(cfg.nombre)}</strong> (id ${_escMP(cfg.id)}). Guardar modifica ESTA caja; para crear otra, «Cancelar / Nueva caja».`
+            : '<i class="bi bi-plus-circle"></i> <strong>Nueva caja</strong> — se creará al guardar. Para modificar una existente, haz clic en su fila de la tabla.';
+    }
+    if (btn) btn.innerHTML = cfg ? '<i class="bi bi-save"></i> Guardar cambios' : '<i class="bi bi-save"></i> Crear caja';
+}
+
+/** "NICK1 · Caja1" (o lista) de las cajas del sistema que usan una máquina. */
+function _asignadaTxtMP(d) {
+    const a = (d && d.asignaciones) || [];
+    return a.length ? a.map(x => `${_escMP(x.sucursal)} · ${_escMP(x.caja)}${x.habilitado ? '' : ' (deshab.)'}`).join('<br>')
+                    : '<span class="text-muted">— sin asignar</span>';
 }
 
 /** Empresa cuya cuenta MP usa el formulario de asociación: la elegida en
@@ -2073,14 +2117,15 @@ function elegirDeviceMP() {
                     <td style="word-break:break-all;"><code style="font-size:.66rem;">${_escMP(d.device_id)}</code></td>
                     <td class="text-center"><span class="badge ${(d.operating_mode||'')==='PDV'?'bg-primary':'bg-secondary'}" style="font-size:.6rem;">${_escMP(d.operating_mode||'?')}</span></td>
                     <td class="text-center"><code style="font-size:.64rem;">${_escMP(d.external_pos_id)||'—'}</code></td>
+                    <td style="font-size:.66rem;">${_asignadaTxtMP(d)}</td>
                 </tr>`).join('');
             Swal.fire({
                 title: 'Elegir máquina Point',
-                html: `<p class="small text-muted mb-1">Clic para asociarla a esta caja (debe estar en modo PDV para recibir cobros)</p>
+                html: `<p class="small text-muted mb-1">Clic para asociarla a esta caja (debe estar en modo PDV para recibir cobros). Si ya está asignada a otra caja, al guardar quedará en las dos: usa «Cambiar sucursal» (botón 📱 de la cuenta) para moverla.</p>
                        <table class="table table-sm table-hover" style="font-size:.72rem;">
-                       <thead><tr><th>Device</th><th class="text-center">Modo</th><th class="text-center">Caja MP</th></tr></thead>
+                       <thead><tr><th>Device</th><th class="text-center">Modo</th><th class="text-center">Caja MP</th><th>Asignada a</th></tr></thead>
                        <tbody>${filas}</tbody></table>`,
-                width: 560, showConfirmButton: false, showCloseButton: true
+                width: 680, showConfirmButton: false, showCloseButton: true
             });
         })
         .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
@@ -2164,12 +2209,20 @@ function verDevicesMP(empresaId, nombre) {
                 Swal.fire({ icon: 'info', title: 'Sin máquinas Point', text: 'Esta cuenta no tiene terminales Point vinculadas.' });
                 return;
             }
-            const filas = devices.map(d => {
+            window.__devicesCuenta = devices;
+            window.__mpSucursales = data.sucursales || [];
+            const filas = devices.map((d, i) => {
                 const esPDV = (d.operating_mode || '').toUpperCase() === 'PDV';
                 return `<tr>
-                    <td style="word-break:break-all;"><code style="font-size:.66rem;">${_escMP(d.device_id)}</code></td>
+                    <td style="word-break:break-all;"><code style="font-size:.66rem;">${_escMP(d.device_id)}</code>
+                        ${d.external_pos_id ? '<div class="text-muted" style="font-size:.6rem;">caja MP: <code>' + _escMP(d.external_pos_id) + '</code></div>' : ''}</td>
                     <td class="text-center"><span class="badge ${esPDV ? 'bg-primary' : 'bg-secondary'}" style="font-size:.62rem;">${esPDV ? 'PDV (integrada)' : 'STANDALONE'}</span></td>
-                    <td class="text-center">
+                    <td style="font-size:.68rem;">${_asignadaTxtMP(d)}</td>
+                    <td class="text-center text-nowrap">
+                        <button class="btn btn-sm btn-outline-primary py-0 px-2 mb-1" style="font-size:.66rem;"
+                                onclick="reasignarDeviceMP(${empresaId}, ${i}, '${_escMP(nombre)}')">
+                            <i class="bi bi-shop"></i> Cambiar sucursal
+                        </button><br>
                         <button class="btn btn-sm ${esPDV ? 'btn-outline-secondary' : 'btn-outline-primary'} py-0 px-2" style="font-size:.66rem;"
                                 onclick="cambiarModoDeviceMP(${empresaId}, '${_escMP(d.device_id)}', '${esPDV ? 'STANDALONE' : 'PDV'}', '${_escMP(nombre)}')">
                             ${esPDV ? 'Volver a Standalone' : 'Activar modo PDV'}
@@ -2180,14 +2233,66 @@ function verDevicesMP(empresaId, nombre) {
             Swal.fire({
                 title: `Máquinas Point — ${nombre}`,
                 html: `<p class="small text-muted mb-1"><strong>PDV</strong>: la máquina queda integrada al sistema
-                       (NO acepta cobros digitados en su pantalla). <strong>Standalone</strong>: cobra sola, sin integración.</p>
+                       (NO acepta cobros digitados en su pantalla). <strong>Standalone</strong>: cobra sola, sin integración.
+                       <strong>Asignada a</strong>: la sucursal · caja del sistema que la usa (cambiar = moverla de tienda).</p>
                        <table class="table table-sm" style="font-size:.72rem;">
-                       <thead><tr><th>Device</th><th class="text-center">Modo</th><th class="text-center">Acción</th></tr></thead>
+                       <thead><tr><th>Máquina</th><th class="text-center">Modo</th><th>Asignada a</th><th class="text-center">Acción</th></tr></thead>
                        <tbody>${filas}</tbody></table>`,
-                width: 620, showConfirmButton: false, showCloseButton: true
+                width: 760, showConfirmButton: false, showCloseButton: true
             });
         })
         .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
+}
+
+/** Mueve la máquina i (del listado de la cuenta) a otra sucursal/caja del sistema. */
+function reasignarDeviceMP(empresaId, i, nombreEmpresa) {
+    const d = (window.__devicesCuenta || [])[i];
+    const sucs = window.__mpSucursales || [];
+    if (!d) return;
+    if (!sucs.length) { Swal.fire({ icon: 'warning', title: 'Sin sucursales' }); return; }
+    const actual = (d.asignaciones || [])[0];
+    const opts = sucs.map(s => `<option value="${s.id}"${actual && actual.sucursal_id === s.id ? ' selected' : ''}>${_escMP(s.alias)}</option>`).join('');
+    Swal.fire({
+        title: 'Cambiar sucursal de la máquina',
+        html: `<div class="text-start small">
+            <div class="mb-2">Máquina <code>${_escMP(d.device_id)}</code><br>Asignada hoy a: <strong>${_asignadaTxtMP(d)}</strong></div>
+            <label class="form-label-sm" style="display:block;">Nueva sucursal (la caja del POS que la usará)</label>
+            <select id="swalReasigSuc" class="form-select form-select-sm mb-2">${opts}</select>
+            <label class="form-label-sm" style="display:block;">Nombre de la caja en esa sucursal (vacío = su caja principal)</label>
+            <input id="swalReasigNombre" class="form-control form-control-sm mb-2" placeholder="Caja principal">
+            <p class="text-muted mb-0">Se quita la máquina de las cajas que la tenían (quedan solo QR) y se pone en la caja elegida,
+            habilitada y cobrando con la cuenta de <strong>${_escMP(nombreEmpresa)}</strong>. La asociación dentro de Mercado Pago
+            (sucursal/caja MP de la máquina) no cambia: eso se hace en el panel de MP.</p>
+        </div>`,
+        showCancelButton: true, confirmButtonText: 'Mover máquina', cancelButtonText: 'Cancelar', confirmButtonColor: '#0066FF',
+        preConfirm: () => ({
+            sucursal_id: document.getElementById('swalReasigSuc').value,
+            nombre: document.getElementById('swalReasigNombre').value.trim()
+        })
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        const fd = new FormData();
+        fd.append('empresa_id', empresaId);
+        fd.append('device_id', d.device_id);
+        fd.append('sucursal_id', r.value.sucursal_id);
+        fd.append('nombre', r.value.nombre);
+        fd.append('external_pos_id', d.external_pos_id || '');
+        fd.append('csrfmiddlewaretoken', _csrfMP());
+        Swal.fire({ title: 'Moviendo máquina…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
+        fetch('/app/pos/mercadopago/gestion/devices/reasignar/', { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(resp => resp.json())
+            .then(data => {
+                if (!data.success) { Swal.fire({ icon: 'error', title: 'No se pudo mover', text: data.error }); return; }
+                refrescarDatosMP();
+                cargarMiCajaMP(false);
+                Swal.fire({
+                    icon: 'success',
+                    title: `Máquina asignada a ${_escMP(data.sucursal)} · ${_escMP(data.caja)}`,
+                    html: `<div class="small text-start">${(data.liberadas || []).length ? 'Se quitó de: ' + data.liberadas.map(_escMP).join(', ') + '.<br>' : ''}${data.aviso ? '⚠️ ' + _escMP(data.aviso) : ''}</div>`
+                }).then(() => verDevicesMP(empresaId, nombreEmpresa));
+            })
+            .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
+    });
 }
 
 function cambiarModoDeviceMP(empresaId, deviceId, modoNuevo, nombre) {
@@ -3371,6 +3476,9 @@ document.addEventListener('DOMContentLoaded', function () {
     cargarModosPOS();
     cargarMiCajaMP(true);
     resumenDiaMP();
+    // Deja window.__mpConfigs/__mpCuentas listos para editar desde la tabla
+    // (es_principal, cuenta) sin depender de un primer guardado.
+    if (typeof refrescarDatosMP === 'function') refrescarDatosMP();
 });
 </script>
 
