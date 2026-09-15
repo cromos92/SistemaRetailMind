@@ -544,6 +544,7 @@ from .views_mercadopago import (
     gestion_resumen_dia_mp,
     gestion_cobrar_terminal_mp,
     gestion_imprimir_cierre_terminal_mp,
+    gestion_mi_caja_mp,
 )
 from .views_dashboards_kpi import (
     dashboard_documentos,
@@ -1174,7 +1175,10 @@ urlpatterns = [
     path('pos/mercadopago/gestion/config/eliminar/', gestion_eliminar_config_mp, name='mp_gestion_config_eliminar'),
     path('pos/mercadopago/gestion/config/probar/', gestion_probar_config_mp, name='mp_gestion_config_probar'),
     path('pos/mercadopago/gestion/resumen-dia/', gestion_resumen_dia_mp, name='mp_gestion_resumen_dia'),
+    # Cobro directo y panel "Tu caja": CUALQUIER usuario logueado (no-admin
+    # limitado a la caja de su sucursal de sesión; el gate está en la vista)
     path('pos/mercadopago/gestion/terminal/cobrar/', gestion_cobrar_terminal_mp, name='mp_gestion_terminal_cobrar'),
+    path('pos/mercadopago/gestion/mi-caja/', gestion_mi_caja_mp, name='mp_gestion_mi_caja'),
     path('pos/mercadopago/gestion/terminal/imprimir-cierre/', gestion_imprimir_cierre_terminal_mp, name='mp_gestion_terminal_imprimir'),
     # Pantalla Dineros MP (pendiente de liberación / liberado / depositado)
     path('ventas/dineros-mercadopago/', dineros_mercadopago, name='dineros_mercadopago'),

@@ -7,6 +7,7 @@ los servidores de MP, sin sesión).
 """
 import json
 import logging
+import re
 from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
@@ -151,6 +152,13 @@ def estado_pago_mp(request, transaccion_id):
         'monto': transaccion.monto,
         'incierto': mp.es_incierta(transaccion),
         'puede_reintentar': transaccion.estado in mp.ESTADOS_FINALES_MP,
+        # Aditivos (los usa el cobro directo de /app/pos/transbank/): el N° de
+        # operación que muestra el panel/app de MP —el que se digita en
+        # "MP manual"— y la etiqueta legible del medio.
+        'payment_id_mp': transaccion.payment_id_mp,
+        'medio': mp.etiqueta_medio_mp(transaccion.metodo_pago_mp),
+        'canal': transaccion.canal,
+        'correlativo': transaccion.correlativo_ticket,
     })
 
 
@@ -234,6 +242,39 @@ def webhook_mercadopago(request):
 
 def _es_admin(request):
     return getattr(request.user, 'rol', '') in ('administrador', 'administracion')
+
+
+def _config_operable(request, config_id=None, requerir_habilitada=False):
+    """Caja MP sobre la que opera el usuario en la pestaña Mercado Pago.
+
+    Admin: la que elija (``config_id``); si no manda ninguna, la de su
+    sucursal de sesión. Cualquier otro rol: SIEMPRE la caja de su sucursal de
+    sesión (no puede apuntar a otra tienda). Se prefiere la caja habilitada y
+    principal; con ``requerir_habilitada`` una caja deshabilitada no sirve.
+
+    Devuelve ``(config, respuesta_error)``: exactamente uno de los dos es None.
+    """
+    qs = MercadoPagoConfig.objects.select_related('sucursal', 'cuenta')
+    if _es_admin(request) and config_id:
+        config = qs.filter(id=config_id).first()
+        if not config:
+            return None, JsonResponse({'success': False, 'error': 'Caja no encontrada.'}, status=404)
+        return config, None
+    sucursal_id = _sucursal_sesion(request)
+    if not sucursal_id:
+        return None, JsonResponse({'success': False, 'error': 'No hay sucursal en sesión.'}, status=400)
+    base = qs.filter(sucursal_id=sucursal_id).order_by('-es_principal', 'id')
+    config = base.filter(habilitado=True).first()
+    if not config and not requerir_habilitada:
+        config = base.first()
+    if not config:
+        return None, JsonResponse({
+            'success': False,
+            'error': ('Tu sucursal no tiene una caja de Mercado Pago '
+                      + ('habilitada.' if requerir_habilitada else 'asociada.')
+                      + ' Pídele al administrador que la cree en «Configuración avanzada».'),
+        }, status=404)
+    return config, None
 
 
 @login_required
@@ -392,26 +433,62 @@ def gestion_devices_point_mp(request):
 @login_required
 @require_POST
 def gestion_modo_device_mp(request):
-    """POST gestion/devices/modo/ — cambia PDV/STANDALONE de una Point (admin).
+    """POST gestion/devices/modo/ — cambia PDV/STANDALONE de una Point.
 
     PDV: la máquina queda esclava del sistema (no cobra desde su pantalla).
-    STANDALONE: vuelve a operar sola. El cambio es reversible al instante.
+    STANDALONE: vuelve a operar sola. El cambio es reversible al instante,
+    pero MP exige REINICIAR la máquina para que lo tome.
+
+    Dos formas de llamarlo:
+    - admin: ``empresa_id`` + ``device_id`` (cualquier máquina de la cuenta),
+      o ``config_id`` (la máquina de esa caja).
+    - cualquier usuario logueado: ``config_id`` o nada → SOLO la máquina de
+      la caja de su sucursal de sesión. Es la palanca de contingencia de la
+      tienda: si el sistema no puede mandar el cobro, se pasa la máquina a
+      Standalone, se cobra desde su pantalla y se registra en el POS con
+      "MP manual" + N° de operación. Antes era solo-admin y la tienda
+      quedaba sin poder cobrar hasta ubicar a uno.
     """
-    if not _es_admin(request):
-        return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
-    cuenta = _cuenta_por_empresa(request)
-    if not cuenta:
-        return JsonResponse({'success': False, 'error': 'La empresa no tiene cuenta MP guardada.'}, status=404)
-    device_id = (request.POST.get('device_id') or '').strip()
     modo = (request.POST.get('modo') or '').strip().upper()
-    if not device_id:
-        return JsonResponse({'success': False, 'error': 'Falta el device_id.'}, status=400)
+    if modo not in ('PDV', 'STANDALONE'):
+        return JsonResponse({'success': False, 'error': 'Modo inválido (PDV o STANDALONE).'}, status=400)
+    device_id = (request.POST.get('device_id') or '').strip()
+
+    if _es_admin(request) and request.POST.get('empresa_id'):
+        cuenta = _cuenta_por_empresa(request)
+        if not cuenta:
+            return JsonResponse({'success': False, 'error': 'La empresa no tiene cuenta MP guardada.'}, status=404)
+        if not device_id:
+            return JsonResponse({'success': False, 'error': 'Falta el device_id.'}, status=400)
+        config = None
+    else:
+        try:
+            config_id = int(request.POST.get('config_id') or 0)
+        except (TypeError, ValueError):
+            config_id = 0
+        config, err = _config_operable(request, config_id)
+        if err:
+            return err
+        if not config.device_id:
+            return JsonResponse({'success': False, 'error': 'Tu caja no tiene máquina Point asociada.'}, status=400)
+        if device_id and device_id != config.device_id and not _es_admin(request):
+            return JsonResponse({'success': False,
+                                 'error': 'Solo puedes cambiar el modo de la máquina de tu propia caja.'},
+                                status=403)
+        # Un no-admin siempre opera la máquina de SU caja, mande lo que mande.
+        device_id = config.device_id if not _es_admin(request) else (device_id or config.device_id)
+        cuenta = mp._cuenta_de(config)
+        if not cuenta:
+            return JsonResponse({'success': False,
+                                 'error': 'La empresa de la sucursal no tiene cuenta MP guardada.'}, status=404)
     try:
         modo_final = mp.cambiar_modo_device(cuenta, device_id, modo)
     except mp.MercadoPagoError as e:
         return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
-    logger.warning("MP gestión: device %s -> %s por %s", device_id, modo_final, request.user.username)
-    return JsonResponse({'success': True, 'operating_mode': modo_final})
+    logger.warning("MP gestión: device %s -> %s por %s (caja %s)",
+                   device_id, modo_final, request.user.username,
+                   config.id if config else 'por empresa')
+    return JsonResponse({'success': True, 'operating_mode': modo_final, 'device_id': device_id})
 
 
 @login_required
@@ -764,44 +841,183 @@ def gestion_imprimir_cierre_terminal_mp(request):
 @login_required
 @require_POST
 def gestion_cobrar_terminal_mp(request):
-    """POST gestion/terminal/cobrar/ — COBRO DIRECTO en la máquina Point desde
-    la pestaña de gestión (admin). ⚠️ No queda asociado a un ticket: para
-    ventas normales se usa el POS; esto sirve para cobros sueltos/soporte.
-    Correlativo DIRECTO-* — visible en Dineros y en el resumen por terminal."""
-    if not _es_admin(request):
-        return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
-    config = MercadoPagoConfig.objects.select_related('sucursal').filter(
-        id=int(request.POST.get('config_id', 0) or 0)).first()
-    if not config:
-        return JsonResponse({'success': False, 'error': 'Caja no encontrada.'}, status=404)
-    if not config.device_id:
-        return JsonResponse({'success': False, 'error': 'Esa caja no tiene máquina Point asociada.'}, status=400)
+    """POST gestion/terminal/cobrar/ — COBRO DIRECTO desde la pestaña Mercado
+    Pago de /app/pos/transbank/, para CUALQUIER usuario logueado.
+
+    Sirve para no perder la venta cuando el botón del POS no responde: el cobro
+    sale por la máquina Point (canal POINT) o como QR en pantalla (canal QR).
+    Un no-admin cobra SOLO con la caja habilitada de su sucursal de sesión; el
+    admin elige caja con ``config_id``.
+
+    - Con ``correlativo`` (N° de ticket del POS): el cobro queda ligado a esa
+      venta y el POS lo detecta al entrar al cobro del ticket (en-curso/),
+      exactamente igual que uno hecho con el botón M. Pago. Pasa por el mismo
+      guard anti doble cobro que el POS (MP_COBRO_EN_CURSO).
+    - Sin ticket: correlativo DIRECTO-* (fuera de la cuadratura de tickets;
+      visible en Dineros y en el resumen por terminal) y se registra en el
+      POS con "MP manual" + N° de operación.
+    """
+    try:
+        config_id = int(request.POST.get('config_id') or 0)
+    except (TypeError, ValueError):
+        config_id = 0
+    config, err = _config_operable(request, config_id,
+                                   requerir_habilitada=not _es_admin(request))
+    if err:
+        return err
     try:
         monto = int(request.POST.get('monto', 0) or 0)
     except (TypeError, ValueError):
         monto = 0
     if monto < 50:
         return JsonResponse({'success': False, 'error': 'Monto mínimo $50.'}, status=400)
-    correlativo = f"DIRECTO-{timezone.now():%d%m-%H%M%S}"
+    canal = (request.POST.get('canal') or ('POINT' if config.device_id else 'QR')).strip().upper()
+    if canal not in ('QR', 'POINT'):
+        return JsonResponse({'success': False, 'error': 'Canal inválido (POINT o QR).'}, status=400)
+    if canal == 'POINT' and not config.device_id:
+        return JsonResponse({'success': False, 'error': 'Esa caja no tiene máquina Point asociada.'}, status=400)
+    if canal == 'QR' and not config.external_pos_id:
+        return JsonResponse({'success': False,
+                             'error': 'Esa caja no tiene ID de caja QR (external_pos_id).'}, status=400)
+
+    ticket = re.sub(r'[^A-Za-z0-9\-]', '', (request.POST.get('correlativo') or '').strip())
+    ticket = ticket[:mp.MP_CORRELATIVO_MAX_LEN]
+    if ticket.upper().startswith(mp.PREFIJOS_CORRELATIVO_SIN_TICKET):
+        return JsonResponse({'success': False, 'error': 'Ese N° de ticket no es válido.'}, status=400)
+    correlativo = ticket or f"DIRECTO-{timezone.now():%d%m-%H%M%S}"
+    descripcion = (f'Venta {ticket}' if ticket
+                   else f'Cobro directo {canal} {config.external_pos_id or config.nombre}')
     try:
-        transaccion, _qr = mp.crear_orden(
-            config, correlativo, monto, canal='POINT',
-            descripcion=f'Cobro directo terminal {config.external_pos_id}',
-            usuario=request.user,
+        transaccion, qr_data = mp.crear_orden(
+            config, correlativo, monto, canal=canal,
+            descripcion=descripcion, usuario=request.user,
         )
     except mp.MercadoPagoError as e:
-        detalle = ''
-        try:
-            detalle = json.dumps(e.detalle, ensure_ascii=False)[:800] if e.detalle else ''
-        except (TypeError, ValueError):
-            detalle = str(e.detalle)[:800]
-        return JsonResponse({'success': False, 'error': e.mensaje, 'detalle': detalle}, status=400)
-    logger.warning("MP gestión: COBRO DIRECTO $%s en terminal %s por %s (%s)",
-                   monto, config.device_id, request.user.username, correlativo)
-    return JsonResponse({'success': True, 'transaccion_id': transaccion.id,
-                         'canal': 'POINT', 'monto': monto,
-                         'correlativo': correlativo,
-                         'expira_en_segundos': mp.QR_TIMEOUT_SEGUNDOS})
+        cuerpo = {'success': False, 'error': e.mensaje}
+        # Ya hay un cobro vivo/incierto del MISMO ticket: la pantalla lo vigila
+        # en vez de dejar cobrar de nuevo (mismo contrato que qr/crear/).
+        previa = getattr(e, 'transaccion', None)
+        if previa is not None:
+            cuerpo['error_tipo'] = 'MP_COBRO_EN_CURSO'
+            cuerpo['transaccion_id'] = previa.id
+            cuerpo['cobro'] = mp.resumen_cobro(previa)
+        elif _es_admin(request):
+            # Payload crudo de MP solo al admin: es la única forma de
+            # diagnosticar un 400 de la Orders API sin ir a los logs.
+            try:
+                cuerpo['detalle'] = json.dumps(e.detalle, ensure_ascii=False)[:800] if e.detalle else ''
+            except (TypeError, ValueError):
+                cuerpo['detalle'] = str(e.detalle)[:800]
+        return JsonResponse(cuerpo, status=400)
+    incierto = mp.es_incierta(transaccion)
+    logger.warning("MP gestión: COBRO DIRECTO %s $%s caja %s (%s) por %s%s",
+                   canal, monto, config.id, correlativo, request.user.username,
+                   ' — SIN CONFIRMAR' if incierto else '')
+    return JsonResponse({
+        'success': True,
+        'estado': 'INCIERTO' if incierto else 'OK',
+        'transaccion_id': transaccion.id,
+        'canal': canal,
+        'monto': monto,
+        'correlativo': correlativo,
+        'con_ticket': bool(ticket),
+        'qr_data': qr_data,
+        'qr_base64': mp.qr_png_base64(qr_data) if qr_data else None,
+        'expira_en_segundos': mp.QR_TIMEOUT_SEGUNDOS,
+        'caja': f"{config.sucursal.alias} · {config.nombre}",
+        'mensaje': ('No pudimos confirmar el envío a Mercado Pago. Estamos '
+                    'verificando: NO cobres de nuevo todavía.') if incierto else '',
+    })
+
+
+@login_required
+def gestion_mi_caja_mp(request):
+    """GET gestion/mi-caja/?config_id=&vivo=1 — panel "Tu caja" de la pestaña
+    Mercado Pago: identificación de la caja con la que opera el usuario, modo
+    actual de su máquina Point (PDV = integrada al sistema / STANDALONE =
+    cobra sola; consultado EN VIVO a MP con ``vivo=1``), cobros de hoy y los
+    últimos movimientos. Cualquier usuario logueado; un no-admin ve SOLO la
+    caja de su sucursal de sesión."""
+    try:
+        config_id = int(request.GET.get('config_id') or 0)
+    except (TypeError, ValueError):
+        config_id = 0
+    config, err = _config_operable(request, config_id)
+    if err:
+        return err
+
+    hoy = timezone.localdate()
+    trxs = list(
+        TransaccionMercadoPago.objects.filter(config=config, creado_en__date=hoy)
+        .exclude(correlativo_ticket__startswith='PRUEBA-')
+        .select_related('usuario').order_by('-creado_en')
+    )
+    aprobadas = [t for t in trxs if t.tipo == 'VENTA' and t.estado == 'APROBADA']
+    ultimos = [{
+        'id': t.id,
+        'hora': timezone.localtime(t.creado_en).strftime('%H:%M'),
+        'monto': t.monto,
+        'tipo': t.tipo,
+        'estado': t.estado,
+        'estado_detalle': t.estado_detalle,
+        'canal': t.canal,
+        'correlativo': t.correlativo_ticket,
+        'directo': t.correlativo_ticket.startswith('DIRECTO-'),
+        'medio': mp.etiqueta_medio_mp(t.metodo_pago_mp),
+        'payment_id_mp': t.payment_id_mp,
+        'payment_id': t.payment_id,
+        'consumida': t.consumida,
+        'incierto': mp.es_incierta(t),
+        'vivo': t.estado in ('CREADA', 'PENDIENTE'),
+        'usuario': ((t.usuario.get_full_name() or t.usuario.username)
+                    if t.usuario_id else ''),
+    } for t in trxs[:12]]
+
+    device = {'device_id': config.device_id, 'consultado': False, 'ok': False,
+              'operating_mode': '', 'error': ''}
+    if config.device_id and str(request.GET.get('vivo') or '') in ('1', 'true', 'True'):
+        device['consultado'] = True
+        cuenta = mp._cuenta_de(config)
+        if not cuenta:
+            device['error'] = 'La empresa de la sucursal no tiene cuenta MP guardada.'
+        else:
+            try:
+                for d in mp.listar_devices_point(cuenta):
+                    if d.get('device_id') == config.device_id:
+                        device['ok'] = True
+                        device['operating_mode'] = (d.get('operating_mode') or '').upper()
+                        break
+                else:
+                    device['error'] = ('La máquina asociada a esta caja no aparece en la '
+                                       'cuenta de Mercado Pago de la empresa.')
+            except mp.MercadoPagoError as e:
+                device['error'] = e.mensaje
+
+    return JsonResponse({
+        'success': True,
+        'es_admin': _es_admin(request),
+        'config': {
+            'id': config.id,
+            'nombre': config.nombre,
+            'sucursal_id': config.sucursal_id,
+            'sucursal': config.sucursal.alias or config.sucursal.nombre or f'Sucursal {config.sucursal_id}',
+            'external_pos_id': config.external_pos_id,
+            'external_store_id': config.external_store_id,
+            'device_id': config.device_id,
+            'habilitado': config.habilitado,
+            'es_principal': config.es_principal,
+            'puede_point': bool(config.device_id),
+            'puede_qr': bool(config.external_pos_id),
+        },
+        'device': device,
+        'hoy': {
+            'cobros': len(aprobadas),
+            'monto': sum(t.monto for t in aprobadas),
+            'directos': sum(1 for t in aprobadas if t.correlativo_ticket.startswith('DIRECTO-')),
+            'vivos': sum(1 for t in trxs if t.estado in ('CREADA', 'PENDIENTE')),
+        },
+        'ultimos': ultimos,
+    })
 
 
 @login_required

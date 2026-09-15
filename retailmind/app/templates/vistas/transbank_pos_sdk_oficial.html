@@ -244,13 +244,156 @@
         overflow-y: auto;
         overflow-x: auto;
     }
+
+    /* ══════════ Selector grande Transbank / Mercado Pago (reemplaza las nav-tabs) ══════════ */
+    .pos-switch {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    @media (max-width: 767px) { .pos-switch { grid-template-columns: 1fr; } }
+    .pos-switch-btn {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-align: left;
+        background: #fff;
+        border: 2px solid #e3e3ea;
+        border-radius: 10px;
+        padding: 10px 14px;
+        cursor: pointer;
+        transition: border-color .2s, box-shadow .2s, background .2s;
+        min-height: 72px;
+        color: #1A1A2E;
+    }
+    .pos-switch-btn:hover { border-color: #b8c7ff; }
+    .pos-switch-btn.active {
+        border-color: var(--tbk-primary);
+        box-shadow: 0 0 0 3px rgba(0, 102, 255, .15);
+        background: #F5F9FF;
+    }
+    .pos-switch-btn.pos-switch-mp.active {
+        border-color: var(--tbk-success);
+        box-shadow: 0 0 0 3px rgba(0, 212, 170, .18);
+        background: #F2FCF9;
+    }
+    .pos-switch-icon {
+        width: 46px; height: 46px;
+        border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.45rem;
+        color: #fff;
+        background: var(--tbk-primary);
+        flex: none;
+    }
+    .pos-switch-mp .pos-switch-icon { background: var(--tbk-success); }
+    .pos-switch-body { min-width: 0; }
+    .pos-switch-name { font-weight: 800; font-size: 1.02rem; line-height: 1.1; }
+    .pos-switch-sub { font-size: .7rem; color: #8A8A9A; }
+    .pos-switch-state { margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap; }
+    .pos-switch-go { margin-left: auto; color: #c2c2cc; font-size: 1.1rem; flex: none; }
+    .pos-switch-btn.active .pos-switch-go { color: inherit; }
+
+    /* Píldoras de modo (INTEGRADO / MANUAL / sin dato) */
+    .mode-pill {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 2px 9px;
+        border-radius: 50px;
+        font-size: .68rem;
+        font-weight: 800;
+        letter-spacing: .02em;
+        white-space: nowrap;
+    }
+    .mode-pill-int  { background: #e6faf5; color: #087f5b; border: 1px solid #b2f0e0; }
+    .mode-pill-man  { background: #fff6e0; color: #8a5a00; border: 1px solid #ffe0a3; }
+    .mode-pill-off  { background: #f4f4f7; color: #6c757d; border: 1px solid #e3e3ea; }
+    .mode-pill-err  { background: #fff1f1; color: #a4161a; border: 1px solid #ffc9c9; }
+    .mode-pill-wait { background: #f4f4f7; color: #8A8A9A; border: 1px dashed #d1d1d9; }
+
+    /* Panel "Tu caja" (Transbank y Mercado Pago) */
+    .micaja {
+        display: grid;
+        grid-template-columns: 1.3fr 1fr 1fr;
+        gap: 8px;
+    }
+    @media (max-width: 991px) { .micaja { grid-template-columns: 1fr; } }
+    .micaja-box {
+        border: 1px solid #e3e3ea;
+        border-radius: 8px;
+        padding: 8px 10px;
+        background: #fbfbfd;
+        display: flex; flex-direction: column;
+    }
+    .micaja-box .lbl {
+        font-size: .64rem; text-transform: uppercase; letter-spacing: .04em;
+        color: #8A8A9A; font-weight: 700;
+    }
+    .micaja-box .val { font-size: .95rem; font-weight: 700; color: #1A1A2E; line-height: 1.25; }
+    .micaja-box .sub { font-size: .7rem; color: #6c757d; line-height: 1.35; }
+    .micaja-box .big { font-size: 1.2rem; font-weight: 900; line-height: 1.2; margin: 2px 0; }
+    .micaja-box .btn { margin-top: auto; }
+    .micaja-mode { border-width: 2px; }
+    .micaja-mode.is-int { border-color: #00D4AA; background: #f2fcf9; }
+    .micaja-mode.is-man { border-color: #FFB020; background: #fff9ec; }
+    .micaja-mode.is-off { border-color: #ced4da; }
+    .mode-explain { font-size: .7rem; color: #555; line-height: 1.4; }
+    .mode-explain strong { color: #1A1A2E; }
+    .mode-explain .mode-pill { margin-right: 4px; vertical-align: middle; }
+
+    /* Cobro directo Mercado Pago (targets táctiles ≥48px) */
+    .cobro-directo { border-left: 4px solid var(--tbk-success); }
+    .cobro-directo .monto-input { height: 48px; font-size: 1.4rem; font-weight: 800; text-align: right; }
+    .canal-toggle { display: flex; gap: 6px; }
+    .canal-toggle .btn {
+        min-height: 48px; display: flex; align-items: center; justify-content: center;
+        font-size: .8rem; font-weight: 700;
+    }
+    .canal-toggle .btn-check:checked + .btn {
+        background: var(--tbk-primary); color: #fff; border-color: var(--tbk-primary);
+    }
+    .btn-cobrar {
+        min-height: 48px; width: 100%;
+        font-size: 1.02rem; font-weight: 800;
+        background: var(--tbk-success); color: #fff;
+        border: none; border-radius: 8px;
+        transition: background .2s;
+    }
+    .btn-cobrar:hover { background: #00b898; color: #fff; }
+    .btn-cobrar:disabled { background: #b9c0c7; cursor: not-allowed; }
+    .ultimos-cobros { font-size: .7rem; }
+    .ultimos-cobros td, .ultimos-cobros th { padding: 3px 5px; white-space: nowrap; }
+
+    /* Sección de configuración plegada */
+    .admin-toggle {
+        width: 100%; text-align: left;
+        background: #fff; border: 1px dashed #ced4da; border-radius: 8px;
+        padding: 9px 12px;
+        font-size: .8rem; font-weight: 700; color: #4A4A5A;
+        display: flex; align-items: center; gap: 8px;
+        min-height: 44px;
+    }
+    .admin-toggle:hover { background: #fbfbfd; }
+    .admin-toggle .bi-chevron-down { margin-left: auto; transition: transform .2s; }
+    .admin-toggle[aria-expanded="true"] .bi-chevron-down { transform: rotate(180deg); }
+
+    /* Modal del cobro en curso / aprobado */
+    .cobro-live-icon { font-size: 3rem; color: var(--tbk-primary); line-height: 1; }
+    .cobro-live-monto { font-size: 1.7rem; font-weight: 900; color: #1A1A2E; }
+    .cobro-live-estado { font-size: .86rem; color: #4A4A5A; }
+    .cobro-ok-grid { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: .82rem; text-align: left; }
+    .cobro-ok-grid dt { color: #8A8A9A; font-weight: 600; }
+    .cobro-ok-grid dd { margin: 0; font-weight: 700; }
 </style>
 
 <!-- Header compacto -->
 <div class="tbk-hero">
     <div>
         <p class="tbk-hero-title"><i class="bi bi-credit-card-2-front"></i> POS Integrado · Transbank y Mercado Pago</p>
-        <p class="tbk-hero-sub">Transbank: Web Serial · Verifone &amp; Ingenico &nbsp;|&nbsp; Mercado Pago: QR vía API</p>
+        <p class="tbk-hero-sub">
+            Tu caja: <strong>{{ sucursal_sesion_alias|default:'sin sucursal en sesión' }}</strong>
+            &nbsp;·&nbsp; Elige abajo el medio de pago que quieres revisar: cada tarjeta muestra en qué modo está cobrando tu caja.
+        </p>
     </div>
     <div class="tbk-badges">
         <span class="tbk-badge tbk-badge-error" id="estado_pos"><i class="bi bi-circle-fill"></i> Desconectado</span>
@@ -268,22 +411,70 @@
     </div>
 </div>
 
-<!-- Pestañas Transbank / Mercado Pago -->
-<ul class="nav nav-tabs mb-2" id="tabsPosIntegrado" role="tablist" style="font-size:.82rem;">
-    <li class="nav-item" role="presentation">
-        <button class="nav-link active fw-bold" id="tab-tbk-btn" data-bs-toggle="tab" data-bs-target="#tab-tbk" type="button" role="tab">
-            <i class="bi bi-credit-card-2-front"></i> Transbank
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link fw-bold" id="tab-mp-btn" data-bs-toggle="tab" data-bs-target="#tab-mp" type="button" role="tab">
-            <i class="bi bi-qr-code"></i> Mercado Pago
-        </button>
-    </li>
-</ul>
+<!-- ==================== SELECTOR GRANDE: TRANSBANK / MERCADO PAGO ====================
+     Reemplaza las pestañas chicas: cada tarjeta dice qué es, qué se hace ahí y en
+     qué modo está cobrando la caja de la sesión (lo llena el JS al cargar). -->
+<div class="pos-switch" id="tabsPosIntegrado" role="tablist">
+    <button class="pos-switch-btn pos-switch-tbk active" id="tab-tbk-btn" data-bs-toggle="tab" data-bs-target="#tab-tbk"
+            type="button" role="tab" aria-controls="tab-tbk" aria-selected="true">
+        <div class="pos-switch-icon"><i class="bi bi-credit-card-2-front"></i></div>
+        <div class="pos-switch-body">
+            <div class="pos-switch-name">Transbank</div>
+            <div class="pos-switch-sub">Terminal Verifone / Ingenico conectado por cable · conexión, cierre de día y modo de cobro</div>
+            <div class="pos-switch-state" id="tbkSwitchEstado">
+                <span class="mode-pill mode-pill-wait"><i class="bi bi-hourglass-split"></i> Consultando modo…</span>
+            </div>
+        </div>
+        <i class="bi bi-chevron-right pos-switch-go"></i>
+    </button>
+    <button class="pos-switch-btn pos-switch-mp" id="tab-mp-btn" data-bs-toggle="tab" data-bs-target="#tab-mp"
+            type="button" role="tab" aria-controls="tab-mp" aria-selected="false">
+        <div class="pos-switch-icon"><i class="bi bi-qr-code"></i></div>
+        <div class="pos-switch-body">
+            <div class="pos-switch-name">Mercado Pago</div>
+            <div class="pos-switch-sub">Máquina Point y QR · cobro directo, modo PDV / manual y cierre del día</div>
+            <div class="pos-switch-state" id="mpSwitchEstado">
+                <span class="mode-pill mode-pill-wait"><i class="bi bi-hourglass-split"></i> Consultando modo…</span>
+            </div>
+        </div>
+        <i class="bi bi-chevron-right pos-switch-go"></i>
+    </button>
+</div>
 
 <div class="tab-content">
-<div class="tab-pane fade show active" id="tab-tbk" role="tabpanel">
+<div class="tab-pane fade show active" id="tab-tbk" role="tabpanel" aria-labelledby="tab-tbk-btn">
+
+<div id="tbkSerialAviso"></div>
+
+<!-- ==================== TU CAJA · TRANSBANK ====================
+     Modo actual de la caja de la sesión (la misma condición que evalúa el POS
+     para autoconectar el terminal) con el cambio a mano, sin buscar la fila en
+     la tabla de todas las sucursales. -->
+<div class="tbk-card" style="border-left:4px solid var(--tbk-primary);">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <h6 class="mb-0"><i class="bi bi-shop"></i> Tu caja · Transbank
+            <span class="text-muted fw-normal" style="font-size:.7rem;">(sucursal de tu sesión)</span></h6>
+        <button type="button" class="btn btn-sm btn-light border" onclick="cargarModosPOS()" title="Volver a consultar">
+            <i class="bi bi-arrow-clockwise"></i> Actualizar
+        </button>
+    </div>
+    <hr>
+    <div class="micaja" id="tbkMiCaja">
+        <div class="micaja-box" style="grid-column:1/-1;"><span class="text-muted">Cargando…</span></div>
+    </div>
+    <div class="mode-explain mt-2">
+        <div class="row g-2">
+            <div class="col-md-6">
+                <span class="mode-pill mode-pill-int"><i class="bi bi-plug-fill"></i> INTEGRADO</span>
+                El POS manda el monto al terminal por cable y registra la respuesta solo (botón <strong>POS TBK</strong>).
+            </div>
+            <div class="col-md-6">
+                <span class="mode-pill mode-pill-man"><i class="bi bi-hand-index-thumb"></i> MANUAL</span>
+                El cajero cobra en el terminal y digita el voucher en el POS (<strong>Débito F6 / Crédito F7</strong>).
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Layout 3 columnas -->
 <div class="row g-2">
@@ -470,7 +661,7 @@
      aquí es exactamente lo que hará la caja. -->
 <div class="tbk-card mt-2">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-        <h6 class="mb-0"><i class="bi bi-diagram-3"></i> Modo de cobro por caja</h6>
+        <h6 class="mb-0"><i class="bi bi-diagram-3"></i> Todas las cajas · modo de cobro Transbank</h6>
         <div class="d-flex align-items-center gap-2">
             <span class="text-muted" style="font-size:12px;">
                 <strong>Integrado:</strong> el POS cobra en el terminal ·
@@ -504,8 +695,11 @@
 
 </div><!-- /tab-tbk -->
 
-<!-- ==================== PESTAÑA MERCADO PAGO ==================== -->
-<div class="tab-pane fade" id="tab-mp" role="tabpanel">
+<!-- ==================== PESTAÑA MERCADO PAGO ====================
+     Orden pensado para la tienda: 1) en qué modo está mi máquina y cambiarlo,
+     2) cobrar directo si el POS no responde, 3) cierre del día. La configuración
+     (credenciales, webhook, asociación de cajas) queda plegada al final. -->
+<div class="tab-pane fade" id="tab-mp" role="tabpanel" aria-labelledby="tab-mp-btn">
 {% csrf_token %}
 
 {% if mp_migraciones_pendientes %}
@@ -516,6 +710,144 @@
 </div>
 {% endif %}
 
+<!-- 1. TU CAJA · MERCADO PAGO (modo PDV / Standalone) -->
+<div class="tbk-card" style="border-left:4px solid var(--tbk-success);">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <h6 class="mb-0"><i class="bi bi-shop"></i> Tu caja · Mercado Pago
+            <span class="text-muted fw-normal" style="font-size:.7rem;">{% if es_admin_mp %}(como administrador puedes elegir cualquier caja){% else %}(sucursal de tu sesión){% endif %}</span></h6>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            {% if es_admin_mp %}
+            <select class="form-control-sm-pos" id="mpOpCaja" style="width:auto;min-width:240px;height:34px;" onchange="cargarMiCajaMP(true)"
+                    title="Caja sobre la que operan «Tu caja», «Cobro directo» e «Imprimir cierre en la máquina»">
+                {% for cfg in configs_mp %}
+                <option value="{{ cfg.id }}" data-sucursal="{{ cfg.sucursal_id }}"
+                        {% if cfg.sucursal_id == sucursal_sesion_id and cfg.es_principal %}selected{% endif %}>
+                    {{ cfg.sucursal_alias }} · {{ cfg.nombre }}{% if cfg.device_id %} 📟{% endif %}{% if not cfg.habilitado %} (deshabilitada){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+            {% endif %}
+            <button type="button" class="btn btn-sm btn-light border" style="height:34px;" onclick="cargarMiCajaMP(true)"
+                    title="Vuelve a preguntar a Mercado Pago en qué modo está la máquina">
+                <i class="bi bi-arrow-clockwise"></i> Actualizar
+            </button>
+        </div>
+    </div>
+    <hr>
+    <div class="micaja" id="mpMiCaja">
+        <div class="micaja-box" style="grid-column:1/-1;"><span class="text-muted">Cargando…</span></div>
+    </div>
+    <div class="mode-explain mt-2">
+        <div class="row g-2">
+            <div class="col-md-6">
+                <span class="mode-pill mode-pill-int"><i class="bi bi-plug-fill"></i> PDV · INTEGRADO</span>
+                La máquina obedece al sistema: el monto le llega desde el botón <strong>M. Pago</strong> del POS
+                o desde <strong>Cobro directo</strong> (abajo). No acepta montos digitados en su pantalla.
+            </div>
+            <div class="col-md-6">
+                <span class="mode-pill mode-pill-man"><i class="bi bi-hand-index-thumb"></i> STANDALONE · MANUAL</span>
+                La máquina cobra sola desde su pantalla. En el POS el pago se registra con <strong>MP manual</strong>
+                + N° de operación. Úsalo si el sistema o internet fallan.
+            </div>
+        </div>
+        <div class="mt-1 text-muted"><i class="bi bi-arrow-repeat"></i> Tras cambiar el modo hay que
+            <strong>reiniciar la máquina</strong> (apagar y encender) para que lo tome — requisito de Mercado Pago.</div>
+    </div>
+</div>
+
+<!-- 2. COBRO DIRECTO (cualquier usuario, caja de su sucursal) -->
+<div class="tbk-card cobro-directo">
+    <h6><i class="bi bi-lightning-charge-fill"></i> Cobro directo — cobrar ahora sin pasar por el POS
+        <span class="text-muted fw-normal" style="font-size:.7rem;">para no perder la venta si el botón del POS no responde</span></h6>
+    <hr>
+    <div class="row g-2 align-items-end">
+        <div class="col-md-3 col-6">
+            <label class="form-label-sm" for="mpOpMonto">Monto CLP</label>
+            <input type="number" class="form-control-sm-pos monto-input" id="mpOpMonto" min="50" step="1"
+                   placeholder="0" inputmode="numeric" onkeydown="if(event.key==='Enter'){cobroDirectoMP();}">
+        </div>
+        <div class="col-md-3 col-6">
+            <label class="form-label-sm" for="mpOpTicket">N° de ticket del POS
+                <span class="text-muted fw-normal">(opcional, recomendado)</span></label>
+            <input type="text" class="form-control-sm-pos" id="mpOpTicket" placeholder="Ej: 10046" maxlength="45"
+                   style="height:48px;font-size:1rem;" onkeydown="if(event.key==='Enter'){cobroDirectoMP();}">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label-sm">¿Por dónde cobra?</label>
+            <div class="canal-toggle">
+                <input type="radio" class="btn-check" name="mpOpCanal" id="mpOpCanalPoint" value="POINT" autocomplete="off">
+                <label class="btn btn-outline-primary flex-fill" for="mpOpCanalPoint"><i class="bi bi-phone-vibrate me-1"></i> Máquina Point</label>
+                <input type="radio" class="btn-check" name="mpOpCanal" id="mpOpCanalQr" value="QR" autocomplete="off">
+                <label class="btn btn-outline-primary flex-fill" for="mpOpCanalQr"><i class="bi bi-qr-code me-1"></i> QR en pantalla</label>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <button type="button" class="btn-cobrar" id="mpOpBtnCobrar" onclick="cobroDirectoMP()" disabled>
+                <i class="bi bi-cash-coin"></i> Cobrar ahora
+            </button>
+        </div>
+    </div>
+    <div class="alert alert-warning py-1 px-2 mt-2 mb-0 d-none" id="mpOpAviso" style="font-size:.74rem;"></div>
+    <div class="tbk-tech-body mt-2">
+        <i class="bi bi-info-circle"></i>
+        <strong>Con N° de ticket:</strong> el cobro queda ligado a esa venta y el POS lo detecta solo al entrar al
+        cobro del ticket (botón «Agregar al ticket»).
+        <strong>Sin ticket:</strong> queda como cobro suelto <code>DIRECTO-*</code> (fuera de la cuadratura de
+        tickets); regístralo en el POS con <strong>MP manual</strong> usando el N° de operación que aparece al aprobarse.
+    </div>
+    <div class="mt-2">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="form-label-sm mb-0">Últimos cobros de hoy en esta caja</span>
+            <button type="button" class="btn btn-sm btn-light border py-0" onclick="cargarMiCajaMP(false)" title="Refrescar la lista">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle mb-0 ultimos-cobros" id="mpUltimosCobros">
+                <thead class="table-light">
+                    <tr>
+                        <th>Hora</th><th class="text-end">Monto</th><th>Estado</th><th>Canal</th>
+                        <th>Medio</th><th>Ticket</th><th>N° operación</th><th>Cajero</th><th></th>
+                    </tr>
+                </thead>
+                <tbody><tr><td colspan="9" class="text-center text-muted">Cargando…</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 3. CIERRE / RESUMEN DEL DÍA POR CAJA -->
+<div class="tbk-card" id="mpCierreCard">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <h6 class="mb-0"><i class="bi bi-receipt-cutoff"></i> Cierre del día por caja / terminal</h6>
+        <div class="d-flex gap-1 flex-wrap align-items-center">
+            <input type="date" class="form-control-sm-pos" id="mpResumenFecha" style="max-width:150px;height:34px;">
+            <button class="btn btn-sm btn-primary" style="font-size:.74rem;min-height:34px;" onclick="resumenDiaMP()"><i class="bi bi-search"></i> Ver</button>
+            <button class="btn btn-sm btn-warning" style="font-size:.74rem;min-height:34px;"
+                    title="Le pregunta a Mercado Pago qué cobró de verdad ese día y lo compara medio por medio con lo que registró el sistema. Tarda unos segundos (consulta la API)."
+                    onclick="resumenDiaMP(true)"><i class="bi bi-shield-check"></i> Verificar con MP</button>
+            <button class="btn btn-sm btn-outline-primary" style="font-size:.74rem;min-height:34px;"
+                    title="Imprime el cierre COMPLETO del día en la impresora de la máquina Point ({% if es_admin_mp %}caja elegida en «Tu caja»{% else %}la de tu sucursal{% endif %}): MP débito/crédito/prepago + todos los medios de pago del día + total global, con el control contra la API de Mercado Pago, fecha, hora y responsable"
+                    onclick="imprimirCierreEnMaquinaMP()"><i class="bi bi-phone-vibrate"></i> Imprimir cierre en la máquina</button>
+        </div>
+    </div>
+    <hr>
+    <p class="tbk-tech-body mb-1">Mercado Pago no tiene cierre de lote (los pagos liquidan solos): este es el cierre
+    del día <strong>por caja/terminal</strong>, con desglose QR vs máquina Point y por medio (débito / crédito / prepago).
+    «Verificar con MP» cruza contra lo que Mercado Pago cobró de verdad.</p>
+    <div id="mpResumenBody" class="tbk-tech-body">—</div>
+</div>
+
+<!-- 4. CONFIGURACIÓN (plegada: credenciales, webhook, asociación de máquinas) -->
+<button class="admin-toggle mt-1" type="button" data-bs-toggle="collapse" data-bs-target="#mpConfigAvanzada"
+        aria-expanded="false" aria-controls="mpConfigAvanzada">
+    <i class="bi bi-gear-fill"></i>
+    {% if es_admin_mp %}Configuración avanzada — credenciales, webhook y asociación de máquinas
+    <span class="mp-chip-admin">SOLO ADMIN</span>{% else %}Ver configuración de la integración (solo lectura){% endif %}
+    <i class="bi bi-chevron-down"></i>
+</button>
+<div class="collapse mt-2" id="mpConfigAvanzada">
+
 {% if not es_admin_mp %}
 <div class="alert alert-warning py-2 px-3 mb-2" style="font-size:.78rem;">
     <i class="bi bi-lock-fill"></i> <strong>Solo lectura.</strong>
@@ -524,38 +856,8 @@
 </div>
 {% endif %}
 
-{% if es_admin_mp %}
-<!-- Operación PDV: cobrar directo en la máquina Point -->
-<div class="tbk-card" style="border-left:4px solid var(--tbk-primary);">
-    <h6><i class="bi bi-lightning-charge-fill"></i> Operación Terminal (PDV) — cobrar en la máquina<span class="mp-chip-admin">SOLO ADMIN</span></h6>
-    <hr>
-    <div class="d-flex flex-wrap align-items-end gap-2">
-        <div style="min-width:220px;">
-            <label class="form-label-sm">Caja con máquina Point</label>
-            <select class="form-control-sm-pos" id="mpOpCaja">
-                {% for cfg in configs_mp %}{% if cfg.device_id %}
-                <option value="{{ cfg.id }}" {% if cfg.sucursal_id == sucursal_sesion_id %}selected{% endif %}>{{ cfg.sucursal_alias }} · {{ cfg.nombre }} ({{ cfg.external_pos_id }})</option>
-                {% endif %}{% endfor %}
-            </select>
-        </div>
-        <div style="width:140px;">
-            <label class="form-label-sm">Monto CLP</label>
-            <input type="number" class="form-control-sm-pos" id="mpOpMonto" min="50" placeholder="0">
-        </div>
-        <button class="tbk-btn tbk-btn-primary" style="width:auto; padding:6px 16px;" onclick="cobrarTerminalMP()">
-            <i class="bi bi-credit-card"></i> Cobrar en terminal
-        </button>
-        <span class="tbk-tech-body" style="max-width:380px;">
-            ⚠️ Cobro suelto SIN ticket (no entra a la cuadratura de tickets; queda
-            como <code>DIRECTO-*</code> en Dineros y en el resumen por terminal).
-            Para ventas normales usar el botón MP Point del POS.
-        </span>
-    </div>
-</div>
-{% endif %}
-
 <div class="row g-2">
-    <!-- Col 1: Webhook -->
+    <!-- Col 1: Webhook + estado de cuentas -->
     <div class="col-md-4">
         <div class="tbk-card">
             <h6><i class="bi bi-broadcast-pin"></i> Webhook (respuesta de la máquina)</h6>
@@ -570,7 +872,7 @@
                         onclick="copiarWebhookMP()"><i class="bi bi-clipboard"></i></button>
             </div>
             <p class="tbk-tech-body mb-0">Al guardarla, MP te entrega la <strong>clave
-            secreta de firma</strong>: pégala en la cuenta de la empresa (columna derecha).
+            secreta de firma</strong>: pégala en la cuenta de la empresa (columna del medio).
             Sin la clave, las notificaciones se descartan por firma inválida y el cobro
             queda solo con el respaldo del polling.</p>
         </div>
@@ -592,7 +894,7 @@
                                     onclick="editarCuentaMP({{ c.empresa_id }}, '{{ c.mp_user_id|escapejs }}')"><i class="bi bi-pencil"></i></button>
                             <button class="btn btn-sm btn-outline-success py-0 px-1" style="font-size:.68rem;" title="Probar conexión (valida el token contra MP)"
                                     onclick="probarCuentaMP({{ c.empresa_id }}, '{{ c.empresa_nombre|escapejs }}')"><i class="bi bi-plug"></i></button>
-                            <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:.68rem;" title="Máquinas Point: ver y cambiar modo PDV/Standalone"
+                            <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:.68rem;" title="Máquinas Point de la cuenta: ver y cambiar modo PDV/Standalone de cualquiera"
                                     onclick="verDevicesMP({{ c.empresa_id }}, '{{ c.empresa_nombre|escapejs }}')"><i class="bi bi-phone"></i></button>
                             <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:.68rem;" title="Eliminar cuenta"
                                     onclick="eliminarCuentaMP({{ c.empresa_id }}, '{{ c.empresa_nombre|escapejs }}')"><i class="bi bi-trash"></i></button>
@@ -604,24 +906,6 @@
                 {% endfor %}
                 </tbody><!-- mpCuentasBody -->
             </table>
-        </div>
-
-        <div class="tbk-card">
-            <h6><i class="bi bi-receipt-cutoff"></i> Cierre / Resumen por terminal</h6>
-            <hr>
-            <p class="tbk-tech-body mb-1">MP no tiene cierre de lote (los pagos liquidan
-            solos): este es el cierre del día <strong>por caja/terminal</strong>, con
-            desglose QR vs máquina Point. Imprimible por máquina.</p>
-            <div class="d-flex gap-1 mb-2 flex-wrap">
-                <input type="date" class="form-control-sm-pos" id="mpResumenFecha" style="max-width:150px;">
-                <button class="btn btn-sm btn-primary py-0 px-2" style="font-size:.72rem;" onclick="resumenDiaMP()"><i class="bi bi-search"></i> Ver</button>
-                <button class="btn btn-sm btn-warning py-0 px-2" style="font-size:.72rem;"
-                        title="Le pregunta a Mercado Pago qué cobró de verdad ese día y lo compara medio por medio con lo que registró el sistema. Tarda unos segundos (consulta la API)."
-                        onclick="resumenDiaMP(true)"><i class="bi bi-shield-check"></i> Verificar con MP</button>
-                <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.72rem;" title="Imprime el cierre COMPLETO del día en la impresora de la máquina Point ({% if es_admin_mp %}caja elegida en Operación Terminal{% else %}la de tu sucursal{% endif %}): MP débito/crédito/prepago + todos los medios de pago del día + total global, con el control contra la API de Mercado Pago, fecha, hora y responsable"
-                        onclick="imprimirCierreEnMaquinaMP()"><i class="bi bi-phone-vibrate"></i> Imprimir cierre en la máquina</button>
-            </div>
-            <div id="mpResumenBody" class="tbk-tech-body">—</div>
         </div>
     </div>
 
@@ -654,8 +938,8 @@
             <h6><i class="bi bi-lock-fill"></i> Ingreso de credenciales</h6>
             <hr>
             <p class="tbk-tech-body mb-0">Esta sección la gestiona un
-            <strong>Administrador</strong>.<br>Tu rol puede ver el estado de cuentas,
-            cajas y el resumen del día, pero no modificar credenciales ni asociaciones.</p>
+            <strong>Administrador</strong>.<br>Tu rol puede ver el estado de cuentas y
+            cajas, pero no modificar credenciales ni asociaciones.</p>
         </div>
         {% endif %}
     </div>
@@ -663,14 +947,14 @@
     <!-- Col 3: Asociación de máquinas/cajas -->
     <div class="col-md-4">
         <div class="tbk-card">
-            <h6><i class="bi bi-pc-display"></i> Asociación de máquinas (cajas QR){% if es_admin_mp %}<span class="mp-chip-admin">EDICIÓN: SOLO ADMIN</span>{% endif %}</h6>
+            <h6><i class="bi bi-pc-display"></i> Asociación de máquinas (cajas QR / Point){% if es_admin_mp %}<span class="mp-chip-admin">EDICIÓN: SOLO ADMIN</span>{% endif %}</h6>
             <hr>
             <table class="table table-sm mb-2" style="font-size:.72rem;">
                 <thead><tr><th>Sucursal</th><th>Caja MP (external_pos_id)</th><th class="text-center">Habilitada</th>{% if es_admin_mp %}<th class="text-center">Acciones</th>{% endif %}</tr></thead>
                 <tbody id="mpConfigsBody">
                 {% for cfg in configs_mp %}
                     <tr {% if es_admin_mp %}style="cursor:pointer;" title="Clic para editar"
-                        onclick="editarConfigMP({{ cfg.id }}, {{ cfg.sucursal_id }}, '{{ cfg.nombre|escapejs }}', '{{ cfg.external_store_id|escapejs }}', '{{ cfg.external_pos_id|escapejs }}', {{ cfg.habilitado|yesno:'true,false' }}, '{{ cfg.device_id|escapejs }}'){% endif %}">
+                        onclick="editarConfigMP({{ cfg.id }}, {{ cfg.sucursal_id }}, '{{ cfg.nombre|escapejs }}', '{{ cfg.external_store_id|escapejs }}', '{{ cfg.external_pos_id|escapejs }}', {{ cfg.habilitado|yesno:'true,false' }}, '{{ cfg.device_id|escapejs }}'){% endif %}>
                         <td>{{ cfg.sucursal_alias }}{% if cfg.es_principal %} ⭐{% endif %}{% if cfg.device_id %} <i class="bi bi-phone" title="Con máquina Point asociada"></i>{% endif %}</td>
                         <td class="font-monospace">{{ cfg.external_pos_id|default:'—' }}</td>
                         <td class="text-center">{% if cfg.habilitado %}✅{% else %}❌{% endif %}</td>
@@ -706,7 +990,7 @@
             <input type="text" class="form-control-sm-pos mb-2" id="mpCfgStore" placeholder="RETAIL-SUC5">
             <label class="form-label-sm">external_pos_id (caja en MP)</label>
             <input type="text" class="form-control-sm-pos mb-2" id="mpCfgPos" placeholder="REALSPORTCAJA1">
-            <label class="form-label-sm">Máquina Point (opcional — habilita el botón "MP Point" del POS)</label>
+            <label class="form-label-sm">Máquina Point (opcional — habilita el botón "M. Pago" Point del POS)</label>
             <div class="d-flex gap-1 mb-2">
                 <input type="text" class="form-control-sm-pos" id="mpCfgDevice" placeholder="vacío = solo QR">
                 <button class="btn btn-sm btn-outline-secondary py-0 px-2" type="button" style="font-size:.72rem;"
@@ -714,7 +998,7 @@
             </div>
             <div class="form-check mb-2" style="font-size:.76rem;">
                 <input class="form-check-input" type="checkbox" id="mpCfgHabilitado">
-                <label class="form-check-label" for="mpCfgHabilitado">Habilitada (muestra el botón MP QR en el POS)</label>
+                <label class="form-check-label" for="mpCfgHabilitado">Habilitada (muestra el botón M. Pago en el POS)</label>
             </div>
             <button class="tbk-btn tbk-btn-primary" onclick="guardarConfigMP()">
                 <i class="bi bi-save"></i> Guardar asociación
@@ -726,6 +1010,8 @@
         </div>
     </div>
 </div>
+
+</div><!-- /mpConfigAvanzada -->
 
 </div><!-- /tab-mp -->
 </div><!-- /tab-content -->
@@ -2061,42 +2347,570 @@ function _modalQRPruebaMP(data) {
     }, 2500);
 }
 
-// ── Operación Terminal (PDV): cobro directo en la máquina ──
+// ==================== TU CAJA · MERCADO PAGO (modo PDV / Standalone + cobro directo) ====================
+// Panel de operación de la TIENDA: con qué caja MP opera el usuario, en qué modo
+// está su máquina Point (consultado EN VIVO a Mercado Pago), cobro directo si el
+// botón del POS no responde, y cambio de modo. Un no-admin solo ve y opera la
+// caja de su sucursal de sesión: el gate real está en el servidor
+// (gestion_mi_caja_mp / gestion_cobrar_terminal_mp / gestion_modo_device_mp).
 
-function cobrarTerminalMP() {
-    const sel = document.getElementById('mpOpCaja');
-    const monto = parseInt(document.getElementById('mpOpMonto').value);
-    if (!sel || !sel.value) { Swal.fire({ icon: 'warning', title: 'No hay cajas con máquina Point asociada' }); return; }
-    if (!monto || monto < 50) { Swal.fire({ icon: 'warning', title: 'Monto mínimo $50' }); return; }
-    const cajaTxt = sel.options[sel.selectedIndex].text;
+let _miCajaMP = null;
+let _miCajaCargando = false;
+const _mpDirectoVigilados = new Map();
+
+function _mpConfigIdElegida() {
+    const sel = document.getElementById('mpOpCaja');   // solo existe para admin
+    return (sel && sel.value) ? sel.value : '';
+}
+
+/** Modo de la máquina → {clave, pill}. clave ∈ PDV | STANDALONE | QR | WAIT | ERR */
+function _mpModoDeMaquina(d) {
+    const c = d.config || {}, dev = d.device || {};
+    if (!c.device_id) {
+        return { clave: 'QR', pill: '<span class="mode-pill mode-pill-off"><i class="bi bi-qr-code"></i> Solo QR · sin máquina Point</span>' };
+    }
+    if (!dev.consultado) {
+        return { clave: 'WAIT', pill: '<span class="mode-pill mode-pill-wait"><i class="bi bi-hourglass-split"></i> Consultando modo de la máquina…</span>' };
+    }
+    if (!dev.ok) {
+        return { clave: 'ERR', pill: '<span class="mode-pill mode-pill-err"><i class="bi bi-exclamation-triangle-fill"></i> Modo sin confirmar</span>' };
+    }
+    if (dev.operating_mode === 'PDV') {
+        return { clave: 'PDV', pill: '<span class="mode-pill mode-pill-int"><i class="bi bi-plug-fill"></i> PDV · INTEGRADO al sistema</span>' };
+    }
+    return { clave: 'STANDALONE', pill: '<span class="mode-pill mode-pill-man"><i class="bi bi-hand-index-thumb"></i> STANDALONE · COBRO MANUAL</span>' };
+}
+
+/**
+ * @param {boolean} vivo  true = además pregunta a MP en qué modo está la máquina
+ *   (tarda unos segundos). false = refresco rápido de cobros/lista, conservando
+ *   el último modo conocido.
+ */
+async function cargarMiCajaMP(vivo) {
+    if (_miCajaCargando) return;
+    _miCajaCargando = true;
+    const cont = document.getElementById('mpMiCaja');
+    const sw = document.getElementById('mpSwitchEstado');
+    const cfgId = _mpConfigIdElegida();
+    if (vivo && sw) {
+        sw.innerHTML = '<span class="mode-pill mode-pill-wait"><i class="bi bi-hourglass-split"></i> Consultando modo…</span>';
+    }
+    const url = `/app/pos/mercadopago/gestion/mi-caja/?vivo=${vivo ? 1 : 0}`
+              + (cfgId ? `&config_id=${encodeURIComponent(cfgId)}` : '');
+    try {
+        const r = await fetch(url, { credentials: 'same-origin' });
+        const d = await r.json();
+        if (!d.success) throw new Error(d.error || 'No se pudo consultar la caja');
+        // Refresco rápido (sin ir a MP): conservar el último modo conocido de la misma caja
+        if (!d.device.consultado && _miCajaMP && _miCajaMP.device && _miCajaMP.device.consultado
+            && _miCajaMP.config && _miCajaMP.config.id === d.config.id) {
+            d.device = _miCajaMP.device;
+        }
+        _miCajaMP = d;
+        _renderMiCajaMP(d);
+        _renderUltimosCobrosMP(d.ultimos || []);
+        _ajustarFormCobroMP(d);
+    } catch (e) {
+        _miCajaMP = null;
+        const msg = _escMP((e && e.message) || e);
+        if (cont) {
+            cont.innerHTML = `<div class="micaja-box micaja-mode is-off" style="grid-column:1/-1;">
+                <div class="lbl">Mercado Pago</div>
+                <div class="val text-danger"><i class="bi bi-x-circle"></i> ${msg}</div>
+                <div class="sub">Sin caja asociada no se puede cobrar por Mercado Pago desde el sistema.
+                El POS igual acepta <strong>MP manual</strong> para registrar un cobro hecho en la máquina.</div>
+            </div>`;
+        }
+        if (sw) sw.innerHTML = '<span class="mode-pill mode-pill-off"><i class="bi bi-dash-circle"></i> Sin caja MP asociada</span>';
+        _renderUltimosCobrosMP([]);
+        _ajustarFormCobroMP(null);
+    } finally {
+        _miCajaCargando = false;
+    }
+}
+
+function _renderMiCajaMP(d) {
+    const cont = document.getElementById('mpMiCaja');
+    const sw = document.getElementById('mpSwitchEstado');
+    const c = d.config, dev = d.device || {}, hoy = d.hoy || {};
+    const m = _mpModoDeMaquina(d);
+    if (sw) {
+        sw.innerHTML = m.pill + (c.habilitado ? ''
+            : ' <span class="mode-pill mode-pill-err"><i class="bi bi-eye-slash"></i> caja deshabilitada en el POS</span>');
+    }
+    if (!cont) return;
+
+    const btn = (cls, onclick, icon, txt) =>
+        `<button type="button" class="btn ${cls} btn-sm mt-2 w-100" style="min-height:44px;font-weight:700;" onclick="${onclick}">
+            <i class="bi ${icon}"></i> ${txt}</button>`;
+
+    let modoBox;
+    if (m.clave === 'PDV') {
+        modoBox = `<div class="micaja-box micaja-mode is-int">
+            <div class="lbl">Modo actual de la máquina Point</div>
+            <div class="big text-success"><i class="bi bi-plug-fill"></i> INTEGRADO (PDV)</div>
+            <div class="sub">La máquina obedece al sistema: cobra desde el botón <strong>M. Pago</strong> del POS
+            o desde <strong>Cobro directo</strong> (abajo). No acepta montos digitados en su pantalla.</div>
+            ${btn('btn-outline-warning', "cambiarModoMiCajaMP('STANDALONE')", 'bi-hand-index-thumb', 'Pasar a cobro manual (Standalone)')}
+        </div>`;
+    } else if (m.clave === 'STANDALONE') {
+        modoBox = `<div class="micaja-box micaja-mode is-man">
+            <div class="lbl">Modo actual de la máquina Point</div>
+            <div class="big" style="color:#8a5a00;"><i class="bi bi-hand-index-thumb"></i> MANUAL (Standalone)</div>
+            <div class="sub">La máquina cobra sola desde su pantalla. En el POS registra cada pago con
+            <strong>MP manual</strong> + N° de operación. El botón M. Pago del POS y el Cobro directo
+            <strong>no llegan</strong> a la máquina en este modo.</div>
+            ${btn('btn-success', "cambiarModoMiCajaMP('PDV')", 'bi-plug-fill', 'Activar cobro integrado (PDV)')}
+        </div>`;
+    } else if (m.clave === 'QR') {
+        modoBox = `<div class="micaja-box micaja-mode is-off">
+            <div class="lbl">Máquina Point</div>
+            <div class="big text-muted"><i class="bi bi-qr-code"></i> SOLO QR</div>
+            <div class="sub">Esta caja no tiene máquina Point asociada: el cobro integrado sale como QR en
+            pantalla.${MP_ES_ADMIN ? ' Asocia una máquina en «Configuración avanzada».' : ''}</div>
+        </div>`;
+    } else if (m.clave === 'WAIT') {
+        modoBox = `<div class="micaja-box micaja-mode is-off">
+            <div class="lbl">Modo actual de la máquina Point</div>
+            <div class="big text-muted"><span class="spinner-border spinner-border-sm"></span> Consultando…</div>
+            <div class="sub">Preguntando a Mercado Pago en qué modo está la máquina.</div>
+        </div>`;
+    } else {
+        modoBox = `<div class="micaja-box micaja-mode is-off" style="border-color:#FF4D4D;">
+            <div class="lbl">Modo actual de la máquina Point</div>
+            <div class="big text-danger"><i class="bi bi-exclamation-triangle-fill"></i> SIN CONFIRMAR</div>
+            <div class="sub">${_escMP(dev.error || 'Mercado Pago no respondió.')}</div>
+            ${btn('btn-outline-secondary', 'cargarMiCajaMP(true)', 'bi-arrow-clockwise', 'Reintentar')}
+        </div>`;
+    }
+
+    const devCorto = c.device_id ? c.device_id.replace(/^.*__/, '') : '';
+    const cajaBox = `<div class="micaja-box">
+        <div class="lbl">Caja</div>
+        <div class="val">${_escMP(c.sucursal)} · ${_escMP(c.nombre)}${c.es_principal ? ' ⭐' : ''}</div>
+        <div class="sub">Caja MP: <code>${_escMP(c.external_pos_id) || '—'}</code></div>
+        <div class="sub">Máquina: ${c.device_id
+            ? '<code title="' + _escMP(c.device_id) + '">' + _escMP(devCorto) + '</code>'
+            : '<span class="text-muted">sin Point</span>'}</div>
+        <div class="sub mt-1">${c.habilitado
+            ? '<span class="text-success"><i class="bi bi-check-circle-fill"></i> Visible en el POS (botón M. Pago)</span>'
+            : '<span class="text-danger"><i class="bi bi-eye-slash"></i> Deshabilitada: el POS no muestra el botón M. Pago</span>'}</div>
+    </div>`;
+
+    const hoyBox = `<div class="micaja-box">
+        <div class="lbl">Hoy en esta caja</div>
+        <div class="val">${fmtCLP(hoy.monto || 0)}</div>
+        <div class="sub">${hoy.cobros || 0} cobro(s) aprobado(s)${hoy.directos ? ' · ' + hoy.directos + ' directo(s)' : ''}${hoy.vivos ? ' · <span class="text-warning fw-bold">' + hoy.vivos + ' en curso</span>' : ''}</div>
+        ${btn('btn-outline-primary', 'irACierreMP()', 'bi-receipt-cutoff', 'Ver cierre del día')}
+    </div>`;
+
+    cont.innerHTML = modoBox + cajaBox + hoyBox;
+}
+
+function irACierreMP() {
+    const el = document.getElementById('mpCierreCard');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    resumenDiaMP();
+}
+
+/** Cambia PDV ↔ Standalone de la máquina de la caja elegida (cualquier usuario, su caja). */
+function cambiarModoMiCajaMP(modo) {
+    if (!_miCajaMP || !_miCajaMP.config || !_miCajaMP.config.device_id) return;
+    const aPDV = modo === 'PDV';
+    const c = _miCajaMP.config;
     Swal.fire({
-        icon: 'question', title: `¿Cobrar $${monto.toLocaleString('es-CL')} en la máquina?`,
-        html: `<div class="text-start small">${cajaTxt}<br><br>
-               ⚠️ Este cobro <strong>no queda asociado a un ticket</strong> — quedará como
-               <code>DIRECTO-*</code> en Dineros y en el resumen por terminal.</div>`,
-        showCancelButton: true, confirmButtonText: 'Enviar a la máquina', cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#0066FF'
+        icon: 'warning',
+        title: aPDV ? '¿Activar cobro integrado (PDV)?' : '¿Pasar a cobro manual (Standalone)?',
+        html: `<div class="text-start small">
+            <p class="mb-2">Máquina de <strong>${_escMP(c.sucursal)} · ${_escMP(c.nombre)}</strong></p>
+            ${aPDV
+                ? '<p class="mb-2">La máquina quedará <strong>esclava del sistema</strong>: los cobros salen desde el POS (botón M. Pago) o desde Cobro directo. <strong>No</strong> se podrán digitar montos en su pantalla.</p>'
+                : '<p class="mb-2">La máquina volverá a <strong>cobrar sola</strong> desde su pantalla. Cada cobro se registra en el POS con <strong>MP manual</strong> + N° de operación (si no, la plata queda en MP y la cuadratura no la ve).</p>'}
+            <p class="mb-0">🔄 <strong>Después del cambio hay que REINICIAR la máquina</strong> (apagar y encender) para que tome el modo — requisito de Mercado Pago.</p>
+        </div>`,
+        showCancelButton: true,
+        confirmButtonText: aPDV ? 'Sí, activar PDV' : 'Sí, pasar a manual',
+        confirmButtonColor: aPDV ? '#00b898' : '#FFB020',
+        cancelButtonText: 'Cancelar'
     }).then(r => {
         if (!r.isConfirmed) return;
         const fd = new FormData();
-        fd.append('config_id', sel.value);
-        fd.append('monto', monto);
+        fd.append('config_id', c.id);
+        fd.append('modo', modo);
         fd.append('csrfmiddlewaretoken', _csrfMP());
-        Swal.fire({ title: 'Enviando a la máquina…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
-        fetch('/app/pos/mercadopago/gestion/terminal/cobrar/', { method: 'POST', body: fd, credentials: 'same-origin' })
+        Swal.fire({ title: 'Cambiando modo en Mercado Pago…', didOpen: () => Swal.showLoading(),
+                    showConfirmButton: false, allowOutsideClick: false });
+        fetch('/app/pos/mercadopago/gestion/devices/modo/', { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(resp => resp.json())
             .then(data => {
-                if (!data.success) {
-                    Swal.fire({ icon: 'error', title: 'No se pudo enviar',
-                        html: `<div class="text-start small">${_escMP(data.error)}</div>` +
-                              (data.detalle ? `<pre class="text-start mt-2" style="font-size:.62rem;max-height:140px;overflow:auto;background:#f4f4f7;padding:6px;border-radius:6px;">${_escMP(data.detalle)}</pre>` : '') });
-                    return;
+                if (!data.success) { Swal.fire({ icon: 'error', title: 'MP rechazó el cambio', text: data.error }); return; }
+                if (_miCajaMP) {
+                    _miCajaMP.device = { device_id: c.device_id, consultado: true, ok: true,
+                                         operating_mode: String(data.operating_mode || modo).toUpperCase(), error: '' };
+                    _renderMiCajaMP(_miCajaMP);
+                    _ajustarFormCobroMP(_miCajaMP);
                 }
-                document.getElementById('mpOpMonto').value = '';
-                _modalQRPruebaMP(data);
+                Swal.fire({
+                    icon: 'success',
+                    title: `Máquina en modo ${data.operating_mode || modo}`,
+                    html: '<div class="small">Ahora <strong>reinicia la máquina</strong> (apagar y encender) para que tome el modo.</div>',
+                    confirmButtonText: 'Entendido'
+                });
             })
             .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
     });
+}
+
+/** Habilita/deshabilita canales y botón según lo que puede la caja. */
+function _ajustarFormCobroMP(d) {
+    const rPoint = document.getElementById('mpOpCanalPoint');
+    const rQr = document.getElementById('mpOpCanalQr');
+    const btn = document.getElementById('mpOpBtnCobrar');
+    const aviso = document.getElementById('mpOpAviso');
+    const c = d && d.config;
+    const puedePoint = !!(c && c.puede_point);
+    const puedeQr = !!(c && c.puede_qr);
+    if (rPoint) rPoint.disabled = !puedePoint;
+    if (rQr) rQr.disabled = !puedeQr;
+    // Canal por defecto: la máquina si hay; si no, QR. Se respeta lo que ya eligió el usuario.
+    const elegido = document.querySelector('input[name=mpOpCanal]:checked');
+    const elegidoValido = elegido && !elegido.disabled;
+    if (!elegidoValido) {
+        if (rPoint && puedePoint) rPoint.checked = true;
+        else if (rQr && puedeQr) rQr.checked = true;
+    }
+    const bloqueado = !c || (!puedePoint && !puedeQr) || (!c.habilitado && !MP_ES_ADMIN);
+    if (btn) btn.disabled = bloqueado;
+    if (aviso) {
+        let txt = '';
+        if (c && !puedePoint && !puedeQr) {
+            txt = 'La caja no tiene ni máquina Point ni ID de caja QR: no se puede cobrar desde aquí.';
+        } else if (c && !c.habilitado && !MP_ES_ADMIN) {
+            txt = 'La caja está deshabilitada: un administrador debe habilitarla para poder cobrar.';
+        } else if (c && puedePoint && d.device && d.device.consultado && d.device.ok && d.device.operating_mode !== 'PDV') {
+            txt = 'La máquina está en Standalone: el cobro por máquina Point NO le llegará. Actívale el modo PDV arriba, o cobra por QR en pantalla.';
+        }
+        aviso.textContent = txt;
+        aviso.classList.toggle('d-none', !txt);
+    }
+}
+
+function _renderUltimosCobrosMP(lista) {
+    const tbody = document.querySelector('#mpUltimosCobros tbody');
+    if (!tbody) return;
+    if (!lista.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Sin cobros hoy en esta caja</td></tr>';
+        return;
+    }
+    const badge = t => {
+        if (t.incierto) return '<span class="badge bg-danger" title="Mercado Pago no confirmó el envío: se está verificando">SIN CONFIRMAR</span>';
+        const map = { 'APROBADA': 'bg-success', 'PENDIENTE': 'bg-warning text-dark', 'CREADA': 'bg-warning text-dark',
+                      'RECHAZADA': 'bg-danger', 'CANCELADA': 'bg-secondary', 'EXPIRADA': 'bg-secondary',
+                      'ERROR': 'bg-danger', 'DEVUELTA': 'bg-info text-dark', 'CONTRACARGO': 'bg-dark' };
+        return `<span class="badge ${map[t.estado] || 'bg-secondary'}" title="${_escMP(t.estado_detalle || '')}">${_escMP(t.estado)}</span>`;
+    };
+    tbody.innerHTML = lista.map(t => {
+        const ticket = t.directo
+            ? '<span class="text-muted" title="Cobro suelto sin ticket">directo</span>'
+            : `<span class="badge bg-light text-dark border">${_escMP(t.correlativo)}</span>`;
+        const nop = t.payment_id_mp
+            ? `<code>${_escMP(t.payment_id_mp)}</code>`
+            : (t.estado === 'APROBADA'
+                ? '<span class="text-muted" title="El N° del panel de MP llega por webhook en unos segundos">llegando…</span>'
+                : '—');
+        const uso = t.estado === 'APROBADA'
+            ? (t.consumida
+                ? ' <i class="bi bi-check2-circle text-success" title="Ya respalda un pago de venta"></i>'
+                : ' <i class="bi bi-exclamation-circle text-warning" title="Aprobado y todavía sin usar en una venta"></i>')
+            : '';
+        const accion = t.vivo
+            ? `<button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.66rem;" onclick="seguirCobroMP(${t.id})"><i class="bi bi-eye"></i> Seguir</button>`
+            : '';
+        return `<tr>
+            <td>${_escMP(t.hora)}</td>
+            <td class="text-end fw-bold">${fmtCLP(t.monto)}${t.tipo === 'DEVOLUCION' ? ' <span class="text-muted">(dev.)</span>' : ''}</td>
+            <td>${badge(t)}${uso}</td>
+            <td>${t.canal === 'POINT' ? '<i class="bi bi-phone-vibrate"></i> Point' : '<i class="bi bi-qr-code"></i> QR'}</td>
+            <td>${_escMP(t.medio || '—')}</td>
+            <td>${ticket}</td>
+            <td>${nop}</td>
+            <td>${_escMP(t.usuario || '—')}</td>
+            <td>${accion}</td>
+        </tr>`;
+    }).join('');
+}
+
+/** Reabre el modal de espera de un cobro que sigue vivo (p.ej. se cerró la ventana). */
+function seguirCobroMP(id) {
+    const t = ((_miCajaMP && _miCajaMP.ultimos) || []).find(x => x.id === id);
+    if (!t) return;
+    _modalCobroDirectoMP({ transaccion_id: t.id, monto: t.monto, canal: t.canal, correlativo: t.correlativo,
+                           con_ticket: !t.directo, estado: t.incierto ? 'INCIERTO' : 'OK', reanudado: true });
+}
+
+// ── Cobro directo ──
+
+async function cobroDirectoMP() {
+    if (!_miCajaMP || !_miCajaMP.config) {
+        Swal.fire({ icon: 'warning', title: 'Tu caja Mercado Pago no está disponible', text: 'Revisa el panel «Tu caja» de arriba.' });
+        return;
+    }
+    const c = _miCajaMP.config;
+    const montoEl = document.getElementById('mpOpMonto');
+    const ticketEl = document.getElementById('mpOpTicket');
+    const monto = parseInt(montoEl.value, 10);
+    const ticket = (ticketEl.value || '').trim();
+    const canalEl = document.querySelector('input[name=mpOpCanal]:checked');
+    const canal = canalEl ? canalEl.value : '';
+    if (!monto || monto < 50) {
+        Swal.fire({ icon: 'warning', title: 'Ingresa el monto', text: 'Mínimo $50.' }).then(() => montoEl.focus());
+        return;
+    }
+    if (!canal) { Swal.fire({ icon: 'warning', title: 'Elige por dónde cobrar', text: 'Máquina Point o QR en pantalla.' }); return; }
+    if (ticket && !/^[A-Za-z0-9-]{1,45}$/.test(ticket)) {
+        Swal.fire({ icon: 'warning', title: 'N° de ticket inválido', text: 'Solo letras, números y guión (máx. 45).' });
+        return;
+    }
+    if (ticket && /^(PRUEBA|DIRECTO)-/i.test(ticket)) {
+        Swal.fire({ icon: 'warning', title: 'N° de ticket inválido', text: 'Ese prefijo está reservado.' });
+        return;
+    }
+    const esPoint = canal === 'POINT';
+    const res = await Swal.fire({
+        icon: 'question',
+        title: `¿Cobrar ${fmtCLP(monto)}?`,
+        html: `<div class="text-start small">
+            <div><strong>Caja:</strong> ${_escMP(c.sucursal)} · ${_escMP(c.nombre)}</div>
+            <div><strong>Por:</strong> ${esPoint ? '📟 máquina Point' : '📱 QR en pantalla'}</div>
+            <div><strong>Ticket:</strong> ${ticket
+                ? '<code>' + _escMP(ticket) + '</code> — el POS lo detectará al cobrar ese ticket'
+                : '<span class="text-warning fw-bold">sin ticket</span> — quedará como cobro suelto; regístralo en el POS con «MP manual»'}</div>
+        </div>`,
+        showCancelButton: true,
+        confirmButtonText: esPoint ? '📟 Enviar a la máquina' : '📱 Generar QR',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0066FF'
+    });
+    if (!res.isConfirmed) return;
+
+    const fd = new FormData();
+    fd.append('config_id', c.id);
+    fd.append('monto', String(monto));
+    fd.append('canal', canal);
+    fd.append('correlativo', ticket);
+    fd.append('csrfmiddlewaretoken', _csrfMP());
+    Swal.fire({ title: esPoint ? 'Enviando a la máquina…' : 'Generando QR…', didOpen: () => Swal.showLoading(),
+                showConfirmButton: false, allowOutsideClick: false });
+    let data;
+    try {
+        const r = await fetch('/app/pos/mercadopago/gestion/terminal/cobrar/', { method: 'POST', body: fd, credentials: 'same-origin' });
+        data = await r.json();
+    } catch (e) {
+        // Se cortó el enlace con NUESTRO servidor: pudo alcanzar a mandar el
+        // cobro. La lista de abajo lo muestra y «Seguir» lo retoma.
+        data = { success: false, error: 'No se pudo contactar al servidor. Si la máquina muestra el cobro, NO cobres de nuevo: revisa «Últimos cobros de hoy» y usa «Seguir».' };
+    }
+    if (!data.success) {
+        if (data.error_tipo === 'MP_COBRO_EN_CURSO' && data.transaccion_id) {
+            const cobro = data.cobro || {};
+            await Swal.fire({
+                icon: 'warning', title: 'Ese ticket ya tiene un cobro en curso',
+                html: `<div class="text-start small">${_escMP(data.error)}<br><br>Se muestra ese cobro para seguirlo.
+                       Si el cliente no va a pagar, cancélalo en la máquina antes de cobrar de nuevo.</div>`,
+                confirmButtonText: 'Ver el cobro'
+            });
+            _modalCobroDirectoMP({ transaccion_id: data.transaccion_id, monto: cobro.monto || monto,
+                                   canal: cobro.canal || canal, correlativo: ticket, con_ticket: !!ticket,
+                                   estado: cobro.incierto ? 'INCIERTO' : 'OK', reanudado: true });
+            cargarMiCajaMP(false);
+            return;
+        }
+        Swal.fire({
+            icon: 'error', title: 'No se pudo cobrar',
+            html: `<div class="text-start small">${_escMP(data.error)}</div>`
+                + (data.detalle ? `<pre class="text-start mt-2" style="font-size:.62rem;max-height:140px;overflow:auto;background:#f4f4f7;padding:6px;border-radius:6px;">${_escMP(data.detalle)}</pre>` : '')
+        });
+        cargarMiCajaMP(false);
+        return;
+    }
+    montoEl.value = '';
+    ticketEl.value = '';
+    cargarMiCajaMP(false);
+    _modalCobroDirectoMP(data);
+}
+
+function _textoEstadoDirectoMP(estado, detalle, esPoint) {
+    if (estado === 'CREADA') return detalle || 'Enviado a Mercado Pago…';
+    if (estado === 'PENDIENTE') {
+        return detalle || (esPoint ? 'En la pantalla de la máquina: el cliente elige tarjeta o QR y paga.'
+                                   : 'Esperando que el cliente escanee y pague…');
+    }
+    return detalle || estado;
+}
+
+/** Modal de espera con polling (2,5 s). Al cerrar intenta cancelar; si MP no
+ *  deja (Point ya en pantalla), el cobro queda vigilado en segundo plano. */
+function _modalCobroDirectoMP(data) {
+    const esPoint = String(data.canal || '').toUpperCase() === 'POINT';
+    const id = data.transaccion_id;
+    let pollTimer = null, cronoTimer = null, segundos = 0, finalizado = false;
+    const detener = () => {
+        if (pollTimer) clearInterval(pollTimer);
+        if (cronoTimer) clearInterval(cronoTimer);
+        pollTimer = cronoTimer = null;
+    };
+    const expira = Number(data.expira_en_segundos) || 0;
+    const incierto = data.estado === 'INCIERTO';
+    const cuerpo = esPoint
+        ? '<div class="cobro-live-icon"><i class="bi bi-phone-vibrate"></i></div>'
+        : (data.qr_base64
+            ? `<img src="data:image/png;base64,${data.qr_base64}" style="width:240px;max-width:100%;" alt="QR Mercado Pago">`
+            : (data.qr_data
+                ? `<textarea class="form-control" rows="3" readonly style="font-size:.68rem;">${_escMP(data.qr_data)}</textarea>`
+                : '<div class="cobro-live-icon"><i class="bi bi-qr-code"></i></div>'));
+    Swal.fire({
+        title: data.reanudado ? 'Siguiendo el cobro' : (esPoint ? 'Cobro enviado a la máquina' : 'QR listo para pagar'),
+        html: `<div class="text-center">
+            ${cuerpo}
+            <div class="cobro-live-monto mt-1">${fmtCLP(data.monto)}</div>
+            <div class="small text-muted">${data.con_ticket
+                ? 'Ticket <code>' + _escMP(data.correlativo) + '</code>'
+                : 'Cobro suelto <code>' + _escMP(data.correlativo || '') + '</code>'}</div>
+            <div class="cobro-live-estado mt-2 ${incierto ? 'text-danger fw-bold' : ''}" id="mpDirectoEstado">${incierto
+                ? '⚠️ ' + _escMP(data.mensaje || 'Sin confirmar: verificando, NO cobres de nuevo.')
+                : (esPoint ? '📡 Conectando con la máquina…' : '📱 El cliente escanea el QR con su app de Mercado Pago')}</div>
+            <div class="small text-muted mt-1">Esperando hace <span id="mpDirectoTimer">0</span>s${(!esPoint && expira) ? ' · el QR vence en ' + expira + 's' : ''}</div>
+            <hr class="my-2">
+            <p class="small text-muted mb-0">${esPoint
+                ? 'Para abortar: botón atrás/cancelar <strong>de la máquina</strong>.'
+                : 'Si el cliente no paga, cierra esta ventana y el QR se cancela.'}</p>
+        </div>`,
+        showConfirmButton: false, showCancelButton: true,
+        cancelButtonText: esPoint ? 'Cerrar (cancelar en la máquina)' : 'Cancelar cobro',
+        allowOutsideClick: false, width: 420
+    }).then(() => {
+        if (finalizado) return;
+        finalizado = true;
+        detener();
+        fetch(`/app/pos/mercadopago/cancelar/${id}/`, { method: 'POST', headers: { 'X-CSRFToken': _csrfMP() }, credentials: 'same-origin' })
+            .then(r => r.json().catch(() => ({ success: false })))
+            .then(res => {
+                cargarMiCajaMP(false);
+                if (res && res.success) {
+                    Swal.fire({ icon: 'info', title: 'Cobro cancelado', timer: 1500, showConfirmButton: false });
+                    return;
+                }
+                _vigilarDirectoMP(id, data);
+                Swal.fire({
+                    icon: 'warning', title: 'El cobro sigue vivo',
+                    html: `<div class="text-start small"><p>${_escMP((res && res.error) || 'Mercado Pago no permitió cancelarlo desde el sistema.')}</p>
+                           <p class="mb-0"><strong>Cancélalo en la máquina</strong> antes de cobrar por otro medio. Si el cliente
+                           alcanza a pagar, se avisará aquí y aparecerá aprobado en «Últimos cobros de hoy».</p></div>`,
+                    confirmButtonText: 'Entendido', confirmButtonColor: '#FFB020'
+                });
+            })
+            .catch(() => _vigilarDirectoMP(id, data));
+    });
+    cronoTimer = setInterval(() => {
+        segundos += 1;
+        const el = document.getElementById('mpDirectoTimer');
+        if (el) el.textContent = segundos;
+    }, 1000);
+    pollTimer = setInterval(async () => {
+        if (finalizado) return;
+        let est;
+        try {
+            const r = await fetch(`/app/pos/mercadopago/estado/${id}/`, { credentials: 'same-origin' });
+            est = await r.json();
+        } catch (e) { return; }
+        if (!est || !est.success) return;
+        if (est.estado === 'PENDIENTE' || est.estado === 'CREADA') {
+            const el = document.getElementById('mpDirectoEstado');
+            if (el) {
+                if (est.incierto) {
+                    el.className = 'cobro-live-estado mt-2 text-danger fw-bold';
+                    el.textContent = '⚠️ Sin confirmar: verificando con Mercado Pago, NO cobres de nuevo.';
+                } else {
+                    el.className = 'cobro-live-estado mt-2';
+                    el.textContent = _textoEstadoDirectoMP(est.estado, est.estado_detalle, esPoint);
+                }
+            }
+            return;
+        }
+        finalizado = true;
+        detener();
+        cargarMiCajaMP(false);
+        if (est.estado === 'APROBADA') {
+            _exitoDirectoMP(est, data);
+        } else {
+            const titulos = { 'RECHAZADA': 'Pago rechazado', 'EXPIRADA': 'Cobro expirado',
+                              'CANCELADA': 'Cobro cancelado', 'ERROR': 'Error en el cobro' };
+            Swal.fire({ icon: 'error', title: titulos[est.estado] || 'Cobro no completado',
+                        text: est.estado_detalle || 'El pago no se concretó.', confirmButtonText: 'Cerrar' });
+        }
+    }, 2500);
+}
+
+function _exitoDirectoMP(est, data) {
+    if (typeof beepAprobacionMP === 'function') { try { beepAprobacionMP(); } catch (e) {} }
+    const nop = est.payment_id_mp || '';
+    const fila = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
+    const html = `<dl class="cobro-ok-grid mb-2">
+        ${fila('Monto', fmtCLP(est.monto || data.monto))}
+        ${fila('Medio', _escMP(est.medio || est.metodo_pago_mp || '—'))}
+        ${est.ultimos_4_digitos ? fila('Tarjeta', '•••• ' + _escMP(est.ultimos_4_digitos)) : ''}
+        ${fila('Autorización', _escMP(est.codigo_autorizacion || '—'))}
+        ${fila('N° operación', nop
+            ? '<code style="font-size:1rem;">' + _escMP(nop) + '</code>'
+            : `<span id="mpDirectoNop"><span class="text-muted">llegando desde MP…</span>
+               <button type="button" class="btn btn-sm btn-light border py-0" onclick="_refrescarNopMP(${Number(data.transaccion_id)})">actualizar</button></span>`)}
+        ${fila('Ticket', data.con_ticket
+            ? '<code>' + _escMP(data.correlativo) + '</code>'
+            : '<span class="text-muted">sin ticket (' + _escMP(data.correlativo || '') + ')</span>')}
+    </dl>
+    <div class="alert ${data.con_ticket ? 'alert-success' : 'alert-warning'} py-2 px-2 mb-0 text-start small">
+        ${data.con_ticket
+            ? '<strong>Listo.</strong> En el POS, al entrar al cobro del ticket <code>' + _escMP(data.correlativo) + '</code>, aparecerá este pago con el botón <strong>«Agregar al ticket»</strong>.'
+            : '<strong>Ahora regístralo en el POS:</strong> botón <strong>MP manual</strong> → tipo (' + _escMP(est.medio || 'según el medio') + ') → N° de operación. Sin eso la plata queda en MP y la cuadratura no la ve.'}
+    </div>`;
+    Swal.fire({ icon: 'success', title: '✅ Pago APROBADO', html, width: 470, confirmButtonText: 'Listo' });
+}
+
+async function _refrescarNopMP(id) {
+    const el = document.getElementById('mpDirectoNop');
+    if (!el) return;
+    try {
+        const r = await fetch(`/app/pos/mercadopago/estado/${id}/`, { credentials: 'same-origin' });
+        const est = await r.json();
+        if (est.success && est.payment_id_mp) {
+            el.innerHTML = '<code style="font-size:1rem;">' + _escMP(est.payment_id_mp) + '</code>';
+            return;
+        }
+    } catch (e) { /* se reintenta con el botón */ }
+    el.innerHTML = `<span class="text-muted">todavía no llega (míralo luego en «Últimos cobros de hoy»)</span>
+        <button type="button" class="btn btn-sm btn-light border py-0" onclick="_refrescarNopMP(${Number(id)})">actualizar</button>`;
+}
+
+/** Vigilancia en segundo plano (4 s, ~10 min) de un cobro que no se pudo cancelar. */
+function _vigilarDirectoMP(id, data) {
+    if (_mpDirectoVigilados.has(id)) return;
+    let ticks = 0;
+    const timer = setInterval(async () => {
+        ticks += 1;
+        if (ticks > 150) { clearInterval(timer); _mpDirectoVigilados.delete(id); return; }
+        let est;
+        try {
+            const r = await fetch(`/app/pos/mercadopago/estado/${id}/`, { credentials: 'same-origin' });
+            est = await r.json();
+        } catch (e) { return; }
+        if (!est || !est.success) return;
+        if (est.estado === 'PENDIENTE' || est.estado === 'CREADA') return;
+        clearInterval(timer);
+        _mpDirectoVigilados.delete(id);
+        cargarMiCajaMP(false);
+        if (est.estado === 'APROBADA') _exitoDirectoMP(est, data);
+    }, 4000);
+    _mpDirectoVigilados.set(id, timer);
 }
 
 // ── Cierre / Resumen por terminal ──
@@ -2224,7 +3038,7 @@ function imprimirCierreEnMaquinaMP() {
     // ese selector — el servidor resuelve la caja de SU sucursal de sesión.
     const sel = document.getElementById('mpOpCaja');
     if (MP_ES_ADMIN && (!sel || !sel.value)) {
-        Swal.fire({ icon: 'warning', title: 'No hay cajas con máquina Point', text: 'Elige la caja en "Operación Terminal".' });
+        Swal.fire({ icon: 'warning', title: 'No hay cajas con máquina Point', text: 'Elige la caja en «Tu caja · Mercado Pago».' });
         return;
     }
     const fecha = document.getElementById('mpResumenFecha').value || new Date().toISOString().slice(0, 10);
@@ -2256,30 +3070,76 @@ function imprimirCierreEnMaquinaMP() {
 // (El botón "Imprimir (PC)" se eliminó a pedido: el cierre se imprime SOLO en
 // la máquina Point, ahora con todos los medios de pago del día y total global.)
 
-window.addEventListener('load', function () {
-    const inputFecha = document.getElementById('fecha_registro');
-    if (inputFecha && !inputFecha.value) inputFecha.value = fechaHoyLocal();
-    cargarRegistroSistema();
-
-    if (!('serial' in navigator)) {
-        Swal.fire({
-            icon: 'error',
-            title: 'Navegador no compatible',
-            html: 'Web Serial API no disponible.<br>Usa <strong>Chrome</strong> o <strong>Edge</strong> 89+.',
-            allowOutsideClick: false
-        });
-    }
-});
-
-// ══════════════ Modo de cobro por caja (integrado vs manual) ══════════════
+// ══════════════ Modo de cobro por caja Transbank (integrado vs manual) ══════════════
 // El modo no es un campo propio: refleja si la sucursal tiene un terminal SDK
-// activo, que es lo que el POS consulta para autoconectar la maquina.
+// activo, que es lo que el POS consulta para autoconectar la máquina. La misma
+// respuesta alimenta el panel "Tu caja · Transbank" y la tarjeta del selector.
 let _modosPosPuedeEditar = false;
 
 function _escModo(t) {
     return String(t == null ? '' : t).replace(/[&<>"']/g, c => (
         { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
     ));
+}
+
+/** Panel "Tu caja · Transbank" + píldora del selector, con la fila de la sesión. */
+function _renderMiCajaTBK(f) {
+    const cont = document.getElementById('tbkMiCaja');
+    const sw = document.getElementById('tbkSwitchEstado');
+    if (!f) {
+        if (cont) {
+            cont.innerHTML = `<div class="micaja-box micaja-mode is-off" style="grid-column:1/-1;">
+                <div class="lbl">Transbank</div>
+                <div class="val">Sin sucursal en sesión</div>
+                <div class="sub">Inicia sesión en una caja para ver su modo de cobro.</div>
+            </div>`;
+        }
+        if (sw) sw.innerHTML = '<span class="mode-pill mode-pill-off"><i class="bi bi-dash-circle"></i> Sin sucursal en sesión</span>';
+        return;
+    }
+    const integrado = f.modo === 'INTEGRADO';
+    if (sw) {
+        sw.innerHTML = integrado
+            ? '<span class="mode-pill mode-pill-int"><i class="bi bi-plug-fill"></i> INTEGRADO · cobra en el terminal</span>'
+            : '<span class="mode-pill mode-pill-man"><i class="bi bi-hand-index-thumb"></i> MANUAL · voucher digitado (F6/F7)</span>';
+    }
+    if (!cont) return;
+    const btn = (cls, onclick, icon, txt) =>
+        `<button type="button" class="btn ${cls} btn-sm mt-2 w-100" style="min-height:44px;font-weight:700;" onclick="${onclick}">
+            <i class="bi ${icon}"></i> ${txt}</button>`;
+    let accion;
+    if (!_modosPosPuedeEditar) {
+        accion = '<div class="sub mt-2"><i class="bi bi-lock"></i> Solo un administrador puede cambiar el modo de la caja.</div>';
+    } else if (integrado) {
+        accion = btn('btn-outline-warning', `cambiarModoPOS(${f.sucursal_id}, 'MANUAL', '${_escModo(f.sucursal)}')`, 'bi-hand-index-thumb', 'Pasar a cobro manual');
+    } else if (f.puede_integrar) {
+        accion = btn('btn-success', `cambiarModoPOS(${f.sucursal_id}, 'INTEGRADO', '${_escModo(f.sucursal)}')`, 'bi-plug-fill', 'Activar cobro integrado');
+    } else {
+        accion = '<div class="sub mt-2 text-danger"><i class="bi bi-exclamation-circle"></i> Sin terminal registrado: conéctalo con «Conectar POS» para poder integrarlo.</div>';
+    }
+    cont.innerHTML = `
+        <div class="micaja-box micaja-mode ${integrado ? 'is-int' : 'is-man'}">
+            <div class="lbl">Modo actual de cobro con tarjeta</div>
+            <div class="big ${integrado ? 'text-success' : ''}" ${integrado ? '' : 'style="color:#8a5a00;"'}>
+                ${integrado ? '<i class="bi bi-plug-fill"></i> INTEGRADO' : '<i class="bi bi-hand-index-thumb"></i> MANUAL'}
+            </div>
+            <div class="sub">${integrado
+                ? 'El POS manda el monto al terminal Transbank y registra la respuesta solo (botón <strong>POS TBK</strong>).'
+                : 'El cajero cobra en el terminal y digita el voucher en el POS (<strong>Débito F6 / Crédito F7</strong>).'}</div>
+            ${accion}
+        </div>
+        <div class="micaja-box">
+            <div class="lbl">Terminal</div>
+            <div class="val">${_escModo(f.terminal) || '<span class="text-muted">sin terminal registrado</span>'}</div>
+            <div class="sub">${_escModo(f.tipo_pos) || ''}${f.puerto ? ' · Puerto <code>' + _escModo(f.puerto) + '</code>' : ''}</div>
+            ${f.numero_serie ? '<div class="sub">S/N ' + _escModo(f.numero_serie) + '</div>' : ''}
+        </div>
+        <div class="micaja-box">
+            <div class="lbl">Última conexión registrada</div>
+            <div class="val">${_escModo(f.ultima_conexion) || '—'}</div>
+            <div class="sub">${_escModo(f.estado_conexion) || ''}</div>
+            ${btn('btn-primary', 'conectarPOS()', 'bi-power', 'Conectar POS ahora')}
+        </div>`;
 }
 
 async function cargarModosPOS() {
@@ -2298,6 +3158,7 @@ async function cargarModosPOS() {
                 aviso.innerHTML = '<i class="bi bi-info-circle"></i> Solo un administrador puede cambiar el modo de una caja. Aquí ves el estado actual.';
             }
         }
+        _renderMiCajaTBK((d.filas || []).find(f => f.es_sesion));
         if (!d.filas.length) {
             tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Sin sucursales</td></tr>';
             return;
@@ -2307,8 +3168,8 @@ async function cargarModosPOS() {
             const badge = integrado
                 ? '<span class="badge bg-success">INTEGRADO</span>'
                 : '<span class="badge bg-warning text-dark">MANUAL</span>';
-            // La caja con la que se inicio sesion se marca: es la que usan los
-            // botones de conexion de esta misma pantalla.
+            // La caja con la que se inició sesión se marca: es la que usan los
+            // botones de conexión de esta misma pantalla.
             const marca = f.es_sesion
                 ? ' <span class="badge bg-primary" title="Sucursal de tu sesión">tu caja</span>' : '';
             const accion = !_modosPosPuedeEditar
@@ -2331,6 +3192,8 @@ async function cargarModosPOS() {
         }).join('');
     } catch (e) {
         tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-3">${_escModo(e.message || e)}</td></tr>`;
+        const sw = document.getElementById('tbkSwitchEstado');
+        if (sw) sw.innerHTML = '<span class="mode-pill mode-pill-err"><i class="bi bi-exclamation-triangle-fill"></i> No se pudo consultar</span>';
     }
 }
 
@@ -2364,7 +3227,51 @@ async function cambiarModoPOS(sucursalId, modo, nombre) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', cargarModosPOS);
+// ══════════════ Arranque ══════════════
+
+function _activarPestana(cual) {
+    const btn = document.getElementById(cual === 'mp' ? 'tab-mp-btn' : 'tab-tbk-btn');
+    if (!btn) return;
+    if (window.bootstrap && bootstrap.Tab) bootstrap.Tab.getOrCreateInstance(btn).show();
+    else btn.click();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    // Fecha de hoy en los selectores de cuadratura/cierre
+    const inputFecha = document.getElementById('fecha_registro');
+    if (inputFecha && !inputFecha.value) inputFecha.value = fechaHoyLocal();
+    const mpFecha = document.getElementById('mpResumenFecha');
+    if (mpFecha && !mpFecha.value) mpFecha.value = fechaHoyLocal();
+
+    // Aviso Web Serial (Transbank) SIN bloquear la pantalla: antes era un modal
+    // que tapaba todo, y la pestaña Mercado Pago no necesita Web Serial.
+    if (!('serial' in navigator)) {
+        const av = document.getElementById('tbkSerialAviso');
+        if (av) {
+            av.innerHTML = '<div class="alert alert-danger py-2 px-3 mb-2" style="font-size:.78rem;">'
+                + '<i class="bi bi-exclamation-triangle-fill"></i> <strong>Este navegador no puede conectar el terminal Transbank</strong> '
+                + '(sin Web Serial API). Usa <strong>Chrome</strong> o <strong>Edge</strong> 89+. La pestaña Mercado Pago funciona igual.</div>';
+        }
+    }
+
+    // Pestaña inicial: #mp o ?tab=mp abren Mercado Pago directo (para enlazar
+    // desde el POS o el menú), y el hash se mantiene al cambiar de pestaña.
+    const params = new URLSearchParams(location.search);
+    if (location.hash === '#mp' || params.get('tab') === 'mp') _activarPestana('mp');
+    ['tab-tbk-btn', 'tab-mp-btn'].forEach(idb => {
+        const el = document.getElementById(idb);
+        if (el) {
+            el.addEventListener('shown.bs.tab', () => {
+                try { history.replaceState(null, '', idb === 'tab-mp-btn' ? '#mp' : '#tbk'); } catch (e) {}
+            });
+        }
+    });
+
+    cargarRegistroSistema();
+    cargarModosPOS();
+    cargarMiCajaMP(true);
+    resumenDiaMP();
+});
 </script>
 
 {% include 'layout/footer.html' %}

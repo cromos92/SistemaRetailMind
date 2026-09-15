@@ -12754,12 +12754,33 @@ body {
                     <tbody>${filas}</tbody>
                 </table>
                 <p class="mb-0 small text-muted">${aprobados.length
-                    ? 'Regístralo como pago <strong>Mercado Pago</strong>: si lo cobras como tarjeta manual, la plata queda en MP y la cuadratura la muestra en VISA-MC-AMEX.'
+                    ? 'Agrégalo como pago <strong>Mercado Pago</strong> con el botón de abajo: si lo cobras como tarjeta manual, la plata queda en MP y la cuadratura la muestra en VISA-MC-AMEX.'
                     : 'Cancélalo en la máquina antes de cobrar por otro medio, o espera a que el cliente pague.'}</p>
             </div>`,
             width: '560px',
-            confirmButtonText: 'Entendido',
-            confirmButtonColor: aprobados.length ? '#dc3545' : '#f7b924'
+            showCancelButton: aprobados.length > 0,
+            confirmButtonText: aprobados.length ? '➕ Agregar al ticket' : 'Entendido',
+            cancelButtonText: 'Ahora no',
+            confirmButtonColor: aprobados.length ? '#198754' : '#f7b924'
+        }).then(r => {
+            if (!aprobados.length || !r.isConfirmed) return;
+            // Mismo pago que arma el modal de espera cuando la máquina aprueba:
+            // método real por el medio (débito/crédito), voucher = payment_id y
+            // origen POS_INTEGRADO para que registrar_pagos_ticket lo consuma.
+            aprobados.forEach(c => {
+                pagosActuales.push({
+                    metodo_pago: c.metodo_pago_ticket || (c.canal === 'QR' ? 'MP_QR' : 'MP_POINT'),
+                    monto: c.monto,
+                    tipo_tarjeta: c.metodo_pago_mp || 'MERCADO PAGO',
+                    voucher: c.payment_id || '',
+                    notas: `MP ${c.canal} (cobro previo) Aut: ${c.codigo_autorizacion || '-'}`
+                         + (c.ultimos_4_digitos ? ' | ****' + c.ultimos_4_digitos : ''),
+                    origen_pago: 'POS_INTEGRADO'
+                });
+            });
+            actualizarListaPagos();
+            actualizarResumenVenta();
+            if (typeof beepAprobacionMP === 'function') beepAprobacionMP();
         });
         // Los que siguen en la máquina quedan vigilados: si el cliente paga, el
         // pago se agrega solo al ticket que está en pantalla.

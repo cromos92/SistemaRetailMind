@@ -57,6 +57,11 @@ def gestion_transbank_pos_sdk(request):
         ) or None
     except (TypeError, ValueError):
         context['sucursal_sesion_id'] = None
+    context['sucursal_sesion_alias'] = ''
+    if context['sucursal_sesion_id']:
+        suc = Sucursal.objects.filter(id=context['sucursal_sesion_id']).first()
+        if suc:
+            context['sucursal_sesion_alias'] = suc.alias or suc.nombre or f'Sucursal {suc.id}'
     # Empresas candidatas a cuenta MP: las que tienen sucursales (dueñas de
     # tiendas). NO filtrar por esProveedor: las empresas madre de las cadenas
     # (ej. Nicole Andrea) también operan como CD/proveedoras y ese flag las
