@@ -351,7 +351,10 @@ def gestion_guardar_config_mp(request):
     nombre = (request.POST.get('nombre') or 'Caja principal').strip()[:100]
     config_id = (request.POST.get('config_id') or '').strip()
     movida = False
+    origen_id = None
     if config_id:
+        if not _int_o_cero(config_id):
+            return JsonResponse({'success': False, 'error': 'config_id inválido'}, status=400)
         config = MercadoPagoConfig.objects.filter(id=int(config_id)).first()
         if not config:
             return JsonResponse({'success': False, 'error': 'Configuración no encontrada'}, status=404)
@@ -360,6 +363,7 @@ def gestion_guardar_config_mp(request):
                                  'error': f'Ya existe otra caja llamada «{nombre}» en {sucursal.alias}: usa otro nombre.'},
                                 status=400)
         movida = config.sucursal_id != sucursal.id
+        origen_id = config.sucursal_id if movida else None
         config.sucursal = sucursal
         config.nombre = nombre
     else:
@@ -393,20 +397,30 @@ def gestion_guardar_config_mp(request):
         config.cuenta = None
     # Con máquina Point asociada la caja puede cobrar por ambos canales
     config.modo = 'AMBOS' if config.device_id else 'QR'
-    # Principal = la caja que usa el POS de la sucursal. Primera caja = principal;
-    # el admin puede marcar otra (save() destrona a la anterior); una caja que
-    # se MUEVE de sucursal no destrona a la principal del destino.
+    # Principal = la caja que usa el POS de la sucursal (obtener_config y
+    # pos_dashboard ordenan por -es_principal). Primera caja = principal; el
+    # admin puede marcar otra y aquí se destrona a la anterior EXPLÍCITAMENTE
+    # (MercadoPagoConfig no tiene save() que lo haga); una caja que se MUEVE
+    # de sucursal nunca destrona a la principal del destino; y la sucursal de
+    # origen no queda sin principal.
     otra_principal = MercadoPagoConfig.objects.filter(
         sucursal=sucursal, es_principal=True).exclude(id=config.id).exists()
     quiere_principal = request.POST.get('es_principal')
     if not otra_principal:
         config.es_principal = True
+    elif movida:
+        config.es_principal = False
     elif quiere_principal == '1':
         config.es_principal = True
-    elif quiere_principal == '0' or movida:
+    else:
         config.es_principal = False
     try:
-        config.save()
+        with transaction.atomic():
+            config.save()
+            if config.es_principal:
+                _hacer_principal_mp(config)
+            if origen_id:
+                _asegurar_principal_mp(origen_id)
     except Exception as e:
         return JsonResponse({'success': False, 'error': f'No se pudo guardar: {e}'}, status=400)
     logger.info(
@@ -435,11 +449,45 @@ def gestion_datos_mp(request):
     return JsonResponse({'success': True, 'cuentas': cuentas, 'configs': configs})
 
 
-def _cuenta_por_empresa(request):
+def _cuenta_por_empresa(request, requerir_activa=False):
     try:
-        return MercadoPagoCuenta.objects.get(empresa_id=int(request.POST.get('empresa_id', 0)))
+        qs = MercadoPagoCuenta.objects.filter(empresa_id=int(request.POST.get('empresa_id', 0)))
+        if requerir_activa:
+            qs = qs.filter(activo=True)
+        return qs.get()
     except (MercadoPagoCuenta.DoesNotExist, TypeError, ValueError):
         return None
+
+
+def _int_o_cero(valor):
+    """int() tolerante para ids que vienen del POST (un 'abc' era un 500)."""
+    try:
+        return int(valor or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _hacer_principal_mp(config):
+    """Deja a `config` como ÚNICA caja principal de su sucursal. MercadoPagoConfig
+    NO sobreescribe save() (el que destrona es el de ConfiguracionPOS), así que
+    el destronado se hace aquí, explícito. Llamar dentro de la transacción y
+    con `config` ya guardado."""
+    MercadoPagoConfig.objects.filter(sucursal_id=config.sucursal_id, es_principal=True) \
+        .exclude(id=config.id).update(es_principal=False)
+    if not config.es_principal:
+        MercadoPagoConfig.objects.filter(id=config.id).update(es_principal=True)
+        config.es_principal = True
+
+
+def _asegurar_principal_mp(sucursal_id):
+    """Si la sucursal quedó sin caja principal (se movió o borró), promueve la
+    que realmente toma obtener_config/pos_dashboard: habilitada primero y, a
+    igualdad, la de menor id. Así la ⭐ de la tabla dice la verdad."""
+    if not sucursal_id or MercadoPagoConfig.objects.filter(sucursal_id=sucursal_id, es_principal=True).exists():
+        return
+    primera = MercadoPagoConfig.objects.filter(sucursal_id=sucursal_id).order_by('-habilitado', 'id').first()
+    if primera:
+        MercadoPagoConfig.objects.filter(id=primera.id).update(es_principal=True)
 
 
 def _msg_sin_cuenta(request):
@@ -615,7 +663,7 @@ def gestion_reasignar_device_mp(request):
     """
     if not _es_admin(request):
         return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
-    cuenta = _cuenta_por_empresa(request)
+    cuenta = _cuenta_por_empresa(request, requerir_activa=True)
     if not cuenta:
         return JsonResponse({'success': False, 'error': _msg_sin_cuenta(request)}, status=404)
     device_id = (request.POST.get('device_id') or '').strip()[:60]
@@ -627,6 +675,7 @@ def gestion_reasignar_device_mp(request):
         return JsonResponse({'success': False, 'error': 'Sucursal inválida'}, status=400)
     nombre = (request.POST.get('nombre') or '').strip()[:100]
     ext_pos_mp = (request.POST.get('external_pos_id') or '').strip()[:60]
+    empresa_cuenta = cuenta.empresa.nombre or cuenta.empresa.razon_social or cuenta.empresa.rut
 
     avisos = []
     with transaction.atomic():
@@ -640,11 +689,65 @@ def gestion_reasignar_device_mp(request):
                        .order_by('-es_principal', 'id').first())
         if destino is None:
             destino = MercadoPagoConfig(sucursal=sucursal, nombre=nombre or 'Caja principal')
+
+        # ── Una caja = una cuenta MP. Si la caja destino ya cobra con OTRA
+        # cuenta, sus cobros históricos resuelven el token por la config
+        # (TransaccionMercadoPago no guarda la cuenta): cambiársela rompería
+        # devoluciones por API y el control del cierre. Se exige una caja aparte.
+        if destino.pk:
+            # Cuenta "de registro" de la caja: el FK explícito aunque esté
+            # inactivo (sus cobros se hicieron con esa cuenta), si no la que
+            # resuelve el service por la empresa de la sucursal.
+            cuenta_actual = (MercadoPagoCuenta.objects.select_related('empresa').filter(id=destino.cuenta_id).first()
+                             if destino.cuenta_id else mp._cuenta_de(destino))
+            if cuenta_actual and cuenta_actual.id != cuenta.id:
+                if destino.transacciones.exists():
+                    empresa_actual = (cuenta_actual.empresa.nombre or cuenta_actual.empresa.razon_social
+                                      or cuenta_actual.empresa.rut)
+                    return JsonResponse({'success': False, 'error': (
+                        f'«{sucursal.alias} · {destino.nombre}» ya tiene cobros hechos con la cuenta de '
+                        f'{empresa_actual}; no se puede pasar a la cuenta de {empresa_cuenta} sin romper las '
+                        'devoluciones y el control del cierre de esos cobros. Escribe un nombre de caja NUEVO '
+                        '(p.ej. "Point ' + empresa_cuenta[:20] + '") para que la máquina quede en una caja aparte.')},
+                        status=400)
+                if destino.external_pos_id or destino.external_store_id:
+                    # IDs de caja/sucursal de la otra cuenta: con este token MP los rechaza.
+                    avisos.append(f'La caja destino tenía el ID de caja QR «{destino.external_pos_id}» de otra '
+                                  f'cuenta; se quitó. Para QR en pantalla asigna una caja creada en la cuenta de '
+                                  f'{empresa_cuenta} desde el formulario.')
+                    destino.external_pos_id = ''
+                    destino.external_store_id = ''
+
         liberadas = [p for p in previas if p.id != destino.id]
         for p in liberadas:
             p.device_id = ''
             p.modo = 'QR'
-            p.save(update_fields=['device_id', 'modo', 'actualizado_en'])
+            campos = ['device_id', 'modo', 'actualizado_en']
+            # La cuenta explícita existía por la máquina (caja de OTRA empresa):
+            # sin cobros hechos vuelve a automático, para no dejarla cobrando
+            # QR con un token ajeno ni bloquear (PROTECT) el borrado de la cuenta.
+            if (p.cuenta_id == cuenta.id and p.sucursal.empresa_id != cuenta.empresa_id
+                    and not p.transacciones.exists()):
+                p.cuenta = None
+                campos.append('cuenta')
+                if p.external_pos_id or p.external_store_id:
+                    # Esos IDs existen en la cuenta de la máquina, no en la de
+                    # su propia empresa: con el token propio MP los rechazaría.
+                    avisos.append(f'{p.sucursal.alias} · {p.nombre} tenía el ID de caja QR «{p.external_pos_id}» '
+                                  f'de la cuenta de {empresa_cuenta}; se quitó.')
+                    p.external_pos_id = ''
+                    p.external_store_id = ''
+                    campos += ['external_pos_id', 'external_store_id']
+            if not p.external_pos_id and p.habilitado:
+                # Sin máquina ni ID de caja QR no puede cobrar por ningún canal:
+                # habilitada, el POS mostraría "MP QR" y fallaría siempre.
+                p.habilitado = False
+                campos.append('habilitado')
+                avisos.append(f'{p.sucursal.alias} · {p.nombre} quedó sin máquina y sin ID de caja QR: se '
+                              'deshabilitó (el POS de esa sucursal no mostrará Mercado Pago hasta asignarle '
+                              'una máquina o un ID de caja).')
+            p.save(update_fields=campos)
+
         destino.device_id = device_id
         destino.modo = 'AMBOS'
         destino.cuenta = cuenta
@@ -655,9 +758,17 @@ def gestion_reasignar_device_mp(request):
             else:
                 avisos.append('La caja destino no tiene ID de caja QR (external_pos_id): el cobro por máquina '
                               'funciona igual; para QR en pantalla asígnalo desde el formulario.')
-        if not MercadoPagoConfig.objects.filter(sucursal=sucursal, es_principal=True).exclude(id=destino.id).exists():
-            destino.es_principal = True
+        # La caja con la máquina es la que debe usar el POS (toma la principal):
+        # siempre principal, destronando a la anterior de forma explícita.
+        anterior = (MercadoPagoConfig.objects.filter(sucursal=sucursal, es_principal=True)
+                    .exclude(id=destino.id).first())
+        if anterior and anterior.external_pos_id and not destino.external_pos_id:
+            avisos.append(f'«{anterior.nombre}» deja de ser la caja principal de {sucursal.alias}: el POS '
+                          'cobrará por la máquina, pero pierde el QR en pantalla hasta que la caja nueva '
+                          'tenga ID de caja QR.')
+        destino.es_principal = True
         destino.save()
+        _hacer_principal_mp(destino)
     logger.warning("MP gestión: máquina %s movida a %s · %s (config %s) por %s; liberadas: %s",
                    device_id, sucursal.alias, destino.nombre, destino.id, request.user.username,
                    [f'{p.sucursal.alias}·{p.nombre}' for p in liberadas] or '-')
@@ -744,10 +855,11 @@ def gestion_eliminar_config_mp(request):
     Si ya tiene transacciones, no se puede borrar: deshabilitarla."""
     if not _es_admin(request):
         return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
-    config = MercadoPagoConfig.objects.filter(id=int(request.POST.get('config_id', 0) or 0)).first()
+    config = MercadoPagoConfig.objects.filter(id=_int_o_cero(request.POST.get('config_id'))).first()
     if not config:
         return JsonResponse({'success': False, 'error': 'Caja no encontrada.'}, status=404)
     from django.db.models import ProtectedError
+    sucursal_id = config.sucursal_id
     try:
         config.delete()
     except ProtectedError:
@@ -756,6 +868,9 @@ def gestion_eliminar_config_mp(request):
         return JsonResponse({'success': False,
                              'error': 'La caja ya tiene cobros registrados y no puede borrarse: quedó DESHABILITADA.'},
                             status=400)
+    # Si se borró la principal, la siguiente por id pasa a serlo (es la que el
+    # POS ya tomaba por desempate; así la tabla lo muestra).
+    _asegurar_principal_mp(sucursal_id)
     return JsonResponse({'success': True})
 
 
@@ -769,7 +884,7 @@ def gestion_probar_config_mp(request):
     if not _es_admin(request):
         return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
     config = MercadoPagoConfig.objects.select_related('sucursal').filter(
-        id=int(request.POST.get('config_id', 0) or 0)).first()
+        id=_int_o_cero(request.POST.get('config_id'))).first()
     if not config:
         return JsonResponse({'success': False, 'error': 'Caja no encontrada.'}, status=404)
     try:
@@ -909,7 +1024,7 @@ def gestion_imprimir_cierre_terminal_mp(request):
     """
     if _es_admin(request):
         config = MercadoPagoConfig.objects.select_related('sucursal').filter(
-            id=int(request.POST.get('config_id', 0) or 0)).first()
+            id=_int_o_cero(request.POST.get('config_id'))).first()
         if not config:
             return JsonResponse({'success': False, 'error': 'Caja no encontrada.'}, status=404)
     else:

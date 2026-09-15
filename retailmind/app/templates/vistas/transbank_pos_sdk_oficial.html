@@ -1957,7 +1957,11 @@ function _postGestionMP(url, datos, exitoMsg) {
                 // Tras guardar/eliminar una caja el formulario vuelve a "Nueva":
                 // si quedaba en modo edición, el siguiente Guardar pisaba la
                 // misma caja y parecía que "no dejaba crear más de una".
-                if (url.indexOf('/gestion/config/') !== -1 && typeof limpiarFormConfigMP === 'function') {
+                const esGuardarCaja = /\/gestion\/config\/$/.test(url);
+                const esEliminarCaja = url.indexOf('/gestion/config/eliminar/') !== -1;
+                const idEnEdicion = (document.getElementById('mpCfgId') || {}).value || '';
+                if (typeof limpiarFormConfigMP === 'function'
+                    && (esGuardarCaja || (esEliminarCaja && String(datos.config_id) === String(idEnEdicion)))) {
                     limpiarFormConfigMP();
                 }
                 if (data.aviso) {
@@ -2211,6 +2215,9 @@ function verDevicesMP(empresaId, nombre) {
             }
             window.__devicesCuenta = devices;
             window.__mpSucursales = data.sucursales || [];
+            // Nada de datos (nombre de empresa, device) dentro de onclick: un
+            // apóstrofe rompía el JS y un nombre malicioso ejecutaba código.
+            window.__devicesCtx = { empresaId: empresaId, nombre: nombre };
             const filas = devices.map((d, i) => {
                 const esPDV = (d.operating_mode || '').toUpperCase() === 'PDV';
                 return `<tr>
@@ -2220,11 +2227,11 @@ function verDevicesMP(empresaId, nombre) {
                     <td style="font-size:.68rem;">${_asignadaTxtMP(d)}</td>
                     <td class="text-center text-nowrap">
                         <button class="btn btn-sm btn-outline-primary py-0 px-2 mb-1" style="font-size:.66rem;"
-                                onclick="reasignarDeviceMP(${empresaId}, ${i}, '${_escMP(nombre)}')">
+                                onclick="reasignarDeviceMP(${i})">
                             <i class="bi bi-shop"></i> Cambiar sucursal
                         </button><br>
                         <button class="btn btn-sm ${esPDV ? 'btn-outline-secondary' : 'btn-outline-primary'} py-0 px-2" style="font-size:.66rem;"
-                                onclick="cambiarModoDeviceMP(${empresaId}, '${_escMP(d.device_id)}', '${esPDV ? 'STANDALONE' : 'PDV'}', '${_escMP(nombre)}')">
+                                onclick="cambiarModoDeviceMP(${i}, '${esPDV ? 'STANDALONE' : 'PDV'}')">
                             ${esPDV ? 'Volver a Standalone' : 'Activar modo PDV'}
                         </button>
                     </td>
@@ -2245,10 +2252,13 @@ function verDevicesMP(empresaId, nombre) {
 }
 
 /** Mueve la máquina i (del listado de la cuenta) a otra sucursal/caja del sistema. */
-function reasignarDeviceMP(empresaId, i, nombreEmpresa) {
+function reasignarDeviceMP(i) {
+    const ctx = window.__devicesCtx || {};
+    const empresaId = ctx.empresaId;
+    const nombreEmpresa = ctx.nombre || '';
     const d = (window.__devicesCuenta || [])[i];
     const sucs = window.__mpSucursales || [];
-    if (!d) return;
+    if (!d || !empresaId) return;
     if (!sucs.length) { Swal.fire({ icon: 'warning', title: 'Sin sucursales' }); return; }
     const actual = (d.asignaciones || [])[0];
     const opts = sucs.map(s => `<option value="${s.id}"${actual && actual.sucursal_id === s.id ? ' selected' : ''}>${_escMP(s.alias)}</option>`).join('');
@@ -2284,7 +2294,7 @@ function reasignarDeviceMP(empresaId, i, nombreEmpresa) {
             .then(data => {
                 if (!data.success) { Swal.fire({ icon: 'error', title: 'No se pudo mover', text: data.error }); return; }
                 refrescarDatosMP();
-                cargarMiCajaMP(false);
+                cargarMiCajaMP(true);   // la máquina de la caja cambió: consultar su modo en vivo
                 Swal.fire({
                     icon: 'success',
                     title: `Máquina asignada a ${_escMP(data.sucursal)} · ${_escMP(data.caja)}`,
@@ -2295,7 +2305,13 @@ function reasignarDeviceMP(empresaId, i, nombreEmpresa) {
     });
 }
 
-function cambiarModoDeviceMP(empresaId, deviceId, modoNuevo, nombre) {
+function cambiarModoDeviceMP(i, modoNuevo) {
+    const ctx = window.__devicesCtx || {};
+    const empresaId = ctx.empresaId;
+    const nombre = ctx.nombre || '';
+    const d = (window.__devicesCuenta || [])[i];
+    if (!d || !empresaId) return;
+    const deviceId = d.device_id;
     const aPDV = modoNuevo === 'PDV';
     Swal.fire({
         icon: 'warning',
@@ -2604,13 +2620,19 @@ async function cargarMiCajaMP(vivo) {
         if (!d.success) throw new Error(d.error || 'No se pudo consultar la caja');
         // Refresco rápido (sin ir a MP): conservar el último modo conocido de la misma caja
         if (!d.device.consultado && _miCajaMP && _miCajaMP.device && _miCajaMP.device.consultado
-            && _miCajaMP.config && _miCajaMP.config.id === d.config.id) {
+            && _miCajaMP.config && _miCajaMP.config.id === d.config.id
+            && _miCajaMP.device.device_id === d.config.device_id) {
             d.device = _miCajaMP.device;
         }
         _miCajaMP = d;
         _renderMiCajaMP(d);
         _renderUltimosCobrosMP(d.ultimos || []);
         _ajustarFormCobroMP(d);
+        // Caja con máquina y sin modo conocido (p.ej. recién movida): no dejar
+        // el panel en "Consultando…" sin consulta en vuelo.
+        if (!vivo && d.config.device_id && !d.device.consultado) {
+            setTimeout(() => cargarMiCajaMP(true), 60);
+        }
     } catch (e) {
         _miCajaMP = null;
         const msg = _escMP((e && e.message) || e);
