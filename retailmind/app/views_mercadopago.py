@@ -347,6 +347,20 @@ def gestion_guardar_config_mp(request):
     config.external_pos_id = (request.POST.get('external_pos_id') or '').strip()[:60]
     config.habilitado = request.POST.get('habilitado') == '1'
     config.device_id = (request.POST.get('device_id') or '').strip()[:60]
+    # Cuenta MP explícita (empresa dueña del token). Vacío = automática: la de
+    # la empresa dueña de la sucursal. Hace falta cuando la caja cobra con la
+    # cuenta de OTRA empresa (p.ej. una máquina de Paola en una sucursal de
+    # EDEL): el modelo siempre tuvo el FK, pero la pantalla no lo exponía.
+    cuenta_empresa_id = (request.POST.get('cuenta_empresa_id') or '').strip()
+    if cuenta_empresa_id:
+        try:
+            config.cuenta = MercadoPagoCuenta.objects.get(empresa_id=int(cuenta_empresa_id), activo=True)
+        except (MercadoPagoCuenta.DoesNotExist, TypeError, ValueError):
+            return JsonResponse({'success': False,
+                                 'error': 'Esa empresa no tiene cuenta de Mercado Pago guardada.'},
+                                status=400)
+    else:
+        config.cuenta = None
     # Con máquina Point asociada la caja puede cobrar por ambos canales
     config.modo = 'AMBOS' if config.device_id else 'QR'
     # Primera caja de la sucursal = principal; si ya hay otra principal se respeta
@@ -377,7 +391,41 @@ def gestion_datos_mp(request):
         'tiene_secret': bool(c.webhook_secret_cifrado),
         'activo': c.activo,
     } for c in MercadoPagoCuenta.objects.select_related('empresa').all()]
-    configs = [{
+    configs = [serializar_config_mp(cfg) for cfg in MercadoPagoConfig.objects.select_related(
+        'sucursal', 'sucursal__empresa', 'cuenta', 'cuenta__empresa').order_by('sucursal__alias', 'nombre')]
+    return JsonResponse({'success': True, 'cuentas': cuentas, 'configs': configs})
+
+
+def _cuenta_por_empresa(request):
+    try:
+        return MercadoPagoCuenta.objects.get(empresa_id=int(request.POST.get('empresa_id', 0)))
+    except (MercadoPagoCuenta.DoesNotExist, TypeError, ValueError):
+        return None
+
+
+def _msg_sin_cuenta(request):
+    """Error legible cuando la empresa pedida no tiene MercadoPagoCuenta: dice
+    QUÉ empresa es y cómo salir del paso (elegir otra cuenta en el formulario)."""
+    try:
+        emp = Empresa.objects.filter(id=int(request.POST.get('empresa_id', 0) or 0)).first()
+    except (TypeError, ValueError):
+        emp = None
+    nombre = (emp.nombre or emp.razon_social) if emp else 'La empresa de la sucursal'
+    return (f'«{nombre}» no tiene cuenta de Mercado Pago guardada. En el formulario de '
+            'asociación elige la empresa correcta en «Cuenta Mercado Pago» (p.ej. la dueña '
+            'de la máquina), o guarda primero sus credenciales.')
+
+
+def serializar_config_mp(cfg):
+    """Dict de una caja para las tablas de gestión (template inicial y AJAX).
+    Incluye con qué cuenta cobra de verdad: la explícita (FK ``cuenta``) o, en
+    automático, la de la empresa dueña de la sucursal (si existe)."""
+    empresa = cfg.sucursal.empresa
+    cuenta_nombre = ''
+    if cfg.cuenta_id:
+        cuenta_nombre = cfg.cuenta.empresa.nombre or cfg.cuenta.empresa.razon_social
+    empresa_tiene_cuenta = MercadoPagoCuenta.objects.filter(empresa_id=empresa.id, activo=True).exists()
+    return {
         'id': cfg.id,
         'sucursal_id': cfg.sucursal_id,
         'sucursal_alias': cfg.sucursal.alias,
@@ -387,15 +435,14 @@ def gestion_datos_mp(request):
         'device_id': cfg.device_id,
         'habilitado': cfg.habilitado,
         'es_principal': cfg.es_principal,
-    } for cfg in MercadoPagoConfig.objects.select_related('sucursal').order_by('sucursal__alias', 'nombre')]
-    return JsonResponse({'success': True, 'cuentas': cuentas, 'configs': configs})
-
-
-def _cuenta_por_empresa(request):
-    try:
-        return MercadoPagoCuenta.objects.get(empresa_id=int(request.POST.get('empresa_id', 0)))
-    except (MercadoPagoCuenta.DoesNotExist, TypeError, ValueError):
-        return None
+        'cuenta_empresa_id': cfg.cuenta.empresa_id if cfg.cuenta_id else None,
+        'cuenta_nombre': cuenta_nombre,
+        'empresa_id': empresa.id,
+        'empresa_nombre': empresa.nombre or empresa.razon_social,
+        # Con qué cuenta cobra de verdad (lo que resuelve _cuenta_de en el service)
+        'cuenta_efectiva': cuenta_nombre or ((empresa.nombre or empresa.razon_social)
+                                              if empresa_tiene_cuenta else ''),
+    }
 
 
 @login_required
@@ -422,7 +469,7 @@ def gestion_devices_point_mp(request):
         return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
     cuenta = _cuenta_por_empresa(request)
     if not cuenta:
-        return JsonResponse({'success': False, 'error': 'La empresa no tiene cuenta MP guardada.'}, status=404)
+        return JsonResponse({'success': False, 'error': _msg_sin_cuenta(request)}, status=404)
     try:
         devices = mp.listar_devices_point(cuenta)
     except mp.MercadoPagoError as e:
@@ -521,9 +568,7 @@ def gestion_listar_cajas_mp(request):
         return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
     cuenta = _cuenta_por_empresa(request)
     if not cuenta:
-        return JsonResponse({'success': False,
-                             'error': 'Primero guarda las credenciales de la empresa (columna del medio).'},
-                            status=404)
+        return JsonResponse({'success': False, 'error': _msg_sin_cuenta(request)}, status=404)
     try:
         cajas = mp.listar_cajas(cuenta)
     except mp.MercadoPagoError as e:

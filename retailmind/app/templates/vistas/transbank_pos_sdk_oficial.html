@@ -954,8 +954,9 @@
                 <tbody id="mpConfigsBody">
                 {% for cfg in configs_mp %}
                     <tr {% if es_admin_mp %}style="cursor:pointer;" title="Clic para editar"
-                        onclick="editarConfigMP({{ cfg.id }}, {{ cfg.sucursal_id }}, '{{ cfg.nombre|escapejs }}', '{{ cfg.external_store_id|escapejs }}', '{{ cfg.external_pos_id|escapejs }}', {{ cfg.habilitado|yesno:'true,false' }}, '{{ cfg.device_id|escapejs }}'){% endif %}>
-                        <td>{{ cfg.sucursal_alias }}{% if cfg.es_principal %} ⭐{% endif %}{% if cfg.device_id %} <i class="bi bi-phone" title="Con máquina Point asociada"></i>{% endif %}</td>
+                        onclick="editarConfigMP({{ cfg.id }}, {{ cfg.sucursal_id }}, '{{ cfg.nombre|escapejs }}', '{{ cfg.external_store_id|escapejs }}', '{{ cfg.external_pos_id|escapejs }}', {{ cfg.habilitado|yesno:'true,false' }}, '{{ cfg.device_id|escapejs }}', '{{ cfg.cuenta_empresa_id|default:'' }}'){% endif %}">
+                        <td>{{ cfg.sucursal_alias }}{% if cfg.es_principal %} ⭐{% endif %}{% if cfg.device_id %} <i class="bi bi-phone" title="Con máquina Point asociada"></i>{% endif %}
+                            <div class="text-muted" style="font-size:.62rem;white-space:nowrap;">{% if cfg.cuenta_efectiva %}cuenta: {{ cfg.cuenta_efectiva }}{% else %}<span class="text-danger">⚠ sin cuenta MP</span>{% endif %}</div></td>
                         <td class="font-monospace">{{ cfg.external_pos_id|default:'—' }}</td>
                         <td class="text-center">{% if cfg.habilitado %}✅{% else %}❌{% endif %}</td>
                         {% if es_admin_mp %}
@@ -975,15 +976,26 @@
 
             {% if es_admin_mp %}
             <hr>
+            <p class="tbk-tech-body mb-2"><strong>Máquina de otra empresa (p.ej. Paola):</strong>
+            1) la Point tiene que estar vinculada a la cuenta MP de esa empresa (se inicia sesión en la propia máquina con ese usuario de Mercado Pago);
+            2) aquí elige la sucursal y, en «Cuenta Mercado Pago», la empresa dueña — con el botón 📱 aparecen SUS máquinas;
+            3) «Buscar cajas creadas en MP» para el ID de caja, marca Habilitada y guarda.</p>
             <button class="btn btn-sm btn-outline-primary w-100 mb-2" style="font-size:.74rem;" onclick="buscarCajasMP()"
                     title="Lista las sucursales y cajas ya creadas en la cuenta MP de la empresa de la sucursal elegida — clic en una para llenar los campos solo">
                 <i class="bi bi-cloud-download"></i> Buscar cajas creadas en Mercado Pago
             </button>
             <input type="hidden" id="mpCfgId" value="">
             <label class="form-label-sm">Sucursal</label>
-            <select class="form-control-sm-pos mb-2" id="mpCfgSucursal">
-                {% for s in sucursales_mp %}<option value="{{ s.id }}" data-empresa="{{ s.empresa_id }}">{{ s.alias }}</option>{% endfor %}
+            <select class="form-control-sm-pos mb-2" id="mpCfgSucursal" onchange="_actualizarAyudaCuentaMP()">
+                {% for s in sucursales_mp %}<option value="{{ s.id }}" data-empresa="{{ s.empresa_id }}" data-empresa-nombre="{{ s.empresa.nombre|default:s.empresa.razon_social }}">{{ s.alias }}</option>{% endfor %}
             </select>
+            <label class="form-label-sm">Cuenta Mercado Pago (empresa dueña del token y de la máquina)</label>
+            <select class="form-control-sm-pos mb-1" id="mpCfgCuenta" onchange="_actualizarAyudaCuentaMP()"
+                    title="Con qué cuenta de Mercado Pago cobra esta caja. «Automática» usa la de la empresa dueña de la sucursal.">
+                <option value="">Automática: la de la empresa dueña de la sucursal</option>
+                {% for c in cuentas_mp %}<option value="{{ c.empresa_id }}">{{ c.empresa_nombre }} ({{ c.empresa_rut }})</option>{% endfor %}
+            </select>
+            <div class="tbk-tech-body mb-2" id="mpCfgCuentaAyuda"></div>
             <label class="form-label-sm">Nombre de la caja</label>
             <input type="text" class="form-control-sm-pos mb-2" id="mpCfgNombre" value="Caja principal">
             <label class="form-label-sm">external_store_id (sucursal en MP)</label>
@@ -1883,7 +1895,8 @@ function _renderConfigsMP(configs) {
     }
     body.innerHTML = configs.map((cfg, i) => `
         <tr ${MP_ES_ADMIN ? `style="cursor:pointer;" title="Clic para editar" onclick="configAccionMP(${i},'editar')"` : ''}>
-            <td>${_escMP(cfg.sucursal_alias)}${cfg.es_principal ? ' ⭐' : ''}</td>
+            <td>${_escMP(cfg.sucursal_alias)}${cfg.es_principal ? ' ⭐' : ''}${cfg.device_id ? ' <i class="bi bi-phone" title="Con máquina Point asociada"></i>' : ''}
+                <div class="text-muted" style="font-size:.62rem;white-space:nowrap;">${cfg.cuenta_efectiva ? 'cuenta: ' + _escMP(cfg.cuenta_efectiva) : '<span class="text-danger">⚠ sin cuenta MP</span>'}</div></td>
             <td class="font-monospace">${_escMP(cfg.external_pos_id) || '—'}</td>
             <td class="text-center">${cfg.habilitado ? '✅' : '❌'}</td>
             ${MP_ES_ADMIN ? `<td class="text-center text-nowrap">
@@ -1896,7 +1909,7 @@ function _renderConfigsMP(configs) {
 function configAccionMP(i, accion) {
     const cfg = (window.__mpConfigs || [])[i];
     if (!cfg) return;
-    if (accion === 'editar') editarConfigMP(cfg.id, cfg.sucursal_id, cfg.nombre, cfg.external_store_id, cfg.external_pos_id, cfg.habilitado, cfg.device_id);
+    if (accion === 'editar') editarConfigMP(cfg.id, cfg.sucursal_id, cfg.nombre, cfg.external_store_id, cfg.external_pos_id, cfg.habilitado, cfg.device_id, cfg.cuenta_empresa_id);
     else if (accion === 'probar') probarConfigMP(cfg.id, cfg.sucursal_alias, !!cfg.device_id);
     else if (accion === 'eliminar') eliminarConfigMP(cfg.id, cfg.sucursal_alias);
 }
@@ -1954,11 +1967,12 @@ function guardarConfigMP() {
         external_store_id: document.getElementById('mpCfgStore').value.trim(),
         external_pos_id: document.getElementById('mpCfgPos').value.trim(),
         device_id: document.getElementById('mpCfgDevice').value.trim(),
-        habilitado: document.getElementById('mpCfgHabilitado').checked ? '1' : '0'
+        habilitado: document.getElementById('mpCfgHabilitado').checked ? '1' : '0',
+        cuenta_empresa_id: (document.getElementById('mpCfgCuenta') || {}).value || ''
     }, 'Asociación de caja guardada');
 }
 
-function editarConfigMP(id, sucursalId, nombre, storeId, posId, habilitado, deviceId) {
+function editarConfigMP(id, sucursalId, nombre, storeId, posId, habilitado, deviceId, cuentaEmpresaId) {
     document.getElementById('mpCfgId').value = id;
     document.getElementById('mpCfgSucursal').value = sucursalId;
     // Con Select2 activo hay que notificar el cambio para que se pinte
@@ -1970,7 +1984,15 @@ function editarConfigMP(id, sucursalId, nombre, storeId, posId, habilitado, devi
     document.getElementById('mpCfgPos').value = posId;
     document.getElementById('mpCfgDevice').value = deviceId || '';
     document.getElementById('mpCfgHabilitado').checked = habilitado;
+    const selCuenta = document.getElementById('mpCfgCuenta');
+    if (selCuenta) selCuenta.value = cuentaEmpresaId ? String(cuentaEmpresaId) : '';
+    _actualizarAyudaCuentaMP();
     document.getElementById('tab-mp-btn').click();
+    // El formulario vive en la sección plegada: abrirla para que se vea
+    const plegada = document.getElementById('mpConfigAvanzada');
+    if (plegada && window.bootstrap && bootstrap.Collapse) {
+        bootstrap.Collapse.getOrCreateInstance(plegada, { toggle: false }).show();
+    }
 }
 
 function limpiarFormConfigMP() {
@@ -1980,13 +2002,46 @@ function limpiarFormConfigMP() {
     document.getElementById('mpCfgPos').value = '';
     document.getElementById('mpCfgDevice').value = '';
     document.getElementById('mpCfgHabilitado').checked = false;
+    const selCuenta = document.getElementById('mpCfgCuenta');
+    if (selCuenta) selCuenta.value = '';
+    _actualizarAyudaCuentaMP();
+}
+
+/** Empresa cuya cuenta MP usa el formulario de asociación: la elegida en
+ *  «Cuenta Mercado Pago» o, en automático, la dueña de la sucursal. */
+function _mpEmpresaCuentaForm() {
+    const selC = document.getElementById('mpCfgCuenta');
+    if (selC && selC.value) {
+        return { empresaId: selC.value, nombre: selC.options[selC.selectedIndex].text, explicita: true };
+    }
+    const sel = document.getElementById('mpCfgSucursal');
+    const opcion = sel && sel.options[sel.selectedIndex];
+    return { empresaId: opcion ? opcion.dataset.empresa : null,
+             nombre: opcion ? (opcion.dataset.empresaNombre || '') : '', explicita: false };
+}
+
+/** Texto bajo el selector: con qué cuenta se van a listar máquinas/cajas, o
+ *  aviso en rojo si esa empresa no tiene cuenta guardada. */
+function _actualizarAyudaCuentaMP() {
+    const el = document.getElementById('mpCfgCuentaAyuda');
+    if (!el) return;
+    const e = _mpEmpresaCuentaForm();
+    if (!e.empresaId) { el.innerHTML = ''; return; }
+    const selC = document.getElementById('mpCfgCuenta');
+    const tieneCuenta = !!(selC && Array.from(selC.options).some(o => o.value === String(e.empresaId)));
+    if (tieneCuenta) {
+        el.innerHTML = `<i class="bi bi-check-circle-fill text-success"></i> Se usará la cuenta de <strong>${_escMP(e.nombre)}</strong>`
+            + (e.explicita ? '' : ' (empresa dueña de la sucursal)')
+            + ': las máquinas y cajas que se listan con 📱 y «Buscar cajas» son de esa cuenta.';
+    } else {
+        el.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle-fill"></i> <strong>${_escMP(e.nombre || 'La empresa de la sucursal')}</strong> `
+            + 'no tiene cuenta de Mercado Pago guardada: elige arriba la cuenta correcta (p.ej. la de Paola) o guarda primero sus credenciales.</span>';
+    }
 }
 
 function elegirDeviceMP() {
-    const sel = document.getElementById('mpCfgSucursal');
-    const opcion = sel && sel.options[sel.selectedIndex];
-    const empresaId = opcion ? opcion.dataset.empresa : null;
-    if (!empresaId) { Swal.fire({ icon: 'warning', title: 'Elige primero la sucursal' }); return; }
+    const empresaId = _mpEmpresaCuentaForm().empresaId;
+    if (!empresaId) { Swal.fire({ icon: 'warning', title: 'Elige primero la sucursal (o la cuenta Mercado Pago)' }); return; }
     Swal.fire({ title: 'Buscando máquinas Point…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
     const fd = new FormData();
     fd.append('empresa_id', empresaId);
@@ -1996,7 +2051,13 @@ function elegirDeviceMP() {
         .then(data => {
             if (!data.success) { Swal.fire({ icon: 'error', title: 'No se pudo listar', text: data.error }); return; }
             const devices = data.devices || [];
-            if (!devices.length) { Swal.fire({ icon: 'info', title: 'Sin máquinas Point en la cuenta' }); return; }
+            if (!devices.length) {
+                Swal.fire({ icon: 'info', title: 'Sin máquinas Point en la cuenta',
+                    html: `<div class="text-start small">La cuenta de <strong>${_escMP(_mpEmpresaCuentaForm().nombre)}</strong> no tiene terminales Point vinculadas.<br><br>
+                           Una máquina se vincula a la cuenta <strong>desde la propia Point</strong> (iniciar sesión en ella con el usuario de Mercado Pago de esa empresa).
+                           Recién entonces aparece aquí. Si la máquina es de otra empresa, elige esa empresa en «Cuenta Mercado Pago».</div>` });
+                return;
+            }
             window.__devicesForm = devices;
             const filas = devices.map((d, i) => `
                 <tr style="cursor:pointer;" onclick="usarDeviceMP(${i})">
@@ -2157,10 +2218,8 @@ function cambiarModoDeviceMP(empresaId, deviceId, modoNuevo, nombre) {
 // ── Cajas: buscar en MP / probar QR / eliminar ──
 
 function buscarCajasMP() {
-    const sel = document.getElementById('mpCfgSucursal');
-    const opcion = sel && sel.options[sel.selectedIndex];
-    const empresaId = opcion ? opcion.dataset.empresa : null;
-    if (!empresaId) { Swal.fire({ icon: 'warning', title: 'Elige primero la sucursal' }); return; }
+    const empresaId = _mpEmpresaCuentaForm().empresaId;
+    if (!empresaId) { Swal.fire({ icon: 'warning', title: 'Elige primero la sucursal (o la cuenta Mercado Pago)' }); return; }
     Swal.fire({ title: 'Consultando cajas en Mercado Pago…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
     const fd = new FormData();
     fd.append('empresa_id', empresaId);
@@ -3299,6 +3358,8 @@ $(function () {
             placeholder: 'Buscar sucursal…',
             language: { noResults: function () { return 'Sin resultados'; } }
         });
+        $sucursal.on('change', function () { if (window._actualizarAyudaCuentaMP) _actualizarAyudaCuentaMP(); });
     }
+    if (window._actualizarAyudaCuentaMP) _actualizarAyudaCuentaMP();
 });
 </script>

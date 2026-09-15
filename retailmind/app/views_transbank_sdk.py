@@ -72,7 +72,7 @@ def gestion_transbank_pos_sdk(request):
         Empresa.objects.filter(sucursales_app__isnull=False)
         .distinct().order_by('nombre')
     )
-    context['sucursales_mp'] = Sucursal.objects.order_by('alias')
+    context['sucursales_mp'] = Sucursal.objects.select_related('empresa').order_by('alias')
     context['cuentas_mp'] = []
     context['configs_mp'] = []
     context['mp_migraciones_pendientes'] = False
@@ -87,17 +87,9 @@ def gestion_transbank_pos_sdk(request):
             'tiene_secret': bool(c.webhook_secret_cifrado),
             'activo': c.activo,
         } for c in MercadoPagoCuenta.objects.select_related('empresa').all()]
-        context['configs_mp'] = [{
-            'id': cfg.id,
-            'sucursal_id': cfg.sucursal_id,
-            'sucursal_alias': cfg.sucursal.alias,
-            'nombre': cfg.nombre,
-            'external_store_id': cfg.external_store_id,
-            'external_pos_id': cfg.external_pos_id,
-            'device_id': cfg.device_id,
-            'habilitado': cfg.habilitado,
-            'es_principal': cfg.es_principal,
-        } for cfg in MercadoPagoConfig.objects.select_related('sucursal').order_by('sucursal__alias', 'nombre')]
+        from .views_mercadopago import serializar_config_mp
+        context['configs_mp'] = [serializar_config_mp(cfg) for cfg in MercadoPagoConfig.objects.select_related(
+            'sucursal', 'sucursal__empresa', 'cuenta', 'cuenta__empresa').order_by('sucursal__alias', 'nombre')]
     except Exception as e:
         # Tablas MP inexistentes (migraciones sin aplicar) u otro error de BD:
         # la pestaña avisa en vez de mostrar selects vacíos sin explicación.
