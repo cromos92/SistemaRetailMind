@@ -76,6 +76,7 @@ def gestion_transbank_pos_sdk(request):
     context['cuentas_mp'] = []
     context['configs_mp'] = []
     context['mp_migraciones_pendientes'] = False
+    context['sesion_tiene_caja_mp'] = False
     try:
         from .models import MercadoPagoConfig, MercadoPagoCuenta
         context['cuentas_mp'] = [{
@@ -90,6 +91,12 @@ def gestion_transbank_pos_sdk(request):
         from .views_mercadopago import serializar_config_mp
         context['configs_mp'] = [serializar_config_mp(cfg) for cfg in MercadoPagoConfig.objects.select_related(
             'sucursal', 'sucursal__empresa', 'cuenta', 'cuenta__empresa').order_by('sucursal__alias', 'nombre')]
+        # El selector de caja del admin arranca en SU sucursal de sesión; si esa
+        # sucursal no tiene caja, el select lo dice en vez de caer en la primera
+        # caja de la lista (mostraba NICK1 estando en PAO1).
+        context['sesion_tiene_caja_mp'] = any(
+            c['sucursal_id'] == context['sucursal_sesion_id'] for c in context['configs_mp']
+        )
     except Exception as e:
         # Tablas MP inexistentes (migraciones sin aplicar) u otro error de BD:
         # la pestaña avisa en vez de mostrar selects vacíos sin explicación.

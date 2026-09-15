@@ -311,7 +311,23 @@ def gestion_guardar_cuenta_mp(request):
         'creada' if creada else 'actualizada', empresa.rut, request.user.username,
         'actualizado' if token else 'sin cambio', 'actualizado' if secret else 'sin cambio',
     )
-    return JsonResponse({'success': True})
+    respuesta = {'success': True}
+    # Verificación inmediata (la pide el formulario con verificar=1): valida el
+    # token contra /users/me y deja el mp_user_id REAL, que es el que usan
+    # «Buscar cajas» y la asignación de IDs. Si MP no responde, la cuenta queda
+    # guardada igual y se avisa.
+    if request.POST.get('verificar') == '1':
+        try:
+            datos = mp.probar_cuenta(cuenta)
+            respuesta['verificacion'] = dict(datos, ok=True)
+            real = str(datos.get('user_id') or '')
+            if mp_user_id and real and mp_user_id != real:
+                respuesta['aviso'] = (f'El User ID que escribiste ({mp_user_id}) no es el dueño del '
+                                      f'token: se guardó el real ({real}).')
+        except mp.MercadoPagoError as e:
+            respuesta['verificacion'] = {'ok': False, 'error': e.mensaje}
+            respuesta['aviso'] = f'Cuenta guardada, pero el token no pasó la prueba: {e.mensaje}'
+    return JsonResponse(respuesta)
 
 
 @login_required
@@ -1014,6 +1030,7 @@ def gestion_mi_caja_mp(request):
         'consumida': t.consumida,
         'incierto': mp.es_incierta(t),
         'vivo': t.estado in ('CREADA', 'PENDIENTE'),
+        'edad_seg': int((timezone.now() - t.creado_en).total_seconds()),
         'usuario': ((t.usuario.get_full_name() or t.usuario.username)
                     if t.usuario_id else ''),
     } for t in trxs[:12]]

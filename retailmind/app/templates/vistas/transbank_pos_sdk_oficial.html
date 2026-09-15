@@ -719,12 +719,8 @@
             {% if es_admin_mp %}
             <select class="form-control-sm-pos" id="mpOpCaja" style="width:auto;min-width:240px;height:34px;" onchange="cargarMiCajaMP(true)"
                     title="Caja sobre la que operan «Tu caja», «Cobro directo» e «Imprimir cierre en la máquina»">
-                {% for cfg in configs_mp %}
-                <option value="{{ cfg.id }}" data-sucursal="{{ cfg.sucursal_id }}"
-                        {% if cfg.sucursal_id == sucursal_sesion_id and cfg.es_principal %}selected{% endif %}>
-                    {{ cfg.sucursal_alias }} · {{ cfg.nombre }}{% if cfg.device_id %} 📟{% endif %}{% if not cfg.habilitado %} (deshabilitada){% endif %}
-                </option>
-                {% endfor %}
+                {% if not sesion_tiene_caja_mp %}<option value="" selected>Tu sucursal ({{ sucursal_sesion_alias|default:'sin sesión' }}) no tiene caja MP — elige una o créala abajo</option>{% endif %}
+                {% for cfg in configs_mp %}<option value="{{ cfg.id }}" data-sucursal="{{ cfg.sucursal_id }}"{% if cfg.sucursal_id == sucursal_sesion_id and cfg.es_principal %} selected{% endif %}>{{ cfg.sucursal_alias }} · {{ cfg.nombre }}{% if cfg.device_id %} 📟{% endif %}{% if not cfg.habilitado %} (deshabilitada){% endif %}{% if cfg.sucursal_id == sucursal_sesion_id %} — tu sucursal{% endif %}</option>{% endfor %}
             </select>
             {% endif %}
             <button type="button" class="btn btn-sm btn-light border" style="height:34px;" onclick="cargarMiCajaMP(true)"
@@ -919,8 +915,9 @@
             <select class="form-control-sm-pos mb-2" id="mpCuentaEmpresa">
                 {% for e in empresas_mp %}<option value="{{ e.id }}">{{ e.nombre }} ({{ e.rut }})</option>{% endfor %}
             </select>
-            <label class="form-label-sm">User ID (collector, opcional)</label>
-            <input type="text" class="form-control-sm-pos mb-2" id="mpCuentaUserId" placeholder="757112306794">
+            <label class="form-label-sm">User ID (opcional — se detecta solo desde el token al guardar o probar)</label>
+            <input type="text" class="form-control-sm-pos mb-2" id="mpCuentaUserId" placeholder="vacío: lo completa el sistema"
+                   title="Es el id del dueño del token. No lo tipees a mano: si no coincide con el token, Mercado Pago responde 403 al listar cajas.">
             <label class="form-label-sm">Access Token</label>
             <input type="password" class="form-control-sm-pos mb-2" id="mpCuentaToken"
                    placeholder="APP_USR-… (vacío = mantener el actual)" autocomplete="new-password">
@@ -1830,6 +1827,7 @@ function agregarLogTransaccion(resultado, montoEnviado) {
 
 var MP_ES_ADMIN = {{ es_admin_mp|yesno:"true,false" }};
 var MP_RESPONSABLE = "{{ request.user.get_full_name|default:request.user.username|escapejs }}";
+var MP_SUCURSAL_SESION = {{ sucursal_sesion_id|default:'null' }};
 
 function _csrfMP() {
     const el = document.querySelector('#tab-mp input[name=csrfmiddlewaretoken]');
@@ -1851,6 +1849,7 @@ function refrescarDatosMP() {
             if (!data.success) return;
             _renderCuentasMP(data.cuentas || []);
             _renderConfigsMP(data.configs || []);
+            if (typeof _renderOpCajaMP === 'function') _renderOpCajaMP(data.configs || []);
         }).catch(() => {});
 }
 
@@ -1934,13 +1933,22 @@ function _postGestionMP(url, datos, exitoMsg) {
         .then(data => {
             if (data.success) {
                 // Sin recargar la página: toast + refresco AJAX de las tablas
-                Swal.fire({ icon: 'success', title: exitoMsg, toast: true,
-                            position: 'top-end', timer: 1800, showConfirmButton: false });
+                const v = data.verificacion;
+                const titulo = exitoMsg + (v && v.ok ? ` · token OK (user ${v.user_id})` : '');
+                Swal.fire({ icon: 'success', title: titulo, toast: true,
+                            position: 'top-end', timer: (v && v.ok) ? 3200 : 1800, showConfirmButton: false });
                 const tok = document.getElementById('mpCuentaToken');
                 const sec = document.getElementById('mpCuentaSecret');
                 if (tok) tok.value = '';
                 if (sec) sec.value = '';
+                if (v && v.ok && v.user_id) {
+                    const uid = document.getElementById('mpCuentaUserId');
+                    if (uid) uid.value = String(v.user_id);
+                }
                 refrescarDatosMP();
+                if (data.aviso) {
+                    Swal.fire({ icon: 'warning', title: 'Guardado, con un aviso', text: data.aviso });
+                }
             } else {
                 Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: data.error || 'Error desconocido' });
             }
@@ -1955,7 +1963,8 @@ function guardarCuentaMP() {
         empresa_id: document.getElementById('mpCuentaEmpresa').value,
         mp_user_id: document.getElementById('mpCuentaUserId').value.trim(),
         access_token: token,
-        webhook_secret: secret
+        webhook_secret: secret,
+        verificar: '1'
     }, 'Cuenta guardada (credenciales cifradas)');
 }
 
@@ -2422,6 +2431,34 @@ function _mpConfigIdElegida() {
     return (sel && sel.value) ? sel.value : '';
 }
 
+/** Reconstruye el selector de caja del admin con las cajas actuales (se llama
+ *  tras crear/editar/eliminar una caja, sin recargar). Conserva la elección;
+ *  si no había caja elegida y la sucursal de sesión ahora tiene, la toma. */
+function _renderOpCajaMP(configs) {
+    const sel = document.getElementById('mpOpCaja');
+    if (!sel) return;
+    const actual = sel.value;
+    const deSesion = configs.filter(c => MP_SUCURSAL_SESION && c.sucursal_id === MP_SUCURSAL_SESION);
+    const principalSesion = deSesion.find(c => c.es_principal) || deSesion[0] || null;
+    let html = '';
+    if (!deSesion.length) {
+        html += '<option value="">Tu sucursal no tiene caja MP — elige una o créala abajo</option>';
+    }
+    html += configs.map(c => `<option value="${c.id}" data-sucursal="${c.sucursal_id}">`
+        + `${_escMP(c.sucursal_alias)} · ${_escMP(c.nombre)}${c.device_id ? ' 📟' : ''}`
+        + `${c.habilitado ? '' : ' (deshabilitada)'}${deSesion.some(d => d.id === c.id) ? ' — tu sucursal' : ''}</option>`).join('');
+    sel.innerHTML = html;
+    const sigue = actual && configs.some(c => String(c.id) === String(actual));
+    if (sigue) {
+        sel.value = actual;
+    } else if (principalSesion) {
+        sel.value = String(principalSesion.id);
+        cargarMiCajaMP(true);
+    } else {
+        sel.value = '';
+    }
+}
+
 /** Modo de la máquina → {clave, pill}. clave ∈ PDV | STANDALONE | QR | WAIT | ERR */
 function _mpModoDeMaquina(d) {
     const c = d.config || {}, dev = d.device || {};
@@ -2672,10 +2709,14 @@ function _renderUltimosCobrosMP(lista) {
         const ticket = t.directo
             ? '<span class="text-muted" title="Cobro suelto sin ticket">directo</span>'
             : `<span class="badge bg-light text-dark border">${_escMP(t.correlativo)}</span>`;
+        // El N° del panel de MP llega por el webhook de pagos; si en 3 min no
+        // llegó, decirlo (antes quedaba "llegando…" para siempre).
         const nop = t.payment_id_mp
             ? `<code>${_escMP(t.payment_id_mp)}</code>`
             : (t.estado === 'APROBADA'
-                ? '<span class="text-muted" title="El N° del panel de MP llega por webhook en unos segundos">llegando…</span>'
+                ? ((t.edad_seg || 0) < 180
+                    ? '<span class="text-muted" title="El N° del panel de MP llega por webhook en unos segundos">llegando…</span>'
+                    : '<span class="text-warning" title="No llegó el webhook de pagos de Mercado Pago. Se completa con «Verificar con MP» del cierre o con el comando backfill_payment_id_mp. Para MP manual usa el N° que muestra la máquina.">sin N° (webhook)</span>')
                 : '—');
         const uso = t.estado === 'APROBADA'
             ? (t.consumida

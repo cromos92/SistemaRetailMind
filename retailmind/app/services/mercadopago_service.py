@@ -332,8 +332,15 @@ def probar_cuenta(cuenta):
             f'Token inválido o vencido (HTTP {resp.status_code}).',
             detalle=data,
         )
-    if not cuenta.mp_user_id and data.get('id'):
-        cuenta.mp_user_id = str(data['id'])[:30]
+    # El user_id lo dicta el TOKEN, no lo que se tipeó en el formulario: si
+    # difiere se corrige. Con un id ajeno, /users/{id}/stores/search responde
+    # 403 (visto en vivo 15-09-2026 con la cuenta de Paola).
+    real_id = str(data.get('id') or '')[:30]
+    if real_id and cuenta.mp_user_id != real_id:
+        if cuenta.mp_user_id:
+            logger.warning("MP: mp_user_id de la cuenta de empresa %s corregido %s -> %s (según el token)",
+                           cuenta.empresa_id, cuenta.mp_user_id, real_id)
+        cuenta.mp_user_id = real_id
         cuenta.save(update_fields=['mp_user_id', 'actualizado_en'])
     return {
         'user_id': data.get('id'),
@@ -366,8 +373,23 @@ def listar_cajas(cuenta):
             return resp.status_code, {}
 
     status_s, data_s = _get(f'/users/{cuenta.mp_user_id}/stores/search', {'limit': 50})
+    if status_s in (401, 403, 404):
+        # 403 típico: el user_id guardado no es el dueño del token (se tipeó
+        # otro a mano). Se corrige contra /users/me y se reintenta UNA vez.
+        anterior = cuenta.mp_user_id
+        probar_cuenta(cuenta)
+        cuenta.refresh_from_db()
+        if cuenta.mp_user_id != anterior:
+            logger.info("MP: listar_cajas reintenta con el user_id real %s (antes %s)",
+                        cuenta.mp_user_id, anterior)
+            status_s, data_s = _get(f'/users/{cuenta.mp_user_id}/stores/search', {'limit': 50})
     if status_s != 200:
-        raise MercadoPagoError(f'No se pudieron listar las sucursales MP (HTTP {status_s}).',
+        pista = ''
+        if status_s in (401, 403):
+            pista = (' El token no tiene permiso para leer las sucursales/cajas de esta cuenta: '
+                     'revisa que sea el access token de PRODUCCIÓN de la aplicación (no el de prueba) '
+                     'y que la cuenta sea la dueña de la máquina.')
+        raise MercadoPagoError(f'No se pudieron listar las sucursales MP (HTTP {status_s}).{pista}',
                                detalle=data_s)
     stores = {str(s.get('id')): s for s in (data_s.get('results') or [])}
 
