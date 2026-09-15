@@ -1288,14 +1288,16 @@ def generar_datos_etiquetas(request):
                 'cantidad_etiquetas': cantidad
             })
             
-            # Generar etiquetas según la cantidad
+            # Generar etiquetas según la cantidad. Los topes [:N] son solo un
+            # freno de seguridad: el ancho real lo decide el JS (ajustarTextoZPL /
+            # ajustarLinea3) según la fuente y el espacio que deje el precio.
             for i in range(cantidad):
                 etiquetas.append({
                     'sucursal': (item.get('sucursal', sucursal_nombre) or '')[:8],
-                    'desc': (item.get('descripcion', item.get('articulo', '')) or '')[:28],
+                    'desc': (item.get('descripcion', item.get('articulo', '')) or '')[:40],
                     'marca': (item.get('marca', '') or '')[:10],
                     'sku': str(item.get('sku', ''))[:10],
-                    'art': (item.get('articulo', '') or '')[:14],
+                    'art': (item.get('articulo', '') or '')[:40],
                     'precio': precio_formateado[:10],
                     'factura': str(numero_documento)[:8],
                     'talla': str(item.get('talla', ''))[:4],

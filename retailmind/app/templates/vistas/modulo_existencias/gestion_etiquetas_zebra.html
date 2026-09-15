@@ -810,6 +810,11 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                 <i class="ri-refresh-line"></i>
                 Reconectar
             </button>
+            <button class="nexo-btn nexo-btn-outline" onclick="abrirPruebaImpresion()"
+                    title="Imprime 1 fila de prueba (2 etiquetas) directo a la Zebra, sin registrar historial">
+                <i class="ri-test-tube-line"></i>
+                Prueba
+            </button>
         </div>
     </div>
 
@@ -1404,6 +1409,11 @@ const AREA_A_INICIO = 25;
 const AREA_A_ANCHO  = 375;
 const AREA_B_INICIO = 456;
 const AREA_B_ANCHO  = 354;  // 456+354=810, margen derecho 20 dots desde PW=830
+// Borde derecho donde se pega el precio. En A se deja 27 dots libres hasta el
+// separador (x=425) y en B 20 hasta el fin del papel: si el precio resultara
+// más ancho de lo estimado se come ese margen y no otro campo.
+const AREA_A_FIN = 398;
+const AREA_B_FIN = 810;
 
 // Ancho de un Code128 en MÓDULOS (unidad independiente del ^BY).
 // ^BC en modo automático codifica los dígitos de a PARES en el subset C: son
@@ -1440,28 +1450,28 @@ function calcularPosicionBarcode(sku, areaInicio, areaAncho) {
 }
 
 // Calcula la posición X para centrar el texto del SKU que va bajo el código.
-// El ancho se estima con el mismo ratio que `ajustarTextoZPL` (0,6 × alto de la
-// fuente A0) y recibe el ALTO REAL con que se imprime, no un valor suelto: así
-// el número y el código de barras comparten centro.
+// Usa el mismo estimador de ancho que el resto de los textos (`anchoTextoA0`)
+// y recibe el ALTO REAL con que se imprime, no un valor suelto: así el número
+// y el código de barras comparten centro.
 function calcularPosicionTextoSku(sku, areaInicio, areaAncho, fontSize) {
-    const skuLen = String(sku).length || 7;
-    const textoWidth = skuLen * RATIO_ANCHO_CHAR_A0 * fontSize;
+    const textoWidth = anchoTextoA0(String(sku || '0000000'), fontSize);
     const posX = areaInicio + Math.floor((areaAncho - textoWidth) / 2);
     return Math.max(areaInicio, posX);
 }
 
-// Ajusta tamaño de fuente del precio para evitar cortes en montos grandes.
+// Tamaño del precio: la fuente más grande (32) con la que quepa en
+// PRECIO_ANCHO_MAX. Devuelve también el ancho estimado, que `ajustarLinea3`
+// usa para pegar el precio al borde derecho y ceder el resto al artículo.
+const PRECIO_FONTS = [32, 28, 24];
+const PRECIO_ANCHO_MAX = 160;
 function obtenerFormatoPrecio(precio) {
     const texto = String(precio || '');
-    const largo = texto.length;
-
-    if (largo <= 6) {
-        return { alto: 32, ancho: 32, y: 140 };
+    for (const font of PRECIO_FONTS) {
+        const ancho = anchoTextoA0(texto, font);
+        if (ancho <= PRECIO_ANCHO_MAX) return { font, ancho };
     }
-    if (largo <= 8) {
-        return { alto: 28, ancho: 28, y: 142 };
-    }
-    return { alto: 24, ancho: 24, y: 145 };
+    const font = PRECIO_FONTS[PRECIO_FONTS.length - 1];
+    return { font, ancho: Math.min(anchoTextoA0(texto, font), PRECIO_ANCHO_MAX) };
 }
 
 // Sanea texto para ZPL: escapa caracteres de control (^ ~ \) y remueve
@@ -1484,21 +1494,88 @@ function sanearZPL(texto) {
     return s.trim();
 }
 
-// Ancho promedio de un carácter de la fuente escalable A0 respecto a su alto.
-// 0.6 es conservador (dígitos y guiones son más angostos): mejor achicar o
-// truncar un carácter de más que arriesgar texto encimado.
-const RATIO_ANCHO_CHAR_A0 = 0.6;
+// ---------- Estimación de ancho de la fuente escalable A0 ----------
+// A0 es CG Triumvirate Bold Condensed (clon de Helvetica Bold Condensed). El
+// ancho de cada carácter va como fracción del ALTO de la fuente, según las
+// métricas de Helvetica-Condensed-Bold (avance por 1000 em). El ratio plano
+// anterior (0,6 para todo) trataba espacios, dígitos e "I" como si fueran una
+// "H": el artículo se cortaba 4-5 caracteres antes de lo necesario y el precio
+// quedaba con un hueco a la izquierda. Con métricas reales una "M" o "W" (0,78)
+// ya no se subestima, que era el otro riesgo del 0,6 fijo.
+const ANCHO_A0_POR_CHAR = (() => {
+    const t = {};
+    const set = (chars, v) => { for (const c of chars) t[c] = v; };
+    set('ijl', 0.222);
+    set(" Ift.,:;'!|/", 0.278);
+    set('r-()[]{}', 0.333);
+    set('*zFJLcsvxy', 0.444);
+    set('0123456789$#+=<>?"ETVXYZabdeghknopqu', 0.500);
+    set('ABCDHKNPRSU', 0.556);
+    set('GOQ', 0.611);
+    set('&w', 0.667);
+    set('MWm', 0.778);
+    set('%', 0.889);
+    set('@', 1.000);
+    return t;
+})();
+const ANCHO_A0_DESCONOCIDO = 0.778;   // símbolo raro: se asume ancho como una M
+// Resguardo global sobre las métricas: si en la impresora un texto llegara a
+// pisar al vecino, subir este factor (1.15) antes que tocar la tabla.
+const FACTOR_SEGURIDAD_A0 = 1.08;
+
+// Ancho estimado en dots de `texto` impreso con ^A0N,font,font.
+function anchoTextoA0(texto, font) {
+    let em = 0;
+    for (const ch of String(texto || '')) {
+        // Ñ/á/é... miden igual que su letra base
+        const base = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        em += ANCHO_A0_POR_CHAR[base] ?? ANCHO_A0_DESCONOCIDO;
+    }
+    return Math.ceil(em * font * FACTOR_SEGURIDAD_A0);
+}
 
 // Ajusta un texto a un ancho fijo en dots: primero achica la fuente (de a 2,
-// hasta fontMin, mismo criterio que obtenerFormatoPrecio) y si aún no cabe
-// TRUNCA. Necesario porque ^FB de 1 línea NO corta el texto sobrante: lo
-// re-imprime encima de la misma línea y la etiqueta sale como un manchón.
+// hasta fontMin) y si aún no cabe TRUNCA carácter a carácter. Necesario porque
+// ^FB de 1 línea NO corta el texto sobrante: lo re-imprime encima de la misma
+// línea y la etiqueta sale como un manchón.
 function ajustarTextoZPL(texto, anchoDots, fontMax, fontMin) {
     const s = String(texto || '');
-    const capacidad = (font) => Math.floor(anchoDots / (RATIO_ANCHO_CHAR_A0 * font));
     let font = fontMax;
-    while (font - 2 >= fontMin && s.length > capacidad(font)) font -= 2;
-    return { texto: s.slice(0, capacidad(font)), font };
+    while (font - 2 >= fontMin && anchoTextoA0(s, font) > anchoDots) font -= 2;
+    if (anchoTextoA0(s, font) <= anchoDots) return { texto: s, font };
+    let corte = s;
+    while (corte.length && anchoTextoA0(corte, font) > anchoDots) corte = corte.slice(0, -1);
+    return { texto: corte.trimEnd(), font };
+}
+
+// Línea 3 (artículo + precio). El precio se pega al borde derecho del área con
+// el ancho que realmente ocupa y el artículo recibe TODO lo que queda. Antes el
+// artículo tenía una caja fija de 205 dots y el precio una de 160 alineada a
+// la derecha: con "29.990" (~105 dots reales) quedaban ~100 dots (12 mm) en
+// blanco entre ambos mientras el artículo salía cortado. Ambos campos van sin
+// ^FB: si el estimado se quedara corto el texto se acerca al vecino en vez de
+// re-imprimirse encima de sí mismo.
+const LINEA3_BASE = 173;   // borde inferior común de artículo y precio (sin OFFSET_Y)
+const LINEA3_GAP  = 10;    // separación mínima artículo-precio
+function ajustarLinea3(art, precioTexto, areaInicio, areaFin) {
+    const precio = obtenerFormatoPrecio(precioTexto);
+    const precioX = areaFin - precio.ancho;
+    const artFit = ajustarTextoZPL(art, precioX - LINEA3_GAP - areaInicio, 28, 18);
+    return {
+        art:    { texto: artFit.texto, font: artFit.font, x: areaInicio, y: LINEA3_BASE - artFit.font },
+        precio: { texto: precioTexto, font: precio.font, x: precioX,    y: LINEA3_BASE - precio.font }
+    };
+}
+
+// Texto del artículo / descripción tal como saldrán impresos, para que la
+// vista previa muestre exactamente lo que cabe. Se usa el área B (la más
+// angosta): una etiqueta en posición A puede mostrar 1-2 caracteres más.
+function textoArticuloImpreso(articulo, precio) {
+    const precioTexto = sanearZPL(formatearPrecio(precio));
+    return ajustarLinea3(sanearZPL(articulo), precioTexto, AREA_B_INICIO, AREA_B_FIN).art.texto;
+}
+function textoDescImpreso(desc) {
+    return ajustarTextoZPL(sanearZPL(desc), 269, 24, 18).texto;
 }
 
 // Sanea todos los campos de una etiqueta y pre-calcula fuente/truncado de los
@@ -1519,7 +1596,7 @@ function prepararEtiqueta(raw, anchoDesc) {
     e.fit = {
         sucursal: ajustarTextoZPL(e.sucursal, 82, 24, 20),
         desc: ajustarTextoZPL(e.desc, anchoDesc, 24, 18),
-        art: ajustarTextoZPL(e.art, 205, 28, 20),
+        // art: se ajusta en ajustarLinea3 según el ancho que deje el precio
         factura: ajustarTextoZPL(e.factura, 100, 22, 18),
         marca: ajustarTextoZPL(e.marca, 140, 22, 16),
         color: ajustarTextoZPL(e.color, 140, 20, 16)
@@ -1543,8 +1620,8 @@ function generarZPL(etiquetas) {
         const e1 = e1Raw ? prepararEtiqueta(e1Raw, 290) : null;
         const e2 = e2Raw ? prepararEtiqueta(e2Raw, 269) : null;
 
-        const precioFmtA = obtenerFormatoPrecio(e1?.precio);
-        const precioFmtB = e2 ? obtenerFormatoPrecio(e2?.precio) : null;
+        const l3A = ajustarLinea3(e1.art, e1.precio, AREA_A_INICIO, AREA_A_FIN);
+        const l3B = e2 ? ajustarLinea3(e2.art, e2.precio, AREA_B_INICIO, AREA_B_FIN) : null;
 
         zpl += '^XA\n';
         zpl += '^CI28\n';   // Habilitar UTF-8 (soporta tildes, ñ y caracteres Unicode)
@@ -1569,9 +1646,9 @@ function generarZPL(etiquetas) {
         // SKU centrado debajo del código de barras
         zpl += `^FO${textoSkuX_A},${112 + OFFSET_Y}^A0N,28,28^FD${e1.sku}^FS\n`;
         
-        // Línea 3: Artículo + Precio
-        zpl += `^FO25,${145 + OFFSET_Y}^A0N,${e1.fit.art.font},${e1.fit.art.font}^FB205,1,0,L^FD${e1.fit.art.texto}^FS\n`;
-        zpl += `^FO238,${precioFmtA.y + OFFSET_Y}^A0N,${precioFmtA.alto},${precioFmtA.ancho}^FB160,1,0,R^FD${e1.precio}^FS\n`;
+        // Línea 3: Artículo + Precio (reparto dinámico, ver ajustarLinea3)
+        zpl += `^FO${l3A.art.x},${l3A.art.y + OFFSET_Y}^A0N,${l3A.art.font},${l3A.art.font}^FD${l3A.art.texto}^FS\n`;
+        zpl += `^FO${l3A.precio.x},${l3A.precio.y + OFFSET_Y}^A0N,${l3A.precio.font},${l3A.precio.font}^FD${l3A.precio.texto}^FS\n`;
         
         // Línea 4: G/F Factura + Talla + Color
         zpl += `^FO25,${180 + OFFSET_Y}^A0N,20,20^FDG/F^FS\n`;
@@ -1600,9 +1677,9 @@ function generarZPL(etiquetas) {
             // SKU centrado debajo del código de barras
             zpl += `^FO${textoSkuX_B},${112 + OFFSET_Y}^A0N,28,28^FD${e2.sku}^FS\n`;
             
-            // Línea 3: Artículo + Precio
-            zpl += `^FO456,${145 + OFFSET_Y}^A0N,${e2.fit.art.font},${e2.fit.art.font}^FB205,1,0,L^FD${e2.fit.art.texto}^FS\n`;
-            zpl += `^FO650,${precioFmtB.y + OFFSET_Y}^A0N,${precioFmtB.alto},${precioFmtB.ancho}^FB160,1,0,R^FD${e2.precio}^FS\n`;
+            // Línea 3: Artículo + Precio (reparto dinámico, ver ajustarLinea3)
+            zpl += `^FO${l3B.art.x},${l3B.art.y + OFFSET_Y}^A0N,${l3B.art.font},${l3B.art.font}^FD${l3B.art.texto}^FS\n`;
+            zpl += `^FO${l3B.precio.x},${l3B.precio.y + OFFSET_Y}^A0N,${l3B.precio.font},${l3B.precio.font}^FD${l3B.precio.texto}^FS\n`;
             
             // Línea 4: G/F Factura + Talla + Color
             zpl += `^FO456,${180 + OFFSET_Y}^A0N,20,20^FDG/F^FS\n`;
@@ -1897,10 +1974,9 @@ function actualizarModalPreview(producto) {
     const fecha = document.getElementById('modalFechaImpresion').value;
     const sucursal = document.getElementById('modalSucursalEtiqueta').value || producto.sucursal || '';
     document.getElementById('mprevSucursal').textContent = sucursal.substring(0, 8);
-    document.getElementById('mprevDesc').textContent = (producto.descripcion || producto.articulo || '').substring(0, 22);
+    document.getElementById('mprevDesc').textContent = textoDescImpreso(producto.descripcion || producto.articulo || '');
     document.getElementById('mprevSku').textContent = producto.sku;
-    // 17 = tope real de impresión (ajustarTextoZPL con fuente mínima 20 en 205 dots)
-    document.getElementById('mprevArt').textContent = (producto.articulo || '').substring(0, 17);
+    document.getElementById('mprevArt').textContent = textoArticuloImpreso(producto.articulo || '', producto.precio);
     document.getElementById('mprevPrecio').textContent = '$' + formatearPrecio(producto.precio);
     document.getElementById('mprevFactura').textContent = producto.factura || modalContexto?.id || '';
     document.getElementById('mprevTalla').textContent = producto.talla || '';
@@ -1922,6 +1998,40 @@ function sincronizarSucursalModal() {
     const val = document.getElementById('modalSucursalEtiqueta').value;
     const panelSuc = document.getElementById('sucursalEtiqueta');
     if (panelSuc) panelSuc.value = val;
+}
+
+// Envía ZPL al agente Zebra Browser Print. Lanza Error si no hay agente o si
+// la impresora responde distinto de 2xx. Lo comparten la impresión real
+// (confirmarImpresionModal) y la prueba de impresión (imprimirPrueba).
+async function enviarZPLaImpresora(zpl) {
+    if (!ZEBRA_URL) {
+        // La base se resuelve al buscar la impresora; sin eso no hay a donde escribir.
+        await resolverZebraBase();
+        if (!ZEBRA_URL) throw new Error('Zebra Browser Print no esta disponible');
+    }
+    if (!printerDevice) throw new Error('No hay impresora Zebra conectada');
+
+    const printResponse = await fetch(ZEBRA_URL + '/write', {
+        method: 'POST',
+        // OJO con el Content-Type: 'text/plain' es CORS-safelisted y evita
+        // el preflight OPTIONS, que el agente de Zebra NO contesta. Con
+        // 'application/json' (como estaba) la request muere antes de salir.
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: JSON.stringify({
+            device: {
+                uid: printerDevice.uid,
+                connection: printerDevice.connection,
+                deviceType: printerDevice.deviceType,
+                provider: printerDevice.provider,
+                manufacturer: printerDevice.manufacturer,
+                name: printerDevice.name,
+                version: printerDevice.version
+            },
+            data: zpl
+        })
+    });
+    if (!printResponse.ok) throw new Error('Error en respuesta de impresora: ' + printResponse.status);
+    return printResponse;
 }
 
 let impresionEnCurso = false;
@@ -2020,49 +2130,20 @@ async function confirmarImpresionModal(confirmarDuplicado = false) {
         document.getElementById('loadingText').textContent = `Enviando ${data.total_etiquetas} etiquetas...`;
         const zpl = generarZPL(data.etiquetas);
 
-        if (!ZEBRA_URL) {
-            // La base se resuelve al buscar la impresora; sin eso no hay a donde escribir.
-            await resolverZebraBase();
-            if (!ZEBRA_URL) throw new Error('Zebra Browser Print no esta disponible');
-        }
-
-        const printResponse = await fetch(ZEBRA_URL + '/write', {
-            method: 'POST',
-            // OJO con el Content-Type: 'text/plain' es CORS-safelisted y evita
-            // el preflight OPTIONS, que el agente de Zebra NO contesta. Con
-            // 'application/json' (como estaba) la request muere antes de salir.
-            headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-            body: JSON.stringify({
-                device: {
-                    uid: printerDevice.uid,
-                    connection: printerDevice.connection,
-                    deviceType: printerDevice.deviceType,
-                    provider: printerDevice.provider,
-                    manufacturer: printerDevice.manufacturer,
-                    name: printerDevice.name,
-                    version: printerDevice.version
-                },
-                data: zpl
-            })
-        });
-
+        await enviarZPLaImpresora(zpl);
         ocultarLoading();
 
-        if (printResponse.ok) {
-            Swal.fire({
-                icon: 'success',
-                title: '¡Listo!',
-                html: `<strong>${data.total_etiquetas}</strong> etiqueta(s) enviadas a la impresora.<br><small class="text-muted">${data.total_filas} filas ZPL generadas.</small>`,
-                timer: 3000,
-                showConfirmButton: false
-            });
-            // Recargar tabla de documentos para actualizar estado
-            cargarDocumentos();
-            // Marcar como impreso en la tabla de productos
-            if (modalContexto) seleccionarDocumento(modalContexto.tipo, modalContexto.id);
-        } else {
-            throw new Error('Error en respuesta de impresora: ' + printResponse.status);
-        }
+        Swal.fire({
+            icon: 'success',
+            title: '¡Listo!',
+            html: `<strong>${data.total_etiquetas}</strong> etiqueta(s) enviadas a la impresora.<br><small class="text-muted">${data.total_filas} filas ZPL generadas.</small>`,
+            timer: 3000,
+            showConfirmButton: false
+        });
+        // Recargar tabla de documentos para actualizar estado
+        cargarDocumentos();
+        // Marcar como impreso en la tabla de productos
+        if (modalContexto) seleccionarDocumento(modalContexto.tipo, modalContexto.id);
 
     } catch (error) {
         ocultarLoading();
@@ -2072,6 +2153,220 @@ async function confirmarImpresionModal(confirmarDuplicado = false) {
         const btn = document.getElementById('btnConfirmarImprimir');
         if (btn) btn.disabled = false;
     }
+}
+
+// ========== PRUEBA DE IMPRESIÓN ==========
+// Imprime UNA fila (etiqueta A + B) directo a la Zebra, sin pasar por el
+// servidor ni registrar historial, para validar la distribución en papel.
+// Los casos fijos llevan cada campo al tope que aplica el servidor en
+// generar_datos_etiquetas y los caracteres que más exigen al estimador de
+// ancho (`anchoTextoA0`): nombre largo, precio de 7 dígitos, M/W/O.
+const TOPES_CAMPOS_ETIQUETA = { sucursal: 8, desc: 40, marca: 10, sku: 10, art: 40, precio: 10, factura: 8, talla: 4, color: 10 };
+
+const CASOS_PRUEBA_ETIQUETA = {
+    limites: {
+        nombre: 'Límites: nombre largo + precio de 7 dígitos',
+        etiquetas: [
+            { sucursal: 'SUCURSAL', desc: 'DESCRIPCION LARGA PARA PROBAR EL CORTE 123', marca: 'MARCALARGA', sku: '1234567890',
+              art: 'ZAPATILLA SKECHERS GO WALK 6 NEGRA HOMBRE', precio: '1.299.990', factura: '12345678', talla: '42.5', color: 'COLORLARGO' },
+            { sucursal: 'SUCURSAL', desc: 'DESCRIPCION LARGA PARA PROBAR EL CORTE 123', marca: 'MARCALARGA', sku: '1234567',
+              art: 'ZAPATILLA SKECHERS GO WALK 6 NEGRA HOMBRE', precio: '9.990', factura: '12345678', talla: '42.5', color: 'COLORLARGO' }
+        ]
+    },
+    anchas: {
+        nombre: 'Letras anchas (M, W, O)',
+        etiquetas: [
+            { sucursal: 'MMMMWWWW', desc: 'MOMO WOW OOOO MMMM WWWW OOOO MMMM', marca: 'WWWWWWWWWW', sku: '9876543',
+              art: 'MOCASIN WOMAN COMFORT MAX OOOO', precio: '129.990', factura: '99999999', talla: '39', color: 'MMMMMMMMMM' },
+            { sucursal: 'MMMMWWWW', desc: 'MOMO WOW OOOO MMMM WWWW OOOO MMMM', marca: 'WWWWWWWWWW', sku: '9876543',
+              art: 'WWWWWWWWWWWWWWWWWWWWWWWW', precio: '29.990', factura: '99999999', talla: '39', color: 'MMMMMMMMMM' }
+        ]
+    },
+    tipico: {
+        nombre: 'Producto típico',
+        etiquetas: [
+            { sucursal: 'NICK1', desc: 'ZAPATILLA URBANA HOMBRE', marca: 'CUECA', sku: '1234567',
+              art: 'ZAPATILLA CUECA HOMBRE', precio: '39.990', factura: '123456', talla: '42', color: 'NEGRO' },
+            { sucursal: 'NICK1', desc: 'PANTUFLA CERRADA', marca: 'SKECHERS', sku: '7654321',
+              art: 'PANTUFLA', precio: '9.990', factura: '123456', talla: '37', color: 'CAFE' }
+        ]
+    }
+};
+
+// Aplica los mismos topes que el servidor para que la prueba sea fiel.
+function normalizarEtiquetaPrueba(raw) {
+    const e = { fecha: new Date().toLocaleDateString('es-CL') };
+    for (const [campo, tope] of Object.entries(TOPES_CAMPOS_ETIQUETA)) {
+        e[campo] = String(raw[campo] ?? '').slice(0, tope);
+    }
+    return e;
+}
+
+// Etiqueta a partir de un producto real de /buscar-producto/ (precio público
+// vigente, alias real de su sucursal salvo que el panel indique otro).
+function etiquetaDesdeProducto(p, sucursal) {
+    return {
+        sucursal: sucursal || p.sucursal || '',
+        desc: p.descripcion || p.articulo || '',
+        marca: p.marca || '',
+        sku: p.sku || '',
+        art: p.articulo || '',
+        precio: formatearPrecio(p.precio),
+        factura: 'PRUEBA',
+        talla: p.talla || '',
+        color: p.color || ''
+    };
+}
+
+async function buscarProductosPrueba(termino) {
+    const params = new URLSearchParams({
+        termino,
+        sucursal_id: document.getElementById('filtroSucursal')?.value || '',
+        fuente: obtenerFuenteActual()
+    });
+    const response = await fetch(`/app/etiquetas/buscar-producto/?${params}`);
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error || 'Error buscando el producto');
+    if (!data.productos?.length) throw new Error(`Sin resultados para "${termino}"`);
+    return data.productos;
+}
+
+let pruebaEnCurso = false;
+
+async function abrirPruebaImpresion() {
+    if (pruebaEnCurso) return;
+    if (!printerDevice && !(await buscarImpresora())) {
+        Swal.fire({ icon: 'warning', title: 'Sin impresora', text: 'Conecta Zebra Browser Print e intenta de nuevo.', confirmButtonColor: '#0066FF' });
+        return;
+    }
+
+    const opcionesCasos = Object.entries(CASOS_PRUEBA_ETIQUETA)
+        .map(([clave, caso]) => `<option value="${clave}">${caso.nombre}</option>`).join('');
+    const sucursalPanel = document.getElementById('sucursalEtiqueta')?.value.trim() || '';
+
+    const res = await Swal.fire({
+        title: 'Prueba de impresión',
+        width: 560,
+        html: `
+            <div class="text-start">
+                <p class="text-muted small mb-2">Imprime <b>1 fila</b> (etiqueta A izquierda + B derecha) directo a la Zebra. No pasa por el servidor ni queda en el historial.</p>
+                <label class="form-label small mb-1">Caso</label>
+                <select id="pruebaCaso" class="form-select form-select-sm mb-2">
+                    ${opcionesCasos}
+                    <option value="producto">Producto real (por SKU o nombre)</option>
+                    <option value="personalizado">Personalizado</option>
+                </select>
+                <div id="pruebaProducto" hidden>
+                    <label class="form-label small mb-1">SKU o nombre</label>
+                    <input id="pruebaTermino" class="form-control form-control-sm" placeholder="Ej: 1234567 o ZAPATILLA">
+                    <div class="form-text">Salen los 2 primeros resultados (si hay uno solo, va en A y en B).${sucursalPanel ? ` Sucursal en etiqueta: <b>${escaparAtributo(sucursalPanel)}</b>.` : ''}</div>
+                </div>
+                <div id="pruebaPersonalizado" hidden>
+                    <div class="row g-2">
+                        <div class="col-8"><label class="form-label small mb-1">Artículo</label><input id="pruebaArt" class="form-control form-control-sm" value="ZAPATILLA SKECHERS GO WALK 6 NEGRA"></div>
+                        <div class="col-4"><label class="form-label small mb-1">Precio</label><input id="pruebaPrecio" type="number" min="0" class="form-control form-control-sm" value="1299990"></div>
+                        <div class="col-8"><label class="form-label small mb-1">Descripción</label><input id="pruebaDesc" class="form-control form-control-sm" value="ZAPATILLA URBANA HOMBRE"></div>
+                        <div class="col-4"><label class="form-label small mb-1">SKU</label><input id="pruebaSku" class="form-control form-control-sm" value="1234567"></div>
+                        <div class="col-4"><label class="form-label small mb-1">Marca</label><input id="pruebaMarca" class="form-control form-control-sm" value="SKECHERS"></div>
+                        <div class="col-4"><label class="form-label small mb-1">Color</label><input id="pruebaColor" class="form-control form-control-sm" value="NEGRO"></div>
+                        <div class="col-4"><label class="form-label small mb-1">Talla</label><input id="pruebaTalla" class="form-control form-control-sm" value="42"></div>
+                    </div>
+                    <div class="form-text">Se imprime el mismo dato en A y en B.</div>
+                </div>
+            </div>`,
+        showCancelButton: true,
+        confirmButtonText: '<i class="ri-printer-line"></i> Imprimir prueba',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0066FF',
+        didOpen: () => {
+            const sel = document.getElementById('pruebaCaso');
+            const sync = () => {
+                document.getElementById('pruebaProducto').hidden = sel.value !== 'producto';
+                document.getElementById('pruebaPersonalizado').hidden = sel.value !== 'personalizado';
+            };
+            sel.addEventListener('change', sync);
+            sync();
+        },
+        preConfirm: () => {
+            const caso = document.getElementById('pruebaCaso').value;
+            const v = (id) => document.getElementById(id).value.trim();
+            if (caso === 'producto') {
+                const termino = v('pruebaTermino');
+                if (termino.length < 2) { Swal.showValidationMessage('Escribe al menos 2 caracteres'); return false; }
+                return { caso, termino, sucursal: sucursalPanel };
+            }
+            if (caso === 'personalizado') {
+                if (!v('pruebaArt')) { Swal.showValidationMessage('El artículo no puede ir vacío'); return false; }
+                return { caso, etiqueta: {
+                    sucursal: sucursalPanel || 'PRUEBA', desc: v('pruebaDesc'), marca: v('pruebaMarca'), sku: v('pruebaSku'),
+                    art: v('pruebaArt'), precio: formatearPrecio(v('pruebaPrecio') || 0), factura: 'PRUEBA',
+                    talla: v('pruebaTalla'), color: v('pruebaColor')
+                } };
+            }
+            return { caso };
+        }
+    });
+    if (!res.isConfirmed) return;
+    await imprimirPrueba(res.value);
+}
+
+async function imprimirPrueba(cfg) {
+    pruebaEnCurso = true;
+    mostrarLoading('Preparando fila de prueba...');
+    try {
+        let etiquetas;
+        if (cfg.caso === 'producto') {
+            const productos = await buscarProductosPrueba(cfg.termino);
+            etiquetas = [productos[0], productos[1] || productos[0]].map(p => etiquetaDesdeProducto(p, cfg.sucursal));
+        } else if (cfg.caso === 'personalizado') {
+            etiquetas = [cfg.etiqueta, cfg.etiqueta];
+        } else {
+            etiquetas = CASOS_PRUEBA_ETIQUETA[cfg.caso].etiquetas;
+        }
+        etiquetas = etiquetas.map(normalizarEtiquetaPrueba);
+
+        document.getElementById('loadingText').textContent = 'Enviando fila de prueba...';
+        await enviarZPLaImpresora(generarZPL(etiquetas));
+        ocultarLoading();
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Fila de prueba enviada',
+            width: 560,
+            html: resumenPrueba(etiquetas),
+            confirmButtonColor: '#0066FF'
+        });
+    } catch (error) {
+        ocultarLoading();
+        Swal.fire({ icon: 'error', title: 'No se pudo imprimir la prueba', text: error.message });
+    } finally {
+        pruebaEnCurso = false;
+    }
+}
+
+// Resume qué salió en cada etiqueta (texto final y fuente del artículo,
+// fuente del precio y hueco estimado entre ambos) para contrastar con el papel.
+function resumenPrueba(etiquetas) {
+    const areas = [['A', AREA_A_INICIO, AREA_A_FIN, 290], ['B', AREA_B_INICIO, AREA_B_FIN, 269]];
+    const filas = etiquetas.slice(0, 2).map((raw, i) => {
+        const [nombre, ini, fin, anchoDesc] = areas[i];
+        const e = prepararEtiqueta(raw, anchoDesc);
+        const l3 = ajustarLinea3(e.art, e.precio, ini, fin);
+        const finArt = l3.art.x + anchoTextoA0(l3.art.texto, l3.art.font);
+        const huecoMm = ((l3.precio.x - finArt) / 8).toFixed(1);   // 203 dpi ≈ 8 dots/mm
+        const cortado = l3.art.texto.length < e.art.length ? ' <span class="text-danger">(cortado)</span>' : '';
+        return `<tr>
+            <td><b>${nombre}</b></td>
+            <td class="text-start">${escaparAtributo(l3.art.texto)}${cortado}<br><small class="text-muted">fuente ${l3.art.font}</small></td>
+            <td>${escaparAtributo(l3.precio.texto)}<br><small class="text-muted">fuente ${l3.precio.font}</small></td>
+            <td>${huecoMm} mm</td>
+        </tr>`;
+    }).join('');
+    return `<table class="table table-sm small mb-2 align-middle">
+                <thead><tr><th></th><th class="text-start">Artículo impreso</th><th>Precio</th><th>Hueco est.</th></tr></thead>
+                <tbody>${filas}</tbody>
+            </table>
+            <small class="text-muted">Si en el papel el artículo toca el precio, sube <code>FACTOR_SEGURIDAD_A0</code> (1.08 → 1.15) en este template.</small>`;
 }
 
 let skuSearchTimeout = null;
@@ -2648,11 +2943,10 @@ function actualizarPreview(producto) {
     const sucursal = document.getElementById('sucursalEtiqueta').value || producto.sucursal || '';
     
     document.getElementById('prevSucursal').textContent = sucursal.substring(0, 8);
-    document.getElementById('prevDesc').textContent = (producto.descripcion || producto.articulo).substring(0, 28);
+    document.getElementById('prevDesc').textContent = textoDescImpreso(producto.descripcion || producto.articulo || '');
     document.getElementById('prevMarca').textContent = (producto.marca || '').substring(0, 10);
     document.getElementById('prevSku').textContent = producto.sku;
-    // 17 = tope real de impresión (ajustarTextoZPL con fuente mínima 20 en 205 dots)
-    document.getElementById('prevArt').textContent = producto.articulo.substring(0, 17);
+    document.getElementById('prevArt').textContent = textoArticuloImpreso(producto.articulo || '', producto.precio);
     document.getElementById('prevPrecio').textContent = '$' + formatearPrecio(producto.precio);
     document.getElementById('prevFactura').textContent = producto.factura || documentoSeleccionado?.id || '';
     document.getElementById('prevTalla').textContent = producto.talla;
