@@ -384,6 +384,25 @@
     .cobro-ok-grid { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: .82rem; text-align: left; }
     .cobro-ok-grid dt { color: #8A8A9A; font-weight: 600; }
     .cobro-ok-grid dd { margin: 0; font-weight: 700; }
+
+    /* Guía rápida: los tres conceptos de Mercado Pago, en castellano */
+    .guia-mp { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    @media (max-width: 991px) { .guia-mp { grid-template-columns: 1fr; } }
+    .guia-mp-paso {
+        border: 1px solid #e3e3ea; border-radius: 8px; padding: 8px 10px; background: #fbfbfd;
+        font-size: .72rem; color: #555; line-height: 1.45;
+    }
+    .guia-mp-paso .t {
+        font-size: .8rem; font-weight: 800; color: #1A1A2E;
+        display: flex; align-items: center; gap: 6px; margin-bottom: 2px;
+    }
+    .guia-mp-paso .t i { color: var(--tbk-primary); }
+    .guia-mp-paso code { font-size: .64rem; color: #8A8A9A; background: none; padding: 0; }
+
+    /* Tablas compactas de la pestaña Mercado Pago */
+    .tabla-mp { font-size: .72rem; }
+    .tabla-mp th, .tabla-mp td { padding: 4px 6px; vertical-align: middle; }
+    .tabla-mp .tec { font-size: .6rem; color: #8A8A9A; display: block; white-space: nowrap; }
 </style>
 
 <!-- Header compacto -->
@@ -710,7 +729,41 @@
 </div>
 {% endif %}
 
-<!-- 1. TU CAJA · MERCADO PAGO (modo PDV / Standalone) -->
+<!-- 0. GUÍA RÁPIDA — los tres conceptos, en castellano. Plegable: el que ya
+     sabe no la ve; el que llega nuevo entiende qué es cada cosa sin preguntar. -->
+<button class="admin-toggle mb-2" type="button" data-bs-toggle="collapse" data-bs-target="#mpGuia"
+        aria-expanded="false" aria-controls="mpGuia">
+    <i class="bi bi-question-circle-fill"></i> ¿Cómo funciona el cobro con Mercado Pago? (guía rápida)
+    <i class="bi bi-chevron-down"></i>
+</button>
+<div class="collapse mb-2" id="mpGuia">
+    <div class="tbk-card mb-2">
+        <div class="guia-mp">
+            <div class="guia-mp-paso">
+                <div class="t"><i class="bi bi-building"></i> 1. La cuenta</div>
+                Es la cuenta de Mercado Pago de una <strong>empresa</strong> (un RUT): ahí llega la plata.
+                Hay una por empresa. Se carga una sola vez, en «Configuración avanzada».
+            </div>
+            <div class="guia-mp-paso">
+                <div class="t"><i class="bi bi-shop"></i> 2. El punto de venta</div>
+                Es la <strong>caja de una sucursal</strong>. Decirle a una sucursal con qué cuenta cobra es lo que
+                hace aparecer el botón <strong>M. Pago</strong> en el POS de esa tienda.
+            </div>
+            <div class="guia-mp-paso">
+                <div class="t"><i class="bi bi-phone-vibrate"></i> 3. La máquina</div>
+                Es el <strong>aparato físico</strong> (Point). Se asigna a la caja de una sucursal y puede estar
+                <strong>Integrada</strong> (el sistema le manda el monto) o en <strong>Manual</strong> (se cobra en su pantalla).
+            </div>
+        </div>
+        <div class="mode-explain mt-2">
+            <strong>Si algo falla y no puedes perder la venta:</strong> cobra con «Cobro directo» de esta pantalla
+            (poniendo el N° de ticket), o pasa la máquina a <strong>Manual</strong>, cóbrale al cliente en la máquina
+            y registra el pago en el POS con el botón <strong>MP manual</strong> y el N° de operación.
+        </div>
+    </div>
+</div>
+
+<!-- 1. TU CAJA · MERCADO PAGO (modo Integrado / Manual) -->
 <div class="tbk-card" style="border-left:4px solid var(--tbk-success);">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
         <h6 class="mb-0"><i class="bi bi-shop"></i> Tu caja · Mercado Pago
@@ -718,7 +771,7 @@
         <div class="d-flex align-items-center gap-2 flex-wrap">
             {% if es_admin_mp %}
             <select class="form-control-sm-pos" id="mpOpCaja" style="width:auto;min-width:240px;height:34px;" onchange="cargarMiCajaMP(true)"
-                    title="Caja sobre la que operan «Tu caja», «Cobro directo» e «Imprimir cierre en la máquina»">
+                    title="Sucursal y caja sobre la que trabajan «Tu caja», «Cobro directo» e «Imprimir cierre en la máquina»">
                 {% if not sesion_tiene_caja_mp %}<option value="" selected>Tu sucursal ({{ sucursal_sesion_alias|default:'sin sesión' }}) no tiene caja MP — elige una o créala abajo</option>{% endif %}
                 {% for cfg in configs_mp %}<option value="{{ cfg.id }}" data-sucursal="{{ cfg.sucursal_id }}"{% if cfg.sucursal_id == sucursal_sesion_id and cfg.es_principal %} selected{% endif %}>{{ cfg.sucursal_alias }} · {{ cfg.nombre }}{% if cfg.device_id %} 📟{% endif %}{% if not cfg.habilitado %} (deshabilitada){% endif %}{% if cfg.sucursal_id == sucursal_sesion_id %} — tu sucursal{% endif %}</option>{% endfor %}
             </select>
@@ -736,20 +789,39 @@
     <div class="mode-explain mt-2">
         <div class="row g-2">
             <div class="col-md-6">
-                <span class="mode-pill mode-pill-int"><i class="bi bi-plug-fill"></i> PDV · INTEGRADO</span>
-                La máquina obedece al sistema: el monto le llega desde el botón <strong>M. Pago</strong> del POS
-                o desde <strong>Cobro directo</strong> (abajo). No acepta montos digitados en su pantalla.
+                <span class="mode-pill mode-pill-int"><i class="bi bi-plug-fill"></i> INTEGRADA</span>
+                El monto le llega desde el sistema: botón <strong>M. Pago</strong> del POS o <strong>Cobro directo</strong>
+                (abajo). En este modo <strong>no</strong> se pueden digitar montos en la pantalla de la máquina.
+                <span class="text-muted">Mercado Pago lo llama «PDV».</span>
             </div>
             <div class="col-md-6">
-                <span class="mode-pill mode-pill-man"><i class="bi bi-hand-index-thumb"></i> STANDALONE · MANUAL</span>
-                La máquina cobra sola desde su pantalla. En el POS el pago se registra con <strong>MP manual</strong>
-                + N° de operación. Úsalo si el sistema o internet fallan.
+                <span class="mode-pill mode-pill-man"><i class="bi bi-hand-index-thumb"></i> MANUAL</span>
+                La máquina cobra sola desde su pantalla. Después hay que registrar el pago en el POS con
+                <strong>MP manual</strong> + N° de operación. Úsalo si el sistema o internet fallan.
+                <span class="text-muted">Mercado Pago lo llama «Standalone».</span>
             </div>
         </div>
         <div class="mt-1 text-muted"><i class="bi bi-arrow-repeat"></i> Tras cambiar el modo hay que
             <strong>reiniciar la máquina</strong> (apagar y encender) para que lo tome — requisito de Mercado Pago.</div>
     </div>
 </div>
+
+{% if es_admin_mp %}
+<!-- 1b. MÁQUINAS POS Y SU SUCURSAL — asignar el aparato a una tienda sin entrar
+     a «Configuración avanzada». Se carga al abrir la pestaña (consulta a MP). -->
+<div class="tbk-card" id="mpMaquinasCard" style="border-left:4px solid var(--tbk-primary);">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <h6 class="mb-0"><i class="bi bi-phone-vibrate"></i> Máquinas POS y su sucursal
+            <span class="text-muted fw-normal" style="font-size:.7rem;">qué tienda usa cada aparato y en qué modo está</span></h6>
+        <button type="button" id="mpMaquinasRefrescar" class="btn btn-sm btn-light border" onclick="cargarMaquinasMP(true)"
+                title="Vuelve a preguntarle a Mercado Pago qué máquinas tiene cada empresa">
+            <i class="bi bi-arrow-clockwise"></i> Actualizar
+        </button>
+    </div>
+    <hr>
+    <div id="mpMaquinasBody" class="tbk-tech-body">Se cargan al abrir esta pestaña…</div>
+</div>
+{% endif %}
 
 <!-- 2. COBRO DIRECTO (cualquier usuario, caja de su sucursal) -->
 <div class="tbk-card cobro-directo">
@@ -786,10 +858,12 @@
     <div class="alert alert-warning py-1 px-2 mt-2 mb-0 d-none" id="mpOpAviso" style="font-size:.74rem;"></div>
     <div class="tbk-tech-body mt-2">
         <i class="bi bi-info-circle"></i>
-        <strong>Con N° de ticket:</strong> el cobro queda ligado a esa venta y el POS lo detecta solo al entrar al
-        cobro del ticket (botón «Agregar al ticket»).
-        <strong>Sin ticket:</strong> queda como cobro suelto <code>DIRECTO-*</code> (fuera de la cuadratura de
-        tickets); regístralo en el POS con <strong>MP manual</strong> usando el N° de operación que aparece al aprobarse.
+        <strong>Con N° de ticket</strong> (lo normal): el cobro queda pegado a esa venta y el POS te lo ofrece
+        solo al entrar al cobro de ese ticket, con el botón «Agregar al ticket». Es la forma segura: la venta y la
+        plata quedan juntas.
+        <strong>Sin N° de ticket:</strong> queda como cobro suelto y hay que registrarlo a mano en el POS con
+        <strong>MP manual</strong> y el N° de operación que aparece al aprobarse; si no, la plata entra a Mercado
+        Pago pero la venta no la muestra.
     </div>
     <div class="mt-2">
         <div class="d-flex justify-content-between align-items-center mb-1">
@@ -856,28 +930,34 @@
     <!-- Col 1: Webhook + estado de cuentas -->
     <div class="col-md-4">
         <div class="tbk-card">
-            <h6><i class="bi bi-broadcast-pin"></i> Webhook (respuesta de la máquina)</h6>
+            <h6><i class="bi bi-broadcast-pin"></i> Aviso de pagos
+                <span class="text-muted fw-normal" style="font-size:.66rem;">(webhook)</span></h6>
             <hr>
-            <p class="tbk-tech-body mb-1">Configura esta URL en el panel de developers de
-            Mercado Pago (Tus integraciones → tu aplicación → Webhooks), eventos
-            <strong>Pagos</strong> y <strong>Órdenes</strong>:</p>
+            <p class="tbk-tech-body mb-1">Es la dirección a la que Mercado Pago le avisa al sistema que un cobro
+            se pagó. <strong>Se configura una sola vez por cuenta</strong>, en el panel de Mercado Pago
+            (Tus integraciones → tu aplicación → Webhooks), marcando los eventos
+            <strong>Pagos</strong> y <strong>Órdenes</strong>. Copia esta dirección:</p>
             <div class="d-flex gap-1 mb-2">
                 <input type="text" class="form-control-sm-pos" id="mpWebhookUrl" readonly
                        value="https://{{ request.get_host }}{% url 'mp_webhook' %}">
                 <button class="btn btn-sm btn-outline-primary" type="button" style="font-size:.72rem;"
                         onclick="copiarWebhookMP()"><i class="bi bi-clipboard"></i></button>
             </div>
-            <p class="tbk-tech-body mb-0">Al guardarla, MP te entrega la <strong>clave
-            secreta de firma</strong>: pégala en la cuenta de la empresa (columna del medio).
-            Sin la clave, las notificaciones se descartan por firma inválida y el cobro
-            queda solo con el respaldo del polling.</p>
+            <p class="tbk-tech-body mb-0">Al guardarla, Mercado Pago entrega una <strong>clave secreta</strong>:
+            pégala en la cuenta de la empresa (columna del medio). Sin esa clave el sistema ignora los avisos por
+            seguridad y tiene que ir preguntando el estado de cada cobro, que es más lento: el N° de operación puede
+            demorar en aparecer.</p>
         </div>
 
         <div class="tbk-card">
-            <h6><i class="bi bi-shield-check"></i> Estado de cuentas por empresa</h6>
+            <h6><i class="bi bi-shield-check"></i> Cuentas de Mercado Pago
+                <span class="text-muted fw-normal" style="font-size:.66rem;">una por empresa (RUT)</span></h6>
             <hr>
             <table class="table table-sm mb-0" style="font-size:.74rem;">
-                <thead><tr><th>Empresa</th><th class="text-center">Token</th><th class="text-center">Clave webhook</th>{% if es_admin_mp %}<th class="text-center">Acciones</th>{% endif %}</tr></thead>
+                <thead><tr><th>Empresa</th>
+                    <th class="text-center" title="Access token: la credencial con la que el sistema cobra por esa cuenta">Clave de acceso</th>
+                    <th class="text-center" title="Clave secreta del webhook: valida los avisos de pago de Mercado Pago">Clave de avisos</th>
+                    {% if es_admin_mp %}<th class="text-center">Acciones</th>{% endif %}</tr></thead>
                 <tbody id="mpCuentasBody">
                 {% for c in cuentas_mp %}
                     <tr>
@@ -890,7 +970,7 @@
                                     onclick="editarCuentaMP({{ c.empresa_id }}, '{{ c.mp_user_id|escapejs }}')"><i class="bi bi-pencil"></i></button>
                             <button class="btn btn-sm btn-outline-success py-0 px-1" style="font-size:.68rem;" title="Probar conexión (valida el token contra MP)"
                                     onclick="probarCuentaMP({{ c.empresa_id }}, '{{ c.empresa_nombre|escapejs }}')"><i class="bi bi-plug"></i></button>
-                            <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:.68rem;" title="Máquinas Point de la cuenta: ver y cambiar modo PDV/Standalone de cualquiera"
+                            <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:.68rem;" title="Máquinas de esta cuenta: ver dónde está cada una, asignarla a una sucursal y cambiar su modo"
                                     onclick="verDevicesMP({{ c.empresa_id }}, '{{ c.empresa_nombre|escapejs }}')"><i class="bi bi-phone"></i></button>
                             <button class="btn btn-sm btn-outline-danger py-0 px-1" style="font-size:.68rem;" title="Eliminar cuenta"
                                     onclick="eliminarCuentaMP({{ c.empresa_id }}, '{{ c.empresa_nombre|escapejs }}')"><i class="bi bi-trash"></i></button>
@@ -909,26 +989,28 @@
     <div class="col-md-4">
         {% if es_admin_mp %}
         <div class="tbk-card">
-            <h6><i class="bi bi-key-fill"></i> Ingreso de credenciales (por empresa/RUT)<span class="mp-chip-admin">SOLO ADMIN</span></h6>
+            <h6><i class="bi bi-key-fill"></i> Credenciales de la cuenta<span class="mp-chip-admin">SOLO ADMIN</span></h6>
             <hr>
-            <label class="form-label-sm">Empresa (RUT dueño de la cuenta MP)</label>
+            <p class="tbk-tech-body mb-2">Las entrega Mercado Pago en el panel de developers de esa empresa.
+            Se guardan cifradas y no se vuelven a mostrar.</p>
+            <label class="form-label-sm">Empresa dueña de la cuenta (RUT)</label>
             <select class="form-control-sm-pos mb-2" id="mpCuentaEmpresa">
                 {% for e in empresas_mp %}<option value="{{ e.id }}">{{ e.nombre }} ({{ e.rut }})</option>{% endfor %}
             </select>
-            <label class="form-label-sm">User ID (opcional — se detecta solo desde el token al guardar o probar)</label>
+            <label class="form-label-sm">N° de usuario de Mercado Pago <span class="text-muted fw-normal">(se detecta solo: déjalo vacío)</span></label>
             <input type="text" class="form-control-sm-pos mb-2" id="mpCuentaUserId" placeholder="vacío: lo completa el sistema"
                    title="Es el id del dueño del token. No lo tipees a mano: si no coincide con el token, Mercado Pago responde 403 al listar cajas.">
-            <label class="form-label-sm">Access Token</label>
+            <label class="form-label-sm">Clave de acceso <span class="text-muted fw-normal">(Access Token)</span></label>
             <input type="password" class="form-control-sm-pos mb-2" id="mpCuentaToken"
                    placeholder="APP_USR-… (vacío = mantener el actual)" autocomplete="new-password">
-            <label class="form-label-sm">Clave secreta del webhook</label>
+            <label class="form-label-sm">Clave de avisos de pago <span class="text-muted fw-normal">(clave secreta del webhook)</span></label>
             <input type="password" class="form-control-sm-pos mb-2" id="mpCuentaSecret"
                    placeholder="del panel de Webhooks (vacío = mantener)" autocomplete="new-password">
             <button class="tbk-btn tbk-btn-primary" onclick="guardarCuentaMP()">
-                <i class="bi bi-save"></i> Guardar cuenta (se cifra en BD)
+                <i class="bi bi-save"></i> Guardar cuenta
             </button>
-            <p class="tbk-tech-body mt-1 mb-0">Los valores guardados nunca se vuelven a
-            mostrar. Dejar un campo vacío conserva el que ya está.</p>
+            <p class="tbk-tech-body mt-1 mb-0">Al guardar se prueba la clave contra Mercado Pago.
+            Dejar un campo vacío conserva el que ya está.</p>
         </div>
         {% else %}
         <div class="tbk-card mp-card-bloqueada text-center">
@@ -944,10 +1026,14 @@
     <!-- Col 3: Asociación de máquinas/cajas -->
     <div class="col-md-4">
         <div class="tbk-card">
-            <h6><i class="bi bi-pc-display"></i> Asociación de máquinas (cajas QR / Point){% if es_admin_mp %}<span class="mp-chip-admin">EDICIÓN: SOLO ADMIN</span>{% endif %}</h6>
+            <h6><i class="bi bi-pc-display"></i> Puntos de venta
+                <span class="text-muted fw-normal" style="font-size:.66rem;">con qué cobra cada sucursal</span>{% if es_admin_mp %}<span class="mp-chip-admin">EDICIÓN: SOLO ADMIN</span>{% endif %}</h6>
             <hr>
             <table class="table table-sm mb-2" style="font-size:.72rem;">
-                <thead><tr><th>Sucursal · caja</th><th>Caja MP (external_pos_id)</th><th class="text-center">Habilitada</th>{% if es_admin_mp %}<th class="text-center">Acciones</th>{% endif %}</tr></thead>
+                <thead><tr><th>Sucursal · caja</th>
+                    <th title="Código de la caja dentro de Mercado Pago (external_pos_id): lo necesita el cobro con QR">Código en MP</th>
+                    <th class="text-center" title="Si está habilitada, el POS de esa sucursal muestra el botón M. Pago">Activa</th>
+                    {% if es_admin_mp %}<th class="text-center">Acciones</th>{% endif %}</tr></thead>
                 <tbody id="mpConfigsBody">
                 {% for cfg in configs_mp %}
                     <tr {% if es_admin_mp %}style="cursor:pointer;" title="Clic para editar"
@@ -973,10 +1059,10 @@
 
             {% if es_admin_mp %}
             <hr>
-            <p class="tbk-tech-body mb-2"><strong>Máquina de otra empresa (p.ej. Paola):</strong>
-            1) la Point tiene que estar vinculada a la cuenta MP de esa empresa (se inicia sesión en la propia máquina con ese usuario de Mercado Pago);
-            2) aquí elige la sucursal y, en «Cuenta Mercado Pago», la empresa dueña — con el botón 📱 aparecen SUS máquinas;
-            3) «Buscar cajas creadas en MP» para el ID de caja, marca Habilitada y guarda.</p>
+            <p class="tbk-tech-body mb-2"><strong>Para que una sucursal cobre con Mercado Pago:</strong>
+            elige la sucursal, elige con qué <strong>cuenta</strong> cobra (puede ser la de otra empresa, p.ej. Paola),
+            usa «Buscar cajas creadas en Mercado Pago» para traer el código de la caja, marca <strong>Activa</strong> y guarda.
+            La <strong>máquina</strong> se asigna más arriba, en «Máquinas POS y su sucursal».</p>
             <button class="btn btn-sm btn-outline-primary w-100 mb-2" style="font-size:.74rem;" onclick="buscarCajasMP()"
                     title="Lista las sucursales y cajas ya creadas en la cuenta MP de la empresa de la sucursal elegida — clic en una para llenar los campos solo">
                 <i class="bi bi-cloud-download"></i> Buscar cajas creadas en Mercado Pago
@@ -997,21 +1083,24 @@
                 {% for c in cuentas_mp %}<option value="{{ c.empresa_id }}">{{ c.empresa_nombre }} ({{ c.empresa_rut }})</option>{% endfor %}
             </select>
             <div class="tbk-tech-body mb-2" id="mpCfgCuentaAyuda"></div>
-            <label class="form-label-sm">Nombre de la caja</label>
+            <label class="form-label-sm">Nombre de la caja <span class="text-muted fw-normal">(interno, para distinguirla)</span></label>
             <input type="text" class="form-control-sm-pos mb-2" id="mpCfgNombre" value="Caja principal">
-            <label class="form-label-sm">external_store_id (sucursal en MP)</label>
-            <input type="text" class="form-control-sm-pos mb-2" id="mpCfgStore" placeholder="RETAIL-SUC5">
-            <label class="form-label-sm">external_pos_id (caja en MP)</label>
-            <input type="text" class="form-control-sm-pos mb-2" id="mpCfgPos" placeholder="REALSPORTCAJA1">
-            <label class="form-label-sm">Máquina Point (opcional — habilita el botón "M. Pago" Point del POS)</label>
+            <label class="form-label-sm">Código de la sucursal en Mercado Pago
+                <span class="text-muted fw-normal">(external_store_id)</span></label>
+            <input type="text" class="form-control-sm-pos mb-2" id="mpCfgStore" placeholder="lo trae «Buscar cajas…»">
+            <label class="form-label-sm">Código de la caja en Mercado Pago
+                <span class="text-muted fw-normal">(external_pos_id — lo usa el cobro con QR)</span></label>
+            <input type="text" class="form-control-sm-pos mb-2" id="mpCfgPos" placeholder="lo trae «Buscar cajas…»">
+            <label class="form-label-sm">Máquina asignada
+                <span class="text-muted fw-normal">(opcional: sin máquina, la sucursal cobra solo con QR)</span></label>
             <div class="d-flex gap-1 mb-2">
-                <input type="text" class="form-control-sm-pos" id="mpCfgDevice" placeholder="vacío = solo QR">
+                <input type="text" class="form-control-sm-pos" id="mpCfgDevice" placeholder="vacío = solo QR en pantalla">
                 <button class="btn btn-sm btn-outline-secondary py-0 px-2" type="button" style="font-size:.72rem;"
                         title="Elegir de las máquinas Point de la cuenta" onclick="elegirDeviceMP()"><i class="bi bi-phone"></i></button>
             </div>
             <div class="form-check mb-1" style="font-size:.76rem;">
                 <input class="form-check-input" type="checkbox" id="mpCfgHabilitado">
-                <label class="form-check-label" for="mpCfgHabilitado">Habilitada (muestra el botón M. Pago en el POS)</label>
+                <label class="form-check-label" for="mpCfgHabilitado">Activa: el POS de esa sucursal muestra el botón M. Pago</label>
             </div>
             <div class="form-check mb-2" style="font-size:.76rem;">
                 <input class="form-check-input" type="checkbox" id="mpCfgPrincipal">
@@ -1964,6 +2053,10 @@ function _postGestionMP(url, datos, exitoMsg) {
                     && (esGuardarCaja || (esEliminarCaja && String(datos.config_id) === String(idEnEdicion)))) {
                     limpiarFormConfigMP();
                 }
+                // Guardar/eliminar una caja puede cambiar qué máquina usa: la
+                // tarjeta «Máquinas POS» quedaría mintiendo (y su modal
+                // preseleccionaría la sucursal vieja). Solo si ya se mostró.
+                if ((esGuardarCaja || esEliminarCaja) && _mpMaquinasCargadas) cargarMaquinasMP(true);
                 if (data.aviso) {
                     Swal.fire({ icon: 'warning', title: 'Guardado, con un aviso', text: data.aviso });
                 }
@@ -2119,13 +2212,13 @@ function elegirDeviceMP() {
             const filas = devices.map((d, i) => `
                 <tr style="cursor:pointer;" onclick="usarDeviceMP(${i})">
                     <td style="word-break:break-all;"><code style="font-size:.66rem;">${_escMP(d.device_id)}</code></td>
-                    <td class="text-center"><span class="badge ${(d.operating_mode||'')==='PDV'?'bg-primary':'bg-secondary'}" style="font-size:.6rem;">${_escMP(d.operating_mode||'?')}</span></td>
+                    <td class="text-center"><span class="badge ${(d.operating_mode||'')==='PDV'?'bg-primary':'bg-secondary'}" style="font-size:.6rem;">${(d.operating_mode||'')==='PDV'?'INTEGRADA':'MANUAL'}</span></td>
                     <td class="text-center"><code style="font-size:.64rem;">${_escMP(d.external_pos_id)||'—'}</code></td>
                     <td style="font-size:.66rem;">${_asignadaTxtMP(d)}</td>
                 </tr>`).join('');
             Swal.fire({
                 title: 'Elegir máquina Point',
-                html: `<p class="small text-muted mb-1">Clic para asociarla a esta caja (debe estar en modo PDV para recibir cobros). Si ya está asignada a otra caja, al guardar quedará en las dos: usa «Cambiar sucursal» (botón 📱 de la cuenta) para moverla.</p>
+                html: `<p class="small text-muted mb-1">Clic para usar esta máquina en la caja del formulario (tiene que estar <strong>INTEGRADA</strong> para recibir los cobros del sistema). Si la máquina ya la usa otra caja, <strong>guardar aquí te lo va a rechazar</strong>: para moverla de tienda usa «Asignar a sucursal» en la tarjeta <strong>Máquinas POS</strong>, que libera la caja anterior.</p>
                        <table class="table table-sm table-hover" style="font-size:.72rem;">
                        <thead><tr><th>Device</th><th class="text-center">Modo</th><th class="text-center">Caja MP</th><th>Asignada a</th></tr></thead>
                        <tbody>${filas}</tbody></table>`,
@@ -2144,8 +2237,8 @@ function usarDeviceMP(i) {
     }
     Swal.close();
     if ((d.operating_mode || '') !== 'PDV') {
-        Swal.fire({ icon: 'warning', title: 'Máquina en Standalone',
-            text: 'Para que reciba cobros del sistema debe estar en modo PDV (botón 🖥 de la cuenta).' });
+        Swal.fire({ icon: 'warning', title: 'La máquina está en MANUAL',
+            text: 'Para que reciba los cobros del sistema hay que pasarla a INTEGRADA en la tarjeta «Máquinas POS y su sucursal».' });
     }
 }
 
@@ -2174,7 +2267,7 @@ function probarCuentaMP(empresaId, nombre) {
             if (data.success) {
                 const d = data.datos || {};
                 Swal.fire({ icon: 'success', title: 'Conexión OK',
-                    html: `<div class="text-start small"><strong>${nombre}</strong><br>` +
+                    html: `<div class="text-start small"><strong>${_escMP(nombre)}</strong><br>` +
                           `User ID: <code>${d.user_id || '-'}</code><br>` +
                           `Cuenta: ${d.nickname || '-'} (${d.email || '-'})<br>` +
                           `Sitio: ${d.site || '-'}</div>` });
@@ -2223,27 +2316,27 @@ function verDevicesMP(empresaId, nombre) {
                 return `<tr>
                     <td style="word-break:break-all;"><code style="font-size:.66rem;">${_escMP(d.device_id)}</code>
                         ${d.external_pos_id ? '<div class="text-muted" style="font-size:.6rem;">caja MP: <code>' + _escMP(d.external_pos_id) + '</code></div>' : ''}</td>
-                    <td class="text-center"><span class="badge ${esPDV ? 'bg-primary' : 'bg-secondary'}" style="font-size:.62rem;">${esPDV ? 'PDV (integrada)' : 'STANDALONE'}</span></td>
+                    <td class="text-center"><span class="badge ${esPDV ? 'bg-primary' : 'bg-secondary'}" style="font-size:.62rem;">${esPDV ? 'INTEGRADA' : 'MANUAL'}</span></td>
                     <td style="font-size:.68rem;">${_asignadaTxtMP(d)}</td>
                     <td class="text-center text-nowrap">
                         <button class="btn btn-sm btn-outline-primary py-0 px-2 mb-1" style="font-size:.66rem;"
                                 onclick="reasignarDeviceMP(${i})">
-                            <i class="bi bi-shop"></i> Cambiar sucursal
+                            <i class="bi bi-shop"></i> Asignar a sucursal
                         </button><br>
                         <button class="btn btn-sm ${esPDV ? 'btn-outline-secondary' : 'btn-outline-primary'} py-0 px-2" style="font-size:.66rem;"
                                 onclick="cambiarModoDeviceMP(${i}, '${esPDV ? 'STANDALONE' : 'PDV'}')">
-                            ${esPDV ? 'Volver a Standalone' : 'Activar modo PDV'}
+                            ${esPDV ? 'Pasar a manual' : 'Pasar a integrada'}
                         </button>
                     </td>
                 </tr>`;
             }).join('');
             Swal.fire({
-                title: `Máquinas Point — ${nombre}`,
-                html: `<p class="small text-muted mb-1"><strong>PDV</strong>: la máquina queda integrada al sistema
-                       (NO acepta cobros digitados en su pantalla). <strong>Standalone</strong>: cobra sola, sin integración.
-                       <strong>Asignada a</strong>: la sucursal · caja del sistema que la usa (cambiar = moverla de tienda).</p>
+                title: `Máquinas de ${_escMP(nombre)}`,
+                html: `<p class="small text-muted mb-1"><strong>Integrada</strong>: el sistema le manda el monto
+                       (no acepta montos digitados en su pantalla). <strong>Manual</strong>: cobra sola desde su pantalla.
+                       <strong>Asignada a</strong>: la sucursal · caja que la usa.</p>
                        <table class="table table-sm" style="font-size:.72rem;">
-                       <thead><tr><th>Máquina</th><th class="text-center">Modo</th><th>Asignada a</th><th class="text-center">Acción</th></tr></thead>
+                       <thead><tr><th>Máquina</th><th class="text-center">Modo</th><th>Sucursal · caja</th><th class="text-center">Acción</th></tr></thead>
                        <tbody>${filas}</tbody></table>`,
                 width: 760, showConfirmButton: false, showCloseButton: true
             });
@@ -2251,97 +2344,29 @@ function verDevicesMP(empresaId, nombre) {
         .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
 }
 
-/** Mueve la máquina i (del listado de la cuenta) a otra sucursal/caja del sistema. */
+/** Asigna la máquina i (del listado de UNA cuenta) a una sucursal del sistema. */
 function reasignarDeviceMP(i) {
     const ctx = window.__devicesCtx || {};
-    const empresaId = ctx.empresaId;
-    const nombreEmpresa = ctx.nombre || '';
     const d = (window.__devicesCuenta || [])[i];
-    const sucs = window.__mpSucursales || [];
-    if (!d || !empresaId) return;
-    if (!sucs.length) { Swal.fire({ icon: 'warning', title: 'Sin sucursales' }); return; }
-    const actual = (d.asignaciones || [])[0];
-    const opts = sucs.map(s => `<option value="${s.id}"${actual && actual.sucursal_id === s.id ? ' selected' : ''}>${_escMP(s.alias)}</option>`).join('');
-    Swal.fire({
-        title: 'Cambiar sucursal de la máquina',
-        html: `<div class="text-start small">
-            <div class="mb-2">Máquina <code>${_escMP(d.device_id)}</code><br>Asignada hoy a: <strong>${_asignadaTxtMP(d)}</strong></div>
-            <label class="form-label-sm" style="display:block;">Nueva sucursal (la caja del POS que la usará)</label>
-            <select id="swalReasigSuc" class="form-select form-select-sm mb-2">${opts}</select>
-            <label class="form-label-sm" style="display:block;">Nombre de la caja en esa sucursal (vacío = su caja principal)</label>
-            <input id="swalReasigNombre" class="form-control form-control-sm mb-2" placeholder="Caja principal">
-            <p class="text-muted mb-0">Se quita la máquina de las cajas que la tenían (quedan solo QR) y se pone en la caja elegida,
-            habilitada y cobrando con la cuenta de <strong>${_escMP(nombreEmpresa)}</strong>. La asociación dentro de Mercado Pago
-            (sucursal/caja MP de la máquina) no cambia: eso se hace en el panel de MP.</p>
-        </div>`,
-        showCancelButton: true, confirmButtonText: 'Mover máquina', cancelButtonText: 'Cancelar', confirmButtonColor: '#0066FF',
-        preConfirm: () => ({
-            sucursal_id: document.getElementById('swalReasigSuc').value,
-            nombre: document.getElementById('swalReasigNombre').value.trim()
-        })
-    }).then(r => {
-        if (!r.isConfirmed) return;
-        const fd = new FormData();
-        fd.append('empresa_id', empresaId);
-        fd.append('device_id', d.device_id);
-        fd.append('sucursal_id', r.value.sucursal_id);
-        fd.append('nombre', r.value.nombre);
-        fd.append('external_pos_id', d.external_pos_id || '');
-        fd.append('csrfmiddlewaretoken', _csrfMP());
-        Swal.fire({ title: 'Moviendo máquina…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
-        fetch('/app/pos/mercadopago/gestion/devices/reasignar/', { method: 'POST', body: fd, credentials: 'same-origin' })
-            .then(resp => resp.json())
-            .then(data => {
-                if (!data.success) { Swal.fire({ icon: 'error', title: 'No se pudo mover', text: data.error }); return; }
-                refrescarDatosMP();
-                cargarMiCajaMP(true);   // la máquina de la caja cambió: consultar su modo en vivo
-                Swal.fire({
-                    icon: 'success',
-                    title: `Máquina asignada a ${_escMP(data.sucursal)} · ${_escMP(data.caja)}`,
-                    html: `<div class="small text-start">${(data.liberadas || []).length ? 'Se quitó de: ' + data.liberadas.map(_escMP).join(', ') + '.<br>' : ''}${data.aviso ? '⚠️ ' + _escMP(data.aviso) : ''}</div>`
-                }).then(() => verDevicesMP(empresaId, nombreEmpresa));
-            })
-            .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
+    if (!d || !ctx.empresaId) return;
+    _modalAsignarMaquinaMP({
+        empresaId: ctx.empresaId, deviceId: d.device_id, empresaNombre: ctx.nombre || '',
+        externalPosId: d.external_pos_id, asignaciones: d.asignaciones,
+        onDone: () => {
+            cargarMiCajaMP(true);          // la máquina de la caja cambió: consultar su modo
+            cargarMaquinasMP(true);
+            verDevicesMP(ctx.empresaId, ctx.nombre || '');
+        },
     });
 }
 
 function cambiarModoDeviceMP(i, modoNuevo) {
     const ctx = window.__devicesCtx || {};
-    const empresaId = ctx.empresaId;
-    const nombre = ctx.nombre || '';
     const d = (window.__devicesCuenta || [])[i];
-    if (!d || !empresaId) return;
-    const deviceId = d.device_id;
-    const aPDV = modoNuevo === 'PDV';
-    Swal.fire({
-        icon: 'warning',
-        title: aPDV ? '¿Activar modo PDV?' : '¿Volver a Standalone?',
-        html: aPDV
-            ? '<div class="text-start small">La máquina quedará <strong>esclava del sistema</strong>: ' +
-              'NO se podrán digitar cobros en su pantalla hasta volver a Standalone.<br><br>' +
-              '🔄 <strong>Después del cambio hay que REINICIAR la máquina</strong> para que tome el modo (requisito de MP).</div>'
-            : '<div class="text-start small">La máquina volverá a cobrar de forma independiente desde su pantalla.<br><br>' +
-              '🔄 <strong>Después del cambio hay que REINICIAR la máquina</strong> para que tome el modo (requisito de MP).</div>',
-        showCancelButton: true,
-        confirmButtonText: aPDV ? 'Sí, activar PDV' : 'Sí, volver a Standalone',
-        confirmButtonColor: aPDV ? '#FFB020' : '#0066FF',
-        cancelButtonText: 'Cancelar'
-    }).then(r => {
-        if (!r.isConfirmed) return;
-        const fd = new FormData();
-        fd.append('empresa_id', empresaId);
-        fd.append('device_id', deviceId);
-        fd.append('modo', modoNuevo);
-        fd.append('csrfmiddlewaretoken', _csrfMP());
-        Swal.fire({ title: 'Cambiando modo…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
-        fetch('/app/pos/mercadopago/gestion/devices/modo/', { method: 'POST', body: fd, credentials: 'same-origin' })
-            .then(resp => resp.json())
-            .then(data => {
-                if (!data.success) { Swal.fire({ icon: 'error', title: 'MP rechazó el cambio', text: data.error }); return; }
-                Swal.fire({ icon: 'success', title: `Modo ${data.operating_mode}`, timer: 1500, showConfirmButton: false })
-                    .then(() => verDevicesMP(empresaId, nombre));
-            })
-            .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
+    if (!d || !ctx.empresaId) return;
+    _confirmarCambioModoMP({
+        empresaId: ctx.empresaId, deviceId: d.device_id, modoNuevo: modoNuevo,
+        onDone: () => { cargarMaquinasMP(true); verDevicesMP(ctx.empresaId, ctx.nombre || ''); },
     });
 }
 
@@ -2463,7 +2488,7 @@ function probarConfigMP(configId, sucursal, tieneDevice) {
            </select></div>`
         : '';
     Swal.fire({
-        title: `Transacción de prueba — ${sucursal}`,
+        title: `Transacción de prueba — ${_escMP(sucursal)}`,
         html: `<p class="small text-muted">Cobro REAL de prueba (queda marcado PRUEBA). Si nadie paga, se cancela.</p>${canalHtml}`,
         input: 'number', inputValue: 100, inputLabel: 'Monto CLP',
         showCancelButton: true, confirmButtonText: 'Enviar prueba', cancelButtonText: 'Cerrar'
@@ -2730,6 +2755,256 @@ function _renderMiCajaMP(d) {
     cont.innerHTML = modoBox + cajaBox + hoyBox;
 }
 
+// ══════════════ Máquinas POS (Point) y su sucursal ══════════════
+// Antes, saber dónde estaba una máquina obligaba a entrar cuenta por cuenta
+// («Configuración avanzada» → fila de la cuenta → 📱). Esta tarjeta lo muestra
+// todo junto y deja asignar el aparato a una tienda con un clic.
+
+let _mpMaquinas = [];
+let _mpMaquinasCargadas = false;
+// Nº de la consulta en curso: dos clics en «Actualizar» lanzan dos consultas a
+// Mercado Pago y la que llega última pinta, aunque sea la más vieja. Solo se
+// pinta la respuesta de la consulta más reciente.
+let _mpMaquinasSeq = 0;
+let _mpMaquinasEnVuelo = 0;
+// Última respuesta completa: permite repintar la tabla (con sus avisos por
+// cuenta) tras un cambio local, sin volver a consultar a Mercado Pago.
+let _mpMaquinasData = null;
+
+function _mpMaquinasBoton(ocupado) {
+    const btn = document.getElementById('mpMaquinasRefrescar');
+    if (btn) btn.disabled = ocupado;
+}
+
+/** @param {boolean} forzar  true = el usuario pidió refrescar (o cambió algo). */
+function cargarMaquinasMP(forzar) {
+    const cont = document.getElementById('mpMaquinasBody');
+    if (!cont) return;                       // no-admin: la tarjeta no existe
+    if (_mpMaquinasCargadas && !forzar) return;
+    _mpMaquinasCargadas = true;
+    const seq = ++_mpMaquinasSeq;
+    _mpMaquinasEnVuelo += 1;
+    _mpMaquinasBoton(true);
+    const listo = () => {
+        _mpMaquinasEnVuelo -= 1;
+        if (_mpMaquinasEnVuelo <= 0) { _mpMaquinasEnVuelo = 0; _mpMaquinasBoton(false); }
+    };
+    cont.innerHTML = '<span class="text-muted"><span class="spinner-border spinner-border-sm"></span> '
+                   + 'Preguntándole a Mercado Pago qué máquinas tiene cada empresa…</span>';
+    fetch('/app/pos/mercadopago/gestion/maquinas/', { credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(data => {
+            listo();
+            if (seq !== _mpMaquinasSeq) return;      // llegó una respuesta vieja
+            if (!data.success) {
+                cont.innerHTML = `<span class="text-danger">${_escMP(data.error || 'No se pudieron listar las máquinas')}</span>`;
+                return;
+            }
+            _mpMaquinas = data.maquinas || [];
+            _mpMaquinasData = data;
+            window.__mpSucursales = data.sucursales || [];
+            _renderMaquinasMP(data);
+        })
+        .catch(() => {
+            listo();
+            if (seq !== _mpMaquinasSeq) return;
+            // Falló: que el próximo intento (o volver a la pestaña) reconsulte.
+            _mpMaquinasCargadas = false;
+            cont.innerHTML = '<span class="text-danger">Error de conexión al listar las máquinas. '
+                           + '<a href="#" onclick="cargarMaquinasMP(true);return false;">Reintentar</a></span>';
+        });
+}
+
+
+/** Refleja en la tarjeta un modo que ya cambió, sin re-consultar a MP. */
+function _mpMarcarModoMaquina(deviceId, modo) {
+    if (!deviceId || !_mpMaquinasData) return;
+    const fila = (_mpMaquinas || []).find(x => x.device_id === deviceId);
+    if (!fila) return;
+    fila.operating_mode = String(modo || '').toUpperCase();
+    _renderMaquinasMP(_mpMaquinasData);
+}
+
+function _renderMaquinasMP(data) {
+    const cont = document.getElementById('mpMaquinasBody');
+    if (!cont) return;
+    const errores = (data.errores || []).map(e => `
+        <div class="alert alert-warning py-1 px-2 mb-1" style="font-size:.7rem;">
+            <i class="bi bi-exclamation-triangle-fill"></i> No se pudieron ver las máquinas de
+            <strong>${_escMP(e.empresa)}</strong>: ${_escMP(e.error)}
+        </div>`).join('');
+    if (!_mpMaquinas.length) {
+        cont.innerHTML = errores + `<div class="text-muted">No hay máquinas Point vinculadas a las cuentas cargadas.
+            Una máquina aparece aquí cuando se inicia sesión <strong>en la propia máquina</strong> con el usuario de
+            Mercado Pago de la empresa.</div>`;
+        return;
+    }
+    const filas = _mpMaquinas.map((m, i) => {
+        const integrada = m.operating_mode === 'PDV';
+        const modo = integrada
+            ? '<span class="mode-pill mode-pill-int"><i class="bi bi-plug-fill"></i> INTEGRADA</span>'
+            : '<span class="mode-pill mode-pill-man"><i class="bi bi-hand-index-thumb"></i> MANUAL</span>';
+        const asignada = (m.asignaciones || []).length
+            ? (m.asignaciones || []).map(a => `<strong>${_escMP(a.sucursal)}</strong> · ${_escMP(a.caja)}`
+                + (a.habilitado ? '' : ' <span class="text-danger">(caja no activa)</span>')).join('<br>')
+            : '<span class="text-danger"><i class="bi bi-exclamation-circle"></i> sin sucursal asignada</span>';
+        return `<tr>
+            <td><i class="bi bi-phone-vibrate"></i> …${_escMP(String(m.device_id).slice(-6))}
+                <span class="tec" title="${_escMP(m.device_id)}">${_escMP(m.device_id)}</span></td>
+            <td>${_escMP(m.empresa)}</td>
+            <td>${modo}<span class="tec">${integrada ? 'cobra desde el sistema' : 'cobra desde su pantalla'}</span></td>
+            <td>${asignada}</td>
+            <td class="text-end text-nowrap">
+                <button class="btn btn-sm btn-outline-primary py-0 px-2 mb-1" style="font-size:.68rem;"
+                        onclick="asignarMaquinaMP(${i})"><i class="bi bi-shop"></i> Asignar a sucursal</button><br>
+                <button class="btn btn-sm ${integrada ? 'btn-outline-secondary' : 'btn-outline-success'} py-0 px-2" style="font-size:.68rem;"
+                        onclick="cambiarModoMaquinaMP(${i})">${integrada ? 'Pasar a manual' : 'Pasar a integrada'}</button>
+            </td>
+        </tr>`;
+    }).join('');
+    cont.innerHTML = errores + `
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle mb-1 tabla-mp">
+                <thead class="table-light"><tr>
+                    <th>Máquina</th><th>Cuenta (empresa)</th><th>Modo</th>
+                    <th>Sucursal · caja que la usa</th><th></th>
+                </tr></thead>
+                <tbody>${filas}</tbody>
+            </table>
+        </div>
+        <div class="text-muted" style="font-size:.68rem;">
+            <i class="bi bi-info-circle"></i> Una máquina cobra para la sucursal que tenga asignada.
+            Tras cambiar el modo hay que <strong>reiniciar la máquina</strong> para que lo tome.
+        </div>`;
+}
+
+function asignarMaquinaMP(i) {
+    const m = _mpMaquinas[i];
+    if (!m) return;
+    _modalAsignarMaquinaMP({
+        empresaId: m.empresa_id, deviceId: m.device_id, empresaNombre: m.empresa,
+        externalPosId: m.external_pos_id, asignaciones: m.asignaciones,
+        onDone: () => { cargarMaquinasMP(true); cargarMiCajaMP(true); },
+    });
+}
+
+function cambiarModoMaquinaMP(i) {
+    const m = _mpMaquinas[i];
+    if (!m) return;
+    _confirmarCambioModoMP({
+        empresaId: m.empresa_id, deviceId: m.device_id,
+        modoNuevo: m.operating_mode === 'PDV' ? 'STANDALONE' : 'PDV',
+        onDone: () => { cargarMaquinasMP(true); cargarMiCajaMP(true); },
+    });
+}
+
+/** Modal «¿qué sucursal usa esta máquina?» — compartido por la tarjeta
+ *  Máquinas POS y por el listado de máquinas de una cuenta. */
+function _modalAsignarMaquinaMP(op) {
+    const sucs = window.__mpSucursales || [];
+    if (!op || !op.empresaId || !op.deviceId) return;
+    if (!sucs.length) { Swal.fire({ icon: 'warning', title: 'No hay sucursales para asignar' }); return; }
+    const actual = (op.asignaciones || [])[0];
+    const opts = sucs.map(x => `<option value="${x.id}"${actual && actual.sucursal_id === x.id ? ' selected' : ''}>${_escMP(x.alias)}</option>`).join('');
+    const asignadaTxt = (op.asignaciones || []).length
+        ? (op.asignaciones || []).map(a => `${_escMP(a.sucursal)} · ${_escMP(a.caja)}`).join(', ')
+        : 'ninguna todavía';
+    Swal.fire({
+        title: 'Asignar la máquina a una sucursal',
+        html: `<div class="text-start small">
+            <div class="mb-2">Máquina <code>${_escMP(op.deviceId)}</code><br>
+                Cuenta: <strong>${_escMP(op.empresaNombre || '')}</strong><br>
+                Hoy la usa: <strong>${asignadaTxt}</strong></div>
+            <label class="form-label-sm" style="display:block;">Sucursal que va a usarla</label>
+            <select id="swalAsigSuc" class="form-select form-select-sm mb-2">${opts}</select>
+            <label class="form-label-sm" style="display:block;">Caja de esa sucursal
+                <span class="text-muted fw-normal">(vacío = su caja principal)</span></label>
+            <input id="swalAsigNombre" class="form-control form-control-sm mb-2" placeholder="Caja principal">
+            <p class="text-muted mb-0">La máquina se quita de la caja que la tenía y queda en la elegida, activa y
+            cobrando con la cuenta de <strong>${_escMP(op.empresaNombre || '')}</strong>. Dentro de Mercado Pago la
+            máquina no se mueve: eso se hace en el panel de Mercado Pago.</p>
+        </div>`,
+        showCancelButton: true, confirmButtonText: 'Asignar', cancelButtonText: 'Cancelar', confirmButtonColor: '#0066FF',
+        preConfirm: () => ({
+            sucursal_id: document.getElementById('swalAsigSuc').value,
+            nombre: document.getElementById('swalAsigNombre').value.trim(),
+        }),
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        const fd = new FormData();
+        fd.append('empresa_id', op.empresaId);
+        fd.append('device_id', op.deviceId);
+        fd.append('sucursal_id', r.value.sucursal_id);
+        fd.append('nombre', r.value.nombre);
+        fd.append('external_pos_id', op.externalPosId || '');
+        fd.append('csrfmiddlewaretoken', _csrfMP());
+        Swal.fire({ title: 'Asignando la máquina…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
+        fetch('/app/pos/mercadopago/gestion/devices/reasignar/', { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(resp => resp.json())
+            .then(data => {
+                if (!data.success) { Swal.fire({ icon: 'error', title: 'No se pudo asignar', text: data.error }); return; }
+                refrescarDatosMP();
+                // Si el formulario de «Puntos de venta» estaba editando una de
+                // las cajas afectadas, sus datos (máquina, activa) quedaron
+                // viejos: guardarlo desharía lo que se acaba de hacer.
+                const editando = (document.getElementById('mpCfgId') || {}).value || '';
+                const afectadas = [String(data.config_id)].concat((data.liberadas_ids || []).map(String));
+                if (editando && afectadas.indexOf(String(editando)) !== -1
+                    && typeof limpiarFormConfigMP === 'function') {
+                    limpiarFormConfigMP();
+                }
+                Swal.fire({
+                    icon: 'success',
+                    title: `La usa ${_escMP(data.sucursal)} · ${_escMP(data.caja)}`,
+                    html: `<div class="small text-start">${(data.liberadas || []).length
+                        ? 'Se quitó de: ' + data.liberadas.map(_escMP).join(', ') + '.<br>' : ''}${data.aviso ? '⚠️ ' + _escMP(data.aviso) : ''}</div>`,
+                }).then(() => { if (op.onDone) op.onDone(); });
+            })
+            .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
+    });
+}
+
+/** Confirmación + POST del cambio Integrada (PDV) ↔ Manual (Standalone) de una
+ *  máquina de la cuenta. Compartido por la tarjeta y el listado de la cuenta. */
+function _confirmarCambioModoMP(op) {
+    const aPDV = op.modoNuevo === 'PDV';
+    Swal.fire({
+        icon: 'warning',
+        title: aPDV ? '¿Pasar la máquina a INTEGRADA?' : '¿Pasar la máquina a MANUAL?',
+        html: aPDV
+            ? '<div class="text-start small">El monto le llegará desde el sistema (botón M. Pago del POS o Cobro directo).'
+              + ' <strong>No</strong> se podrán digitar montos en su pantalla.<br><br>'
+              + '🔄 <strong>Hay que reiniciar la máquina</strong> (apagar y encender) para que tome el cambio.</div>'
+            : '<div class="text-start small">La máquina volverá a cobrar sola desde su pantalla. Cada cobro habrá que'
+              + ' registrarlo en el POS con <strong>MP manual</strong> + N° de operación; si no, la plata entra a'
+              + ' Mercado Pago y la venta no la muestra.<br><br>'
+              + '🔄 <strong>Hay que reiniciar la máquina</strong> (apagar y encender) para que tome el cambio.</div>',
+        showCancelButton: true,
+        confirmButtonText: aPDV ? 'Sí, integrada' : 'Sí, manual',
+        confirmButtonColor: aPDV ? '#00b898' : '#FFB020',
+        cancelButtonText: 'Cancelar',
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        const fd = new FormData();
+        fd.append('empresa_id', op.empresaId);
+        fd.append('device_id', op.deviceId);
+        fd.append('modo', op.modoNuevo);
+        fd.append('csrfmiddlewaretoken', _csrfMP());
+        Swal.fire({ title: 'Cambiando el modo…', didOpen: () => Swal.showLoading(), showConfirmButton: false });
+        fetch('/app/pos/mercadopago/gestion/devices/modo/', { method: 'POST', body: fd, credentials: 'same-origin' })
+            .then(resp => resp.json())
+            .then(data => {
+                if (!data.success) { Swal.fire({ icon: 'error', title: 'Mercado Pago rechazó el cambio', text: data.error }); return; }
+                Swal.fire({
+                    icon: 'success',
+                    title: data.operating_mode === 'PDV' ? 'Máquina INTEGRADA' : 'Máquina en MANUAL',
+                    html: '<div class="small">Ahora <strong>reinicia la máquina</strong> (apagar y encender) para que tome el modo.</div>',
+                }).then(() => { if (op.onDone) op.onDone(); });
+            })
+            .catch(() => Swal.fire({ icon: 'error', title: 'Error de conexión' }));
+    });
+}
+
 function irACierreMP() {
     const el = document.getElementById('mpCierreCard');
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2773,9 +3048,12 @@ function cambiarModoMiCajaMP(modo) {
                     _renderMiCajaMP(_miCajaMP);
                     _ajustarFormCobroMP(_miCajaMP);
                 }
+                // La tarjeta «Máquinas POS» está justo debajo y mostraría el modo
+                // viejo de la MISMA máquina: se corrige en memoria, sin re-consultar.
+                _mpMarcarModoMaquina(c.device_id, data.operating_mode || modo);
                 Swal.fire({
                     icon: 'success',
-                    title: `Máquina en modo ${data.operating_mode || modo}`,
+                    title: `Máquina en modo ${_escMP(data.operating_mode || modo)}`,
                     html: '<div class="small">Ahora <strong>reinicia la máquina</strong> (apagar y encender) para que tome el modo.</div>',
                     confirmButtonText: 'Entendido'
                 });
@@ -3483,16 +3761,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Pestaña inicial: #mp o ?tab=mp abren Mercado Pago directo (para enlazar
     // desde el POS o el menú), y el hash se mantiene al cambiar de pestaña.
-    const params = new URLSearchParams(location.search);
-    if (location.hash === '#mp' || params.get('tab') === 'mp') _activarPestana('mp');
+    // Los listeners van ANTES de activar la pestaña: si la página abre con #mp,
+    // el evento shown ya tiene quién lo escuche y la tarjeta de máquinas carga.
     ['tab-tbk-btn', 'tab-mp-btn'].forEach(idb => {
         const el = document.getElementById(idb);
         if (el) {
             el.addEventListener('shown.bs.tab', () => {
                 try { history.replaceState(null, '', idb === 'tab-mp-btn' ? '#mp' : '#tbk'); } catch (e) {}
+                // Las máquinas se consultan a Mercado Pago (segundos): solo al
+                // abrir la pestaña, y una sola vez salvo que se pida refrescar.
+                if (idb === 'tab-mp-btn') cargarMaquinasMP(false);
             });
         }
     });
+    const params = new URLSearchParams(location.search);
+    if (location.hash === '#mp' || params.get('tab') === 'mp') _activarPestana('mp');
+    const paneMp = document.getElementById('tab-mp');
+    if (paneMp && paneMp.classList.contains('active')) cargarMaquinasMP(false);
 
     cargarRegistroSistema();
     cargarModosPOS();

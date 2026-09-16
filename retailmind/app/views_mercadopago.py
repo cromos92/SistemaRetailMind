@@ -381,6 +381,19 @@ def gestion_guardar_config_mp(request):
     config.external_pos_id = (request.POST.get('external_pos_id') or '').strip()[:60]
     config.habilitado = request.POST.get('habilitado') == '1'
     config.device_id = (request.POST.get('device_id') or '').strip()[:60]
+    if config.device_id:
+        # Una máquina cobra para UNA caja. Este formulario no libera la caja
+        # anterior (eso lo hace «Asignar a sucursal», que además arregla cuenta,
+        # modo y caja principal), así que guardar aquí la dejaría en dos sitios:
+        # el POS de las dos tiendas la mostraría y la cuadratura no sabría de
+        # quién es la venta.
+        otra = (MercadoPagoConfig.objects.filter(device_id=config.device_id)
+                .exclude(pk=config.pk).select_related('sucursal').first())
+        if otra:
+            return JsonResponse({'success': False, 'error': (
+                f'Esa máquina ya la usa «{otra.sucursal.alias} · {otra.nombre}». '
+                'Para cambiarla de tienda usa «Asignar a sucursal» en la tarjeta '
+                '«Máquinas POS y su sucursal»: así se libera la caja anterior.')}, status=400)
     # Cuenta MP explícita (empresa dueña del token). Vacío = automática: la de
     # la empresa dueña de la sucursal. Hace falta cuando la caja cobra con la
     # cuenta de OTRA empresa (p.ej. una máquina de Paola en una sucursal de
@@ -643,6 +656,62 @@ def gestion_modo_device_mp(request):
 
 
 @login_required
+def gestion_maquinas_mp(request):
+    """GET gestion/maquinas/ — TODAS las máquinas Point de TODAS las cuentas
+    activas, con la sucursal/caja del sistema a la que está asignada cada una.
+
+    Es lo que alimenta la tarjeta «Máquinas POS» de la pestaña Mercado Pago:
+    antes, para saber dónde estaba una máquina había que entrar cuenta por
+    cuenta. Solo admin: hace una llamada a Mercado Pago POR CUENTA (unos
+    segundos), por eso se carga bajo demanda y no al abrir la página. Una
+    cuenta que falla no tumba el resto: se informa en `errores`.
+    """
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
+
+    maquinas, errores = [], []
+    for cuenta in MercadoPagoCuenta.objects.filter(activo=True).select_related('empresa'):
+        empresa = cuenta.empresa.nombre or cuenta.empresa.razon_social or cuenta.empresa.rut
+        try:
+            devices = mp.listar_devices_point(cuenta)
+        except mp.MercadoPagoError as e:
+            errores.append({'empresa': empresa, 'error': e.mensaje})
+            continue
+        for d in devices:
+            maquinas.append({
+                'device_id': d.get('device_id') or '',
+                'operating_mode': (d.get('operating_mode') or '').upper(),
+                'external_pos_id': d.get('external_pos_id') or '',
+                'empresa_id': cuenta.empresa_id,
+                'empresa': empresa,
+                'asignaciones': [],
+            })
+
+    ids = [m['device_id'] for m in maquinas if m['device_id']]
+    asignadas = {}
+    for cfg in (MercadoPagoConfig.objects.filter(device_id__in=ids)
+                .select_related('sucursal').order_by('-es_principal', 'id')):
+        asignadas.setdefault(cfg.device_id, []).append({
+            'config_id': cfg.id,
+            'sucursal_id': cfg.sucursal_id,
+            'sucursal': cfg.sucursal.alias or cfg.sucursal.nombre or f'Sucursal {cfg.sucursal_id}',
+            'caja': cfg.nombre,
+            'habilitado': cfg.habilitado,
+            'es_principal': cfg.es_principal,
+        })
+    for m in maquinas:
+        m['asignaciones'] = asignadas.get(m['device_id'], [])
+
+    return JsonResponse({
+        'success': True,
+        'maquinas': maquinas,
+        'errores': errores,
+        'sucursales': [{'id': suc.id, 'alias': suc.alias or suc.nombre or f'Sucursal {suc.id}'}
+                       for suc in Sucursal.objects.order_by('alias')],
+    })
+
+
+@login_required
 @require_POST
 def gestion_reasignar_device_mp(request):
     """POST gestion/devices/reasignar/ — mueve una máquina Point a otra
@@ -778,6 +847,7 @@ def gestion_reasignar_device_mp(request):
         'sucursal': sucursal.alias or sucursal.nombre or f'Sucursal {sucursal.id}',
         'caja': destino.nombre,
         'liberadas': [f'{p.sucursal.alias} · {p.nombre}' for p in liberadas],
+        'liberadas_ids': [p.id for p in liberadas],
         'aviso': ' '.join(avisos),
     })
 
