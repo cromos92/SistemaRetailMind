@@ -245,6 +245,23 @@ def _es_admin(request):
     return getattr(request.user, 'rol', '') in ('administrador', 'administracion')
 
 
+def _pendiente_en_terminal(config):
+    """Cobro Point que el sistema ve vivo en esa máquina, para poder explicar un
+    `already_queued_order_on_terminal` con datos concretos (qué hay que cancelar
+    en la pantalla del terminal). Devuelve '' si no hay ninguno."""
+    trx = (TransaccionMercadoPago.objects
+           .filter(config=config, canal='POINT', estado__in=('CREADA', 'PENDIENTE'))
+           .order_by('-creado_en').first())
+    if not trx:
+        return ''
+    hora = timezone.localtime(trx.creado_en).strftime('%H:%M')
+    monto = f'{trx.monto:,}'.replace(',', '.')
+    corr = trx.correlativo_ticket or ''
+    ref = ('suelto' if corr.startswith(('DIRECTO-', 'PRUEBA-'))
+           else (f'del ticket {corr}' if corr else 'sin ticket'))
+    return (f' Pendiente en esa máquina: un cobro {ref} por ${monto} enviado a las {hora}.')
+
+
 def _config_operable(request, config_id=None, requerir_habilitada=False):
     """Caja MP sobre la que opera el usuario en la pestaña Mercado Pago.
 
@@ -1195,7 +1212,10 @@ def gestion_imprimir_cierre_terminal_mp(request):
             f"CIERRE-{config.id}-{fecha}-{timezone.now():%H%M%S}",
         )
     except mp.MercadoPagoError as e:
-        return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
+        mensaje = e.mensaje
+        if 'already_queued' in str(e.detalle):
+            mensaje += _pendiente_en_terminal(config)
+        return JsonResponse({'success': False, 'error': mensaje}, status=400)
     logger.info("MP gestión: cierre %s de caja %s impreso en terminal por %s",
                 fecha, config.id, request.user.username)
     return JsonResponse({'success': True})
@@ -1257,6 +1277,10 @@ def gestion_cobrar_terminal_mp(request):
         )
     except mp.MercadoPagoError as e:
         cuerpo = {'success': False, 'error': e.mensaje}
+        if 'already_queued' in str(e.detalle):
+            # La máquina está ocupada con OTRA operación (puede ser de otro
+            # ticket o una impresión): decir cuál, que se cancela en el terminal.
+            cuerpo['error'] += _pendiente_en_terminal(config)
         # Ya hay un cobro vivo/incierto del MISMO ticket: la pantalla lo vigila
         # en vez de dejar cobrar de nuevo (mismo contrato que qr/crear/).
         previa = getattr(e, 'transaccion', None)

@@ -259,6 +259,39 @@ def _request(config, metodo, path, json_body=None, idempotency_key=None, params=
     return resp
 
 
+# Códigos de error de Mercado Pago que tienen una acción concreta del lado de
+# la tienda. Sin esto el cajero ve el código en inglés y no sabe qué hacer;
+# con esto el mensaje dice qué apretar. Se buscan como subcadena en el cuerpo
+# crudo de la respuesta, que es donde MP los pone (code, message o errors[]).
+_PISTAS_ERROR_MP = (
+    ('already_queued_order_on_terminal',
+     'La máquina ya tiene una operación esperando en su pantalla (un cobro sin terminar o '
+     'una impresión anterior) y Mercado Pago admite solo una a la vez: termínala o cancélala '
+     'EN LA MÁQUINA (botón rojo o «atrás») y vuelve a intentar.'),
+    ('cannot_cancel_order',
+     'El cobro ya está en la pantalla de la máquina y Mercado Pago no deja cancelarlo desde '
+     'el sistema: hay que cancelarlo EN LA MÁQUINA.'),
+    ('invalid terminal_id',
+     'Esa máquina no aparece en esta cuenta de Mercado Pago: revisa a qué cuenta y sucursal '
+     'está asignada en «Máquinas POS y su sucursal».'),
+    ('terminal_not_found',
+     'Esa máquina no aparece en esta cuenta de Mercado Pago: revisa a qué cuenta y sucursal '
+     'está asignada en «Máquinas POS y su sucursal».'),
+)
+
+
+def _pista_error_mp(data):
+    """Qué hacer ante un error conocido de MP, en castellano. '' si no se reconoce."""
+    try:
+        crudo = json.dumps(data, ensure_ascii=False).lower()
+    except (TypeError, ValueError):
+        crudo = str(data).lower()
+    for codigo, texto in _PISTAS_ERROR_MP:
+        if codigo in crudo:
+            return texto
+    return ''
+
+
 def _json_o_error(resp, contexto):
     try:
         data = resp.json()
@@ -285,6 +318,7 @@ def _json_o_error(resp, contexto):
         if data.get('cause'):
             partes.append(str(data['cause'])[:200])
         mensaje_api = ' | '.join(partes) or f'HTTP {resp.status_code}'
+        pista = _pista_error_mp(data)
         logger.error(f"MP: {contexto} falló ({resp.status_code}): {json.dumps(data)[:800]}")
         # Un 4xx de validación prueba que MP NO hizo nada. Un 5xx/429/408 NO
         # prueba nada: la operación pudo haberse ejecutado del otro lado y
@@ -292,8 +326,9 @@ def _json_o_error(resp, contexto):
         # timeout. Marcarlos red=True es lo que evita que un 502 del edge de MP
         # cierre el cobro como "rechazado" y habilite un segundo cobro.
         incierto = resp.status_code >= 500 or resp.status_code in (408, 429)
-        raise MercadoPagoError(f'Mercado Pago rechazó la operación: {mensaje_api}',
-                               detalle=data, red=incierto)
+        raise MercadoPagoError(
+            f'Mercado Pago rechazó la operación: {mensaje_api}' + (f' — {pista}' if pista else ''),
+            detalle=data, red=incierto)
     return data
 
 
