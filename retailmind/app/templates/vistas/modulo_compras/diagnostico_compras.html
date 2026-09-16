@@ -4,36 +4,169 @@
 {% include 'layout/menu.html' %}
 
 <style>
-.diagnostico-card {
-    border-radius: 10px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin-bottom: 20px;
+/* ==================== ESTILOS MÓDULO DIAGNÓSTICO COMPRAS ==================== */
+/* Ver guía completa en: templates/vistas/ESTILOS_MODULOS.md */
+
+/* Contenedor principal - FONDO BLANCO */
+.page-content {
+    background: #ffffff !important;
+    min-height: calc(100vh - 70px);
 }
 
-.status-ok { border-left: 4px solid #28a745; }
-.status-warning { border-left: 4px solid #ffc107; }
-.status-error { border-left: 4px solid #dc3545; }
+/* Card principal estilizada */
+.card.shadow {
+    border: none;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(64, 81, 137, 0.1);
+    animation: fadeInCard 0.4s ease;
+}
 
-.progress-bar {
-    transition: width 0.3s ease;
+@keyframes fadeInCard {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Header con gradiente estilo unificado */
+.module-header {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.module-header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.module-header-icon {
+    width: 48px;
+    height: 48px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+}
+
+.module-header-info h5 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: white;
+}
+
+.module-header-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    opacity: 0.9;
+    margin-top: 4px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background: #4ade80;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.module-header-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.module-header-actions .btn {
+    border-radius: 10px;
+    font-weight: 500;
+    padding: 8px 14px;
+    font-size: 13px;
+    border: none;
+    transition: all 0.2s ease;
+}
+
+.module-header-actions .btn-outline-light {
+    border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.module-header-actions .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* Card body estilizado */
+.card-body {
+    padding: 24px;
+    background: white;
+}
+
+/* Secciones del diagnóstico (una sola card, secciones internas) */
+.diag-seccion {
+    border: 1px solid var(--vz-border-color);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+}
+
+.diag-seccion:last-child {
+    margin-bottom: 0;
+}
+
+.diag-seccion-titulo {
+    display: flex;
+    align-items: center;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #405189;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--vz-border-color);
+}
+
+/* Acento de estado: solo el borde izquierdo (paleta del tema) */
+.status-warning { border-left: 4px solid var(--vz-warning); }
+.status-error { border-left: 4px solid var(--vz-danger); }
+
+/* Cajas del flujo de datos */
+.flujo-box {
+    border: 1px solid var(--vz-border-color);
+    border-radius: 12px;
+    padding: 16px;
+    height: 100%;
+}
+
+.flujo-box h6 {
+    margin: 8px 0;
+    font-weight: 600;
+}
+
+.flujo-box .badge {
+    font-size: 0.85rem;
+    padding: 6px 12px;
 }
 
 .detalle-item {
-    background: #f8f9fa;
-    border-radius: 5px;
+    background: var(--vz-light);
+    border-radius: 8px;
     padding: 10px;
     margin: 5px 0;
     font-size: 0.9rem;
-}
-
-@media (max-width: 768px) {
-    .diagnostico-stats { flex-direction: column; gap: 0.5rem; }
-    .diagnostico-stats .stat-card { width: 100%; }
-    .diagnostico-content .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
-}
-@media (max-width: 576px) {
-    .diagnostico-header { flex-direction: column; gap: 0.5rem; }
-    .diagnostico-value { font-size: 1rem; }
 }
 </style>
 
@@ -42,154 +175,124 @@
     <div class="page-content">
         <div class="container-fluid">
             
-            <!-- Header -->
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h2 class="mb-1">🔍 Diagnóstico de Datos de Compras</h2>
-                            <p class="text-muted mb-0">Análisis completo del estado de datos en el sistema</p>
+            <div class="card shadow">
+                <!-- Header con gradiente -->
+                <div class="module-header">
+                    <div class="module-header-left">
+                        <div class="module-header-icon">
+                            <i class="bi bi-clipboard-data"></i>
                         </div>
-                        <div class="btn-group">
-                            <button class="btn btn-primary" onclick="ejecutarDiagnostico()">
-                                <i class="bi bi-arrow-clockwise me-1"></i>Actualizar Diagnóstico
-                            </button>
-                            <a href="{% url 'verDashboardCompras' %}" class="btn btn-outline-info">
-                                <i class="bi bi-graph-up me-1"></i>Ir al Dashboard
-                            </a>
+                        <div class="module-header-info">
+                            <h5 id="tituloDiagnostico">Diagnóstico de Compras</h5>
+                            <div class="module-header-status">
+                                <span class="status-dot"></span>
+                                Análisis completo del estado de datos en el sistema
+                            </div>
                         </div>
                     </div>
+                    <div class="module-header-actions">
+                        <button type="button" class="btn btn-light" onclick="ejecutarDiagnostico()">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Actualizar Diagnóstico
+                        </button>
+                        <a href="{% url 'verDashboardCompras' %}" class="btn btn-outline-light">
+                            <i class="bi bi-graph-up me-1"></i>Ir al Dashboard
+                        </a>
+                    </div>
                 </div>
-            </div>
 
-            <!-- Loader -->
-            <div id="diagnosticoLoader" class="text-center py-5" style="display: none;">
-                <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
-                    <span class="visually-hidden">Analizando...</span>
-                </div>
-                <p class="mt-3 text-muted">Analizando datos del sistema...</p>
-            </div>
+                <div class="card-body" role="region" aria-labelledby="tituloDiagnostico">
 
-            <!-- Resultados del Diagnóstico -->
-            <div id="resultadosDiagnostico" style="display: none;">
-                
-                <!-- Resumen General -->
-                <div class="row mb-4">
-                    <div class="col-12">
-                        <div class="card diagnostico-card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0">
-                                    <i class="bi bi-info-circle me-2"></i>Resumen General
-                                </h5>
+                    <!-- Loader -->
+                    <div id="diagnosticoLoader" class="text-center py-5" style="display: none;" aria-live="polite">
+                        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                            <span class="visually-hidden">Analizando...</span>
+                        </div>
+                        <p class="mt-3 text-muted">Analizando datos del sistema...</p>
+                    </div>
+
+                    <!-- Resultados del Diagnóstico -->
+                    <div id="resultadosDiagnostico" style="display: none;" aria-live="polite">
+
+                        <!-- Resumen General -->
+                        <div class="diag-seccion">
+                            <h6 class="diag-seccion-titulo">
+                                <i class="bi bi-info-circle text-primary me-2"></i>Resumen General
+                            </h6>
+                            <div class="row" id="resumenGeneral">
+                                <!-- Se llena dinámicamente -->
                             </div>
-                            <div class="card-body">
-                                <div class="row" id="resumenGeneral">
-                                    <!-- Se llena dinámicamente -->
+                        </div>
+
+                        <!-- Problemas Detectados -->
+                        <div class="diag-seccion status-error" id="seccionProblemas" style="display: none;">
+                            <h6 class="diag-seccion-titulo">
+                                <i class="bi bi-exclamation-triangle text-danger me-2"></i>Problemas Detectados
+                            </h6>
+                            <ul id="listaProblemas" class="list-unstyled mb-0">
+                                <!-- Se llena dinámicamente -->
+                            </ul>
+                        </div>
+
+                        <!-- Recomendaciones -->
+                        <div class="diag-seccion status-warning" id="seccionRecomendaciones" style="display: none;">
+                            <h6 class="diag-seccion-titulo">
+                                <i class="bi bi-lightbulb text-warning me-2"></i>Recomendaciones
+                            </h6>
+                            <ul id="listaRecomendaciones" class="list-unstyled mb-0">
+                                <!-- Se llena dinámicamente -->
+                            </ul>
+                        </div>
+
+                        <!-- Detalles -->
+                        <div class="diag-seccion" id="seccionDetalles" style="display: none;">
+                            <h6 class="diag-seccion-titulo">
+                                <i class="bi bi-list-ul text-primary me-2"></i>Detalles de Datos
+                            </h6>
+                            <div id="detallesDatos">
+                                <!-- Se llena dinámicamente -->
+                            </div>
+                        </div>
+
+                        <!-- Flujo de Datos -->
+                        <div class="diag-seccion" id="seccionFlujo" style="display: none;">
+                            <h6 class="diag-seccion-titulo">
+                                <i class="bi bi-diagram-3 text-primary me-2"></i>Flujo de Datos
+                            </h6>
+                            <div class="row g-3">
+                                <div class="col-md-3 col-6 text-center">
+                                    <div class="flujo-box">
+                                        <i class="bi bi-cart-plus fs-1 text-primary"></i>
+                                        <h6>Compras</h6>
+                                        <span id="contadorCompras" class="badge badge-soft-primary">0</span>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Problemas Detectados -->
-                <div class="row mb-4" id="seccionProblemas" style="display: none;">
-                    <div class="col-12">
-                        <div class="card diagnostico-card status-error">
-                            <div class="card-header bg-danger text-white">
-                                <h5 class="card-title mb-0">
-                                    <i class="bi bi-exclamation-triangle me-2"></i>Problemas Detectados
-                                </h5>
-                            </div>
-                            <div class="card-body">
-                                <ul id="listaProblemas" class="list-unstyled mb-0">
-                                    <!-- Se llena dinámicamente -->
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Recomendaciones -->
-                <div class="row mb-4" id="seccionRecomendaciones" style="display: none;">
-                    <div class="col-12">
-                        <div class="card diagnostico-card status-warning">
-                            <div class="card-header bg-warning text-dark">
-                                <h5 class="card-title mb-0">
-                                    <i class="bi bi-lightbulb me-2"></i>Recomendaciones
-                                </h5>
-                            </div>
-                            <div class="card-body">
-                                <ul id="listaRecomendaciones" class="list-unstyled mb-0">
-                                    <!-- Se llena dinámicamente -->
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Detalles -->
-                <div class="row mb-4" id="seccionDetalles" style="display: none;">
-                    <div class="col-12">
-                        <div class="card diagnostico-card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0">
-                                    <i class="bi bi-list-ul me-2"></i>Detalles de Datos
-                                </h5>
-                            </div>
-                            <div class="card-body">
-                                <div id="detallesDatos">
-                                    <!-- Se llena dinámicamente -->
+                                <div class="col-md-3 col-6 text-center">
+                                    <div class="flujo-box">
+                                        <i class="bi bi-box-seam fs-1 text-info"></i>
+                                        <h6>Productos</h6>
+                                        <span id="contadorProductos" class="badge badge-soft-info">0</span>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Flujo de Datos -->
-                <div class="row mb-4" id="seccionFlujo" style="display: none;">
-                    <div class="col-12">
-                        <div class="card diagnostico-card">
-                            <div class="card-header">
-                                <h5 class="card-title mb-0">
-                                    <i class="bi bi-diagram-3 me-2"></i>Flujo de Datos
-                                </h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="row">
-                                    <div class="col-md-3 text-center">
-                                        <div class="border rounded p-3">
-                                            <i class="bi bi-cart-plus fs-1 text-primary"></i>
-                                            <h6 class="mt-2">Compras</h6>
-                                            <span id="contadorCompras" class="badge bg-primary">0</span>
-                                        </div>
+                                <div class="col-md-3 col-6 text-center">
+                                    <div class="flujo-box">
+                                        <i class="bi bi-rulers fs-1 text-warning"></i>
+                                        <h6>Tallas</h6>
+                                        <span id="contadorTallas" class="badge badge-soft-warning">0</span>
                                     </div>
-                                    <div class="col-md-3 text-center">
-                                        <div class="border rounded p-3">
-                                            <i class="bi bi-box-seam fs-1 text-info"></i>
-                                            <h6 class="mt-2">Productos</h6>
-                                            <span id="contadorProductos" class="badge bg-info">0</span>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3 text-center">
-                                        <div class="border rounded p-3">
-                                            <i class="bi bi-rulers fs-1 text-warning"></i>
-                                            <h6 class="mt-2">Tallas</h6>
-                                            <span id="contadorTallas" class="badge bg-warning">0</span>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3 text-center">
-                                        <div class="border rounded p-3">
-                                            <i class="bi bi-check-circle fs-1 text-success"></i>
-                                            <h6 class="mt-2">Recepciones</h6>
-                                            <span id="contadorRecepciones" class="badge bg-success">0</span>
-                                        </div>
+                                </div>
+                                <div class="col-md-3 col-6 text-center">
+                                    <div class="flujo-box">
+                                        <i class="bi bi-box-arrow-in-down fs-1 text-success"></i>
+                                        <h6>Recepciones</h6>
+                                        <span id="contadorRecepciones" class="badge badge-soft-success">0</span>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
 
+                    </div>
+
+                </div>
             </div>
 
         </div>
@@ -304,25 +407,25 @@ function mostrarResultados(data) {
 // Mostrar resumen general
 function mostrarResumenGeneral(resumen) {
     const html = `
-        <div class="col-md-3">
+        <div class="col-md-3 col-6">
             <div class="text-center">
                 <h4 class="text-primary">${resumen.compras?.total || 0}</h4>
                 <p class="text-muted mb-0">Compras Totales</p>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-3 col-6">
             <div class="text-center">
                 <h4 class="text-info">${resumen.compras_producto || 0}</h4>
                 <p class="text-muted mb-0">Productos</p>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-3 col-6">
             <div class="text-center">
                 <h4 class="text-warning">${resumen.compras_producto_talla || 0}</h4>
                 <p class="text-muted mb-0">Tallas</p>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-3 col-6">
             <div class="text-center">
                 <h4 class="text-success">${resumen.productos_recepcionados || 0}</h4>
                 <p class="text-muted mb-0">Recepciones</p>
@@ -346,7 +449,7 @@ function mostrarProblemas(problemas) {
 // Mostrar recomendaciones
 function mostrarRecomendaciones(recomendaciones) {
     const html = recomendaciones.map(recomendacion => 
-        `<li class="mb-2"><i class="bi bi-check-circle text-success me-2"></i>${recomendacion}</li>`
+        `<li class="mb-2"><i class="bi bi-lightbulb text-warning me-2"></i>${recomendacion}</li>`
     ).join('');
     
     $('#listaRecomendaciones').html(html);

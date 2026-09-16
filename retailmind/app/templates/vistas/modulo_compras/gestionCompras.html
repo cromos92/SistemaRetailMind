@@ -16,97 +16,29 @@
     min-height: calc(100vh - 70px);
 }
 
-/* Card principal estilizada */
-.card.shadow {
-    border: none;
-    border-radius: 16px;
-    overflow: hidden;
-    box-shadow: 0 4px 20px rgba(64, 81, 137, 0.1);
-    animation: fadeInCard 0.4s ease;
+/* Tokens del módulo (Paleta de Colores Principal de ESTILOS_MODULOS.md) */
+:root {
+    --rm-primary: #405189;
+    --rm-accent: #0ab39c;
+    --rm-warning: #ffbe0b;
+    --rm-warning-dark: #f0a500;
+    --rm-danger: #f06548;
+    --rm-info: #299cdb;
+    --rm-purple: #7c3aed;        /* concepto "compra histórica / vincular" (mismo que usa el JS) */
+    --rm-purple-dark: #4c1d95;
+    --rm-text-muted: #6c757d;
+    --rm-gradient: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    --rm-kpi-yellow: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+    --rm-kpi-orange: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+    --rm-kpi-green: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+    --rm-kpi-blue: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
 }
+.text-rm-primary { color: var(--rm-primary); }
 
-@keyframes fadeInCard {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* Header con gradiente estilo unificado */
-.module-header {
-    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
-    color: white;
-    padding: 16px 24px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
-}
-
-.module-header-left {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-}
-
-.module-header-icon {
-    width: 48px;
-    height: 48px;
-    background: rgba(255,255,255,0.2);
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px;
-}
-
-.module-header-info h5 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-    color: white;
-}
-
-.module-header-status {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 13px;
-    opacity: 0.9;
-    margin-top: 4px;
-}
-
-.status-dot {
-    width: 8px;
-    height: 8px;
-    background: #4ade80;
-    border-radius: 50%;
-    animation: pulse 2s infinite;
-}
-
+/* Pulso del icono del loader */
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
-}
-
-.module-header-actions {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    align-items: center;
-}
-
-.module-header-actions .btn {
-    border-radius: 10px;
-    font-weight: 500;
-    padding: 8px 14px;
-    font-size: 13px;
-    border: none;
-    transition: all 0.2s ease;
-}
-
-.module-header-actions .btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
 
 /* Card body estilizado */
@@ -146,14 +78,14 @@
     border-radius: 8px;
 }
 
-/* Tabla mejorada */
-.table-responsive {
+/* Contenedor de la tabla principal. overflow auto habilita el scroll horizontal
+   que necesita la columna 'Acciones' sticky; el tope de alto vive aquí, no inline. */
+.tabla-compras-wrap {
     border-radius: 12px;
     border: 1px solid #e9ecef;
-    /* overflow-x auto habilita scroll horizontal cuando la tabla excede el ancho,
-       necesario para que la columna 'Acciones' sticky funcione. */
-    overflow-x: auto;
-    overflow-y: hidden;
+    max-height: 70vh;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 #tablaCompras {
@@ -167,7 +99,7 @@
 #tablaCompras thead th {
     color: white;
     font-weight: 600;
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.4px;
     padding: 0.55rem 0.5rem;
@@ -195,8 +127,8 @@
 
 /* Meta-línea con fecha/responsable bajo el nombre de la compra */
 #tablaCompras .compra-meta {
-    font-size: 0.68rem;
-    color: #8a92a3;
+    font-size: 0.72rem;
+    color: #6c757d;
     margin-top: 2px;
     line-height: 1.3;
 }
@@ -209,11 +141,11 @@
     font-family: 'Inter', monospace;
 }
 #tablaCompras .td-inversion .uds {
-    font-size: 0.68rem; color: #8a92a3; margin-top: 1px;
+    font-size: 0.72rem; color: #6c757d; margin-top: 1px;
 }
 
 /* Badges más finos en la grilla */
-#tablaCompras .badge { padding: 0.32em 0.55em; font-size: 0.68rem; }
+#tablaCompras .badge { padding: 0.32em 0.55em; font-size: 0.7rem; }
 #tablaCompras .td-proveedor { font-weight: 600; color: #344053; }
 #tablaCompras .td-nombre { min-width: 180px; max-width: 280px; }
 #tablaCompras .td-nombre > div > span:first-child { font-weight: 600; color: #1a1a2e; }
@@ -296,9 +228,10 @@
     font-weight: 600;
 }
 
-/* Modal de recepción extra grande */
+/* Modal de recepción extra grande (los topes de 1600/1800px van en las media queries) */
 .modal-xxl {
-    max-width: 95%;
+    width: 96%;
+    max-width: 96%;
 }
 
 @media (min-width: 1400px) {
@@ -328,7 +261,6 @@
 
 /* Tabla de recepción - compacta */
 #tablaRecepcionProductos { font-size: 0.82rem; }
-#tablaRecepcionProductos thead { background: linear-gradient(135deg, #405189 0%, #4a5d99 100%) !important; }
 #tablaRecepcionProductos th {
     font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
     letter-spacing: 0.3px; background: transparent !important;
@@ -463,12 +395,128 @@
     color: white;
 }
 
-/* ==================== RESPONSIVE COMPLETO ==================== */
+/* ==================== COMPONENTES COMPARTIDOS DEL MÓDULO ==================== */
 
-/* --- Tablet landscape (≤1200px) --- */
-@media (max-width: 1199.98px) {
-    #tablaCompras .col-hide-xl { display: none; }
+/* Stepper del flujo de compra (banda bajo la cabecera de la card) */
+.workflow-steps {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid #dee2e6;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    font-size: .78rem;
 }
+.workflow-step {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+    font-weight: 600;
+    color: var(--rm-primary);
+}
+.workflow-step:hover { color: var(--rm-primary); }
+.workflow-step-num {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--rm-primary);
+    color: #fff;
+    font-size: .7rem;
+    font-weight: 700;
+}
+.workflow-step--info,  .workflow-step--info:hover    { color: var(--rm-info); }
+.workflow-step--info .workflow-step-num              { background: var(--rm-info); }
+.workflow-step--warning, .workflow-step--warning:hover { color: #b7791f; }
+.workflow-step--warning .workflow-step-num           { background: var(--rm-warning); color: #1a1a2e; }
+.workflow-step--accent, .workflow-step--accent:hover { color: #099885; }
+.workflow-step--accent .workflow-step-num            { background: var(--rm-accent); }
+.workflow-step i { font-size: .68rem; }
+.workflow-connector {
+    width: 30px; height: 2px;
+    margin: 0 6px;
+    background: rgba(64, 81, 137, 0.25);
+}
+
+/* Cabecera de modal unificada (gradiente del módulo, icono 44px, título h5) */
+.modal-header-nexo {
+    background: var(--rm-gradient);
+    color: #fff;
+    border: 0;
+}
+.modal-header-nexo .modal-title { color: #fff; font-weight: 700; font-size: 1.05rem; }
+.modal-header-nexo small { color: rgba(255,255,255,.8); }
+.modal-header-nexo .modal-header-icon {
+    width: 44px; height: 44px; min-width: 44px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.25rem;
+    color: #fff;
+}
+/* Modificadores semánticos: aviso (afecta inventario) y concepto "histórica / vincular" */
+.modal-header-nexo--warning { background: linear-gradient(135deg, var(--rm-warning) 0%, var(--rm-warning-dark) 100%); color: #1a1a2e; }
+.modal-header-nexo--warning .modal-title { color: #1a1a2e; }
+.modal-header-nexo--warning small { color: rgba(26,26,46,.75); }
+.modal-header-nexo--warning .modal-header-icon { background: rgba(26,26,46,.12); color: #1a1a2e; }
+.modal-header-nexo--purple { background: linear-gradient(135deg, var(--rm-purple) 0%, var(--rm-purple-dark) 100%); }
+
+/* Pie de modal unificado */
+.modal-footer-nexo {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 0;
+}
+.modal-footer-nexo .btn { border-radius: 10px; }
+
+/* Acción primaria de cada modal (Guardar / Confirmar / Importar) */
+.btn-nexo-primary {
+    background: var(--rm-gradient);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: var(--vz-btn-padding-y) var(--vz-btn-padding-x);
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(64, 81, 137, 0.25);
+}
+.btn-nexo-primary:hover,
+.btn-nexo-primary:focus {
+    background: linear-gradient(135deg, #344577 0%, #089a85 100%);
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(64, 81, 137, 0.35);
+}
+.btn-nexo-primary:disabled { opacity: .55; transform: none; box-shadow: none; color: #fff; }
+
+/* Título de sección dentro de modales: pill con gradiente + línea */
+.section-title .badge {
+    background: var(--rm-gradient);
+    color: #fff;
+    padding: 8px 14px;
+    font-weight: 600;
+}
+.section-title hr { border-color: #dee2e6; }
+
+/* Campos de los formularios Crear / Editar compra (antes 44 style= idénticos) */
+#modalCrearCompra .form-label,
+#modalEditarCompra .form-label { color: var(--rm-primary); }
+#modalCrearCompra .form-control,
+#modalCrearCompra .form-select,
+#modalEditarCompra .form-control,
+#modalEditarCompra .form-select { border-radius: 10px; border: 2px solid #e9ecef; }
+
+/* Cabecera de tabla del módulo */
+.thead-nexo { background: var(--rm-gradient); }
+.thead-nexo th {
+    background: transparent;
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    border: none;
+}
+
+/* ==================== RESPONSIVE COMPLETO ==================== */
 
 /* --- Tablet portrait (≤992px) --- */
 @media (max-width: 991.98px) {
@@ -480,13 +528,8 @@
     .card-header .col.text-end { width: 100%; }
     .card-header .col.text-end .d-flex { justify-content: flex-start !important; }
 
-    #tablaCompras .col-hide-lg { display: none; }
-    #tablaCompras thead th { padding: 0.75rem 0.5rem; font-size: 0.7rem; }
+    #tablaCompras thead th { padding: 0.75rem 0.5rem; font-size: 0.72rem; }
     #tablaCompras tbody td { padding: 0.65rem 0.5rem; font-size: 0.8rem; }
-
-    .resumen-flotante { flex-wrap: wrap; gap: 8px; padding: 10px 14px; }
-    .resumen-flotante .stat-item { flex: 1 1 auto; min-width: 80px; }
-    .resumen-flotante .stat-value { font-size: 1rem; }
 }
 
 /* --- Mobile landscape / small tablet (≤768px) --- */
@@ -555,14 +598,7 @@
     .td-actions { width: 40px !important; padding: 4px 2px !important; text-align: center !important; }
     .td-actions .dropdown .btn { padding: 4px 6px; font-size: 0.75rem; }
 
-    .table-responsive { max-height: 70vh !important; border: none !important; }
-
-    .resumen-flotante {
-        flex-direction: column; text-align: center; gap: 4px;
-        padding: 8px 12px; border-radius: 8px 8px 0 0;
-    }
-    .resumen-flotante .stat-value { font-size: 0.9rem; }
-    .resumen-flotante .stat-label { font-size: 0.6rem; }
+    .tabla-compras-wrap { border: none; }
 
     .modal-dialog { margin: 0.5rem; }
     .modal-dialog.modal-lg, .modal-dialog.modal-xl { max-width: calc(100% - 1rem); }
@@ -607,7 +643,7 @@
 }
 @media (max-width: 575.98px) {
     #modalVincularRetroactivo .modal-header { padding: 8px 12px !important; }
-    #modalVincularRetroactivo .modal-header .rounded-circle { width: 32px !important; height: 32px !important; }
+    #modalVincularRetroactivo .modal-header-icon { width: 32px; height: 32px; min-width: 32px; }
     #modalVincularRetroactivo .modal-header h5 { font-size: .88rem; }
     #modalVincularRetroactivo .modal-header small { font-size: .68rem; }
     #modalVincularRetroactivo #vincRetro_contenido { max-height: 45vh; }
@@ -628,7 +664,7 @@
     #modalEditarRecepcionCompra #resumenRecepcionCompra .col-md-3 { flex: 0 0 50%; max-width: 50%; margin-bottom: 6px; }
     #modalEditarRecepcionCompra #resumenRecepcionCompra .card-body { padding: 8px !important; }
     #modalEditarRecepcionCompra #resumenRecepcionCompra h5 { font-size: .9rem; }
-    #modalEditarRecepcionCompra #resumenRecepcionCompra small { font-size: .65rem; }
+    #modalEditarRecepcionCompra #resumenRecepcionCompra small { font-size: .72rem; }
     #modalEditarRecepcionCompra .table { font-size: .72rem; }
     #modalEditarRecepcionCompra .btn-revertir-desde-compra { font-size: .65rem; padding: 2px 4px; }
 }
@@ -636,7 +672,6 @@
 /* --- Tabla compras - mejor scroll horizontal en pantallas pequeñas --- */
 @media (max-width: 575.98px) {
     #tablaCompras { min-width: 480px; }
-    .table-responsive { -webkit-overflow-scrolling: touch; }
 }
 
 /* === Autocompletado inline para Vinculación Retroactiva === */
@@ -820,8 +855,8 @@
     font-size: 0.72rem;
     font-weight: 600;
 }
-.vincRetro-info-line .totales-badge.bg-info { background: #0dcaf0 !important; color: #084c61; }
-.vincRetro-info-line .totales-badge.bg-success { background: #198754 !important; }
+.vincRetro-info-line .totales-badge.bg-info { background: var(--rm-info) !important; color: #084c61; }
+.vincRetro-info-line .totales-badge.bg-success { background: #0ab39c !important; }
 .vincRetro-info-line .totales-badge.bg-secondary { background: #6c757d !important; }
 .vincRetro-talla-row .cta {
     color: #7c3aed;
@@ -833,16 +868,16 @@
 .vincRetro-autocomplete .vincRetro-loading {
     padding: 12px;
     text-align: center;
-    color: #8a92a3;
+    color: #6c757d;
     font-size: 0.78rem;
 }
 /* Aviso de qué hace la vinculación */
 .vincRetro-autocomplete .vincRetro-aviso {
-    background: #fffbe6;
-    border-bottom: 1px solid #ffeaa7;
+    background: #fff8e1;
+    border-bottom: 1px solid rgba(255, 190, 11, .5);
     padding: 5px 10px;
-    font-size: 0.66rem;
-    color: #8a6d3b;
+    font-size: 0.72rem;
+    color: #92400e;
 }
 /* La celda con el buscador necesita overflow visible para que el autocomplete asome */
 #vincRetro_contenido td.td-buscar { overflow: visible !important; }
@@ -890,7 +925,7 @@
     padding: 6px 0;
 }
 .td-actions .dropdown-header {
-    color: #7c3aed;
+    color: #6c757d;
     font-weight: 700;
 }
 .td-actions .dropdown-item {
@@ -924,22 +959,11 @@
     .td-actions .dropdown .btn.btn-acciones { padding: 5px 8px; font-size: 0.72rem; }
 }
 
-/* Stats cards en tabla */
-.stat-value {
-    font-weight: 700;
-    color: #1a1a2e;
-}
-
-.stat-currency {
-    font-family: 'Inter', monospace;
-    font-weight: 600;
-}
-
 /* Empty state */
 .empty-state {
     text-align: center;
     padding: 3rem;
-    color: #8a8a9a;
+    color: #6c757d;
 }
 
 .empty-state i {
@@ -981,7 +1005,6 @@
     text-transform: uppercase;
 }
 .btn-max i { font-size: 0.78rem; }
-.btn-clear { background: #f8d7da; color: #721c24; }
 .btn-cantidad-rapida:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 .btn-cantidad-rapida:disabled:hover { transform: none; filter: none; }
 
@@ -1057,64 +1080,6 @@
     margin-top: 4px;
 }
 
-/* Resumen flotante */
-.resumen-flotante {
-    position: sticky;
-    bottom: 0;
-    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
-    padding: 12px 20px;
-    border-radius: 12px 12px 0 0;
-    color: white;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
-    z-index: 100;
-}
-
-.resumen-flotante .stat-item {
-    text-align: center;
-}
-
-.resumen-flotante .stat-label {
-    font-size: 0.7rem;
-    opacity: 0.85;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.resumen-flotante .stat-value {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: white;
-}
-
-/* Animacion de shake para errores */
-@keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-5px); }
-    75% { transform: translateX(5px); }
-}
-
-.input-error {
-    animation: shake 0.3s ease;
-    border-color: #dc3545 !important;
-}
-
-/* Checkbox seleccionar fila */
-.check-seleccionar {
-    width: 20px;
-    height: 20px;
-    cursor: pointer;
-    accent-color: #0ab39c;
-}
-
-/* Fila seleccionada */
-.fila-seleccionada {
-    background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%) !important;
-    border-left: 4px solid #ffc107 !important;
-}
-
 /* ==================== KPI CARDS (mismo diseño que gestionDteCompras) ==================== */
 .kpi-card {
     border-radius: 10px;
@@ -1147,7 +1112,7 @@
     margin: 0;
 }
 .kpi-card .kpi-label {
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     color: #6c757d;
     font-weight: 500;
     line-height: 1.2;
@@ -1163,6 +1128,24 @@
     outline: 2px solid #405189;
     outline-offset: -2px;
 }
+/* Un solo tono por tarjeta: fondo, borde, icono y detalle (tabla de colores de ESTILOS_MODULOS.md) */
+.kpi-card .kpi-value { color: #1a1a2e; }
+.kpi-card--blue   { background: var(--rm-kpi-blue);   border-left: 3px solid var(--rm-info); }
+.kpi-card--green  { background: var(--rm-kpi-green);  border-left: 3px solid var(--rm-accent); }
+.kpi-card--yellow { background: var(--rm-kpi-yellow); border-left: 3px solid var(--rm-warning); }
+.kpi-card--orange { background: var(--rm-kpi-orange); border-left: 3px solid #fb8c00; }
+.kpi-card--blue .kpi-icon   { background: linear-gradient(135deg, #299cdb, #1976d2); }
+.kpi-card--green .kpi-icon  { background: linear-gradient(135deg, #0ab39c, #099885); }
+.kpi-card--yellow .kpi-icon { background: linear-gradient(135deg, #ffbe0b, #f0a500); }
+.kpi-card--orange .kpi-icon { background: linear-gradient(135deg, #fb8c00, #f57c00); }
+.kpi-card--blue .kpi-amount   { color: #1976d2; }
+.kpi-card--green .kpi-amount  { color: #099885; }
+.kpi-card--yellow .kpi-amount { color: #b7791f; }
+.kpi-card--orange .kpi-amount { color: #f57c00; }
+/* Variante informativa (no filtra): sin cursor ni elevación */
+.kpi-card.kpi-static { cursor: default; }
+.kpi-card.kpi-static:hover { transform: none; box-shadow: none; }
+.kpi-card .kpi-mini-value { font-size: 1.05rem; font-weight: 700; color: #1a1a2e; margin: 0; }
 
 /* ==================== CHIPS DE FILTRO ACTIVO ==================== */
 .filtros-activos-bar {
@@ -1193,12 +1176,12 @@
     background: rgba(64, 81, 137, 0.1);
     color: #405189;
     border-radius: 50%;
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.6rem;
+    font-size: 0.68rem;
     cursor: pointer;
     transition: all 0.15s ease;
 }
@@ -1211,14 +1194,18 @@
     color: #b42318;
     background: #ffebee;
 }
+/* Aviso "ojo con esto": un solo estilo para filtros incompatibles y avisos de modal */
+.alert-nexo-warning,
 .aviso-filtros-incompatibles {
-    font-size: 0.74rem;
+    font-size: 0.78rem;
     border-radius: 10px;
-    padding: 6px 12px;
-    background: #fff3e0;
-    border-left: 3px solid #fb8c00;
+    padding: 8px 12px;
+    background: var(--rm-kpi-yellow);
+    border-color: transparent;
+    border-left: 4px solid var(--rm-warning);
     color: #92400e;
 }
+.alert-nexo-warning > i:first-child { color: var(--rm-warning-dark); }
 
 /* Fila de la compra recién creada / recién tocada */
 @keyframes flashFilaNueva {
@@ -1245,7 +1232,7 @@ tr.fila-recien-creada > td {
     transform: translateY(-1px);
     color: #fff;
 }
-.btn-accion-primaria.ap-recepcionar { background: linear-gradient(135deg, #f7b84b, #e9a13b); color: #3d2f00; }
+.btn-accion-primaria.ap-recepcionar { background: linear-gradient(135deg, var(--rm-warning), var(--rm-warning-dark)); color: #3d2f00; }
 .btn-accion-primaria.ap-crear-productos { background: linear-gradient(135deg, #0ab39c, #099885); }
 .btn-accion-primaria.ap-cargar { background: linear-gradient(135deg, #405189, #364574); }
 .btn-accion-primaria.ap-listo { background: #e9ecef; color: #6c757d; }
@@ -1260,36 +1247,10 @@ tr.fila-recien-creada > td {
     .card-body { padding: 16px; }
     .pagination-controls { padding: 10px 12px; margin-bottom: 10px; }
     .kpi-card .card-body { padding: 7px 10px; }
-    .kpi-card .kpi-value { font-size: 1rem; }
+    .kpi-card .kpi-value { font-size: 1.05rem; }
 }
 
-</style>
-
-<!-- Loader con estilo del proyecto -->
-<div id="fullscreenLoader" style="
-    display: none;
-    position: fixed;
-    z-index: 1060;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(135deg, rgba(64, 81, 137, 0.1) 0%, rgba(10, 179, 156, 0.1) 100%);
-    backdrop-filter: blur(8px);
-    text-align: center;">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 40px 60px; border-radius: 20px; box-shadow: 0 20px 60px rgba(64, 81, 137, 0.3);">
-        <div style="width: 60px; height: 60px; margin: 0 auto 20px; background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: pulse 1.5s ease-in-out infinite;">
-            <i class="bi bi-cart4 fs-3 text-white"></i>
-        </div>
-        <div class="spinner-border mb-3" role="status" style="width: 2.5rem; height: 2.5rem; color: #405189;">
-            <span class="visually-hidden">Cargando...</span>
-        </div>
-        <p class="mb-0 fw-bold" style="color: #405189;">Cargando información...</p>
-        <small class="text-muted">Por favor espera un momento</small>
-    </div>
-</div>
-
-<style>
+/* ==================== ESTILOS ADICIONALES (botones soft, Select2, Producto Manual) ==================== */
 /* Estilos adicionales para botones soft */
 .btn-soft-info {
     background: #E6F7FF;
@@ -1351,7 +1312,7 @@ tr.fila-recien-creada > td {
 #modalProductoManual .select2-container--default.select2-container--focus .select2-selection--single,
 #modalProductoManual .select2-container--default.select2-container--open .select2-selection--single {
     border-color: #405189;
-    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+    box-shadow: 0 0 0 3px rgba(64, 81, 137, 0.1);
 }
 
 #modalProductoManual .select2-container--default .select2-selection--single .select2-selection__placeholder {
@@ -1372,8 +1333,8 @@ tr.fila-recien-creada > td {
 }
 
 .select2-results__option--highlighted[aria-selected] {
-    background: linear-gradient(135deg, #405189, #1a1a2e) !important;
-    color: white;
+    background: rgba(64, 81, 137, 0.1) !important;
+    color: #405189;
 }
 
 .select2-results__option[aria-selected=true] {
@@ -1390,7 +1351,7 @@ tr.fila-recien-creada > td {
 .select2-search--dropdown .select2-search__field:focus {
     border-color: #405189;
     outline: none;
-    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+    box-shadow: 0 0 0 3px rgba(64, 81, 137, 0.1);
 }
 
 /* Clear button */
@@ -1415,7 +1376,7 @@ tr.fila-recien-creada > td {
 
 #modalProductoManual .form-control:focus {
     border-color: #405189;
-    box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+    box-shadow: 0 0 0 3px rgba(64, 81, 137, 0.1);
 }
 
 /* ==================== RESPONSIVE - MODAL PRODUCTO MANUAL ==================== */
@@ -1452,9 +1413,10 @@ tr.fila-recien-creada > td {
         top: 0;
         z-index: 10;
     }
-    #modalProductoManual .modal-header .rounded-circle {
-        width: 36px !important;
-        height: 36px !important;
+    #modalProductoManual .modal-header-icon {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
     }
     #modalProductoManual .modal-header h5 {
         font-size: 0.95rem;
@@ -1529,27 +1491,13 @@ tr.fila-recien-creada > td {
 /* ==================== RESPONSIVE - STEPPER WORKFLOW ==================== */
 
 @media (max-width: 767.98px) {
-    .page-content > .container-fluid > .card > .px-4.py-3 {
-        padding: 8px 12px !important;
-    }
-    .page-content > .container-fluid > .card > .px-4.py-3 .d-flex {
-        font-size: 0.65rem !important;
-    }
-    .page-content > .container-fluid > .card > .px-4.py-3 .rounded-circle {
-        width: 20px !important;
-        height: 20px !important;
-        font-size: 0.6rem !important;
-    }
-    .page-content > .container-fluid > .card > .px-4.py-3 div[style*="width:30px"] {
-        width: 16px !important;
-        margin: 0 3px !important;
-    }
+    .workflow-steps { padding: 8px 12px; font-size: 0.7rem; }
+    .workflow-step-num { width: 20px; height: 20px; font-size: 0.62rem; }
+    .workflow-connector { width: 16px; margin: 0 3px; }
 }
 
 @media (max-width: 575.98px) {
-    .page-content > .container-fluid > .card > .px-4.py-3 {
-        display: none !important;
-    }
+    .workflow-steps { display: none; }
 }
 
 /* ==================== RESPONSIVE - HEADER BUTTONS ==================== */
@@ -1576,7 +1524,430 @@ tr.fila-recien-creada > td {
         width: 100% !important;
     }
 }
+
+/* ==================== IMPORTAR CSV + MODAL RECEPCIÓN ==================== */
+.csv-upload-zone {
+    transition: all 0.3s ease;
+    cursor: pointer;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+.csv-upload-zone:hover {
+    border-color: #405189 !important;
+    background: rgba(64, 81, 137, 0.08);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(64, 81, 137, 0.2);
+}
+.csv-upload-zone.drag-over {
+    border-color: #0ab39c !important;
+    background: #e6fff9;
+    transform: scale(1.02);
+}
+.border-dashed {
+    border-style: dashed !important;
+}
+
+/* ========== ESTILOS MODAL RECEPCIÓN NEXO ========== */
+#modalRecepcionProductos .table th {
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    border-bottom: 2px solid #dee2e6;
+}
+
+#modalRecepcionProductos .table tbody tr {
+    transition: all 0.2s ease;
+}
+
+#modalRecepcionProductos .table tbody tr:hover {
+    background-color: rgba(10, 179, 156, 0.08) !important;
+}
+
+#modalRecepcionProductos .table tbody tr.row-recepcionado {
+    background-color: rgba(10, 179, 156, 0.15) !important;
+}
+
+#modalRecepcionProductos .sticky-top {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+/* Animación para filas recepcionadas */
+@keyframes highlightRecepcion {
+    0% { background-color: rgba(10, 179, 156, 0.3); }
+    100% { background-color: rgba(10, 179, 156, 0.15); }
+}
+
+#modalRecepcionProductos .row-just-received {
+    animation: highlightRecepcion 0.5s ease-out;
+}
+
+/* Progress bar personalizado */
+#modalRecepcionProductos .progress {
+    background-color: #e9ecef;
+    overflow: hidden;
+}
+
+#modalRecepcionProductos .progress-bar {
+    transition: width 0.4s ease;
+}
+
+/* ========== MODAL RECEPCIÓN - ESTILOS COMPACTOS ========== */
+#modalRecepcionProductos .modal-content { border-radius: 10px; }
+#modalRecepcionProductos .modal-header { min-height: 0; padding: 6px 12px !important; }
+#modalRecepcionProductos .modal-body { padding: 6px !important; }
+#modalRecepcionProductos .modal-footer { padding: 4px 10px !important; }
+
+/* --- Guía de pasos compacta / colapsable --- */
+.recepcion-guia-pasos {
+    background: linear-gradient(135deg, #f0f4ff 0%, #e8f5e9 100%);
+    border: 1px solid #c5cae9;
+    border-radius: 8px;
+    padding: 4px 10px;
+    margin-bottom: 6px;
+    font-size: 0.72rem;
+}
+.recepcion-guia-pasos .paso {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    color: #37474f;
+}
+.recepcion-guia-pasos .paso .paso-num {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: #405189;
+    color: white;
+    font-size: 0.68rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.recepcion-guia-pasos .paso.paso-opcional .paso-num {
+    background: #78909c;
+}
+.recepcion-guia-pasos .paso-separador {
+    width: 14px;
+    text-align: center;
+    color: #90a4ae;
+    font-size: 0.65rem;
+}
+/* Guía colapsada: queda como strip delgado con toggle */
+.recepcion-guia-pasos.collapsed {
+    padding: 4px 10px;
+}
+.recepcion-guia-pasos.collapsed .guia-content { display: none; }
+.recepcion-guia-pasos:not(.collapsed) .guia-summary { display: none; }
+.recepcion-guia-pasos .guia-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.recepcion-guia-pasos .btn-toggle-guia {
+    background: transparent; border: none; color: #405189;
+    font-size: 0.68rem; padding: 0; cursor: pointer;
+}
+
+/* --- Grupo producto: campos de aplicar masivo --- */
+.producto-grupo .masivo-control {
+    background: #eef0f7;
+    border: 1px dashed #9fa8da;
+    border-radius: 6px;
+    padding: 2px 4px;
+}
+.producto-grupo .masivo-control input {
+    background: transparent;
+    border: none;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+.producto-grupo .masivo-control input:focus {
+    outline: none;
+    background: white;
+    border-radius: 4px;
+}
+.producto-grupo .masivo-control .btn-aplicar-masivo {
+    background: #405189;
+    border: none;
+    color: white;
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+.producto-grupo .masivo-control .btn-aplicar-masivo:hover {
+    background: #2e3b61;
+}
+
+/* --- Columna editable highlight --- */
+#tablaRecepcionProductos thead th.col-editable {
+    background: rgba(10,179,156,0.35) !important;
+    position: relative;
+}
+#tablaRecepcionProductos thead th.col-editable::after {
+    content: '✎';
+    font-size: 0.55rem;
+    margin-left: 3px;
+    opacity: 0.8;
+}
+
+/* --- Factura opcional badge --- */
+.factura-opcional-badge {
+    font-size: 0.68rem;
+    color: rgba(255, 255, 255, 0.75);
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
+    display: block;
+    line-height: 1;
+    margin-top: 1px;
+}
+
+.recepcion-toolbar { font-size: 0.76rem; }
+.recepcion-toolbar .form-control,
+.recepcion-toolbar .form-select,
+.recepcion-toolbar .btn { font-size: 0.74rem; }
+
+/* ====== Fila de filtros: TODO EN UNA LÍNEA (CSS Grid) ====== */
+.toolbar-filtros {
+    display: grid;
+    grid-template-columns:
+        minmax(220px, 1.4fr)   /* Buscar */
+        minmax(180px, 1fr)     /* Estado */
+        minmax(170px, 1fr)     /* Sucursal */
+        auto;                  /* Contador + paginación */
+    gap: 10px;
+    align-items: end;
+    padding: 6px 8px;
+    background: #ffffff;
+    border: 1px solid #e3e6ef;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(64, 81, 137, 0.04);
+}
+.toolbar-filtros .filtro-item {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.toolbar-filtros .filtro-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 2px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.toolbar-filtros .filtro-label i { color: #405189; font-size: 0.78rem; }
+.toolbar-filtros .input-group-text {
+    padding: 2px 6px;
+    font-size: 0.72rem;
+}
+.toolbar-filtros .form-control,
+.toolbar-filtros .form-select {
+    height: 28px;
+    font-size: 0.74rem;
+}
+.toolbar-filtros .filtro-paginacion {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-top: 14px; /* alinear con inputs (que tienen label arriba) */
+    justify-content: flex-end;
+    white-space: nowrap;
+}
+.toolbar-filtros .filtro-paginacion .badge {
+    padding: 5px 10px;
+    font-size: 0.7rem;
+}
+.toolbar-filtros .filtro-paginacion .btn-group .btn { height: 28px; }
+
+/* En pantallas muy angostas, permitir que envuelva para no cortar controles */
+@media (max-width: 900px) {
+    .toolbar-filtros {
+        grid-template-columns: 1fr 1fr;
+    }
+    .toolbar-filtros .filtro-paginacion {
+        grid-column: 1 / -1;
+        padding-top: 4px;
+        justify-content: space-between;
+    }
+}
+@media (max-width: 560px) {
+    .toolbar-filtros { grid-template-columns: 1fr; }
+    .toolbar-filtros .filtro-paginacion { grid-column: auto; }
+}
+
+/* ====== Modal-body en flex column para que el footer quede sticky ====== */
+#modalRecepcionProductos .modal-body {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 100px);
+    gap: 4px;
+}
+#modalRecepcionProductos .modal-body > .card {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+#modalRecepcionProductos .modal-body > .card > .card-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#modalRecepcionProductos .modal-body > .card > .card-body > .table-responsive {
+    flex: 1 1 auto;
+    min-height: 180px;
+    max-height: none !important;
+    overflow-y: auto;
+}
+#modalRecepcionProductos .modal-body > .card > .card-body > .border-top {
+    flex-shrink: 0;
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    background: linear-gradient(180deg, #ffffff 0%, #eef0f3 100%) !important;
+    box-shadow: 0 -4px 10px rgba(64, 81, 137, 0.08);
+    border-top: 2px solid #405189 !important;
+}
+
+/* Footer: destaque visual para "rebajados sin confirmar" */
+#modalRecepcionProductos .stat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: #f1f3f7;
+    color: #405189;
+    border: 1px solid #dfe3ec;
+}
+#modalRecepcionProductos .stat-chip.chip-pendiente { background: #fff8e1; color: #b7791f; border-color: #f6d78a; }
+#modalRecepcionProductos .stat-chip.chip-sesion {
+    background: linear-gradient(135deg, #0ab39c 0%, #099885 100%);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 2px 6px rgba(10, 179, 156, 0.35);
+}
+#modalRecepcionProductos .stat-chip.chip-recep { background: #e6fff9; color: #099885; border-color: #9fe7db; }
+#modalRecepcionProductos .stat-chip.chip-costo  { background: #eef3ff; color: #405189; border-color: #c7d1ea; }
+
+/* ====== Tabla más compacta ====== */
+#modalRecepcionProductos #tablaRecepcionProductos { font-size: 0.74rem; }
+#modalRecepcionProductos #tablaRecepcionProductos thead th {
+    padding: 4px 5px !important;
+    font-size: 0.72rem !important;
+    letter-spacing: 0.2px;
+}
+#modalRecepcionProductos #tablaRecepcionProductos tbody td { padding: 2px 5px !important; }
+#modalRecepcionProductos #tablaRecepcionProductos .producto-grupo td { padding: 3px 5px !important; font-size: 0.76rem; }
+#modalRecepcionProductos #tablaRecepcionProductos .talla-detalle td { padding: 1px 4px !important; font-size: 0.74rem; }
+#modalRecepcionProductos #tablaRecepcionProductos .badge { font-size: 0.66rem; padding: 0.22em 0.4em; }
+
+#modalRecepcionProductos .table-sm th,
+#modalRecepcionProductos .table-sm td { padding: 3px 5px; }
+
+/* Columnas ocultas por defecto para compactar la tabla:
+   - Descripción: redundante con el nombre del artículo
+   - Género: poco informativo en la grilla
+   Se mantienen visibles solo en pantallas extra anchas (>1600px). */
+#tablaRecepcionProductos .recep-col-desc,
+#tablaRecepcionProductos .recep-col-genero { display: none; }
+@media (min-width: 1600px) {
+    #tablaRecepcionProductos .recep-col-desc,
+    #tablaRecepcionProductos .recep-col-genero { display: table-cell; }
+}
+/* Color: solo en pantallas anchas (>=1280px) */
+#tablaRecepcionProductos .recep-col-color { display: none; }
+@media (min-width: 1280px) {
+    #tablaRecepcionProductos .recep-col-color { display: table-cell; }
+}
+
+#modalRecepcionProductos input[type="number"].cantidad-recepcion,
+#modalRecepcionProductos input[type="number"].recepcionado-input {
+    width: 54px; text-align: center; border-radius: 6px;
+    border: 1px solid #dee2e6; padding: 2px 4px; font-weight: 600;
+    font-size: 0.78rem; transition: all 0.2s;
+}
+#modalRecepcionProductos input[type="number"].cantidad-recepcion:focus,
+#modalRecepcionProductos input[type="number"].recepcionado-input:focus {
+    border-color: #0ab39c; box-shadow: 0 0 0 2px rgba(10,179,156,0.2);
+}
+#modalRecepcionProductos input[type="number"].cantidad-recepcion.filled,
+#modalRecepcionProductos input[type="number"].recepcionado-input.filled {
+    background-color: #e6fff9; border-color: #0ab39c; color: #099885;
+}
+
+#modalRecepcionProductos .factura-datalist-input {
+    font-size: 0.78rem; padding: 3px 6px;
+}
+
+#modalRecepcionProductos .producto-grupo .badge,
+#modalRecepcionProductos .talla-detalle .badge { font-size: 0.66rem; }
+
+/* Modo asignación masiva de sucursal: checkboxes por fila */
+#tablaRecepcionProductos .col-sucursal-sel { display: none; }
+#modalRecepcionProductos.modo-sucursal-sel #tablaRecepcionProductos .col-sucursal-sel { display: table-cell; }
+#modalRecepcionProductos.modo-sucursal-sel #tablaRecepcionProductos tbody tr.row-sucursal-sel {
+    background-color: rgba(13, 202, 240, 0.18) !important;
+}
+
+#modalRecepcionProductos .input-cantidad-wrapper { position: relative; display: inline-flex; align-items: center; gap: 3px; }
+/* El resto del look del botón Máx vive en la regla global
+   `.btn-cantidad-rapida` (fondo verde, ancho auto, etc.) para
+   que sea visible y legible también dentro del modal. */
+
+/* ==================== TÁCTIL (tablet / pantalla táctil de bodega) ==================== */
+@media (pointer: coarse) {
+    #modalRecepcionProductos input[type="number"].cantidad-recepcion,
+    #modalRecepcionProductos input[type="number"].recepcionado-input,
+    #modalRecepcionProductos .input-cantidad-wrapper .form-control {
+        width: 64px; height: 40px; font-size: 0.9rem;
+    }
+    #modalRecepcionProductos .btn-cantidad-rapida { height: 40px; min-width: 48px; font-size: 0.8rem; }
+    #modalRecepcionProductos .factura-datalist-input,
+    #modalRecepcionProductos .toolbar-filtros .form-control,
+    #modalRecepcionProductos .toolbar-filtros .form-select { height: 40px; font-size: 0.85rem; }
+    #modalRecepcionProductos .producto-grupo .masivo-control .btn-aplicar-masivo { padding: 8px 12px; font-size: 0.8rem; }
+    #modalRecepcionProductos .expand-icon { width: 32px; height: 32px; }
+    #modalRecepcionProductos .modal-footer .btn { min-height: 44px; }
+    .filtro-chip .chip-quitar { width: 32px; height: 32px; font-size: 0.8rem; }
+}
 </style>
+
+<!-- Loader con estilo del proyecto -->
+<div id="fullscreenLoader" style="
+    display: none;
+    position: fixed;
+    z-index: 1060;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(64, 81, 137, 0.1) 0%, rgba(10, 179, 156, 0.1) 100%);
+    backdrop-filter: blur(8px);
+    text-align: center;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 40px 60px; border-radius: 20px; box-shadow: 0 20px 60px rgba(64, 81, 137, 0.3);">
+        <div style="width: 60px; height: 60px; margin: 0 auto 20px; background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: pulse 1.5s ease-in-out infinite;">
+            <i class="bi bi-cart4 fs-3 text-white"></i>
+        </div>
+        <div class="spinner-border mb-3" role="status" style="width: 2.5rem; height: 2.5rem; color: #405189;">
+            <span class="visually-hidden">Cargando...</span>
+        </div>
+        <p class="mb-0 fw-bold" style="color: #405189;">Cargando información...</p>
+        <small class="text-muted">Por favor espera un momento</small>
+    </div>
+</div>
+
 <div class="page-content">
     <div class="container-fluid">
 
@@ -1588,7 +1959,7 @@ tr.fila-recien-creada > td {
                     <div class="col-auto">
                         <div class="d-flex align-items-center gap-3">
                             <div class="icon-box bg-primary bg-opacity-10 rounded-3 p-2">
-                                <i class="ri-shopping-cart-2-line fs-4 text-primary"></i>
+                                <i class="bi bi-cart3 fs-4 text-primary"></i>
                             </div>
                             <div>
                                 <h5 class="mb-0 fw-semibold text-dark">Gestión de Compras</h5>
@@ -1602,7 +1973,7 @@ tr.fila-recien-creada > td {
                         <div class="d-flex align-items-center gap-2">
                             <div class="input-group input-group-sm" style="width: 160px;">
                                 <span class="input-group-text bg-light border-end-0">
-                                    <i class="ri-calendar-line text-muted"></i>
+                                    <i class="bi bi-calendar3 text-muted"></i>
                                 </span>
                                 <!-- Antes era un input numérico libre: en el sistema solo hay
                                      compras desde 2025, así que se ofrecen los años que existen
@@ -1612,7 +1983,7 @@ tr.fila-recien-creada > td {
                                         title="Año de la compra"></select>
                             </div>
                             <button type="button" class="btn btn-primary btn-sm" id="btnBusquedaCompra">
-                                <i class="ri-search-line me-1"></i> Filtrar
+                                <i class="bi bi-search me-1"></i> Filtrar
                             </button>
                         </div>
                     </div>
@@ -1620,16 +1991,16 @@ tr.fila-recien-creada > td {
                     <!-- Botones de acción -->
                     <div class="col text-end">
                         <div class="d-flex justify-content-end gap-2 flex-wrap">
-                            <a href="{% url 'verDashboardCompras' %}" class="btn btn-soft-info btn-sm" data-bs-toggle="tooltip" title="Dashboard Estratégico">
+                            <a href="{% url 'verDashboardCompras' %}" class="btn btn-soft-primary btn-sm" data-bs-toggle="tooltip" title="Dashboard Estratégico">
                                 <i class="bi bi-graph-up me-1"></i> <span class="d-none d-lg-inline">Dashboard</span>
                             </a>
-                            <a href="{% url 'verGestionDteCompras' %}" class="btn btn-soft-warning btn-sm" data-bs-toggle="tooltip" title="Gestión de DTEs de Compras">
+                            <a href="{% url 'verGestionDteCompras' %}" class="btn btn-soft-primary btn-sm" data-bs-toggle="tooltip" title="Gestión de DTEs de Compras">
                                 <i class="bi bi-file-earmark-text me-1"></i> <span class="d-none d-lg-inline">DTEs Compras</span>
                             </a>
                             <a href="{% url 'ver_reporte_rendimiento_proveedor' %}" class="btn btn-soft-primary btn-sm" data-bs-toggle="tooltip" title="Rendimiento por Proveedor: comprados, recepcionados, vendidos">
                                 <i class="bi bi-people me-1"></i> <span class="d-none d-lg-inline">Rendimiento Proveedor</span>
                             </a>
-                            <a href="{% url 'verGestionProducto' %}" class="btn btn-soft-success btn-sm" data-bs-toggle="tooltip" title="Crear productos desde recepciones">
+                            <a href="{% url 'verGestionProducto' %}" class="btn btn-soft-primary btn-sm" data-bs-toggle="tooltip" title="Crear productos desde recepciones">
                                 <i class="bi bi-archive me-1"></i> <span class="d-none d-lg-inline">Crear Productos</span>
                             </a>
 
@@ -1689,30 +2060,26 @@ tr.fila-recien-creada > td {
             </div>
 
             <!-- ========== STEPPER WORKFLOW ========== -->
-            <div class="px-4 py-3" style="background:linear-gradient(135deg,#f8f9fa 0%,#e9ecef 100%);border-bottom:1px solid #dee2e6;">
-                <div class="d-flex align-items-center justify-content-center gap-0 flex-wrap" style="font-size:.78rem;">
-                    <div class="d-flex align-items-center">
-                        <span class="d-inline-flex align-items-center justify-content-center rounded-circle text-white fw-bold" style="width:26px;height:26px;background:#405189;font-size:.7rem;">1</span>
-                        <span class="fw-bold ms-1" style="color:#405189;">Crear Compra</span>
-                    </div>
-                    <div style="width:30px;height:2px;background:linear-gradient(90deg,#405189,#0ab39c);margin:0 6px;"></div>
-                    <div class="d-flex align-items-center">
-                        <span class="d-inline-flex align-items-center justify-content-center rounded-circle text-white fw-bold" style="width:26px;height:26px;background:#3577f1;font-size:.7rem;">2</span>
-                        <span class="fw-semibold ms-1" style="color:#3577f1;">Cargar Productos</span>
-                    </div>
-                    <div style="width:30px;height:2px;background:linear-gradient(90deg,#3577f1,#f7b84b);margin:0 6px;"></div>
-                    <div class="d-flex align-items-center">
-                        <span class="d-inline-flex align-items-center justify-content-center rounded-circle text-white fw-bold" style="width:26px;height:26px;background:#f7b84b;font-size:.7rem;">3</span>
-                        <span class="fw-semibold ms-1" style="color:#c59220;">Recepcionar</span>
-                    </div>
-                    <div style="width:30px;height:2px;background:linear-gradient(90deg,#f7b84b,#0ab39c);margin:0 6px;"></div>
-                    <div class="d-flex align-items-center">
-                        <a href="/app/verGestionProducto/" class="d-flex align-items-center text-decoration-none">
-                            <span class="d-inline-flex align-items-center justify-content-center rounded-circle text-white fw-bold" style="width:26px;height:26px;background:#0ab39c;font-size:.7rem;">4</span>
-                            <span class="fw-semibold ms-1" style="color:#0ab39c;">Crear Productos <i class="bi bi-arrow-right" style="font-size:.65rem;"></i></span>
-                        </a>
-                    </div>
+            <div class="workflow-steps">
+                <div class="workflow-step">
+                    <span class="workflow-step-num">1</span>
+                    <span class="ms-1">Crear Compra</span>
                 </div>
+                <div class="workflow-connector"></div>
+                <div class="workflow-step workflow-step--info">
+                    <span class="workflow-step-num">2</span>
+                    <span class="ms-1">Cargar Productos</span>
+                </div>
+                <div class="workflow-connector"></div>
+                <div class="workflow-step workflow-step--warning">
+                    <span class="workflow-step-num">3</span>
+                    <span class="ms-1">Recepcionar</span>
+                </div>
+                <div class="workflow-connector"></div>
+                <a href="/app/verGestionProducto/" class="workflow-step workflow-step--accent">
+                    <span class="workflow-step-num">4</span>
+                    <span class="ms-1">Crear Productos <i class="bi bi-arrow-right"></i></span>
+                </a>
             </div>
 
             <div class="card-body">
@@ -1720,69 +2087,69 @@ tr.fila-recien-creada > td {
                 <!-- ========== KPIs DEL AÑO (se calculan sobre el año + búsqueda + sucursal) ========== -->
                 <div class="row g-2 mb-3" id="kpisCompras">
                     <div class="col-xl-3 col-md-6 col-6">
-                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 3px solid #299cdb;"
+                        <div class="kpi-card kpi-card--blue card h-100"
                              data-kpi-estado="" title="Ver todas las órdenes del año">
                             <div class="card-body d-flex align-items-center gap-2">
-                                <div class="kpi-icon text-white" style="background: linear-gradient(135deg, #299cdb, #1976d2);">
+                                <div class="kpi-icon text-white">
                                     <i class="bi bi-cart-check"></i>
                                 </div>
                                 <div class="flex-grow-1 overflow-hidden">
                                     <div class="d-flex align-items-baseline gap-2">
-                                        <span class="kpi-value" id="kpiOrdenes" style="color: #405189;">–</span>
+                                        <span class="kpi-value" id="kpiOrdenes">–</span>
                                         <span class="kpi-label">Órdenes del año</span>
                                     </div>
-                                    <p class="kpi-amount" id="kpiOrdenesDetalle" style="color: #299cdb;">&nbsp;</p>
+                                    <p class="kpi-amount" id="kpiOrdenesDetalle">&nbsp;</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div class="col-xl-3 col-md-6 col-6">
-                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 3px solid #0ab39c;"
+                        <div class="kpi-card kpi-card--green card h-100"
                              data-kpi-estado="" title="Inversión total comprometida en las órdenes del año (suma de las órdenes listadas)">
                             <div class="card-body d-flex align-items-center gap-2">
-                                <div class="kpi-icon text-white" style="background: linear-gradient(135deg, #0ab39c, #099885);">
+                                <div class="kpi-icon text-white">
                                     <i class="bi bi-currency-dollar"></i>
                                 </div>
                                 <div class="flex-grow-1 overflow-hidden">
                                     <div class="d-flex align-items-baseline gap-2">
-                                        <span class="kpi-value" id="kpiInversion" style="color: #0ab39c;">–</span>
+                                        <span class="kpi-value" id="kpiInversion">–</span>
                                         <span class="kpi-label">Inversión</span>
                                     </div>
-                                    <p class="kpi-amount" id="kpiInversionDetalle" style="color: #0ab39c;">&nbsp;</p>
+                                    <p class="kpi-amount" id="kpiInversionDetalle">&nbsp;</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div class="col-xl-3 col-md-6 col-6">
-                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 3px solid #ffbe0b;"
+                        <div class="kpi-card kpi-card--yellow card h-100"
                              data-kpi-estado="pendiente" title="Órdenes sin ninguna unidad recepcionada — clic para filtrarlas">
                             <div class="card-body d-flex align-items-center gap-2">
-                                <div class="kpi-icon text-white" style="background: linear-gradient(135deg, #ffbe0b, #f0a500);">
+                                <div class="kpi-icon text-white">
                                     <i class="bi bi-box-seam"></i>
                                 </div>
                                 <div class="flex-grow-1 overflow-hidden">
                                     <div class="d-flex align-items-baseline gap-2">
-                                        <span class="kpi-value" id="kpiSinRecepcionar" style="color: #405189;">–</span>
+                                        <span class="kpi-value" id="kpiSinRecepcionar">–</span>
                                         <span class="kpi-label">Sin recepcionar</span>
                                     </div>
-                                    <p class="kpi-amount" id="kpiSinRecepcionarDetalle" style="color: #f06548;">&nbsp;</p>
+                                    <p class="kpi-amount" id="kpiSinRecepcionarDetalle">&nbsp;</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div class="col-xl-3 col-md-6 col-6">
-                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-left: 3px solid #fb8c00;"
+                        <div class="kpi-card kpi-card--orange card h-100"
                              data-kpi-estado="por_crear" title="Órdenes con mercadería recepcionada que todavía no se convirtió en producto — clic para filtrarlas">
                             <div class="card-body d-flex align-items-center gap-2">
-                                <div class="kpi-icon text-white" style="background: linear-gradient(135deg, #fb8c00, #f57c00);">
+                                <div class="kpi-icon text-white">
                                     <i class="bi bi-archive"></i>
                                 </div>
                                 <div class="flex-grow-1 overflow-hidden">
                                     <div class="d-flex align-items-baseline gap-2">
-                                        <span class="kpi-value" id="kpiPorCrear" style="color: #fb8c00;">–</span>
+                                        <span class="kpi-value" id="kpiPorCrear">–</span>
                                         <span class="kpi-label">Con productos por crear</span>
                                     </div>
-                                    <p class="kpi-amount" id="kpiPorCrearDetalle" style="color: #fb8c00;">&nbsp;</p>
+                                    <p class="kpi-amount" id="kpiPorCrearDetalle">&nbsp;</p>
                                 </div>
                             </div>
                         </div>
@@ -1819,7 +2186,7 @@ tr.fila-recien-creada > td {
                                       data-bs-toggle="tooltip"
                                       data-bs-placement="top"
                                       data-bs-html="true"
-                                      title="<strong>🔍 Busca en:</strong><br>• Proveedor, Responsable<br>• Nombre/Temporada compra<br>• Productos: nombre, marca<br>• Color, género, talla">
+                                      title="<strong><i class='bi bi-search me-1'></i>Busca en:</strong><br>• Proveedor, Responsable<br>• Nombre/Temporada compra<br>• Productos: nombre, marca<br>• Color, género, talla">
                                     <i class="bi bi-search text-muted"></i>
                                 </span>
                                 <input type="text" class="form-control border-start-0 ps-0" id="searchCompras"
@@ -1876,9 +2243,9 @@ tr.fila-recien-creada > td {
                 </div>
 
                 <!-- Tabla de compras -->
-                <div class="table-responsive" style="max-height: 70vh; overflow-y: auto; -webkit-overflow-scrolling: touch;">
+                <div class="table-responsive tabla-compras-wrap">
                     <table class="table table-hover align-middle mb-0" id="tablaCompras">
-                        <thead class="sticky-top" style="z-index: 2;">
+                        <thead class="thead-nexo sticky-top" style="z-index: 2;">
                             <tr>
                                 <th class="col-hide-sm" style="width: 50px;">
                                     <i class="bi bi-hash me-1"></i>ID
@@ -1927,10 +2294,10 @@ tr.fila-recien-creada > td {
 
                         {% csrf_token %}
                         <!-- Header con gradiente Estilo Chat -->
-                        <div class="modal-header border-0 text-white py-3" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);">
+                        <div class="modal-header modal-header-nexo py-3">
                             <div class="d-flex align-items-center gap-3">
-                                <div class="rounded-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background: rgba(255,255,255,0.2);">
-                                    <i class="bi bi-cart-plus fs-4 text-white"></i>
+                                <div class="modal-header-icon">
+                                    <i class="bi bi-cart-plus"></i>
                                 </div>
                                 <div>
                                     <h5 class="modal-title mb-0 fw-bold text-white" id="modalCrearCompraLabel">
@@ -1947,18 +2314,18 @@ tr.fila-recien-creada > td {
                             
                             <!-- Sección: Proveedor -->
                             <div class="mb-4">
-                                <div class="d-flex align-items-center gap-2 mb-3">
-                                    <span class="badge rounded-pill text-white" style="background: linear-gradient(135deg, #405189, #0ab39c); padding: 8px 14px;">
+                                <div class="section-title d-flex align-items-center gap-2 mb-3">
+                                    <span class="badge rounded-pill">
                                         <i class="bi bi-building me-1"></i> Proveedor
                                     </span>
-                                    <hr class="flex-grow-1 my-0" style="border-color: #dee2e6;">
+                                    <hr class="flex-grow-1 my-0">
                                 </div>
                                 <div class="card border-0 shadow-sm" style="border-radius: 12px;">
                                     <div class="card-body">
-                                        <label for="empresa" class="form-label fw-semibold" style="color: #405189;">
+                                        <label for="empresa" class="form-label fw-semibold">
                                             <i class="bi bi-shop me-1"></i>Empresa Proveedora
                                         </label>
-                                        <select class="form-select select2" id="empresa" name="empresa" required style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                        <select class="form-select select2" id="empresa" name="empresa" required>
                                             <option selected disabled>Seleccione una empresa</option>
                                             {% for empresa in empresas %}
                                             <option value="{{ empresa.id }}">{{ empresa.nombre }} - {{ empresa.rut }}</option>
@@ -1970,51 +2337,47 @@ tr.fila-recien-creada > td {
 
                             <!-- Sección: Información de la Compra -->
                             <div class="mb-4">
-                                <div class="d-flex align-items-center gap-2 mb-3">
-                                    <span class="badge rounded-pill text-white" style="background: linear-gradient(135deg, #405189, #0ab39c); padding: 8px 14px;">
+                                <div class="section-title d-flex align-items-center gap-2 mb-3">
+                                    <span class="badge rounded-pill">
                                         <i class="bi bi-info-circle me-1"></i> Información
                                     </span>
-                                    <hr class="flex-grow-1 my-0" style="border-color: #dee2e6;">
+                                    <hr class="flex-grow-1 my-0">
                                 </div>
                                 <div class="card border-0 shadow-sm" style="border-radius: 12px;">
                                     <div class="card-body">
                                         <div class="row g-3">
                                             <div class="col-md-6">
-                                                <label for="nombre" class="form-label fw-semibold" style="color: #405189;">
+                                                <label for="nombre" class="form-label fw-semibold">
                                                     <i class="bi bi-tag me-1"></i>Nombre de la Compra
                                                 </label>
                                                 <input type="text" class="form-control" id="nombre" name="nombre"
-                                                    placeholder="Ej: Compra Materiales Enero" required 
-                                                    style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                    placeholder="Ej: Compra Materiales Enero" required>
                                             </div>
                                             <div class="col-md-6">
-                                                <label for="tipo" class="form-label fw-semibold" style="color: #405189;">
+                                                <label for="tipo" class="form-label fw-semibold">
                                                     <i class="bi bi-diagram-3 me-1"></i>Tipo de Compra
                                                 </label>
-                                                <select class="form-select" id="tipo" name="tipo" required
-                                                    style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                <select class="form-select" id="tipo" name="tipo" required>
                                                     <option value="inicial" selected>Compra Inicial</option>
                                                     <option value="reposicion">Reposición</option>
                                                     <option value="urgente">Urgente</option>
                                                 </select>
                                             </div>
                                             <div class="col-md-6">
-                                                <label for="fecha_compra" class="form-label fw-semibold" style="color: #405189;">
+                                                <label for="fecha_compra" class="form-label fw-semibold">
                                                     <i class="bi bi-calendar-date me-1"></i>Fecha Real de la Compra
                                                 </label>
-                                                <input type="date" class="form-control" id="fecha_compra" name="fecha_compra" required
-                                                    style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                <input type="date" class="form-control" id="fecha_compra" name="fecha_compra" required>
                                                 <small class="text-muted d-block mt-1" style="font-size: 11px;">
                                                     <i class="bi bi-info-circle me-1"></i>
                                                     Fecha en que se realizó la compra (puede ser pasada para cargar históricas).
                                                 </small>
                                             </div>
                                             <div class="col-md-3">
-                                                <label for="temporada_familia" class="form-label fw-semibold" style="color: #405189;">
+                                                <label for="temporada_familia" class="form-label fw-semibold">
                                                     <i class="bi bi-cloud-sun me-1"></i>Temporada
                                                 </label>
-                                                <select class="form-select" id="temporada_familia" name="temporada_familia" required
-                                                    style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                <select class="form-select" id="temporada_familia" name="temporada_familia" required>
                                                     <option value="" selected disabled>Selecciona...</option>
                                                     <option value="VERANO">Verano</option>
                                                     <option value="OTONO">Otoño</option>
@@ -2023,12 +2386,11 @@ tr.fila-recien-creada > td {
                                                 </select>
                                             </div>
                                             <div class="col-md-3">
-                                                <label for="temporada_anio" class="form-label fw-semibold" style="color: #405189;">
+                                                <label for="temporada_anio" class="form-label fw-semibold">
                                                     <i class="bi bi-123 me-1"></i>Año
                                                 </label>
                                                 <input type="number" class="form-control" id="temporada_anio" name="temporada_anio"
-                                                    min="2020" max="2099" placeholder="Ej: 2025" required
-                                                    style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                    min="2020" max="2099" placeholder="Ej: 2025" required>
                                             </div>
                                         </div>
                                     </div>
@@ -2037,30 +2399,28 @@ tr.fila-recien-creada > td {
 
                             <!-- Sección: Fechas de Temporada -->
                             <div class="mb-3">
-                                <div class="d-flex align-items-center gap-2 mb-3">
-                                    <span class="badge rounded-pill text-white" style="background: linear-gradient(135deg, #405189, #0ab39c); padding: 8px 14px;">
+                                <div class="section-title d-flex align-items-center gap-2 mb-3">
+                                    <span class="badge rounded-pill">
                                         <i class="bi bi-calendar-range me-1"></i> Período
                                     </span>
-                                    <hr class="flex-grow-1 my-0" style="border-color: #dee2e6;">
+                                    <hr class="flex-grow-1 my-0">
                                 </div>
                                 <div class="card border-0 shadow-sm" style="border-radius: 12px;">
                                     <div class="card-body">
                                         <div class="row g-3">
                                             <div class="col-md-6">
-                                                <label for="fechaInicioTemporada" class="form-label fw-semibold" style="color: #405189;">
+                                                <label for="fechaInicioTemporada" class="form-label fw-semibold">
                                                     <i class="bi bi-calendar-event me-1"></i>Fecha Inicio
                                                 </label>
                                                 <input type="date" class="form-control" id="fechaInicioTemporada"
-                                                    name="fechaInicioTemporada" required
-                                                    style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                    name="fechaInicioTemporada" required>
                                             </div>
                                             <div class="col-md-6">
-                                                <label for="fechaTerminoTemporada" class="form-label fw-semibold" style="color: #405189;">
+                                                <label for="fechaTerminoTemporada" class="form-label fw-semibold">
                                                     <i class="bi bi-calendar-check me-1"></i>Fecha Término
                                                 </label>
                                                 <input type="date" class="form-control" id="fechaTerminoTemporada"
-                                                    name="fechaTerminoTemporada" required
-                                                    style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                    name="fechaTerminoTemporada" required>
                                             </div>
                                         </div>
                                     </div>
@@ -2069,12 +2429,12 @@ tr.fila-recien-creada > td {
 
                             <!-- Sección: Compra histórica -->
                             <div class="mb-3">
-                                <div class="card border-0 shadow-sm" style="border-radius: 12px; background: #faf5ff; border-left: 4px solid #7c3aed !important;">
+                                <div class="card border-0 shadow-sm" style="border-radius: 12px; background: #faf5ff; border-left: 4px solid var(--rm-purple) !important;">
                                     <div class="card-body py-2 px-3">
                                         <div class="form-check d-flex align-items-start gap-2 mb-0">
                                             <input class="form-check-input mt-1" type="checkbox" id="es_historica" name="es_historica" value="1" style="cursor: pointer;">
                                             <label class="form-check-label" for="es_historica" style="cursor: pointer;">
-                                                <span class="fw-semibold" style="color: #7c3aed;">
+                                                <span class="fw-semibold" style="color: var(--rm-purple);">
                                                     <i class="bi bi-clock-history me-1"></i> Compra histórica (ya recibida)
                                                 </span>
                                                 <br>
@@ -2109,20 +2469,18 @@ tr.fila-recien-creada > td {
                                             <div class="accordion-body">
                                                 <div class="row g-3">
                                                     <div class="col-md-6">
-                                                        <label for="fecha_envio_proveedor" class="form-label fw-semibold" style="color: #405189;">
+                                                        <label for="fecha_envio_proveedor" class="form-label fw-semibold">
                                                             <i class="bi bi-box-seam me-1"></i>Fecha envío del proveedor
                                                         </label>
                                                         <input type="date" class="form-control" id="fecha_envio_proveedor"
-                                                            name="fecha_envio_proveedor"
-                                                            style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                            name="fecha_envio_proveedor">
                                                     </div>
                                                     <div class="col-md-6">
-                                                        <label for="fecha_entrega_real" class="form-label fw-semibold" style="color: #405189;">
+                                                        <label for="fecha_entrega_real" class="form-label fw-semibold">
                                                             <i class="bi bi-check-circle me-1"></i>Fecha entrega real
                                                         </label>
                                                         <input type="date" class="form-control" id="fecha_entrega_real"
-                                                            name="fecha_entrega_real"
-                                                            style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                            name="fecha_entrega_real">
                                                     </div>
                                                 </div>
                                                 <small class="text-muted d-block mt-2" style="font-size: 11px;">
@@ -2138,17 +2496,17 @@ tr.fila-recien-creada > td {
                         </div>
                         
                         <!-- Footer con estilo del proyecto -->
-                        <div class="modal-footer border-0 py-3" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
+                        <div class="modal-footer modal-footer-nexo py-3">
                             <div class="d-flex justify-content-between w-100 align-items-center flex-wrap gap-2">
-                                <small class="d-none d-sm-block" style="color: #405189;">
+                                <small class="d-none d-sm-block text-rm-primary">
                                     <i class="bi bi-info-circle me-1"></i>
                                     Los campos marcados son obligatorios
                                 </small>
                                 <div class="d-flex gap-2 flex-grow-1 flex-sm-grow-0 justify-content-end">
-                                    <button type="button" class="btn btn-outline-secondary px-3 px-sm-4" data-bs-dismiss="modal" style="border-radius: 10px;">
+                                    <button type="button" class="btn btn-outline-secondary px-3 px-sm-4" data-bs-dismiss="modal">
                                         <i class="bi bi-x-lg me-1"></i><span class="d-none d-sm-inline">Cancelar</span><span class="d-sm-none">No</span>
                                     </button>
-                                    <button type="submit" class="btn text-white px-3 px-sm-4" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border: none; border-radius: 10px;">
+                                    <button type="submit" class="btn btn-nexo-primary px-3 px-sm-4">
                                         <i class="bi bi-check2-circle me-1"></i>Crear Compra
                                     </button>
                                 </div>
@@ -2167,10 +2525,10 @@ tr.fila-recien-creada > td {
                         {% csrf_token %}
                         <input type="hidden" id="editCompraId" name="compra_id">
 
-                        <div class="modal-header border-0 text-white py-3" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);">
+                        <div class="modal-header modal-header-nexo py-3">
                             <div class="d-flex align-items-center gap-3">
-                                <div class="rounded-3 d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; background: rgba(255,255,255,0.2);">
-                                    <i class="bi bi-pencil-square fs-4 text-white"></i>
+                                <div class="modal-header-icon">
+                                    <i class="bi bi-pencil-square"></i>
                                 </div>
                                 <div>
                                     <h5 class="modal-title mb-0 fw-bold text-white" id="modalEditarCompraLabel">
@@ -2192,31 +2550,31 @@ tr.fila-recien-creada > td {
                             <div id="editCompraContenido" style="display:none;">
 
                                 <!-- Aviso fecha → reportes -->
-                                <div class="alert d-flex align-items-start gap-2 mb-3 py-2" style="background:#fff8e1;border-left:4px solid #f7b84b;border-radius:10px;font-size:.78rem;">
-                                    <i class="bi bi-info-circle-fill mt-1" style="color:#f7b84b;"></i>
+                                <div class="alert alert-nexo-warning d-flex align-items-start gap-2 mb-3 py-2">
+                                    <i class="bi bi-info-circle-fill mt-1"></i>
                                     <div>
-                                        <strong style="color:#92400e;">Sobre la fecha:</strong>
+                                        <strong>Sobre la fecha:</strong>
                                         la <em>Fecha real</em> que pongas decide en qué año aparece la compra en el <strong>Dashboard de Compras</strong> y en el <strong>Reporte de Rendimiento Proveedor</strong>. Si emitiste la compra en un año pero la mercadería llegó en otro, pon la fecha que quieres que cuente en los reportes.
                                     </div>
                                 </div>
 
                                 <!-- Proveedor -->
                                 <div class="mb-4">
-                                    <div class="d-flex align-items-center gap-2 mb-3">
-                                        <span class="badge rounded-pill text-white" style="background: linear-gradient(135deg, #405189, #0ab39c); padding: 8px 14px;">
+                                    <div class="section-title d-flex align-items-center gap-2 mb-3">
+                                        <span class="badge rounded-pill">
                                             <i class="bi bi-building me-1"></i> Proveedor
                                         </span>
-                                        <hr class="flex-grow-1 my-0" style="border-color: #dee2e6;">
+                                        <hr class="flex-grow-1 my-0">
                                     </div>
                                     <div class="card border-0 shadow-sm" style="border-radius: 12px;">
                                         <div class="card-body">
-                                            <label for="edit_empresa" class="form-label fw-semibold" style="color: #405189;">
+                                            <label for="edit_empresa" class="form-label fw-semibold">
                                                 <i class="bi bi-shop me-1"></i>Empresa Proveedora
                                             </label>
                                             <!-- select2 (igual que el modal Crear): con 86 proveedores
                                                  el <select> nativo era inusable. Lo inicializa
                                                  initSelect2() en el evento shown.bs.modal. -->
-                                            <select class="form-select select2" id="edit_empresa" name="empresa" required style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                            <select class="form-select select2" id="edit_empresa" name="empresa" required>
                                                 <option value="" disabled>Seleccione una empresa</option>
                                                 {% for empresa in empresas %}
                                                 <option value="{{ empresa.id }}">{{ empresa.nombre }} - {{ empresa.rut }}</option>
@@ -2228,48 +2586,48 @@ tr.fila-recien-creada > td {
 
                                 <!-- Información -->
                                 <div class="mb-4">
-                                    <div class="d-flex align-items-center gap-2 mb-3">
-                                        <span class="badge rounded-pill text-white" style="background: linear-gradient(135deg, #405189, #0ab39c); padding: 8px 14px;">
+                                    <div class="section-title d-flex align-items-center gap-2 mb-3">
+                                        <span class="badge rounded-pill">
                                             <i class="bi bi-info-circle me-1"></i> Información
                                         </span>
-                                        <hr class="flex-grow-1 my-0" style="border-color: #dee2e6;">
+                                        <hr class="flex-grow-1 my-0">
                                     </div>
                                     <div class="card border-0 shadow-sm" style="border-radius: 12px;">
                                         <div class="card-body">
                                             <div class="row g-3">
                                                 <div class="col-md-6">
-                                                    <label for="edit_nombre" class="form-label fw-semibold" style="color: #405189;">
+                                                    <label for="edit_nombre" class="form-label fw-semibold">
                                                         <i class="bi bi-tag me-1"></i>Nombre de la Compra
                                                     </label>
-                                                    <input type="text" class="form-control" id="edit_nombre" name="nombre" required style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                    <input type="text" class="form-control" id="edit_nombre" name="nombre" required>
                                                 </div>
                                                 <div class="col-md-6">
-                                                    <label for="edit_tipo" class="form-label fw-semibold" style="color: #405189;">
+                                                    <label for="edit_tipo" class="form-label fw-semibold">
                                                         <i class="bi bi-diagram-3 me-1"></i>Tipo de Compra
                                                     </label>
-                                                    <select class="form-select" id="edit_tipo" name="tipo" required style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                    <select class="form-select" id="edit_tipo" name="tipo" required>
                                                         <option value="inicial">Compra Inicial</option>
                                                         <option value="reposicion">Reposición</option>
                                                         <option value="urgente">Urgente</option>
                                                     </select>
                                                 </div>
                                                 <div class="col-md-6">
-                                                    <label for="edit_fecha" class="form-label fw-semibold d-flex align-items-center gap-1" style="color: #405189;">
+                                                    <label for="edit_fecha" class="form-label fw-semibold d-flex align-items-center gap-1">
                                                         <i class="bi bi-calendar-date me-1"></i>Fecha Real de la Compra
                                                         <i class="bi bi-question-circle-fill text-warning" data-bs-toggle="tooltip" data-bs-html="true"
                                                            title="Esta fecha define en qué <strong>año fiscal</strong> aparece la compra en los reportes. Si cambias el año, la compra se moverá de período."></i>
                                                     </label>
-                                                    <input type="date" class="form-control" id="edit_fecha" name="fecha" required style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                    <input type="date" class="form-control" id="edit_fecha" name="fecha" required>
                                                     <small class="text-muted d-block mt-1" style="font-size: 11px;">
                                                         <i class="bi bi-info-circle me-1"></i>
                                                         Si esta compra es histórica y ya está vinculada, al cambiarla se propagará a las recepciones asociadas.
                                                     </small>
                                                 </div>
                                                 <div class="col-md-3">
-                                                    <label for="edit_temporada_familia" class="form-label fw-semibold" style="color: #405189;">
+                                                    <label for="edit_temporada_familia" class="form-label fw-semibold">
                                                         <i class="bi bi-cloud-sun me-1"></i>Temporada
                                                     </label>
-                                                    <select class="form-select" id="edit_temporada_familia" name="temporada_familia" style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                    <select class="form-select" id="edit_temporada_familia" name="temporada_familia">
                                                         <option value="">Sin definir</option>
                                                         <option value="VERANO">Verano</option>
                                                         <option value="OTONO">Otoño</option>
@@ -2278,10 +2636,10 @@ tr.fila-recien-creada > td {
                                                     </select>
                                                 </div>
                                                 <div class="col-md-3">
-                                                    <label for="edit_temporada_anio" class="form-label fw-semibold" style="color: #405189;">
+                                                    <label for="edit_temporada_anio" class="form-label fw-semibold">
                                                         <i class="bi bi-123 me-1"></i>Año
                                                     </label>
-                                                    <input type="number" class="form-control" id="edit_temporada_anio" name="temporada_anio" min="2000" max="2100" style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                    <input type="number" class="form-control" id="edit_temporada_anio" name="temporada_anio" min="2000" max="2100">
                                                 </div>
                                             </div>
                                         </div>
@@ -2290,26 +2648,26 @@ tr.fila-recien-creada > td {
 
                                 <!-- Período -->
                                 <div class="mb-3">
-                                    <div class="d-flex align-items-center gap-2 mb-3">
-                                        <span class="badge rounded-pill text-white" style="background: linear-gradient(135deg, #405189, #0ab39c); padding: 8px 14px;">
+                                    <div class="section-title d-flex align-items-center gap-2 mb-3">
+                                        <span class="badge rounded-pill">
                                             <i class="bi bi-calendar-range me-1"></i> Período de Temporada
                                         </span>
-                                        <hr class="flex-grow-1 my-0" style="border-color: #dee2e6;">
+                                        <hr class="flex-grow-1 my-0">
                                     </div>
                                     <div class="card border-0 shadow-sm" style="border-radius: 12px;">
                                         <div class="card-body">
                                             <div class="row g-3">
                                                 <div class="col-md-6">
-                                                    <label for="edit_fechaInicioTemporada" class="form-label fw-semibold" style="color: #405189;">
+                                                    <label for="edit_fechaInicioTemporada" class="form-label fw-semibold">
                                                         <i class="bi bi-calendar-event me-1"></i>Fecha Inicio
                                                     </label>
-                                                    <input type="date" class="form-control" id="edit_fechaInicioTemporada" name="fechaInicioTemporada" style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                    <input type="date" class="form-control" id="edit_fechaInicioTemporada" name="fechaInicioTemporada">
                                                 </div>
                                                 <div class="col-md-6">
-                                                    <label for="edit_fechaTerminoTemporada" class="form-label fw-semibold" style="color: #405189;">
+                                                    <label for="edit_fechaTerminoTemporada" class="form-label fw-semibold">
                                                         <i class="bi bi-calendar-check me-1"></i>Fecha Término
                                                     </label>
-                                                    <input type="date" class="form-control" id="edit_fechaTerminoTemporada" name="fechaTerminoTemporada" style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                    <input type="date" class="form-control" id="edit_fechaTerminoTemporada" name="fechaTerminoTemporada">
                                                 </div>
                                             </div>
                                         </div>
@@ -2318,12 +2676,12 @@ tr.fila-recien-creada > td {
 
                                 <!-- Histórica -->
                                 <div class="mb-3">
-                                    <div class="card border-0 shadow-sm" style="border-radius: 12px; background: #faf5ff; border-left: 4px solid #7c3aed !important;">
+                                    <div class="card border-0 shadow-sm" style="border-radius: 12px; background: #faf5ff; border-left: 4px solid var(--rm-purple) !important;">
                                         <div class="card-body py-2 px-3">
                                             <div class="form-check d-flex align-items-start gap-2 mb-0">
                                                 <input class="form-check-input mt-1" type="checkbox" id="edit_es_historica" name="es_historica" value="1" style="cursor: pointer;">
                                                 <label class="form-check-label" for="edit_es_historica" style="cursor: pointer;">
-                                                    <span class="fw-semibold" style="color: #7c3aed;">
+                                                    <span class="fw-semibold" style="color: var(--rm-purple);">
                                                         <i class="bi bi-clock-history me-1"></i> Compra histórica (ya recibida)
                                                     </span>
                                                     <br>
@@ -2352,16 +2710,16 @@ tr.fila-recien-creada > td {
                                                 <div class="accordion-body">
                                                     <div class="row g-3">
                                                         <div class="col-md-6">
-                                                            <label for="edit_fecha_envio_proveedor" class="form-label fw-semibold" style="color: #405189;">
+                                                            <label for="edit_fecha_envio_proveedor" class="form-label fw-semibold">
                                                                 <i class="bi bi-box-seam me-1"></i>Fecha envío del proveedor
                                                             </label>
-                                                            <input type="date" class="form-control" id="edit_fecha_envio_proveedor" name="fecha_envio_proveedor" style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                            <input type="date" class="form-control" id="edit_fecha_envio_proveedor" name="fecha_envio_proveedor">
                                                         </div>
                                                         <div class="col-md-6">
-                                                            <label for="edit_fecha_entrega_real" class="form-label fw-semibold" style="color: #405189;">
+                                                            <label for="edit_fecha_entrega_real" class="form-label fw-semibold">
                                                                 <i class="bi bi-check-circle me-1"></i>Fecha entrega real
                                                             </label>
-                                                            <input type="date" class="form-control" id="edit_fecha_entrega_real" name="fecha_entrega_real" style="border-radius: 10px; border: 2px solid #e9ecef;">
+                                                            <input type="date" class="form-control" id="edit_fecha_entrega_real" name="fecha_entrega_real">
                                                         </div>
                                                     </div>
                                                 </div>
@@ -2373,17 +2731,17 @@ tr.fila-recien-creada > td {
                             </div>
                         </div>
 
-                        <div class="modal-footer border-0 py-3" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
+                        <div class="modal-footer modal-footer-nexo py-3">
                             <div class="d-flex justify-content-between w-100 align-items-center flex-wrap gap-2">
-                                <small class="d-none d-sm-block" style="color: #405189;">
+                                <small class="d-none d-sm-block text-rm-primary">
                                     <i class="bi bi-info-circle me-1"></i>
                                     Los cambios se aplican al guardar
                                 </small>
                                 <div class="d-flex gap-2 flex-grow-1 flex-sm-grow-0 justify-content-end">
-                                    <button type="button" class="btn btn-outline-secondary px-3 px-sm-4" data-bs-dismiss="modal" style="border-radius: 10px;">
+                                    <button type="button" class="btn btn-outline-secondary px-3 px-sm-4" data-bs-dismiss="modal">
                                         <i class="bi bi-x-lg me-1"></i>Cancelar
                                     </button>
-                                    <button type="submit" class="btn text-white px-3 px-sm-4" id="btnGuardarEdicionCompra" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border: none; border-radius: 10px;">
+                                    <button type="submit" class="btn btn-nexo-primary px-3 px-sm-4" id="btnGuardarEdicionCompra">
                                         <i class="bi bi-check2-circle me-1"></i>Guardar Cambios
                                     </button>
                                 </div>
@@ -2399,7 +2757,7 @@ tr.fila-recien-creada > td {
             aria-hidden="true">
             <div class="modal-dialog modal-xl modal-dialog-centered">
                 <div class="modal-content shadow-lg border-0">
-                    <div class="modal-header bg-gradient-primary text-white">
+                    <div class="modal-header modal-header-nexo">
                         <h5 class="modal-title text-white d-flex align-items-center" id="modalImportarCSVLabel">
                             <i class="bi bi-file-earmark-spreadsheet-fill me-2"></i>
                             Importar Productos desde Excel/CSV
@@ -2434,7 +2792,7 @@ tr.fila-recien-creada > td {
                                     </p>
                                 </div>
                             </div>
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
                         </div>
 
                         <!-- Zona de Drag & Drop Mejorada -->
@@ -2465,7 +2823,7 @@ tr.fila-recien-creada > td {
                                     <button class="btn btn-sm btn-outline-info me-2" id="btnCargarCSV">
                                         <i class="bi bi-eye me-1"></i>Vista Previa
                                     </button>
-                                    <button type="button" class="btn btn-sm btn-outline-danger" id="btnRemoveCSV">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" id="btnRemoveCSV" title="Quitar archivo" aria-label="Quitar archivo">
                                         <i class="bi bi-x-lg"></i>
                                     </button>
                                 </div>
@@ -2495,7 +2853,7 @@ tr.fila-recien-creada > td {
                                 <div class="card-body p-0">
                                     <div class="table-responsive" style="max-height: 450px; overflow-y: auto;">
                                         <table class="table table-hover table-sm mb-0" id="tablaCSVPreview">
-                                            <thead class="table-primary sticky-top">
+                                            <thead class="thead-nexo sticky-top">
                                                 <tr class="text-center">
                                                     <th width="3%">#</th>
                                                     <th style="min-width: 180px;">Nombre (Artículo)</th>
@@ -2557,11 +2915,11 @@ tr.fila-recien-creada > td {
 
                     </div>
 
-                    <div class="modal-footer bg-light border-top">
+                    <div class="modal-footer modal-footer-nexo">
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                             <i class="bi bi-x-circle me-1"></i>Cancelar
                         </button>
-                        <button type="button" class="btn btn-success" id="btnImportarCSV" disabled>
+                        <button type="button" class="btn btn-nexo-primary" id="btnImportarCSV" disabled>
                             <i class="bi bi-cloud-upload me-1"></i>Importar Datos
                         </button>
                     </div>
@@ -2569,423 +2927,16 @@ tr.fila-recien-creada > td {
             </div>
         </div>
 
-        <style>
-        .csv-upload-zone {
-            transition: all 0.3s ease;
-            cursor: pointer;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        }
-        .csv-upload-zone:hover {
-            border-color: #0d6efd !important;
-            background: linear-gradient(135deg, #e7f1ff 0%, #cfe2ff 100%);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
-        }
-        .csv-upload-zone.drag-over {
-            border-color: #198754 !important;
-            background: linear-gradient(135deg, #d1e7dd 0%, #badbcc 100%);
-            transform: scale(1.02);
-        }
-        .bg-gradient-primary {
-            background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
-        }
-        .border-dashed {
-            border-style: dashed !important;
-        }
-        
-        /* ========== ESTILOS MODAL RECEPCIÓN NEXO ========== */
-        #modalRecepcionProductos .text-purple {
-            color: #6f42c1;
-        }
-        
-        #modalRecepcionProductos .table th {
-            font-weight: 600;
-            letter-spacing: 0.3px;
-            border-bottom: 2px solid #dee2e6;
-        }
-        
-        #modalRecepcionProductos .table tbody tr {
-            transition: all 0.2s ease;
-        }
-        
-        #modalRecepcionProductos .table tbody tr:hover {
-            background-color: rgba(25, 135, 84, 0.08) !important;
-        }
-        
-        #modalRecepcionProductos .table tbody tr.row-recepcionado {
-            background-color: rgba(25, 135, 84, 0.15) !important;
-        }
-        
-        #modalRecepcionProductos .sticky-top {
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        
-        /* Animación para filas recepcionadas */
-        @keyframes highlightRecepcion {
-            0% { background-color: rgba(25, 135, 84, 0.3); }
-            100% { background-color: rgba(25, 135, 84, 0.15); }
-        }
-        
-        #modalRecepcionProductos .row-just-received {
-            animation: highlightRecepcion 0.5s ease-out;
-        }
-        
-        /* Progress bar personalizado */
-        #modalRecepcionProductos .progress {
-            background-color: #e9ecef;
-            overflow: hidden;
-        }
-        
-        #modalRecepcionProductos .progress-bar {
-            transition: width 0.4s ease;
-        }
-        
-        /* ========== MODAL RECEPCIÓN - ESTILOS COMPACTOS ========== */
-        #modalRecepcionProductos .modal-content { border-radius: 10px; }
-        #modalRecepcionProductos .modal-header { min-height: 0; padding: 6px 12px !important; }
-        #modalRecepcionProductos .modal-body { padding: 6px !important; }
-        #modalRecepcionProductos .modal-footer { padding: 4px 10px !important; }
-
-        /* --- Guía de pasos compacta / colapsable --- */
-        .recepcion-guia-pasos {
-            background: linear-gradient(135deg, #f0f4ff 0%, #e8f5e9 100%);
-            border: 1px solid #c5cae9;
-            border-radius: 8px;
-            padding: 4px 10px;
-            margin-bottom: 6px;
-            font-size: 0.72rem;
-        }
-        .recepcion-guia-pasos .paso {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 0.72rem;
-            color: #37474f;
-        }
-        .recepcion-guia-pasos .paso .paso-num {
-            width: 18px; height: 18px;
-            border-radius: 50%;
-            background: #405189;
-            color: white;
-            font-size: 0.62rem;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-        .recepcion-guia-pasos .paso.paso-opcional .paso-num {
-            background: #78909c;
-        }
-        .recepcion-guia-pasos .paso-separador {
-            width: 14px;
-            text-align: center;
-            color: #90a4ae;
-            font-size: 0.65rem;
-        }
-        /* Guía colapsada: queda como strip delgado con toggle */
-        .recepcion-guia-pasos.collapsed {
-            padding: 4px 10px;
-        }
-        .recepcion-guia-pasos.collapsed .guia-content { display: none; }
-        .recepcion-guia-pasos:not(.collapsed) .guia-summary { display: none; }
-        .recepcion-guia-pasos .guia-summary {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-        }
-        .recepcion-guia-pasos .btn-toggle-guia {
-            background: transparent; border: none; color: #405189;
-            font-size: 0.68rem; padding: 0; cursor: pointer;
-        }
-
-        /* --- Grupo producto: campos de aplicar masivo --- */
-        .producto-grupo .masivo-control {
-            background: #eef0f7;
-            border: 1px dashed #9fa8da;
-            border-radius: 6px;
-            padding: 2px 4px;
-        }
-        .producto-grupo .masivo-control input {
-            background: transparent;
-            border: none;
-            font-size: 0.75rem;
-            font-weight: 500;
-        }
-        .producto-grupo .masivo-control input:focus {
-            outline: none;
-            background: white;
-            border-radius: 4px;
-        }
-        .producto-grupo .masivo-control .btn-aplicar-masivo {
-            background: #405189;
-            border: none;
-            color: white;
-            font-size: 0.65rem;
-            padding: 2px 8px;
-            border-radius: 4px;
-            white-space: nowrap;
-        }
-        .producto-grupo .masivo-control .btn-aplicar-masivo:hover {
-            background: #2e3b61;
-        }
-
-        /* --- Columna editable highlight --- */
-        #tablaRecepcionProductos thead th.col-editable {
-            background: rgba(10,179,156,0.35) !important;
-            position: relative;
-        }
-        #tablaRecepcionProductos thead th.col-editable::after {
-            content: '✎';
-            font-size: 0.55rem;
-            margin-left: 3px;
-            opacity: 0.8;
-        }
-
-        /* --- Factura opcional badge --- */
-        .factura-opcional-badge {
-            font-size: 0.55rem;
-            color: #78909c;
-            font-weight: 400;
-            display: block;
-            line-height: 1;
-            margin-top: 1px;
-        }
-
-        .recepcion-toolbar { font-size: 0.76rem; }
-        .recepcion-toolbar .form-control,
-        .recepcion-toolbar .form-select,
-        .recepcion-toolbar .btn { font-size: 0.74rem; }
-
-        /* ====== Fila de filtros: TODO EN UNA LÍNEA (CSS Grid) ====== */
-        .toolbar-filtros {
-            display: grid;
-            grid-template-columns:
-                minmax(220px, 1.4fr)   /* Buscar */
-                minmax(180px, 1fr)     /* Estado */
-                minmax(170px, 1fr)     /* Sucursal */
-                auto;                  /* Contador + paginación */
-            gap: 10px;
-            align-items: end;
-            padding: 6px 8px;
-            background: #ffffff;
-            border: 1px solid #e3e6ef;
-            border-radius: 8px;
-            box-shadow: 0 1px 2px rgba(64, 81, 137, 0.04);
-        }
-        .toolbar-filtros .filtro-item {
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
-        }
-        .toolbar-filtros .filtro-label {
-            font-size: 0.6rem;
-            font-weight: 700;
-            color: #6c757d;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-            margin-bottom: 2px;
-            line-height: 1;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-        }
-        .toolbar-filtros .filtro-label i { color: #405189; font-size: 0.78rem; }
-        .toolbar-filtros .input-group-text {
-            padding: 2px 6px;
-            font-size: 0.72rem;
-        }
-        .toolbar-filtros .form-control,
-        .toolbar-filtros .form-select {
-            height: 28px;
-            font-size: 0.74rem;
-        }
-        .toolbar-filtros .filtro-paginacion {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding-top: 14px; /* alinear con inputs (que tienen label arriba) */
-            justify-content: flex-end;
-            white-space: nowrap;
-        }
-        .toolbar-filtros .filtro-paginacion .badge {
-            padding: 5px 10px;
-            font-size: 0.7rem;
-        }
-        .toolbar-filtros .filtro-paginacion .btn-group .btn { height: 28px; }
-
-        /* En pantallas muy angostas, permitir que envuelva para no cortar controles */
-        @media (max-width: 900px) {
-            .toolbar-filtros {
-                grid-template-columns: 1fr 1fr;
-            }
-            .toolbar-filtros .filtro-paginacion {
-                grid-column: 1 / -1;
-                padding-top: 4px;
-                justify-content: space-between;
-            }
-        }
-        @media (max-width: 560px) {
-            .toolbar-filtros { grid-template-columns: 1fr; }
-            .toolbar-filtros .filtro-paginacion { grid-column: auto; }
-        }
-
-        /* ====== Modal-body en flex column para que el footer quede sticky ====== */
-        #modalRecepcionProductos .modal-body {
-            display: flex;
-            flex-direction: column;
-            max-height: calc(100vh - 90px);
-            gap: 4px;
-        }
-        #modalRecepcionProductos .modal-body > .card {
-            flex: 1 1 auto;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-        }
-        #modalRecepcionProductos .modal-body > .card > .card-body {
-            flex: 1 1 auto;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        #modalRecepcionProductos .modal-body > .card > .card-body > .table-responsive {
-            flex: 1 1 auto;
-            min-height: 180px;
-            max-height: none !important;
-            overflow-y: auto;
-        }
-        #modalRecepcionProductos .modal-body > .card > .card-body > .border-top {
-            flex-shrink: 0;
-            position: sticky;
-            bottom: 0;
-            z-index: 5;
-            background: linear-gradient(180deg, #ffffff 0%, #eef0f3 100%) !important;
-            box-shadow: 0 -4px 10px rgba(64, 81, 137, 0.08);
-            border-top: 2px solid #405189 !important;
-        }
-
-        /* Footer: destaque visual para "rebajados sin confirmar" */
-        #modalRecepcionProductos .stat-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 0.7rem;
-            font-weight: 600;
-            background: #f1f3f7;
-            color: #405189;
-            border: 1px solid #dfe3ec;
-        }
-        #modalRecepcionProductos .stat-chip.chip-pendiente { background: #fff8e1; color: #b7791f; border-color: #f6d78a; }
-        #modalRecepcionProductos .stat-chip.chip-sesion {
-            background: linear-gradient(135deg, #0ab39c 0%, #099885 100%);
-            color: #fff;
-            border-color: transparent;
-            box-shadow: 0 2px 6px rgba(10, 179, 156, 0.35);
-        }
-        #modalRecepcionProductos .stat-chip.chip-recep { background: #e6fff9; color: #099885; border-color: #9fe7db; }
-        #modalRecepcionProductos .stat-chip.chip-costo  { background: #eef3ff; color: #405189; border-color: #c7d1ea; }
-
-        /* ====== Tabla más compacta ====== */
-        #modalRecepcionProductos #tablaRecepcionProductos { font-size: 0.74rem; }
-        #modalRecepcionProductos #tablaRecepcionProductos thead th {
-            padding: 4px 5px !important;
-            font-size: 0.66rem !important;
-            letter-spacing: 0.2px;
-        }
-        #modalRecepcionProductos #tablaRecepcionProductos tbody td { padding: 2px 5px !important; }
-        #modalRecepcionProductos #tablaRecepcionProductos .producto-grupo td { padding: 3px 5px !important; font-size: 0.73rem; }
-        #modalRecepcionProductos #tablaRecepcionProductos .talla-detalle td { padding: 1px 4px !important; font-size: 0.72rem; }
-        #modalRecepcionProductos #tablaRecepcionProductos .badge { font-size: 0.58rem; padding: 0.22em 0.4em; }
-
-        #modalRecepcionProductos .table-sm th,
-        #modalRecepcionProductos .table-sm td { padding: 3px 5px; }
-
-        /* Columnas ocultas por defecto para compactar la tabla:
-           - Descripción: redundante con el nombre del artículo
-           - Género: poco informativo en la grilla
-           Se mantienen visibles solo en pantallas extra anchas (>1600px). */
-        #tablaRecepcionProductos .recep-col-desc,
-        #tablaRecepcionProductos .recep-col-genero { display: none; }
-        @media (min-width: 1600px) {
-            #tablaRecepcionProductos .recep-col-desc,
-            #tablaRecepcionProductos .recep-col-genero { display: table-cell; }
-        }
-        /* Color: solo en pantallas anchas (>=1280px) */
-        #tablaRecepcionProductos .recep-col-color { display: none; }
-        @media (min-width: 1280px) {
-            #tablaRecepcionProductos .recep-col-color { display: table-cell; }
-        }
-
-        #modalRecepcionProductos input[type="number"].cantidad-recepcion,
-        #modalRecepcionProductos input[type="number"].recepcionado-input {
-            width: 54px; text-align: center; border-radius: 6px;
-            border: 1px solid #dee2e6; padding: 2px 4px; font-weight: 600;
-            font-size: 0.78rem; transition: all 0.2s;
-        }
-        #modalRecepcionProductos input[type="number"].cantidad-recepcion:focus,
-        #modalRecepcionProductos input[type="number"].recepcionado-input:focus {
-            border-color: #198754; box-shadow: 0 0 0 2px rgba(25,135,84,0.2);
-        }
-        #modalRecepcionProductos input[type="number"].cantidad-recepcion.filled,
-        #modalRecepcionProductos input[type="number"].recepcionado-input.filled {
-            background-color: #d1e7dd; border-color: #198754; color: #0f5132;
-        }
-
-        #modalRecepcionProductos .factura-datalist-input {
-            font-size: 0.78rem; padding: 3px 6px;
-        }
-
-        .btn-vista {
-            border-color: #405189; color: #405189; transition: all 0.2s ease;
-        }
-        .btn-vista:hover {
-            background-color: rgba(64, 81, 137, 0.1); border-color: #405189; color: #405189;
-        }
-        .btn-check:checked + .btn-vista {
-            background-color: #405189; border-color: #405189; color: white !important;
-        }
-        .btn-check:checked + .btn-vista i { color: white !important; }
-        
-        #modalRecepcionProductos .producto-grupo td { padding: 4px 5px; font-size: 0.76rem; }
-        #modalRecepcionProductos .talla-detalle td { padding: 2px 5px; font-size: 0.74rem; }
-        #modalRecepcionProductos .producto-grupo .badge,
-        #modalRecepcionProductos .talla-detalle .badge { font-size: 0.6rem; }
-
-        /* Modo asignación masiva de sucursal: checkboxes por fila */
-        #tablaRecepcionProductos .col-sucursal-sel { display: none; }
-        #modalRecepcionProductos.modo-sucursal-sel #tablaRecepcionProductos .col-sucursal-sel { display: table-cell; }
-        #modalRecepcionProductos.modo-sucursal-sel #tablaRecepcionProductos tbody tr.row-sucursal-sel {
-            background-color: rgba(13, 202, 240, 0.18) !important;
-        }
-        
-        #modalRecepcionProductos .input-cantidad-wrapper { position: relative; display: inline-flex; align-items: center; gap: 3px; }
-        /* El resto del look del botón Máx vive en la regla global
-           `.btn-cantidad-rapida` (fondo verde, ancho auto, etc.) para
-           que sea visible y legible también dentro del modal. */
-        
-        @media (max-width: 1400px) {
-            .recep-col-extra { display: none; }
-        }
-        @media (max-width: 1100px) {
-            .recep-col-desc { display: none; }
-        }
-        </style>
-
         <!-- ========== MODAL RECEPCIÓN DE PRODUCTOS - ESTILO CHAT PROYECTO ========== -->
         <div class="modal fade" id="modalRecepcionProductos" tabindex="-1" aria-labelledby="modalRecepcionLabel" aria-hidden="true">
-            <div class="modal-dialog modal-xxl modal-dialog-centered" style="max-width: 96%; width: 96%;">
+            <div class="modal-dialog modal-xxl modal-dialog-centered">
                 <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden; box-shadow: 0 20px 60px rgba(64, 81, 137, 0.3);">
                     
                     <!-- Header compacto -->
-                    <div class="modal-header border-0 text-white py-1 px-3" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);">
+                    <div class="modal-header modal-header-nexo py-1 px-3">
                         <div class="d-flex align-items-center gap-2 w-100">
                             <i class="bi bi-box-seam-fill text-white" style="font-size:1rem;"></i>
-                            <h6 class="modal-title mb-0 fw-bold text-white" id="modalRecepcionLabel" style="font-size:0.88rem;">Recepción de Productos</h6>
+                            <h5 class="modal-title mb-0 fw-bold text-white" id="modalRecepcionLabel">Recepción de Productos</h5>
                             <small class="text-white opacity-75 d-none d-md-inline" style="font-size: 0.68rem;" id="recepcionSubtitulo">Gestiona la entrada de mercadería</small>
                             <div class="ms-auto d-flex align-items-center gap-1">
                                 <span class="badge rounded-pill px-2" style="background: rgba(255,255,255,0.15); font-size: 0.68rem;">
@@ -3169,8 +3120,8 @@ tr.fila-recien-creada > td {
                                 
                                 <div class="table-responsive" style="max-height: calc(100vh - 240px); min-height: 300px; overflow-y: auto;">
                                     <table class="table table-hover table-sm align-middle mb-0" id="tablaRecepcionProductos">
-                                        <thead class="sticky-top" style="z-index: 10; background: linear-gradient(135deg, #405189 0%, #4a5d99 100%);">
-                                            <tr class="text-center" style="font-size: 0.7rem;">
+                                        <thead class="thead-nexo sticky-top" style="z-index: 10;">
+                                            <tr class="text-center">
                                                 <th class="py-1 text-white col-sucursal-sel" style="width: 36px;">
                                                     <input type="checkbox" class="form-check-input" id="checkSucursalTodos" title="Seleccionar / deseleccionar todas las filas">
                                                 </th>
@@ -3227,12 +3178,12 @@ tr.fila-recien-creada > td {
                     </div>
 
                     <!-- Footer con resumen y acción principal -->
-                    <div class="modal-footer border-0 py-1 px-2" style="background: #eef0f3;">
+                    <div class="modal-footer modal-footer-nexo py-1 px-2">
                         <small class="text-muted me-auto" style="font-size:0.7rem;">
                             <i class="bi bi-info-circle me-1"></i>Solo se guardan las tallas con cantidad ingresada. Los productos quedan listos para crear en inventario.
                         </small>
-                        <button type="button" class="btn btn-outline-secondary btn-sm px-2 py-1" data-bs-dismiss="modal" style="font-size:0.75rem;"><i class="bi bi-x-lg me-1"></i>Cancelar</button>
-                        <button type="button" class="btn btn-sm px-3 py-1 text-white fw-bold" id="btnGuardarRecepcion" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border: none; font-size: 0.78rem;">
+                        <button type="button" class="btn btn-outline-secondary btn-sm px-3" data-bs-dismiss="modal"><i class="bi bi-x-lg me-1"></i>Cancelar</button>
+                        <button type="button" class="btn btn-nexo-primary btn-sm px-3" id="btnGuardarRecepcion">
                             <i class="bi bi-check2-circle me-1"></i>Guardar Recepción
                         </button>
                     </div>
@@ -3244,9 +3195,9 @@ tr.fila-recien-creada > td {
         <div class="modal fade" id="modalDistribuirTallas" tabindex="-1" aria-labelledby="modalDistribuirTallasLabel" aria-hidden="true">
             <div class="modal-dialog modal-lg modal-dialog-centered">
                 <div class="modal-content border-0 shadow-lg" style="border-radius: 14px; overflow: hidden;">
-                    <div class="modal-header text-white py-2 px-3" style="background: linear-gradient(135deg, #6f42c1 0%, #405189 100%);">
+                    <div class="modal-header modal-header-nexo py-2 px-3">
                         <div>
-                            <h6 class="modal-title mb-0 fw-bold"><i class="bi bi-rulers me-2"></i>Distribuir stock por Guía de Tallas</h6>
+                            <h5 class="modal-title mb-0 fw-bold"><i class="bi bi-rulers me-2"></i>Distribuir stock por Guía de Tallas</h5>
                             <small class="opacity-75" id="distTallasSubtitulo">Reparte el total importado en tallas reales</small>
                         </div>
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
@@ -3277,7 +3228,7 @@ tr.fila-recien-creada > td {
                         <!-- Selectores de curva / guía -->
                         <div class="row g-2 mb-2">
                             <div class="col-md-6">
-                                <label class="form-label small mb-1 fw-semibold"><i class="bi bi-bookmark-star me-1 text-warning"></i>Curva guardada</label>
+                                <label class="form-label small mb-1 fw-semibold" for="distTallasCurvaSelect"><i class="bi bi-bookmark-star me-1 text-warning"></i>Curva guardada</label>
                                 <div class="input-group input-group-sm">
                                     <select class="form-select" id="distTallasCurvaSelect">
                                         <option value="">-- sin usar curva --</option>
@@ -3287,7 +3238,7 @@ tr.fila-recien-creada > td {
                                 <small class="text-muted" style="font-size:.7rem;">Se sugieren automáticamente curvas de esta marca/género.</small>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label small mb-1 fw-semibold"><i class="bi bi-rulers me-1 text-info"></i>Guía de tallas</label>
+                                <label class="form-label small mb-1 fw-semibold" for="distTallasGuiaSelect"><i class="bi bi-rulers me-1 text-info"></i>Guía de tallas</label>
                                 <div class="input-group input-group-sm">
                                     <select class="form-select" id="distTallasGuiaSelect">
                                         <option value="">-- seleccionar guía --</option>
@@ -3329,10 +3280,10 @@ tr.fila-recien-creada > td {
                         </div>
                     </div>
 
-                    <div class="modal-footer py-2 px-3 bg-light">
-                        <button type="button" class="btn btn-outline-warning btn-sm me-auto" id="btnGuardarComoCurva"><i class="bi bi-bookmark-plus me-1"></i>Guardar como curva</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="button" class="btn btn-success btn-sm" id="btnAplicarDistTallas"><i class="bi bi-check2-circle me-1"></i>Aplicar distribución</button>
+                    <div class="modal-footer modal-footer-nexo py-2 px-3">
+                        <button type="button" class="btn btn-outline-warning me-auto" id="btnGuardarComoCurva"><i class="bi bi-bookmark-plus me-1"></i>Guardar como curva</button>
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-nexo-primary" id="btnAplicarDistTallas"><i class="bi bi-check2-circle me-1"></i>Aplicar distribución</button>
                     </div>
                 </div>
             </div>
@@ -3342,26 +3293,26 @@ tr.fila-recien-creada > td {
         <div class="modal fade" id="modalGuardarCurva" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content border-0 shadow-lg" style="border-radius:12px;overflow:hidden;">
-                    <div class="modal-header text-white" style="background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%);">
-                        <h6 class="modal-title fw-bold"><i class="bi bi-bookmark-plus me-2"></i>Guardar como curva</h6>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <div class="modal-header modal-header-nexo">
+                        <h5 class="modal-title fw-bold"><i class="bi bi-bookmark-plus me-2"></i>Guardar como curva</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                     </div>
                     <div class="modal-body">
                         <div class="mb-2">
-                            <label class="form-label small fw-semibold">Nombre</label>
+                            <label class="form-label small fw-semibold" for="guardarCurvaNombre">Nombre</label>
                             <input type="text" class="form-control form-control-sm" id="guardarCurvaNombre" placeholder="Ej: Curva zapatilla hombre 38-44" maxlength="120">
                         </div>
                         <div class="mb-2">
-                            <label class="form-label small fw-semibold">Descripción (opcional)</label>
+                            <label class="form-label small fw-semibold" for="guardarCurvaDescripcion">Descripción (opcional)</label>
                             <input type="text" class="form-control form-control-sm" id="guardarCurvaDescripcion" maxlength="250">
                         </div>
                         <div class="row g-2">
                             <div class="col-6">
-                                <label class="form-label small fw-semibold">Marca (opcional)</label>
+                                <label class="form-label small fw-semibold" for="guardarCurvaMarca">Marca (opcional)</label>
                                 <select class="form-select form-select-sm" id="guardarCurvaMarca"><option value="">— todas —</option></select>
                             </div>
                             <div class="col-6">
-                                <label class="form-label small fw-semibold">Género (opcional)</label>
+                                <label class="form-label small fw-semibold" for="guardarCurvaGenero">Género (opcional)</label>
                                 <select class="form-select form-select-sm" id="guardarCurvaGenero"><option value="">— todos —</option></select>
                             </div>
                         </div>
@@ -3369,9 +3320,9 @@ tr.fila-recien-creada > td {
                             Los porcentajes se calculan automáticamente desde la distribución actual. Los ítems con stock 0 se omiten.
                         </div>
                     </div>
-                    <div class="modal-footer py-2 px-3 bg-light">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="button" class="btn btn-warning btn-sm" id="btnConfirmarGuardarCurva"><i class="bi bi-save me-1"></i>Guardar</button>
+                    <div class="modal-footer modal-footer-nexo py-2 px-3">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-nexo-primary" id="btnConfirmarGuardarCurva"><i class="bi bi-save me-1"></i>Guardar</button>
                     </div>
                 </div>
             </div>
@@ -3383,19 +3334,19 @@ tr.fila-recien-creada > td {
                 <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
 
                     <!-- Header -->
-                    <div class="modal-header border-0 text-white py-3" style="background: linear-gradient(135deg, #f0a500 0%, #e67e00 100%);">
+                    <div class="modal-header modal-header-nexo modal-header-nexo--warning py-3">
                         <div class="d-flex align-items-center gap-2 gap-md-3 flex-grow-1 min-w-0">
-                            <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width: 44px; height: 44px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px);">
-                                <i class="bi bi-pencil-square fs-5"></i>
+                            <div class="modal-header-icon flex-shrink-0">
+                                <i class="bi bi-pencil-square"></i>
                             </div>
                             <div class="min-w-0">
-                                <h5 class="modal-title mb-0 fw-bold text-white text-truncate" id="modalEditarRecepcionCompraLabel">
+                                <h5 class="modal-title mb-0 fw-bold text-truncate" id="modalEditarRecepcionCompraLabel">
                                     Editar Recepciones — <span id="nombreCompraRecepcion"></span>
                                 </h5>
-                                <small class="opacity-75 text-white d-none d-sm-inline">Recepciones registradas y unidades pendientes de recibir</small>
+                                <small class="opacity-75 d-none d-sm-inline">Recepciones registradas y unidades pendientes de recibir</small>
                             </div>
                         </div>
-                        <button type="button" class="btn-close btn-close-white ms-2 flex-shrink-0" data-bs-dismiss="modal" aria-label="Close"></button>
+                        <button type="button" class="btn-close ms-2 flex-shrink-0" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                     </div>
 
                     <!-- Body -->
@@ -3405,38 +3356,38 @@ tr.fila-recien-creada > td {
                         <!-- Resumen compacto (siempre visible) -->
                         <div class="row g-2 mb-3" id="resumenRecepcionCompra">
                             <div class="col-6 col-md-3">
-                                <div class="card border-0 h-100" style="background: linear-gradient(135deg, #e8eaf6, #c5cae9); border-radius: 10px;">
+                                <div class="kpi-card kpi-card--blue kpi-static card h-100">
                                     <div class="card-body text-center py-2 px-2">
                                         <i class="bi bi-receipt text-primary mb-1 d-block"></i>
-                                        <h6 class="mb-0 fw-bold" id="totalDtesRecepcionCompra">0</h6>
-                                        <small class="text-muted" style="font-size:.72rem;">Facturas</small>
+                                        <h6 class="kpi-mini-value" id="totalDtesRecepcionCompra">0</h6>
+                                        <small class="kpi-label">Facturas</small>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-6 col-md-3">
-                                <div class="card border-0 h-100" style="background: linear-gradient(135deg, #e0f2f1, #b2dfdb); border-radius: 10px;">
+                                <div class="kpi-card kpi-card--green kpi-static card h-100">
                                     <div class="card-body text-center py-2 px-2">
                                         <i class="bi bi-check2-circle text-success mb-1 d-block"></i>
-                                        <h6 class="mb-0 fw-bold" id="totalUnidadesRecepcionCompra">0</h6>
-                                        <small class="text-muted" style="font-size:.72rem;">Recibidas</small>
+                                        <h6 class="kpi-mini-value" id="totalUnidadesRecepcionCompra">0</h6>
+                                        <small class="kpi-label">Recibidas</small>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-6 col-md-3">
-                                <div class="card border-0 h-100" style="background: linear-gradient(135deg, #fff3e0, #ffe0b2); border-radius: 10px;">
+                                <div class="kpi-card kpi-card--yellow kpi-static card h-100">
                                     <div class="card-body text-center py-2 px-2">
                                         <i class="bi bi-hourglass-split text-warning mb-1 d-block"></i>
-                                        <h6 class="mb-0 fw-bold" id="totalPendienteRecepcionCompra">0</h6>
-                                        <small class="text-muted" style="font-size:.72rem;">Pendientes</small>
+                                        <h6 class="kpi-mini-value" id="totalPendienteRecepcionCompra">0</h6>
+                                        <small class="kpi-label">Pendientes</small>
                                     </div>
                                 </div>
                             </div>
                             <div class="col-6 col-md-3">
-                                <div class="card border-0 h-100" style="background: linear-gradient(135deg, #fce4ec, #f8bbd9); border-radius: 10px;">
+                                <div class="kpi-card kpi-card--orange kpi-static card h-100">
                                     <div class="card-body text-center py-2 px-2">
                                         <i class="bi bi-currency-dollar text-danger mb-1 d-block"></i>
-                                        <h6 class="mb-0 fw-bold" id="valorTotalRecepcionCompra">$0</h6>
-                                        <small class="text-muted" style="font-size:.72rem;">Valor (Costo)</small>
+                                        <h6 class="kpi-mini-value" id="valorTotalRecepcionCompra">$0</h6>
+                                        <small class="kpi-label">Valor (Costo)</small>
                                     </div>
                                 </div>
                             </div>
@@ -3482,7 +3433,7 @@ tr.fila-recien-creada > td {
 
                                 <!-- ===== TAB 1: LO RECEPCIONADO ===== -->
                                 <div class="tab-pane fade show active" id="contentRecepcionado" role="tabpanel">
-                                    <div class="alert alert-warning border-0 py-2 mb-3" style="border-radius: 8px; font-size: .85rem;">
+                                    <div class="alert alert-nexo-warning border-0 py-2 mb-3">
                                         <i class="bi bi-exclamation-triangle me-1"></i>
                                         Edita cantidades o elimina recepciones ya registradas. Los cambios afectan el inventario.
                                     </div>
@@ -3506,7 +3457,7 @@ tr.fila-recien-creada > td {
                                     <div id="tablaRecepcionesCompraContainer">
                                         <div class="table-responsive">
                                             <table class="table table-hover table-sm align-middle" id="tablaRecepcionesCompra">
-                                                <thead style="background: linear-gradient(135deg, #405189, #364574); color:#fff;">
+                                                <thead class="thead-nexo">
                                                     <tr>
                                                         <th class="text-nowrap"><i class="bi bi-receipt me-1"></i>Factura</th>
                                                         <th><i class="bi bi-box me-1"></i>Producto</th>
@@ -3568,7 +3519,7 @@ tr.fila-recien-creada > td {
                                     <div id="tablaPendientesCompraContainer">
                                         <div class="table-responsive">
                                             <table class="table table-hover table-sm align-middle" id="tablaPendientesCompra">
-                                                <thead style="background: linear-gradient(135deg, #e67e00, #b85e00); color:#fff;">
+                                                <thead class="thead-nexo">
                                                     <tr>
                                                         <th style="width:36px;">
                                                             <div class="form-check mb-0">
@@ -3612,13 +3563,12 @@ tr.fila-recien-creada > td {
                     </div><!-- /modal-body -->
 
                     <!-- Footer -->
-                    <div class="modal-footer border-0 py-2 py-md-3 flex-wrap gap-2"
-                         style="background: linear-gradient(135deg, #f8f9fa, #e9ecef);">
-                        <button type="button" class="btn btn-secondary btn-sm px-3" data-bs-dismiss="modal" style="border-radius:8px;">
+                    <div class="modal-footer modal-footer-nexo py-2 py-md-3 flex-wrap gap-2">
+                        <button type="button" class="btn btn-outline-secondary px-3" data-bs-dismiss="modal">
                             <i class="bi bi-x-circle me-1"></i>Cerrar
                         </button>
                         <div class="ms-auto d-flex gap-2 flex-wrap justify-content-end">
-                            <button type="button" class="btn btn-warning btn-sm px-3 text-dark" id="btnGuardarRecepcionCompraEditada" style="border-radius:8px;">
+                            <button type="button" class="btn btn-nexo-primary px-3" id="btnGuardarRecepcionCompraEditada">
                                 <i class="bi bi-check-circle me-1"></i>Guardar Cambios
                             </button>
                         </div>
@@ -3633,17 +3583,17 @@ tr.fila-recien-creada > td {
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
             <!-- Header con gradiente NEXO -->
-            <div class="modal-header border-0 text-white py-3" style="background: linear-gradient(135deg, #405189 0%, #1a1a2e 100%);">
+            <div class="modal-header modal-header-nexo py-3">
                 <div class="d-flex align-items-center gap-3">
-                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px);">
-                        <i class="bi bi-box-seam fs-5"></i>
+                    <div class="modal-header-icon">
+                        <i class="bi bi-box-seam"></i>
                     </div>
                     <div>
                         <h5 class="modal-title mb-0 fw-bold text-white" id="modalProductoManualLabel">Agregar Producto Manual</h5>
                         <small class="opacity-75">Complete los datos del producto</small>
                     </div>
                 </div>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             
             <div class="modal-body p-4">
@@ -3652,22 +3602,22 @@ tr.fila-recien-creada > td {
                     
                     <!-- Sección: Documento -->
                     <div class="mb-4">
-                        <div class="d-flex align-items-center gap-2 mb-3">
-                            <span class="badge rounded-pill" style="background: linear-gradient(135deg, #405189, #1a1a2e); padding: 6px 12px;">
+                        <div class="section-title d-flex align-items-center gap-2 mb-3">
+                            <span class="badge rounded-pill">
                                 <i class="bi bi-file-earmark-text me-1"></i> Documento
                             </span>
-                            <hr class="flex-grow-1 my-0" style="border-color: #e0e0e0;">
+                            <hr class="flex-grow-1 my-0">
                         </div>
                         <div class="row g-2 g-md-3">
                             <div class="col-12 col-md-6">
-                                <label class="form-label fw-semibold text-muted small">
+                                <label class="form-label fw-semibold text-muted small" for="proveedorNombreManual">
                                     <i class="bi bi-building me-1 text-primary"></i>Proveedor
                                 </label>
                                 <input type="text" class="form-control bg-light" id="proveedorNombreManual" readonly placeholder="Se asigna de la compra">
                                 <input type="hidden" id="proveedorIdManual" name="proveedor_id">
                             </div>
                             <div class="col-12 col-md-6">
-                                <label class="form-label fw-semibold text-muted small">
+                                <label class="form-label fw-semibold text-muted small" for="selectDteManual">
                                     <i class="bi bi-receipt me-1 text-primary"></i>DTE (Factura/Guía) *
                                 </label>
                                 <select class="form-select" id="selectDteManual" name="dte_id" required>
@@ -3679,15 +3629,15 @@ tr.fila-recien-creada > td {
                     
                     <!-- Sección: Información del Producto -->
                     <div class="mb-4">
-                        <div class="d-flex align-items-center gap-2 mb-3">
-                            <span class="badge rounded-pill" style="background: linear-gradient(135deg, #0d6efd, #0dcaf0); padding: 6px 12px;">
+                        <div class="section-title d-flex align-items-center gap-2 mb-3">
+                            <span class="badge rounded-pill">
                                 <i class="bi bi-info-circle me-1"></i> Información
                             </span>
-                            <hr class="flex-grow-1 my-0" style="border-color: #e0e0e0;">
+                            <hr class="flex-grow-1 my-0">
                         </div>
                         <div class="row g-2 g-md-3">
                             <div class="col-12 col-md-6">
-                                <label class="form-label fw-semibold text-muted small">
+                                <label class="form-label fw-semibold text-muted small" for="inputNombreCompraManual">
                                     <i class="bi bi-tag me-1 text-info"></i>Nombre / Código del Producto *
                                 </label>
                                 <div class="position-relative">
@@ -3696,68 +3646,68 @@ tr.fila-recien-creada > td {
                                 </div>
                             </div>
                             <div class="col-12 col-md-6">
-                                <label class="form-label fw-semibold text-muted small">
+                                <label class="form-label fw-semibold text-muted small" for="inputDescripcionManual">
                                     <i class="bi bi-card-text me-1 text-info"></i>Descripción
                                 </label>
-                                <input type="text" class="form-control" name="descripcion" placeholder="Descripción opcional">
+                                <input type="text" class="form-control" id="inputDescripcionManual" name="descripcion" placeholder="Descripción opcional">
                             </div>
                         </div>
                     </div>
                     
                     <!-- Sección: Atributos -->
                     <div class="mb-4">
-                        <div class="d-flex align-items-center gap-2 mb-3">
-                            <span class="badge rounded-pill" style="background: linear-gradient(135deg, #6f42c1, #d63384); padding: 6px 12px;">
+                        <div class="section-title d-flex align-items-center gap-2 mb-3">
+                            <span class="badge rounded-pill">
                                 <i class="bi bi-tags me-1"></i> Atributos
                             </span>
                             <small class="text-muted ms-2"><i class="bi bi-lightbulb text-warning"></i> Selecciona o escribe un nuevo valor</small>
-                            <hr class="flex-grow-1 my-0" style="border-color: #e0e0e0;">
+                            <hr class="flex-grow-1 my-0">
                         </div>
                         <div class="row g-2 g-md-3">
                             <div class="col-6 col-md-3">
-                                <label class="form-label fw-semibold text-muted small">
-                                    <i class="bi bi-award me-1" style="color: #6f42c1;"></i>Marca *
+                                <label class="form-label fw-semibold text-muted small" for="selectMarcaManual">
+                                    <i class="bi bi-award me-1 text-primary"></i>Marca *
                                 </label>
                                 <select class="form-select select2-tags" id="selectMarcaManual" name="atributo1" required>
                                     <option value="">Seleccionar...</option>
                                 </select>
                             </div>
                             <div class="col-6 col-md-3">
-                                <label class="form-label fw-semibold text-muted small">
-                                    <i class="bi bi-palette me-1" style="color: #d63384;"></i>Color *
+                                <label class="form-label fw-semibold text-muted small" for="selectColorManual">
+                                    <i class="bi bi-palette me-1 text-primary"></i>Color *
                                 </label>
                                 <select class="form-select select2-tags" id="selectColorManual" name="atributo2" required>
                                     <option value="">Seleccionar...</option>
                                 </select>
                             </div>
                             <div class="col-6 col-md-3">
-                                <label class="form-label fw-semibold text-muted small">
-                                    <i class="bi bi-gender-ambiguous me-1" style="color: #0d6efd;"></i>Género *
+                                <label class="form-label fw-semibold text-muted small" for="selectGeneroManual">
+                                    <i class="bi bi-gender-ambiguous me-1 text-primary"></i>Género *
                                 </label>
                                 <select class="form-select select2-tags" id="selectGeneroManual" name="atributo3" required>
                                     <option value="">Seleccionar...</option>
                                 </select>
                             </div>
                             <div class="col-6 col-md-3">
-                                <label class="form-label fw-semibold text-muted small">
+                                <label class="form-label fw-semibold text-muted small" for="inputExtraManual">
                                     <i class="bi bi-bookmark me-1 text-secondary"></i>Extra
                                 </label>
-                                <input type="text" class="form-control" name="atributo4" placeholder="Opcional">
+                                <input type="text" class="form-control" id="inputExtraManual" name="atributo4" placeholder="Opcional">
                             </div>
                         </div>
                     </div>
                     
                     <!-- Sección: Precios -->
                     <div class="mb-3">
-                        <div class="d-flex align-items-center gap-2 mb-3">
-                            <span class="badge rounded-pill" style="background: linear-gradient(135deg, #198754, #20c997); padding: 6px 12px;">
+                        <div class="section-title d-flex align-items-center gap-2 mb-3">
+                            <span class="badge rounded-pill">
                                 <i class="bi bi-currency-dollar me-1"></i> Precios
                             </span>
-                            <hr class="flex-grow-1 my-0" style="border-color: #e0e0e0;">
+                            <hr class="flex-grow-1 my-0">
                         </div>
                         <div class="row g-2 g-md-3">
                             <div class="col-6">
-                                <label class="form-label fw-semibold text-muted small">
+                                <label class="form-label fw-semibold text-muted small" for="inputCostoManual">
                                     <i class="bi bi-cash me-1 text-danger"></i>Costo *
                                 </label>
                                 <div class="input-group">
@@ -3766,7 +3716,7 @@ tr.fila-recien-creada > td {
                                 </div>
                             </div>
                             <div class="col-6">
-                                <label class="form-label fw-semibold text-muted small">
+                                <label class="form-label fw-semibold text-muted small" for="inputPrecioManual">
                                     <i class="bi bi-tag me-1 text-success"></i>Precio * <small class="text-muted d-none d-md-inline">(2x costo)</small>
                                 </label>
                                 <div class="input-group">
@@ -3779,12 +3729,12 @@ tr.fila-recien-creada > td {
                     
                     <!-- Sección: Tallas y Stock (múltiples) -->
                     <div class="mb-2">
-                        <div class="d-flex align-items-center gap-2 mb-3">
-                            <span class="badge rounded-pill" style="background: linear-gradient(135deg, #0dcaf0, #0d6efd); padding: 6px 12px;">
+                        <div class="section-title d-flex align-items-center gap-2 mb-3">
+                            <span class="badge rounded-pill">
                                 <i class="bi bi-rulers me-1"></i> Tallas y Stock
                             </span>
                             <small class="text-muted"><i class="bi bi-info-circle me-1"></i>Puedes agregar múltiples tallas</small>
-                            <hr class="flex-grow-1 my-0" style="border-color: #e0e0e0;">
+                            <hr class="flex-grow-1 my-0">
                         </div>
                         
                         <!-- Tabla de tallas -->
@@ -3831,7 +3781,7 @@ tr.fila-recien-creada > td {
             </div>
             
             <!-- Footer mejorado -->
-            <div class="modal-footer border-0 bg-light py-3">
+            <div class="modal-footer modal-footer-nexo py-3">
                 <div class="d-flex justify-content-between w-100">
                     <small class="text-muted align-self-center">
                         <i class="bi bi-info-circle me-1"></i>Los campos con * son obligatorios
@@ -3840,7 +3790,7 @@ tr.fila-recien-creada > td {
                         <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">
                             <i class="bi bi-x-lg me-1"></i>Cancelar
                         </button>
-                        <button type="submit" class="btn text-white px-4" form="formProductoManual" style="background: linear-gradient(135deg, #405189, #1a1a2e);">
+                        <button type="submit" class="btn btn-nexo-primary px-4" form="formProductoManual">
                             <i class="bi bi-plus-circle me-1"></i>Agregar Producto
                         </button>
                     </div>
@@ -3865,17 +3815,17 @@ tr.fila-recien-creada > td {
 <div class="modal fade" id="modalVincularRetroactivo" tabindex="-1" aria-labelledby="modalVincularRetroactivoLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
-            <div class="modal-header border-0 text-white py-3" style="background: linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%);">
+            <div class="modal-header modal-header-nexo modal-header-nexo--purple py-3">
                 <div class="d-flex align-items-center gap-3">
-                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px);">
-                        <i class="bi bi-link-45deg fs-5"></i>
+                    <div class="modal-header-icon">
+                        <i class="bi bi-link-45deg"></i>
                     </div>
                     <div>
                         <h5 class="modal-title mb-0 fw-bold text-white" id="modalVincularRetroactivoLabel">Vincular Productos Existentes</h5>
                         <small class="opacity-75" id="vincRetro_compraNombre">Vinculación retroactiva a compra</small>
                     </div>
                 </div>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body p-3">
                 <!-- Guía de uso paso a paso -->
@@ -3933,9 +3883,9 @@ tr.fila-recien-creada > td {
 
                 <div id="vincRetro_contenido" style="max-height:55vh;overflow-y:auto;"></div>
             </div>
-            <div class="modal-footer border-0 bg-light">
+            <div class="modal-footer modal-footer-nexo">
                 <span class="me-auto text-muted" style="font-size:.78rem;" id="vincRetro_footerInfo"></span>
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                     <i class="bi bi-x-lg me-1"></i>Cerrar
                 </button>
             </div>

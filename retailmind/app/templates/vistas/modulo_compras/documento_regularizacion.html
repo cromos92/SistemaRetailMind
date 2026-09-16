@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+{% load humanize %}<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Documento de Regularización #{{ solicitud.numero_solicitud|default:regularizacion.id }}</title>
+    <title>Regularización {{ tipo_regularizacion }} #{{ numero_documento }} - DTE {{ dte_original.numero_documento }}</title>
     <style>
         @page {
             size: letter;
@@ -12,7 +12,25 @@
         
         @media print {
             .no-print { display: none; }
-            body { margin: 0; }
+            thead { display: table-header-group; }
+            .signatures, .stamp-box, .observations, .info-grid, table, .nota-importante {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+        }
+        
+        /* Tokens NEXO mínimos (documento sin hojas externas) */
+        :root {
+            --nexo-primary: #0066FF;
+            --nexo-primary-dark: #0052CC;
+            --nexo-secondary: #1A1A2E;
+            --nexo-warning: #FFB020;
+            --nexo-error: #FF4D4D;
+            --nexo-gray-700: #4A4A5A;
+            --nexo-gray-500: #8A8A9A;
+            --nexo-gray-300: #D1D1D9;
+            --nexo-gray-100: #F5F5F7;
+            --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
         }
         
         * {
@@ -26,6 +44,7 @@
             font-size: 11pt;
             line-height: 1.4;
             color: #000;
+            background: #fff;
         }
         
         .container {
@@ -34,21 +53,66 @@
             padding: 20px;
         }
         
+        @media screen {
+            body { background: var(--nexo-gray-100); }
+            .container {
+                background: #fff;
+                box-shadow: var(--nexo-shadow-md);
+                margin: 24px auto;
+                padding: 32px;
+            }
+            .table-wrap { overflow-x: auto; }
+        }
+        
         .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
             border-bottom: 3px solid #000;
             padding-bottom: 15px;
             margin-bottom: 20px;
         }
         
         .header h1 {
-            font-size: 18pt;
+            font-size: 16pt;
             margin-bottom: 5px;
         }
         
-        .header .doc-type {
-            font-size: 14pt;
+        .header .empresa p {
+            font-size: 10pt;
+        }
+        
+        .doc-box {
+            flex: 0 0 auto;
+            min-width: 240px;
+            border: 2px solid #000;
+            border-left: 6px solid var(--nexo-error);
+            padding: 10px 16px;
+            text-align: center;
+        }
+        
+        .doc-box .doc-label {
+            font-size: 9pt;
+            letter-spacing: 1px;
+        }
+        
+        .doc-box .doc-type {
+            font-size: 15pt;
             font-weight: bold;
-            color: #c00;
+            margin: 4px 0;
+        }
+        
+        .doc-box .doc-num {
+            font-size: 12pt;
+            font-weight: bold;
+        }
+        
+        .section-title {
+            font-size: 12pt;
+            margin: 20px 0 10px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 5px;
         }
         
         .info-grid {
@@ -63,7 +127,7 @@
             padding: 10px;
         }
         
-        .info-box h3 {
+        .info-box h2 {
             font-size: 11pt;
             border-bottom: 1px solid #ccc;
             padding-bottom: 5px;
@@ -87,33 +151,27 @@
         }
         
         table th {
-            background: #333;
-            color: white;
+            background: #E8EAF0;
+            color: #000;
+            border: 1px solid #000;
             padding: 8px;
             text-align: left;
             font-size: 10pt;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
         
         table td {
-            border: 1px solid #ddd;
+            border: 1px solid var(--nexo-gray-300);
             padding: 8px;
             font-size: 10pt;
         }
         
-        .totals {
-            text-align: right;
-            margin-top: 10px;
-            font-size: 11pt;
-        }
-        
-        .totals .total-row {
-            margin: 5px 0;
-        }
-        
-        .totals .total-row strong {
-            display: inline-block;
-            width: 150px;
-        }
+        th.num, td.num { text-align: right; white-space: nowrap; }
+        th.ctr, td.ctr { text-align: center; white-space: nowrap; }
+        td.neg { color: var(--nexo-error); font-weight: 700; }
+/* En papel el rojo queda claro (3,3:1): negro; el <strong> ya da el énfasis. */
+@media print { td.neg { color: #000; } }
         
         .signatures {
             display: grid;
@@ -133,6 +191,10 @@
             font-size: 10pt;
         }
         
+        .signature-line .firma-nombre {
+            font-weight: bold;
+        }
+        
         .observations {
             border: 1px solid #333;
             padding: 10px;
@@ -146,10 +208,10 @@
         }
         
         .stamp-box {
-            border: 2px dashed #999;
+            border: 2px dashed var(--nexo-gray-500);
             padding: 15px;
             text-align: center;
-            color: #999;
+            color: var(--nexo-gray-700);
             font-size: 10pt;
             margin: 20px 0;
         }
@@ -160,60 +222,99 @@
             padding-top: 10px;
             font-size: 9pt;
             text-align: center;
-            color: #666;
+            color: var(--nexo-gray-700);
+        }
+        
+        .toolbar {
+            padding: 10px 16px;
+            background: var(--nexo-secondary);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
         }
         
         .btn-print {
-            background: #28a745;
+            background: var(--nexo-primary);
             color: white;
             border: none;
-            padding: 10px 20px;
-            font-size: 14pt;
+            padding: 8px 18px;
+            font-size: 14px;
+            font-weight: 700;
             cursor: pointer;
-            margin: 20px 0;
-            border-radius: 5px;
+            border-radius: 8px;
         }
         
         .btn-print:hover {
-            background: #218838;
+            background: var(--nexo-primary-dark);
         }
         
-        .alert-warning {
-            background: #fff3cd;
-            border: 1px solid #ffc107;
+        .btn-print.btn-print--secondary {
+            background: var(--nexo-gray-700);
+        }
+        
+        .btn-print.btn-print--secondary:hover {
+            background: var(--nexo-secondary);
+        }
+        
+        .nota-importante {
+            background: #FFF7E6;
+            border: 1px solid var(--nexo-warning);
+            border-left: 4px solid var(--nexo-warning);
             padding: 10px;
             margin: 10px 0;
             border-radius: 4px;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        
+        @media screen and (max-width: 640px) {
+            .header { flex-direction: column; }
+            .doc-box { min-width: 0; width: 100%; }
+            .info-grid, .signatures {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+            .info-box strong {
+                width: auto;
+                display: block;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Botón de impresión -->
-        <div class="no-print" style="text-align: center;">
-            <button class="btn-print" onclick="window.print()">🖨️ Imprimir Documento</button>
-            <button class="btn-print" style="background: #6c757d;" onclick="window.close()">Cerrar</button>
-        </div>
+    <!-- Botón de impresión -->
+    <div class="toolbar no-print">
+        <button class="btn-print" onclick="window.print()">Imprimir Documento</button>
+        <button class="btn-print btn-print--secondary" onclick="window.close()">Cerrar</button>
+    </div>
         
+    <div class="container">
         <!-- Encabezado -->
         <div class="header">
-            <h1>{{ empresa.nombre|default:"Empresa" }}</h1>
-            <p>RUT: {{ empresa.rut|default:"-" }} | {{ empresa.direccion|default:"-" }}</p>
-            <p class="doc-type">
-                {% if tipo_regularizacion == 'NC' %}
-                    DOCUMENTO DE REGULARIZACIÓN - NOTA DE CRÉDITO
-                {% elif tipo_regularizacion == 'CAMBIO' %}
-                    DOCUMENTO DE REGULARIZACIÓN - CAMBIO DE PRODUCTO
-                {% else %}
-                    DOCUMENTO DE REGULARIZACIÓN
-                {% endif %}
-            </p>
+            <div class="empresa">
+                <h1>{{ empresa.nombre|default:"Empresa" }}</h1>
+                <p>RUT: {{ empresa.rut|default:"-" }} | {{ empresa.direccion|default:"-" }}</p>
+            </div>
+            <div class="doc-box">
+                <div class="doc-label">DOCUMENTO DE REGULARIZACIÓN</div>
+                <p class="doc-type">
+                    {% if tipo_regularizacion == 'NC' %}
+                        NOTA DE CRÉDITO
+                    {% elif tipo_regularizacion == 'CAMBIO' %}
+                        CAMBIO DE PRODUCTO
+                    {% else %}
+                        REGULARIZACIÓN
+                    {% endif %}
+                </p>
+                <div class="doc-num">N° {{ numero_documento|default:"-" }}</div>
+            </div>
         </div>
         
         <!-- Información general -->
         <div class="info-grid">
             <div class="info-box">
-                <h3>INFORMACIÓN DEL DOCUMENTO</h3>
+                <h2>INFORMACIÓN DEL DOCUMENTO</h2>
                 <p><strong>Número:</strong> {{ numero_documento|default:"-" }}</p>
                 <p><strong>Fecha Emisión:</strong> {{ fecha_emision }}</p>
                 <p><strong>Responsable:</strong> {{ responsable }}</p>
@@ -222,33 +323,36 @@
                         Nota de Crédito
                     {% elif tipo_regularizacion == 'CAMBIO' %}
                         Cambio de Producto
+                    {% else %}
+                        -
                     {% endif %}
                 </p>
             </div>
             
             <div class="info-box">
-                <h3>DTE ORIGINAL</h3>
+                <h2>DTE ORIGINAL</h2>
                 <p><strong>Número DTE:</strong> #{{ dte_original.numero_documento }}</p>
                 <p><strong>Tipo:</strong> {{ dte_original.tipo_documento }}</p>
-                <p><strong>Fecha DTE:</strong> {{ dte_original.fecha_emision }}</p>
+                <p><strong>Fecha DTE:</strong> {{ dte_original.fecha_emision|date:"d/m/Y" }}</p>
                 <p><strong>Emisor:</strong> {{ dte_original.emisor.nombre }}</p>
                 <p><strong>Receptor:</strong> {{ dte_original.receptor.nombre }}</p>
             </div>
         </div>
         
         <!-- Producto Original con Problema -->
-        <h3 style="margin: 20px 0 10px 0; border-bottom: 2px solid #000; padding-bottom: 5px;">PRODUCTO ORIGINAL CON PROBLEMA</h3>
+        <h2 class="section-title">PRODUCTO ORIGINAL CON PROBLEMA</h2>
+        <div class="table-wrap">
         <table>
             <thead>
                 <tr>
-                    <th>SKU</th>
-                    <th>Descripción</th>
-                    <th>Talla</th>
-                    <th>Cant. Esperada</th>
-                    <th>Cant. Recibida</th>
-                    <th>Cant. Problema</th>
-                    <th>Tipo Problema</th>
-                    <th>Precio Unit.</th>
+                    <th scope="col">SKU</th>
+                    <th scope="col">Descripción</th>
+                    <th scope="col">Talla</th>
+                    <th scope="col" class="ctr">Cant. Esperada</th>
+                    <th scope="col" class="ctr">Cant. Recibida</th>
+                    <th scope="col" class="ctr">Cant. Problema</th>
+                    <th scope="col">Tipo Problema</th>
+                    <th scope="col" class="num">Precio Unit.</th>
                 </tr>
             </thead>
             <tbody>
@@ -256,27 +360,29 @@
                     <td>{{ producto_original.sku }}</td>
                     <td>{{ producto_original.nombre }}</td>
                     <td>{{ producto_original.talla }}</td>
-                    <td style="text-align: center;">{{ producto_original.cantidad_esperada }}</td>
-                    <td style="text-align: center;">{{ producto_original.cantidad_recibida }}</td>
-                    <td style="text-align: center; color: red;"><strong>{{ producto_original.cantidad_problema }}</strong></td>
+                    <td class="ctr">{{ producto_original.cantidad_esperada }}</td>
+                    <td class="ctr">{{ producto_original.cantidad_recibida }}</td>
+                    <td class="ctr neg"><strong>{{ producto_original.cantidad_problema }}</strong></td>
                     <td>{{ producto_original.tipo_problema }}</td>
-                    <td style="text-align: right;">${{ producto_original.precio_unitario|floatformat:0 }}</td>
+                    <td class="num">${{ producto_original.precio_unitario|floatformat:0|intcomma }}</td>
                 </tr>
             </tbody>
         </table>
+        </div>
         
         {% if tipo_regularizacion == 'CAMBIO' and producto_cambio %}
         <!-- Producto de Cambio -->
-        <h3 style="margin: 20px 0 10px 0; border-bottom: 2px solid #000; padding-bottom: 5px;">PRODUCTO DE CAMBIO / REEMPLAZO</h3>
+        <h2 class="section-title">PRODUCTO DE CAMBIO / REEMPLAZO</h2>
+        <div class="table-wrap">
         <table>
             <thead>
                 <tr>
-                    <th>SKU</th>
-                    <th>Descripción</th>
-                    <th>Talla</th>
-                    <th>Cantidad</th>
-                    <th>Precio Unit.</th>
-                    <th>Total</th>
+                    <th scope="col">SKU</th>
+                    <th scope="col">Descripción</th>
+                    <th scope="col">Talla</th>
+                    <th scope="col" class="ctr">Cantidad</th>
+                    <th scope="col" class="num">Precio Unit.</th>
+                    <th scope="col" class="num">Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -284,30 +390,32 @@
                     <td>{{ producto_cambio.sku }}</td>
                     <td>{{ producto_cambio.nombre }}</td>
                     <td>{{ producto_cambio.talla }}</td>
-                    <td style="text-align: center;">{{ producto_cambio.cantidad }}</td>
-                    <td style="text-align: right;">${{ producto_cambio.precio_unitario|floatformat:0 }}</td>
-                    <td style="text-align: right;">${{ producto_cambio.total|floatformat:0 }}</td>
+                    <td class="ctr">{{ producto_cambio.cantidad }}</td>
+                    <td class="num">${{ producto_cambio.precio_unitario|floatformat:0|intcomma }}</td>
+                    <td class="num">${{ producto_cambio.total|floatformat:0|intcomma }}</td>
                 </tr>
             </tbody>
         </table>
+        </div>
         
-        <div class="alert-warning">
-            <strong>⚠️ NOTA IMPORTANTE:</strong> Se ha generado un nuevo DTE #{{ dte_cambio.numero_documento }} con el producto de reemplazo. 
+        <div class="nota-importante">
+            <strong>NOTA IMPORTANTE:</strong> Se ha generado un nuevo DTE #{{ dte_cambio.numero_documento }} con el producto de reemplazo. 
             El receptor debe recepcionar este DTE para que ingrese a su inventario.
         </div>
         {% endif %}
         
         <!-- Documentos Generados -->
-        <h3 style="margin: 20px 0 10px 0; border-bottom: 2px solid #000; padding-bottom: 5px;">DOCUMENTOS TRIBUTARIOS GENERADOS</h3>
+        <h2 class="section-title">DOCUMENTOS TRIBUTARIOS GENERADOS</h2>
+        <div class="table-wrap">
         <table>
             <thead>
                 <tr>
-                    <th>Tipo Documento</th>
-                    <th>Número</th>
-                    <th>Fecha</th>
-                    <th>Monto Neto</th>
-                    <th>IVA</th>
-                    <th>Total</th>
+                    <th scope="col">Tipo Documento</th>
+                    <th scope="col">Número</th>
+                    <th scope="col">Fecha</th>
+                    <th scope="col" class="num">Monto Neto</th>
+                    <th scope="col" class="num">IVA</th>
+                    <th scope="col" class="num">Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -315,10 +423,10 @@
                 <tr>
                     <td><strong>NOTA DE CRÉDITO</strong></td>
                     <td>#{{ nc_generada.numero_documento }}</td>
-                    <td>{{ nc_generada.fecha_emision }}</td>
-                    <td style="text-align: right;">${{ nc_generada.monto_neto|floatformat:0 }}</td>
-                    <td style="text-align: right;">${{ nc_generada.iva|floatformat:0 }}</td>
-                    <td style="text-align: right;"><strong>${{ nc_generada.monto_con_iva|floatformat:0 }}</strong></td>
+                    <td>{{ nc_generada.fecha_emision|date:"d/m/Y" }}</td>
+                    <td class="num">${{ nc_generada.monto_neto|floatformat:0|intcomma }}</td>
+                    <td class="num">${{ nc_generada.iva|floatformat:0|intcomma }}</td>
+                    <td class="num"><strong>${{ nc_generada.monto_con_iva|floatformat:0|intcomma }}</strong></td>
                 </tr>
                 {% endif %}
                 
@@ -326,14 +434,15 @@
                 <tr>
                     <td><strong>{{ dte_cambio.tipo_documento }}</strong></td>
                     <td>#{{ dte_cambio.numero_documento }}</td>
-                    <td>{{ dte_cambio.fecha_emision }}</td>
-                    <td style="text-align: right;">${{ dte_cambio.monto_neto|floatformat:0 }}</td>
-                    <td style="text-align: right;">${{ dte_cambio.iva|floatformat:0 }}</td>
-                    <td style="text-align: right;"><strong>${{ dte_cambio.monto_con_iva|floatformat:0 }}</strong></td>
+                    <td>{{ dte_cambio.fecha_emision|date:"d/m/Y" }}</td>
+                    <td class="num">${{ dte_cambio.monto_neto|floatformat:0|intcomma }}</td>
+                    <td class="num">${{ dte_cambio.iva|floatformat:0|intcomma }}</td>
+                    <td class="num"><strong>${{ dte_cambio.monto_con_iva|floatformat:0|intcomma }}</strong></td>
                 </tr>
                 {% endif %}
             </tbody>
         </table>
+        </div>
         
         <!-- Observaciones -->
         <div class="observations">
@@ -350,7 +459,7 @@
         <div class="signatures">
             <div class="signature-box">
                 <div class="signature-line">
-                    <strong>{{ responsable }}</strong><br>
+                    <span class="firma-nombre">Nombre: {{ responsable }}</span><br>
                     EMISOR - {{ dte_original.emisor.nombre }}<br>
                     Quien regulariza
                 </div>
@@ -358,7 +467,8 @@
             
             <div class="signature-box">
                 <div class="signature-line">
-                    <strong>______________________</strong><br>
+                    <span class="firma-nombre">Nombre: ____________________</span><br>
+                    RUT: ______________ &nbsp; Fecha: ____/____/______<br>
                     RECEPTOR - {{ dte_original.receptor.nombre }}<br>
                     Conforme
                 </div>

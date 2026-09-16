@@ -5,35 +5,22 @@
 <style>
     /* ==================== NEXO DESIGN SYSTEM - RECEPCIÓN DTE ==================== */
     
-    /* Variables CSS Nexo */
+    /* Los tokens --nexo-* vienen de css/nexo-design-system.css (lo carga
+       layout/header.html). Aquí solo van los derivados que el sistema todavía
+       no expone: un único color para "sobrante" (info de ESTILOS_MODULOS.md)
+       y los tonos oscuros / de texto AA de success, warning y error. */
     :root {
-        --nexo-primary: #0066FF;
-        --nexo-primary-dark: #0052CC;
-        --nexo-primary-light: #E6F0FF;
-        --nexo-secondary: #1A1A2E;
-        --nexo-accent: #00D4AA;
-        --nexo-success: #00D4AA;
-        --nexo-warning: #FFB020;
-        --nexo-error: #FF4D4D;
-        --nexo-info: #0066FF;
-        --nexo-gray-900: #1A1A2E;
-        --nexo-gray-700: #4A4A5A;
-        --nexo-gray-500: #8A8A9A;
-        --nexo-gray-300: #D1D1D9;
-        --nexo-gray-100: #F5F5F7;
-        --nexo-white: #FFFFFF;
-        --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
-        --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
-        --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
-        --nexo-shadow-xl: 0 20px 25px rgba(26, 26, 46, 0.15);
-        --nexo-radius-sm: 4px;
-        --nexo-radius-md: 8px;
-        --nexo-radius-lg: 12px;
-        --nexo-radius-xl: 16px;
-        --nexo-transition-fast: 150ms ease;
-        --nexo-transition-normal: 250ms ease;
+        --rd-sobrante: #299cdb;
+        --rd-sobrante-bg: rgba(41, 156, 219, 0.10);
+        --rd-sobrante-text: #1f75a4;
+        --rd-success-dark: #00B090;
+        --rd-success-text: #00805F;
+        --rd-warning-dark: #E69A00;
+        --rd-warning-text: #996B00;
+        --rd-error-dark: #E63939;
+        --rd-error-text: #b02a2a;
     }
-    
+
     /* Contenedor principal */
     .page-content {
         background: var(--nexo-white) !important;
@@ -56,12 +43,13 @@
         to { opacity: 1; transform: translateY(0); }
     }
     
-    .recepcion-header h4 {
+    .recepcion-header h5 {
+        font-size: 18px;
         font-weight: 600;
         letter-spacing: -0.5px;
         color: var(--nexo-white) !important;
     }
-    
+
     .recepcion-header p,
     .recepcion-header small {
         color: var(--nexo-white) !important;
@@ -104,26 +92,11 @@
         font-weight: 600;
     }
 
-    .badge-en-proceso {
-        background-color: var(--nexo-info);
-        color: var(--nexo-white);
-    }
-
-    .badge-completado {
-        background-color: var(--nexo-success);
-        color: var(--nexo-white);
-    }
-
     .badge-recepcionado {
         background-color: var(--nexo-success);
         color: var(--nexo-white);
     }
 
-    .badge-anulado {
-        background-color: var(--nexo-error);
-        color: var(--nexo-white);
-    }
-    
     /* Fila de DTE recepcionado */
     .dte-recepcionado {
         background-color: rgba(0, 212, 170, 0.08) !important;
@@ -175,7 +148,7 @@
         border-bottom: 1px solid var(--nexo-gray-300);
     }
     
-    .table-hover tbody tr:hover {
+    .table-hover tbody tr:not([class*="table-"]):not(.dte-recepcionado):hover {
         background-color: var(--nexo-primary-light) !important;
     }
 
@@ -204,7 +177,8 @@
     }
 
     /* Sección de filtros */
-    .filter-section label {
+    .filter-section label,
+    .filter-section .form-label {
         font-weight: 600;
         font-size: 13px;
         color: var(--nexo-gray-700);
@@ -264,24 +238,40 @@
         }
     }
     
-    /* Estilos para verificación de productos */
+    /* Estilos para verificación de productos (tintes de fila por estado).
+       El build Velzon pinta cada celda con var(--vz-table-bg), así que se
+       sobrescribe la variable (no el fondo del tr). El hover deja el tinte. */
     .table-success {
-        background-color: rgba(0, 212, 170, 0.15) !important;
+        --vz-table-bg: rgba(0, 212, 170, 0.15);
+        --vz-table-hover-bg: transparent;
+        --vz-table-hover-color: inherit;
     }
-    
+
     .table-warning {
-        background-color: rgba(255, 176, 32, 0.15) !important;
+        --vz-table-bg: rgba(255, 176, 32, 0.15);
+        --vz-table-hover-bg: transparent;
+        --vz-table-hover-color: inherit;
     }
-    
+
+    .table-danger {
+        --vz-table-bg: rgba(255, 77, 77, 0.12);
+        --vz-table-hover-bg: transparent;
+        --vz-table-hover-color: inherit;
+    }
+
     #productosVerificacionBody tr {
         transition: var(--nexo-transition-fast);
     }
-    
+
+    /* Al pasar el mouse la fila con estado conserva su tinte: solo se remarca */
     #productosVerificacionBody tr:hover {
-        background-color: var(--nexo-gray-100) !important;
-        box-shadow: var(--nexo-shadow-sm);
+        box-shadow: inset 0 0 0 1px var(--nexo-gray-300);
     }
-    
+
+    #productosVerificacionBody tr:not([class*="table-"]):hover {
+        background-color: var(--nexo-gray-100) !important;
+    }
+
     /* Input de cantidad */
     .cantidad-recepcionada {
         border: 2px solid var(--nexo-gray-300);
@@ -306,9 +296,9 @@
     .btn-detallar {
         transition: var(--nexo-transition-fast);
         border-color: var(--nexo-warning);
-        color: var(--nexo-warning);
+        color: var(--rd-warning-text);
     }
-    
+
     .btn-detallar:hover {
         transform: scale(1.1);
         background-color: var(--nexo-warning);
@@ -339,19 +329,24 @@
     }
     
     .modal-header.bg-warning {
-        background: linear-gradient(135deg, var(--nexo-warning) 0%, #E69A00 100%) !important;
+        background: linear-gradient(135deg, var(--nexo-warning) 0%, var(--rd-warning-dark) 100%) !important;
     }
-    
+
     .modal-header.bg-warning .modal-title,
     .modal-header.bg-warning h5,
-    .modal-header.bg-warning h6 {
+    .modal-header.bg-warning h6,
+    .modal-header.bg-warning small {
         color: var(--nexo-secondary) !important;
     }
-    
-    .modal-header.bg-success {
-        background: linear-gradient(135deg, var(--nexo-success) 0%, #00B090 100%) !important;
+
+    .modal-header.bg-danger {
+        background: linear-gradient(135deg, var(--nexo-error) 0%, var(--rd-error-dark) 100%) !important;
     }
-    
+
+    .modal-header.bg-success {
+        background: linear-gradient(135deg, var(--nexo-success) 0%, var(--rd-success-dark) 100%) !important;
+    }
+
     .modal-header.bg-success .modal-title,
     .modal-header.bg-success h5,
     .modal-header.bg-success h6,
@@ -402,12 +397,6 @@
         transition: var(--nexo-transition-fast);
     }
     
-    .timeline-content:hover {
-        background: var(--nexo-primary-light);
-        border-left-color: var(--nexo-primary-dark);
-        transform: translateX(3px);
-    }
-    
     /* Historial item */
     .historial-item {
         transition: var(--nexo-transition-fast);
@@ -419,26 +408,6 @@
         background-color: var(--nexo-gray-100);
     }
 
-    /* Estado vacío */
-    .empty-state {
-        padding: 48px;
-        text-align: center;
-        background: var(--nexo-white);
-        border-radius: var(--nexo-radius-lg);
-        border: 2px dashed var(--nexo-gray-300);
-    }
-
-    .empty-state i {
-        font-size: 56px;
-        color: var(--nexo-gray-500);
-        margin-bottom: 16px;
-    }
-    
-    .empty-state h5 {
-        color: var(--nexo-gray-700);
-        font-weight: 600;
-    }
-    
     /* Botones estilo Nexo */
     .btn-primary {
         background-color: var(--nexo-primary);
@@ -456,10 +425,10 @@
     }
     
     .btn-success:hover {
-        background-color: #00B090;
-        border-color: #00B090;
+        background-color: var(--rd-success-dark);
+        border-color: var(--rd-success-dark);
     }
-    
+
     .btn-warning {
         background-color: var(--nexo-warning);
         border-color: var(--nexo-warning);
@@ -467,20 +436,20 @@
     }
     
     .btn-warning:hover {
-        background-color: #E69A00;
-        border-color: #E69A00;
+        background-color: var(--rd-warning-dark);
+        border-color: var(--rd-warning-dark);
     }
-    
+
     .btn-danger {
         background-color: var(--nexo-error);
         border-color: var(--nexo-error);
     }
     
     .btn-danger:hover {
-        background-color: #E63939;
-        border-color: #E63939;
+        background-color: var(--rd-error-dark);
+        border-color: var(--rd-error-dark);
     }
-    
+
     .btn-outline-success {
         color: var(--nexo-success);
         border-color: var(--nexo-success);
@@ -503,17 +472,23 @@
         color: var(--nexo-white);
     }
     
-    .btn-outline-info {
-        color: var(--nexo-info);
-        border-color: var(--nexo-info);
-    }
-    
-    .btn-outline-info:hover {
-        background-color: var(--nexo-info);
-        border-color: var(--nexo-info);
+    .btn-info {
+        background-color: var(--rd-sobrante);
+        border-color: var(--rd-sobrante);
         color: var(--nexo-white);
     }
-    
+
+    .btn-outline-info {
+        color: var(--rd-sobrante);
+        border-color: var(--rd-sobrante);
+    }
+
+    .btn-outline-info:hover {
+        background-color: var(--rd-sobrante);
+        border-color: var(--rd-sobrante);
+        color: var(--nexo-white);
+    }
+
     .btn-outline-secondary {
         color: var(--nexo-gray-700);
         border-color: var(--nexo-gray-300);
@@ -526,10 +501,10 @@
     }
     
     .btn-outline-warning {
-        color: var(--nexo-warning);
+        color: var(--rd-warning-text);
         border-color: var(--nexo-warning);
     }
-    
+
     .btn-outline-warning:hover {
         background-color: var(--nexo-warning);
         border-color: var(--nexo-warning);
@@ -542,10 +517,6 @@
         border-radius: var(--nexo-radius-lg);
         box-shadow: var(--nexo-shadow-sm);
         transition: var(--nexo-transition-fast);
-    }
-    
-    .card:hover {
-        box-shadow: var(--nexo-shadow-md);
     }
     
     .card-header {
@@ -564,13 +535,13 @@
     .alert-warning {
         background-color: rgba(255, 176, 32, 0.1);
         border-color: var(--nexo-warning);
-        color: #996B00;
+        color: var(--rd-warning-text);
     }
     
     .alert-success {
         background-color: rgba(0, 212, 170, 0.1);
         border-color: var(--nexo-success);
-        color: #00805F;
+        color: var(--rd-success-text);
     }
     
     .alert-info {
@@ -582,9 +553,9 @@
     .alert-danger {
         background-color: rgba(255, 77, 77, 0.1);
         border-color: var(--nexo-error);
-        color: var(--nexo-error);
+        color: var(--rd-error-text);
     }
-    
+
     /* Resumen verificación en modal */
     .card.border-success {
         border-color: var(--nexo-success) !important;
@@ -596,10 +567,10 @@
     }
     
     .badge.bg-info {
-        background-color: var(--nexo-info) !important;
-        color: var(--nexo-white) !important;
+        background-color: var(--rd-sobrante) !important;
+        color: var(--nexo-secondary) !important;
     }
-    
+
     .badge.bg-success {
         background-color: var(--nexo-success) !important;
     }
@@ -627,9 +598,18 @@
     }
     
     .text-warning {
-        color: var(--nexo-warning) !important;
+        color: var(--rd-warning-text) !important;
     }
-    
+
+    .text-info {
+        color: var(--rd-sobrante-text) !important;
+    }
+
+    /* La cifra grande de sobrante sí aguanta el azul de fondo/borde */
+    #impactoSobrante.text-info {
+        color: var(--rd-sobrante) !important;
+    }
+
     .text-danger {
         color: var(--nexo-error) !important;
     }
@@ -639,9 +619,9 @@
     }
     
     .text-muted {
-        color: var(--nexo-gray-500) !important;
+        color: var(--nexo-gray-700) !important;
     }
-    
+
     /* Paginación */
     #paginationContainer .btn-outline-secondary {
         color: var(--nexo-gray-700);
@@ -652,17 +632,6 @@
         background-color: var(--nexo-primary);
         border-color: var(--nexo-primary);
         color: var(--nexo-white);
-    }
-    
-    /* Responsive */
-    @media (max-width: 768px) {
-        .recepcion-header {
-            padding: 16px;
-        }
-        
-        .recepcion-header h4 {
-            font-size: 18px;
-        }
     }
     
     /* Progress bar Nexo */
@@ -745,12 +714,6 @@
     .nc-paso { animation: fadeIn 0.2s ease; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
     
-    /* Table success header override */
-    .table thead.table-success th,
-    .table thead[style*="nexo-success"] th {
-        color: var(--nexo-white) !important;
-    }
-    
     /* Form validation */
     .is-invalid {
         border-color: var(--nexo-error) !important;
@@ -783,12 +746,12 @@
         border-radius: var(--nexo-radius-md);
     }
     
-    /* Fix for table header in modals */
-    #listaProductosRecepcion .table thead th,
-    #verDteProductosBody .table thead th {
-        color: var(--nexo-white) !important;
+    /* Cabeceras fijas dentro de los contenedores con scroll */
+    .table thead.sticky-top {
+        top: 0;
+        z-index: 10;
     }
-    
+
     /* ===== ESTILOS MEJORADOS PARA VERIFICACIÓN ===== */
     
     /* Guía rápida de verificación (el contenido vive plegado dentro de
@@ -817,14 +780,14 @@
     }
     
     #accionesRapidas .btn-success {
-        background: linear-gradient(135deg, var(--nexo-success) 0%, #00B090 100%);
+        background: linear-gradient(135deg, var(--nexo-success) 0%, var(--rd-success-dark) 100%);
         border: none;
     }
-    
+
     #accionesRapidas .btn-outline-warning:hover {
-        background: linear-gradient(135deg, var(--nexo-warning) 0%, #E69A00 100%);
+        background: linear-gradient(135deg, var(--nexo-warning) 0%, var(--rd-warning-dark) 100%);
     }
-    
+
     /* Badge de productos sin observaciones */
     #badgeProductosSinObs {
         animation: pulse 1.5s infinite;
@@ -848,22 +811,9 @@
     
     /* Input de cantidad recibida deshabilitado */
     .cantidad-recepcionada:disabled {
-        background-color: #e9ecef;
+        background-color: var(--nexo-gray-100);
         cursor: not-allowed;
         opacity: 0.6;
-    }
-    
-    /* Filas de productos según estado */
-    .table-success {
-        background-color: rgba(40, 167, 69, 0.1) !important;
-    }
-    
-    .table-warning {
-        background-color: rgba(255, 193, 7, 0.15) !important;
-    }
-    
-    .table-danger {
-        background-color: rgba(220, 53, 69, 0.15) !important;
     }
     
     /* Barra de progreso de verificación */
@@ -878,18 +828,6 @@
         width: 1px;
         background: var(--nexo-gray-300);
         opacity: 0.5;
-    }
-    
-    /* Sugerencias en observación masiva */
-    .sugerencia-obs {
-        font-size: 11px;
-        transition: var(--nexo-transition-fast);
-    }
-    
-    .sugerencia-obs:hover {
-        background-color: var(--nexo-primary) !important;
-        color: white !important;
-        border-color: var(--nexo-primary) !important;
     }
     
     /* Sugerencias de rechazo */
@@ -916,22 +854,6 @@
     #modalDetalleProblema .alert-info {
         background: var(--nexo-primary-light);
         border: 1px solid rgba(0, 102, 255, 0.2);
-    }
-    
-    /* Responsive improvements */
-    @media (max-width: 768px) {
-        #accionesRapidas .btn {
-            font-size: 13px;
-            padding: 8px 12px;
-        }
-        
-        #guiaVerificacion {
-            font-size: 12px;
-        }
-        
-        #guiaVerificacion .badge {
-            display: none;
-        }
     }
     
     /* ============================================== */
@@ -974,18 +896,52 @@
     
     .swal2-popup textarea:focus,
     .swal2-popup .swal2-textarea:focus {
-        outline: 2px solid #0066FF !important;
+        outline: 2px solid var(--nexo-primary) !important;
         outline-offset: 2px;
-        border-color: #0066FF !important;
+        border-color: var(--nexo-primary) !important;
     }
     
-    /* Loader con estilo del proyecto */
+    /* Loader de pantalla completa */
     #fullscreenLoader {
-        backdrop-filter: blur(4px);
+        position: fixed;
+        inset: 0;
+        z-index: 1060;
+        background: linear-gradient(135deg, rgba(0, 102, 255, 0.08) 0%, rgba(0, 212, 170, 0.08) 100%);
+        backdrop-filter: blur(6px);
+        text-align: center;
+    }
+
+    #fullscreenLoader .loader-box {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: var(--nexo-white);
+        padding: 40px 60px;
+        border-radius: var(--nexo-radius-xl);
+        box-shadow: var(--nexo-shadow-xl);
+    }
+
+    #fullscreenLoader .loader-icon {
+        width: 60px;
+        height: 60px;
+        margin: 0 auto 20px;
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: pulse 1.5s ease-in-out infinite;
     }
 
     #fullscreenLoader .spinner-border {
-        color: #405189 !important;
+        width: 2.5rem;
+        height: 2.5rem;
+        color: var(--nexo-primary) !important;
+    }
+
+    #fullscreenLoader .loader-text {
+        color: var(--nexo-primary);
     }
 
     /* ============================================== */
@@ -1017,84 +973,14 @@
     }
 
     /* ============================================== */
-    /* POS 15" - RESPONSIVE (1024px - 1440px)        */
-    /* ============================================== */
-    @media (min-width: 1024px) and (max-width: 1440px) {
-        /* Main table - compact but readable */
-        #tablaRecepciones .table th {
-            font-size: 11px;
-            padding: 10px 8px;
-        }
-
-        #tablaRecepciones .table td {
-            font-size: 13px;
-            padding: 10px 8px;
-        }
-
-        /* Product list in modal - use more vertical space on 15" */
-        #listaProductosRecepcion {
-            max-height: calc(46vh) !important;
-        }
-
-        /* Modal product table - compact columns */
-        #listaProductosRecepcion .table th,
-        #listaProductosRecepcion .table td {
-            font-size: 12px;
-            padding: 8px 6px;
-        }
-
-        /* Summary cards in sidebar */
-        .resumen-card .card-body {
-            padding: 14px;
-        }
-
-        .section-title {
-            font-size: 13px;
-        }
-
-        /* Header */
-        .recepcion-header {
-            padding: 16px 20px;
-        }
-
-        .recepcion-header h4 {
-            font-size: 20px;
-        }
-
-        /* Filter section */
-        .filter-section label {
-            font-size: 12px;
-        }
-
-        .filter-section .form-control,
-        .filter-section .form-select {
-            font-size: 13px;
-            height: 36px;
-        }
-
-        /* Action buttons in modal */
-        #accionesRapidas .btn {
-            font-size: 13px;
-            padding: 7px 14px;
-        }
-
-        /* Real-time summary */
-        #resumenOK, #resumenParcial, #resumenFaltante {
-            font-size: 18px;
-        }
-    }
-
-    /* ============================================== */
-    /* POS - LARGER TOUCH TARGETS                    */
+    /* ESCRITORIO (>= 1024px): entradas cómodas       */
     /* ============================================== */
     @media (min-width: 1024px) {
-        /* Bigger checkbox for POS use */
         .producto-checkbox {
             width: 22px !important;
             height: 22px !important;
         }
 
-        /* Wider quantity input for easy entry */
         .cantidad-recepcionada {
             width: 80px !important;
             min-height: 34px;
@@ -1103,31 +989,52 @@
             text-align: center;
         }
 
-        /* Bigger detallar button */
         .btn-detallar {
             min-width: 32px;
             min-height: 32px;
             padding: 4px 8px;
         }
 
-        /* Larger action buttons in modal footer */
         .modal-footer .btn {
             min-height: 38px;
             font-size: 14px;
         }
 
-        /* Main table action buttons */
         #tablaRecepciones .btn {
             min-height: 34px;
         }
     }
 
+    /* ============================================== */
+    /* MODO TÁCTIL (pos_kiosk): targets >= 44px       */
+    /* header.html marca <html data-pos-kiosk="1">    */
+    /* ============================================== */
+    html[data-pos-kiosk] .producto-checkbox {
+        width: 28px !important;
+        height: 28px !important;
+    }
+
+    html[data-pos-kiosk] #listaProductosRecepcion td:first-child {
+        padding: 10px 14px;
+    }
+
+    html[data-pos-kiosk] .btn-detallar {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 6px 10px;
+    }
+
+    html[data-pos-kiosk] .cantidad-recepcionada {
+        min-height: 44px;
+        font-size: 16px;
+    }
+
     @media (max-width: 480px) {
-        .recepcion-header { flex-direction: column; gap: 0.5rem; }
+        .recepcion-header > .d-flex { flex-direction: column; align-items: flex-start !important; }
+        .recepcion-header .text-end { text-align: left !important; }
         .recepcion-header .btn { width: 100%; }
-        .recepcion-filters .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
-        .recepcion-table { font-size: 0.7rem; }
-        .recepcion-table th, .recepcion-table td { padding: 0.35rem; }
+        #tablaRecepciones { font-size: 12px; }
+        #tablaRecepciones th, #tablaRecepciones td { padding: 0.35rem; }
     }
 
     /* ============================================== */
@@ -1190,7 +1097,8 @@
 
     .ayuda-item.ayuda-ok { border-left-color: var(--nexo-accent); }
     .ayuda-item.ayuda-falta { border-left-color: var(--nexo-warning); }
-    .ayuda-item.ayuda-sobra { border-left-color: var(--nexo-info); }
+    .ayuda-item.ayuda-reg { border-left-color: var(--nexo-primary); }
+    .ayuda-item.ayuda-sobra { border-left-color: var(--rd-sobrante); }
     .ayuda-item.ayuda-rechazo { border-left-color: var(--nexo-error); }
 
     /* Antigüedad de la mercadería en tránsito */
@@ -1203,9 +1111,9 @@
         white-space: nowrap;
     }
 
-    .transito-ok { background: rgba(0, 212, 170, 0.15); color: #0a7f68; }
-    .transito-warn { background: rgba(255, 176, 32, 0.20); color: #8a5c00; }
-    .transito-alert { background: rgba(255, 77, 77, 0.16); color: #b02a2a; }
+    .transito-ok { background: rgba(0, 212, 170, 0.15); color: var(--rd-success-text); }
+    .transito-warn { background: rgba(255, 176, 32, 0.20); color: var(--rd-warning-text); }
+    .transito-alert { background: rgba(255, 77, 77, 0.16); color: var(--rd-error-text); }
 
     /* Barra de impacto en el modal de verificación */
     .impacto-bar {
@@ -1222,7 +1130,7 @@
     }
 
     .impacto-bar .impacto-label {
-        font-size: 11px;
+        font-size: 12px;
         color: var(--nexo-gray-700);
         display: block;
         line-height: 1.2;
@@ -1237,7 +1145,24 @@
     /* ============================================== */
     @media (min-width: 1024px) and (max-width: 1440px) {
         .recepcion-header { padding: 12px 16px; margin-bottom: 14px; }
-        .recepcion-header h4 { font-size: 17px; }
+        .recepcion-header h5 { font-size: 17px; }
+
+        /* Tabla principal: compacta pero legible */
+        #tablaRecepciones .table th { font-size: 11px; padding: 10px 8px; }
+        #tablaRecepciones .table td { font-size: 13px; padding: 10px 8px; }
+
+        /* Tabla de productos del modal */
+        #listaProductosRecepcion .table th,
+        #listaProductosRecepcion .table td { font-size: 12px; padding: 8px 6px; }
+
+        .resumen-card .card-body { padding: 14px; }
+        .section-title { font-size: 13px; }
+        .filter-section label,
+        .filter-section .form-label { font-size: 12px; }
+        .filter-section .form-control,
+        .filter-section .form-select { font-size: 13px; height: 36px; }
+        #accionesRapidas .btn { font-size: 13px; padding: 7px 14px; }
+        #resumenOK, #resumenParcial, #resumenFaltante { font-size: 18px; }
         .proceso-step { min-width: 132px; padding: 5px 8px; }
         .proceso-step strong { font-size: 11.5px; }
         .proceso-step span.paso-detalle { font-size: 10.5px; }
@@ -1264,26 +1189,26 @@
     /* ===== Búsqueda y filtros rápidos (patrón .quick-filter-btn del proyecto,
        ver templates/vistas/ESTILOS_MODULOS.md) ===== */
     .quick-filter-btn {
-        background: #fff;
-        border: 1px solid rgba(64, 81, 137, 0.2);
+        background: var(--nexo-white);
+        border: 1px solid rgba(0, 102, 255, 0.2);
         border-radius: 20px;
         padding: 6px 14px;
         font-size: 12px;
         font-weight: 500;
-        color: #405189;
+        color: var(--nexo-primary);
         transition: background .2s ease, color .2s ease, box-shadow .2s ease;
         cursor: pointer;
         white-space: nowrap;
     }
     .quick-filter-btn:hover {
-        background: #405189;
-        color: #fff;
-        box-shadow: 0 4px 12px rgba(64, 81, 137, 0.3);
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+        box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
     }
     .quick-filter-btn.active {
-        background: #405189;
-        color: #fff;
-        border-color: #405189;
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+        border-color: var(--nexo-primary);
         font-weight: 600;
     }
     .quick-filter-btn .qf-count {
@@ -1291,46 +1216,106 @@
         margin-left: 6px;
         padding: 0 6px;
         border-radius: 10px;
-        background: rgba(64, 81, 137, .12);
+        background: rgba(0, 102, 255, .12);
         font-variant-numeric: tabular-nums;
         font-size: 11px;
     }
     .quick-filter-btn.active .qf-count { background: rgba(255, 255, 255, .25); }
-    .quick-filter-btn:focus-visible { outline: 2px solid #405189; outline-offset: 2px; }
+    .quick-filter-btn:focus-visible { outline: 2px solid var(--nexo-primary); outline-offset: 2px; }
     #dteBuscadorWrap .bi-search {
         position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-        color: #6c757d; pointer-events: none;
+        color: var(--nexo-gray-500); pointer-events: none;
     }
     #dteBuscador { padding-left: 34px; }
     #btnLimpiarBusquedaDte {
         position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
-        border: none; background: transparent; color: #6c757d; line-height: 1;
+        border: none; background: transparent; color: var(--nexo-gray-500); line-height: 1;
     }
+
+    /* Pestañas de vista: mismo primary que el header y los filtros rápidos */
+    .recepcion-nav .nav-link {
+        color: var(--nexo-gray-700);
+        font-weight: 500;
+    }
+    .recepcion-nav .nav-link:hover {
+        color: var(--nexo-primary);
+        background: var(--nexo-primary-light);
+    }
+    .recepcion-nav .nav-link.active {
+        background: var(--nexo-primary);
+        color: var(--nexo-white);
+        font-weight: 600;
+    }
+
+    /* ===== Utilidades del módulo (reemplazan style= repetidos) ===== */
+    .card-flat {
+        border: none;
+        box-shadow: var(--nexo-shadow-md);
+    }
+    .scroll-box {
+        overflow-y: auto;
+        overflow-x: auto;
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+    }
+    .scroll-box--md { max-height: 45vh; }
+    .scroll-box--sm { max-height: 42vh; }
+    .scroll-box--xs { max-height: 140px; }
+    .label-xs { font-size: 12px; }
+    .sobrante-box {
+        background: var(--rd-sobrante-bg);
+        border-color: var(--rd-sobrante) !important;
+    }
+    .btn-diagnostico-traspaso {
+        color: var(--nexo-gray-700);
+        border-color: var(--nexo-gray-300);
+    }
+    .btn-diagnostico-traspaso:hover {
+        background: var(--nexo-gray-700);
+        border-color: var(--nexo-gray-700);
+        color: var(--nexo-white);
+    }
+
+    /* KPIs clicables de la fila compacta: fondo por estado + hover/foco.
+       El resaltado del activo lo pone el JS con box-shadow inline, por eso
+       el hover no usa box-shadow. */
+    .kpi-tile {
+        cursor: pointer;
+        transition: filter var(--nexo-transition-fast), transform var(--nexo-transition-fast);
+    }
+    .kpi-tile:hover { filter: brightness(0.96); transform: translateY(-1px); }
+    .kpi-tile:focus-visible { outline: 2px solid var(--nexo-primary); outline-offset: 2px; }
+    .kpi-tile--transito { background: rgba(255, 176, 32, .12); }
+    .kpi-tile--ok { background: rgba(0, 212, 170, .12); }
+    .kpi-tile--problema { background: rgba(255, 77, 77, .10); }
+    .kpi-tile--reg { background: rgba(0, 102, 255, .10); }
+    .kpi-tile--rechazo { background: rgba(74, 74, 90, .10); }
+    .kpi-tile--neutral { background: var(--nexo-gray-100); }
+
+    /* ===== Responsive <= 768px (un solo bloque) ===== */
     @media (max-width: 768px) {
+        .recepcion-header { padding: 16px; }
         .quick-filter-btn { padding: 8px 14px; font-size: 13px; }
+        #accionesRapidas .btn { font-size: 13px; padding: 8px 12px; }
+        #guiaVerificacion { font-size: 12px; }
+        #guiaVerificacion .badge { display: none; }
+        /* Barra de impacto: 2 columnas por fila, sin separadores laterales */
+        .impacto-bar .row { row-gap: 8px; }
+        .impacto-bar .impacto-col + .impacto-col { border-left: 0; }
+        .impacto-bar .impacto-valor { font-size: 18px; }
     }
 </style>
 
 <!-- Loader con estilo del proyecto -->
-<div id="fullscreenLoader" style="
-    display: none;
-    position: fixed;
-    z-index: 1060;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(135deg, rgba(64, 81, 137, 0.1) 0%, rgba(10, 179, 156, 0.1) 100%);
-    backdrop-filter: blur(8px);
-    text-align: center;">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 40px 60px; border-radius: 20px; box-shadow: 0 20px 60px rgba(64, 81, 137, 0.3);">
-        <div style="width: 60px; height: 60px; margin: 0 auto 20px; background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: pulse 1.5s ease-in-out infinite;">
+<div id="fullscreenLoader" style="display: none;">
+    <div class="loader-box">
+        <div class="loader-icon">
             <i class="bi bi-box-arrow-in-down fs-3 text-white"></i>
         </div>
-        <div class="spinner-border mb-3" role="status" style="width: 2.5rem; height: 2.5rem; color: #405189;">
+        <div class="spinner-border mb-3" role="status">
             <span class="visually-hidden">Cargando...</span>
         </div>
-        <p class="mb-0 fw-bold" style="color: #405189;">Cargando información...</p>
+        <p class="mb-0 fw-bold loader-text">Cargando información...</p>
         <small class="text-muted">Por favor espera un momento</small>
     </div>
 </div>
@@ -1340,7 +1325,7 @@
         <div class="recepcion-header">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <div>
-                    <h4 class="mb-1 text-white"><i class="bi bi-box-arrow-in-down me-2"></i>Recepción de Documentos Internos</h4>
+                    <h5 class="mb-1 text-white"><i class="bi bi-box-arrow-in-down me-2"></i>Recepción de Documentos Internos</h5>
                     <p class="mb-0 text-white opacity-75">Recibe, revisa y regulariza traspasos internos desde una sola pantalla</p>
                 </div>
                 <div class="text-end d-flex align-items-center gap-3">
@@ -1395,7 +1380,7 @@
 
         <!-- Panel plegable "¿Cómo funciona?": qué implica cada decisión -->
         <div class="collapse mb-3" id="ayudaProcesoPanel">
-            <div class="card" style="border:none;box-shadow:var(--nexo-shadow-md);">
+            <div class="card card-flat">
                 <div class="card-body py-3">
                     <div class="d-flex justify-content-between align-items-start mb-2">
                         <h6 class="mb-0"><i class="bi bi-lightbulb-fill text-warning me-2"></i>Qué pasa con el stock según lo que marques</h6>
@@ -1439,60 +1424,50 @@
             </div>
         </div>
 
-        <div class="card mb-3" style="border:none;box-shadow:var(--nexo-shadow-md);">
+        <div class="card card-flat mb-3">
             <div class="card-body py-3">
                 <span id="badgeDevolucionesPendientes" class="d-none"></span>
                 <div class="row g-2" id="indicadoresCompactosRecepcion">
                     <div class="col-6 col-md-2">
-                        <div class="text-center p-2 rounded" id="kpiCardEnTransito" role="button" tabindex="0"
-                             title="Documentos despachados que aún no se recepcionan. Click para verlos todos, sin filtro de fecha."
-                             style="background:rgba(255,176,32,.12);cursor:pointer;">
+                        <div class="text-center p-2 rounded kpi-tile kpi-tile--transito" id="kpiCardEnTransito" role="button" tabindex="0"
+                             title="Documentos despachados que aún no se recepcionan. Click para verlos todos, sin filtro de fecha.">
                             <div class="fw-bold" id="kpiPendientesCompacto">0</div>
                             <small class="text-muted">En tránsito</small>
                         </div>
                     </div>
-                    <!-- KPI clickeables: el handler $(document).on('click','.estado-indicator')
-                         y el resaltado del activo ya existían, pero ningún elemento
-                         tenía la clase, así que eran ~35 líneas de JS muerto y 5
-                         números que no hacían nada. Solo hacía falta la clase +
-                         data-estado. Se estilan inline igual que antes (el design system expone .kpi-card-nexo,
-                         que trae ::before y transform y rompe esta fila compacta). -->
+                    <!-- KPI clicables: el handler $(document).on('click','.estado-indicator')
+                         filtra por data-estado y resalta el activo con box-shadow inline. -->
                     <div class="col-6 col-md-2">
-                        <div class="text-center p-2 rounded estado-indicator" role="button" tabindex="0"
-                             data-estado="RECEPCIONADO_COMPLETO" title="Ver los documentos ya recepcionados"
-                             style="cursor:pointer;background:rgba(0,212,170,.12);">
+                        <div class="text-center p-2 rounded estado-indicator kpi-tile kpi-tile--ok" role="button" tabindex="0"
+                             data-estado="RECEPCIONADO_COMPLETO" title="Ver los documentos ya recepcionados">
                             <div class="fw-bold" id="kpiRecibidosCompacto">0</div>
                             <small class="text-muted">Recibidos hoy</small>
                         </div>
                     </div>
                     <div class="col-6 col-md-2">
-                        <div class="text-center p-2 rounded estado-indicator" role="button" tabindex="0"
-                             data-estado="RECEPCIONADO_PARCIAL" title="Ver los documentos con faltante, daño o sobrante"
-                             style="cursor:pointer;background:rgba(255,77,77,.10);">
+                        <div class="text-center p-2 rounded estado-indicator kpi-tile kpi-tile--problema" role="button" tabindex="0"
+                             data-estado="RECEPCIONADO_PARCIAL" title="Ver los documentos con faltante, daño o sobrante">
                             <div class="fw-bold" id="kpiProblemasCompacto">0</div>
                             <small class="text-muted">Con problema</small>
                         </div>
                     </div>
                     <div class="col-6 col-md-2">
-                        <div class="text-center p-2 rounded estado-indicator" role="button" tabindex="0"
-                             data-estado="EN_REGULARIZACION" title="Ver los documentos en regularización"
-                             style="cursor:pointer;background:rgba(0,102,255,.10);">
+                        <div class="text-center p-2 rounded estado-indicator kpi-tile kpi-tile--reg" role="button" tabindex="0"
+                             data-estado="EN_REGULARIZACION" title="Ver los documentos en regularización">
                             <div class="fw-bold" id="kpiRegularizacionCompacto">0</div>
                             <small class="text-muted">En regularización</small>
                         </div>
                     </div>
                     <div class="col-6 col-md-2">
-                        <div class="text-center p-2 rounded estado-indicator" role="button" tabindex="0"
-                             data-estado="RECHAZADO" title="Ver los documentos rechazados"
-                             style="cursor:pointer;background:rgba(108,117,125,.10);">
+                        <div class="text-center p-2 rounded estado-indicator kpi-tile kpi-tile--rechazo" role="button" tabindex="0"
+                             data-estado="RECHAZADO" title="Ver los documentos rechazados">
                             <div class="fw-bold" id="kpiRechazadosCompacto">0</div>
                             <small class="text-muted">Rechazados</small>
                         </div>
                     </div>
                     <div class="col-6 col-md-2">
-                        <div class="text-center p-2 rounded estado-indicator" role="button" tabindex="0"
-                             data-estado="" title="Ver todos los documentos"
-                             style="cursor:pointer;background:var(--nexo-gray-100);">
+                        <div class="text-center p-2 rounded estado-indicator kpi-tile kpi-tile--neutral" role="button" tabindex="0"
+                             data-estado="" title="Ver todos los documentos">
                             <div class="fw-bold" id="kpiUnidadesCompacto">0</div>
                             <small class="text-muted">Unidades</small>
                         </div>
@@ -1627,9 +1602,9 @@
                                             </div>
                                         </div>
                                         <div class="col-md-7">
-                                            <label class="form-label d-block">Ver</label>
+                                            <span class="form-label d-block" id="labelFiltrosRapidosDte">Ver</span>
                                             <div class="d-flex flex-wrap gap-2" id="filtrosRapidosDte" role="group"
-                                                 aria-label="Filtros rápidos por estado">
+                                                 aria-labelledby="labelFiltrosRapidosDte" aria-label="Filtros rápidos por estado">
                                                 <button type="button" class="quick-filter-btn active" data-qf="">
                                                     Todos
                                                 </button>
@@ -1753,7 +1728,7 @@
                                                 </div>
                                             </div>
                                             <div class="col-md-4">
-                                                <div class="ayuda-item ayuda-sobra">
+                                                <div class="ayuda-item ayuda-reg">
                                                     <strong class="d-block">En regularización</strong>
                                                     Ya se pidió o emitió la solución (NC o solicitud al emisor) y está en curso.
                                                 </div>
@@ -1791,47 +1766,6 @@
                             </div>
 
 
-                            <!-- Detalle por documento: "Ver o corregir".
-                                 La tabla de arriba muestra UNA fila por DTE; el
-                                 talla a talla (y las acciones por línea) viven acá. -->
-                            <div class="modal fade" id="modalDetalleRegDTE" tabindex="-1">
-                                <div class="modal-dialog modal-xl modal-dialog-scrollable">
-                                    <div class="modal-content">
-                                        <div class="modal-header" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%) !important;">
-                                            <h5 class="modal-title text-white">
-                                                <i class="bi bi-list-check me-2"></i>
-                                                <span id="detalleRegTipoDoc">DTE</span> #<span id="detalleRegNumero">-</span>
-                                            </h5>
-                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                                        </div>
-                                        <div class="modal-body">
-                                            <div class="alert alert-light border mb-3" id="detalleRegCabecera"></div>
-                                            <div id="detalleRegAyudaRol" class="mb-3"></div>
-                                            <div class="d-flex flex-wrap gap-2 mb-3" id="detalleRegAccionesDte"></div>
-                                            <div class="table-responsive">
-                                                <table class="table table-sm table-hover align-middle">
-                                                    <thead class="table-light">
-                                                        <tr>
-                                                            <th>Producto</th>
-                                                            <th>SKU / Talla</th>
-                                                            <th class="text-center" title="Unidades documentadas en el DTE">Esperado</th>
-                                                            <th class="text-center" title="Unidades que sí ingresaron al stock del destino">Recibido</th>
-                                                            <th class="text-center" title="Unidades que nunca llegaron">Faltante</th>
-                                                            <th class="text-center" title="Unidades que llegaron de más">Sobrante</th>
-                                                            <th>Estado</th>
-                                                            <th class="text-end">Acciones</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody id="detalleRegBody"></tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                        <div class="modal-footer">
-                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
                             <div class="table-responsive">
                                 <table class="table table-hover align-middle">
                                     <thead>
@@ -1895,25 +1829,6 @@
                                         </tr>
                                     </tbody>
                                 </table>
-                            </div>
-                        </div>
-
-                        <!-- Modal: confirmar devolución física al origen -->
-                        <div class="modal fade" id="modalConfirmarDevolucion" tabindex="-1">
-                            <div class="modal-dialog modal-lg">
-                                <div class="modal-content">
-                                    <div class="modal-header bg-info text-white">
-                                        <h5 class="modal-title">Confirmar despacho físico al origen</h5>
-                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                                    </div>
-                                    <div class="modal-body" id="modalConfirmarDevolucionBody">
-                                        <div class="text-center py-4 text-muted">Cargando…</div>
-                                    </div>
-                                    <div class="modal-footer">
-                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                                        <button type="button" class="btn btn-info" id="btnConfirmarDevolucionFisica">Confirmar despacho</button>
-                                    </div>
-                                </div>
                             </div>
                         </div>
 
@@ -2016,17 +1931,11 @@
                 </div>
 
                 <div class="card mb-3">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0"><i class="bi bi-info-circle me-2 text-primary"></i>Cómo funciona</h6>
-                        <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" id="btnAyudaProcesoLateral">Ver detalle</button>
-                    </div>
-                    <div class="card-body">
-                        <ul class="list-unstyled mb-0">
-                            <li class="mb-2"><i class="bi bi-check-circle-fill me-2" style="color: var(--nexo-accent);"></i>Ves los traspasos donde tu sucursal es <strong>origen o destino</strong>: la columna <em>Mi rol</em> te dice cuál eres.</li>
-                            <li class="mb-2"><i class="bi bi-check-circle-fill me-2" style="color: var(--nexo-accent);"></i>Verifica talla a talla antes de confirmar: lo que escribas en <strong>Recibido</strong> es lo que entra al stock.</li>
-                            <li class="mb-2"><i class="bi bi-check-circle-fill me-2" style="color: var(--nexo-accent);"></i>Al confirmar, el stock de <strong id="ayudaSucursalDestino">tu sucursal</strong> sube solo por lo recibido; el movimiento queda completado.</li>
-                            <li><i class="bi bi-exclamation-triangle-fill me-2" style="color: var(--nexo-warning);"></i>Faltantes y sobrantes <strong>no suman stock</strong>: se resuelven en la pestaña <em>Por resolver</em>.</li>
-                        </ul>
+                    <div class="card-body py-2 d-flex justify-content-between align-items-center gap-2">
+                        <small class="text-muted mb-0">
+                            <i class="bi bi-info-circle me-1 text-primary"></i>Al confirmar, el stock de <strong id="ayudaSucursalDestino">tu sucursal</strong> sube solo por lo recibido.
+                        </small>
+                        <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none text-nowrap" id="btnAyudaProcesoLateral">Ver detalle</button>
                     </div>
                 </div>
 
@@ -2051,17 +1960,17 @@
 <div class="modal fade" id="modalAjustarDteEmisor" tabindex="-1" aria-labelledby="modalAjustarDteEmisorLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header" style="background: linear-gradient(135deg, #c47d00 0%, #e69a00 100%); color: #fff;">
+            <div class="modal-header bg-warning">
                 <div>
                     <h5 class="modal-title mb-1" id="modalAjustarDteEmisorLabel">
                         <i class="bi bi-pencil-square me-2"></i>Ajustar DTE emitido — <span id="ajusteNumero">-</span>
                     </h5>
                     <small class="opacity-75" id="ajusteSubtitulo">Indica cuántas unidades DEVUELVES por línea; la NC/ajuste se emite por esa cantidad</small>
                 </div>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-warning border-0 mb-3" style="border-radius: 10px;">
+                <div class="alert alert-warning border-0 mb-3">
                     <i class="bi bi-exclamation-triangle me-2"></i>
                     <strong>Modo emisor:</strong> esto afecta el DTE <span id="ajusteTipoDocTexto">-</span> <span id="ajusteNumeroRef">-</span>.
                     Al confirmar se genera un documento de trazabilidad automáticamente:
@@ -2085,14 +1994,14 @@
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-bold mb-1">Motivo del ajuste <span class="text-danger">*</span></label>
+                        <label class="form-label fw-bold mb-1" for="ajusteMotivo">Motivo del ajuste <span class="text-danger">*</span></label>
                         <textarea id="ajusteMotivo" class="form-control" rows="2" placeholder="Ej: Mercadería dañada, error de conteo en bodega, etc." maxlength="500"></textarea>
                     </div>
                 </div>
 
-                <div class="table-responsive" style="max-height: 45vh; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px;">
+                <div class="table-responsive scroll-box scroll-box--md">
                     <table class="table table-hover mb-0">
-                        <thead class="sticky-top bg-white" style="top: 0; z-index: 10;">
+                        <thead class="sticky-top">
                             <tr>
                                 <th style="width: 110px;">SKU</th>
                                 <th>Producto</th>
@@ -2120,7 +2029,7 @@
                         <div class="col-4">
                             <div class="card border-0 bg-light">
                                 <div class="card-body py-1 px-2 text-center">
-                                    <small class="text-muted d-block" style="font-size:11px;">Unidades NC</small>
+                                    <small class="text-muted d-block label-xs">Unidades NC</small>
                                     <strong id="ajusteDiferencialUnidades" class="text-danger fs-6">0</strong>
                                 </div>
                             </div>
@@ -2128,15 +2037,15 @@
                         <div class="col-4">
                             <div class="card border-0 bg-light">
                                 <div class="card-body py-1 px-2 text-center">
-                                    <small class="text-muted d-block" style="font-size:11px;">Monto neto NC</small>
+                                    <small class="text-muted d-block label-xs">Monto neto NC</small>
                                     <strong id="ajusteDiferencialNeto" class="text-danger fs-6">$0</strong>
                                 </div>
                             </div>
                         </div>
                         <div class="col-4">
-                            <div class="card border-danger" style="border-radius:var(--nexo-radius-md);">
+                            <div class="card border-danger">
                                 <div class="card-body py-1 px-2 text-center">
-                                    <small class="text-muted d-block" style="font-size:11px;">Total con IVA</small>
+                                    <small class="text-muted d-block label-xs">Total con IVA</small>
                                     <strong id="ajusteDiferencialTotal" class="text-danger fs-6">$0</strong>
                                 </div>
                             </div>
@@ -2182,9 +2091,9 @@
                 </div>
                 <div id="ajusteResStockPanel" class="d-none">
                     <p class="small fw-bold mb-1"><i class="bi bi-box-seam me-1"></i>Stock actualizado:</p>
-                    <div class="table-responsive" style="max-height:140px;overflow-y:auto;">
+                    <div class="table-responsive scroll-box scroll-box--xs">
                         <table class="table table-sm table-bordered mb-0">
-                            <thead class="table-light"><tr><th>SKU</th><th>Talla</th><th>Sucursal</th><th class="text-end">Stock</th></tr></thead>
+                            <thead><tr><th>SKU</th><th>Talla</th><th>Sucursal</th><th class="text-end">Stock</th></tr></thead>
                             <tbody id="ajusteResStockBody"></tbody>
                         </table>
                     </div>
@@ -2200,7 +2109,7 @@
                 </button>
             </div>
             <div class="modal-footer d-none" id="ajusteFooterResultado">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
                 <button type="button" class="btn btn-outline-primary btn-sm" id="btnVerTrazabilidadAjuste">
                     <i class="bi bi-diagram-3 me-1"></i>Ver trazabilidad
                 </button>
@@ -2220,7 +2129,7 @@
      data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header" style="background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); color: #fff;">
+            <div class="modal-header">
                 <div>
                     <h5 class="modal-title mb-1" id="modalCambiarTallaLabel">
                         <i class="bi bi-arrow-left-right me-2"></i>Corregir tallas del <span id="cambioTallaNumero">-</span>
@@ -2249,15 +2158,15 @@
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-bold mb-1">Motivo del cambio <span class="text-danger">*</span></label>
+                        <label class="form-label fw-bold mb-1" for="cambioTallaMotivo">Motivo del cambio <span class="text-danger">*</span></label>
                         <textarea id="cambioTallaMotivo" class="form-control" rows="2"
                                   placeholder="Ej: se picó mal el pedido, salieron 10 pares talla 38 en vez de 37" maxlength="500"></textarea>
                     </div>
                 </div>
 
-                <div class="table-responsive" style="max-height: 45vh; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px;">
+                <div class="table-responsive scroll-box scroll-box--md">
                     <table class="table table-hover mb-0">
-                        <thead class="sticky-top bg-white" style="top: 0; z-index: 10;">
+                        <thead class="sticky-top">
                             <tr>
                                 <th style="width: 110px;">SKU</th>
                                 <th>Producto</th>
@@ -2289,8 +2198,7 @@
                     <!-- Franja de invariante: es lo que responde de un vistazo la
                          pregunta que el operador se hace ("¿esto me emite otro
                          documento?"). Visible siempre, no solo cuando hay cambios. -->
-                    <div class="alert alert-light border d-flex align-items-center gap-2 py-2 px-3 mb-2"
-                         style="border-radius:8px;">
+                    <div class="alert alert-light border d-flex align-items-center gap-2 py-2 px-3 mb-2">
                         <i class="bi bi-shield-check text-success fs-5"></i>
                         <div class="small">
                             <strong>Documento <span id="ctInvNumero">—</span>:</strong>
@@ -2319,14 +2227,14 @@
 
                 <!-- Panel de resultado -->
                 <div id="cambioTallaResultadoPanel" class="d-none">
-                    <div class="alert alert-success border-0" style="border-radius: 10px;">
+                    <div class="alert alert-success border-0">
                         <h6 class="fw-bold mb-1"><i class="bi bi-check-circle me-2"></i>Tallas corregidas</h6>
                         <div id="ctResUnidades" class="small mb-0"></div>
                     </div>
                     <p class="small fw-bold mb-1"><i class="bi bi-box-seam me-1"></i>Stock actualizado:</p>
-                    <div class="table-responsive" style="max-height:140px;overflow-y:auto;">
+                    <div class="table-responsive scroll-box scroll-box--xs">
                         <table class="table table-sm table-bordered mb-0">
-                            <thead class="table-light"><tr><th>SKU</th><th>Talla</th><th>Sucursal</th><th class="text-end">Stock</th></tr></thead>
+                            <thead><tr><th>SKU</th><th>Talla</th><th>Sucursal</th><th class="text-end">Stock</th></tr></thead>
                             <tbody id="ctResStockBody"></tbody>
                         </table>
                     </div>
@@ -2342,7 +2250,7 @@
                 </button>
             </div>
             <div class="modal-footer d-none" id="ctFooterResultado">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
             </div>
         </div>
     </div>
@@ -2377,7 +2285,7 @@
                 </div>
 
                 <!-- Banner: ajuste previo del emisor -->
-                <div id="bannerAjustePrevio" class="alert alert-warning d-none mb-2 py-2" style="border-left: 4px solid #e69a00;">
+                <div id="bannerAjustePrevio" class="alert alert-warning d-none mb-2 py-2" style="border-left: 4px solid var(--rd-warning-dark);">
                     <div class="d-flex align-items-start">
                         <i class="bi bi-exclamation-triangle-fill fs-4 me-2 text-warning"></i>
                         <div class="flex-grow-1">
@@ -2412,7 +2320,8 @@
                         <div class="input-group">
                             <span class="input-group-text"><i class="bi bi-search"></i></span>
                             <input type="text" id="buscarProductoModal" class="form-control" placeholder="Buscar por SKU, descripción, artículo, color, marca...">
-                            <button class="btn btn-outline-secondary" type="button" id="btnLimpiarBusqueda">
+                            <button class="btn btn-outline-secondary" type="button" id="btnLimpiarBusqueda"
+                                    title="Limpiar búsqueda" aria-label="Limpiar búsqueda">
                                 <i class="bi bi-x"></i>
                             </button>
                         </div>
@@ -2423,23 +2332,23 @@
                 <!-- Impacto de lo marcado: qué entra al stock y qué no -->
                 <div class="impacto-bar mb-2">
                     <div class="row text-center g-0 align-items-center">
-                        <div class="col impacto-col">
+                        <div class="col-6 col-md impacto-col">
                             <div class="impacto-valor text-success" id="impactoIngresa">0</div>
                             <span class="impacto-label">Entra al stock de <strong id="impactoDestino">tu sucursal</strong></span>
                         </div>
-                        <div class="col impacto-col">
+                        <div class="col-6 col-md impacto-col">
                             <div class="impacto-valor text-secondary" id="impactoNoIngresa">0</div>
                             <span class="impacto-label">No llega (faltante/dañado)</span>
                         </div>
-                        <div class="col impacto-col">
+                        <div class="col-6 col-md impacto-col">
                             <div class="impacto-valor text-info" id="impactoSobrante">0</div>
                             <span class="impacto-label">Sobrante — no entra al stock</span>
                         </div>
-                        <div class="col impacto-col">
+                        <div class="col-6 col-md impacto-col">
                             <div class="impacto-valor text-dark" id="impactoEsperado">0</div>
                             <span class="impacto-label">Pedido en el documento</span>
                         </div>
-                        <div class="col impacto-col">
+                        <div class="col-6 col-md impacto-col">
                             <div class="impacto-valor" id="impactoLineasProblema">0</div>
                             <span class="impacto-label">Líneas con diferencia</span>
                         </div>
@@ -2468,8 +2377,8 @@
                         <div class="alert alert-info py-2 mt-2 mb-0 small">
                             <div><span class="badge bg-success me-1">1</span> Si llegó todo tal cual el documento → <strong>Marcar todos OK</strong> y confirma.</div>
                             <div><span class="badge bg-warning text-dark me-1">2</span> Si algo no llegó o llegó dañado → <strong>desmarca</strong> la línea y escribe en <strong>«Recibido»</strong> solo las unidades buenas. La diferencia queda como faltante y <strong>no entra al stock</strong>.</div>
-                            <div><span class="badge bg-info me-1">3</span> Si llegó de más → botón <strong>⚠️</strong> de la línea y carga el <strong>sobrante</strong>: no ingresa al stock, queda para que bodega decida.</div>
-                            <div><span class="badge bg-primary me-1">4</span> Toda línea desmarcada necesita <strong>observación</strong> (botón ⚠️ o <strong>Obs. Masiva</strong>); si falta, el botón de confirmar queda bloqueado.</div>
+                            <div><span class="badge bg-info text-dark me-1">3</span> Si llegó de más → botón <strong><i class="bi bi-exclamation-circle"></i> Detallar problema</strong> de la línea y carga el <strong>sobrante</strong>: no ingresa al stock, queda para que bodega decida.</div>
+                            <div><span class="badge bg-primary me-1">4</span> Toda línea desmarcada necesita <strong>observación</strong> (botón <strong><i class="bi bi-exclamation-circle"></i> Detallar problema</strong> u <strong>Obs. Masiva</strong>); si falta, el botón de confirmar queda bloqueado.</div>
                         </div>
                     </div>
                 </div>
@@ -2479,12 +2388,12 @@
                     <div class="col-md-8">
                         <div class="btn-group-vertical btn-group-sm w-100 d-md-none mb-2">
                             <button type="button" class="btn btn-success" id="btnMarcarTodosOKMobile">
-                                <i class="bi bi-check-all me-1"></i>✅ Todo llegó bien - Marcar todos OK
+                                <i class="bi bi-check-all me-1"></i>Todo llegó bien - Marcar todos OK
                             </button>
                         </div>
                         <div class="d-none d-md-flex gap-2 align-items-center">
                             <button type="button" class="btn btn-success" id="btnMarcarTodosOK" title="Todos los productos llegaron en perfecto estado">
-                                <i class="bi bi-check-all me-1"></i>✅ Marcar todos OK
+                                <i class="bi bi-check-all me-1"></i>Marcar todos OK
                             </button>
                             <div class="vr mx-2"></div>
                             <button type="button" class="btn btn-outline-warning" id="btnObservacionMasiva" title="Agregar la misma observación a todos los productos desmarcados">
@@ -2516,7 +2425,7 @@
                         <div>
                             <i class="bi bi-exclamation-triangle-fill me-2"></i>
                             <strong><span id="cantSinObs">0</span> producto(s) desmarcados</strong> no tienen observación.
-                            <span class="text-muted">Usa "Observación Masiva" o el botón "⚠️" para agregarlas.</span>
+                            <span class="text-muted">Usa "Observación Masiva" o el botón <i class="bi bi-exclamation-circle"></i> "Detallar problema" para agregarlas.</span>
                         </div>
                         <button type="button" class="btn btn-warning btn-sm" onclick="$('#btnObservacionMasiva').click()">
                             <i class="bi bi-pencil-square me-1"></i>Agregar ahora
@@ -2525,9 +2434,9 @@
                 </div>
 
                 <!-- Lista de Productos con Scroll -->
-                <div style="max-height: calc(45vh); overflow-y: auto; overflow-x: auto; border: 1px solid #dee2e6; border-radius: 8px;" id="listaProductosRecepcion">
+                <div class="scroll-box scroll-box--md" id="listaProductosRecepcion">
                     <table class="table table-hover mb-0">
-                        <thead class="sticky-top bg-white" style="top: 0; z-index: 10;">
+                        <thead class="sticky-top">
                             <tr>
                                 <th style="width: 50px;">OK</th>
                                 <th style="width: 110px;">SKU</th>
@@ -2559,7 +2468,7 @@
 
                 <!-- Observaciones Generales -->
                 <div class="mt-2">
-                    <label class="form-label fw-bold mb-1">Observaciones Generales <small class="text-muted fw-normal">(opcional, queda en el historial del documento)</small></label>
+                    <label class="form-label fw-bold mb-1" for="observacionesGenerales">Observaciones Generales <small class="text-muted fw-normal">(opcional, queda en el historial del documento)</small></label>
                     <textarea id="observacionesGenerales" class="form-control" rows="2" placeholder="Comentarios adicionales sobre la recepción..."></textarea>
                 </div>
             </div>
@@ -2592,10 +2501,10 @@
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-warning">
-                <h6 class="modal-title text-white">
+                <h5 class="modal-title">
                     <i class="bi bi-exclamation-triangle me-2"></i>Detallar Problema
-                </h6>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
                 <!-- Info del Producto -->
@@ -2622,7 +2531,7 @@
                 
                 <!-- Cantidad Recepcionada (max = esperada) -->
                 <div class="mb-3">
-                    <label class="form-label fw-bold">
+                    <label class="form-label fw-bold" for="problemaCantidadRecepcionada">
                         <i class="bi bi-check-circle text-success me-1"></i>¿Cuantas unidades del DTE recibiste?
                     </label>
                     <input type="number" id="problemaCantidadRecepcionada" class="form-control form-control-lg"
@@ -2634,8 +2543,8 @@
                 </div>
 
                 <!-- Sobrante (separado - NO entra al stock) -->
-                <div class="mb-3 p-3 border rounded" style="background: rgba(13,202,240,.05); border-color: #0dcaf0 !important;">
-                    <label class="form-label fw-bold text-info mb-1">
+                <div class="mb-3 p-3 border rounded sobrante-box">
+                    <label class="form-label fw-bold text-info mb-1" for="problemaCantidadSobranteInput">
                         <i class="bi bi-plus-circle me-1"></i>¿Llegaron unidades de mas? (sobrante)
                     </label>
                     <small class="text-muted d-block mb-2">Si llego mercaderia adicional no documentada en el DTE. Estas unidades NO ingresan al stock, van a regularizacion.</small>
@@ -2655,7 +2564,7 @@
 
                 <!-- Observaciones -->
                 <div class="mb-3">
-                    <label class="form-label fw-bold">
+                    <label class="form-label fw-bold" for="problemaObservaciones">
                         <i class="bi bi-chat-left-text me-1"></i>Observaciones
                     </label>
                     <textarea id="problemaObservaciones" class="form-control" rows="2"
@@ -2668,7 +2577,7 @@
                 <input type="hidden" id="problemaEstado">
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-primary" id="btnGuardarProblema">
                     <i class="bi bi-save me-1"></i>Guardar
                 </button>
@@ -2680,6 +2589,67 @@
 <!-- Modal DTEs con Problemas - Reemplazado por redirección a regularizar-recepciones -->
 
 <!-- Modal DTEs Rechazados - Reemplazado por redirección a regularizar-recepciones -->
+
+<!-- Modal detalle de regularización por documento: "Ver o corregir".
+     La tabla de #panelRegularizaciones muestra UNA fila por DTE; el talla a
+     talla (y las acciones por línea) viven acá. -->
+<div class="modal fade" id="modalDetalleRegDTE" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-white">
+                    <i class="bi bi-list-check me-2"></i>
+                    <span id="detalleRegTipoDoc">DTE</span> #<span id="detalleRegNumero">-</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-light border mb-3" id="detalleRegCabecera"></div>
+                <div id="detalleRegAyudaRol" class="mb-3"></div>
+                <div class="d-flex flex-wrap gap-2 mb-3" id="detalleRegAccionesDte"></div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th>SKU / Talla</th>
+                                <th class="text-center" title="Unidades documentadas en el DTE">Esperado</th>
+                                <th class="text-center" title="Unidades que sí ingresaron al stock del destino">Recibido</th>
+                                <th class="text-center" title="Unidades que nunca llegaron">Faltante</th>
+                                <th class="text-center" title="Unidades que llegaron de más">Sobrante</th>
+                                <th>Estado</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detalleRegBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: confirmar devolución física al origen -->
+<div class="modal fade" id="modalConfirmarDevolucion" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirmar despacho físico al origen</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" id="modalConfirmarDevolucionBody">
+                <div class="text-center py-4 text-muted">Cargando…</div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-info" id="btnConfirmarDevolucionFisica">Confirmar despacho</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Modal de Regularización (HTML + JS compartido con la página legacy) -->
 {% include 'vistas/modulo_compras/_modal_regularizar.html' %}
@@ -2717,7 +2687,7 @@
                     <h5 class="modal-title mb-1" id="modalVerDTELabel">
                         <i class="bi bi-check-circle me-2"></i>DTE Recepcionado - #<span id="verDteNumero">-</span>
                     </h5>
-                    <small class="text-white-50">Detalles de la recepción completada</small>
+                    <small class="opacity-75">Detalles de la recepción completada</small>
                 </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
@@ -2745,8 +2715,8 @@
                 <!-- Tabla de Productos -->
                 <div class="table-responsive">
                     <table class="table table-hover table-sm">
-                        <thead style="background: var(--nexo-success) !important;">
-                            <tr style="background: var(--nexo-success) !important;">
+                        <thead>
+                            <tr>
                                 <th>SKU</th>
                                 <th>Producto</th>
                                 <th>Artículo</th>
@@ -2776,15 +2746,15 @@
                                 <div class="row text-center">
                                     <div class="col-4">
                                         <div class="fw-bold text-success" id="verResumenOK">0</div>
-                                        <small class="text-muted">OK ✅</small>
+                                        <small class="text-muted">OK</small>
                                     </div>
                                     <div class="col-4">
                                         <div class="fw-bold text-warning" id="verResumenParcial">0</div>
-                                        <small class="text-muted">Con Problemas ⚠️</small>
+                                        <small class="text-muted">Con Problemas</small>
                                     </div>
                                     <div class="col-4">
                                         <div class="fw-bold text-secondary" id="verResumenFaltante">0</div>
-                                        <small class="text-muted">Faltantes ❌</small>
+                                        <small class="text-muted">Faltantes</small>
                                     </div>
                                 </div>
                             </div>
@@ -2793,7 +2763,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                     <i class="bi bi-x-circle me-1"></i>Cerrar
                 </button>
             </div>
@@ -2805,11 +2775,11 @@
 <div class="modal fade" id="modalCorregirRecepcion" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header" style="background: linear-gradient(135deg, var(--nexo-warning) 0%, #E69A00 100%) !important;">
+            <div class="modal-header bg-warning">
                 <h5 class="modal-title text-dark">
                     <i class="bi bi-tools me-2"></i>Corregir Recepción - DTE #<span id="corregirDteNumero">-</span>
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
                 <div class="alert alert-info mb-3">
@@ -2824,7 +2794,7 @@
                 </p>
                 <div class="table-responsive">
                     <table class="table table-hover table-sm">
-                        <thead class="table-warning">
+                        <thead>
                             <tr>
                                 <th>SKU</th>
                                 <th>Producto</th>
@@ -2847,7 +2817,7 @@
                     </table>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-bold">
+                    <label class="form-label fw-bold" for="corregirObservaciones">
                         <i class="bi bi-chat-left-text me-1"></i>Observaciones de la corrección
                     </label>
                     <textarea id="corregirObservaciones" class="form-control" rows="2"
@@ -2859,7 +2829,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-warning" id="btnConfirmarCorreccion" disabled>
                     <i class="bi bi-check-circle me-1"></i>Confirmar Corrección
                 </button>
@@ -2872,11 +2842,11 @@
 <div class="modal fade" id="modalListaDTEsCorregir" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header" style="background: linear-gradient(135deg, var(--nexo-warning) 0%, #E69A00 100%) !important;">
+            <div class="modal-header bg-warning">
                 <h5 class="modal-title text-dark">
                     <i class="bi bi-tools me-2"></i>DTEs Pendientes de Corrección
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
                 <p class="text-muted mb-3">
@@ -2890,7 +2860,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
             </div>
         </div>
     </div>
@@ -2904,7 +2874,7 @@
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <!-- Header rojo NC -->
-            <div class="modal-header" style="background: linear-gradient(135deg, #FF4D4D 0%, #CC2222 100%);">
+            <div class="modal-header bg-danger">
                 <div>
                     <h5 class="modal-title mb-0" id="modalGestionarNCLabel">
                         <i class="bi bi-receipt-cutoff me-2"></i>Generar Nota de Crédito &mdash; <span id="ncDteNumero">-</span>
@@ -2965,7 +2935,7 @@
                         </div>
                     </div>
                     <div>
-                        <label class="form-label fw-bold">Motivo <span class="text-danger">*</span></label>
+                        <label class="form-label fw-bold" for="ncMotivo">Motivo <span class="text-danger">*</span></label>
                         <textarea id="ncMotivo" class="form-control" rows="2" maxlength="500"
                                   placeholder="Ej: Producto devuelto por rechazo de destino, error en cantidad emitida..."></textarea>
                         <div class="invalid-feedback">El motivo es requerido.</div>
@@ -2991,9 +2961,9 @@
                     <div id="ncAlertaPaso2" class="alert alert-info small mb-2 py-2 d-none">
                         <i class="bi bi-info-circle me-1"></i><span id="ncAlertaPaso2Texto"></span>
                     </div>
-                    <div class="table-responsive" style="max-height:42vh;overflow-y:auto;border:1px solid var(--nexo-gray-300);border-radius:var(--nexo-radius-md);">
+                    <div class="table-responsive scroll-box scroll-box--sm">
                         <table class="table table-sm table-hover mb-0">
-                            <thead class="sticky-top" style="top:0;z-index:10;background:var(--nexo-secondary);">
+                            <thead class="sticky-top">
                                 <tr>
                                     <th class="text-white" style="width:36px;">
                                         <input type="checkbox" id="ncCheckTodos" class="form-check-input" checked title="Marcar/desmarcar todos">
@@ -3004,7 +2974,7 @@
                                     <th class="text-white text-center" style="width:80px;">Cant. DTE</th>
                                     <th class="text-white text-center" style="width:90px;">Cant. NC</th>
                                     <th class="text-white text-end" style="width:95px;">P. unit.</th>
-                                    <th class="text-white text-end" style="width:100px;background:rgba(255,77,77,0.3);">Monto NC</th>
+                                    <th class="text-white text-end" style="width:100px;">Monto NC</th>
                                 </tr>
                             </thead>
                             <tbody id="ncPaso2ProductosBody">
@@ -3018,25 +2988,25 @@
                         <div class="row g-2">
                             <div class="col-3">
                                 <div class="card border-0 bg-light text-center py-1">
-                                    <small class="text-muted" style="font-size:11px;">Líneas</small>
+                                    <small class="text-muted label-xs">Líneas</small>
                                     <strong id="ncResumenLineas" class="text-danger">0</strong>
                                 </div>
                             </div>
                             <div class="col-3">
                                 <div class="card border-0 bg-light text-center py-1">
-                                    <small class="text-muted" style="font-size:11px;">Unidades NC</small>
+                                    <small class="text-muted label-xs">Unidades NC</small>
                                     <strong id="ncResumenUnidades" class="text-danger">0</strong>
                                 </div>
                             </div>
                             <div class="col-3">
                                 <div class="card border-0 bg-light text-center py-1">
-                                    <small class="text-muted" style="font-size:11px;">Monto neto</small>
+                                    <small class="text-muted label-xs">Monto neto</small>
                                     <strong id="ncResumenNeto" class="text-danger">$0</strong>
                                 </div>
                             </div>
                             <div class="col-3">
                                 <div class="card border-danger text-center py-1">
-                                    <small class="text-muted" style="font-size:11px;">Total c/IVA</small>
+                                    <small class="text-muted label-xs">Total c/IVA</small>
                                     <strong id="ncResumenTotal" class="text-danger">$0</strong>
                                 </div>
                             </div>
@@ -3106,7 +3076,7 @@
                     <button type="button" class="btn btn-danger d-none" id="btnNcConfirmar">
                         <i class="bi bi-check-circle me-1"></i>Emitir Nota de Crédito
                     </button>
-                    <button type="button" class="btn btn-secondary d-none" id="btnNcCerrarFinal" data-bs-dismiss="modal">
+                    <button type="button" class="btn btn-outline-secondary d-none" id="btnNcCerrarFinal" data-bs-dismiss="modal">
                         Cerrar
                     </button>
                 </div>
@@ -5875,7 +5845,7 @@ function confirmarRecepcion() {
     const tablaDetalle = lineasConDiferencia.length ? `
         <div class="mt-2" style="max-height:190px;overflow:auto;">
             <table class="table table-sm table-bordered mb-0" style="font-size:12px;">
-                <thead class="table-light">
+                <thead>
                     <tr>
                         <th class="text-start">Producto</th>
                         <th class="text-center">Talla</th>
@@ -6388,7 +6358,7 @@ function verDTEsRechazados() {
                 </div>
                 <div class="table-responsive">
                     <table class="table table-sm table-striped align-middle">
-                        <thead class="table-light">
+                        <thead>
                             <tr>
                                 <th>N°</th>
                                 <th>Tipo</th>
@@ -7354,7 +7324,7 @@ function renderTablaRecepcionados() {
 
     window.emitidosData.forEach(d => {
         const ajustesBadge = d.ajustes_previos
-            ? `<span class="badge bg-info text-white ms-1" title="NC/ajustes ya emitidos sobre este DTE">${d.ajustes_previos} NC</span>`
+            ? `<span class="badge bg-info ms-1" title="NC/ajustes ya emitidos sobre este DTE">${d.ajustes_previos} NC</span>`
             : '';
         // Indicador: NCs hijas que no devolvieron stock (bug histórico).
         const pendienteBadge = (d.ncs_stock_pendiente || 0) > 0
@@ -7378,8 +7348,7 @@ function renderTablaRecepcionados() {
                     </button>`;
         }
         const botonDiagnostico = PUEDE_REGULARIZAR_DTE ? `
-                    <button class="btn btn-sm btn-diagnostico-traspaso"
-                            style="background:#6f42c1;color:white;"
+                    <button class="btn btn-sm btn-outline-secondary btn-diagnostico-traspaso"
                             data-dte-id="${d.id}"
                             title="Diagnosticar cantidades, líneas sin producto y stock no actualizado">
                         <i class="bi bi-shield-exclamation me-1"></i>Diagnóstico
@@ -7776,7 +7745,7 @@ function abrirModalAjusteEmisor(dteId, opciones) {
                 const colStockDestino = esPostRecepcion
                     ? `<td class="text-center">
                            ${stockDestino !== null
-                                ? `<span class="badge ${sinStockDestino ? 'bg-warning text-dark' : 'bg-info text-white'}">${stockDestino}</span>`
+                                ? `<span class="badge ${sinStockDestino ? 'bg-warning text-dark' : 'bg-info'}">${stockDestino}</span>`
                                 : '<span class="text-muted small">-</span>'}
                        </td>`
                     : '';
@@ -7934,7 +7903,7 @@ function confirmarAjusteEmisor() {
     const resumenAjusteHtml = `
         <div class="table-responsive mt-2">
             <table class="table table-sm table-bordered align-middle mb-2">
-                <thead class="table-light">
+                <thead>
                     <tr>
                         <th>SKU</th>
                         <th>Producto</th>

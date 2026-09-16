@@ -1,7 +1,7 @@
 {% comment %}
-Modal de Regularización de Recepciones, compartido entre:
-  - regularizar_recepciones.html (página legacy)
-  - recepcion_dte.html (modal in-place, modo regularizar)
+Modal de Regularización de Recepciones. Parcial incluido únicamente por
+recepcion_dte.html (modal in-place, modo regularizar); no tiene
+header/menu/footer propios.
 
 Requiere que el template padre defina estas variables JS globales antes
 de incluirlo: productosProblemas (array), tabActual (string).
@@ -16,21 +16,54 @@ de incluirlo: productosProblemas (array), tabActual (string).
     #modalRegularizar .modal-body,
     #modalRegularizarDTE .modal-body { scrollbar-width: thin; }
 
+    /* El color de fondo y texto de los .modal-header (incluido el <small> del
+       subtítulo sobre .bg-warning) lo controla el padre recepcion_dte.html. */
+    #modalRegularizarDTE .modal-header small { opacity: .85; }
+
+    /* Leyenda "¿Qué hace cada opción?": mismo color que el botón que explica
+       (NC = warning, Cambio = primary, Ajuste = info, Encontrada = success). */
+    .reg-leyenda-card { background: var(--nexo-gray-100); }
     .reg-leyenda-item {
-        border-left: 3px solid #dee2e6;
+        border-left: 3px solid var(--nexo-gray-300);
         padding: 2px 0 2px 10px;
         font-size: 12.5px;
         line-height: 1.35;
     }
+    .reg-leyenda-nc { border-left-color: var(--nexo-warning); }
+    .reg-leyenda-cambio { border-left-color: var(--nexo-primary); }
+    .reg-leyenda-ajuste { border-left-color: var(--vz-info); } /* info del tema (= .btn-outline-info) */
+    .reg-leyenda-encontrada { border-left-color: var(--nexo-accent); }
 
-    .reg-leyenda-nc { border-left-color: #0ab39c; }
-    .reg-leyenda-cambio { border-left-color: #405189; }
-    .reg-leyenda-ajuste { border-left-color: #ffb020; }
-    .reg-leyenda-encontrada { border-left-color: #0dcaf0; }
+    /* Contenedor de resultados de los 4 buscadores. */
+    .reg-resultados {
+        max-height: 250px;
+        min-height: 100px;
+        overflow-y: auto;
+        background: var(--nexo-white);
+    }
+    /* Fila clicable generada por JS dentro de los resultados. */
+    .reg-resultado-item { cursor: pointer; transition: background .2s; }
+    .reg-resultado-item:hover { background: var(--nexo-gray-100); }
+    .reg-clickable { cursor: pointer; }
+
+    /* Primera columna (etiqueta) de las tablas de vista previa. */
+    .reg-label-col { width: 120px; }
+
+    /* Badge de talla dentro de <small>: .badge (.75em) heredaría ~8.5px;
+       se fija en 12px para no bajar de los 11px mínimos. */
+    .reg-badge-talla { font-size: .75rem; }
+
+    /* Historial de observaciones en el Swal de producto ya regularizado. */
+    .reg-historial-obs { white-space: pre-wrap; max-height: 160px; overflow-y: auto; }
+
+    /* Swal abierto sobre el modal (z-index del modal BS5 = 1055). */
+    .swal-on-top { z-index: 1090; }
+    /* Botones de Swal con buttonsStyling:false heredan el tema Bootstrap. */
+    .swal2-actions .btn { margin: .25em .5em; }
 
     @media (min-width: 1024px) and (max-width: 1440px) {
         #modalRegularizarDTE .table th,
-        #modalRegularizarDTE .table td { font-size: 11.5px; padding: 5px 4px; }
+        #modalRegularizarDTE .table td { font-size: 12px; padding: 5px 4px; }
         #modalRegularizar .card-body { padding: 12px; }
         #modalRegularizar .alert { padding: 8px 12px; }
         #modalRegularizar .btn-group .btn { font-size: 12.5px; }
@@ -41,14 +74,14 @@ de incluirlo: productosProblemas (array), tabActual (string).
 <div class="modal fade" id="modalRegularizarDTE" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header bg-success text-white">
+            <div class="modal-header bg-success">
                 <div>
                     <h5 class="modal-title">
                         <i class="bi bi-tools me-2"></i> Regularizar <span id="dteTipoDocumento">DTE</span> #<span id="dteTitulo">-</span>
                     </h5>
-                    <small style="opacity: 0.85;" id="subtituloModal">Generar Nota de Crédito por productos con problemas</small>
+                    <small id="subtituloModal">Generar Nota de Crédito por productos con problemas</small>
                 </div>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
                 <div class="alert alert-info mb-4" id="alertaFactura" style="display:none;">
@@ -102,8 +135,8 @@ de incluirlo: productosProblemas (array), tabActual (string).
                             <div class="col-md-6">
                                 <div class="d-flex justify-content-between py-1"><span class="text-muted">Monto Neto:</span><strong>$<span id="ncMontoNeto">0</span></strong></div>
                                 <div class="d-flex justify-content-between py-1"><span class="text-muted">IVA (19%):</span><strong>$<span id="ncIVA">0</span></strong></div>
-                                <div class="d-flex justify-content-between py-2 mt-1 px-2 rounded" style="background: rgba(40,167,69,.1);">
-                                    <span class="fw-bold">Total NC:</span><strong class="text-success fs-5">$<span id="ncTotal">0</span></strong>
+                                <div class="d-flex justify-content-between py-2 mt-1 px-2 rounded bg-light">
+                                    <span class="fw-bold">Total NC:</span><strong class="text-danger fs-5">$<span id="ncTotal">0</span></strong>
                                 </div>
                             </div>
                         </div>
@@ -111,8 +144,8 @@ de incluirlo: productosProblemas (array), tabActual (string).
                 </div>
 
                 <div class="mt-4">
-                    <label class="form-label fw-semibold">Motivo de la NC <span class="text-danger">*</span></label>
-                    <textarea id="motivoNCMasiva" class="form-control" rows="2" placeholder="Ej: Productos no llegaron completos al destino"></textarea>
+                    <label for="motivoNCMasiva" class="form-label fw-semibold">Motivo de la NC <span class="text-danger">*</span></label>
+                    <textarea id="motivoNCMasiva" required aria-required="true" class="form-control" rows="2" placeholder="Ej: Productos no llegaron completos al destino"></textarea>
                 </div>
             </div>
             <div class="modal-footer justify-content-between">
@@ -122,7 +155,7 @@ de incluirlo: productosProblemas (array), tabActual (string).
                     vuelve a la bodega de origen.
                 </small>
                 <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                         <i class="bi bi-x-circle me-1"></i>Cancelar
                     </button>
                     <button type="button" class="btn btn-success" id="btnProcesarDTE">
@@ -138,20 +171,20 @@ de incluirlo: productosProblemas (array), tabActual (string).
 <div class="modal fade" id="modalRegularizar" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header bg-warning text-dark">
+            <div class="modal-header bg-warning">
                 <div>
                     <h5 class="modal-title mb-0">
-                        <i class="ri-settings-3-line me-2"></i> Regularizar Producto
+                        <i class="bi bi-gear me-2"></i> Regularizar Producto
                     </h5>
                     <small>Paso 4 del proceso: cerrar la diferencia detectada al recepcionar</small>
                 </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
                 <!-- Info del Producto Original -->
                 <div class="alert alert-info">
                     <h6 class="alert-heading mb-2">
-                        <i class="ri-information-line"></i> Producto Original del DTE
+                        <i class="bi bi-info-circle"></i> Producto Original del DTE
                     </h6>
                     <div class="row">
                         <div class="col-md-6">
@@ -184,14 +217,14 @@ de incluirlo: productosProblemas (array), tabActual (string).
                 <!-- Opciones de Regularización -->
                 <div class="mb-3" id="opcionesRegularizacion">
                     <div class="d-flex justify-content-between align-items-center">
-                        <label class="form-label fw-bold mb-1">¿Qué solución solicitas?</label>
+                        <div class="form-label fw-bold mb-1">¿Qué solución solicitas?</div>
                         <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none"
                                 data-bs-toggle="collapse" data-bs-target="#leyendaOpcionesRegularizar">
                             <i class="bi bi-question-circle me-1"></i>¿Qué hace cada opción?
                         </button>
                     </div>
                     <div class="collapse mb-2" id="leyendaOpcionesRegularizar">
-                        <div class="card border-0" style="background:#f5f5f7;">
+                        <div class="card border-0 reg-leyenda-card">
                             <div class="card-body py-2">
                                 <div class="row g-2">
                                     <div class="col-md-6">
@@ -233,7 +266,7 @@ de incluirlo: productosProblemas (array), tabActual (string).
 
                 <!-- Panel Solicitar NC (Entre Empresas) -->
                 <div id="panelSolicitarNC" class="regularizacion-panel" style="display:none;">
-                    <div class="card bg-warning bg-opacity-10 border-warning">
+                    <div class="card">
                         <div class="card-body">
                             <h6 class="card-title">
                                 <i class="bi bi-file-earmark-text"></i> Solicitar Nota de Crédito
@@ -246,59 +279,57 @@ de incluirlo: productosProblemas (array), tabActual (string).
                             
                             <div class="row mb-3">
                                 <div class="col-md-4">
-                                    <label class="small text-muted">Producto:</label>
+                                    <div class="small text-muted">Producto:</div>
                                     <p class="mb-0"><strong id="ncProducto">-</strong></p>
                                 </div>
                                 <div class="col-md-4">
-                                    <label class="small text-muted">Cantidad Problema:</label>
+                                    <div class="small text-muted">Cantidad Problema:</div>
                                     <p class="mb-0"><strong class="text-danger" id="ncCantidad">-</strong> unidades</p>
                                 </div>
                                 <div class="col-md-4">
-                                    <label class="small text-muted">Tipo Problema:</label>
+                                    <div class="small text-muted">Tipo Problema:</div>
                                     <p class="mb-0"><span class="badge bg-warning" id="ncTipoProblema">-</span></p>
                                 </div>
                             </div>
                             
                             <div class="mb-3">
-                                <label class="form-label">
+                                <label for="justificacionNC" class="form-label">
                                     <i class="bi bi-chat-left-text me-1"></i>
                                     Justificación <span class="text-danger">*</span>
                                 </label>
-                                <textarea class="form-control" id="justificacionNC" rows="3"
+                                <textarea class="form-control" id="justificacionNC" required aria-required="true" rows="3"
                                           placeholder="Explica el motivo por el cual solicitas la Nota de Crédito..."></textarea>
                                 <small class="text-muted">Describe el problema claramente</small>
                             </div>
                             
                             <!-- Preview de la NC que se generará -->
-                            <div class="card border-warning bg-warning bg-opacity-10">
-                                <div class="card-body py-2">
-                                    <h6 class="card-title text-warning mb-2">
-                                        <i class="bi bi-file-earmark-text me-1"></i>
-                                        Preview: Nota de Crédito a Generar
-                                    </h6>
-                                    <table class="table table-sm table-borderless mb-0">
-                                        <tr>
-                                            <td class="text-muted">Producto:</td>
-                                            <td><strong id="ncPreviewProducto">-</strong></td>
-                                        </tr>
-                                        <tr>
-                                            <td class="text-muted">Cantidad:</td>
-                                            <td><strong id="ncPreviewCantidad">-</strong> unidades</td>
-                                        </tr>
-                                        <tr>
-                                            <td class="text-muted">Precio Unit.:</td>
-                                            <td>$<span id="ncPreviewPrecioUnit">0</span></td>
-                                        </tr>
-                                        <tr class="border-top">
-                                            <td class="text-muted"><strong>Monto Total NC:</strong></td>
-                                            <td><strong class="text-success">$<span id="ncPreviewTotal">0</span></strong></td>
-                                        </tr>
-                                    </table>
-                                    <small class="text-muted">
-                                        <i class="bi bi-info-circle me-1"></i>
-                                        Este es el monto que se facturó originalmente y que será devuelto vía NC.
-                                    </small>
-                                </div>
+                            <div class="alert alert-light border mb-0">
+                                <h6 class="alert-heading">
+                                    <i class="bi bi-file-earmark-check me-1"></i>
+                                    Preview: Nota de Crédito a Generar
+                                </h6>
+                                <table class="table table-sm table-borderless mb-0">
+                                    <tr>
+                                        <td class="text-muted reg-label-col">Producto:</td>
+                                        <td><strong id="ncPreviewProducto">-</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Cantidad:</td>
+                                        <td><strong id="ncPreviewCantidad">-</strong> unidades</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">Precio Unit.:</td>
+                                        <td>$<span id="ncPreviewPrecioUnit">0</span></td>
+                                    </tr>
+                                    <tr class="border-top">
+                                        <td class="text-muted"><strong>Monto Total NC:</strong></td>
+                                        <td><strong class="text-danger">$<span id="ncPreviewTotal">0</span></strong></td>
+                                    </tr>
+                                </table>
+                                <small class="text-muted">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Este es el monto que se facturó originalmente y que será devuelto vía NC.
+                                </small>
                             </div>
                         </div>
                     </div>
@@ -306,7 +337,7 @@ de incluirlo: productosProblemas (array), tabActual (string).
                 
                 <!-- Panel Emitir NC (Emisor Ejecuta Directamente) -->
                 <div id="panelEmitirNC" class="regularizacion-panel" style="display:none;">
-                    <div class="card bg-success bg-opacity-10 border-success">
+                    <div class="card">
                         <div class="card-body">
                             <h6 class="card-title">
                                 <i class="bi bi-file-earmark-text"></i> Emitir Nota de Crédito
@@ -320,13 +351,13 @@ de incluirlo: productosProblemas (array), tabActual (string).
                             <!-- Información del DTE Original -->
                             <div class="row mb-3">
                                 <div class="col-md-6">
-                                    <label class="form-label fw-bold">DTE Original</label>
+                                    <div class="fw-bold mb-1">DTE Original</div>
                                     <p class="mb-1">Número: <strong id="ncDteNumero">-</strong></p>
                                     <p class="mb-1">Fecha Emisión: <strong id="ncDteFecha">-</strong></p>
                                     <p class="mb-1">Receptor: <strong id="ncReceptor">-</strong></p>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label fw-bold">Producto a Acreditar</label>
+                                    <div class="fw-bold mb-1">Producto a Acreditar</div>
                                     <p class="mb-1">SKU: <strong id="ncEjecutarProducto">-</strong></p>
                                     <p class="mb-1">Cantidad: <strong id="ncEjecutarCantidad">-</strong> unidades</p>
                                     <p class="mb-1">Tipo: <strong id="ncEjecutarTipoProblema" class="text-danger">-</strong></p>
@@ -339,7 +370,7 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                     <i class="bi bi-pencil me-1"></i> Motivo de la Nota de Crédito <span class="text-danger">*</span>
                                 </label>
                                 <textarea class="form-control" id="ncEjecutarMotivo" rows="3" 
-                                          placeholder="Describe el motivo de la NC (ej: Productos dañados en recepción...)" required></textarea>
+                                          placeholder="Describe el motivo de la NC (ej: Productos dañados en recepción...)" required aria-required="true"></textarea>
                                 <small class="text-muted">Este motivo aparecerá en la NC formal</small>
                             </div>
                             
@@ -350,19 +381,19 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                 </h6>
                                 <table class="table table-sm table-borderless mb-0">
                                     <tr>
-                                        <td><strong>Producto:</strong></td>
+                                        <td class="text-muted reg-label-col">Producto:</td>
                                         <td id="ncEjecutarPreviewProducto">-</td>
                                     </tr>
                                     <tr>
-                                        <td><strong>Cantidad:</strong></td>
+                                        <td class="text-muted">Cantidad:</td>
                                         <td id="ncEjecutarPreviewCantidad">-</td>
                                     </tr>
                                     <tr>
-                                        <td><strong>Precio Unit.:</strong></td>
+                                        <td class="text-muted">Precio Unit.:</td>
                                         <td>$<span id="ncEjecutarPreviewPrecioUnit">0</span></td>
                                     </tr>
                                     <tr>
-                                        <td><strong>Monto Total NC:</strong></td>
+                                        <td class="text-muted"><strong>Monto Total NC:</strong></td>
                                         <td class="text-danger fw-bold">$<span id="ncEjecutarPreviewTotal">0</span></td>
                                     </tr>
                                 </table>
@@ -377,7 +408,7 @@ de incluirlo: productosProblemas (array), tabActual (string).
                 
                 <!-- Panel Enviar Producto de Cambio (Emisor Ejecuta) -->
                 <div id="panelEnviarCambio" class="regularizacion-panel" style="display:none;">
-                    <div class="card bg-primary bg-opacity-10 border-primary">
+                    <div class="card">
                         <div class="card-body">
                             <h6 class="card-title">
                                 <i class="bi bi-box-seam"></i> Enviar Producto de Cambio
@@ -389,7 +420,7 @@ de incluirlo: productosProblemas (array), tabActual (string).
                             
                             <!-- Buscador de productos -->
                             <div class="mb-3">
-                                <label class="form-label">
+                                <label for="buscarProductoEnvioCambio" class="form-label">
                                     <i class="bi bi-search"></i> Buscar Producto en tu Inventario
                                 </label>
                                 <div class="input-group">
@@ -406,8 +437,7 @@ de incluirlo: productosProblemas (array), tabActual (string).
                             </div>
                             
                             <!-- Resultados de búsqueda -->
-                            <div id="resultadosProductosEnvioCambio" class="border rounded p-2 mb-3" 
-                                 style="max-height: 250px; overflow-y: auto; min-height: 100px; background: white;">
+                            <div id="resultadosProductosEnvioCambio" class="border rounded p-2 mb-3 reg-resultados">
                                 <p class="text-muted text-center my-3">
                                     <i class="bi bi-search"></i><br>
                                     Escribe para buscar productos en tu inventario...
@@ -420,10 +450,10 @@ de incluirlo: productosProblemas (array), tabActual (string).
                             
                             <!-- Cantidad a enviar -->
                             <div class="mb-3" id="contenedorCantidadEnvioCambio" style="display:none;">
-                                <label class="form-label">
+                                <label for="cantidadEnvioCambio" class="form-label">
                                     <i class="bi bi-123"></i> Cantidad a Enviar <span class="text-danger">*</span>
                                 </label>
-                                <input type="number" class="form-control" id="cantidadEnvioCambio" 
+                                <input type="number" class="form-control" id="cantidadEnvioCambio" required aria-required="true" 
                                        min="1" value="1" step="1">
                                 <small class="text-muted">Máximo: <span id="stockDisponibleEnvio">0</span> unidades disponibles</small>
                             </div>
@@ -434,7 +464,7 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                     <i class="bi bi-pencil"></i> Motivo del Cambio <span class="text-danger">*</span>
                                 </label>
                                 <textarea class="form-control" id="motivoEnvioCambio" rows="2" 
-                                          placeholder="Ej: Producto de cambio por daños en recepción..." required></textarea>
+                                          placeholder="Ej: Producto de cambio por daños en recepción..." required aria-required="true"></textarea>
                             </div>
                             
                             <!-- Resumen -->
@@ -443,10 +473,10 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                     <i class="bi bi-clipboard-check"></i> Resumen del Envío
                                 </h6>
                                 <p class="mb-1"><strong>Se generará automáticamente:</strong></p>
-                                <ul class="mb-0 small">
-                                    <li>✅ Devolución de stock del producto original</li>
-                                    <li>✅ Nuevo DTE (Guía/Factura según original) con el producto de cambio</li>
-                                    <li>✅ Descuento de stock de tu sucursal</li>
+                                <ul class="list-unstyled mb-0 small">
+                                    <li><i class="bi bi-check-circle text-success me-1"></i>Devolución de stock del producto original</li>
+                                    <li><i class="bi bi-check-circle text-success me-1"></i>Nuevo DTE (Guía/Factura según original) con el producto de cambio</li>
+                                    <li><i class="bi bi-check-circle text-success me-1"></i>Descuento de stock de tu sucursal</li>
                                     <li class="text-muted"><small><i class="bi bi-info-circle"></i> NC solo si el documento original es FACTURA</small></li>
                                 </ul>
                             </div>
@@ -458,13 +488,13 @@ de incluirlo: productosProblemas (array), tabActual (string).
                 
                 <!-- Panel Ajuste Interno (Solo para Guías) -->
                 <div id="panelAjusteInterno" class="regularizacion-panel" style="display:none;">
-                    <div class="card bg-info bg-opacity-10 border-info">
+                    <div class="card">
                         <div class="card-body">
                             <h6 class="card-title">
-                                <i class="ri-arrow-go-back-line"></i> Ajuste Interno - Devolución de Stock
+                                <i class="bi bi-arrow-return-left"></i> Ajuste Interno - Devolución de Stock
                             </h6>
                             <div class="alert alert-info mb-3">
-                                <i class="ri-information-line me-2"></i>
+                                <i class="bi bi-info-circle me-2"></i>
                                 <strong>Solo devuelve el stock al emisor.</strong><br>
                                 No se genera Nota de Crédito (las guías no tienen valor monetario).
                             </div>
@@ -474,12 +504,12 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                 <div class="card-body py-2">
                                     <div class="row">
                                         <div class="col-md-6">
-                                            <label class="small text-muted">Producto:</label>
+                                            <div class="small text-muted">Producto:</div>
                                             <p class="mb-0"><strong id="ajusteInternoProducto">-</strong></p>
                                             <small class="text-muted">SKU: <span id="ajusteInternoSKU">-</span></small>
                                         </div>
                                         <div class="col-md-6">
-                                            <label class="small text-muted">Cantidad con Problema:</label>
+                                            <div class="small text-muted">Cantidad con Problema:</div>
                                             <p class="mb-0"><strong class="text-danger" id="ajusteInternoCantidad">0</strong> unidades</p>
                                             <small class="text-muted">Tipo: <span id="ajusteInternoTipo">-</span></small>
                                         </div>
@@ -489,10 +519,10 @@ de incluirlo: productosProblemas (array), tabActual (string).
                             
                             <!-- Cantidad a devolver -->
                             <div class="mb-3">
-                                <label class="form-label">
-                                    <i class="ri-arrow-left-line"></i> Cantidad a Devolver al Stock <span class="text-danger">*</span>
+                                <label for="cantidadAjusteInterno" class="form-label">
+                                    <i class="bi bi-arrow-left"></i> Cantidad a Devolver al Stock <span class="text-danger">*</span>
                                 </label>
-                                <input type="number" class="form-control" id="cantidadAjusteInterno" 
+                                <input type="number" class="form-control" id="cantidadAjusteInterno" required aria-required="true" 
                                        min="1" value="1" step="1">
                                 <small class="text-muted">Máximo: <span id="maxCantidadAjuste">0</span> unidades</small>
                             </div>
@@ -500,21 +530,21 @@ de incluirlo: productosProblemas (array), tabActual (string).
                             <!-- Observaciones -->
                             <div class="mb-3">
                                 <label for="observacionesAjusteInterno" class="form-label">
-                                    <i class="ri-message-2-line"></i> Observaciones <span class="text-danger">*</span>
+                                    <i class="bi bi-chat-left-text"></i> Observaciones <span class="text-danger">*</span>
                                 </label>
                                 <textarea class="form-control" id="observacionesAjusteInterno" rows="2" 
-                                          placeholder="Describe el motivo del ajuste (ej: Productos no llegaron, productos dañados...)" required></textarea>
+                                          placeholder="Describe el motivo del ajuste (ej: Productos no llegaron, productos dañados...)" required aria-required="true"></textarea>
                             </div>
                             
                             <!-- Preview del ajuste -->
                             <div class="alert alert-light border">
                                 <h6 class="alert-heading">
-                                    <i class="ri-eye-line"></i> Vista Previa del Ajuste
+                                    <i class="bi bi-eye"></i> Vista Previa del Ajuste
                                 </h6>
-                                <ul class="mb-0 small">
-                                    <li>✅ Se devolverán <strong><span id="previewCantidadAjuste">0</span></strong> unidades al stock del emisor</li>
-                                    <li>✅ El estado del producto se marcará como "Regularizado"</li>
-                                    <li>ℹ️ No se genera Nota de Crédito (guías sin valor monetario)</li>
+                                <ul class="list-unstyled mb-0 small">
+                                    <li><i class="bi bi-check-circle text-success me-1"></i>Se devolverán <strong><span id="previewCantidadAjuste">0</span></strong> unidades al stock del emisor</li>
+                                    <li><i class="bi bi-check-circle text-success me-1"></i>El estado del producto se marcará como "Regularizado"</li>
+                                    <li><i class="bi bi-info-circle text-muted me-1"></i>No se genera Nota de Crédito (guías sin valor monetario)</li>
                                 </ul>
                             </div>
                         </div>
@@ -523,13 +553,13 @@ de incluirlo: productosProblemas (array), tabActual (string).
                 
                 <!-- Panel Mercadería Encontrada -->
                 <div id="panelMercaderiaEncontrada" class="regularizacion-panel" style="display:none;">
-                    <div class="card bg-success bg-opacity-10 border-success">
+                    <div class="card">
                         <div class="card-body">
                             <h6 class="card-title">
-                                <i class="ri-checkbox-circle-line"></i> Mercadería Encontrada
+                                <i class="bi bi-check-circle"></i> Mercadería Encontrada
                             </h6>
                             <div class="alert alert-success mb-3">
-                                <i class="ri-information-line me-2"></i>
+                                <i class="bi bi-info-circle me-2"></i>
                                 <strong>Se encontró la mercadería faltante.</strong><br>
                                 El stock se ingresará a la bodega destino automáticamente.
                             </div>
@@ -538,12 +568,12 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                 <div class="card-body py-2">
                                     <div class="row">
                                         <div class="col-md-6">
-                                            <label class="small text-muted">Producto:</label>
+                                            <div class="small text-muted">Producto:</div>
                                             <p class="mb-0"><strong id="mercaderiaProducto">-</strong></p>
                                             <small class="text-muted">SKU: <span id="mercaderiaSKU">-</span></small>
                                         </div>
                                         <div class="col-md-6">
-                                            <label class="small text-muted">Cantidad Faltante:</label>
+                                            <div class="small text-muted">Cantidad Faltante:</div>
                                             <p class="mb-0"><strong class="text-danger" id="mercaderiaFaltante">0</strong> unidades</p>
                                         </div>
                                     </div>
@@ -551,17 +581,17 @@ de incluirlo: productosProblemas (array), tabActual (string).
                             </div>
                             
                             <div class="mb-3">
-                                <label class="form-label">
-                                    <i class="ri-add-circle-line"></i> Cantidad Encontrada <span class="text-danger">*</span>
+                                <label for="cantidadMercaderiaEncontrada" class="form-label">
+                                    <i class="bi bi-plus-circle"></i> Cantidad Encontrada <span class="text-danger">*</span>
                                 </label>
-                                <input type="number" class="form-control" id="cantidadMercaderiaEncontrada" 
+                                <input type="number" class="form-control" id="cantidadMercaderiaEncontrada" required aria-required="true" 
                                        min="1" value="1" step="1">
                                 <small class="text-muted">Máximo: <span id="maxMercaderiaEncontrada">0</span> unidades</small>
                             </div>
                             
                             <div class="alert alert-light border">
                                 <h6 class="alert-heading">
-                                    <i class="ri-eye-line"></i> Vista Previa
+                                    <i class="bi bi-eye"></i> Vista Previa
                                 </h6>
                                 <ul class="mb-0 small">
                                     <li>Se ingresarán <strong><span id="previewMercaderiaEncontrada">0</span></strong> unidades al inventario</li>
@@ -575,13 +605,13 @@ de incluirlo: productosProblemas (array), tabActual (string).
                 
                 <!-- Panel Regularizar con NC (con decisión) -->
                 <div id="panelRegularizarConNC" class="regularizacion-panel" style="display:none;">
-                    <div class="card bg-warning bg-opacity-10 border-warning">
+                    <div class="card">
                         <div class="card-body">
                             <h6 class="card-title">
-                                <i class="ri-file-text-line"></i> Regularizar con/sin Nota de Crédito
+                                <i class="bi bi-file-earmark-text"></i> Regularizar con/sin Nota de Crédito
                             </h6>
                             <div class="alert alert-warning mb-3">
-                                <i class="ri-information-line me-2"></i>
+                                <i class="bi bi-info-circle me-2"></i>
                                 <strong>Decide si generar NC o solo devolver el stock.</strong><br>
                                 El stock se devolverá a la bodega de origen.
                             </div>
@@ -590,15 +620,15 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                 <div class="card-body py-2">
                                     <div class="row">
                                         <div class="col-md-4">
-                                            <label class="small text-muted">Producto:</label>
+                                            <div class="small text-muted">Producto:</div>
                                             <p class="mb-0"><strong id="ncDecisionProducto">-</strong></p>
                                         </div>
                                         <div class="col-md-4">
-                                            <label class="small text-muted">Cant. a Regularizar:</label>
+                                            <div class="small text-muted">Cant. a Regularizar:</div>
                                             <p class="mb-0"><strong class="text-danger" id="ncDecisionCantidad">0</strong> unidades</p>
                                         </div>
                                         <div class="col-md-4">
-                                            <label class="small text-muted">Precio Unit.:</label>
+                                            <div class="small text-muted">Precio Unit.:</div>
                                             <p class="mb-0">$<span id="ncDecisionPrecio">0</span></p>
                                         </div>
                                     </div>
@@ -606,16 +636,16 @@ de incluirlo: productosProblemas (array), tabActual (string).
                             </div>
                             
                             <div class="mb-3">
-                                <label class="form-label fw-bold">¿Generar Nota de Crédito?</label>
+                                <div class="form-label fw-bold">¿Generar Nota de Crédito?</div>
                                 <div class="d-grid gap-2">
-                                    <label class="btn btn-outline-success text-start p-3" style="border-radius: var(--nexo-radius-md);">
+                                    <label class="btn btn-outline-warning text-start p-3" style="border-radius: var(--nexo-radius-md);">
                                         <input type="radio" name="decisionNC" value="true" class="me-2" checked>
-                                        <i class="ri-file-text-line me-1"></i> <strong>Sí, generar NC y devolver stock</strong>
+                                        <i class="bi bi-file-earmark-text me-1"></i> <strong>Sí, generar NC y devolver stock</strong>
                                         <br><small class="text-muted ms-4">Se emite NC formal + stock vuelve a bodega principal</small>
                                     </label>
-                                    <label class="btn btn-outline-warning text-start p-3" style="border-radius: var(--nexo-radius-md);">
+                                    <label class="btn btn-outline-secondary text-start p-3" style="border-radius: var(--nexo-radius-md);">
                                         <input type="radio" name="decisionNC" value="false" class="me-2">
-                                        <i class="ri-arrow-go-back-line me-1"></i> <strong>No, solo devolver stock (sin NC)</strong>
+                                        <i class="bi bi-arrow-return-left me-1"></i> <strong>No, solo devolver stock (sin NC)</strong>
                                         <br><small class="text-muted ms-4">Solo se devuelve el stock a bodega principal, sin documento</small>
                                     </label>
                                 </div>
@@ -625,12 +655,12 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                 <label for="motivoNCDecision" class="form-label">
                                     Motivo <span class="text-danger">*</span>
                                 </label>
-                                <textarea class="form-control" id="motivoNCDecision" rows="2" 
+                                <textarea class="form-control" id="motivoNCDecision" required aria-required="true" rows="2" 
                                           placeholder="Describe el motivo de la regularización..."></textarea>
                             </div>
                             
-                            <div class="alert alert-info border" id="previewNCDecision">
-                                <h6 class="alert-heading"><i class="ri-eye-line"></i> Resumen</h6>
+                            <div class="alert alert-light border" id="previewNCDecision">
+                                <h6 class="alert-heading"><i class="bi bi-eye"></i> Resumen</h6>
                                 <ul class="mb-0 small">
                                     <li>Stock devuelto: <strong><span id="previewNCDecisionCantidad">0</span></strong> unidades a bodega origen</li>
                                     <li>Monto NC: <strong>$<span id="previewNCDecisionMonto">0</span></strong></li>
@@ -642,13 +672,13 @@ de incluirlo: productosProblemas (array), tabActual (string).
                 
                 <!-- Panel Cambio de Producto (Solo para Guías) -->
                 <div id="panelCambioProductoGuia" class="regularizacion-panel" style="display:none;">
-                    <div class="card bg-primary bg-opacity-10 border-primary">
+                    <div class="card">
                         <div class="card-body">
                             <h6 class="card-title">
-                                <i class="ri-exchange-line"></i> Cambio de Producto
+                                <i class="bi bi-arrow-left-right"></i> Cambio de Producto
                             </h6>
                             <div class="alert alert-primary mb-3">
-                                <i class="ri-information-line me-2"></i>
+                                <i class="bi bi-info-circle me-2"></i>
                                 <strong>Envía un producto de reemplazo.</strong><br>
                                 Se generará una nueva Guía de Despacho con el producto correcto.
                             </div>
@@ -656,17 +686,17 @@ de incluirlo: productosProblemas (array), tabActual (string).
                             <!-- Producto original con problema -->
                             <div class="card mb-3 border-danger">
                                 <div class="card-header bg-danger bg-opacity-10">
-                                    <h6 class="mb-0"><i class="ri-close-circle-line"></i> Producto con Problema</h6>
+                                    <h6 class="mb-0"><i class="bi bi-x-circle"></i> Producto con Problema</h6>
                                 </div>
                                 <div class="card-body py-2">
                                     <div class="row">
                                         <div class="col-md-6">
-                                            <label class="small text-muted">Producto:</label>
+                                            <div class="small text-muted">Producto:</div>
                                             <p class="mb-0"><strong id="cambioGuiaProductoOriginal">-</strong></p>
                                             <small class="text-muted">SKU: <span id="cambioGuiaSKUOriginal">-</span></small>
                                         </div>
                                         <div class="col-md-6">
-                                            <label class="small text-muted">Cantidad Problema:</label>
+                                            <div class="small text-muted">Cantidad Problema:</div>
                                             <p class="mb-0"><strong class="text-danger" id="cambioGuiaCantidadProblema">0</strong> unidades</p>
                                             <small class="text-muted">Tipo: <span id="cambioGuiaTipoProblema">-</span></small>
                                         </div>
@@ -676,27 +706,26 @@ de incluirlo: productosProblemas (array), tabActual (string).
                             
                             <!-- Buscador de productos de reemplazo -->
                             <div class="mb-3">
-                                <label class="form-label">
-                                    <i class="ri-search-line"></i> Buscar Producto de Reemplazo
+                                <label for="buscarProductoCambioGuia" class="form-label">
+                                    <i class="bi bi-search"></i> Buscar Producto de Reemplazo
                                 </label>
                                 <div class="input-group">
                                     <input type="text" class="form-control" id="buscarProductoCambioGuia" 
                                            placeholder="SKU, nombre del producto..."
                                            onkeyup="if(event.key === 'Enter') buscarProductosParaCambioGuia()">
                                     <button class="btn btn-primary" type="button" onclick="buscarProductosParaCambioGuia()">
-                                        <i class="ri-search-line"></i> Buscar
+                                        <i class="bi bi-search"></i> Buscar
                                     </button>
                                 </div>
                                 <small class="text-muted">
-                                    <i class="ri-lightbulb-line"></i> Solo se mostrarán productos con stock disponible
+                                    <i class="bi bi-lightbulb"></i> Solo se mostrarán productos con stock disponible
                                 </small>
                             </div>
                             
                             <!-- Resultados de búsqueda -->
-                            <div id="resultadosProductosCambioGuia" class="border rounded p-2 mb-3" 
-                                 style="max-height: 250px; overflow-y: auto; min-height: 100px; background: white;">
+                            <div id="resultadosProductosCambioGuia" class="border rounded p-2 mb-3 reg-resultados">
                                 <p class="text-muted text-center my-3">
-                                    <i class="ri-search-line"></i><br>
+                                    <i class="bi bi-search"></i><br>
                                     Escribe para buscar productos en tu inventario...
                                 </p>
                             </div>
@@ -707,10 +736,10 @@ de incluirlo: productosProblemas (array), tabActual (string).
                             
                             <!-- Cantidad a enviar -->
                             <div class="mb-3" id="contenedorCantidadCambioGuia" style="display:none;">
-                                <label class="form-label">
-                                    <i class="ri-inbox-line"></i> Cantidad a Enviar <span class="text-danger">*</span>
+                                <label for="cantidadCambioGuia" class="form-label">
+                                    <i class="bi bi-123"></i> Cantidad a Enviar <span class="text-danger">*</span>
                                 </label>
-                                <input type="number" class="form-control" id="cantidadCambioGuia" 
+                                <input type="number" class="form-control" id="cantidadCambioGuia" required aria-required="true" 
                                        min="1" value="1" step="1">
                                 <small class="text-muted">Máximo: <span id="stockDisponibleCambioGuia">0</span> unidades disponibles</small>
                             </div>
@@ -718,22 +747,22 @@ de incluirlo: productosProblemas (array), tabActual (string).
                             <!-- Observaciones -->
                             <div class="mb-3">
                                 <label for="observacionesCambioGuia" class="form-label">
-                                    <i class="ri-message-2-line"></i> Observaciones del Cambio <span class="text-danger">*</span>
+                                    <i class="bi bi-chat-left-text"></i> Observaciones del Cambio <span class="text-danger">*</span>
                                 </label>
                                 <textarea class="form-control" id="observacionesCambioGuia" rows="2" 
-                                          placeholder="Ej: Producto de cambio por daños en recepción..." required></textarea>
+                                          placeholder="Ej: Producto de cambio por daños en recepción..." required aria-required="true"></textarea>
                             </div>
                             
                             <!-- Preview del cambio -->
                             <div class="alert alert-light border" id="previewCambioGuia" style="display:none;">
                                 <h6 class="alert-heading">
-                                    <i class="ri-eye-line"></i> Vista Previa del Cambio
+                                    <i class="bi bi-eye"></i> Vista Previa del Cambio
                                 </h6>
-                                <ul class="mb-0 small">
-                                    <li>✅ Se generará nueva Guía de Despacho con el producto de reemplazo</li>
-                                    <li>✅ Se descontará <strong><span id="previewCantidadCambioGuia">0</span></strong> unidades de tu stock</li>
-                                    <li>✅ El producto original se marcará como "Regularizado"</li>
-                                    <li>ℹ️ La nueva guía no tiene valor monetario</li>
+                                <ul class="list-unstyled mb-0 small">
+                                    <li><i class="bi bi-check-circle text-success me-1"></i>Se generará nueva Guía de Despacho con el producto de reemplazo</li>
+                                    <li><i class="bi bi-check-circle text-success me-1"></i>Se descontará <strong><span id="previewCantidadCambioGuia">0</span></strong> unidades de tu stock</li>
+                                    <li><i class="bi bi-check-circle text-success me-1"></i>El producto original se marcará como "Regularizado"</li>
+                                    <li><i class="bi bi-info-circle text-muted me-1"></i>La nueva guía no tiene valor monetario</li>
                                 </ul>
                             </div>
                         </div>
@@ -766,11 +795,11 @@ de incluirlo: productosProblemas (array), tabActual (string).
                             
                             <div class="row">
                                 <div class="col-md-12">
-                                    <label class="form-label">
+                                    <label for="ajustarCantidad" class="form-label">
                                         <i class="bi bi-plus-circle me-1"></i>
                                         ¿Cuántas unidades más encontraste? <span class="text-danger">*</span>
                                     </label>
-                                    <input type="number" class="form-control" id="ajustarCantidad" 
+                                    <input type="number" class="form-control" id="ajustarCantidad" required aria-required="true" 
                                            min="1" max="0" value="1" step="1">
                                     <small class="text-muted">
                                         Mínimo: 1 | Máximo: <strong id="maxAjuste">0</strong> unidades (lo que faltaba)
@@ -783,7 +812,7 @@ de incluirlo: productosProblemas (array), tabActual (string).
                             </div>
                             
                             <div class="mt-3">
-                                <div class="alert alert-success" id="resumenAjuste">
+                                <div class="alert alert-light border" id="resumenAjuste">
                                     <small>
                                         <strong>Nueva cantidad total:</strong> 
                                         <span id="nuevaCantidadTotal">0</span> de <span id="cantidadEsperadaTotal">0</span>
@@ -802,11 +831,11 @@ de incluirlo: productosProblemas (array), tabActual (string).
                         <div class="card bg-light">
                             <div class="card-body">
                                 <h6 class="card-title">
-                                    <i class="bi bi-swap"></i> Cambiar por otro Producto
+                                    <i class="bi bi-arrow-left-right"></i> Cambiar por otro Producto
                                 </h6>
                                 <p class="small text-muted">El proveedor envió un producto diferente. El stock se actualizará inmediatamente.</p>
                                 <div class="mb-3">
-                                    <label class="form-label">Buscar Producto por SKU o Nombre</label>
+                                    <label for="buscarNuevoProducto" class="form-label">Buscar Producto por SKU o Nombre</label>
                                     <div class="input-group">
                                         <input type="text" class="form-control" id="buscarNuevoProducto" 
                                                placeholder="Ej: NIKE, ZAP-42..." 
@@ -817,7 +846,7 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                     </div>
                                     <small class="text-muted">Escribe al menos 2 caracteres y presiona Enter o click en Buscar</small>
                                 </div>
-                                <div id="resultadosProductos" class="border rounded p-2" style="max-height: 250px; overflow-y: auto; min-height: 100px; background: white;">
+                                <div id="resultadosProductos" class="border rounded p-2 reg-resultados">
                                     <p class="text-muted text-center my-3">
                                         <i class="bi bi-search"></i><br>
                                         Escribe para buscar productos...
@@ -832,7 +861,7 @@ de incluirlo: productosProblemas (array), tabActual (string).
                     
                     <!-- Opción B: Solicitar Cambio (Entre Empresas) -->
                     <div id="opcionSolicitarCambio" style="display:none;">
-                        <div class="card bg-warning bg-opacity-10 border-warning">
+                        <div class="card">
                             <div class="card-body">
                                 <h6 class="card-title">
                                     <i class="bi bi-envelope-paper"></i> Solicitar Cambio de Producto
@@ -855,7 +884,7 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                 
                                 <!-- Búsqueda de producto en inventario del EMISOR -->
                                 <div class="mb-3">
-                                    <label class="form-label">
+                                    <label for="buscarProductoSolicitud" class="form-label">
                                         <i class="bi bi-search"></i> Buscar Producto Disponible en Emisor
                                     </label>
                                     <div class="input-group">
@@ -873,8 +902,7 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                 </div>
                                 
                                 <!-- Resultados de búsqueda -->
-                                <div id="resultadosProductosEmisor" class="border rounded p-2 mb-3" 
-                                     style="max-height: 250px; overflow-y: auto; min-height: 100px; background: white;">
+                                <div id="resultadosProductosEmisor" class="border rounded p-2 mb-3 reg-resultados">
                                     <p class="text-muted text-center my-3">
                                         <i class="bi bi-search"></i><br>
                                         Escribe para buscar productos en el inventario del emisor...
@@ -887,11 +915,11 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                 
                                 <!-- Cantidad a solicitar -->
                                 <div class="mb-3" id="contenedorCantidadSolicitud" style="display:none;">
-                                    <label class="form-label">
+                                    <label for="cantidadSolicitud" class="form-label">
                                         <i class="bi bi-123 me-1"></i>
                                         ¿Cuántas unidades solicitas? <span class="text-danger">*</span>
                                     </label>
-                                    <input type="number" class="form-control" id="cantidadSolicitud" 
+                                    <input type="number" class="form-control" id="cantidadSolicitud" required aria-required="true" 
                                            min="1" max="0" value="1" step="1">
                                     <small class="text-muted">
                                         Mínimo: 1 | Máximo: <strong id="maxCantidadSolicitud">0</strong> unidades (problema detectado: <span id="cantidadProblema">0</span>)
@@ -904,77 +932,73 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                 
                                 <!-- Justificación OBLIGATORIA -->
                                 <div class="mb-3">
-                                    <label class="form-label">
+                                    <label for="justificacionSolicitud" class="form-label">
                                         <i class="bi bi-chat-left-text me-1"></i>
                                         Justificación de la solicitud <span class="text-danger">*</span>
                                     </label>
-                                    <textarea class="form-control" id="justificacionSolicitud" rows="3"
+                                    <textarea class="form-control" id="justificacionSolicitud" required aria-required="true" rows="3"
                                               placeholder="Ej: El producto original llegó dañado. Prefiero este modelo porque tenemos más demanda en la temporada..."></textarea>
                                     <small class="text-muted">Explica por qué solicitas este cambio (obligatorio)</small>
                                 </div>
                                 
                                 <!-- Preview de Documentos que se Generarán -->
                                 <div id="previewDocumentos" style="display:none;">
-                                    <div class="card border-success bg-success bg-opacity-10 mb-2">
-                                        <div class="card-body py-2">
-                                            <h6 class="card-title text-success mb-2">
-                                                <i class="bi bi-file-earmark-minus me-1"></i>
-                                                1️⃣ Nota de Crédito (por producto original)
-                                            </h6>
-                                            <table class="table table-sm table-borderless mb-0">
-                                                <tr>
-                                                    <td class="text-muted" style="width: 120px;">Producto:</td>
-                                                    <td><small id="previewNCProducto">-</small></td>
-                                                </tr>
-                                                <tr>
-                                                    <td class="text-muted">Cantidad:</td>
-                                                    <td><strong id="previewNCCantidad">-</strong> unidades</td>
-                                                </tr>
-                                                <tr>
-                                                    <td class="text-muted">Precio Unit.:</td>
-                                                    <td>$<span id="previewNCPrecio">0</span></td>
-                                                </tr>
-                                                <tr class="border-top">
-                                                    <td class="text-muted"><strong>Monto NC:</strong></td>
-                                                    <td><strong class="text-danger">$<span id="previewNCMonto">0</span></strong></td>
-                                                </tr>
-                                            </table>
-                                        </div>
+                                    <div class="alert alert-light border mb-2">
+                                        <h6 class="alert-heading">
+                                            <i class="bi bi-file-earmark-minus me-1"></i>
+                                            <span class="badge rounded-pill bg-secondary me-1">1</span>Nota de Crédito (por producto original)
+                                        </h6>
+                                        <table class="table table-sm table-borderless mb-0">
+                                            <tr>
+                                                <td class="text-muted reg-label-col">Producto:</td>
+                                                <td><small id="previewNCProducto">-</small></td>
+                                            </tr>
+                                            <tr>
+                                                <td class="text-muted">Cantidad:</td>
+                                                <td><strong id="previewNCCantidad">-</strong> unidades</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="text-muted">Precio Unit.:</td>
+                                                <td>$<span id="previewNCPrecio">0</span></td>
+                                            </tr>
+                                            <tr class="border-top">
+                                                <td class="text-muted"><strong>Monto NC:</strong></td>
+                                                <td><strong class="text-danger">$<span id="previewNCMonto">0</span></strong></td>
+                                            </tr>
+                                        </table>
                                     </div>
                                     
-                                    <div class="card border-primary bg-primary bg-opacity-10">
-                                        <div class="card-body py-2">
-                                            <h6 class="card-title text-primary mb-2">
-                                                <i class="bi bi-file-earmark-plus me-1"></i>
-                                                2️⃣ Nuevo DTE (con producto de cambio)
-                                            </h6>
-                                            <table class="table table-sm table-borderless mb-0">
-                                                <tr>
-                                                    <td class="text-muted" style="width: 120px;">Tipo:</td>
-                                                    <td><span class="badge bg-info">GUIA DE DESPACHO</span></td>
-                                                </tr>
-                                                <tr>
-                                                    <td class="text-muted">Destino:</td>
-                                                    <td><strong id="previewDTEDestino">-</strong></td>
-                                                </tr>
-                                                <tr>
-                                                    <td class="text-muted">Producto:</td>
-                                                    <td><small id="previewDTEProducto">-</small></td>
-                                                </tr>
-                                                <tr>
-                                                    <td class="text-muted">Cantidad:</td>
-                                                    <td><strong id="previewDTECantidad">-</strong> unidades</td>
-                                                </tr>
-                                                <tr>
-                                                    <td class="text-muted">Precio Unit.:</td>
-                                                    <td>$<span id="previewDTEPrecio">0</span></td>
-                                                </tr>
-                                                <tr class="border-top">
-                                                    <td class="text-muted"><strong>Monto Total:</strong></td>
-                                                    <td><strong class="text-success">$<span id="previewDTEMonto">0</span></strong></td>
-                                                </tr>
-                                            </table>
-                                        </div>
+                                    <div class="alert alert-light border mb-0">
+                                        <h6 class="alert-heading">
+                                            <i class="bi bi-file-earmark-plus me-1"></i>
+                                            <span class="badge rounded-pill bg-secondary me-1">2</span>Nuevo DTE (con producto de cambio)
+                                        </h6>
+                                        <table class="table table-sm table-borderless mb-0">
+                                            <tr>
+                                                <td class="text-muted reg-label-col">Tipo:</td>
+                                                <td><span class="badge bg-info">GUIA DE DESPACHO</span></td>
+                                            </tr>
+                                            <tr>
+                                                <td class="text-muted">Destino:</td>
+                                                <td><strong id="previewDTEDestino">-</strong></td>
+                                            </tr>
+                                            <tr>
+                                                <td class="text-muted">Producto:</td>
+                                                <td><small id="previewDTEProducto">-</small></td>
+                                            </tr>
+                                            <tr>
+                                                <td class="text-muted">Cantidad:</td>
+                                                <td><strong id="previewDTECantidad">-</strong> unidades</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="text-muted">Precio Unit.:</td>
+                                                <td>$<span id="previewDTEPrecio">0</span></td>
+                                            </tr>
+                                            <tr class="border-top">
+                                                <td class="text-muted"><strong>Monto Total:</strong></td>
+                                                <td><strong class="text-success">$<span id="previewDTEMonto">0</span></strong></td>
+                                            </tr>
+                                        </table>
                                     </div>
                                     <div class="alert alert-light mb-0 mt-2">
                                         <small class="text-muted">
@@ -990,17 +1014,17 @@ de incluirlo: productosProblemas (array), tabActual (string).
 
                 <!-- Observaciones -->
                 <div class="mt-3">
-                    <label class="form-label">Observaciones</label>
+                    <label for="regObservaciones" class="form-label">Observaciones</label>
                     <textarea class="form-control" id="regObservaciones" rows="3"
                               placeholder="Detalles de la regularización..."></textarea>
                 </div>
             </div>
-            <div class="modal-footer bg-light">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <i class="ri-close-line"></i> Cancelar
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancelar
                 </button>
                 <button type="button" class="btn btn-success" onclick="guardarRegularizacion()">
-                    <i class="ri-check-line"></i> Guardar Regularización
+                    <i class="bi bi-check-circle"></i> Guardar Regularización
                 </button>
             </div>
         </div>
@@ -1060,7 +1084,7 @@ function abrirModalRegularizarDTE(key) {
                 <p>Las guías no tienen valor monetario. Regulariza cada producto individualmente con <strong>Ajuste Interno</strong> o <strong>Cambio</strong>.</p>
             </div>`,
             icon: 'error',
-            width: '600px',
+            width: '640px',
         });
         return;
     }
@@ -1083,13 +1107,13 @@ function abrirModalRegularizarDTE(key) {
             <tr data-producto-id="${prod.id}">
                 <td><strong>${prod.producto_nombre || '-'}</strong></td>
                 <td><code>${prod.sku || '-'}</code></td>
-                <td class="text-center"><span class="badge bg-info">${prod.talla || '-'}</span></td>
+                <td class="text-center"><span class="badge bg-light text-dark border">${prod.talla || '-'}</span></td>
                 <td class="text-center">${prod.cantidad_esperada || 0}</td>
                 <td class="text-center text-success">${prod.cantidad_recibida || 0}</td>
                 <td class="text-center text-danger">${prod.cantidad_faltante || 0}</td>
                 <td class="text-center text-warning">${prod.cantidad_danada || 0}</td>
                 <td class="text-center"><strong class="text-primary">${cantAcred}</strong></td>
-                <td class="text-end"><small class="text-muted">$${precio.toLocaleString('es-CL')}</small></td>
+                <td class="text-end text-muted">$${precio.toLocaleString('es-CL')}</td>
                 <td class="text-end"><strong class="text-success">$${Math.round(subtotal).toLocaleString('es-CL')}</strong></td>
             </tr>`;
     }).join('');
@@ -1137,7 +1161,8 @@ function procesarRegularizacionDTE(dteNumero, productosDTE, dteId) {
         showCancelButton: true,
         confirmButtonText: 'Sí, generar NC',
         cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#28a745',
+        customClass: { confirmButton: 'btn btn-success', cancelButton: 'btn btn-secondary' },
+        buttonsStyling: false,
     }).then(result => {
         if (!result.isConfirmed) return;
 
@@ -1174,7 +1199,7 @@ function procesarRegularizacionDTE(dteNumero, productosDTE, dteId) {
                             Stock devuelto a bodega origen
                         </div>${txtBtn}
                     </div>`,
-                    width: '650px',
+                    width: '640px',
                 });
                 bootstrap.Modal.getInstance(document.getElementById('modalRegularizarDTE'))?.hide();
                 if (typeof window.cargarProductosProblemas === 'function') window.cargarProductosProblemas();
@@ -1223,8 +1248,8 @@ function abrirModalRegularizar(productoId) {
         const fmtCLP = (n) => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL');
         const obs = (p.observaciones || '').trim();
         const obsHtml = obs
-            ? `<details class="mt-2"><summary class="text-muted small" style="cursor:pointer;">Historial de observaciones</summary>
-                  <pre class="bg-light border rounded p-2 mt-1 small mb-0" style="white-space:pre-wrap; font-size:0.75rem; max-height:160px; overflow-y:auto;">${obs.replace(/</g,'&lt;')}</pre>
+            ? `<details class="mt-2"><summary class="text-muted small reg-clickable">Historial de observaciones</summary>
+                  <pre class="bg-light border rounded p-2 mt-1 small mb-0 reg-historial-obs">${obs.replace(/</g,'&lt;')}</pre>
                </details>`
             : '';
 
@@ -1302,7 +1327,7 @@ function abrirModalRegularizar(productoId) {
             confirmButtonText: 'Entendido',
             cancelButtonText: '<i class="bi bi-eye me-1"></i>Ver DTE',
             reverseButtons: true,
-            width: '620px',
+            width: '640px',
         }).then(result => {
             // El botón "Ver DTE" devuelve isDismissed=true con cancel reason
             if (result.dismiss === Swal.DismissReason.cancel && p.dte_id) {
@@ -1358,16 +1383,16 @@ function abrirModalRegularizar(productoId) {
         // SOY EL RECEPTOR - Entre empresas diferentes - CREAR SOLICITUDES
         alertTipo.className = 'alert alert-warning mb-3';
         iconoTipo.className = 'bi bi-building-fill-exclamation fs-3 me-3 text-warning';
-        tituloTipo.textContent = '🏢 Traspaso Entre Empresas';
+        tituloTipo.textContent = 'Traspaso Entre Empresas';
         descripcionTipo.innerHTML = `
             <strong>Emisor:</strong> ${productoSeleccionado.emisor || 'N/A'} (${productoSeleccionado.sucursal_origen || 'N/A'})<br>
-            <div class="alert alert-info mt-2 mb-0">
+            <span class="d-block mt-2 pt-2 border-top">
                 <i class="bi bi-info-circle me-2"></i>
                 <strong>Debes solicitar una solución al emisor.</strong><br>
                 <small class="text-muted">
                     El emisor revisará tu solicitud, la aprobará y ejecutará la solución (emitir NC o enviar producto de cambio).
                 </small>
-            </div>
+            </span>
         `;
         
         // Opciones para CREAR solicitudes
@@ -1379,29 +1404,29 @@ function abrirModalRegularizar(productoId) {
             
             <input type="radio" class="btn-check" name="tipoRegularizacion" id="regCambiarProducto" value="CAMBIAR_PRODUCTO">
             <label class="btn btn-outline-primary" for="regCambiarProducto">
-                <i class="ri-swap-line"></i> Solicitar Cambio de Producto
+                <i class="bi bi-arrow-left-right"></i> Solicitar Cambio de Producto
             </label>
         `;
     } else if (productoSeleccionado.requiere_nc && productoSeleccionado.soy_emisor) {
         // SOY EL EMISOR - Debo EJECUTAR la solución directamente
         alertTipo.className = 'alert alert-success mb-3';
         iconoTipo.className = 'bi bi-check-circle-fill fs-3 me-3 text-success';
-        tituloTipo.textContent = '✅ Resolver Problema (Eres el Emisor)';
+        tituloTipo.textContent = 'Resolver Problema (Eres el Emisor)';
         descripcionTipo.innerHTML = `
             <strong>Tú enviaste este DTE y fue recepcionado con problemas.</strong><br>
-            <div class="alert alert-warning mt-2 mb-0">
+            <span class="d-block mt-2 pt-2 border-top">
                 <i class="bi bi-exclamation-triangle me-2"></i>
                 <strong>Debes dar solución al problema.</strong><br>
                 <small class="text-muted">
                     Emite una Nota de Crédito o envía un producto de cambio para resolver la incidencia.
                 </small>
-            </div>
+            </span>
         `;
         
         // Opciones para EJECUTAR solución (el emisor la ejecuta directamente)
         botonesContainer.innerHTML = `
             <input type="radio" class="btn-check" name="tipoRegularizacion" id="regEmitirNC" value="EMITIR_NC" checked>
-            <label class="btn btn-outline-success" for="regEmitirNC">
+            <label class="btn btn-outline-warning" for="regEmitirNC">
                 <i class="bi bi-file-earmark-text"></i> Emitir Nota de Crédito
             </label>
             
@@ -1413,28 +1438,28 @@ function abrirModalRegularizar(productoId) {
     } else {
         alertTipo.className = 'alert alert-success mb-3';
         iconoTipo.className = 'bi bi-pencil-fill fs-3 me-3 text-success';
-        tituloTipo.textContent = '✏️ Traspaso Interno';
+        tituloTipo.textContent = 'Traspaso Interno';
         descripcionTipo.textContent = 'Misma empresa. Puedes regularizar directamente sin solicitudes.';
         
         botonesContainer.innerHTML = `
             <input type="radio" class="btn-check" name="tipoRegularizacion" id="regMercaderiaEncontrada" value="MERCADERIA_ENCONTRADA" checked>
             <label class="btn btn-outline-success" for="regMercaderiaEncontrada">
-                <i class="ri-checkbox-circle-line"></i> Mercadería Encontrada
+                <i class="bi bi-check-circle"></i> Mercadería Encontrada
             </label>
             
             <input type="radio" class="btn-check" name="tipoRegularizacion" id="regConNC" value="REGULARIZAR_CON_NC">
             <label class="btn btn-outline-warning" for="regConNC">
-                <i class="ri-file-text-line"></i> Regularizar con NC
+                <i class="bi bi-file-earmark-text"></i> Regularizar con NC
             </label>
             
             <input type="radio" class="btn-check" name="tipoRegularizacion" id="regAjustar" value="AJUSTAR">
             <label class="btn btn-outline-primary" for="regAjustar">
-                <i class="ri-edit-line"></i> Ajustar Cantidad
+                <i class="bi bi-pencil"></i> Ajustar Cantidad
             </label>
             
             <input type="radio" class="btn-check" name="tipoRegularizacion" id="regCambiarProducto" value="CAMBIAR_PRODUCTO">
             <label class="btn btn-outline-primary" for="regCambiarProducto">
-                <i class="ri-swap-line"></i> Cambiar Producto
+                <i class="bi bi-arrow-left-right"></i> Cambiar Producto
             </label>
         `;
     }
@@ -1727,7 +1752,7 @@ function buscarProductosEmisor() {
                         <div class="d-flex justify-content-between align-items-start">
                             <div>
                                 <strong>${prod.nombre}</strong><br>
-                                <small class="text-muted">SKU: ${prod.sku} | Talla: ${prod.talla}</small><br>
+                                <small class="text-muted">SKU: ${prod.sku} | Talla: <span class="badge bg-light text-dark border reg-badge-talla">${prod.talla}</span></small><br>
                                 <small class="text-info">Precio: $${Number(prod.precio).toLocaleString('es-CL')}</small>
                             </div>
                             <div class="text-end">
@@ -1768,7 +1793,7 @@ function seleccionarProductoSolicitud(id, sku, nombre, talla, stock, precio) {
                     <small class="text-muted ms-4">SKU: ${sku} | Talla: ${talla} | Stock disponible: ${stock}</small><br>
                     <small class="text-info ms-4">Precio: $${Number(precio).toLocaleString('es-CL')}</small>
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-danger" onclick="limpiarSeleccionSolicitud()">
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="limpiarSeleccionSolicitud()" title="Quitar selección" aria-label="Quitar selección">
                     <i class="bi bi-x"></i>
                 </button>
             </div>
@@ -1945,13 +1970,13 @@ function mostrarResultadosProductosEnvioCambio(productos) {
     }
     
     contenedor.innerHTML = productos.map(prod => `
-        <div class="card mb-2 producto-card" style="cursor: pointer;" 
+        <div class="card mb-2 reg-resultado-item" 
              onclick="seleccionarProductoEnvioCambio(${prod.id}, '${prod.sku}', '${prod.nombre.replace(/'/g, "\\'")}', ${prod.stock})">
             <div class="card-body p-2">
                 <div class="row align-items-center">
                     <div class="col">
                         <strong>${prod.sku}</strong> - ${prod.nombre}<br>
-                        <small class="text-muted">Talla: ${prod.talla || 'N/A'}</small>
+                        <small class="text-muted">Talla: <span class="badge bg-light text-dark border reg-badge-talla">${prod.talla || 'N/A'}</span></small>
                     </div>
                     <div class="col-auto text-end">
                         <span class="badge bg-info">${prod.stock} en stock</span><br>
@@ -2052,17 +2077,14 @@ function mostrarResultadosProductos(productos) {
     }
     
     contenedor.innerHTML = productos.map(prod => `
-        <div class="border-bottom p-2 producto-resultado" 
-             style="cursor:pointer; transition: background 0.2s;" 
-             onmouseover="this.style.background='#f8f9fa'" 
-             onmouseout="this.style.background='white'"
+        <div class="border-bottom p-2 reg-resultado-item"
              onclick="seleccionarNuevoProducto(${prod.talla_id}, '${escapeHtml(prod.articulo)}', '${escapeHtml(prod.sku)}', '${escapeHtml(prod.talla)}', ${prod.stock})">
             <div class="d-flex justify-content-between align-items-start">
                 <div>
                     <strong>${escapeHtml(prod.articulo)}</strong><br>
                     <small class="text-muted">
                         <i class="bi bi-upc"></i> SKU: <code>${escapeHtml(prod.sku)}</code> | 
-                        <i class="bi bi-tag"></i> Talla: <span class="badge bg-secondary">${escapeHtml(prod.talla)}</span>
+                        <i class="bi bi-tag"></i> Talla: <span class="badge bg-light text-dark border reg-badge-talla">${escapeHtml(prod.talla)}</span>
                     </small>
                 </div>
                 <div class="text-end">
@@ -2328,7 +2350,7 @@ function guardarRegularizacion() {
     
     if (data.es_solicitud) {
         // Mensaje para SOLICITUD
-        tituloConfirmacion = '📨 Crear Solicitud';
+        tituloConfirmacion = 'Crear Solicitud';
         
         if (data.tipo_solucion === 'NOTA_CREDITO') {
             // Solicitud de NC
@@ -2374,7 +2396,7 @@ function guardarRegularizacion() {
                         <div class="col-6">
                             <div class="card bg-light mb-2">
                                 <div class="card-body p-2">
-                                    <small class="text-muted">1️⃣ NC por original:</small><br>
+                                    <small class="text-muted"><span class="badge rounded-pill bg-secondary me-1">1</span>NC por original:</small><br>
                                     <strong class="text-danger">$${Number(montoNC).toLocaleString('es-CL')}</strong>
                                     <br><small>(${cantidadSol} × $${Number(precioOriginal).toLocaleString('es-CL')})</small>
                                 </div>
@@ -2383,7 +2405,7 @@ function guardarRegularizacion() {
                         <div class="col-6">
                             <div class="card bg-light mb-2">
                                 <div class="card-body p-2">
-                                    <small class="text-muted">2️⃣ Nuevo DTE:</small><br>
+                                    <small class="text-muted"><span class="badge rounded-pill bg-secondary me-1">2</span>Nuevo DTE:</small><br>
                                     <strong class="text-success">${cantidadSol} unidades</strong>
                                     <br><small>Producto de cambio</small>
                                 </div>
@@ -2395,7 +2417,7 @@ function guardarRegularizacion() {
         }
     } else if (tipo === 'EMITIR_NC') {
         // Emisor ejecuta NC directamente
-        tituloConfirmacion = '✅ Emitir Nota de Crédito';
+        tituloConfirmacion = 'Emitir Nota de Crédito';
         const cantidadNC = data.cantidad_nc || 0;
         const precioUnit = productoSeleccionado.precio_unitario || 0;
         const montoTotal = cantidadNC * precioUnit;
@@ -2438,7 +2460,7 @@ function guardarRegularizacion() {
         
     } else if (tipo === 'ENVIAR_CAMBIO') {
         // Emisor envía producto de cambio
-        tituloConfirmacion = '📦 Enviar Producto de Cambio';
+        tituloConfirmacion = 'Enviar Producto de Cambio';
         
         mensajeConfirmacion = `
             <div class="text-start">
@@ -2448,9 +2470,9 @@ function guardarRegularizacion() {
                     Se generarán los documentos necesarios y se actualizará el inventario.
                 </div>
                 <ol class="small mb-2">
-                    <li>✅ NC por producto original</li>
-                    <li>✅ Nuevo DTE con producto de cambio</li>
-                    <li>✅ Descuento de stock de tu sucursal</li>
+                    <li><i class="bi bi-check-circle text-success me-1"></i>NC por producto original</li>
+                    <li><i class="bi bi-check-circle text-success me-1"></i>Nuevo DTE con producto de cambio</li>
+                    <li><i class="bi bi-check-circle text-success me-1"></i>Descuento de stock de tu sucursal</li>
                 </ol>
                 <table class="table table-sm">
                     <tr>
@@ -2475,7 +2497,7 @@ function guardarRegularizacion() {
                     <li>Producto: ${productoSeleccionado.producto_nombre}</li>
                     <li>Motivo: Productos faltantes en recepción</li>
                 </ul>
-                <p class="text-warning small">⚠️ Cumple normativa SII (empresas diferentes)</p>
+                <p class="text-warning small"><i class="bi bi-exclamation-triangle me-1"></i>Cumple normativa SII (empresas diferentes)</p>
             `;
         }
     }
@@ -2487,7 +2509,8 @@ function guardarRegularizacion() {
         showCancelButton: true,
         confirmButtonText: data.es_solicitud ? 'Sí, enviar solicitud' : 'Sí, regularizar',
         cancelButtonText: 'Cancelar',
-        confirmButtonColor: data.es_solicitud ? '#ffc107' : '#28a745'
+        customClass: { confirmButton: data.es_solicitud ? 'btn btn-warning' : 'btn btn-success', cancelButton: 'btn btn-secondary' },
+        buttonsStyling: false
     }).then(result => {
         if (!result.isConfirmed) return;
         
@@ -2519,7 +2542,7 @@ function guardarRegularizacion() {
                 if (data.tipo === 'SOLICITUD_CREADA') {
                     // Se creó una solicitud
                     icono = 'info';
-                    titulo = '📨 Solicitud Creada';
+                    titulo = 'Solicitud Creada';
                     mensaje = `
                         <div class="text-start">
                             <p>Solicitud <strong>#${data.numero_solicitud}</strong> creada correctamente.</p>
@@ -2534,7 +2557,7 @@ function guardarRegularizacion() {
                     `;
                 } else if (data.tipo === 'NC_GENERADA') {
                     // NC generada directamente por emisor (TXT Acepta ya se descargó arriba).
-                    titulo = '✅ Nota de Crédito Generada';
+                    titulo = 'Nota de Crédito Generada';
                     mensaje = `
                         <div class="text-start">
                             <p class="mb-3">Se ha generado la Nota de Crédito <strong>#${data.numero_nc}</strong></p>
@@ -2557,13 +2580,13 @@ function guardarRegularizacion() {
                     `;
                 } else if (data.tipo === 'CAMBIO_ENVIADO') {
                     // Producto de cambio enviado (TXT Acepta de la NC ya se descargó arriba).
-                    titulo = '📦 Producto de Cambio Enviado';
+                    titulo = 'Producto de Cambio Enviado';
                     mensaje = `
                         <div class="text-start">
                             <p class="mb-2">Se han generado los siguientes documentos:</p>
-                            <ul class="mb-3">
-                                <li>✅ Nota de Crédito <strong>#${data.numero_nc}</strong></li>
-                                <li>✅ DTE de Cambio <strong>#${data.numero_dte_cambio}</strong></li>
+                            <ul class="list-unstyled mb-3">
+                                <li><i class="bi bi-check-circle text-success me-1"></i>Nota de Crédito <strong>#${data.numero_nc}</strong></li>
+                                <li><i class="bi bi-check-circle text-success me-1"></i>DTE de Cambio <strong>#${data.numero_dte_cambio}</strong></li>
                             </ul>
                             <div class="alert alert-info mb-2">
                                 <i class="bi bi-box-seam me-2"></i>
@@ -2599,14 +2622,14 @@ function guardarRegularizacion() {
             } else {
                 Swal.fire('Error', data.error || 'Error al procesar', 'error');
                 btnGuardar.disabled = false;
-                btnGuardar.innerHTML = '<i class="ri-check-line"></i> Guardar Regularización';
+                btnGuardar.innerHTML = '<i class="bi bi-check-circle"></i> Guardar Regularización';
             }
         })
         .catch(error => {
             console.error('Error:', error);
             Swal.fire('Error', 'Error de conexión', 'error');
             btnGuardar.disabled = false;
-            btnGuardar.innerHTML = '<i class="ri-check-line"></i> Guardar Regularización';
+            btnGuardar.innerHTML = '<i class="bi bi-check-circle"></i> Guardar Regularización';
         });
     });
 }
@@ -2664,8 +2687,8 @@ function mostrarOpcionesRegularizacionGuia(dteNumero) {
     // Construir lista de productos pendientes
     let htmlProductos = '';
     if (regularizados.length > 0) {
-        htmlProductos += `<div class="alert alert-success py-2 mb-2" style="font-size:.8rem;">
-            <i class="ri-checkbox-circle-line me-1"></i>${regularizados.length} producto(s) ya regularizado(s)
+        htmlProductos += `<div class="alert alert-success py-2 mb-2 small">
+            <i class="bi bi-check-circle me-1"></i>${regularizados.length} producto(s) ya regularizado(s)
         </div>`;
     }
     htmlProductos += '<div class="list-group mb-3">';
@@ -2673,11 +2696,11 @@ function mostrarOpcionesRegularizacionGuia(dteNumero) {
         const cantidadProblema = (prod.cantidad_faltante || 0) + (prod.cantidad_danada || 0);
         const esSobrante = (prod.cantidad_sobrante || 0) > 0;
         htmlProductos += `
-            <div class="list-group-item list-group-item-action" style="cursor: pointer;" onclick="${esSobrante ? `Swal.close(); decidirSobrante(${prod.id})` : `abrirModalRegularizacionIndividualGuia(${prod.id})`}">
+            <div class="list-group-item list-group-item-action reg-clickable" onclick="${esSobrante ? `Swal.close(); decidirSobrante(${prod.id})` : `abrirModalRegularizacionIndividualGuia(${prod.id})`}">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <h6 class="mb-1">${prod.producto_nombre}</h6>
-                        <small class="text-muted">SKU: ${prod.sku} | Talla: ${prod.talla}</small>
+                        <small class="text-muted">SKU: ${prod.sku} | Talla: <span class="badge bg-light text-dark border reg-badge-talla">${prod.talla}</span></small>
                     </div>
                     <div class="text-end">
                         ${esSobrante ?
@@ -2697,7 +2720,7 @@ function mostrarOpcionesRegularizacionGuia(dteNumero) {
         html: `
             <div class="text-start">
                 <div class="alert alert-info">
-                    <i class="ri-information-line me-2"></i>
+                    <i class="bi bi-info-circle me-2"></i>
                     <strong>Regularización por producto</strong><br>
                     Selecciona el producto que deseas regularizar:
                 </div>
@@ -2707,7 +2730,7 @@ function mostrarOpcionesRegularizacionGuia(dteNumero) {
         showConfirmButton: false,
         showCancelButton: true,
         cancelButtonText: 'Cerrar',
-        width: '700px',
+        width: '640px',
         customClass: {
             container: 'swal-on-top'
         }
@@ -2735,7 +2758,7 @@ function abrirModalRegularizacionIndividualGuia(recepcionId) {
     const cantidadProblema = (producto.cantidad_faltante || 0) + (producto.cantidad_danada || 0);
     
     // Llenar información del modal
-    $('#modalRegularizar').find('.modal-title').html('<i class="ri-settings-3-line me-2"></i> Regularizar Producto (Guía)');
+    $('#modalRegularizar').find('.modal-title').html('<i class="bi bi-gear me-2"></i> Regularizar Producto (Guía)');
     $('#regProductoNombre').text(producto.producto_nombre);
     $('#regProductoSKU').text(producto.sku);
     $('#regProductoTalla').text(producto.talla);
@@ -2749,17 +2772,17 @@ function abrirModalRegularizacionIndividualGuia(recepcionId) {
     $('#alertTipoRegularizacion')
         .removeClass('alert-info alert-warning')
         .addClass('alert-info');
-    $('#iconoTipoReg').html('<i class="ri-guide-line"></i>');
+    $('#iconoTipoReg').html('<i class="bi bi-truck"></i>');
     $('#tituloTipoReg').text('Guía de Despacho (Sin valor monetario)');
     $('#descripcionTipoReg').text('No se genera Nota de Crédito. Puedes devolver stock o enviar producto de reemplazo.');
     
     // Mostrar botones de regularización para guías
     $('#botonesRegularizacion').html(`
         <button type="button" class="btn btn-outline-info" onclick="mostrarPanelAjusteInterno()">
-            <i class="ri-arrow-go-back-line me-1"></i> Ajuste Interno
+            <i class="bi bi-arrow-return-left me-1"></i> Ajuste Interno
         </button>
         <button type="button" class="btn btn-outline-primary" onclick="mostrarPanelCambioProductoGuia()">
-            <i class="ri-exchange-line me-1"></i> Cambio de Producto
+            <i class="bi bi-arrow-left-right me-1"></i> Cambio de Producto
         </button>
     `);
     
@@ -2793,10 +2816,10 @@ function mostrarPanelAjusteInterno() {
     // Actualizar botón de guardar
     $('#modalRegularizar .modal-footer').html(`
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-            <i class="ri-close-line"></i> Cancelar
+            <i class="bi bi-x-circle"></i> Cancelar
         </button>
         <button type="button" class="btn btn-info" onclick="procesarAjusteInterno()">
-            <i class="ri-check-line"></i> Procesar Ajuste
+            <i class="bi bi-check-circle"></i> Procesar Ajuste
         </button>
     `);
     
@@ -2843,7 +2866,8 @@ function procesarAjusteInterno() {
         showCancelButton: true,
         confirmButtonText: 'Sí, procesar',
         cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#17a2b8'
+        customClass: { confirmButton: 'btn btn-info', cancelButton: 'btn btn-secondary' },
+        buttonsStyling: false
     }).then(result => {
         if (!result.isConfirmed) return;
         
@@ -2872,13 +2896,13 @@ function procesarAjusteInterno() {
                 notificarRegularizacionCompleta();
             } else {
                 Swal.fire('Error', data.error, 'error');
-                btnProcesar.prop('disabled', false).html('<i class="ri-check-line"></i> Procesar Ajuste');
+                btnProcesar.prop('disabled', false).html('<i class="bi bi-check-circle"></i> Procesar Ajuste');
             }
         })
         .catch(error => {
             console.error('Error:', error);
             Swal.fire('Error', 'Error de conexión', 'error');
-            btnProcesar.prop('disabled', false).html('<i class="ri-check-line"></i> Procesar Ajuste');
+            btnProcesar.prop('disabled', false).html('<i class="bi bi-check-circle"></i> Procesar Ajuste');
         });
     });
 }
@@ -2907,7 +2931,7 @@ function mostrarPanelCambioProductoGuia() {
     $('#previewCambioGuia').hide();
     $('#resultadosProductosCambioGuia').html(`
         <p class="text-muted text-center my-3">
-            <i class="ri-search-line"></i><br>
+            <i class="bi bi-search"></i><br>
             Escribe para buscar productos en tu inventario...
         </p>
     `);
@@ -2915,10 +2939,10 @@ function mostrarPanelCambioProductoGuia() {
     // Actualizar botón de guardar
     $('#modalRegularizar .modal-footer').html(`
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-            <i class="ri-close-line"></i> Cancelar
+            <i class="bi bi-x-circle"></i> Cancelar
         </button>
         <button type="button" class="btn btn-primary" onclick="procesarCambioProductoGuia()" id="btnProcesarCambioGuia" disabled>
-            <i class="ri-check-line"></i> Enviar Producto de Cambio
+            <i class="bi bi-check-circle"></i> Enviar Producto de Cambio
         </button>
     `);
 }
@@ -2943,11 +2967,11 @@ function buscarProductosParaCambioGuia() {
                 let html = '';
                 data.productos.forEach(prod => {
                     html += `
-                        <div class="border-bottom p-2" style="cursor: pointer;" onclick="seleccionarProductoCambioGuia(${prod.id}, '${prod.sku}', '${prod.nombre}', '${prod.talla}', ${prod.stock})">
+                        <div class="border-bottom p-2 reg-resultado-item" onclick="seleccionarProductoCambioGuia(${prod.id}, '${prod.sku}', '${prod.nombre}', '${prod.talla}', ${prod.stock})">
                             <div class="d-flex justify-content-between">
                                 <div>
                                     <strong>${prod.nombre}</strong><br>
-                                    <small class="text-muted">SKU: ${prod.sku} | Talla: ${prod.talla}</small>
+                                    <small class="text-muted">SKU: ${prod.sku} | Talla: <span class="badge bg-light text-dark border reg-badge-talla">${prod.talla}</span></small>
                                 </div>
                                 <div class="text-end">
                                     <span class="badge bg-success">${prod.stock} unid.</span>
@@ -2978,7 +3002,7 @@ function seleccionarProductoCambioGuia(id, sku, nombre, talla, stock) {
     $('#productoCambioGuiaSeleccionado').html(`
         <div class="card border-success">
             <div class="card-header bg-success bg-opacity-10">
-                <h6 class="mb-0"><i class="ri-check-circle-line"></i> Producto Seleccionado</h6>
+                <h6 class="mb-0"><i class="bi bi-check-circle"></i> Producto Seleccionado</h6>
             </div>
             <div class="card-body py-2">
                 <strong>${nombre}</strong><br>
@@ -3043,7 +3067,8 @@ function procesarCambioProductoGuia() {
         showCancelButton: true,
         confirmButtonText: 'Sí, enviar',
         cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#0d6efd'
+        customClass: { confirmButton: 'btn btn-primary', cancelButton: 'btn btn-secondary' },
+        buttonsStyling: false
     }).then(result => {
         if (!result.isConfirmed) return;
         
@@ -3073,13 +3098,13 @@ function procesarCambioProductoGuia() {
                 notificarRegularizacionCompleta();
             } else {
                 Swal.fire('Error', data.error, 'error');
-                btnProcesar.prop('disabled', false).html('<i class="ri-check-line"></i> Enviar Producto de Cambio');
+                btnProcesar.prop('disabled', false).html('<i class="bi bi-check-circle"></i> Enviar Producto de Cambio');
             }
         })
         .catch(error => {
             console.error('Error:', error);
             Swal.fire('Error', 'Error de conexión', 'error');
-            btnProcesar.prop('disabled', false).html('<i class="ri-check-line"></i> Enviar Producto de Cambio');
+            btnProcesar.prop('disabled', false).html('<i class="bi bi-check-circle"></i> Enviar Producto de Cambio');
         });
     });
 }

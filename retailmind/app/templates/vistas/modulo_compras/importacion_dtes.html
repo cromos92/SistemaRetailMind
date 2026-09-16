@@ -3,39 +3,252 @@
 {% include '../../layout/menu.html' %}
 
 <style>
-.card-importacion {
-    border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+/* ==================== IMPORTACIÓN DTEs (COMPRAS) ==================== */
+/* Paleta del módulo (ESTILOS_MODULOS.md) */
+.page-content {
+    --rm-primary: #405189;
+    --rm-accent: #0ab39c;
+    --rm-gray-light: #f8f9fa;
+    --rm-gray: #e9ecef;
+    --rm-text: #495057;
+    background: var(--nexo-white);
+    min-height: calc(100vh - 70px);
 }
 
-.upload-zone {
-    border: 2px dashed #dee2e6;
+/* Card principal (estándar del módulo) */
+.card.shadow {
+    border: none;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(64, 81, 137, 0.1);
+    animation: fadeInCard 0.4s ease;
+}
+
+@keyframes fadeInCard {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Header con gradiente (module-header estándar) */
+.module-header {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.module-header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.module-header-icon {
+    width: 48px;
+    height: 48px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+}
+
+.module-header-info h5 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: white;
+}
+
+.module-header-status {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 13px;
+    opacity: 0.9;
+    margin-top: 4px;
+}
+
+.module-header-status a {
+    color: #fff;
+    text-decoration: none;
+}
+
+.module-header-status a:hover {
+    color: #fff;
+    text-decoration: underline;
+}
+
+.module-header-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.module-header-actions .btn {
     border-radius: 10px;
-    padding: 40px;
+    font-weight: 500;
+    padding: 8px 14px;
+    font-size: 13px;
+    border: none;
+    transition: all 0.2s ease;
+}
+
+.module-header-actions .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* Card body */
+.card-body {
+    padding: 24px;
+    background: white;
+}
+
+/* Resumen de ayuda (una línea) + instrucciones colapsadas */
+.ayuda-resumen {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--rm-text);
+    background: var(--rm-gray-light);
+    border: 1px solid var(--rm-gray);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 20px;
+}
+
+.ayuda-resumen .bi {
+    color: var(--rm-primary);
+}
+
+.ayuda-resumen .btn-link {
+    color: var(--rm-primary);
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.ayuda-resumen .btn-link:hover {
+    text-decoration: underline;
+}
+
+/* Secciones del flujo: 1 Configurar -> 2 Cargar -> 3 Resultado */
+.seccion-importacion {
+    margin-bottom: 0;
+}
+
+.seccion-importacion + .seccion-importacion {
+    margin-top: 28px;
+}
+
+.seccion-titulo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--rm-primary);
+    padding-bottom: 10px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--rm-gray);
+}
+
+.seccion-paso {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--rm-primary);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* Grupos de opciones (fieldset/legend accesibles) */
+.fieldset-importacion {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.fieldset-importacion legend {
+    float: none;
+    width: auto;
+    font-size: 0.875rem;
+    line-height: inherit;
+    margin-bottom: 0.5rem;
+}
+
+/* Zona de carga */
+.upload-zone {
+    border: 2px dashed var(--rm-gray);
+    border-radius: 10px;
+    padding: 24px 16px;
     text-align: center;
-    background-color: #f8f9fa;
+    background-color: var(--rm-gray-light);
     transition: all 0.3s ease;
     cursor: pointer;
 }
 
 .upload-zone:hover {
-    border-color: #0d6efd;
-    background-color: #e7f1ff;
+    border-color: var(--rm-primary);
+    background-color: rgba(64, 81, 137, 0.06);
 }
 
 .upload-zone.drag-over {
-    border-color: #198754;
-    background-color: #d1e7dd;
+    border-color: var(--rm-accent);
+    background-color: rgba(10, 179, 156, 0.08);
+}
+
+.upload-zone .upload-icon {
+    font-size: 2.5rem;
+    line-height: 1;
+    color: var(--rm-primary);
+}
+
+.upload-zone .upload-titulo {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 8px 0 8px;
 }
 
 .file-info {
     display: none;
-    margin-top: 20px;
+    margin-top: 16px;
 }
 
-.result-table {
+/* Vista previa: un solo contenedor con scroll y cabecera fija */
+.tabla-preview {
+    border: 1px solid #edf0f5;
+    border-radius: 10px;
     max-height: 400px;
-    overflow-y: auto;
+    overflow: auto;
+}
+
+#previewTable thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f8fafc;
+    color: var(--rm-primary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
 }
 
 .error-list {
@@ -44,83 +257,109 @@
 }
 
 @media (max-width: 768px) {
-    .import-header { flex-direction: column; gap: 0.5rem; }
-    .import-header .btn { width: 100%; }
-    .import-zone { padding: 1.5rem 1rem; }
-    .import-results .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
+    .module-header { padding: 12px 16px; }
+    .module-header-icon { width: 40px; height: 40px; font-size: 20px; }
+    .module-header-actions { width: 100%; }
+    .module-header-actions .btn,
+    .module-header-actions .btn-group { flex: 1 1 auto; }
+    .module-header-actions .btn-group .btn { width: 100%; }
 }
 @media (max-width: 576px) {
-    .import-zone { padding: 1rem 0.75rem; min-height: auto; }
-    .import-zone i { font-size: 2rem; }
-    .import-zone p { font-size: 0.813rem; }
-    .import-table { font-size: 0.75rem; }
+    .ayuda-resumen .btn-link { margin-left: 0 !important; }
+    #previewTable { font-size: 0.75rem; }
 }
 </style>
 
 <div class="page-content">
     <div class="container-fluid">
-        
-        <!-- Breadcrumb -->
-        <div class="row">
-            <div class="col-12">
-                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                    <h4 class="mb-sm-0">Importación de DTEs de Compras</h4>
-                    <div class="page-title-right">
-                        <ol class="breadcrumb m-0">
-                            <li class="breadcrumb-item"><a href="{% url 'verHome' %}">Inicio</a></li>
-                            <li class="breadcrumb-item"><a href="{% url 'verGestionDteCompras' %}">Gestión DTEs</a></li>
-                            <li class="breadcrumb-item active">Importar DTEs</li>
-                        </ol>
+        <div class="card shadow">
+            <!-- Header estándar del módulo -->
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon">
+                        <i class="bi bi-file-earmark-arrow-up"></i>
+                    </div>
+                    <div class="module-header-info">
+                        <h5>Importación de DTEs de Compras</h5>
+                        <div class="module-header-status">
+                            <a href="{% url 'verHome' %}">Inicio</a>
+                            <span aria-hidden="true">&rsaquo;</span>
+                            <a href="{% url 'verGestionDteCompras' %}">Gestión DTEs</a>
+                            <span aria-hidden="true">&rsaquo;</span>
+                            <span>Importar DTEs</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Instrucciones -->
-        <div class="row">
-            <div class="col-lg-12">
-                <div class="alert alert-info alert-dismissible fade show" role="alert">
-                    <i class="bi bi-info-circle me-2"></i>
-                    <strong>Instrucciones:</strong>
-                    <ul class="mb-0 mt-2">
-                        <li>Selecciona cómo deseas identificar a los proveedores: por <strong>RUT</strong> o por <strong>ID</strong></li>
-                        <li>Descarga el formato o exporta tus DTEs actuales para editarlos</li>
-                        <li>Completa el archivo con los datos de tus DTEs de compras</li>
-                        <li>Campos obligatorios: <strong>identificador de proveedor</strong> (RUT o ID), <strong>número de documento</strong> y <strong>monto_con_iva</strong></li>
-                        <li>El RUT debe estar en formato: <strong>76123456-7</strong> (sin puntos, solo guión)</li>
-                        <li>Usa el <strong>monto con IVA</strong> (monto total de la factura) - el sistema calculará el neto automáticamente</li>
-                        <li>También puedes usar <strong>monto_neto</strong> si lo prefieres - el sistema calculará el total</li>
-                        <li>El campo <strong>responsable</strong> no es necesario - se asignará automáticamente tu usuario</li>
-                        <li>El campo <strong>receptor</strong> (tu empresa) se asigna automáticamente</li>
-                        <li>Todos los DTEs se importan con estado de pago <strong>"Pendiente"</strong> para que registres los pagos después</li>
-                        <li>Los proveedores deben existir previamente en el sistema</li>
-                        <li>Formatos aceptados: CSV (.csv), Excel (.xlsx, .xls)</li>
-                    </ul>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                <div class="module-header-actions">
+                    <button type="button" class="btn btn-light" id="btnDescargarFormato">
+                        <i class="bi bi-download me-1"></i> Descargar Formato
+                    </button>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-light dropdown-toggle" data-bs-toggle="dropdown">
+                            <i class="bi bi-file-earmark-arrow-down me-1"></i> Exportar Actuales
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" id="btnExportarDtesCSV">
+                                <i class="bi bi-file-earmark-text me-2"></i>Exportar CSV
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" id="btnExportarDtesExcel">
+                                <i class="bi bi-file-earmark-excel me-2"></i>Exportar Excel
+                            </a></li>
+                        </ul>
+                    </div>
+                    <a href="{% url 'verGestionDteCompras' %}" class="btn btn-light">
+                        <i class="bi bi-arrow-left me-1"></i> Volver a DTEs
+                    </a>
                 </div>
             </div>
-        </div>
 
-        <!-- Configuración -->
-        <div class="row mb-3">
-            <div class="col-lg-12">
-                <div class="card">
-                    <div class="card-header bg-secondary text-white">
-                        <h6 class="mb-0 text-white">
-                            <i class="bi bi-gear me-2"></i>
-                            Configuración de Importación
-                        </h6>
+            <div class="card-body">
+                <!-- Ayuda: resumen en una línea + instrucciones colapsadas -->
+                <div class="ayuda-resumen">
+                    <i class="bi bi-info-circle"></i>
+                    <span>Campos obligatorios: <strong>proveedor</strong> (RUT o ID), <strong>número de documento</strong> y <strong>monto_con_iva</strong> &middot; Formatos: CSV / XLSX / XLS</span>
+                    <button type="button" class="btn btn-link btn-sm p-0 ms-auto" data-bs-toggle="collapse" data-bs-target="#ayudaImportacion" aria-expanded="false" aria-controls="ayudaImportacion">
+                        <i class="bi bi-question-circle me-1"></i>Ver instrucciones
+                    </button>
+                </div>
+                <div class="collapse" id="ayudaImportacion">
+                    <div class="alert alert-info mb-4" role="note">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Instrucciones:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Selecciona cómo deseas identificar a los proveedores: por <strong>RUT</strong> o por <strong>ID</strong></li>
+                            <li>Descarga el formato o exporta tus DTEs actuales para editarlos</li>
+                            <li>Completa el archivo con los datos de tus DTEs de compras</li>
+                            <li>Campos obligatorios: <strong>identificador de proveedor</strong> (RUT o ID), <strong>número de documento</strong> y <strong>monto_con_iva</strong></li>
+                            <li>El RUT debe estar en formato: <strong>76123456-7</strong> (sin puntos, solo guión)</li>
+                            <li>Usa el <strong>monto con IVA</strong> (monto total de la factura) - el sistema calculará el neto automáticamente</li>
+                            <li>También puedes usar <strong>monto_neto</strong> si lo prefieres - el sistema calculará el total</li>
+                            <li>El campo <strong>responsable</strong> no es necesario - se asignará automáticamente tu usuario</li>
+                            <li>El campo <strong>receptor</strong> (tu empresa) se asigna automáticamente</li>
+                            <li>Todos los DTEs se importan con estado de pago <strong>"Pendiente"</strong> para que registres los pagos después</li>
+                            <li>Los proveedores deben existir previamente en el sistema</li>
+                            <li>Formatos aceptados: CSV (.csv), Excel (.xlsx, .xls)</li>
+                        </ul>
                     </div>
-                    <div class="card-body">
-                        <div class="row align-items-center mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold">Identificar proveedor por:</label>
-                                <div class="btn-group w-100" role="group">
+                </div>
+
+                <!-- Paso 1: Configuración -->
+                <section class="seccion-importacion" aria-labelledby="tituloConfiguracion">
+                    <h5 class="seccion-titulo" id="tituloConfiguracion">
+                        <span class="seccion-paso">1</span>
+                        <i class="bi bi-gear"></i>
+                        Configuración de Importación
+                    </h5>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <fieldset class="fieldset-importacion">
+                                <legend class="form-label fw-bold">Identificar proveedor por:</legend>
+                                <div class="btn-group w-100" role="group" aria-describedby="helpText">
                                     <input type="radio" class="btn-check" name="tipoBusqueda" id="tipoRut" value="rut" checked>
                                     <label class="btn btn-outline-primary" for="tipoRut">
                                         <i class="bi bi-person-badge me-1"></i> RUT del Proveedor
                                     </label>
-                                    
+
                                     <input type="radio" class="btn-check" name="tipoBusqueda" id="tipoId" value="id">
                                     <label class="btn btn-outline-primary" for="tipoId">
                                         <i class="bi bi-hash me-1"></i> ID del Proveedor
@@ -129,36 +368,16 @@
                                 <small class="text-muted d-block mt-2" id="helpText">
                                     El RUT debe estar en formato: <strong>76123456-7</strong> (sin puntos)
                                 </small>
-                            </div>
-                            <div class="col-md-6 text-end">
-                                <button type="button" class="btn btn-info me-2" id="btnDescargarFormato">
-                                    <i class="bi bi-download me-1"></i> Descargar Formato
-                                </button>
-                                <div class="btn-group" role="group">
-                                    <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown">
-                                        <i class="bi bi-file-earmark-arrow-down me-1"></i> Exportar Actuales
-                                    </button>
-                                    <ul class="dropdown-menu">
-                                        <li><a class="dropdown-item" href="#" id="btnExportarDtesCSV">
-                                            <i class="bi bi-file-earmark-text me-2"></i>Exportar CSV
-                                        </a></li>
-                                        <li><a class="dropdown-item" href="#" id="btnExportarDtesExcel">
-                                            <i class="bi bi-file-earmark-excel me-2"></i>Exportar Excel
-                                        </a></li>
-                                    </ul>
-                                </div>
-                            </div>
+                            </fieldset>
                         </div>
-                        
-                        <!-- Modo de importación para DTEs -->
-                        <div class="row">
-                            <div class="col-12">
-                                <label class="form-label fw-bold">
+                        <div class="col-md-6">
+                            <fieldset class="fieldset-importacion">
+                                <legend class="form-label fw-bold">
                                     <i class="bi bi-arrow-repeat me-1"></i>
                                     Modo de Importación:
-                                </label>
-                                <div class="row">
-                                    <div class="col-md-6">
+                                </legend>
+                                <div class="row g-2">
+                                    <div class="col-sm-6">
                                         <div class="form-check">
                                             <input class="form-check-input" type="radio" name="modoActualizacionDte" id="modoDteSoloCrear" value="solo_crear" checked>
                                             <label class="form-check-label" for="modoDteSoloCrear">
@@ -167,7 +386,7 @@
                                             </label>
                                         </div>
                                     </div>
-                                    <div class="col-md-6">
+                                    <div class="col-sm-6">
                                         <div class="form-check">
                                             <input class="form-check-input" type="radio" name="modoActualizacionDte" id="modoDteCrearActualizar" value="crear_y_actualizar">
                                             <label class="form-check-label" for="modoDteCrearActualizar">
@@ -177,109 +396,89 @@
                                         </div>
                                     </div>
                                 </div>
-                            </div>
+                            </fieldset>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
+                </section>
 
-        <!-- Card principal -->
-        <div class="row">
-            <div class="col-lg-12">
-                <div class="card card-importacion">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="card-title mb-0 text-white">
-                            <i class="bi bi-file-earmark-arrow-up me-2"></i>
-                            Cargar Archivo de DTEs
-                        </h5>
+                <!-- Paso 2: Cargar archivo -->
+                <section class="seccion-importacion" aria-labelledby="tituloCarga">
+                    <h5 class="seccion-titulo" id="tituloCarga">
+                        <span class="seccion-paso">2</span>
+                        <i class="bi bi-file-earmark-arrow-up"></i>
+                        Cargar Archivo de DTEs
+                    </h5>
+
+                    <!-- Zona de carga -->
+                    <div class="upload-zone" id="uploadZone">
+                        <i class="bi bi-cloud-arrow-up upload-icon"></i>
+                        <p class="upload-titulo">Arrastra tu archivo aquí <span class="text-muted fw-normal">o haz clic para seleccionar</span></p>
+                        <p class="mb-0">
+                            <span class="badge bg-light text-dark border">CSV</span>
+                            <span class="badge bg-light text-dark border">XLSX</span>
+                            <span class="badge bg-light text-dark border">XLS</span>
+                        </p>
+                        <input type="file" id="archivoDtes" accept=".csv,.xlsx,.xls" style="display: none;">
                     </div>
-                    
-                    <div class="card-body">
-                        <!-- Zona de carga -->
-                        <div class="upload-zone" id="uploadZone">
-                            <i class="bi bi-cloud-arrow-up display-1 text-primary"></i>
-                            <h5 class="mt-3">Arrastra tu archivo aquí</h5>
-                            <p class="text-muted">o haz clic para seleccionar</p>
-                            <p class="mt-2">
-                                <span class="badge bg-success">CSV</span>
-                                <span class="badge bg-success">XLSX</span>
-                                <span class="badge bg-success">XLS</span>
-                            </p>
-                            <input type="file" id="archivoDtes" accept=".csv,.xlsx,.xls" style="display: none;">
-                        </div>
 
-                        <!-- Información del archivo -->
-                        <div class="file-info" id="fileInfo">
-                            <div class="alert alert-success">
-                                <i class="bi bi-file-earmark-check me-2"></i>
+                    <!-- Información del archivo -->
+                    <div class="file-info" id="fileInfo">
+                        <div class="alert alert-success d-flex align-items-center mb-0">
+                            <i class="bi bi-file-earmark-check me-2"></i>
+                            <div class="flex-grow-1">
                                 <strong>Archivo seleccionado:</strong> <span id="fileName"></span>
-                                <button type="button" class="btn-close float-end" id="btnRemoveFile"></button>
                             </div>
-                        </div>
-
-                        <!-- Vista previa -->
-                        <div id="previewSection" style="display: none;">
-                            <hr>
-                            <h6 class="mb-3">
-                                <i class="bi bi-eye me-2"></i>
-                                Vista Previa (primeras 10 filas)
-                            </h6>
-                            <div class="table-responsive result-table">
-                                <table class="table table-bordered table-sm" id="previewTable">
-                                    <thead class="table-light"></thead>
-                                    <tbody></tbody>
-                                </table>
-                            </div>
-                            <div class="alert alert-warning" id="previewWarning" style="display: none;">
-                                <i class="bi bi-exclamation-triangle me-2"></i>
-                                Se muestran solo las primeras 10 filas. El archivo completo será procesado al importar.
-                            </div>
+                            <button type="button" class="btn-close" id="btnRemoveFile" aria-label="Quitar archivo" title="Quitar archivo"></button>
                         </div>
                     </div>
 
-                    <div class="card-footer">
-                        <div class="d-flex justify-content-between">
-                            <a href="{% url 'verGestionDteCompras' %}" class="btn btn-secondary">
-                                <i class="bi bi-arrow-left me-1"></i> Volver a DTEs
-                            </a>
-                            <button type="button" class="btn btn-primary" id="btnImportar" disabled>
-                                <i class="bi bi-cloud-upload me-1"></i> Importar DTEs
-                            </button>
+                    <!-- Vista previa -->
+                    <div id="previewSection" style="display: none;">
+                        <h6 class="fw-semibold mt-4 mb-3">
+                            <i class="bi bi-eye me-2"></i>
+                            Vista Previa (primeras 10 filas)
+                        </h6>
+                        <div class="tabla-preview">
+                            <table class="table table-sm table-hover align-middle text-nowrap mb-0" id="previewTable">
+                                <thead></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div class="alert alert-warning mt-3 mb-0" id="previewWarning" style="display: none;">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Se muestran solo las primeras 10 filas. El archivo completo será procesado al importar.
                         </div>
                     </div>
-                </div>
+
+                    <div class="d-flex justify-content-end mt-4">
+                        <button type="button" class="btn btn-primary" id="btnImportar" disabled>
+                            <i class="bi bi-cloud-upload me-1"></i> Importar DTEs
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Paso 3: Resultados -->
+                <section class="seccion-importacion" id="resultSection" style="display: none;" aria-labelledby="tituloResultado">
+                    <h5 class="seccion-titulo" id="tituloResultado">
+                        <span class="seccion-paso">3</span>
+                        <i class="bi bi-check-circle"></i>
+                        Resultado de la Importación
+                    </h5>
+                    <div id="resultSummary"></div>
+
+                    <!-- Errores -->
+                    <div id="errorSection" style="display: none;" class="mt-3">
+                        <h6 class="text-danger fw-semibold">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Errores Encontrados:
+                        </h6>
+                        <div class="error-list">
+                            <ul id="errorList" class="list-group"></ul>
+                        </div>
+                    </div>
+                </section>
             </div>
         </div>
-
-        <!-- Resultados -->
-        <div class="row mt-4" id="resultSection" style="display: none;">
-            <div class="col-lg-12">
-                <div class="card">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="card-title mb-0 text-white">
-                            <i class="bi bi-check-circle me-2"></i>
-                            Resultado de la Importación
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="resultSummary"></div>
-                        
-                        <!-- Errores -->
-                        <div id="errorSection" style="display: none;" class="mt-3">
-                            <h6 class="text-danger">
-                                <i class="bi bi-exclamation-triangle me-2"></i>
-                                Errores Encontrados:
-                            </h6>
-                            <div class="error-list">
-                                <ul id="errorList" class="list-group"></ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
     </div>
 </div>
 
@@ -532,7 +731,7 @@
                 <p class="mb-0 small text-muted">Los DTEs están disponibles en Gestión de DTEs</p>
             </div>`,
             confirmButtonText: 'Ir a Gestión de DTEs',
-            confirmButtonColor: '#0d6efd'
+            confirmButtonColor: '#405189'
         }).then((result) => {
             if (result.isConfirmed) {
                 window.location.href = "{% url 'verGestionDteCompras' %}";

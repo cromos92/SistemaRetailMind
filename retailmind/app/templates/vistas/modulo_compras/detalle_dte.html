@@ -3,225 +3,253 @@
 {% include '../../layout/menu.html' %}
 
 <style>
+    /* ==================== ESTILOS DETALLE DTE (COMPRAS) ==================== */
+
+    /* Contenedor principal - FONDO BLANCO (estándar del módulo) */
     .page-content {
-        background: #f0f2f7 !important;
+        background: var(--nexo-white);
         min-height: calc(100vh - 70px);
-        padding-top: 24px;
     }
 
-    .card.shadow-dte {
+    /* Card principal (ESTILOS_MODULOS) */
+    .card.shadow {
         border: none;
-        border-radius: 14px;
+        border-radius: 16px;
         overflow: hidden;
-        box-shadow: 0 4px 24px rgba(26, 26, 46, 0.08);
-        animation: fadeInCard 0.4s ease;
+        box-shadow: 0 4px 20px rgba(64, 81, 137, 0.1);
     }
 
-    @keyframes fadeInCard {
-        from { opacity: 0; transform: translateY(16px); }
-        to { opacity: 1; transform: translateY(0); }
+    /* === HEADER con gradiente (module-header estándar) === */
+    .module-header {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        color: white;
+        padding: 16px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
     }
-
-    /* === HEADER DTE === */
-    .dte-detail-header {
-        background: linear-gradient(135deg, #1A1A2E 0%, #2D2D50 100%);
-        padding: 24px 28px;
-        position: relative;
-        overflow: hidden;
+    .module-header-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
     }
-    .dte-detail-header::before {
-        content: '';
-        position: absolute;
-        top: -40%;
-        right: -10%;
-        width: 260px;
-        height: 260px;
-        background: rgba(0, 212, 170, 0.08);
-        border-radius: 50%;
+    .module-header-icon {
+        width: 48px;
+        height: 48px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
     }
-    .dte-detail-header h4,
-    .dte-detail-header span,
-    .dte-detail-header small,
-    .dte-detail-header i {
-        color: #ffffff !important;
-    }
-    .dte-detail-header h4 {
+    .module-header-info h5 {
         margin: 0;
-        font-weight: 700;
-        font-size: 1.25rem;
-        letter-spacing: 0.3px;
+        font-size: 18px;
+        font-weight: 600;
+        color: white;
     }
-    .dte-detail-header small {
-        opacity: 0.8;
-        font-size: 0.85rem;
+    .module-header-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        opacity: 0.9;
+        margin-top: 4px;
+    }
+    .module-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .module-header-actions .btn {
+        border-radius: 10px;
+        font-weight: 500;
+        padding: 8px 14px;
+        font-size: 13px;
+        border: none;
+        transition: all 0.2s ease;
+    }
+    .module-header-actions .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     }
     .badge-estado-header {
-        background: rgba(255, 255, 255, 0.15) !important;
-        backdrop-filter: blur(4px);
-        color: #fff !important;
+        display: inline-flex;
+        align-items: center;
+        background: rgba(255, 255, 255, 0.15);
+        color: #fff;
         font-size: 0.82rem;
         padding: 7px 14px;
-        border-radius: 20px;
+        border-radius: var(--nexo-radius-full);
         border: 1px solid rgba(255, 255, 255, 0.2);
         font-weight: 500;
     }
 
-    /* === PAGE TITLE === */
-    .page-title-dte h4 {
-        color: #1A1A2E;
+    /* Card body */
+    .card-body {
+        padding: 24px;
+        background: white;
+    }
+
+    /* === KPI MONTOS (kpi-card estándar, colores por tipo de ESTILOS_MODULOS) === */
+    .kpi-card {
+        border-radius: var(--nexo-radius-lg);
+        border: none;
+        overflow: hidden;
+    }
+    .kpi-card .card-body {
+        padding: 10px 14px;
+        background: transparent;
+    }
+    .kpi-card .kpi-icon {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        border-radius: var(--nexo-radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.9rem;
+    }
+    .kpi-card .kpi-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--nexo-text-secondary);
+        line-height: 1.2;
+        margin: 0;
+    }
+    .kpi-card .kpi-value {
+        font-size: 1.15rem;
         font-weight: 700;
-        font-size: 1.3rem;
+        line-height: 1.1;
+        margin: 0;
+        color: #405189;
     }
-    .page-title-dte .breadcrumb-item a {
-        color: #0066FF;
-        text-decoration: none;
-    }
-    .page-title-dte .breadcrumb-item.active {
-        color: #6c757d;
-    }
+    .kpi-blue { background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 3px solid #299cdb; }
+    .kpi-blue .kpi-icon { background: linear-gradient(135deg, #299cdb 0%, #1976d2 100%); }
+    .kpi-orange { background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-left: 3px solid #fb8c00; }
+    .kpi-orange .kpi-icon { background: linear-gradient(135deg, #fb8c00 0%, #f57c00 100%); }
+    .kpi-green { background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 3px solid #0ab39c; }
+    .kpi-green .kpi-icon { background: linear-gradient(135deg, #0ab39c 0%, #099885 100%); }
+    .kpi-red { background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); border-left: 3px solid #f06548; }
+    .kpi-red .kpi-icon { background: linear-gradient(135deg, #f06548 0%, #d9534f 100%); }
 
     /* === INFO CARDS === */
     .info-card {
-        background: #fff;
-        border-radius: 12px;
+        background: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg);
         padding: 22px;
         margin-bottom: 20px;
-        box-shadow: 0 2px 12px rgba(26, 26, 46, 0.05);
-        border: 1px solid #e8eaf0;
-        transition: box-shadow 0.2s;
-    }
-    .info-card:hover {
-        box-shadow: 0 4px 18px rgba(26, 26, 46, 0.09);
+        border: 1px solid var(--nexo-border-light);
     }
     .info-card h6 {
-        color: #1A1A2E;
-        font-weight: 700;
+        color: var(--nexo-secondary);
+        font-weight: 600;
         margin-bottom: 16px;
         padding-bottom: 12px;
-        border-bottom: 2px solid #e8eaf0;
-        font-size: 0.9rem;
+        border-bottom: 2px solid var(--nexo-gray-100);
+        font-size: 0.8rem;
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
     .info-card h6 i {
-        color: #0066FF;
+        color: var(--nexo-primary);
+    }
+    .info-list {
+        margin: 0;
     }
     .info-row {
         display: flex;
         justify-content: space-between;
-        align-items: center;
+        align-items: flex-start;
+        gap: 12px;
         padding: 9px 0;
-        border-bottom: 1px solid #f4f5f8;
+        border-bottom: 1px solid var(--nexo-gray-100);
     }
     .info-row:last-child {
         border-bottom: none;
     }
+    .info-row dt,
+    .info-row dd {
+        margin: 0;
+    }
     .info-label {
-        color: #8A8A9A;
+        color: var(--nexo-text-secondary);
         font-size: 0.85rem;
         font-weight: 500;
+        flex-shrink: 0;
     }
     .info-value {
         font-weight: 600;
-        color: #1A1A2E;
+        color: var(--nexo-text-primary);
         font-size: 0.9rem;
+        text-align: right;
+        max-width: 62%;
+        word-break: break-word;
     }
 
-    /* === MONTO CARDS === */
-    .monto-box {
-        text-align: center;
-        padding: 18px 12px;
-        border-radius: 10px;
-        border: 1px solid #e8eaf0;
-        transition: transform 0.2s;
-    }
-    .monto-box:hover {
-        transform: translateY(-2px);
-    }
-    .monto-box small {
-        font-size: 0.78rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .monto-box h4 {
-        margin: 6px 0 0;
-        font-weight: 700;
-        font-size: 1.15rem;
-    }
-    .monto-neto { background: #f0f4ff; }
-    .monto-neto small { color: #0066FF; }
-    .monto-neto h4 { color: #0052CC; }
-    .monto-iva { background: #fff8f0; }
-    .monto-iva small { color: #e68a00; }
-    .monto-iva h4 { color: #cc7a00; }
-    .monto-total { background: #f0faf6; }
-    .monto-total small { color: #00B090; }
-    .monto-total h4 { color: #008C73; }
-    .monto-saldo { background: #fff0f0; }
-    .monto-saldo small { color: #e55353; }
-    .monto-saldo h4 { color: #cc3333; }
-
-    /* === TABLA PRODUCTOS === */
-    .productos-table {
-        border-radius: 10px;
-        overflow: hidden;
+    /* === TABLAS (cabecera estándar del módulo) === */
+    .dte-table {
         margin-bottom: 0;
     }
-    .productos-table thead {
-        background: #1A1A2E;
+    .dte-table thead {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
     }
-    .productos-table thead th {
-        color: #ffffff !important;
+    .dte-table thead th {
+        background: inherit;
+        color: white;
         font-weight: 600;
         padding: 13px 16px;
         border: none;
-        font-size: 0.82rem;
+        font-size: 0.8rem;
         text-transform: uppercase;
         letter-spacing: 0.4px;
     }
-    .productos-table tbody tr {
-        transition: background 0.15s;
-    }
-    .productos-table tbody tr:hover {
-        background: #f8f9fc;
-    }
-    .productos-table tbody td {
+    .dte-table tbody td {
         padding: 12px 16px;
         vertical-align: middle;
-        color: #333;
+        color: var(--nexo-text-primary);
         font-size: 0.88rem;
-        border-bottom: 1px solid #f0f1f5;
+        border-bottom: 1px solid var(--nexo-gray-100);
     }
-    .productos-table tbody tr:last-child td {
+    .dte-table tbody tr:hover td {
+        background: var(--nexo-gray-100);
+    }
+    .dte-table tbody tr:last-child td {
         border-bottom: none;
     }
 
     /* === BADGES === */
     .badge-dte-estado {
         padding: 5px 12px;
-        border-radius: 20px;
+        border-radius: var(--nexo-radius-full);
         font-size: 0.78rem;
         font-weight: 600;
         letter-spacing: 0.3px;
     }
-
-    /* === BOTONES === */
-    .btn-volver {
-        background: #1A1A2E;
-        color: #fff;
-        border: none;
-        padding: 9px 22px;
-        border-radius: 8px;
+    .sku-code {
+        background: var(--nexo-gray-100);
+        color: var(--nexo-secondary);
+        padding: 3px 8px;
+        border-radius: var(--nexo-radius-sm);
+        font-size: 0.82rem;
+        font-family: 'SFMono-Regular', Consolas, monospace;
         font-weight: 600;
-        font-size: 0.88rem;
-        transition: all 0.25s;
     }
-    .btn-volver:hover {
-        background: #2D2D50;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(26, 26, 46, 0.25);
-        color: #fff;
+    .talla-badge {
+        background: var(--nexo-gray-100);
+        color: var(--nexo-gray-700);
+        border: 1px solid var(--nexo-border-light);
+        padding: 3px 10px;
+        border-radius: var(--nexo-radius-full);
+        font-size: 0.8rem;
+        font-weight: 600;
     }
 
     /* === LOADING === */
@@ -232,259 +260,247 @@
         justify-content: center;
         padding: 60px 20px;
     }
-    .loading-spinner {
-        width: 44px;
-        height: 44px;
-        border: 3px solid #e8eaf0;
-        border-top: 3px solid #0066FF;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+    .loading-container .spinner-border {
+        width: 2.5rem;
+        height: 2.5rem;
+        color: #405189;
     }
 
-    /* === SKU CODE === */
-    .sku-code {
-        background: #f0f2f7;
-        color: #1A1A2E;
-        padding: 3px 8px;
-        border-radius: 4px;
-        font-size: 0.82rem;
-        font-family: 'SFMono-Regular', Consolas, monospace;
-        font-weight: 600;
-    }
-    .talla-badge {
-        background: #e8eaf0;
-        color: #4A4A5A;
-        padding: 3px 10px;
-        border-radius: 12px;
-        font-size: 0.8rem;
-        font-weight: 600;
-    }
-
+    /* Responsive */
     @media (max-width: 768px) {
-        .detalle-dte-header { flex-direction: column; gap: 0.5rem; }
-        .detalle-dte .row > [class*="col-md-"],
-        .detalle-dte .row > [class*="col-lg-"] { flex: 0 0 100%; max-width: 100%; }
-    }
-    @media (max-width: 576px) {
-        .detalle-dte-card { padding: 0.75rem; }
-        .detalle-dte-table { font-size: 0.75rem; }
-        .detalle-dte-total { font-size: 1.125rem; }
+        .module-header {
+            padding: 12px 16px;
+        }
+        .module-header-icon {
+            width: 40px;
+            height: 40px;
+            font-size: 20px;
+        }
+        .info-card {
+            padding: 16px;
+        }
     }
 </style>
 
 <div class="page-content">
     <div class="container-fluid">
-            <!-- Header -->
-            <div class="row mb-3">
-                <div class="col-12">
-                    <div class="d-flex justify-content-between align-items-center page-title-dte">
-                        <div>
-                            <h4 class="mb-1"><i class="ri-file-text-line me-2" style="color:#0066FF"></i>Detalle de DTE</h4>
-                            <nav aria-label="breadcrumb">
-                                <ol class="breadcrumb mb-0">
-                                    <li class="breadcrumb-item"><a href="/app/">Inicio</a></li>
-                                    <li class="breadcrumb-item active">DTE #{{ dte_id }}</li>
-                                </ol>
-                            </nav>
+        <div class="card shadow nexo-animate-fadein">
+            <!-- Header estándar del módulo -->
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon">
+                        <i class="bi bi-file-earmark-text"></i>
+                    </div>
+                    <div class="module-header-info">
+                        <h5>DTE #<span id="numeroDocumento">{{ dte_id }}</span></h5>
+                        <div class="module-header-status">
+                            <span id="tipoDocumentoHeader">Detalle de DTE</span>
                         </div>
-                        <button class="btn btn-volver" onclick="history.back()">
-                            <i class="ri-arrow-left-line me-1"></i>Volver
-                        </button>
                     </div>
                 </div>
+                <div class="module-header-actions">
+                    <span class="badge-estado-header" id="estadoDteHeader">
+                        <i class="bi bi-clock me-1"></i>&mdash;
+                    </span>
+                    <a href="{% url 'verGestionDteCompras' %}" class="btn btn-light">
+                        <i class="bi bi-arrow-left me-1"></i>Volver a DTEs
+                    </a>
+                </div>
             </div>
-            
-            <!-- Contenido Principal -->
-            <div class="row">
-                <div class="col-12">
-                    <div class="card shadow-dte">
-                        <div class="dte-detail-header">
-                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                <div>
-                                    <h4><i class="ri-file-text-line me-2"></i>DTE #<span id="numeroDocumento">{{ dte_id }}</span></h4>
-                                    <small id="tipoDocumentoHeader">Cargando...</small>
-                                </div>
-                                <div>
-                                    <span class="badge-estado-header" id="estadoDteHeader">
-                                        <i class="ri-time-line me-1"></i>Cargando...
-                                    </span>
+
+            <div class="card-body" id="contenidoDte">
+                <!-- Loading -->
+                <div class="loading-container" id="loadingDte" role="status" aria-live="polite">
+                    <div class="spinner-border" aria-hidden="true"></div>
+                    <p class="mt-3 mb-0 text-muted">Cargando información del DTE...</p>
+                </div>
+
+                <!-- Contenido (se llena con JS) -->
+                <div id="detalleDteContent" style="display: none;">
+                    <!-- Montos (KPIs) -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-xl-3 col-md-6 col-6">
+                            <div class="kpi-card kpi-blue card h-100">
+                                <div class="card-body d-flex align-items-center gap-2">
+                                    <div class="kpi-icon text-white">
+                                        <i class="bi bi-receipt"></i>
+                                    </div>
+                                    <div class="flex-grow-1 overflow-hidden">
+                                        <p class="kpi-label">Monto Neto</p>
+                                        <div class="kpi-value" id="montoNeto">$0</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        
-                        <div class="card-body" id="contenidoDte">
-                            <!-- Loading -->
-                            <div class="loading-container" id="loadingDte">
-                                <div class="loading-spinner"></div>
-                                <p class="mt-3 text-muted">Cargando información del DTE...</p>
-                            </div>
-                            
-                            <!-- Contenido (se llena con JS) -->
-                            <div id="detalleDteContent" style="display: none;">
-                                <div class="row">
-                                    <!-- Información General -->
-                                    <div class="col-md-6">
-                                        <div class="info-card">
-                                            <h6><i class="ri-information-line me-2"></i>Información General</h6>
-                                            <div class="info-row">
-                                                <span class="info-label">Tipo Documento:</span>
-                                                <span class="info-value" id="tipoDocumento">-</span>
-                                            </div>
-                                            <div class="info-row">
-                                                <span class="info-label">Número:</span>
-                                                <span class="info-value" id="numDocumento">-</span>
-                                            </div>
-                                            <div class="info-row">
-                                                <span class="info-label">Fecha Emisión:</span>
-                                                <span class="info-value" id="fechaEmision">-</span>
-                                            </div>
-                                            <div class="info-row">
-                                                <span class="info-label">Estado DTE:</span>
-                                                <span class="info-value" id="estadoDte">-</span>
-                                            </div>
-                                            <div class="info-row">
-                                                <span class="info-label">Estado Pago:</span>
-                                                <span class="info-value" id="estadoPago">-</span>
-                                            </div>
-                                        </div>
+                        <div class="col-xl-3 col-md-6 col-6">
+                            <div class="kpi-card kpi-orange card h-100">
+                                <div class="card-body d-flex align-items-center gap-2">
+                                    <div class="kpi-icon text-white">
+                                        <i class="bi bi-percent"></i>
                                     </div>
-                                    
-                                    <!-- Receptor/Emisor -->
-                                    <div class="col-md-6">
-                                        <div class="info-card">
-                                            <h6><i class="ri-building-2-line me-2"></i>Emisor / Receptor</h6>
-                                            <div class="info-row">
-                                                <span class="info-label">Receptor:</span>
-                                                <span class="info-value" id="receptor">-</span>
-                                            </div>
-                                            <div class="info-row">
-                                                <span class="info-label">RUT Receptor:</span>
-                                                <span class="info-value" id="rutReceptor">-</span>
-                                            </div>
-                                            <div class="info-row">
-                                                <span class="info-label">Emisor:</span>
-                                                <span class="info-value" id="emisor">-</span>
-                                            </div>
-                                            <div class="info-row">
-                                                <span class="info-label">Sucursal:</span>
-                                                <span class="info-value" id="sucursal">-</span>
-                                            </div>
-                                            <div class="info-row">
-                                                <span class="info-label">Vendedor:</span>
-                                                <span class="info-value" id="vendedor">-</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Montos -->
-                                <div class="row">
-                                    <div class="col-12">
-                                        <div class="info-card">
-                                            <h6><i class="ri-money-dollar-circle-line me-2"></i>Montos</h6>
-                                            <div class="row g-3">
-                                                <div class="col-6 col-md-3">
-                                                    <div class="monto-box monto-neto">
-                                                        <small>Monto Neto</small>
-                                                        <h4 id="montoNeto">$0</h4>
-                                                    </div>
-                                                </div>
-                                                <div class="col-6 col-md-3">
-                                                    <div class="monto-box monto-iva">
-                                                        <small>IVA (19%)</small>
-                                                        <h4 id="montoIva">$0</h4>
-                                                    </div>
-                                                </div>
-                                                <div class="col-6 col-md-3">
-                                                    <div class="monto-box monto-total">
-                                                        <small>Total</small>
-                                                        <h4 id="montoTotal">$0</h4>
-                                                    </div>
-                                                </div>
-                                                <div class="col-6 col-md-3">
-                                                    <div class="monto-box monto-saldo">
-                                                        <small>Saldo</small>
-                                                        <h4 id="saldoPendiente">$0</h4>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Productos -->
-                                <div class="row">
-                                    <div class="col-12">
-                                        <div class="info-card">
-                                            <h6><i class="ri-shopping-bag-line me-2"></i>Productos</h6>
-                                            <div class="table-responsive">
-                                                <table class="table productos-table" id="tablaProductos">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>Producto</th>
-                                                            <th>SKU</th>
-                                                            <th>Talla</th>
-                                                            <th class="text-center">Cantidad</th>
-                                                            <th class="text-end">Precio Unit.</th>
-                                                            <th class="text-end">Subtotal</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody id="tbodyProductos">
-                                                        <tr>
-                                                            <td colspan="6" class="text-center text-muted">
-                                                                Sin productos
-                                                            </td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Pagos -->
-                                <div class="row" id="seccionPagos" style="display: none;">
-                                    <div class="col-12">
-                                        <div class="info-card">
-                                            <h6><i class="ri-bank-card-line me-2"></i>Pagos Registrados</h6>
-                                            <div class="table-responsive">
-                                                <table class="table productos-table" id="tablaPagos">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>Método de Pago</th>
-                                                            <th>Voucher</th>
-                                                            <th>Tipo Tarjeta</th>
-                                                            <th class="text-end">Monto</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody id="tbodyPagos">
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
+                                    <div class="flex-grow-1 overflow-hidden">
+                                        <p class="kpi-label">IVA (19%)</p>
+                                        <div class="kpi-value" id="montoIva">$0</div>
                                     </div>
                                 </div>
                             </div>
-                            
-                            <!-- Error -->
-                            <div id="errorDte" style="display: none;" class="text-center py-5">
-                                <i class="ri-error-warning-line" style="font-size: 3.5rem; color: #e68a00;"></i>
-                                <h5 class="mt-3" style="color: #1A1A2E; font-weight: 600;">No se pudo cargar el DTE</h5>
-                                <p style="color: #8A8A9A;" id="errorMensaje">Error desconocido</p>
-                                <button class="btn btn-volver mt-3" onclick="history.back()">
-                                    <i class="ri-arrow-left-line me-1"></i>Volver
-                                </button>
+                        </div>
+                        <div class="col-xl-3 col-md-6 col-6">
+                            <div class="kpi-card kpi-green card h-100">
+                                <div class="card-body d-flex align-items-center gap-2">
+                                    <div class="kpi-icon text-white">
+                                        <i class="bi bi-cash-stack"></i>
+                                    </div>
+                                    <div class="flex-grow-1 overflow-hidden">
+                                        <p class="kpi-label">Total</p>
+                                        <div class="kpi-value" id="montoTotal">$0</div>
+                                    </div>
+                                </div>
                             </div>
+                        </div>
+                        <div class="col-xl-3 col-md-6 col-6">
+                            <div class="kpi-card kpi-red card h-100">
+                                <div class="card-body d-flex align-items-center gap-2">
+                                    <div class="kpi-icon text-white">
+                                        <i class="bi bi-wallet2"></i>
+                                    </div>
+                                    <div class="flex-grow-1 overflow-hidden">
+                                        <p class="kpi-label">Saldo</p>
+                                        <div class="kpi-value" id="saldoPendiente">$0</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <!-- Información General -->
+                        <div class="col-md-6">
+                            <div class="info-card">
+                                <h6><i class="bi bi-info-circle me-2"></i>Información General</h6>
+                                <dl class="info-list">
+                                    <div class="info-row">
+                                        <dt class="info-label">Tipo Documento:</dt>
+                                        <dd class="info-value" id="tipoDocumento">-</dd>
+                                    </div>
+                                    <div class="info-row">
+                                        <dt class="info-label">Número:</dt>
+                                        <dd class="info-value" id="numDocumento">-</dd>
+                                    </div>
+                                    <div class="info-row">
+                                        <dt class="info-label">Fecha Emisión:</dt>
+                                        <dd class="info-value" id="fechaEmision">-</dd>
+                                    </div>
+                                    <div class="info-row">
+                                        <dt class="info-label">Estado DTE:</dt>
+                                        <dd class="info-value" id="estadoDte">-</dd>
+                                    </div>
+                                    <div class="info-row">
+                                        <dt class="info-label">Estado Pago:</dt>
+                                        <dd class="info-value" id="estadoPago">-</dd>
+                                    </div>
+                                </dl>
+                            </div>
+                        </div>
+
+                        <!-- Receptor/Emisor -->
+                        <div class="col-md-6">
+                            <div class="info-card">
+                                <h6><i class="bi bi-building me-2"></i>Emisor / Receptor</h6>
+                                <dl class="info-list">
+                                    <div class="info-row">
+                                        <dt class="info-label">Receptor:</dt>
+                                        <dd class="info-value" id="receptor">-</dd>
+                                    </div>
+                                    <div class="info-row">
+                                        <dt class="info-label">RUT Receptor:</dt>
+                                        <dd class="info-value" id="rutReceptor">-</dd>
+                                    </div>
+                                    <div class="info-row">
+                                        <dt class="info-label">Emisor:</dt>
+                                        <dd class="info-value" id="emisor">-</dd>
+                                    </div>
+                                    <div class="info-row">
+                                        <dt class="info-label">Sucursal:</dt>
+                                        <dd class="info-value" id="sucursal">-</dd>
+                                    </div>
+                                    <div class="info-row">
+                                        <dt class="info-label">Vendedor:</dt>
+                                        <dd class="info-value" id="vendedor">-</dd>
+                                    </div>
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Productos -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="info-card">
+                                <h6><i class="bi bi-bag me-2"></i>Productos</h6>
+                                <div class="table-responsive">
+                                    <table class="table dte-table" id="tablaProductos">
+                                        <thead>
+                                            <tr>
+                                                <th>Producto</th>
+                                                <th>SKU</th>
+                                                <th>Talla</th>
+                                                <th class="text-center">Cantidad</th>
+                                                <th class="text-end">Precio Unit.</th>
+                                                <th class="text-end">Subtotal</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyProductos">
+                                            <tr>
+                                                <td colspan="6" class="text-center text-muted">
+                                                    Sin productos
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pagos -->
+                    <div class="row" id="seccionPagos" style="display: none;">
+                        <div class="col-12">
+                            <div class="info-card">
+                                <h6><i class="bi bi-credit-card me-2"></i>Pagos Registrados</h6>
+                                <div class="table-responsive">
+                                    <table class="table dte-table" id="tablaPagos">
+                                        <thead>
+                                            <tr>
+                                                <th>Método de Pago</th>
+                                                <th>Voucher</th>
+                                                <th>Tipo Tarjeta</th>
+                                                <th class="text-end">Monto</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyPagos">
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Error -->
+                <div id="errorDte" style="display: none;">
+                    <div class="alert alert-danger d-flex align-items-start gap-2 mb-0" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+                        <div>
+                            <strong class="d-block">No se pudo cargar el DTE</strong>
+                            <span id="errorMensaje">Error desconocido</span>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
 {% include '../../layout/footer.html' %}
 
@@ -525,9 +541,9 @@ function mostrarDetalleDte(response) {
     const dte = response.dte;
 
     // Header
-    $('#numeroDocumento').text(dte.numero_documento || dteId);
+    $('#numeroDocumento').text(dte.numero_documento || {{ dte_id }});
     $('#tipoDocumentoHeader').text(dte.tipo_documento || '-');
-    $('#estadoDteHeader').html(`<i class="ri-checkbox-circle-line me-1"></i>${formatEstado(dte.estado_dte)}`);
+    $('#estadoDteHeader').html(`<i class="bi bi-check-circle me-1"></i>${formatEstado(dte.estado_dte)}`);
 
     // Información General
     $('#tipoDocumento').text(dte.tipo_documento || '-');
