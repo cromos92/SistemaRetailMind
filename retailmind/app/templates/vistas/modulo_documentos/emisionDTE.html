@@ -7,36 +7,159 @@
 <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 
 <style>
-/* ========== NEXO DESIGN SYSTEM VARIABLES ========== */
-:root {
-    --nexo-primary: #0066FF;
-    --nexo-primary-dark: #0052CC;
-    --nexo-primary-light: #E6F0FF;
-    --nexo-secondary: #1A1A2E;
-    --nexo-accent: #00D4AA;
-    --nexo-success: #00D4AA;
-    --nexo-warning: #FFB020;
-    --nexo-error: #FF4D4D;
-    --nexo-info: #0066FF;
-    --nexo-gray-900: #1A1A2E;
-    --nexo-gray-700: #4A4A5A;
-    --nexo-gray-500: #8A8A9A;
-    --nexo-gray-300: #D1D1D9;
-    --nexo-gray-100: #F5F5F7;
-    --nexo-white: #FFFFFF;
-    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
-    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
-    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
-    --nexo-radius-sm: 4px;
-    --nexo-radius-md: 8px;
-    --nexo-radius-lg: 12px;
-    --nexo-radius-xl: 16px;
-    --nexo-transition-fast: 150ms ease;
-    --nexo-transition-normal: 250ms ease;
+/* Tokens --nexo-* vienen de nexo-design-system.css (cargado en layout/header.html) */
+
+/* ==================== ESTRUCTURA ESTÁNDAR DEL MÓDULO (ESTILOS_MODULOS.md) ==================== */
+.page-content {
+    background: var(--nexo-white);
+    min-height: calc(100vh - 70px);
+}
+
+/* Card principal: sin overflow hidden para no romper el sticky del panel derecho */
+.card.shadow {
+    border: none;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(64, 81, 137, 0.1);
+}
+
+.card.shadow > .card-body {
+    padding: 14px 18px;
+    background: var(--nexo-white);
+    border-radius: 0 0 16px 16px;
+}
+
+/* Header con gradiente estándar */
+.module-header {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.module-header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.module-header-icon {
+    width: 44px;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+}
+
+.module-header-info h5 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: white;
+}
+
+.module-header-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    opacity: 0.9;
+    margin-top: 2px;
+}
+
+.module-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Cabecera oscura única para cards internas y modales de esta pantalla (token secondary) */
+.card-header-nexo {
+    background: var(--nexo-secondary);
+    color: var(--nexo-white);
+    border: none;
+}
+
+.card-header-nexo h6,
+.card-header-nexo .modal-title {
+    color: var(--nexo-white);
+    font-weight: 600;
+    margin: 0;
+}
+
+.card-header-nexo .badge.bg-white {
+    color: var(--nexo-secondary);
+}
+
+/* Botones translúcidos sobre cabeceras oscuras */
+.btn-glass {
+    background: rgba(255, 255, 255, 0.2);
+    color: var(--nexo-white);
+    border: none;
+    min-height: 32px;
+}
+
+.btn-glass:hover,
+.btn-glass:focus {
+    background: rgba(255, 255, 255, 0.32);
+    color: var(--nexo-white);
+}
+
+.btn-glass.btn-glass-danger {
+    background: rgba(255, 77, 77, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.btn-glass.btn-glass-danger:hover {
+    background: rgba(255, 77, 77, 0.5);
+}
+
+/* Overlay de carga (el id lo usa el JS: fadeIn/fadeOut) */
+.loading-overlay {
+    position: fixed;
+    z-index: 1060;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.8);
+    text-align: center;
+}
+
+.loading-overlay-inner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Estados vacíos: variante compacta del .empty-state-nexo global */
+.empty-state-nexo.empty-state-compact {
+    padding: 1.25rem 1rem;
+}
+
+.empty-state-nexo.empty-state-compact i {
+    font-size: 2rem;
+    margin-bottom: 0.25rem;
+    display: block;
+}
+
+.empty-state-nexo.empty-state-compact p {
+    margin: 0;
+    font-size: 0.85rem;
 }
 
 /* Estilos personalizados para emisión de DTE con NEXO Design System */
 .dte-section {
+    position: relative;
     background: var(--nexo-white);
     border-radius: var(--nexo-radius-lg);
     padding: 14px 18px;
@@ -48,15 +171,6 @@
 
 .dte-section:hover {
     box-shadow: var(--nexo-shadow-md);
-}
-
-.dte-header {
-    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%);
-    color: var(--nexo-white);
-    border-radius: var(--nexo-radius-lg);
-    padding: 12px 18px;
-    margin-bottom: 14px;
-    box-shadow: var(--nexo-shadow-lg);
 }
 
 .method-selector {
@@ -71,16 +185,20 @@
     overflow: hidden;
 }
 
+/* "Shine" que cruza la tarjeta al seleccionarla (única definición del ::before) */
 .method-selector::before {
     content: '';
     position: absolute;
     top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(135deg, rgba(0,102,255,0.05) 0%, rgba(0,102,255,0) 100%);
-    opacity: 0;
-    transition: opacity 0.3s ease;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(0, 102, 255, 0.1), transparent);
+    transition: left 0.5s ease;
+}
+
+.method-selector.active::before {
+    left: 100%;
 }
 
 .method-selector:hover {
@@ -88,15 +206,29 @@
     box-shadow: 0 4px 12px rgba(0,102,255,0.15);
 }
 
-.method-selector:hover::before {
-    opacity: 1;
-}
-
 .method-selector.active {
     border-color: var(--nexo-primary);
-    background: linear-gradient(135deg, var(--nexo-primary-light) 0%, #f0f8ff 100%);
-    box-shadow: 0 8px 25px rgba(0,102,255,0.3);
+    background: var(--nexo-primary-light);
+    box-shadow: 0 4px 16px rgba(0, 102, 255, 0.25);
     transform: scale(1.02);
+}
+
+/* Textos internos de la tarjeta de selección */
+.method-selector .method-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-bottom: 2px;
+    color: var(--nexo-secondary);
+}
+
+.method-selector .method-sub {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-500);
+    margin: 0;
+}
+
+.method-selector .method-note {
+    font-size: 0.75rem;
 }
 
 .method-selector.active::after {
@@ -148,79 +280,6 @@
     75% { transform: scale(1.05); }
 }
 
-/* Estilos para el separador de flujo entre pasos */
-.flow-separator {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 10px;
-}
-
-.flow-divider {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    min-height: 180px;
-}
-
-.flow-icon-circle {
-    width: 50px;
-    height: 50px;
-    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
-    animation: flowIconPulse 2s ease-in-out infinite;
-}
-
-.flow-icon-circle i {
-    font-size: 1.8rem;
-    color: white;
-    animation: arrowSlide 1.5s ease-in-out infinite;
-}
-
-.flow-divider-line {
-    width: 2px;
-    flex: 1;
-    background: linear-gradient(to bottom, 
-        transparent 0%, 
-        var(--nexo-primary) 20%, 
-        var(--nexo-primary) 80%, 
-        transparent 100%);
-    margin: 8px 0;
-}
-
-@keyframes flowIconPulse {
-    0%, 100% {
-        transform: scale(1);
-        box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
-    }
-    50% {
-        transform: scale(1.08);
-        box-shadow: 0 6px 20px rgba(0, 102, 255, 0.5);
-    }
-}
-
-@keyframes arrowSlide {
-    0%, 100% {
-        transform: translateX(0);
-    }
-    50% {
-        transform: translateX(4px);
-    }
-}
-
-/* Responsive: En móviles, ocultar el separador */
-@media (max-width: 768px) {
-    .flow-separator {
-        display: none;
-    }
-}
-
 /* Estilos para modal de resumen de despacho */
 .swal-wide {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -244,17 +303,17 @@
 }
 
 .swal-wide .swal2-html-container::-webkit-scrollbar-track {
-    background: #f1f1f1;
+    background: var(--nexo-gray-100);
     border-radius: 10px;
 }
 
 .swal-wide .swal2-html-container::-webkit-scrollbar-thumb {
-    background: #888;
+    background: var(--nexo-gray-500);
     border-radius: 10px;
 }
 
 .swal-wide .swal2-html-container::-webkit-scrollbar-thumb:hover {
-    background: #555;
+    background: var(--nexo-gray-700);
 }
 
 @media (max-height: 700px) {
@@ -279,8 +338,8 @@
 }
 
 .resumen-despacho .table thead th {
-    background-color: #f8f9fa;
-    border-bottom: 2px solid #dee2e6;
+    background-color: var(--nexo-gray-100);
+    border-bottom: 2px solid var(--nexo-gray-300);
     font-weight: 600;
     padding: 10px 8px;
 }
@@ -290,15 +349,15 @@
     vertical-align: middle;
 }
 
-.resumen-despacho .table-hover tbody tr:hover {
-    background-color: rgba(0, 123, 255, 0.05);
+.resumen-despacho .table-hover {
+    --vz-table-hover-bg: rgba(0, 102, 255, 0.05);
 }
 
 .resumen-despacho .sticky-top {
     position: sticky;
     top: 0;
     z-index: 10;
-    background-color: #f8f9fa !important;
+    background-color: var(--nexo-gray-100) !important;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
@@ -313,7 +372,7 @@
     overflow-y: auto;
     overflow-x: hidden;
     position: relative;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--nexo-gray-300);
     border-radius: 4px;
     background: white;
 }
@@ -324,17 +383,17 @@
 }
 
 .productos-scroll-container::-webkit-scrollbar-track {
-    background: #f1f1f1;
+    background: var(--nexo-gray-100);
     border-radius: 10px;
 }
 
 .productos-scroll-container::-webkit-scrollbar-thumb {
-    background: #888;
+    background: var(--nexo-gray-500);
     border-radius: 10px;
 }
 
 .productos-scroll-container::-webkit-scrollbar-thumb:hover {
-    background: #555;
+    background: var(--nexo-gray-700);
 }
 
 /* Indicador de scroll disponible */
@@ -388,110 +447,31 @@
     border-width: 2px;
 }
 
-.talla-selector {
-    display: inline-block;
-    margin: 2px;
-    padding: 5px 10px;
-    border: 1px solid var(--nexo-gray-300);
-    border-radius: var(--nexo-radius-sm);
-    cursor: pointer;
-    background: var(--nexo-white);
-    transition: all 0.2s ease;
+/* Botones: .btn-nexo-primary / .btn-nexo-outline / .btn-nexo-success vienen del CSS global */
+
+/* Botón principal de emisión (variante global btn-nexo-success + énfasis) */
+#btnGenerarOperacion {
+    font-size: 0.95rem;
+    box-shadow: 0 4px 14px rgba(0, 212, 170, 0.35);
 }
 
-.talla-selector:hover {
-    background: var(--nexo-gray-100);
-    border-color: var(--nexo-primary);
-}
-
-.talla-selector.selected {
-    background: var(--nexo-primary);
-    color: white;
-    border-color: var(--nexo-primary);
-}
-
-.detail-section {
-    background: var(--nexo-white);
-    border-radius: var(--nexo-radius-lg);
-    padding: 14px 18px;
-    box-shadow: var(--nexo-shadow-md);
-}
-
-.total-section {
-    background: var(--nexo-gray-100);
+/* Pie del panel derecho: un solo tamaño para los tres botones de navegación */
+.pos-right-panel-footer .d-flex > .btn {
+    padding: 0.45rem 0.9rem;
+    font-size: 0.875rem;
     border-radius: var(--nexo-radius-md);
-    padding: 15px;
-    border-left: 4px solid var(--nexo-accent);
 }
 
-.btn-custom {
-    border-radius: var(--nexo-radius-md);
-    padding: 10px 20px;
-    font-weight: 500;
-    transition: all var(--nexo-transition-fast);
+/* Targets táctiles mínimos en tablas de productos y modal de tallas (POS 15") */
+#tabla_productos_busqueda tbody .btn,
+#table_modal_prod tbody .btn {
+    min-height: 36px;
+    min-width: 36px;
 }
 
-.btn-custom:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--nexo-shadow-md);
-}
-
-/* NEXO Primary Button */
-.btn-nexo-primary {
-    background: var(--nexo-primary);
-    color: var(--nexo-white);
-    border: none;
-    border-radius: var(--nexo-radius-md);
-    padding: 12px 24px;
-    font-weight: 600;
-    transition: all var(--nexo-transition-fast);
-}
-
-.btn-nexo-primary:hover {
-    background: var(--nexo-primary-dark);
-    color: var(--nexo-white);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 102, 255, 0.35);
-}
-
-/* NEXO Success Button */
-.btn-nexo-success {
-    background: var(--nexo-accent);
-    color: var(--nexo-white);
-    border: none;
-    border-radius: var(--nexo-radius-md);
-    padding: 12px 24px;
-    font-weight: 600;
-    transition: all var(--nexo-transition-fast);
-}
-
-.btn-nexo-success:hover {
-    background: #00b894;
-    color: var(--nexo-white);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 212, 170, 0.35);
-}
-
-/* NEXO Outline Button */
-.btn-nexo-outline {
-    background: transparent;
-    color: var(--nexo-primary);
-    border: 2px solid var(--nexo-primary);
-    border-radius: var(--nexo-radius-md);
-    padding: 10px 22px;
-    font-weight: 500;
-    transition: all var(--nexo-transition-fast);
-}
-
-.btn-nexo-outline:hover {
-    background: var(--nexo-primary);
-    color: var(--nexo-white);
-    transform: translateY(-2px);
-}
-
-.search-highlight {
-    background-color: rgba(255, 176, 32, 0.2);
-    font-weight: bold;
+#tabla_modal_ventas_interna .cantidad-input,
+#detalleTable .cantidad-detalle-input {
+    min-height: 36px;
 }
 
 /* Responsive */
@@ -523,13 +503,6 @@
 }
 
 /* Estilos del Wizard de Pasos */
-.wizard-steps {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
-    padding: 10px 16px;
-    margin-top: 10px;
-}
-
 .step-indicator {
     display: flex;
     align-items: center;
@@ -564,17 +537,18 @@
 
 .step-label {
     color: rgba(255, 255, 255, 0.85);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
     transition: all 0.3s ease;
 }
 
 .step-line {
     flex: 1;
+    min-width: 40px;
     height: 2px;
     background: rgba(255, 255, 255, 0.25);
     margin: 0 10px;
-    margin-top: -14px;
+    margin-top: -15px;
     transition: all 0.3s ease;
     border-radius: 2px;
 }
@@ -623,20 +597,16 @@
     color: var(--nexo-primary);
     padding: 2px 10px;
     border-radius: 20px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     border: 1px solid rgba(0, 102, 255, 0.2);
     margin-bottom: 4px;
 }
 
-.dte-section {
-    position: relative;
-}
-
 /* Botones de navegación del wizard - NEXO Style */
 .wizard-navigation {
     display: flex;
-    justify-content: between;
+    justify-content: space-between;
     gap: 10px;
     margin-top: 14px;
     padding: 12px 0;
@@ -676,6 +646,7 @@
     
     .step-line {
         width: 2px;
+        min-width: 0;
         height: 30px;
         margin: 0;
         margin-left: 19px;
@@ -716,7 +687,7 @@
 
 .section-summary .alert {
     margin-bottom: 0;
-    border-left: 4px solid #28a745;
+    border-left: 4px solid var(--nexo-success);
 }
 
 .expand-section-btn {
@@ -732,33 +703,6 @@
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* Mejoras en selectores de método - NEXO Style */
-.method-selector {
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
-}
-
-.method-selector::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(0, 102, 255, 0.1), transparent);
-    transition: left 0.5s ease;
-}
-
-.method-selector.active::before {
-    left: 100%;
-}
-
-.method-selector.active {
-    transform: scale(1.02);
-    box-shadow: 0 4px 16px rgba(0, 102, 255, 0.25);
-}
-
 /* Animación de selección */
 @keyframes selectPulse {
     0% { transform: scale(1); }
@@ -770,62 +714,116 @@
     animation: selectPulse 0.5s ease;
 }
 
-/* NEXO Card Styles */
-.nexo-card {
-    background: var(--nexo-white);
-    border: 1px solid var(--nexo-gray-300);
-    border-radius: var(--nexo-radius-lg);
-    box-shadow: var(--nexo-shadow-sm);
-    transition: all var(--nexo-transition-normal);
-}
-
-.nexo-card:hover {
-    box-shadow: var(--nexo-shadow-md);
-}
-
-/* NEXO Form Controls */
-.form-control:focus, .form-select:focus {
+/* NEXO Form Controls (acotado a los pasos del wizard y al modal de tallas) */
+.dte-section .form-control:focus,
+.dte-section .form-select:focus,
+.product-search-section .form-control:focus,
+.product-search-section .form-select:focus,
+#modalTallas .form-control:focus,
+#modalTallas .form-select:focus {
     border-color: var(--nexo-primary);
     box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
 }
 
-/* NEXO Badges */
-.badge-nexo-primary {
-    background: var(--nexo-primary);
-    color: white;
-}
-
-.badge-nexo-success {
-    background: var(--nexo-accent);
-    color: white;
-}
-
-.badge-nexo-warning {
-    background: var(--nexo-warning);
-    color: var(--nexo-secondary);
-}
-
-/* NEXO Table Styles */
-.table thead th {
+/* NEXO Table Styles (acotado a las tablas de la pantalla, no a las de Swal/Select2) */
+#tabla_productos_busqueda thead th,
+#detalleTable thead th,
+#table_modal_prod thead th,
+#modalPendientesDespacho thead th {
     font-weight: 600;
     text-transform: uppercase;
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     letter-spacing: 0.3px;
 }
 
-.table tbody tr:hover {
-    background-color: var(--nexo-primary-light) !important;
+/* Hover: se sobreescribe la variable Velzon (pinta por celda) para no pisar table-warning/table-danger */
+#tabla_productos_busqueda,
+#detalleTable,
+#table_modal_prod {
+    --vz-table-hover-bg: var(--nexo-primary-light);
 }
 
 /* Compact table rows */
-.table-sm td, .table-sm th {
+#tabla_productos_busqueda td, #tabla_productos_busqueda th,
+#detalleTable td, #detalleTable th,
+#table_modal_prod td, #table_modal_prod th,
+#modalPendientesDespacho td, #modalPendientesDespacho th {
     padding: 0.3rem 0.5rem;
 }
 
-/* Sticky totals panel */
-.totales-sticky {
-    position: sticky;
-    top: 60px;
+/* Carrito del panel derecho (markup generado en JS) */
+.carrito-item {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--nexo-gray-100);
+    transition: background 0.15s;
+}
+
+.carrito-item .carrito-articulo {
+    font-weight: 700;
+    font-size: 0.82rem;
+    color: var(--nexo-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.carrito-item .carrito-desc {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-500);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.carrito-item .carrito-monto {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--nexo-secondary);
+}
+
+.carrito-item .carrito-talla {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    background: var(--nexo-gray-100);
+    border-radius: 10px;
+    padding: 1px 7px;
+    margin: 1px;
+    font-size: 0.75rem;
+}
+
+.carrito-item .carrito-talla span {
+    color: var(--nexo-gray-500);
+}
+
+.carrito-item .carrito-talla strong {
+    color: var(--nexo-secondary);
+}
+
+.carrito-item .carrito-desglose {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-500);
+}
+
+.carrito-item .carrito-desglose .sep {
+    color: var(--nexo-gray-300);
+}
+
+.carrito-item .carrito-desglose .sobre {
+    color: var(--nexo-primary);
+}
+
+.carrito-item .carrito-desglose .pint {
+    color: var(--nexo-secondary);
+}
+
+/* Modales de la pantalla: un solo radio y cabecera oscura (.card-header-nexo) */
+#modalPendientesDespacho .modal-content,
+#modalTallas .modal-content,
+#modalPreview .modal-content {
+    border: none;
+    border-radius: var(--nexo-radius-lg);
+    overflow: hidden;
 }
 
 /* Modal tallas: highlight row when qty entered */
@@ -957,9 +955,20 @@
         padding: 10px 14px;
         margin-bottom: 10px;
     }
-    .dte-header {
-        padding: 8px 14px;
-        margin-bottom: 10px;
+}
+
+/* Pantallas de tienda 15": cabecera del módulo y card-body más compactos */
+@media (min-width: 992px) and (max-height: 800px) {
+    .module-header {
+        padding: 8px 18px;
+    }
+    .module-header-icon {
+        width: 38px;
+        height: 38px;
+        font-size: 19px;
+    }
+    .card.shadow > .card-body {
+        padding: 10px 14px;
     }
 }
 
@@ -990,35 +999,21 @@
     }
 }
 
-/* Enhanced mobile for DTE emission */
+/* Móvil: ajustes contra las clases reales de la pantalla */
 @media (max-width: 576px) {
-    .dte-section { padding: 0.75rem !important; }
-    .dte-section .section-title { font-size: 0.938rem; }
-    .receptor-info .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
-    .productos-dte-table { font-size: 0.75rem; }
-    .productos-dte-table th, .productos-dte-table td { padding: 0.375rem 0.5rem; }
-    .total-dte { font-size: 1.125rem; }
-    .method-option { min-height: 60px; }
-    .method-option i { font-size: 1.25rem !important; }
-    .method-option span { font-size: 0.75rem !important; }
-    .acciones-dte { flex-direction: column; gap: 0.5rem; }
-    .acciones-dte .btn { width: 100%; }
+    .card.shadow > .card-body { padding: 10px 12px; }
+    .module-header { padding: 10px 14px; }
+    .module-header-icon { width: 38px; height: 38px; font-size: 19px; }
+    .dte-section, .product-search-section { padding: 0.75rem; }
+    .method-selector { min-height: 60px; }
+    .pos-right-panel-footer .d-flex > .btn { flex: 1 1 100%; }
 }
 </style>
 
 <!-- Loading overlay -->
-<div id="loadingOverlay" style="
-    display: none;
-    position: fixed;
-    z-index: 1060;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(255, 255, 255, 0.8);
-    text-align: center;">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+<div id="loadingOverlay" class="loading-overlay" style="display: none;">
+    <div class="loading-overlay-inner">
+        <div class="spinner-border text-nexo-primary" role="status" style="width: 3rem; height: 3rem;">
             <span class="visually-hidden">Cargando...</span>
         </div>
         <p class="mt-3 fw-bold">Procesando información...</p>
@@ -1028,37 +1023,43 @@
 <div class="page-content">
     <div class="container-fluid">
         
-        <!-- Header Principal con Wizard de Pasos -->
-        <div class="dte-header">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h6 class="mb-0"><i class="bi bi-file-earmark-plus me-2"></i>Emisión de DTE</h6>
-                    <small class="opacity-75">{{ user.username }} &bull; {{ "now"|date:"d/m/Y" }}</small>
+        <div class="card shadow">
+        <!-- Header estándar del módulo con Wizard de Pasos -->
+        <div class="module-header">
+            <div class="module-header-left">
+                <div class="module-header-icon">
+                    <i class="bi bi-file-earmark-plus"></i>
                 </div>
-        <div class="text-end">
-                    <!-- Wizard de Pasos compacto inline -->
-                    <div class="step-indicator gap-2" style="margin-top: 0;">
-                        <div class="step active" data-step="1">
-                            <div class="step-number">1</div>
-                            <div class="step-label">Config.</div>
-                        </div>
-                        <div class="step-line" style="min-width: 40px; margin-top: -15px;"></div>
-                        <div class="step" data-step="2">
-                            <div class="step-number">2</div>
-                            <div class="step-label">Productos</div>
-                        </div>
+                <div class="module-header-info">
+                    <h5>Emisión de DTE</h5>
+                    <div class="module-header-status">{{ user.username }} &bull; {{ "now"|date:"d/m/Y" }}</div>
+                </div>
+            </div>
+            <div class="module-header-actions">
+                <!-- Wizard de Pasos compacto inline -->
+                <div class="step-indicator gap-2">
+                    <div class="step active" data-step="1">
+                        <div class="step-number">1</div>
+                        <div class="step-label">Config.</div>
+                    </div>
+                    <div class="step-line"></div>
+                    <div class="step" data-step="2">
+                        <div class="step-number">2</div>
+                        <div class="step-label">Productos</div>
                     </div>
                 </div>
             </div>
         </div>
+
+        <div class="card-body">
 
         <!-- Sección 1: Configuración del DTE -->
         <div class="dte-section fade-in step-content" id="step-1" data-step="1">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <div>
                     <div class="section-progress">Paso 1 de 2</div>
-                    <h6 class="mb-0" style="color: var(--nexo-secondary); font-weight: 600;">
-                        <i class="bi bi-gear-fill me-2" style="color: var(--nexo-primary);"></i>Configuración del Documento
+                    <h6 class="mb-0 fw-semibold text-nexo-secondary">
+                        <i class="bi bi-gear-fill me-2 text-nexo-primary"></i>Configuración del Documento
                     </h6>
                 </div>
                 <span class="badge bg-danger" id="badgeMetodoDespacho" style="display:none">Requerido</span>
@@ -1069,20 +1070,20 @@
                 <div class="col-md-6 mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <label class="form-label fw-bold mb-0">
-                            <i class="bi bi-1-circle-fill text-primary me-1"></i>Método de Despacho
+                            <i class="bi bi-1-circle-fill text-nexo-primary me-1"></i>Método de Despacho
                         </label>
                         <span class="badge bg-danger small" id="badgeMetodoDespachoVisible">Requerido</span>
                     </div>
                     <div class="row g-2">
                         <div class="col-6">
                             <div class="method-selector shadow-sm" data-method="interno">
-                                <div class="mb-1" style="font-size: 1.5rem; color: #6c757d;">
+                                <div class="mb-1">
                                     <i class="bi bi-building"></i>
                                 </div>
-                                <h6 class="fw-bold mb-1 small">Despacho Interno</h6>
-                                <p class="text-muted mb-0" style="font-size: 0.7rem;">Entre sucursales</p>
+                                <div class="method-title">Despacho Interno</div>
+                                <p class="method-sub">Entre sucursales</p>
                                 <div class="mt-2 pt-1 border-top">
-                                    <small class="text-danger" style="font-size: 0.65rem;">
+                                    <small class="text-danger method-note">
                                         <i class="bi bi-arrow-down-circle me-1"></i>Stock se reduce
                                     </small>
                                 </div>
@@ -1090,13 +1091,13 @@
                         </div>
                         <div class="col-6">
                             <div class="method-selector shadow-sm" data-method="externo">
-                                <div class="mb-1" style="font-size: 1.5rem; color: #6c757d;">
+                                <div class="mb-1">
                                     <i class="bi bi-truck"></i>
                                 </div>
-                                <h6 class="fw-bold mb-1 small">Despacho Externo</h6>
-                                <p class="text-muted mb-0" style="font-size: 0.7rem;">Venta a cliente</p>
+                                <div class="method-title">Despacho Externo</div>
+                                <p class="method-sub">Venta a cliente</p>
                                 <div class="mt-2 pt-1 border-top">
-                                    <small class="text-danger" style="font-size: 0.65rem;">
+                                    <small class="text-danger method-note">
                                         <i class="bi bi-exclamation-triangle me-1"></i>Stock se reduce
                                     </small>
                                 </div>
@@ -1109,20 +1110,20 @@
                 <div class="col-md-6 mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <label class="form-label fw-bold mb-0">
-                            <i class="bi bi-2-circle-fill text-primary me-1"></i>Tipo de Documento
+                            <i class="bi bi-2-circle-fill text-nexo-primary me-1"></i>Tipo de Documento
                         </label>
                         <span class="badge bg-danger small" id="badgeTipoDocumento">Requerido</span>
                     </div>
                     <div class="row g-2">
                         <div class="col-6">
                             <div class="method-selector shadow-sm" data-concept="factura">
-                                <div class="mb-1" style="font-size: 1.5rem; color: #6c757d;">
+                                <div class="mb-1">
                                     <i class="bi bi-receipt"></i>
                                 </div>
-                                <h6 class="fw-bold mb-1 small">Factura Electrónica</h6>
-                                <p class="text-muted mb-0" style="font-size: 0.7rem;">Con valor comercial</p>
+                                <div class="method-title">Factura Electrónica</div>
+                                <p class="method-sub">Con valor comercial</p>
                                 <div class="mt-2 pt-1 border-top">
-                                    <small class="text-success" style="font-size: 0.65rem;">
+                                    <small class="text-success method-note">
                                         <i class="bi bi-cash-coin me-1"></i>Genera cobro
                                     </small>
                                 </div>
@@ -1130,13 +1131,13 @@
                         </div>
                         <div class="col-6">
                             <div class="method-selector shadow-sm" data-concept="guia">
-                                <div class="mb-1" style="font-size: 1.5rem; color: #6c757d;">
+                                <div class="mb-1">
                                     <i class="bi bi-clipboard-check"></i>
                                 </div>
-                                <h6 class="fw-bold mb-1 small">Guía de Despacho</h6>
-                                <p class="text-muted mb-0" style="font-size: 0.7rem;">Solo traslado</p>
+                                <div class="method-title">Guía de Despacho</div>
+                                <p class="method-sub">Solo traslado</p>
                                 <div class="mt-2 pt-1 border-top">
-                                    <small class="text-muted" style="font-size: 0.65rem;">
+                                    <small class="text-muted method-note">
                                         <i class="bi bi-clipboard me-1"></i>Sin cobro
                                     </small>
                                 </div>
@@ -1157,38 +1158,38 @@
                 <div class="row g-2">
                     <div class="col-6 col-md-3">
                         <div class="method-selector shadow-sm precio-externo-selector" data-precio-mode="costo">
-                            <div class="mb-1" style="font-size: 1.3rem; color: #6c757d;">
+                            <div class="mb-1">
                                 <i class="bi bi-cash-stack"></i>
                             </div>
-                            <h6 class="fw-bold mb-1 small">Al Costo</h6>
-                            <p class="text-muted mb-0" style="font-size: 0.65rem;">Solo costo proveedor</p>
+                            <div class="method-title">Al Costo</div>
+                            <p class="method-sub">Solo costo proveedor</p>
                         </div>
                     </div>
                     <div class="col-6 col-md-3">
                         <div class="method-selector shadow-sm precio-externo-selector" data-precio-mode="sobreprecio">
-                            <div class="mb-1" style="font-size: 1.3rem; color: #6c757d;">
+                            <div class="mb-1">
                                 <i class="bi bi-graph-up-arrow"></i>
                             </div>
-                            <h6 class="fw-bold mb-1 small">Sobreprecio</h6>
-                            <p class="text-muted mb-0" style="font-size: 0.65rem;">Costo + sobreprecio</p>
+                            <div class="method-title">Sobreprecio</div>
+                            <p class="method-sub">Costo + sobreprecio</p>
                         </div>
                     </div>
                     <div class="col-6 col-md-3">
                         <div class="method-selector shadow-sm precio-externo-selector" data-precio-mode="custom_pct">
-                            <div class="mb-1" style="font-size: 1.3rem; color: #6c757d;">
+                            <div class="mb-1">
                                 <i class="bi bi-percent"></i>
                             </div>
-                            <h6 class="fw-bold mb-1 small">% Custom</h6>
-                            <p class="text-muted mb-0" style="font-size: 0.65rem;">Margen sobre costo</p>
+                            <div class="method-title">% Custom</div>
+                            <p class="method-sub">Margen sobre costo</p>
                         </div>
                     </div>
                     <div class="col-6 col-md-3">
                         <div class="method-selector shadow-sm precio-externo-selector" data-precio-mode="precio_venta">
-                            <div class="mb-1" style="font-size: 1.3rem; color: #6c757d;">
+                            <div class="mb-1">
                                 <i class="bi bi-tags-fill"></i>
                             </div>
-                            <h6 class="fw-bold mb-1 small">Precios de venta</h6>
-                            <p class="text-muted mb-0" style="font-size: 0.65rem;">Precio normal de góndola</p>
+                            <div class="method-title">Precios de venta</div>
+                            <p class="method-sub">Precio normal de góndola</p>
                         </div>
                     </div>
                 </div>
@@ -1210,7 +1211,7 @@
             <div id="referenciaExternaContainer" style="display: none;" class="mb-3">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <label class="form-label fw-bold mb-0">
-                        <i class="bi bi-link-45deg text-primary me-1"></i>Referencia (opcional)
+                        <i class="bi bi-link-45deg text-nexo-primary me-1"></i>Referencia (opcional)
                     </label>
                     <span class="badge bg-secondary small">Opcional</span>
                 </div>
@@ -1260,7 +1261,7 @@
             <!-- Receptor/Destino + Campos adicionales en un solo bloque compacto -->
             <div class="row g-2 mt-2">
                 <!-- Para Despacho Externo: Empresa Cliente -->
-                <div class="col-md-4" id="receptorExternoContainer" style="display: none;">
+                <div class="col-md-3" id="receptorExternoContainer" style="display: none;">
                     <label for="receptorSelect" class="form-label fw-bold mb-1 small">
                         <i class="bi bi-building me-1"></i>Empresa Cliente
                     </label>
@@ -1268,9 +1269,9 @@
                         <option value="">Seleccionar empresa cliente...</option>
                     </select>
                 </div>
-                
+
                 <!-- Para Despacho Interno: Sucursal Destino -->
-                <div class="col-md-4" id="sucursalDestinoContainer" style="display: none;">
+                <div class="col-md-3" id="sucursalDestinoContainer" style="display: none;">
                     <label for="sucursalDestinoSelect" class="form-label fw-bold mb-1 small">
                         <i class="bi bi-building me-1"></i>Sucursal Destino
                     </label>
@@ -1302,17 +1303,17 @@
                     <label for="vendedor" class="form-label fw-bold mb-1 small">Vendedor</label>
                     <input type="text" id="vendedor" class="form-control form-control-sm" value="9999" readonly>
                 </div>
-                <div class="col-md-1" id="diasCreditoContainer">
-                    <label for="diasCredito" class="form-label fw-bold mb-1 small">Días Créd.</label>
+                <div class="col-md-2" id="diasCreditoContainer">
+                    <label for="diasCredito" class="form-label fw-bold mb-1 small">Días Crédito</label>
                     <input type="number" id="diasCredito" class="form-control form-control-sm" value="30" min="1" max="365">
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label fw-bold mb-1 small">Folio</label>
+                    <label for="folio_unico" class="form-label fw-bold mb-1 small">Folio</label>
                     <div class="input-group input-group-sm">
                         <span class="input-group-text">N°</span>
-                        <input type="text" class="form-control text-center fw-bold" id="folio_unico" value="---" readonly style="background: #f0f8ff;">
+                        <input type="text" class="form-control text-center fw-bold" id="folio_unico" value="---" readonly style="background: var(--nexo-primary-light);">
                     </div>
-                    <small class="text-muted" style="font-size:0.65rem;">Asignado automáticamente</small>
+                    <small class="text-muted">Asignado automáticamente</small>
                 </div>
             </div>
             
@@ -1336,7 +1337,7 @@
                     <!-- Primer paso, no hay botón anterior -->
                 </div>
                 <div class="wizard-nav-right">
-                    <button type="button" class="btn btn-nexo-primary btn-custom btn-sm px-4" id="btnSiguientePaso1" disabled>
+                    <button type="button" class="btn btn-nexo-primary px-4" id="btnSiguientePaso1" disabled>
                         Continuar a Productos <i class="bi bi-arrow-right-circle-fill ms-2"></i>
                     </button>
                 </div>
@@ -1350,8 +1351,8 @@
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <div>
                     <div class="section-progress">Paso 2 de 2</div>
-                    <h6 class="mb-0" style="color: var(--nexo-secondary); font-weight: 600;">
-                        <i class="bi bi-box-seam-fill me-2" style="color: var(--nexo-primary);"></i>Productos y Emisión
+                    <h6 class="mb-0 fw-semibold text-nexo-secondary">
+                        <i class="bi bi-box-seam-fill me-2 text-nexo-primary"></i>Productos y Emisión
                     </h6>
                 </div>
                 <small class="text-muted" id="resumenConfigHeader"></small>
@@ -1364,18 +1365,18 @@
                 <div class="col-lg-8 col-12">
 
                     <!-- Filtros de búsqueda compactos -->
-                    <div class="row g-1 mb-2">
-                        <div class="col-md-4">
+                    <div class="row g-1 mb-2 align-items-center">
+                        <div class="col-md">
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text"><i class="bi bi-search"></i></span>
-                                <input type="text" id="searchProduct" class="form-control" placeholder="SKU, descripción, marca...">
+                                <input type="text" id="searchProduct" class="form-control" placeholder="SKU, descripción, marca" title="Buscar por SKU, descripción o marca">
                                 <button class="btn btn-outline-secondary" type="button" id="btnSearchProduct">Buscar</button>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="input-group input-group-sm">
                                 <span class="input-group-text"><i class="bi bi-file-text"></i></span>
-                                <input type="text" id="searchReference" class="form-control" placeholder="N° DTE, factura, emisor, SKU...">
+                                <input type="text" id="searchReference" class="form-control" placeholder="N° DTE, emisor, SKU" title="Buscar por N° DTE, factura, emisor o SKU">
                                 <button class="btn btn-outline-secondary" type="button" id="btnSearchReference">Buscar</button>
                             </div>
                         </div>
@@ -1390,7 +1391,7 @@
                             </select>
                         </div>
                         <div class="col-md-1">
-                            <select id="filterTipoTalla" class="form-select form-select-sm">
+                            <select id="filterTipoTalla" class="form-select form-select-sm" title="Sistema de talla">
                                 <option value="">Talla</option>
                                 <option value="CL">CL</option>
                                 <option value="US">US</option>
@@ -1400,7 +1401,7 @@
                                 <option value="CM">CM</option>
                             </select>
                         </div>
-                        <div class="col-auto d-flex align-items-center">
+                        <div class="col-md-auto d-flex align-items-center">
                             <div class="form-check mb-0">
                                 <input class="form-check-input" type="checkbox" id="checkIncluirSinStock">
                                 <label class="form-check-label small" for="checkIncluirSinStock">Sin stock</label>
@@ -1412,8 +1413,8 @@
                     <div class="card" style="border: 1px solid var(--nexo-gray-300); border-radius: var(--nexo-radius-lg); overflow: hidden;">
                         <div class="card-body p-0">
                             <div class="table-responsive pos-products-table">
-                                <table id="tabla_productos_busqueda" class="table table-hover table-sm mb-0" style="font-size:0.78rem;">
-                                    <thead style="background: var(--nexo-secondary); color: white;">
+                                <table id="tabla_productos_busqueda" class="table table-hover table-sm mb-0" style="font-size:0.8rem;">
+                                    <thead class="card-header-nexo">
                                         <tr>
                                             <th class="text-center py-1 d-none d-md-table-cell" style="width:84px;"><i class="bi bi-image"></i> Foto</th>
                                             <th class="py-1" style="white-space:nowrap;">Artículo</th>
@@ -1426,9 +1427,11 @@
                                     </thead>
                                     <tbody id="datos_tabla_productos">
                                         <tr>
-                                            <td colspan="7" class="text-center text-muted py-4">
-                                                <i class="bi bi-search me-2"></i>
-                                                Use los filtros para buscar productos
+                                            <td colspan="7" class="p-0">
+                                                <div class="empty-state-nexo empty-state-compact">
+                                                    <i class="bi bi-search"></i>
+                                                    <p>Use los filtros para buscar productos</p>
+                                                </div>
                                             </td>
                                         </tr>
                                     </tbody>
@@ -1440,7 +1443,7 @@
                     <!-- Resultados de productos (mantener para compatibilidad) -->
                     <div id="productResults" class="mb-1" style="display: none;">
                         <div class="loading-spinner">
-                            <div class="spinner-border text-primary" role="status">
+                            <div class="spinner-border text-nexo-primary" role="status">
                                 <span class="visually-hidden">Buscando productos...</span>
                             </div>
                             <p class="mt-2">Cargando productos...</p>
@@ -1451,7 +1454,7 @@
                     <!-- Paginación -->
                     <div class="d-flex justify-content-between align-items-center my-2">
                         <div class="text-muted small">
-                            <i class="bi bi-search me-1 text-primary"></i><span id="productInfo">0 productos encontrados</span>
+                            <i class="bi bi-search me-1 text-nexo-primary"></i><span id="productInfo">0 productos encontrados</span>
                         </div>
                         <div class="btn-group">
                             <button type="button" class="btn btn-outline-primary btn-sm" id="btnPrevProducts">
@@ -1466,24 +1469,22 @@
 
                     <!-- Carrito con detalle por talla (expandible) -->
                     <div id="detalleSection" style="display: none;">
-                        <div class="card" style="border: 2px solid var(--nexo-accent); border-radius: var(--nexo-radius-lg); overflow: hidden;">
-                            <div class="card-header d-flex justify-content-between align-items-center py-2 px-3" style="background: linear-gradient(135deg, var(--nexo-accent) 0%, #00b894 100%); color: white; border: none;">
+                        <div class="card" style="border: 1px solid var(--nexo-gray-300); border-radius: var(--nexo-radius-lg); overflow: hidden;">
+                            <div class="card-header card-header-nexo d-flex justify-content-between align-items-center py-2 px-3">
                                 <div class="d-flex align-items-center gap-2">
-                                    <h6 class="mb-0 small"><i class="bi bi-cart-check-fill me-1"></i>Detalle del Despacho</h6>
+                                    <h6 class="mb-0"><i class="bi bi-cart-check-fill me-1 text-nexo-accent"></i>Detalle del Despacho</h6>
                                     <span class="badge bg-white text-dark" id="totalProductos">0 líneas</span>
                                     <span class="badge bg-white text-dark" id="totalUnidades">0 unidades</span>
                                     <span class="d-none" id="totalArticulosResumen">0</span>
                                 </div>
                                 <div class="d-flex gap-1 align-items-center">
-                                    <button type="button" class="btn btn-sm" id="btnExpandirDetalleTallas" data-expanded="false"
-                                            style="background: rgba(255,255,255,0.2); color: white; border: none; font-size: 0.75rem;">
+                                    <button type="button" class="btn btn-sm btn-glass" id="btnExpandirDetalleTallas" data-expanded="false">
                                         <i class="bi bi-chevron-down me-1"></i>Por talla
                                     </button>
-                                    <button type="button" class="btn btn-sm" id="btnToggleDetalle" title="Ocultar/Mostrar detalle"
-                                            style="background: rgba(255,255,255,0.2); color: white; border: none;">
+                                    <button type="button" class="btn btn-sm btn-glass" id="btnToggleDetalle" title="Ocultar/Mostrar detalle">
                                         <i class="bi bi-eye-slash"></i>
                                     </button>
-                                    <button type="button" class="btn btn-sm" id="btnLimpiarDetalle" style="display: none; background: rgba(255,77,77,0.3); color: white; border: 1px solid rgba(255,255,255,0.3);">
+                                    <button type="button" class="btn btn-sm btn-glass btn-glass-danger" id="btnLimpiarDetalle" style="display: none;">
                                         <i class="bi bi-trash me-1"></i>Limpiar
                                     </button>
                                 </div>
@@ -1493,25 +1494,38 @@
                                 <div id="detalleTallasContainer" style="display: none;">
                                     <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
                                         <table class="table table-hover table-sm mb-0" id="detalleTable">
+                                            <colgroup>
+                                                <col style="width: 15%;">
+                                                <col style="width: 20%;">
+                                                <col style="width: 12%;">
+                                                <col style="width: 8%;">
+                                                <col style="width: 10%;">
+                                                <col style="width: 10%;">
+                                                <col style="width: 10%;">
+                                                <col style="width: 10%;">
+                                                <col style="width: 5%;">
+                                            </colgroup>
                                             <thead class="table-light">
                                                 <tr>
-                                                    <th width="15%">Artículo</th>
-                                                    <th width="20%">Descripción</th>
-                                                    <th width="12%">Talla / SKU</th>
-                                                    <th width="8%">Cantidad</th>
-                                                    <th width="10%">Costo</th>
-                                                    <th width="10%">Sobreprecio</th>
-                                                    <th width="10%">Precio Unit.</th>
-                                                    <th width="10%">Subtotal</th>
-                                                    <th width="5%">Acciones</th>
+                                                    <th class="text-center">Artículo</th>
+                                                    <th>Descripción</th>
+                                                    <th class="text-center">Talla / SKU</th>
+                                                    <th class="text-center">Cantidad</th>
+                                                    <th class="text-end">Costo</th>
+                                                    <th class="text-end">Sobreprecio</th>
+                                                    <th class="text-end">Precio Unit.</th>
+                                                    <th class="text-end">Subtotal</th>
+                                                    <th class="text-center">Acciones</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="detalleBody">
                                                 <tr id="emptyRow">
-                                                    <td colspan="9" class="text-center text-muted py-3">
-                                                        <i class="bi bi-inbox display-6"></i>
-                                                        <br>No hay productos seleccionados
-                                                        <br><small>Busca y selecciona productos arriba</small>
+                                                    <td colspan="9" class="p-0">
+                                                        <div class="empty-state-nexo empty-state-compact">
+                                                            <i class="bi bi-inbox"></i>
+                                                            <p>No hay productos seleccionados</p>
+                                                            <p><small>Busca y selecciona productos arriba</small></p>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             </tbody>
@@ -1541,17 +1555,17 @@
                         <div class="card mb-2" style="border: 1px solid var(--nexo-gray-300);">
                             <div class="card-body py-2 px-3">
                                 <div class="d-flex flex-wrap gap-2 align-items-center small">
-                                    <span><i class="bi bi-file-earmark-text me-1 text-primary"></i><strong>Tipo:</strong> <span id="resumenTipo">-</span></span>
+                                    <span><i class="bi bi-file-earmark-text me-1 text-nexo-primary"></i><strong>Tipo:</strong> <span id="resumenTipo">-</span></span>
                                     <span class="vr mx-1" style="height:14px;"></span>
-                                    <span><i class="bi bi-truck-front me-1 text-primary"></i><strong>Método:</strong> <span id="resumenMetodo">-</span></span>
+                                    <span><i class="bi bi-truck-front me-1 text-nexo-primary"></i><strong>Método:</strong> <span id="resumenMetodo">-</span></span>
                                 </div>
                                 <div class="d-flex flex-wrap gap-2 align-items-center small mt-1">
-                                    <span><i class="bi bi-building me-1 text-primary"></i><strong>Receptor:</strong> <span id="resumenReceptor">-</span></span>
+                                    <span><i class="bi bi-building me-1 text-nexo-primary"></i><strong>Receptor:</strong> <span id="resumenReceptor">-</span></span>
                                     <span class="vr mx-1" style="height:14px;"></span>
                                     <span><i class="bi bi-calendar me-1 text-muted"></i><span id="resumenFecha">-</span></span>
                                 </div>
                                 <div class="d-flex align-items-center gap-2 mt-1 pt-1 border-top">
-                                    <span class="badge bg-primary rounded-pill" id="resumenProductos">0 ítems</span>
+                                    <span class="badge bg-nexo-primary rounded-pill" id="resumenProductos">0 ítems</span>
                                     <span class="badge bg-info rounded-pill" id="resumenUnidades">0 unid.</span>
                                     <span class="d-none" id="resumenTotalArticulos">0</span>
                                 </div>
@@ -1560,15 +1574,15 @@
 
                         <!-- Carrito: lista resumida de productos seleccionados -->
                         <div class="card mb-2" id="carritoCard">
-                            <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #1A1A2E 0%, #2D2D50 100%); border: none;">
-                                <h6 class="mb-0 small fw-semibold" style="color:#fff;"><i class="ri-shopping-cart-2-line me-1" style="color:#00D4AA;"></i>Carrito</h6>
-                                <span class="badge rounded-pill" id="carritoCount" style="background:#00D4AA; color:#1A1A2E; font-weight:700;">0</span>
+                            <div class="card-header card-header-nexo py-2 px-3 d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0"><i class="bi bi-cart3 me-1 text-nexo-accent"></i>Carrito</h6>
+                                <span class="badge rounded-pill bg-nexo-accent text-nexo-secondary fw-bold" id="carritoCount">0</span>
                             </div>
                             <div class="card-body p-0 pos-cart-table">
                                 <div id="resumenProductosBody" style="padding: 0;">
-                                    <div class="text-center text-muted py-4 small carrito-empty">
-                                        <i class="ri-shopping-cart-line" style="font-size:2rem; color:#ccc;"></i>
-                                        <p class="mt-2 mb-0">Agrega productos al despacho</p>
+                                    <div class="empty-state-nexo empty-state-compact carrito-empty">
+                                        <i class="bi bi-cart3"></i>
+                                        <p>Agrega productos al despacho</p>
                                     </div>
                                 </div>
                             </div>
@@ -1577,7 +1591,7 @@
                         <!-- Observaciones -->
                         <div class="card mb-2">
                             <div class="card-body py-2 px-3">
-                                <label class="form-label small fw-semibold mb-1">
+                                <label for="observacionesFinales" class="form-label small fw-semibold mb-1">
                                     <i class="bi bi-chat-text me-1"></i>Observaciones
                                 </label>
                                 <textarea id="observacionesFinales" class="form-control form-control-sm" rows="2"
@@ -1587,8 +1601,8 @@
 
                         <!-- Totales -->
                         <div class="card mb-2" style="border: none; border-radius: var(--nexo-radius-lg); overflow: hidden; box-shadow: var(--nexo-shadow-md);">
-                            <div class="card-header py-2 px-3" style="background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%); color: white; border: none;">
-                                <h6 class="mb-0 small" style="color: white;"><i class="bi bi-calculator-fill me-2"></i>Totales Finales</h6>
+                            <div class="card-header card-header-nexo py-2 px-3">
+                                <h6 class="mb-0"><i class="bi bi-calculator-fill me-2 text-nexo-accent"></i>Totales Finales</h6>
                             </div>
                             <div class="card-body py-2 px-3">
                                 <div class="d-flex justify-content-between mb-1 small">
@@ -1603,7 +1617,7 @@
                                 <div class="d-flex justify-content-between fw-bold align-items-start">
                                     <span>Total:</span>
                                     <div class="text-end">
-                                        <span id="finalMontoTotal" class="fs-5 text-primary">$0</span>
+                                        <span id="finalMontoTotal" class="fs-5 fw-bold text-nexo-secondary">$0</span>
                                         <div><small class="text-muted fw-normal"><span id="finalTotalUnidades">0</span> unidades</small></div>
                                     </div>
                                 </div>
@@ -1616,8 +1630,7 @@
                       <div class="pos-right-panel-footer">
 
                         <!-- Botón principal de emisión -->
-                        <button id="btnGenerarOperacion" type="button" class="btn w-100 py-2 mb-2"
-                                style="background: linear-gradient(135deg, var(--nexo-accent) 0%, #00b894 100%); color: white; border: none; border-radius: var(--nexo-radius-md); font-weight: 600; font-size: 0.95rem; box-shadow: 0 4px 14px rgba(0, 212, 170, 0.35); transition: all 0.3s ease;">
+                        <button id="btnGenerarOperacion" type="button" class="btn btn-nexo-success w-100 py-2 mb-2">
                             <i class="bi bi-send-fill me-2"></i>
                             <span>Emitir Documento</span>
                             <span id="spinner_btn" style="display:none" class="spinner-border spinner-border-sm ms-2" role="status" aria-hidden="true"></span>
@@ -1625,15 +1638,13 @@
 
                         <!-- Navegación: Volver / Reiniciar / Preview -->
                         <div class="d-flex gap-2 flex-wrap">
-                            <button type="button" class="btn btn-nexo-outline btn-custom btn-sm flex-fill" id="btnAnteriorPaso2">
+                            <button type="button" class="btn btn-nexo-outline flex-fill" id="btnAnteriorPaso2">
                                 <i class="bi bi-arrow-left-circle me-1"></i>Volver
                             </button>
-                            <button type="button" class="btn btn-sm btn-custom flex-fill" id="btnLimpiar"
-                                    style="background: rgba(255, 176, 32, 0.15); color: var(--nexo-warning); border: 1px solid var(--nexo-warning);">
+                            <button type="button" class="btn btn-outline-secondary flex-fill" id="btnLimpiar">
                                 <i class="bi bi-arrow-clockwise me-1"></i>Reiniciar
                             </button>
-                            <button type="button" class="btn btn-sm btn-custom" id="btnPreview"
-                                    style="background: var(--nexo-gray-100); color: var(--nexo-gray-700); border: 1px solid var(--nexo-gray-300);">
+                            <button type="button" class="btn btn-outline-secondary" id="btnPreview">
                                 <i class="bi bi-eye me-1"></i>Preview
                             </button>
                         </div>
@@ -1649,24 +1660,27 @@
 
         <!-- Step-3 eliminado - contenido movido al Step-2 -->
 
+        </div><!-- /card-body -->
+        </div><!-- /card.shadow -->
+
     </div>
 </div>
 
 <!-- Modal para seleccionar pendientes de despacho hacia la sucursal destino -->
 <div class="modal fade" id="modalPendientesDespacho" tabindex="-1" aria-labelledby="modalPendientesDespachoLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
-        <div class="modal-content" style="border-radius:14px; overflow:hidden;">
-            <div class="modal-header py-2 px-3" style="background:linear-gradient(135deg,#1b5e20 0%,#2e7d32 100%);">
+        <div class="modal-content">
+            <div class="modal-header card-header-nexo py-2 px-3">
                 <div class="flex-grow-1 text-white">
-                    <h5 class="modal-title mb-0" id="modalPendientesDespachoLabel" style="font-weight:600;">
-                        <i class="bi bi-inbox-fill me-2"></i>Pendientes de Despacho
+                    <h5 class="modal-title mb-0" id="modalPendientesDespachoLabel">
+                        <i class="bi bi-inbox-fill me-2 text-nexo-accent"></i>Pendientes de Despacho
                     </h5>
                     <small class="text-white-50" id="modalPendientesDespachoSubtitle">Seleccione los productos a agregar al despacho.</small>
                 </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body p-0">
-                <div class="px-3 py-2 d-flex align-items-center gap-2 border-bottom" style="background:#f7f9f7;">
+                <div class="px-3 py-2 d-flex align-items-center gap-2 border-bottom bg-nexo-light">
                     <div class="form-check form-check-sm">
                         <input class="form-check-input" type="checkbox" id="chkPendientesTodos" checked>
                         <label class="form-check-label small" for="chkPendientesTodos">Seleccionar todos</label>
@@ -1688,14 +1702,16 @@
                         <tbody id="tablaPendientesDespachoBody" style="font-size:.8rem;"></tbody>
                     </table>
                 </div>
-                <div class="text-center py-4 text-muted small d-none" id="pendientesDespachoVacio">
-                    <i class="bi bi-emoji-smile fs-3 d-block mb-2"></i>
-                    No hay pendientes para esta sucursal.
+                <div class="empty-state-nexo empty-state-compact d-none" id="pendientesDespachoVacio">
+                    <i class="bi bi-inbox"></i>
+                    <p>No hay pendientes para esta sucursal.</p>
                 </div>
             </div>
             <div class="modal-footer py-2 px-3">
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-sm btn-success" id="btnConfirmarCargarPendientes">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-1"></i>Cancelar
+                </button>
+                <button type="button" class="btn btn-success" id="btnConfirmarCargarPendientes">
                     <i class="bi bi-arrow-right-circle me-1"></i>Agregar al despacho
                 </button>
             </div>
@@ -1706,14 +1722,14 @@
 <!-- Modal para selección de tallas - REDISEÑADO -->
 <div class="modal fade" id="modalTallas" tabindex="-1" aria-labelledby="modalTallasLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content" style="border: none; border-radius: var(--nexo-radius-xl); overflow: hidden;">
+        <div class="modal-content">
 
             <!-- HEADER: título + info del producto en una sola línea -->
-            <div class="modal-header py-2 px-3" style="background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%); border: none;">
+            <div class="modal-header card-header-nexo py-2 px-3">
                 <div class="flex-grow-1 me-3">
                     <div class="d-flex align-items-center gap-2 mb-1">
-                        <h5 class="modal-title mb-0" id="modalTallasLabel" style="color: white; font-weight: 600;">
-                            <i class="bi bi-grid-3x3-gap-fill me-2"></i>Seleccionar Tallas
+                        <h5 class="modal-title mb-0" id="modalTallasLabel">
+                            <i class="bi bi-grid-3x3-gap-fill me-2 text-nexo-accent"></i>Seleccionar Tallas
                         </h5>
                     </div>
                     <!-- Info del producto compacta en línea -->
@@ -1743,23 +1759,23 @@
                         <div class="d-flex align-items-center gap-1 flex-shrink-0">
                             <i class="bi bi-lightning-charge-fill" style="color: var(--nexo-warning);"></i>
                             <span class="fw-semibold small">Agregar por Tarea</span>
-                            <span class="badge bg-info ms-1" id="badge-tarea-info" style="font-size: 0.68rem;">0 tareas</span>
+                            <span class="badge bg-info ms-1" id="badge-tarea-info">0 tareas</span>
                         </div>
                         <!-- Patrón -->
                         <div class="d-flex align-items-center gap-1">
-                            <label class="small text-muted mb-0 flex-shrink-0">Patrón:</label>
+                            <label for="select-patron-tarea" class="small text-muted mb-0 flex-shrink-0">Patrón:</label>
                             <select id="select-patron-tarea" class="form-select form-select-sm" style="width: auto; min-width: 170px;">
-                                <option value="auto">🔍 Auto-detectar</option>
-                                <option value="calzado_adulto">👟 Calzado Adulto</option>
-                                <option value="calzado_deportivo">⚽ Calzado Deportivo</option>
-                                <option value="calzado_infantil">👶 Calzado Infantil</option>
-                                <option value="ropa_adulto">👕 Ropa Adulto (XS-XXL)</option>
-                                <option value="ropa_numerico">👔 Ropa Numérico (38-48)</option>
+                                <option value="auto">Auto-detectar</option>
+                                <option value="calzado_adulto">Calzado Adulto</option>
+                                <option value="calzado_deportivo">Calzado Deportivo</option>
+                                <option value="calzado_infantil">Calzado Infantil</option>
+                                <option value="ropa_adulto">Ropa Adulto (XS-XXL)</option>
+                                <option value="ropa_numerico">Ropa Numérico (38-48)</option>
                             </select>
                         </div>
                         <!-- Cantidad -->
                         <div class="d-flex align-items-center gap-1">
-                            <label class="small text-muted mb-0 flex-shrink-0">Tareas:</label>
+                            <label for="input-cantidad-tareas" class="small text-muted mb-0 flex-shrink-0">Tareas:</label>
                             <input type="number" id="input-cantidad-tareas" class="form-control form-control-sm text-center fw-bold" min="1" max="20" value="1" style="width: 60px;">
                         </div>
                         <!-- Botones de acción con tooltips descriptivos -->
@@ -1782,7 +1798,7 @@
                         </div>
                     </div>
                     <!-- Info de tarea inline (sin ocupar mucho espacio) -->
-                    <div id="alert-tarea-info" class="mt-2 px-3 py-1 small rounded" style="display: none; background: rgba(13,110,253,0.08); border: 1px solid rgba(13,110,253,0.2); color: #084298;">
+                    <div id="alert-tarea-info" class="alert-nexo alert-nexo-info text-nexo-secondary mt-2 px-3 py-1 small" style="display: none;">
                         <i class="bi bi-info-circle me-1"></i><span id="texto-info-tarea"></span>
                     </div>
                 </div>
@@ -1790,7 +1806,7 @@
                 <!-- TABLA DE TALLAS - compacta, sticky header, scroll interno -->
                 <div class="table-responsive" style="max-height: 360px; overflow-y: auto;">
                     <table id="table_modal_prod" class="table table-hover table-sm mb-0">
-                        <thead style="background: var(--nexo-secondary); color: white; position: sticky; top: 0; z-index: 2;">
+                        <thead class="card-header-nexo" style="position: sticky; top: 0; z-index: 2;">
                             <tr>
                                 <th class="text-center py-2">SKU</th>
                                 <th class="text-center py-2">Talla</th>
@@ -1818,15 +1834,15 @@
                 <div class="px-3 py-2 d-flex align-items-center justify-content-between flex-wrap gap-2" style="background: var(--nexo-gray-100); border-top: 1px solid var(--nexo-gray-300);">
                     <div class="d-flex gap-3 align-items-center flex-wrap">
                         <span class="small">
-                            <i class="bi bi-layers text-primary me-1"></i>
+                            <i class="bi bi-layers text-nexo-primary me-1"></i>
                             Tallas: <strong id="totalTallasModal">0</strong>
                         </span>
                         <span class="small">
-                            <i class="bi bi-boxes text-primary me-1"></i>
+                            <i class="bi bi-boxes text-nexo-primary me-1"></i>
                             Unidades: <strong id="totalUnidadesModal">0</strong>
                         </span>
-                        <span class="small fw-bold" style="color: var(--nexo-accent);">
-                            <i class="bi bi-currency-dollar me-1"></i>
+                        <span class="small fw-bold text-nexo-secondary">
+                            <i class="bi bi-currency-dollar me-1 text-nexo-accent"></i>
                             Total: <strong id="totalMontoModal">$0</strong>
                         </span>
                     </div>
@@ -1839,10 +1855,10 @@
 
             <!-- FOOTER con botones ordenados por prioridad -->
             <div class="modal-footer py-2 px-3 gap-2" style="background: white; border-top: 1px solid var(--nexo-gray-300);">
-                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                     <i class="bi bi-x-lg me-1"></i>Cerrar
                 </button>
-                <button type="button" class="btn btn-outline-warning btn-sm" id="btnLimpiarModal">
+                <button type="button" class="btn btn-outline-secondary" id="btnLimpiarModal">
                     <i class="bi bi-arrow-counterclockwise me-1"></i>Limpiar Cant.
                 </button>
                 <button type="button" class="btn btn-outline-primary" id="btnAgregarTodo"
@@ -1862,11 +1878,11 @@
 <div class="modal fade" id="modalPreview" tabindex="-1" aria-labelledby="modalPreviewLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <div class="modal-header">
+            <div class="modal-header card-header-nexo py-2 px-3">
                 <h5 class="modal-title" id="modalPreviewLabel">
-                    <i class="bi bi-eye me-2"></i>Vista Previa del DTE
+                    <i class="bi bi-eye me-2 text-nexo-accent"></i>Vista Previa del DTE
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
                 <div id="previewContent">
@@ -1875,9 +1891,9 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
-                    <i class="bi bi-x-circle me-1"></i>Cerrar
+                    <i class="bi bi-x-lg me-1"></i>Cerrar
                 </button>
-                <button type="button" class="btn btn-primary" id="btnPrintPreview">
+                <button type="button" class="btn btn-nexo-primary" id="btnPrintPreview">
                     <i class="bi bi-printer me-1"></i>Imprimir
                 </button>
             </div>
@@ -2395,14 +2411,14 @@ $(document).on('click', '#btnCargarPendientesDespacho', function() {
                 </td>
                 <td>
                     <div class="fw-semibold">${it.articulo || ''}</div>
-                    <div class="text-muted" style="font-size:.7rem;">
+                    <div class="text-muted" style="font-size:.75rem;">
                         ${it.marca || ''}${it.marca && it.color ? ' · ' : ''}${it.color || ''}
                         ${it.compra_nombre ? `<br><i class="bi bi-truck me-1"></i>${it.compra_nombre}` : ''}
                     </div>
                 </td>
                 <td class="text-center">
-                    <span class="badge bg-primary">${it.talla}</span>
-                    <div class="text-muted" style="font-size:.68rem;">SKU ${it.sku || '—'}</div>
+                    <span class="badge badge-nexo-secondary">${it.talla}</span>
+                    <div class="text-muted" style="font-size:.75rem;">SKU ${it.sku || '—'}</div>
                 </td>
                 <td class="text-end">${it.cantidad_restante}${alertaStock}</td>
                 <td class="text-center">
@@ -2487,7 +2503,7 @@ $(document).on('click', '#btnConfirmarCargarPendientes', function() {
                     <td class="text-center">${src.articulo || ''}</td>
                     <td>${src.descripcion || ''}</td>
                     <td class="text-center">
-                        <span class="badge bg-primary">${src.talla || ''}</span>
+                        <span class="badge badge-nexo-secondary">${src.talla || ''}</span>
                         <br><small class="text-muted">SKU: ${src.sku || ''}</small>
                     </td>
                     <td class="text-center">
@@ -2741,10 +2757,12 @@ function clearDetalle() {
     // Limpiar tabla de detalle
     $('#detalleBody').empty().append(`
         <tr id="emptyRow">
-            <td colspan="7" class="text-center text-muted py-4">
-                <i class="bi bi-inbox display-6"></i>
-                <br>No hay productos seleccionados
-                <br><small>Busca y selecciona productos arriba</small>
+            <td colspan="9" class="p-0">
+                <div class="empty-state-nexo empty-state-compact">
+                    <i class="bi bi-inbox"></i>
+                    <p>No hay productos seleccionados</p>
+                    <p><small>Busca y selecciona productos arriba</small></p>
+                </div>
             </td>
         </tr>
     `);
@@ -2930,7 +2948,7 @@ function actualizarResumenSeleccion() {
         
         // Actualizar textos del resumen
         const metodoTexto = selectedMethod === 'interno' ? 
-            '<span class="text-primary fw-bold">🏢 Despacho Interno</span> (Traspaso entre sucursales)' : 
+            '<span class="text-nexo-primary fw-bold">🏢 Despacho Interno</span> (Traspaso entre sucursales)' :
             '<span class="text-success fw-bold">🚚 Despacho Externo</span> (Venta a cliente)';
         $('#resumenMetodo').html(metodoTexto);
         
@@ -3518,7 +3536,7 @@ function searchProducts(resetPage) {
     $('#datos_tabla_productos').html(`
         <tr>
             <td colspan="7" class="text-center py-4">
-                <div class="spinner-border text-primary" role="status">
+                <div class="spinner-border text-nexo-primary" role="status">
                     <span class="visually-hidden">Buscando productos...</span>
                 </div>
                 <p class="mt-2 mb-0">Cargando productos...</p>
@@ -3598,9 +3616,9 @@ function displayProducts(products) {
     
     if (products.length === 0) {
         container.append(`
-            <div class="text-center py-4">
-                <i class="bi bi-search display-4 text-muted"></i>
-                <p class="text-muted mt-2">No se encontraron productos</p>
+            <div class="empty-state-nexo empty-state-compact">
+                <i class="bi bi-search"></i>
+                <p>No se encontraron productos</p>
             </div>
         `);
         return;
@@ -3618,7 +3636,7 @@ function displayProducts(products) {
                         <h6 class="mb-1">${product.articulo}</h6>
                         <p class="mb-1 text-muted">${product.descripcion || '-'}</p>
                         <div class="d-flex gap-2">
-                            <span class="badge bg-primary">${product.marca || 'Sin marca'}</span>
+                            <span class="badge bg-nexo-primary">${product.marca || 'Sin marca'}</span>
                             <span class="badge bg-secondary">${product.categoria || 'Sin categoría'}</span>
                             <span class="badge bg-info">${product.tipo_talla || 'Sin talla'}</span>
                         </div>
@@ -3655,9 +3673,11 @@ function displayProductsInTable(products) {
     if (!products || products.length === 0) {
         tbody.append(`
             <tr>
-                <td colspan="7" class="text-center text-muted py-4">
-                    <i class="bi bi-search me-2"></i>
-                    No se encontraron productos con los filtros aplicados
+                <td colspan="7" class="p-0">
+                    <div class="empty-state-nexo empty-state-compact">
+                        <i class="bi bi-search"></i>
+                        <p>No se encontraron productos con los filtros aplicados</p>
+                    </div>
                 </td>
             </tr>
         `);
@@ -3701,16 +3721,16 @@ function displayProductsInTable(products) {
         
         // Badges visuales de atributos (solo los que no son '-')
         const attrBadges = [
-            color !== '-' ? `<span class="badge bg-info text-dark" style="font-size:0.65rem;">${color}</span>` : '',
-            marca !== '-' ? `<span class="badge bg-primary" style="font-size:0.65rem;">${marca}</span>` : '',
-            sexo  !== '-' ? `<span class="badge bg-secondary" style="font-size:0.65rem;">${sexo}</span>`  : '',
+            color !== '-' ? `<span class="badge bg-info text-dark" style="font-size:0.75rem;">${color}</span>` : '',
+            marca !== '-' ? `<span class="badge bg-nexo-primary" style="font-size:0.75rem;">${marca}</span>` : '',
+            sexo  !== '-' ? `<span class="badge bg-secondary" style="font-size:0.75rem;">${sexo}</span>`  : '',
         ].filter(Boolean).join(' ');
 
         const rowHtml = `
             <tr data-product-id="${product.id}" class="${estadoClass}">
                 <td class="text-center align-middle d-none d-md-table-cell" style="padding:4px;">
                     <img src="${fotoUrl}" class="producto-portada-img" loading="lazy" alt=""
-                         style="width:70px;height:70px;border-radius:8px;object-fit:cover;border:1px solid #e0e0e0;background:#f5f5f7;"
+                         style="width:70px;height:70px;border-radius:8px;object-fit:cover;border:1px solid var(--nexo-gray-300);background:var(--nexo-gray-100);"
                          onerror="this.src='${placeholderFotoEmision}';">
                 </td>
                 <td class="align-middle fw-semibold" style="white-space:nowrap;">${product.articulo}</td>
@@ -3721,11 +3741,11 @@ function displayProductsInTable(products) {
                 <td class="text-end align-middle d-none d-lg-table-cell" style="white-space:nowrap;">$${parseInt(costo).toLocaleString()}</td>
                 <td class="text-end align-middle text-muted d-none d-lg-table-cell" style="white-space:nowrap;">$${parseInt(sobreprecio).toLocaleString()}</td>
                 <td class="text-center align-middle">
-                    <span class="badge rounded-pill ${stockTotal <= 0 ? 'bg-danger' : stockTotal <= 4 ? 'bg-warning text-dark' : 'bg-success'} px-2" style="font-size:0.8rem;min-width:2rem;">${stockTotal}</span>
-                    ${stockEnDespacho > 0 ? `<div class="text-muted" style="font-size:0.65rem;">${stockEnDespacho} en doc.</div>` : ''}
+                    <span class="badge rounded-pill ${stockTotal <= 0 ? 'badge-nexo-error' : stockTotal <= 4 ? 'badge-nexo-warning' : 'badge-nexo-success'} px-2" style="font-size:0.8rem;min-width:2rem;">${stockTotal}</span>
+                    ${stockEnDespacho > 0 ? `<div class="text-muted" style="font-size:0.75rem;">${stockEnDespacho} en doc.</div>` : ''}
                 </td>
                 <td class="text-center align-middle">
-                    <button class="btn btn-success btn-sm py-0 px-2" onclick="selectProduct(${product.id})" title="Agregar al documento">
+                    <button class="btn btn-success btn-sm px-2" onclick="selectProduct(${product.id})" title="Agregar al documento">
                         <i class="bi bi-plus-lg"></i>
                     </button>
                 </td>
@@ -4000,9 +4020,9 @@ function loadTallasDisponibles(product) {
         const disponibleParaAgregar = Math.max(0, stockTotal - cantidadEnDespacho);
         
         // Clase para el badge de "En Despacho"
-        const badgeEnDespacho = cantidadEnDespacho > 0 ? 'bg-warning text-dark' : 'bg-secondary';
-        const badgeDisponible = disponibleParaAgregar === 0 ? 'bg-danger' : 
-                                disponibleParaAgregar < 5 ? 'bg-warning text-dark' : 'bg-success';
+        const badgeEnDespacho = cantidadEnDespacho > 0 ? 'badge-nexo-warning' : 'badge-nexo-secondary';
+        const badgeDisponible = disponibleParaAgregar === 0 ? 'badge-nexo-error' :
+                                disponibleParaAgregar < 5 ? 'badge-nexo-warning' : 'badge-nexo-success';
         
         console.log(`   Stock: ${stockTotal}, En despacho: ${cantidadEnDespacho}, Disponible: ${disponibleParaAgregar}`);
         
@@ -4017,7 +4037,7 @@ function loadTallasDisponibles(product) {
                 ${disponibleParaAgregar === 0 ? 'style="opacity:0.55;"' : ''}>
                 <td class="text-center fw-bold sku-cell" style="font-size:0.78rem;">${talla.sku || '-'}</td>
                 <td class="text-center">
-                    <span class="badge bg-primary talla-badge">${talla.talla || '-'}</span>
+                    <span class="badge badge-nexo-secondary talla-badge">${talla.talla || '-'}</span>
                 </td>
                 <td class="text-center">
                     <span class="badge bg-info">${stockTotal}</span>
@@ -4039,12 +4059,11 @@ function loadTallasDisponibles(product) {
                            data-talla-id="${talla.id || index}" data-precio="${precioAUsar}"
                            data-sku="${talla.sku || ''}" data-disponible="${disponibleParaAgregar}"
                            data-costo="${costoTalla}" data-sobreprecio="${sobrepreioTalla}" data-precio-venta="${precioVentaTalla}"
-                           ${disponibleParaAgregar === 0 ? 'disabled' : ''}
-                           style="padding: 2px 4px;">
+                           ${disponibleParaAgregar === 0 ? 'disabled' : ''}>
                 </td>
                 <td class="text-end subtotal-cell" style="font-size:0.82rem;">$0</td>
                 <td class="text-center">
-                    <button class="btn btn-success btn-sm px-2 py-1" tabindex="-1"
+                    <button class="btn btn-success btn-sm px-2" tabindex="-1"
                             onclick="agregarTallaIndividual(${talla.id || index})"
                             ${disponibleParaAgregar === 0 ? 'disabled title="Sin stock"' : 'title="Agregar esta talla"'}>
                         <i class="bi bi-plus-lg"></i>
@@ -4336,7 +4355,7 @@ function addTallasToDetalle(tallas, productOverride = null) {
                 <td class="text-center">${currentProduct.articulo}</td>
                 <td>${currentProduct.descripcion}</td>
                 <td class="text-center">
-                    <span class="badge bg-primary">${talla.talla}</span>
+                    <span class="badge badge-nexo-secondary">${talla.talla}</span>
                     <br><small class="text-muted">SKU: ${talla.sku}</small>
                 </td>
                 <td class="text-center">
@@ -4772,8 +4791,8 @@ function createNewProductRow(productoId, productoNombre, tallas) {
                     <i class="bi bi-pencil"></i> Editar
                 </button>
             </td>
-            <td>$${tallas[0].precio.toLocaleString()}</td>
-            <td class="subtotal">$${subtotalProducto.toLocaleString()}</td>
+            <td class="text-end">$${tallas[0].precio.toLocaleString()}</td>
+            <td class="subtotal text-end">$${subtotalProducto.toLocaleString()}</td>
             <td>
                 <button class="btn btn-sm btn-outline-danger" onclick="removeFromDetalle(this)">
                     <i class="bi bi-trash"></i>
@@ -4843,9 +4862,11 @@ function removeFromDetalle(button) {
     if ($('#detalleBody tr').length === 0) {
         $('#detalleBody').append(`
             <tr id="emptyRow">
-                <td colspan="7" class="text-center text-muted py-4">
-                    <i class="bi bi-inbox display-4 d-block mb-2"></i>
-                    No hay productos seleccionados
+                <td colspan="9" class="p-0">
+                    <div class="empty-state-nexo empty-state-compact">
+                        <i class="bi bi-inbox"></i>
+                        <p>No hay productos seleccionados</p>
+                    </div>
                 </td>
             </tr>
         `);
@@ -4933,9 +4954,9 @@ function updateResumenProductosTable() {
     
     if (detalleRows.length === 0) {
         container.html(`
-            <div class="text-center text-muted py-4 small carrito-empty">
-                <i class="ri-shopping-cart-line" style="font-size:2rem; color:#ccc;"></i>
-                <p class="mt-2 mb-0">Agrega productos al despacho</p>
+            <div class="empty-state-nexo empty-state-compact carrito-empty">
+                <i class="bi bi-cart3"></i>
+                <p>Agrega productos al despacho</p>
             </div>
         `);
         $('#carritoCount').text('0');
@@ -4990,27 +5011,27 @@ function updateResumenProductosTable() {
         const p = productosAgrupados[productoId];
         const sobreprecio = p.sobreprecio || 0;
         
-        const tallasHtml = p.tallas.map(t => 
-            `<span style="display:inline-flex; align-items:center; gap:2px; background:#f0f2f7; border-radius:10px; padding:1px 7px; margin:1px; font-size:0.72rem;">
-                <span style="color:#8A8A9A;">${t.talla}</span>
-                <strong style="color:#1A1A2E;">×${t.cantidad}</strong>
+        const tallasHtml = p.tallas.map(t =>
+            `<span class="carrito-talla">
+                <span>${t.talla}</span>
+                <strong>×${t.cantidad}</strong>
             </span>`
         ).join('');
-        
+
         const cardHtml = `
-            <div class="carrito-item" style="padding:10px 12px; border-bottom:1px solid #f0f1f5; transition:background 0.15s;"
-                 onmouseover="this.style.background='#f8f9fc'" onmouseout="this.style.background='transparent'">
+            <div class="carrito-item"
+                 onmouseover="this.style.background='var(--nexo-gray-100)'" onmouseout="this.style.background='transparent'">
                 <div class="d-flex justify-content-between align-items-start mb-1">
                     <div style="flex:1; min-width:0;">
-                        <div style="font-weight:700; font-size:0.82rem; color:#1A1A2E; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        <div class="carrito-articulo">
                             ${p.articulo}
                         </div>
-                        <div style="font-size:0.75rem; color:#8A8A9A; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        <div class="carrito-desc">
                             ${p.descripcion}
                         </div>
                     </div>
                     <div class="text-end ms-2" style="flex-shrink:0;">
-                        <div style="font-weight:700; font-size:0.9rem; color:#1A1A2E;">$${p.totalMonto.toLocaleString('es-CL')}</div>
+                        <div class="carrito-monto">$${p.totalMonto.toLocaleString('es-CL')}</div>
                     </div>
                 </div>
                 <div class="d-flex justify-content-between align-items-center">
@@ -5018,17 +5039,17 @@ function updateResumenProductosTable() {
                         ${tallasHtml}
                     </div>
                     <div class="d-flex align-items-center gap-1 ms-2" style="flex-shrink:0;">
-                        <span style="background:#e8f5e9; color:#2e7d32; font-weight:700; font-size:0.75rem; padding:2px 8px; border-radius:10px;">
+                        <span class="badge badge-nexo-success rounded-pill">
                             ${p.totalCantidad} u.
                         </span>
                     </div>
                 </div>
-                <div class="d-flex flex-wrap gap-1 mt-1" style="font-size:0.7rem; color:#8A8A9A;">
+                <div class="d-flex flex-wrap gap-1 mt-1 carrito-desglose">
                     <span>Costo: $${p.costo.toLocaleString('es-CL')}</span>
-                    <span style="color:#ccc;">+</span>
-                    <span style="color:#0066FF;">Sobre: $${sobreprecio.toLocaleString('es-CL')}</span>
-                    <span style="color:#ccc;">=</span>
-                    <span style="color:#1A1A2E;"><strong>P.Int: $${p.precio.toLocaleString('es-CL')}</strong></span>
+                    <span class="sep">+</span>
+                    <span class="sobre">Sobre: $${sobreprecio.toLocaleString('es-CL')}</span>
+                    <span class="sep">=</span>
+                    <span class="pint"><strong>P.Int: $${p.precio.toLocaleString('es-CL')}</strong></span>
                     <span>· × ${p.totalCantidad}</span>
                 </div>
             </div>
@@ -5357,7 +5378,7 @@ function emitirDTE() {
     const resumenHTML = generarResumenDespacho();
     
     Swal.fire({
-        title: '<i class="bi bi-clipboard-check text-primary"></i> Confirmación de Emisión',
+        title: '<i class="bi bi-clipboard-check text-nexo-primary"></i> Confirmación de Emisión',
         html: resumenHTML,
         icon: null,
         width: '900px',
@@ -5499,21 +5520,21 @@ function generarResumenDespacho() {
         <div class="resumen-despacho" style="text-align: left;">
             <!-- Sección de Configuración -->
             <div class="card mb-3">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header bg-nexo-primary text-white">
                     <i class="bi bi-gear-fill me-2"></i><strong>Configuración del Documento</strong>
                 </div>
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-6">
                             <p class="mb-2">
-                                <i class="bi bi-file-earmark-text text-primary me-2"></i>
+                                <i class="bi bi-file-earmark-text text-nexo-primary me-2"></i>
                                 <strong>Tipo de Documento:</strong><br>
                                 <span class="ms-4">${tipoDocumentoTexto}</span>
                             </p>
                         </div>
                         <div class="col-md-6">
                             <p class="mb-2">
-                                <i class="bi bi-truck text-primary me-2"></i>
+                                <i class="bi bi-truck text-nexo-primary me-2"></i>
                                 <strong>Método de Despacho:</strong><br>
                                 <span class="ms-4">${metodoDespachoTexto}</span>
                             </p>
@@ -5537,7 +5558,7 @@ function generarResumenDespacho() {
                             </div>
                         </div>
                         <div class="col-md-2 text-center">
-                            <i class="bi bi-arrow-right-circle-fill text-primary" style="font-size: 2.5rem;"></i>
+                            <i class="bi bi-arrow-right-circle-fill text-nexo-primary" style="font-size: 2.5rem;"></i>
                         </div>
                         <div class="col-md-5 text-center">
                             <div class="p-3 bg-light rounded">
@@ -5563,13 +5584,20 @@ function generarResumenDespacho() {
                 <div class="card-body p-0">
                     <div class="productos-scroll-container">
                         <table class="table table-hover table-sm mb-0">
+                            <colgroup>
+                                <col style="width: 40%;">
+                                <col style="width: 25%;">
+                                <col style="width: 10%;">
+                                <col style="width: 12%;">
+                                <col style="width: 13%;">
+                            </colgroup>
                             <thead class="table-light sticky-top">
                                 <tr>
-                                    <th class="text-start" width="40%">Producto</th>
-                                    <th class="text-center" width="25%">Tallas</th>
-                                    <th class="text-center" width="10%">Cant. Total</th>
-                                    <th class="text-end" width="12%">Precio Unit.</th>
-                                    <th class="text-end" width="13%">Subtotal</th>
+                                    <th class="text-start">Producto</th>
+                                    <th class="text-center">Tallas</th>
+                                    <th class="text-center">Cant. Total</th>
+                                    <th class="text-end">Precio Unit.</th>
+                                    <th class="text-end">Subtotal</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -5806,7 +5834,7 @@ function buscarPorReferencia(referencia, page) {
     $('#datos_tabla_productos').html(`
         <tr>
             <td colspan="7" class="text-center py-4">
-                <div class="spinner-border text-primary" role="status">
+                <div class="spinner-border text-nexo-primary" role="status">
                     <span class="visually-hidden">Buscando...</span>
                 </div>
                 <p class="mt-2 mb-0">Buscando productos en DTEs recepcionados...</p>
@@ -5827,10 +5855,12 @@ function buscarPorReferencia(referencia, page) {
                 if (response.pagination) updatePagination(response.pagination);
                 $('#datos_tabla_productos').html(`
                     <tr>
-                        <td colspan="7" class="text-center text-muted py-4">
-                            <i class="bi bi-search me-2"></i>
-                            No se encontraron productos en DTEs para "<strong>${$('<span>').text(referencia).html()}</strong>"
-                            <br><small>Intente con número de documento, emisor, SKU o artículo</small>
+                        <td colspan="7" class="p-0">
+                            <div class="empty-state-nexo empty-state-compact">
+                                <i class="bi bi-search"></i>
+                                <p>No se encontraron productos en DTEs para "<strong>${$('<span>').text(referencia).html()}</strong>"</p>
+                                <p><small>Intente con número de documento, emisor, SKU o artículo</small></p>
+                            </div>
                         </td>
                     </tr>
                 `);
@@ -6096,7 +6126,7 @@ function mostrarPatronDetectado() {
     if (patronSeleccionado === 'auto') {
         const resultado = detectarMejorPatron(tallasConStock);
         
-        let html = '<h5 class="text-primary">🔍 Patrón Detectado Automáticamente</h5>';
+        let html = '<h5 class="text-nexo-primary">🔍 Patrón Detectado Automáticamente</h5>';
         html += '<hr>';
         html += '<div class="table-responsive">';
         html += '<table class="table table-bordered table-sm">';
@@ -6108,7 +6138,7 @@ function mostrarPatronDetectado() {
             html += `<tr>
                 <td class="text-center"><strong>${talla}</strong></td>
                 <td class="text-center"><span class="badge bg-success">${stockTalla}</span></td>
-                <td class="text-center"><span class="badge bg-primary">${cant}</span></td>
+                <td class="text-center"><span class="badge bg-nexo-primary">${cant}</span></td>
             </tr>`;
         }
         
@@ -6133,7 +6163,7 @@ function mostrarPatronDetectado() {
     } else {
         const patronPredef = PATRONES_TAREA[patronSeleccionado];
         
-        let html = `<h5 class="text-primary">📋 ${patronPredef.nombre}</h5>`;
+        let html = `<h5 class="text-nexo-primary">📋 ${patronPredef.nombre}</h5>`;
         html += '<hr>';
         html += '<div class="table-responsive">';
         html += '<table class="table table-bordered table-sm">';
@@ -6143,7 +6173,7 @@ function mostrarPatronDetectado() {
         for (const [talla, cant] of Object.entries(patronPredef.tallas)) {
             html += `<tr>
                 <td class="text-center"><strong>${talla}</strong></td>
-                <td class="text-center"><span class="badge bg-primary">${cant}</span></td>
+                <td class="text-center"><span class="badge bg-nexo-primary">${cant}</span></td>
             </tr>`;
         }
         

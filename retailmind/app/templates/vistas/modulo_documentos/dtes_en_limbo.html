@@ -3,86 +3,273 @@
 {% include '../../layout/menu.html' %}
 
 <style>
-    :root {
-        --nexo-primary: #0066FF;
-        --nexo-primary-dark: #0052CC;
-        --nexo-primary-light: #E6F0FF;
-        --nexo-secondary: #1A1A2E;
-        --nexo-accent: #00D4AA;
-        --nexo-warning: #FFB020;
-        --nexo-error: #FF4D4D;
-        --nexo-gray-100: #F5F5F7;
-        --nexo-gray-300: #D1D1D9;
-        --nexo-gray-500: #8A8A9A;
-        --nexo-gray-700: #4A4A5A;
-        --nexo-gray-900: #1A1A2E;
-    }
-
     .page-content { background: #fff; min-height: calc(100vh - 70px); }
 
-    .limbo-header {
-        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
-        color: #fff;
-        border-radius: 12px;
-        padding: 20px 24px;
-        margin-bottom: 20px;
-        box-shadow: 0 10px 15px rgba(26, 26, 46, 0.1);
-    }
-    .limbo-header h4 { color: #fff; font-weight: 600; margin: 0; }
-    .limbo-header small { color: rgba(255,255,255,0.85); }
-
-    .limbo-card {
-        box-shadow: 0 10px 15px rgba(26, 26, 46, 0.08);
-        border: 1px solid var(--nexo-gray-300);
-        border-radius: 14px;
+    /* ==================== ESTRUCTURA ESTÁNDAR DE MÓDULO (ESTILOS_MODULOS.md) ==================== */
+    .card.shadow {
+        border: none;
+        border-radius: 16px;
         overflow: hidden;
+        box-shadow: 0 4px 20px rgba(64, 81, 137, 0.1);
+        animation: fadeInCard 0.4s ease;
     }
-    .limbo-card .card-header {
-        background: var(--nexo-gray-100);
-        padding: 14px 20px;
-        border-bottom: 1px solid var(--nexo-gray-300);
+
+    @keyframes fadeInCard {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
     }
-    .limbo-card .card-header h5 { margin: 0; font-weight: 600; color: var(--nexo-gray-900); }
 
-    .badge-estado { font-weight: 600; padding: 4px 10px; border-radius: 12px; font-size: 12px; }
-    .badge-rechazado { background: #FFE5E5; color: #B30000; }
-    .badge-parcial { background: #FFF4E0; color: #B36A00; }
-    .badge-sobrante { background: #E0F7FA; color: #006B70; }
-    .badge-regularizacion { background: var(--nexo-primary-light); color: var(--nexo-primary-dark); }
-    .badge-emitido-viejo { background: #F0E6FF; color: #5B2E91; }
+    /* Header con gradiente (clase compartida .module-header) */
+    .module-header {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        color: white;
+        padding: 16px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
 
-    .badge-dias { font-weight: 600; padding: 3px 9px; border-radius: 10px; font-size: 11px; }
-    .badge-dias-ok { background: #E0F8EF; color: #007A4D; }
-    .badge-dias-warn { background: #FFF4E0; color: #B36A00; }
-    .badge-dias-alert { background: #FFE5E5; color: #B30000; }
+    .module-header-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
 
+    .module-header-icon {
+        width: 48px;
+        height: 48px;
+        background: rgba(255,255,255,0.2);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+    }
+
+    .module-header-info h5 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: white;
+    }
+
+    .module-header-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        opacity: 0.9;
+        margin-top: 4px;
+    }
+
+    .status-dot {
+        width: 8px;
+        height: 8px;
+        background: #4ade80;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+        flex-shrink: 0;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .module-header-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .module-header-actions .btn {
+        border-radius: 10px;
+        font-weight: 500;
+        padding: 8px 14px;
+        font-size: 13px;
+        border: none;
+        transition: all 0.2s ease;
+    }
+
+    .module-header-actions .contador-total {
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: 10px;
+    }
+
+    .card.shadow > .card-body {
+        padding: 24px;
+        background: #fff;
+    }
+
+    /* Bloque de filtros (mismo fondo que el estándar) */
+    .pagination-controls {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 16px;
+        border: 1px solid rgba(64, 81, 137, 0.1);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    .filtro-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--nexo-gray-700);
+        margin-bottom: 4px;
+    }
+
+    /* Quick filters (mismo bloque que gestionDteCompras.html; min-height 32px) */
+    .quick-filter-btn {
+        padding: 5px 14px;
+        min-height: 32px;
+        font-size: 0.75rem;
+        white-space: nowrap;
+        border-radius: 16px;
+        border: 1.5px solid #e5e7eb;
+        background: white;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-weight: 500;
+        color: #495057;
+    }
+
+    .quick-filter-btn:hover {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        border-color: transparent;
+        color: white;
+        transform: translateY(-1px);
+        box-shadow: 0 3px 8px rgba(64, 81, 137, 0.25);
+    }
+
+    .quick-filter-btn.active {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        border-color: transparent;
+        color: white;
+        box-shadow: 0 2px 8px rgba(64, 81, 137, 0.3);
+    }
+
+    /* ==================== ESTADOS: un tono por color, derivado de los tokens NEXO ==================== */
+    /* badge-estado / badge-dias / chip-problema solo aportan tamaño; el color lo da el tono. */
+    .badge-estado {
+        display: inline-block;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: var(--nexo-radius-full);
+        font-size: 12px;
+        white-space: nowrap;
+    }
+    .badge-dias {
+        display: inline-block;
+        font-weight: 600;
+        padding: 3px 9px;
+        border-radius: var(--nexo-radius-full);
+        font-size: 11px;
+        white-space: nowrap;
+    }
     .chip-problema {
         display: inline-block;
         padding: 3px 8px;
-        border-radius: 10px;
+        border-radius: var(--nexo-radius-full);
         font-size: 11px;
         margin-right: 4px;
         margin-bottom: 2px;
         font-weight: 500;
     }
-    .chip-faltante { background: #FFE5E5; color: #B30000; }
-    .chip-danado { background: #FFF4E0; color: #B36A00; }
-    .chip-sobrante { background: #E0F7FA; color: #006B70; }
+    /* Tono error (misma base que .alert-nexo-error) */
+    .badge-rechazado, .badge-dias-alert, .chip-faltante { background: rgba(255, 77, 77, 0.12); color: var(--nexo-error); }
+    /* Tono warning (misma base que .alert-nexo-warning) */
+    .badge-parcial, .badge-dias-warn, .chip-danado, .chip-nc-pendiente { background: rgba(255, 176, 32, 0.15); color: #996B00; }
+    /* Tono success / accent */
+    .badge-sobrante, .badge-dias-ok, .chip-sobrante { background: rgba(0, 212, 170, 0.12); color: #00A080; }
+    /* Tono info */
+    .badge-regularizacion { background: var(--nexo-primary-light); color: var(--nexo-primary-dark); }
+    /* Tono neutro: emitido sin recepcionar */
+    .badge-emitido-viejo { background: var(--nexo-gray-100); color: var(--nexo-gray-700); }
 
-    .btn-resolver {
-        background: var(--nexo-primary);
-        color: #fff;
-        border: none;
-        padding: 6px 14px;
-        border-radius: 6px;
-        font-weight: 500;
-        transition: background 150ms ease;
+    /* Motivo de rechazo bajo el badge: máximo 2 líneas, no ensancha la columna (el texto completo se ve en el modal) */
+    .motivo-rechazo {
+        max-width: 220px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
     }
-    .btn-resolver:hover { background: var(--nexo-primary-dark); color: #fff; }
+
+    /* Botones NEXO en tamaño sm (el global fija 0.625rem 1.25rem / 0.5rem 1.125rem) */
+    .btn-sm.btn-nexo-primary,
+    .btn-sm.btn-nexo-outline {
+        padding: 0.25rem 0.75rem;
+        font-weight: 500;
+    }
+
+    /* Estado vacío / error dentro de la tabla: versión compacta de .empty-state-nexo global */
+    #tablaLimbo .empty-state-nexo { padding: 2rem 1rem; }
+    #tablaLimbo .empty-state-nexo i { font-size: 3rem; margin-bottom: 0.5rem; }
+    #tablaLimbo .empty-state-nexo h4 { font-size: 1rem; font-weight: 600; }
+
+    /* Indicador de carga (mismo markup que detalle_dte.html) */
+    .loading-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 20px;
+    }
+    .loading-container .spinner-border {
+        width: 2.5rem;
+        height: 2.5rem;
+        color: #405189;
+    }
+
+    /* ==================== MODAL RESOLVER ==================== */
+    .rm-modal-header {
+        background: #fff;
+        border-bottom: 1px solid #edf0f5;
+        padding: 18px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .rm-modal-header .rm-modal-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        flex-shrink: 0;
+    }
+    .rm-modal-icon--blue { background: rgba(64, 81, 137, 0.10); color: #405189; }
+    .rm-modal-header .rm-modal-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin: 0;
+        line-height: 1.3;
+    }
+    .rm-modal-header .rm-modal-subtitle {
+        font-size: 0.78rem;
+        color: var(--nexo-gray-500);
+        margin: 0;
+        font-weight: 400;
+    }
+    .rm-modal-header .btn-close {
+        opacity: 0.7;
+        transition: opacity 0.2s;
+    }
+    .rm-modal-header .btn-close:hover {
+        opacity: 1;
+    }
 
     .accion-card {
         border: 2px solid var(--nexo-gray-300);
-        border-radius: 12px;
+        border-radius: var(--nexo-radius-lg);
         padding: 18px;
         cursor: pointer;
         transition: all 200ms ease;
@@ -93,23 +280,26 @@
         background: var(--nexo-primary-light);
         transform: translateY(-2px);
     }
-    .accion-card.disabled { opacity: 0.45; cursor: not-allowed; }
+    /* Deshabilitada: se atenúa el borde, el texto sigue legible (explica por qué no aplica) */
+    .accion-card.disabled { opacity: 0.65; border-style: dashed; cursor: not-allowed; }
     .accion-card h6 { font-weight: 600; margin-bottom: 8px; }
-    .accion-card small { color: var(--nexo-gray-500); }
+    .accion-card small { color: var(--nexo-gray-700); }
 
     .toggle-devolucion {
         display: flex;
+        flex-wrap: wrap;
         gap: 10px;
         margin: 12px 0;
     }
     .toggle-opcion {
         flex: 1;
+        min-width: 260px;
         padding: 14px;
         border: 2px solid var(--nexo-gray-300);
-        border-radius: 10px;
+        border-radius: var(--nexo-radius-md);
         cursor: pointer;
         text-align: left;
-        background: #fff;
+        background: var(--nexo-white);
         transition: all 150ms ease;
     }
     .toggle-opcion.active {
@@ -122,146 +312,139 @@
 
     .tabla-productos-nc { font-size: 13px; }
     .tabla-productos-nc th { background: var(--nexo-gray-100); font-weight: 600; }
-    .tabla-productos-nc input.cantidad-nc { width: 80px; text-align: center; }
-
-    .alerta-pendiente-confirmacion {
-        background: var(--nexo-primary-light);
-        border-left: 4px solid var(--nexo-primary);
-        padding: 12px 16px;
-        border-radius: 8px;
-        margin-top: 10px;
+    .tabla-productos-nc th.th-check { width: 30px; }
+    /* Cantidades editables (NC y corrección): mismo ancho, alineadas a la derecha de la celda */
+    .tabla-productos-nc input[type="number"] {
+        width: 80px;
+        text-align: right;
+        margin-left: auto;
     }
 
-    /* Filtros rápidos de rango (estilo estándar de módulos) */
-    .quick-filter-btn {
-        padding: 5px 12px;
-        font-size: 0.75rem;
-        white-space: nowrap;
-        border-radius: 16px;
-        border: 1.5px solid var(--nexo-gray-300);
-        background: #fff;
-        cursor: pointer;
-        transition: all 0.2s;
-        font-weight: 500;
-        color: var(--nexo-gray-700);
-    }
-
-    .quick-filter-btn:hover {
-        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
-        border-color: transparent;
-        color: #fff;
-        transform: translateY(-1px);
-    }
-
-    .quick-filter-btn.active {
-        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
-        border-color: transparent;
-        color: #fff;
-    }
-
-    .limbo-filtros-fecha input[type="date"] {
-        width: 150px;
-    }
-
-    .aviso-tope {
-        background: rgba(255, 176, 32, 0.12);
-        border-left: 4px solid var(--nexo-warning);
-        color: #8a5a00;
-        font-size: 12px;
-        padding: 8px 14px;
-        border-radius: 0;
+    @media (max-width: 768px) {
+        .module-header { padding: 12px 16px; }
+        .module-header-icon { width: 40px; height: 40px; font-size: 20px; }
+        .quick-filter-btn { min-height: 44px; }
     }
 </style>
 
-<div class="page-content p-4">
-    <div class="limbo-header">
-        <div class="d-flex align-items-center justify-content-between flex-wrap">
-            <div>
-                <h4>⏳ DTEs en Limbo</h4>
-                <small>DTEs emitidos que requieren tu decisión: rehabilitar, corregir o emitir Nota de Crédito.</small>
-            </div>
-            <div class="text-end">
-                <span id="contadorTotal" class="badge bg-light text-dark" style="font-size: 14px; padding: 8px 14px;">— DTEs</span>
-            </div>
-        </div>
-    </div>
-
-    <div class="limbo-card mb-3">
-        <div class="card-header">
-            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                <h5>📋 Lista de DTEs</h5>
-                <div class="d-flex gap-2 align-items-center flex-wrap">
-                    <select id="filtroEstado" class="form-select form-select-sm" style="width: auto;">
-                        <option value="">Todos los estados</option>
-                        <option value="RECHAZADO">Rechazados</option>
-                        <option value="RECEPCIONADO_PARCIAL">Parciales</option>
-                        <option value="RECEPCIONADO_SOBRANTE">Con sobrantes</option>
-                        <option value="EN_REGULARIZACION">En regularización</option>
-                        <option value="EMITIDO">Emitidos sin recepcionar</option>
-                    </select>
-                    <input type="number" id="filtroDiasMinimos" class="form-control form-control-sm"
-                           placeholder="Antigüedad" style="width: 120px;" min="0"
-                           title="Cuántos días debe llevar un DTE EMITIDO sin recepcionar para entrar al limbo (por defecto 7). No afecta a los rechazados/parciales." />
-                    <button class="btn btn-sm btn-outline-primary" id="btnRefrescar">🔄 Refrescar</button>
+<div class="page-content">
+    <div class="container-fluid">
+        <div class="card shadow">
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon">
+                        <i class="bi bi-hourglass-split"></i>
+                    </div>
+                    <div class="module-header-info">
+                        <h5>DTEs en Limbo</h5>
+                        <div class="module-header-status">
+                            <span class="status-dot"></span>
+                            DTEs emitidos que requieren tu decisión: rehabilitar, corregir o emitir Nota de Crédito.
+                        </div>
+                    </div>
+                </div>
+                <div class="module-header-actions">
+                    <span id="contadorTotal" class="badge bg-light text-dark contador-total">— DTEs</span>
+                    <button type="button" class="btn btn-light" id="btnRefrescar"><i class="bi bi-arrow-clockwise me-1"></i>Refrescar</button>
                 </div>
             </div>
 
-            <!-- Rango de fechas de emisión: por defecto los últimos 90 días.
-                 Sin esto la pantalla mezclaba casos vivos con basura histórica
-                 (documentos de 2021-2022 que ya nadie va a resolver). -->
-            <div class="d-flex gap-2 align-items-center flex-wrap mt-2 limbo-filtros-fecha">
-                <span class="text-muted" style="font-size: 12px;">📅 Emitidos entre</span>
-                <input type="date" id="filtroFechaDesde" class="form-control form-control-sm" />
-                <span class="text-muted" style="font-size: 12px;">y</span>
-                <input type="date" id="filtroFechaHasta" class="form-control form-control-sm" />
-                <span class="text-muted ms-2" style="font-size: 12px;">Rápido:</span>
-                <button type="button" class="quick-filter-btn" data-rango-dias="30">30 días</button>
-                <button type="button" class="quick-filter-btn active" data-rango-dias="90">90 días</button>
-                <button type="button" class="quick-filter-btn" data-rango-dias="365">1 año</button>
-                <button type="button" class="quick-filter-btn" data-rango-dias="0">Todo el histórico</button>
-            </div>
-        </div>
-        <div id="avisoTope" class="aviso-tope d-none"></div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Tipo</th>
-                            <th>Destino</th>
-                            <th>Emisión</th>
-                            <th>Estado</th>
-                            <th>Días</th>
-                            <th>Problemas</th>
-                            <th>Unidades / Monto</th>
-                            <th>Acción</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tablaLimbo">
-                        <tr><td colspan="9" class="text-center text-muted py-4">Cargando…</td></tr>
-                    </tbody>
-                </table>
+            <div class="card-body">
+                <!-- Filtros -->
+                <div class="pagination-controls">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-lg-3 col-md-4 col-sm-6">
+                            <label for="filtroEstado" class="form-label filtro-label">Estado</label>
+                            <select id="filtroEstado" class="form-select form-select-sm">
+                                <option value="">Todos los estados</option>
+                                <option value="RECHAZADO">Rechazados</option>
+                                <option value="RECEPCIONADO_PARCIAL">Parciales</option>
+                                <option value="RECEPCIONADO_SOBRANTE">Con sobrantes</option>
+                                <option value="EN_REGULARIZACION">En regularización</option>
+                                <option value="EMITIDO">Emitidos sin recepcionar</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-2 col-md-2 col-sm-6">
+                            <label for="filtroDiasMinimos" class="form-label filtro-label">Antigüedad (días)</label>
+                            <input type="number" id="filtroDiasMinimos" class="form-control form-control-sm"
+                                   placeholder="Antigüedad" min="0"
+                                   title="Cuántos días debe llevar un DTE EMITIDO sin recepcionar para entrar al limbo (por defecto 7). No afecta a los rechazados/parciales." />
+                        </div>
+
+                        <!-- Rango de fechas de emisión: por defecto los últimos 90 días.
+                             Sin esto la pantalla mezclaba casos vivos con basura histórica
+                             (documentos de 2021-2022 que ya nadie va a resolver). -->
+                        <div class="col-lg-3 col-md-6 col-sm-8">
+                            <label for="filtroFechaDesde" class="form-label filtro-label"><i class="bi bi-calendar3 me-1"></i>Emitidos entre</label>
+                            <div class="input-group input-group-sm">
+                                <input type="date" id="filtroFechaDesde" class="form-control form-control-sm" aria-label="Desde" />
+                                <span class="input-group-text">y</span>
+                                <input type="date" id="filtroFechaHasta" class="form-control form-control-sm" aria-label="Hasta" />
+                            </div>
+                        </div>
+                        <div class="col-lg-4 col-md-12">
+                            <span class="form-label filtro-label d-block">Rápido</span>
+                            <div class="d-flex flex-wrap gap-1">
+                                <button type="button" class="quick-filter-btn" data-rango-dias="30">30 días</button>
+                                <button type="button" class="quick-filter-btn active" data-rango-dias="90">90 días</button>
+                                <button type="button" class="quick-filter-btn" data-rango-dias="365">1 año</button>
+                                <button type="button" class="quick-filter-btn" data-rango-dias="0">Todo el histórico</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="avisoTope" class="alert-nexo alert-nexo-warning py-2 small mb-3 d-none"></div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Tipo</th>
+                                <th>Destino</th>
+                                <th class="text-center">Emisión</th>
+                                <th>Estado</th>
+                                <th class="text-center">Días</th>
+                                <th>Problemas</th>
+                                <th class="text-end">Unid.</th>
+                                <th class="text-end">Monto</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaLimbo">
+                            <tr><td colspan="10"><div class="loading-container" role="status" aria-live="polite"><div class="spinner-border" aria-hidden="true"></div><p class="mt-3 mb-0 text-muted">Cargando…</p></div></td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Modal Resolver -->
-<div class="modal fade" id="modalResolver" tabindex="-1">
+<div class="modal fade" id="modalResolver" tabindex="-1" aria-labelledby="modalResolverTitulo" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header bg-light">
-                <h5 class="modal-title" id="modalResolverTitulo">Resolver DTE</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <div class="rm-modal-header">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rm-modal-icon rm-modal-icon--blue">
+                        <i class="bi bi-hourglass-split"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title rm-modal-title" id="modalResolverTitulo">Resolver DTE</h5>
+                        <p class="rm-modal-subtitle">Elige una acción y confírmala al pie</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body" id="modalResolverBody">
-                <div class="text-center py-4 text-muted">Cargando detalle…</div>
+                <div class="loading-container" role="status" aria-live="polite"><div class="spinner-border" aria-hidden="true"></div><p class="mt-3 mb-0 text-muted">Cargando…</p></div>
             </div>
             <div class="modal-footer">
+                <button type="button" class="btn btn-light me-auto d-none" id="btnVolverAccion"><i class="bi bi-arrow-left me-1"></i>Cambiar acción</button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                <button type="button" class="btn btn-primary d-none" id="btnVolverAccion">← Cambiar acción</button>
-                <button type="button" class="btn btn-primary d-none" id="btnEnviarAccion">Confirmar</button>
+                <button type="button" class="btn btn-nexo-primary d-none" id="btnEnviarAccion">Confirmar</button>
             </div>
         </div>
     </div>
@@ -297,6 +480,21 @@ const CSRF = getCookie('csrftoken');
 // descendente). Lo dejamos explícito para poder avisar cuando la lista viene
 // cortada en vez de mostrar un total que miente.
 const TOPE_SERVIDOR = 300;
+
+// Indicador de carga único para tabla y modal (mismo markup que detalle_dte.html).
+const HTML_CARGANDO =
+    '<div class="loading-container" role="status" aria-live="polite">' +
+    '<div class="spinner-border" aria-hidden="true"></div>' +
+    '<p class="mt-3 mb-0 text-muted">Cargando…</p></div>';
+
+// Etiquetas humanas de estado: las mismas que usa el select de filtro.
+const ETIQUETA_ESTADO = {
+    'RECHAZADO': 'Rechazado',
+    'RECEPCIONADO_PARCIAL': 'Parcial',
+    'RECEPCIONADO_SOBRANTE': 'Con sobrantes',
+    'EN_REGULARIZACION': 'En regularización',
+    'EMITIDO': 'Sin recepcionar',
+};
 
 function aviso(icono, titulo, texto) {
     if (window.Swal) {
@@ -349,7 +547,7 @@ function actualizarAvisos(recibidos, mostrados) {
 
     if (recibidos >= TOPE_SERVIDOR) {
         partes.push(
-            `⚠️ El servidor entrega como máximo <strong>${TOPE_SERVIDOR}</strong> documentos ` +
+            `<i class="bi bi-exclamation-triangle me-1"></i>El servidor entrega como máximo <strong>${TOPE_SERVIDOR}</strong> documentos ` +
             `(los más recientes). Puede haber más DTEs en limbo fuera de esta lista: ` +
             `acota por estado para verlos.`
         );
@@ -377,14 +575,14 @@ function cargarLimboInbox() {
     if (diasMin) params.set('dias_emision', diasMin);
 
     document.getElementById('tablaLimbo').innerHTML =
-        '<tr><td colspan="9" class="text-center text-muted py-4">Cargando…</td></tr>';
+        '<tr><td colspan="10">' + HTML_CARGANDO + '</td></tr>';
 
     fetch(`/app/dte/obtener_limbo_emisor/?${params.toString()}`)
         .then(r => r.json())
         .then(data => {
             if (!data.success) {
                 document.getElementById('tablaLimbo').innerHTML =
-                    `<tr><td colspan="9" class="text-center text-danger py-4">Error: ${data.error || 'desconocido'}</td></tr>`;
+                    `<tr><td colspan="10"><div class="empty-state-nexo"><i class="bi bi-exclamation-triangle"></i><h4>No se pudo cargar la lista</h4><p class="mb-2">${data.error || 'desconocido'}</p><button type="button" class="btn btn-sm btn-nexo-outline" onclick="cargarLimboInbox()"><i class="bi bi-arrow-clockwise me-1"></i>Reintentar</button></div></td></tr>`;
                 return;
             }
             const recibidos = (data.items || []).length;
@@ -398,7 +596,7 @@ function cargarLimboInbox() {
         })
         .catch(err => {
             document.getElementById('tablaLimbo').innerHTML =
-                `<tr><td colspan="9" class="text-center text-danger py-4">Error: ${err}</td></tr>`;
+                `<tr><td colspan="10"><div class="empty-state-nexo"><i class="bi bi-exclamation-triangle"></i><h4>No se pudo cargar la lista</h4><p class="mb-2">${err}</p><button type="button" class="btn btn-sm btn-nexo-outline" onclick="cargarLimboInbox()"><i class="bi bi-arrow-clockwise me-1"></i>Reintentar</button></div></td></tr>`;
         });
 }
 
@@ -410,7 +608,7 @@ function badgeEstado(estado) {
         'EN_REGULARIZACION': 'badge-regularizacion',
         'EMITIDO': 'badge-emitido-viejo',
     };
-    return `<span class="badge-estado ${map[estado] || 'badge-regularizacion'}">${estado.replace(/_/g, ' ')}</span>`;
+    return `<span class="badge-estado ${map[estado] || 'badge-regularizacion'}" title="${estado}">${ETIQUETA_ESTADO[estado] || estado.replace(/_/g, ' ')}</span>`;
 }
 
 function badgeDias(dias) {
@@ -441,27 +639,28 @@ function renderTabla(items) {
         const hayRango = document.getElementById('filtroFechaDesde').value ||
                          document.getElementById('filtroFechaHasta').value;
         tbody.innerHTML = hayRango
-            ? '<tr><td colspan="9" class="text-center text-muted py-4">Sin DTEs en limbo dentro del rango de fechas elegido. Prueba con "Todo el histórico".</td></tr>'
-            : '<tr><td colspan="9" class="text-center text-muted py-4">🎉 No tienes DTEs en limbo</td></tr>';
+            ? '<tr><td colspan="10"><div class="empty-state-nexo"><i class="bi bi-inbox"></i><h4>Sin DTEs en limbo dentro del rango de fechas elegido</h4><p class="mb-0">Prueba con "Todo el histórico".</p></div></td></tr>'
+            : '<tr><td colspan="10"><div class="empty-state-nexo"><i class="bi bi-check2-circle"></i><h4>No tienes DTEs en limbo</h4></div></td></tr>';
         return;
     }
     tbody.innerHTML = items.map(it => {
         const pendNc = it.ncs_hijas_pendientes_devolucion > 0
-            ? `<br><small class="text-warning">⏳ ${it.ncs_hijas_pendientes_devolucion} NC esperando devolución</small>`
+            ? `<span class="chip-problema chip-nc-pendiente"><i class="bi bi-hourglass-split me-1"></i>${it.ncs_hijas_pendientes_devolucion} NC esperando devolución</span>`
             : '';
         return `
             <tr>
-                <td><strong>#${it.numero_documento}</strong>${pendNc}</td>
+                <td><strong>#${it.numero_documento}</strong></td>
                 <td><small>${it.tipo_documento || '-'}</small></td>
                 <td>${it.destino_alias || '-'}</td>
-                <td><small class="text-nowrap">${fechaCorta(it.fecha_emision)}</small></td>
-                <td>${badgeEstado(it.estado_dte)}${it.motivo_rechazo ? `<br><small class="text-muted">${it.motivo_rechazo}</small>` : ''}</td>
-                <td>${badgeDias(it.dias_en_limbo)}</td>
-                <td>${chipsProblemas(it.resumen_problemas)}</td>
-                <td><small>${it.unidades_productos} und<br>$${Math.round(it.monto_con_iva).toLocaleString('es-CL')}</small></td>
+                <td class="text-center"><small class="text-nowrap">${fechaCorta(it.fecha_emision)}</small></td>
+                <td>${badgeEstado(it.estado_dte)}${it.motivo_rechazo ? `<small class="text-muted motivo-rechazo">${it.motivo_rechazo}</small>` : ''}</td>
+                <td class="text-center">${badgeDias(it.dias_en_limbo)}</td>
+                <td>${chipsProblemas(it.resumen_problemas)}${pendNc}</td>
+                <td class="text-end text-nowrap">${it.unidades_productos}</td>
+                <td class="text-end text-nowrap fw-semibold">$${Math.round(it.monto_con_iva).toLocaleString('es-CL')}</td>
                 <td>
                     ${PUEDE_APROBAR
-                        ? `<button class="btn-resolver btn-sm" onclick="abrirResolver(${it.id})">Resolver</button>`
+                        ? `<button type="button" class="btn btn-sm btn-nexo-primary" onclick="abrirResolver(${it.id})">Resolver</button>`
                         : '<small class="text-muted">Sin permiso</small>'}
                 </td>
             </tr>`;
@@ -472,8 +671,7 @@ function abrirResolver(dteId) {
     dteSeleccionado = dteId;
     accionElegida = null;
     modoNcDevolucion = null;
-    document.getElementById('modalResolverBody').innerHTML =
-        '<div class="text-center py-4 text-muted">Cargando detalle…</div>';
+    document.getElementById('modalResolverBody').innerHTML = HTML_CARGANDO;
     document.getElementById('btnVolverAccion').classList.add('d-none');
     document.getElementById('btnEnviarAccion').classList.add('d-none');
     new bootstrap.Modal(document.getElementById('modalResolver')).show();
@@ -483,7 +681,7 @@ function abrirResolver(dteId) {
         .then(data => {
             if (!data.success) {
                 document.getElementById('modalResolverBody').innerHTML =
-                    `<div class="alert alert-danger">${data.error}</div>`;
+                    `<div class="alert-nexo alert-nexo-error">${data.error}</div>`;
                 return;
             }
             detalleActual = data;
@@ -503,28 +701,28 @@ function renderPasoAccion() {
             <div class="col-md-3"><small class="text-muted">Unidades</small><br><strong>${d.unidades_productos}</strong></div>
             <div class="col-md-3"><small class="text-muted">Monto</small><br><strong>$${Math.round(d.monto_con_iva).toLocaleString('es-CL')}</strong></div>
         </div>
-        ${d.motivo_rechazo ? `<div class="alert alert-warning py-2 small">📝 <strong>Motivo de rechazo:</strong> ${d.motivo_rechazo}</div>` : ''}
+        ${d.motivo_rechazo ? `<div class="alert-nexo alert-nexo-warning py-2 small mb-3"><i class="bi bi-chat-left-text me-1"></i><strong>Motivo de rechazo:</strong> ${d.motivo_rechazo}</div>` : ''}
 
         <h6 class="mb-3">¿Qué quieres hacer?</h6>
         <div class="row g-3">
             <div class="col-md-4">
                 <div class="accion-card ${acciones.includes('rehabilitar') ? '' : 'disabled'}"
                      onclick="${acciones.includes('rehabilitar') ? "elegirAccion('rehabilitar')" : ''}">
-                    <h6>🔄 Rehabilitar</h6>
+                    <h6><i class="bi bi-arrow-clockwise me-1"></i>Rehabilitar</h6>
                     <small>Que el receptor vuelva a intentar recepcionar. Útil cuando se rechazó por error.</small>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="accion-card ${acciones.includes('corregir') ? '' : 'disabled'}"
                      onclick="${acciones.includes('corregir') ? "elegirAccion('corregir')" : ''}">
-                    <h6>✏️ Corregir cantidades</h6>
+                    <h6><i class="bi bi-pencil me-1"></i>Corregir cantidades</h6>
                     <small>Confirmar que la mercadería sí llegó (error de conteo). Sube stock en destino, sin NC.</small>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="accion-card ${(acciones.includes('nc_con_devolucion') || acciones.includes('nc_sin_devolucion')) ? '' : 'disabled'}"
                      onclick="${(acciones.includes('nc_con_devolucion') || acciones.includes('nc_sin_devolucion')) ? "elegirAccion('nc')" : ''}">
-                    <h6>📄 Emitir Nota de Crédito</h6>
+                    <h6><i class="bi bi-file-earmark-minus me-1"></i>Emitir Nota de Crédito</h6>
                     <small>Anular líneas con problemas. Puedes elegir devolver mercadería al origen o dejarla en destino.</small>
                 </div>
             </div>
@@ -544,12 +742,12 @@ function elegirAccion(acc) {
 
 function renderRehabilitar() {
     document.getElementById('modalResolverBody').innerHTML = `
-        <div class="alert alert-info">
+        <div class="alert-nexo alert-nexo-info mb-3">
             Vas a rehabilitar el DTE rechazado. Volverá al estado <strong>EMITIDO</strong>
             y el receptor podrá intentar recepcionar de nuevo.
         </div>
         <div class="mb-3">
-            <label class="form-label">Observación (opcional)</label>
+            <label class="form-label" for="obsRehabilitar">Observación (opcional)</label>
             <textarea class="form-control" id="obsRehabilitar" rows="3"
                       placeholder="Ej: confirmé con bodega que la mercadería sí salió"></textarea>
         </div>
@@ -586,46 +784,48 @@ function renderCorregir() {
     const productos = detalleActual.productos.filter(p => (p.cantidad_faltante || 0) > 0);
     if (productos.length === 0) {
         document.getElementById('modalResolverBody').innerHTML =
-            '<div class="alert alert-warning">No hay productos faltantes para corregir.</div>';
+            '<div class="alert-nexo alert-nexo-warning">No hay productos faltantes para corregir.</div>';
         return;
     }
     document.getElementById('modalResolverBody').innerHTML = `
-        <div class="alert alert-info">
+        <div class="alert-nexo alert-nexo-info mb-3">
             Estás afirmando que la mercadería <strong>sí llegó al destino</strong>.
             Se va a sumar al stock en destino sin emitir NC.
         </div>
-        <table class="table tabla-productos-nc">
-            <thead>
-                <tr>
-                    <th>SKU</th>
-                    <th>Talla</th>
-                    <th>Descripción</th>
-                    <th class="text-end">Esperada</th>
-                    <th class="text-end">Recibida</th>
-                    <th class="text-end">Faltante</th>
-                    <th class="text-end">Cantidad real</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${productos.map(p => `
-                    <tr data-recepcion-id="${p.recepcion_id}">
-                        <td><small>${p.sku}</small></td>
-                        <td>${p.talla}</td>
-                        <td><small>${p.descripcion}</small></td>
-                        <td class="text-end">${p.cantidad_esperada}</td>
-                        <td class="text-end">${p.cantidad_recepcionada}</td>
-                        <td class="text-end text-danger">${p.cantidad_faltante}</td>
-                        <td class="text-end">
-                            <input type="number" class="form-control form-control-sm cantidad-corregir"
-                                   min="${p.cantidad_recepcionada}" max="${p.cantidad_esperada}"
-                                   value="${p.cantidad_esperada}" />
-                        </td>
+        <div class="table-responsive">
+            <table class="table tabla-productos-nc">
+                <thead>
+                    <tr>
+                        <th>SKU</th>
+                        <th>Talla</th>
+                        <th>Descripción</th>
+                        <th class="text-end">Esperada</th>
+                        <th class="text-end">Recibida</th>
+                        <th class="text-end">Faltante</th>
+                        <th class="text-end">Cantidad real</th>
                     </tr>
-                `).join('')}
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    ${productos.map(p => `
+                        <tr data-recepcion-id="${p.recepcion_id}">
+                            <td><small>${p.sku}</small></td>
+                            <td>${p.talla}</td>
+                            <td><small>${p.descripcion}</small></td>
+                            <td class="text-end">${p.cantidad_esperada}</td>
+                            <td class="text-end">${p.cantidad_recepcionada}</td>
+                            <td class="text-end text-danger">${p.cantidad_faltante}</td>
+                            <td class="text-end">
+                                <input type="number" class="form-control form-control-sm cantidad-corregir"
+                                       min="${p.cantidad_recepcionada}" max="${p.cantidad_esperada}"
+                                       value="${p.cantidad_esperada}" />
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
         <div class="mb-3">
-            <label class="form-label">Observación general (opcional)</label>
+            <label class="form-label" for="obsCorregir">Observación general (opcional)</label>
             <textarea class="form-control" id="obsCorregir" rows="2"></textarea>
         </div>
     `;
@@ -701,15 +901,15 @@ function renderNc() {
     }
 
     document.getElementById('modalResolverBody').innerHTML = `
-        <h6 class="mb-3">📄 Emitir Nota de Crédito</h6>
+        <h6 class="mb-3"><i class="bi bi-file-earmark-minus me-1"></i>Emitir Nota de Crédito</h6>
 
         <div class="mb-3">
-            <label class="form-label small text-muted">Selecciona los productos y cantidades a creditar:</label>
+            <p class="form-label small text-muted mb-2">Selecciona los productos y cantidades a creditar:</p>
             <div class="table-responsive">
                 <table class="table tabla-productos-nc">
                     <thead>
                         <tr>
-                            <th style="width: 30px;"><input type="checkbox" id="ncCheckAll" /></th>
+                            <th class="th-check"><input type="checkbox" id="ncCheckAll" class="form-check-input" title="Seleccionar todo" aria-label="Seleccionar todos" /></th>
                             <th>SKU</th>
                             <th>Descripción</th>
                             <th class="text-end">Esperada</th>
@@ -720,14 +920,14 @@ function renderNc() {
                     <tbody>
                         ${productos.map(p => `
                             <tr data-dte-producto-id="${p.dte_producto_id || ''}">
-                                <td><input type="checkbox" class="nc-check" ${p.cant_sugerida > 0 ? 'checked' : ''} /></td>
+                                <td><input type="checkbox" class="form-check-input nc-check" aria-label="Creditar ${p.sku}" ${p.cant_sugerida > 0 ? 'checked' : ''} /></td>
                                 <td><small>${p.sku}</small></td>
                                 <td><small>${p.descripcion}</small></td>
                                 <td class="text-end">${p.cantidad_esperada}</td>
                                 <td class="text-end">
-                                    ${p.cantidad_faltante ? `<span class="chip-problema chip-faltante">${p.cantidad_faltante}F</span>` : ''}
-                                    ${p.cantidad_danada ? `<span class="chip-problema chip-danado">${p.cantidad_danada}D</span>` : ''}
-                                    ${p.cantidad_sobrante ? `<span class="chip-problema chip-sobrante">${p.cantidad_sobrante}S</span>` : ''}
+                                    ${p.cantidad_faltante ? `<span class="chip-problema chip-faltante" title="Faltantes">${p.cantidad_faltante}F</span>` : ''}
+                                    ${p.cantidad_danada ? `<span class="chip-problema chip-danado" title="Dañados">${p.cantidad_danada}D</span>` : ''}
+                                    ${p.cantidad_sobrante ? `<span class="chip-problema chip-sobrante" title="Sobrantes">${p.cantidad_sobrante}S</span>` : ''}
                                 </td>
                                 <td class="text-end">
                                     <input type="number" class="form-control form-control-sm cantidad-nc"
@@ -741,24 +941,24 @@ function renderNc() {
         </div>
 
         <div class="mb-3">
-            <label class="form-label fw-bold">¿Devolver mercadería al origen?</label>
+            <p class="form-label fw-bold mb-1">¿Devolver mercadería al origen?</p>
             <div class="toggle-devolucion">
                 <div class="toggle-opcion ${modoNcDevolucion === 'con' ? 'active' : ''} ${permiteConDevolucion ? '' : 'disabled'}"
                      onclick="${permiteConDevolucion ? "setModoNc('con')" : ''}">
-                    <strong>✅ Sí, devolver al origen</strong>
+                    <strong><i class="bi bi-check-circle me-1"></i>Sí, devolver al origen</strong>
                     <small>Se emite NC y se le pide al destino despachar físicamente la mercadería. El stock se mueve cuando confirmen el envío.</small>
                 </div>
                 <div class="toggle-opcion ${modoNcDevolucion === 'sin' ? 'active' : ''} ${(permiteSinDevolucion && !forzarDevolucion) ? '' : 'disabled'}"
                      onclick="${(permiteSinDevolucion && !forzarDevolucion) ? "setModoNc('sin')" : ''}">
-                    <strong>❌ No, queda en destino</strong>
+                    <strong><i class="bi bi-x-circle me-1"></i>No, queda en destino</strong>
                     <small>Se emite NC sin movimiento físico. Origen asume la baja. Útil para sobrantes aceptados o mercadería que no vale la pena devolver.</small>
                 </div>
             </div>
-            ${forzarDevolucion ? '<small class="text-muted">⚠️ Para este estado, la devolución al origen es obligatoria (mercadería no fue recibida en destino).</small>' : ''}
+            ${forzarDevolucion ? '<div class="alert-nexo alert-nexo-warning py-2 small mt-2"><i class="bi bi-exclamation-triangle me-1"></i>Para este estado, la devolución al origen es obligatoria (mercadería no fue recibida en destino).</div>' : ''}
         </div>
 
         <div class="mb-3">
-            <label class="form-label">Motivo de la NC <span class="text-danger">*</span></label>
+            <label class="form-label" for="ncMotivo">Motivo de la NC <span class="text-danger">*</span></label>
             <textarea class="form-control" id="ncMotivo" rows="2" required
                       placeholder="Describe por qué emites la NC"></textarea>
         </div>

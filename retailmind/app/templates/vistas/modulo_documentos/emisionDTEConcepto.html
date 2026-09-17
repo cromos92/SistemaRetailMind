@@ -2,65 +2,145 @@
 {% include '../../layout/header.html' %}
 {% include '../../layout/menu.html' %}
 
-<!-- Select2 CSS -->
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<!-- Select2: el CSS/JS base ya lo cargan layout/header.html y layout/footer.html; solo el tema bootstrap-5 es propio -->
 <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 
 <style>
-:root {
-    --nexo-primary: #0066FF;
-    --nexo-primary-dark: #0052CC;
-    --nexo-primary-light: #E6F0FF;
-    --nexo-secondary: #1A1A2E;
-    --nexo-accent: #00D4AA;
-    --nexo-success: #00D4AA;
-    --nexo-warning: #FFB020;
-    --nexo-error: #FF4D4D;
-    --nexo-info: #0066FF;
-    --nexo-gray-900: #1A1A2E;
-    --nexo-gray-700: #4A4A5A;
-    --nexo-gray-500: #8A8A9A;
-    --nexo-gray-300: #D1D1D9;
-    --nexo-gray-100: #F5F5F7;
-    --nexo-white: #FFFFFF;
-    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
-    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
-    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
-    --nexo-radius-sm: 4px;
-    --nexo-radius-md: 8px;
-    --nexo-radius-lg: 12px;
-    --nexo-radius-xl: 16px;
-    --nexo-transition-fast: 150ms ease;
-    --nexo-transition-normal: 250ms ease;
+/* ==================== EMISIÓN DTE POR CONCEPTO ====================
+   Tokens --nexo-* : nexo-design-system.css (cargado por layout/header.html).
+   Estructura      : card.shadow > .module-header + .card-body (ESTILOS_MODULOS.md).
+   Clases que usa el JS (no renombrar): .method-selector, .active, .step-indicator, .step,
+   .step-content, .concepto-row, .concepto-*, .btn-eliminar-concepto, .plantilla-btn. */
+
+/* --- Card principal + header estándar del módulo --- */
+.card.shadow {
+    border: none;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(64, 81, 137, 0.1);
+}
+.card.shadow > .card-body {
+    padding: 16px 20px;
+    background: var(--nexo-white);
+}
+.module-header {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white;
+    padding: 16px 24px;
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.module-header-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.module-header-icon {
+    width: 48px;
+    height: 48px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+}
+.module-header-info h5 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: white;
+}
+.module-header-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    opacity: 0.9;
+    margin-top: 4px;
+}
+.module-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
+/* --- Indicador de pasos del wizard (vive dentro del module-header) --- */
+.step-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.step { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.step-number {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.18);
+    color: rgba(255,255,255,0.7);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.85rem;
+    transition: all 0.3s ease;
+}
+.step.active .step-number {
+    background: var(--nexo-white);
+    color: #405189;
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.25);
+}
+.step.completed .step-number {
+    background: rgba(255,255,255,0.9);
+    color: #0ab39c;
+}
+.step-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.7;
+}
+.step.active .step-label, .step.completed .step-label { opacity: 1; }
+.step-line {
+    height: 2px;
+    background: rgba(255,255,255,0.3);
+    flex: 1;
+    min-width: 40px;
+    align-self: flex-start;
+    margin-top: 15px; /* centro del círculo de 32px */
+}
+
+/* --- Secciones (pasos) --- */
 .dte-section {
     background: var(--nexo-white);
     border-radius: var(--nexo-radius-lg);
     padding: 14px 18px;
     margin-bottom: 14px;
     border: 1px solid var(--nexo-gray-300);
-    box-shadow: var(--nexo-shadow-sm);
-    transition: box-shadow var(--nexo-transition-normal);
 }
-.dte-section:hover { box-shadow: var(--nexo-shadow-md); }
-
-.dte-header {
-    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%);
-    color: var(--nexo-white);
-    border-radius: var(--nexo-radius-lg);
-    padding: 12px 18px;
-    margin-bottom: 14px;
-    box-shadow: var(--nexo-shadow-lg);
+.section-progress {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
+.section-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--nexo-secondary);
+}
+.section-title i { color: var(--nexo-primary); }
+.text-hint { font-size: 0.75rem; color: var(--nexo-gray-500); }
 
+/* --- Tarjetas de tipo de documento --- */
 .method-selector {
     background: white;
     border: 2px solid var(--nexo-gray-300);
     border-radius: var(--nexo-radius-md);
     padding: 10px 12px;
     cursor: pointer;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
     text-align: center;
     position: relative;
     overflow: hidden;
@@ -71,9 +151,7 @@
 }
 .method-selector.active {
     border-color: var(--nexo-primary);
-    background: linear-gradient(135deg, var(--nexo-primary-light) 0%, #f0f8ff 100%);
-    box-shadow: 0 8px 25px rgba(0,102,255,0.3);
-    transform: scale(1.02);
+    background: var(--nexo-primary-light);
 }
 .method-selector.active::after {
     content: '\2713';
@@ -92,56 +170,37 @@
     font-size: 12px;
 }
 .method-selector i {
-    font-size: 1.4rem;
+    font-size: 1.5rem;
     margin-bottom: 4px;
     color: var(--nexo-gray-500);
-    transition: all 0.2s ease;
+    transition: color 0.2s ease;
 }
 .method-selector:hover i, .method-selector.active i {
     color: var(--nexo-primary);
 }
+.method-selector-title {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    margin-bottom: 2px;
+}
+.method-selector-desc {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-500);
+    margin: 0;
+}
 
-.step-indicator {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.step { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.step-number {
-    width: 32px; height: 32px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.15);
-    color: rgba(255,255,255,0.5);
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 0.85rem;
-    transition: all 0.3s ease;
-}
-.step.active .step-number {
-    background: var(--nexo-accent);
-    color: white;
-    box-shadow: 0 0 12px rgba(0,212,170,0.5);
-}
-.step.completed .step-number {
-    background: var(--nexo-accent);
-    color: white;
-}
-.step-label {
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    opacity: 0.6;
-}
-.step.active .step-label, .step.completed .step-label { opacity: 1; }
-.step-line {
-    height: 2px;
-    background: rgba(255,255,255,0.15);
-    flex: 1;
-    min-width: 40px;
-}
+/* --- Botones: variantes globales (btn-nexo-primary / -outline / -success) + tamaño compacto local --- */
+.btn-nexo-sm { padding: 0.25rem 0.75rem; font-size: 0.82rem; }
+.btn-nexo-outline.btn-nexo-sm { padding: calc(0.25rem - 1px) 0.75rem; } /* compensa el borde de 2px */
+.btn-nexo-outline.btn-nexo-outline--warning { color: var(--nexo-warning); border-color: var(--nexo-warning); }
+.btn-nexo-outline.btn-nexo-outline--warning:hover { background-color: var(--nexo-warning); color: var(--nexo-secondary); }
+#btnEmitir { font-size: 0.95rem; }
+#folio_unico { background: var(--nexo-primary-light); }
 
 .wizard-navigation {
     display: flex;
-    justify-content: between;
+    justify-content: space-between;
     gap: 10px;
     margin-top: 14px;
     padding: 12px 0;
@@ -150,34 +209,61 @@
 .wizard-nav-left { flex: 1; }
 .wizard-nav-right { flex: 1; text-align: right; }
 
-.step-content { transition: all 0.3s ease; }
-
-.btn-nexo-primary {
-    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
-    color: white; border: none;
-    border-radius: var(--nexo-radius-md);
-    font-weight: 600;
-    transition: all 0.25s ease;
-}
-.btn-nexo-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0,102,255,0.35);
-    color: white;
-}
-.btn-nexo-primary:disabled {
-    opacity: 0.5; transform: none; box-shadow: none;
-}
-
-.btn-nexo-outline {
-    background: transparent;
+/* --- Cards internas (cabecera clara, como .dte-table de Compras) --- */
+.dte-card {
     border: 1px solid var(--nexo-gray-300);
-    color: var(--nexo-gray-700);
+    border-radius: var(--nexo-radius-lg);
+    overflow: hidden;
+}
+.dte-card-header {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-text-secondary);
+    border-bottom: 1px solid var(--nexo-gray-300);
+}
+.dte-card-title {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+.dte-card-header .badge-nexo-secondary {
+    background: var(--nexo-white);
+    border: 1px solid var(--nexo-gray-300);
+}
+.card.ref-card {
+    border: 1px solid var(--nexo-gray-300);
+    border-left: 4px solid var(--nexo-gray-300);
     border-radius: var(--nexo-radius-md);
+    overflow: hidden;
 }
-.btn-nexo-outline:hover {
-    border-color: var(--nexo-primary);
-    color: var(--nexo-primary);
+.card.ref-card--warning { border-left-color: var(--nexo-warning); }
+.card.ref-card--primary { border-left-color: var(--nexo-primary); }
+.dte-total { color: var(--nexo-secondary); font-weight: 700; }
+
+/* --- Tabla de conceptos --- */
+.conceptos-scroll { max-height: 450px; overflow-y: auto; }
+#tablaConceptos { font-size: 0.8125rem; min-width: 640px; }
+#tablaConceptos thead {
+    background: var(--nexo-gray-100);
+    position: sticky;
+    top: 0;
+    z-index: 2;
 }
+#tablaConceptos th:nth-child(1) { width: 5%; }
+#tablaConceptos th:nth-child(2) { width: 35%; }
+#tablaConceptos th:nth-child(3) { width: 10%; }
+#tablaConceptos th:nth-child(4) { width: 10%; }
+#tablaConceptos th:nth-child(5) { width: 15%; }
+#tablaConceptos th:nth-child(6) { width: 15%; }
+#tablaConceptos th:nth-child(7) { width: 10%; }
+.table thead th {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.3px;
+}
+.table-sm td, .table-sm th { padding: 0.3rem 0.5rem; }
+.empty-row-icon { font-size: 2rem; color: var(--nexo-gray-300); }
+.swal-scroll { max-height: 200px; overflow-y: auto; }
 
 .concepto-row { transition: background 0.2s ease; }
 .concepto-row:hover { background: var(--nexo-primary-light); }
@@ -189,14 +275,81 @@
     box-shadow: 0 0 0 2px rgba(0,102,255,0.12);
 }
 
-.table thead th {
-    font-weight: 600;
-    text-transform: uppercase;
-    font-size: 0.72rem;
-    letter-spacing: 0.3px;
+/* --- Overlay de carga (el JS alterna #loadingOverlay.style.display) --- */
+.loading-overlay {
+    display: none;
+    position: fixed;
+    z-index: 1060;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(255,255,255,0.8);
+    text-align: center;
 }
-.table-sm td, .table-sm th { padding: 0.3rem 0.5rem; }
+.loading-overlay-inner {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+}
+.loading-overlay .spinner-border { width: 3rem; height: 3rem; color: var(--nexo-primary); }
 
+/* --- Modal (patrón rm-modal de Compras, con tokens NEXO) --- */
+.rm-modal .modal-content {
+    border: none;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+}
+.rm-modal-header {
+    background: var(--nexo-white);
+    border-bottom: 1px solid var(--nexo-gray-100);
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.rm-modal-header .rm-modal-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+.rm-modal-header .rm-modal-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    margin: 0;
+    line-height: 1.3;
+}
+.rm-modal-header .rm-modal-subtitle {
+    font-size: 0.78rem;
+    color: var(--nexo-gray-500);
+    margin: 0;
+    font-weight: 400;
+}
+.rm-modal-header .btn-close { opacity: 0.7; transition: opacity 0.2s; }
+.rm-modal-header .btn-close:hover { opacity: 1; }
+.rm-modal-body { padding: 24px; background: var(--nexo-gray-100); }
+.rm-modal-footer {
+    background: var(--nexo-white);
+    border-top: 1px solid var(--nexo-gray-100);
+    padding: 14px 24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+.rm-modal-footer .btn {
+    border-radius: 8px;
+    font-weight: 500;
+    padding: 8px 20px;
+    font-size: 0.875rem;
+}
+.rm-modal-icon--blue { background: rgba(0, 102, 255, 0.10); color: var(--nexo-primary); }
+
+/* --- Panel derecho pegajoso --- */
 .pos-right-panel {
     position: sticky;
     top: 60px;
@@ -208,28 +361,22 @@
     .pos-right-panel { position: static; max-height: none; overflow-y: visible; }
 }
 
+/* --- Responsive (contra las clases reales de esta pantalla) --- */
 @media (max-width: 768px) {
-    .concepto-section { padding: 0.75rem; }
-    .conceptos-table { font-size: 0.813rem; }
-    .concepto-form .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; }
-    .tipo-documento-selector { flex-wrap: wrap; gap: 0.5rem; }
-    .tipo-documento-selector .tipo-card { flex: 1 1 calc(50% - 0.5rem); }
+    .module-header { padding: 12px 16px; }
+    .module-header-icon { width: 40px; height: 40px; font-size: 20px; }
 }
-
 @media (max-width: 576px) {
-    .concepto-section { padding: 0.5rem; }
-    .tipo-documento-selector .tipo-card { flex: 1 1 100%; }
-    .conceptos-table th, .conceptos-table td { padding: 0.375rem 0.5rem; font-size: 0.75rem; }
-    .total-concepto { font-size: 1.125rem; }
-    .acciones-concepto { flex-direction: column; }
-    .acciones-concepto .btn { width: 100%; }
+    .module-header { flex-direction: column; align-items: stretch; }
+    .module-header-actions { justify-content: center; }
+    .wizard-nav-right .btn { width: 100%; }
 }
 </style>
 
 <!-- Loading overlay -->
-<div id="loadingOverlay" style="display:none; position:fixed; z-index:1060; top:0; left:0; width:100%; height:100%; background-color:rgba(255,255,255,0.8); text-align:center;">
-    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);">
-        <div class="spinner-border text-primary" role="status" style="width:3rem; height:3rem;">
+<div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-overlay-inner">
+        <div class="spinner-border" role="status">
             <span class="visually-hidden">Cargando...</span>
         </div>
         <p class="mt-3 fw-bold">Procesando información...</p>
@@ -239,25 +386,32 @@
 <div class="page-content">
     <div class="container-fluid">
 
-        <!-- Header Principal con Wizard -->
-        <div class="dte-header">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h6 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Emisión DTE por Concepto</h6>
-                    <small class="opacity-75">{{ user.username }} &bull; {{ "now"|date:"d/m/Y" }} &bull; Sin mercadería</small>
+        <div class="card shadow nexo-animate-fadein">
+            <!-- Header estándar del módulo con el indicador de pasos del wizard -->
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon">
+                        <i class="bi bi-file-earmark-text"></i>
+                    </div>
+                    <div class="module-header-info">
+                        <h5>Emisión DTE por Concepto</h5>
+                        <div class="module-header-status">
+                            {{ user.username }} &bull; {{ "now"|date:"d/m/Y" }} &bull; Sin mercadería
+                        </div>
+                    </div>
                 </div>
-                <div class="text-end">
-                    <div class="step-indicator gap-2" style="margin-top:0;">
+                <div class="module-header-actions">
+                    <div class="step-indicator gap-2">
                         <div class="step active" data-step="1">
                             <div class="step-number">1</div>
                             <div class="step-label">Config.</div>
                         </div>
-                        <div class="step-line" style="min-width:40px; margin-top:-15px;"></div>
+                        <div class="step-line"></div>
                         <div class="step" data-step="2">
                             <div class="step-number">2</div>
                             <div class="step-label">Conceptos</div>
                         </div>
-                        <div class="step-line" style="min-width:40px; margin-top:-15px;"></div>
+                        <div class="step-line"></div>
                         <div class="step" data-step="3">
                             <div class="step-number">3</div>
                             <div class="step-label">Emisión</div>
@@ -265,389 +419,390 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- ==================== PASO 1: CONFIGURACIÓN ==================== -->
-        <div class="dte-section fade-in step-content" id="step-1" data-step="1">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <div>
-                    <div class="section-progress" style="font-size:0.7rem; color:var(--nexo-gray-500); text-transform:uppercase; letter-spacing:0.5px;">Paso 1 de 3</div>
-                    <h6 class="mb-0" style="color:var(--nexo-secondary); font-weight:600;">
-                        <i class="bi bi-gear-fill me-2" style="color:var(--nexo-primary);"></i>Configuración del Documento
-                    </h6>
-                </div>
-            </div>
+            <div class="card-body">
 
-            <!-- Tipo de Documento -->
-            <div class="mb-3">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <label class="form-label fw-bold mb-0">
-                        <i class="bi bi-1-circle-fill text-primary me-1"></i>Tipo de Documento
-                    </label>
-                    <span class="badge bg-danger small" id="badgeTipoDocumento">Requerido</span>
-                </div>
-                <div class="row g-2">
-                    <div class="col-6 col-md-3">
-                        <div class="method-selector shadow-sm" data-tipo="FACTURA ELECTRONICA">
-                            <div class="mb-1" style="font-size:1.5rem; color:#6c757d;">
-                                <i class="bi bi-receipt"></i>
-                            </div>
-                            <h6 class="fw-bold mb-1 small">Factura Electrónica</h6>
-                            <p class="text-muted mb-0" style="font-size:0.7rem;">Tipo 33 - Con IVA</p>
+                <!-- ==================== PASO 1: CONFIGURACIÓN ==================== -->
+                <div class="dte-section nexo-animate-fadein step-content" id="step-1" data-step="1">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <div class="section-progress">Paso 1 de 3</div>
+                            <h6 class="section-title">
+                                <i class="bi bi-gear-fill me-2"></i>Configuración del Documento
+                            </h6>
                         </div>
                     </div>
-                    <div class="col-6 col-md-3">
-                        <div class="method-selector shadow-sm" data-tipo="FACTURA EXENTA">
-                            <div class="mb-1" style="font-size:1.5rem; color:#6c757d;">
-                                <i class="bi bi-receipt-cutoff"></i>
-                            </div>
-                            <h6 class="fw-bold mb-1 small">Factura Exenta</h6>
-                            <p class="text-muted mb-0" style="font-size:0.7rem;">Tipo 34 - Sin IVA</p>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="method-selector shadow-sm" data-tipo="BOLETA ELECTRONICA">
-                            <div class="mb-1" style="font-size:1.5rem; color:#6c757d;">
-                                <i class="bi bi-bag-check"></i>
-                            </div>
-                            <h6 class="fw-bold mb-1 small">Boleta Electrónica</h6>
-                            <p class="text-muted mb-0" style="font-size:0.7rem;">Tipo 39 - Consumidor Final</p>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="method-selector shadow-sm" data-tipo="NOTA DE CREDITO">
-                            <div class="mb-1" style="font-size:1.5rem; color:#6c757d;">
-                                <i class="bi bi-file-earmark-minus"></i>
-                            </div>
-                            <h6 class="fw-bold mb-1 small">Nota de Crédito</h6>
-                            <p class="text-muted mb-0" style="font-size:0.7rem;">Tipo 61 - Anulación</p>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="method-selector shadow-sm" data-tipo="NOTA DE DEBITO">
-                            <div class="mb-1" style="font-size:1.5rem; color:#6c757d;">
-                                <i class="bi bi-file-earmark-plus"></i>
-                            </div>
-                            <h6 class="fw-bold mb-1 small">Nota de Débito</h6>
-                            <p class="text-muted mb-0" style="font-size:0.7rem;">Tipo 56 - Cargo adicional</p>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="method-selector shadow-sm" data-tipo="GUIA">
-                            <div class="mb-1" style="font-size:1.5rem; color:#6c757d;">
-                                <i class="bi bi-clipboard-check"></i>
-                            </div>
-                            <h6 class="fw-bold mb-1 small">Guía de Despacho</h6>
-                            <p class="text-muted mb-0" style="font-size:0.7rem;">Tipo 52 - Traslado</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            <!-- Campos del documento -->
-            <div class="row g-2 mt-2">
-                <div class="col-md-4">
-                    <label for="receptorSelect" class="form-label fw-bold mb-1 small">
-                        <i class="bi bi-building me-1"></i>Empresa Receptora
-                    </label>
-                    <div class="d-flex gap-1">
-                        <div class="flex-grow-1">
-                            <select id="receptorSelect" class="form-select form-select-sm">
-                                <option value="">Seleccionar empresa...</option>
+                    <!-- Tipo de Documento -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label fw-bold mb-0">
+                                <i class="bi bi-1-circle-fill text-nexo-primary me-1"></i>Tipo de Documento
+                            </label>
+                            <span class="badge bg-danger small" id="badgeTipoDocumento">Requerido</span>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-6 col-md-4 col-xl-2">
+                                <div class="method-selector shadow-sm" data-tipo="FACTURA ELECTRONICA">
+                                    <div class="mb-1">
+                                        <i class="bi bi-receipt"></i>
+                                    </div>
+                                    <div class="method-selector-title">Factura Electrónica</div>
+                                    <p class="method-selector-desc">Tipo 33 - Con IVA</p>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4 col-xl-2">
+                                <div class="method-selector shadow-sm" data-tipo="FACTURA EXENTA">
+                                    <div class="mb-1">
+                                        <i class="bi bi-receipt-cutoff"></i>
+                                    </div>
+                                    <div class="method-selector-title">Factura Exenta</div>
+                                    <p class="method-selector-desc">Tipo 34 - Sin IVA</p>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4 col-xl-2">
+                                <div class="method-selector shadow-sm" data-tipo="BOLETA ELECTRONICA">
+                                    <div class="mb-1">
+                                        <i class="bi bi-bag-check"></i>
+                                    </div>
+                                    <div class="method-selector-title">Boleta Electrónica</div>
+                                    <p class="method-selector-desc">Tipo 39 - Consumidor Final</p>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4 col-xl-2">
+                                <div class="method-selector shadow-sm" data-tipo="NOTA DE CREDITO">
+                                    <div class="mb-1">
+                                        <i class="bi bi-file-earmark-minus"></i>
+                                    </div>
+                                    <div class="method-selector-title">Nota de Crédito</div>
+                                    <p class="method-selector-desc">Tipo 61 - Anulación</p>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4 col-xl-2">
+                                <div class="method-selector shadow-sm" data-tipo="NOTA DE DEBITO">
+                                    <div class="mb-1">
+                                        <i class="bi bi-file-earmark-plus"></i>
+                                    </div>
+                                    <div class="method-selector-title">Nota de Débito</div>
+                                    <p class="method-selector-desc">Tipo 56 - Cargo adicional</p>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4 col-xl-2">
+                                <div class="method-selector shadow-sm" data-tipo="GUIA">
+                                    <div class="mb-1">
+                                        <i class="bi bi-clipboard-check"></i>
+                                    </div>
+                                    <div class="method-selector-title">Guía de Despacho</div>
+                                    <p class="method-selector-desc">Tipo 52 - Traslado</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Campos del documento -->
+                    <div class="row g-2 mt-2">
+                        <div class="col-md-4">
+                            <label for="receptorSelect" class="form-label fw-bold mb-1 small">
+                                <i class="bi bi-building me-1"></i>Empresa Receptora
+                            </label>
+                            <div class="d-flex gap-1 align-items-stretch">
+                                <div class="flex-grow-1">
+                                    <select id="receptorSelect" class="form-select form-select-sm">
+                                        <option value="">Seleccionar empresa...</option>
+                                    </select>
+                                </div>
+                                <button type="button" class="btn btn-nexo-outline btn-nexo-sm px-2 flex-shrink-0" id="btnNuevaEmpresa"
+                                        title="Crear nueva empresa" aria-label="Crear nueva empresa">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="fechaEmision" class="form-label fw-bold mb-1 small">Fecha Emisión</label>
+                            <input type="date" id="fechaEmision" class="form-control form-control-sm" value="">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="formaPago" class="form-label fw-bold mb-1 small">Forma de Pago</label>
+                            <select id="formaPago" class="form-select form-select-sm" onchange="toggleDiasCredito()">
+                                <option value="Contado">Contado</option>
+                                <option value="Credito" selected>Crédito</option>
                             </select>
                         </div>
-                        <button type="button" class="btn btn-sm btn-success flex-shrink-0" id="btnNuevaEmpresa"
-                                title="Crear nueva empresa" style="height:31px; width:31px; padding:0;">
-                            <i class="bi bi-plus-lg"></i>
-                        </button>
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <label for="fechaEmision" class="form-label fw-bold mb-1 small">Fecha Emisión</label>
-                    <input type="date" id="fechaEmision" class="form-control form-control-sm" value="">
-                </div>
-                <div class="col-md-2">
-                    <label for="formaPago" class="form-label fw-bold mb-1 small">Forma de Pago</label>
-                    <select id="formaPago" class="form-select form-select-sm" onchange="toggleDiasCredito()">
-                        <option value="Contado">Contado</option>
-                        <option value="Credito" selected>Crédito</option>
-                    </select>
-                </div>
-                <div class="col-md-2" id="diasCreditoContainer">
-                    <label for="diasCredito" class="form-label fw-bold mb-1 small">Días Crédito</label>
-                    <input type="number" id="diasCredito" class="form-control form-control-sm" value="30" min="1" max="365">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label fw-bold mb-1 small">Folio</label>
-                    <div class="input-group input-group-sm">
-                        <span class="input-group-text">N°</span>
-                        <input type="text" class="form-control text-center fw-bold" id="folio_unico" value="---" readonly style="background:#f0f8ff;">
-                    </div>
-                    <small class="text-muted" style="font-size:0.65rem;">Asignado automáticamente</small>
-                </div>
-            </div>
-
-            <!-- Referencia NC (solo para Nota de Crédito) -->
-            <div id="referenciaNCContainer" style="display:none;" class="mt-3">
-                <div class="card border-warning">
-                    <div class="card-header bg-warning bg-opacity-10 py-2">
-                        <h6 class="mb-0 small fw-bold"><i class="bi bi-link-45deg me-1"></i>Documento de Referencia (Nota de Crédito/Débito)</h6>
-                    </div>
-                    <div class="card-body py-2">
-                        <div class="row g-2">
-                            <div class="col-md-3">
-                                <label class="form-label small mb-1">Tipo Doc. Referencia</label>
-                                <select id="tipoDocRef" class="form-select form-select-sm">
-                                    <option value="33">Factura Electrónica (33)</option>
-                                    <option value="34">Factura Exenta (34)</option>
-                                    <option value="39">Boleta Electrónica (39)</option>
-                                    <option value="41">Boleta Exenta (41)</option>
-                                    <option value="52">Guía de Despacho (52)</option>
-                                    <option value="61">Nota de Crédito (61)</option>
-                                </select>
+                        <div class="col-md-2" id="diasCreditoContainer">
+                            <label for="diasCredito" class="form-label fw-bold mb-1 small">Días Crédito</label>
+                            <input type="number" id="diasCredito" class="form-control form-control-sm" value="30" min="1" max="365">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="folio_unico" class="form-label fw-bold mb-1 small">Folio</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">N°</span>
+                                <input type="text" class="form-control text-center fw-bold" id="folio_unico" value="---" readonly>
                             </div>
-                            <div class="col-md-3">
-                                <label class="form-label small mb-1">N° Folio Referencia</label>
-                                <input type="number" id="folioRef" class="form-control form-control-sm" placeholder="N° documento original">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label small mb-1">Fecha Doc. Referencia</label>
-                                <input type="date" id="fechaRef" class="form-control form-control-sm">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label small mb-1">Razón Referencia</label>
-                                <select id="razonRef" class="form-select form-select-sm">
-                                    <option value="1">Anula documento de referencia</option>
-                                    <option value="2">Corrige texto del documento</option>
-                                    <option value="3">Corrige montos</option>
-                                </select>
-                            </div>
+                            <small class="text-hint">Asignado automáticamente</small>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- Referencias comerciales opcionales (Orden de Compra 801 / HES) -->
-            <div id="referenciasComercialesContainer" style="display:none;" class="mt-3">
-                <div class="card border-primary">
-                    <div class="card-header bg-primary bg-opacity-10 py-2 d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0 small fw-bold"><i class="bi bi-link-45deg me-1"></i>Referencias Comerciales (Orden de Compra / HES)</h6>
-                        <span class="badge bg-secondary small">Opcional</span>
-                    </div>
-                    <div class="card-body py-2">
-                        <div class="row g-2">
-                            <div class="col-md-6">
-                                <label class="form-label small mb-1 fw-bold"><i class="bi bi-cart3 me-1"></i>Orden de Compra (801)</label>
+                    <!-- Referencia NC (solo para Nota de Crédito) -->
+                    <div id="referenciaNCContainer" style="display:none;" class="mt-3">
+                        <div class="card ref-card ref-card--warning">
+                            <div class="card-header dte-card-header py-2">
+                                <span class="dte-card-title"><i class="bi bi-link-45deg me-1"></i>Documento de Referencia (Nota de Crédito/Débito)</span>
+                            </div>
+                            <div class="card-body py-2">
                                 <div class="row g-2">
-                                    <div class="col-7">
-                                        <input type="text" id="refOcFolio" class="form-control form-control-sm" maxlength="100" placeholder="N° OC (ej: OC-12345)">
+                                    <div class="col-md-3">
+                                        <label for="tipoDocRef" class="form-label small mb-1">Tipo Doc. Referencia</label>
+                                        <select id="tipoDocRef" class="form-select form-select-sm">
+                                            <option value="33">Factura Electrónica (33)</option>
+                                            <option value="34">Factura Exenta (34)</option>
+                                            <option value="39">Boleta Electrónica (39)</option>
+                                            <option value="41">Boleta Exenta (41)</option>
+                                            <option value="52">Guía de Despacho (52)</option>
+                                            <option value="61">Nota de Crédito (61)</option>
+                                        </select>
                                     </div>
-                                    <div class="col-5">
-                                        <input type="date" id="refOcFecha" class="form-control form-control-sm" title="Fecha OC (opcional)">
+                                    <div class="col-md-3">
+                                        <label for="folioRef" class="form-label small mb-1">N° Folio Referencia</label>
+                                        <input type="number" id="folioRef" class="form-control form-control-sm" placeholder="N° documento original">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="fechaRef" class="form-label small mb-1">Fecha Doc. Referencia</label>
+                                        <input type="date" id="fechaRef" class="form-control form-control-sm">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="razonRef" class="form-label small mb-1">Razón Referencia</label>
+                                        <select id="razonRef" class="form-select form-select-sm">
+                                            <option value="1">Anula documento de referencia</option>
+                                            <option value="2">Corrige texto del documento</option>
+                                            <option value="3">Corrige montos</option>
+                                        </select>
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label small mb-1 fw-bold"><i class="bi bi-clipboard-data me-1"></i>HES - Hoja de Entrada de Servicios</label>
+                        </div>
+                    </div>
+
+                    <!-- Referencias comerciales opcionales (Orden de Compra 801 / HES) -->
+                    <div id="referenciasComercialesContainer" style="display:none;" class="mt-3">
+                        <div class="card ref-card ref-card--primary">
+                            <div class="card-header dte-card-header py-2 d-flex justify-content-between align-items-center">
+                                <span class="dte-card-title"><i class="bi bi-link-45deg me-1"></i>Referencias Comerciales (Orden de Compra / HES)</span>
+                                <span class="badge badge-nexo-secondary">Opcional</span>
+                            </div>
+                            <div class="card-body py-2">
                                 <div class="row g-2">
-                                    <div class="col-7">
-                                        <input type="text" id="refHesFolio" class="form-control form-control-sm" maxlength="100" placeholder="N° HES (ej: 1000123456)">
+                                    <div class="col-md-6">
+                                        <label for="refOcFolio" class="form-label small mb-1 fw-bold"><i class="bi bi-cart3 me-1"></i>Orden de Compra (801)</label>
+                                        <div class="row g-2">
+                                            <div class="col-7">
+                                                <input type="text" id="refOcFolio" class="form-control form-control-sm" maxlength="100" placeholder="N° OC (ej: OC-12345)">
+                                            </div>
+                                            <div class="col-5">
+                                                <input type="date" id="refOcFecha" class="form-control form-control-sm" title="Fecha OC (opcional)">
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div class="col-5">
-                                        <input type="date" id="refHesFecha" class="form-control form-control-sm" title="Fecha HES (opcional)">
+                                    <div class="col-md-6">
+                                        <label for="refHesFolio" class="form-label small mb-1 fw-bold"><i class="bi bi-clipboard-data me-1"></i>HES - Hoja de Entrada de Servicios</label>
+                                        <div class="row g-2">
+                                            <div class="col-7">
+                                                <input type="text" id="refHesFolio" class="form-control form-control-sm" maxlength="100" placeholder="N° HES (ej: 1000123456)">
+                                            </div>
+                                            <div class="col-5">
+                                                <input type="date" id="refHesFecha" class="form-control form-control-sm" title="Fecha HES (opcional)">
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-                        <small class="text-muted mt-1 d-block">
-                            <i class="bi bi-info-circle me-1"></i>Se incluyen en el TXT de Acepta como referencias SII (TpoDocRef 801 / HES). Si no indica fecha se usa la fecha de emisión.
-                        </small>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Info según tipo -->
-            <div class="row mt-2">
-                <div class="col-12">
-                    <div id="infoFacturaExenta" class="alert alert-info py-2 mb-0 small" style="display:none;">
-                        <i class="bi bi-info-circle me-1"></i>
-                        <strong>Factura Exenta:</strong> Los montos se registran como exentos de IVA. El total será igual al monto exento.
-                    </div>
-                    <div id="infoBoleta" class="alert alert-info py-2 mb-0 small" style="display:none;">
-                        <i class="bi bi-info-circle me-1"></i>
-                        <strong>Boleta Electrónica:</strong> Documento afecto (IVA incluido). El receptor es opcional; si no se selecciona una empresa se emite a "Consumidor Final".
-                    </div>
-                    <div id="infoNotaCredito" class="alert alert-warning py-2 mb-0 small" style="display:none;">
-                        <i class="bi bi-exclamation-triangle me-1"></i>
-                        <strong>Nota de Crédito/Débito:</strong> Debe referenciar un documento original. Si el documento referenciado es exento (34/41), los montos se emiten sin IVA.
-                    </div>
-                </div>
-            </div>
-
-            <div class="wizard-navigation">
-                <div class="wizard-nav-left"></div>
-                <div class="wizard-nav-right">
-                    <button type="button" class="btn btn-nexo-primary btn-sm px-4" id="btnSiguientePaso1" disabled>
-                        Continuar a Conceptos <i class="bi bi-arrow-right-circle-fill ms-2"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- ==================== PASO 2: DETALLE DE CONCEPTOS ==================== -->
-        <div class="dte-section fade-in step-content" id="step-2" data-step="2" style="display:none;">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <div>
-                    <div class="section-progress" style="font-size:0.7rem; color:var(--nexo-gray-500); text-transform:uppercase; letter-spacing:0.5px;">Paso 2 de 3</div>
-                    <h6 class="mb-0" style="color:var(--nexo-secondary); font-weight:600;">
-                        <i class="bi bi-list-check me-2" style="color:var(--nexo-primary);"></i>Detalle de Conceptos / Servicios
-                    </h6>
-                </div>
-                <small class="text-muted" id="resumenConfigHeader"></small>
-            </div>
-
-            <div class="row g-2">
-                <!-- Panel izquierdo: tabla de conceptos -->
-                <div class="col-lg-8 col-12">
-                    <div class="card" style="border:1px solid var(--nexo-gray-300); border-radius:var(--nexo-radius-lg); overflow:hidden;">
-                        <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%); color:white; border:none;">
-                            <h6 class="mb-0 small"><i class="bi bi-card-list me-1"></i>Líneas de Detalle</h6>
-                            <button type="button" class="btn btn-sm btn-success" id="btnAgregarConcepto">
-                                <i class="bi bi-plus-circle me-1"></i>Agregar Línea
-                            </button>
-                        </div>
-                        <div class="card-body p-0">
-                            <div class="table-responsive" style="max-height:450px; overflow-y:auto;">
-                                <table class="table table-sm mb-0" style="font-size:0.82rem;" id="tablaConceptos">
-                                    <thead style="background:var(--nexo-gray-100); position:sticky; top:0; z-index:2;">
-                                        <tr>
-                                            <th style="width:5%;" class="text-center">#</th>
-                                            <th style="width:35%;">Descripción</th>
-                                            <th style="width:10%;" class="text-center">Cant.</th>
-                                            <th style="width:10%;" class="text-center">Unidad</th>
-                                            <th style="width:15%;" class="text-end">Precio Unit.</th>
-                                            <th style="width:15%;" class="text-end">Subtotal</th>
-                                            <th style="width:10%;" class="text-center">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="conceptosBody">
-                                        <tr id="emptyConceptRow">
-                                            <td colspan="7" class="text-center text-muted py-4">
-                                                <i class="bi bi-card-list" style="font-size:2rem; color:#ccc;"></i>
-                                                <p class="mt-2 mb-0">No hay conceptos agregados</p>
-                                                <small>Presione "Agregar Línea" para comenzar</small>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                                <small class="text-muted mt-1 d-block">
+                                    <i class="bi bi-info-circle me-1"></i>Se incluyen en el TXT de Acepta como referencias SII (TpoDocRef 801 / HES). Si no indica fecha se usa la fecha de emisión.
+                                </small>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Plantillas rápidas -->
-                    <div class="mt-2">
-                        <small class="text-muted fw-bold"><i class="bi bi-lightning-charge me-1"></i>Plantillas rápidas:</small>
-                        <div class="d-flex gap-1 flex-wrap mt-1">
-                            <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Servicio de consultoría" data-unit="HRS">
-                                <i class="bi bi-briefcase me-1"></i>Consultoría
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Arriendo de espacio comercial" data-unit="MES">
-                                <i class="bi bi-house me-1"></i>Arriendo
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Servicio de mantención" data-unit="SRV">
-                                <i class="bi bi-tools me-1"></i>Mantención
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Comisión por venta" data-unit="UN">
-                                <i class="bi bi-percent me-1"></i>Comisión
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Servicio de transporte" data-unit="SRV">
-                                <i class="bi bi-truck me-1"></i>Transporte
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Honorarios profesionales" data-unit="SRV">
-                                <i class="bi bi-person-badge me-1"></i>Honorarios
+                    <!-- Info según tipo -->
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <div id="infoFacturaExenta" class="alert alert-nexo alert-nexo-info py-2 mb-0 small" style="display:none;">
+                                <i class="bi bi-info-circle me-1"></i>
+                                <strong>Factura Exenta:</strong> Los montos se registran como exentos de IVA. El total será igual al monto exento.
+                            </div>
+                            <div id="infoBoleta" class="alert alert-nexo alert-nexo-info py-2 mb-0 small" style="display:none;">
+                                <i class="bi bi-info-circle me-1"></i>
+                                <strong>Boleta Electrónica:</strong> Documento afecto (IVA incluido). El receptor es opcional; si no se selecciona una empresa se emite a "Consumidor Final".
+                            </div>
+                            <div id="infoNotaCredito" class="alert alert-nexo alert-nexo-warning py-2 mb-0 small" style="display:none;">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                <strong>Nota de Crédito/Débito:</strong> Debe referenciar un documento original. Si el documento referenciado es exento (34/41), los montos se emiten sin IVA.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="wizard-navigation">
+                        <div class="wizard-nav-left"></div>
+                        <div class="wizard-nav-right">
+                            <button type="button" class="btn btn-nexo-primary btn-nexo-sm px-4" id="btnSiguientePaso1" disabled>
+                                Continuar a Conceptos <i class="bi bi-arrow-right-circle-fill ms-2"></i>
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Panel derecho: resumen y totales -->
-                <div class="col-lg-4 col-12">
-                    <div class="pos-right-panel">
-
-                        <!-- Resumen de configuración -->
-                        <div class="card mb-2" style="border:1px solid var(--nexo-gray-300);">
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex flex-wrap gap-2 align-items-center small">
-                                    <span><i class="bi bi-file-earmark-text me-1 text-primary"></i><strong>Tipo:</strong> <span id="resumenTipo">-</span></span>
-                                </div>
-                                <div class="d-flex flex-wrap gap-2 align-items-center small mt-1">
-                                    <span><i class="bi bi-building me-1 text-primary"></i><strong>Receptor:</strong> <span id="resumenReceptor">-</span></span>
-                                    <span class="vr mx-1" style="height:14px;"></span>
-                                    <span><i class="bi bi-calendar me-1 text-muted"></i><span id="resumenFecha">-</span></span>
-                                </div>
-                                <div class="d-flex align-items-center gap-2 mt-1 pt-1 border-top">
-                                    <span class="badge bg-primary rounded-pill" id="resumenLineas">0 líneas</span>
-                                </div>
-                            </div>
+                <!-- ==================== PASO 2: DETALLE DE CONCEPTOS ==================== -->
+                <div class="dte-section nexo-animate-fadein step-content" id="step-2" data-step="2" style="display:none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <div class="section-progress">Paso 2 de 3</div>
+                            <h6 class="section-title">
+                                <i class="bi bi-list-check me-2"></i>Detalle de Conceptos / Servicios
+                            </h6>
                         </div>
+                        <small class="text-muted" id="resumenConfigHeader"></small>
+                    </div>
 
-                        <!-- Observaciones -->
-                        <div class="card mb-2">
-                            <div class="card-body py-2 px-3">
-                                <label class="form-label small fw-semibold mb-1">
-                                    <i class="bi bi-chat-text me-1"></i>Observaciones
-                                </label>
-                                <textarea id="observacionesFinales" class="form-control form-control-sm" rows="2"
-                                          placeholder="Observaciones adicionales del documento..."></textarea>
-                            </div>
-                        </div>
-
-                        <!-- Totales -->
-                        <div class="card mb-2" style="border:none; border-radius:var(--nexo-radius-lg); overflow:hidden; box-shadow:var(--nexo-shadow-md);">
-                            <div class="card-header py-2 px-3" style="background:linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%); color:white; border:none;">
-                                <h6 class="mb-0 small" style="color:white;"><i class="bi bi-calculator-fill me-2"></i>Totales</h6>
-                            </div>
-                            <div class="card-body py-2 px-3">
-                                <div class="d-flex justify-content-between mb-1 small" id="filaNetoContainer">
-                                    <span>Subtotal (Neto):</span>
-                                    <span id="finalSubtotalNeto">$0</span>
+                    <div class="row g-2">
+                        <!-- Panel izquierdo: tabla de conceptos -->
+                        <div class="col-lg-8 col-12">
+                            <div class="card dte-card">
+                                <div class="card-header dte-card-header py-2 px-3 d-flex justify-content-between align-items-center">
+                                    <span class="dte-card-title"><i class="bi bi-card-list me-1"></i>Líneas de Detalle</span>
+                                    <button type="button" class="btn btn-nexo-outline btn-nexo-sm" id="btnAgregarConcepto">
+                                        <i class="bi bi-plus-circle me-1"></i>Agregar Línea
+                                    </button>
                                 </div>
-                                <div class="d-flex justify-content-between mb-1 small" id="filaExentoContainer" style="display:none;">
-                                    <span>Monto Exento:</span>
-                                    <span id="finalMontoExento">$0</span>
-                                </div>
-                                <div class="d-flex justify-content-between mb-1 small" id="filaIvaContainer">
-                                    <span>IVA (19%):</span>
-                                    <span id="finalMontoIva">$0</span>
-                                </div>
-                                <hr class="my-1">
-                                <div class="d-flex justify-content-between fw-bold align-items-start">
-                                    <span>Total:</span>
-                                    <div class="text-end">
-                                        <span id="finalMontoTotal" class="fs-5 text-primary">$0</span>
-                                        <div><small class="text-muted fw-normal"><span id="finalTotalLineas">0</span> líneas</small></div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive conceptos-scroll">
+                                        <table class="table table-sm mb-0" id="tablaConceptos">
+                                            <thead>
+                                                <tr>
+                                                    <th class="text-center">#</th>
+                                                    <th>Descripción</th>
+                                                    <th class="text-center">Cant.</th>
+                                                    <th class="text-center">Unidad</th>
+                                                    <th class="text-end">Precio Unit.</th>
+                                                    <th class="text-end">Subtotal</th>
+                                                    <th class="text-center">Acciones</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="conceptosBody">
+                                                <tr id="emptyConceptRow">
+                                                    <td colspan="7" class="text-center text-muted py-4">
+                                                        <i class="bi bi-card-list empty-row-icon"></i>
+                                                        <p class="mt-2 mb-0">No hay conceptos agregados</p>
+                                                        <small>Presione "Agregar Línea" para comenzar</small>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Plantillas rápidas -->
+                            <div class="mt-2">
+                                <small class="text-muted fw-bold"><i class="bi bi-lightning-charge me-1"></i>Plantillas rápidas:</small>
+                                <div class="d-flex gap-1 flex-wrap mt-1">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Servicio de consultoría" data-unit="HRS">
+                                        <i class="bi bi-briefcase me-1"></i>Consultoría
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Arriendo de espacio comercial" data-unit="MES">
+                                        <i class="bi bi-house me-1"></i>Arriendo
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Servicio de mantención" data-unit="SRV">
+                                        <i class="bi bi-tools me-1"></i>Mantención
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Comisión por venta" data-unit="UN">
+                                        <i class="bi bi-percent me-1"></i>Comisión
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Servicio de transporte" data-unit="SRV">
+                                        <i class="bi bi-truck me-1"></i>Transporte
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm plantilla-btn" data-desc="Honorarios profesionales" data-unit="SRV">
+                                        <i class="bi bi-person-badge me-1"></i>Honorarios
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
-                        <!-- Botón principal de emisión -->
-                        <button id="btnEmitir" type="button" class="btn w-100 py-2 mb-2" disabled
-                                style="background:linear-gradient(135deg, var(--nexo-accent) 0%, #00b894 100%); color:white; border:none; border-radius:var(--nexo-radius-md); font-weight:600; font-size:0.95rem; box-shadow:0 4px 14px rgba(0,212,170,0.35); transition:all 0.3s ease;">
-                            <i class="bi bi-send-fill me-2"></i>
-                            <span>Emitir Documento</span>
-                            <span id="spinner_btn" style="display:none" class="spinner-border spinner-border-sm ms-2" role="status"></span>
-                        </button>
+                        <!-- Panel derecho: resumen y totales -->
+                        <div class="col-lg-4 col-12">
+                            <div class="pos-right-panel">
 
-                        <!-- Navegación -->
-                        <div class="d-flex gap-2 flex-wrap">
-                            <button type="button" class="btn btn-nexo-outline btn-sm flex-fill" id="btnVolverPaso1">
-                                <i class="bi bi-arrow-left-circle me-1"></i>Volver
-                            </button>
-                            <button type="button" class="btn btn-sm flex-fill" id="btnLimpiarConceptos"
-                                    style="background:rgba(255,176,32,0.15); color:var(--nexo-warning); border:1px solid var(--nexo-warning);">
-                                <i class="bi bi-arrow-clockwise me-1"></i>Limpiar
-                            </button>
+                                <!-- Resumen de configuración -->
+                                <div class="card dte-card mb-2">
+                                    <div class="card-body py-2 px-3">
+                                        <div class="d-flex flex-wrap gap-2 align-items-center small">
+                                            <span><i class="bi bi-file-earmark-text me-1 text-nexo-primary"></i><strong>Tipo:</strong> <span id="resumenTipo">-</span></span>
+                                        </div>
+                                        <div class="d-flex flex-wrap gap-2 align-items-center small mt-1">
+                                            <span><i class="bi bi-building me-1 text-nexo-primary"></i><strong>Receptor:</strong> <span id="resumenReceptor">-</span></span>
+                                            <span class="vr mx-1"></span>
+                                            <span><i class="bi bi-calendar me-1 text-muted"></i><span id="resumenFecha">-</span></span>
+                                        </div>
+                                        <div class="d-flex align-items-center gap-2 mt-1 pt-1 border-top">
+                                            <span class="badge badge-nexo-info rounded-pill" id="resumenLineas">0 líneas</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Observaciones -->
+                                <div class="card mb-2">
+                                    <div class="card-body py-2 px-3">
+                                        <label for="observacionesFinales" class="form-label small fw-semibold mb-1">
+                                            <i class="bi bi-chat-text me-1"></i>Observaciones
+                                        </label>
+                                        <textarea id="observacionesFinales" class="form-control form-control-sm" rows="2"
+                                                  placeholder="Observaciones adicionales del documento..."></textarea>
+                                    </div>
+                                </div>
+
+                                <!-- Totales -->
+                                <div class="card dte-card mb-2">
+                                    <div class="card-header dte-card-header py-2 px-3">
+                                        <span class="dte-card-title"><i class="bi bi-calculator-fill me-2"></i>Totales</span>
+                                    </div>
+                                    <div class="card-body py-2 px-3">
+                                        <div class="d-flex justify-content-between mb-1 small" id="filaNetoContainer">
+                                            <span>Subtotal (Neto):</span>
+                                            <span id="finalSubtotalNeto">$0</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-1 small" id="filaExentoContainer" style="display:none;">
+                                            <span>Monto Exento:</span>
+                                            <span id="finalMontoExento">$0</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-1 small" id="filaIvaContainer">
+                                            <span>IVA (19%):</span>
+                                            <span id="finalMontoIva">$0</span>
+                                        </div>
+                                        <hr class="my-1">
+                                        <div class="d-flex justify-content-between fw-bold align-items-start">
+                                            <span>Total:</span>
+                                            <div class="text-end">
+                                                <span id="finalMontoTotal" class="fs-5 dte-total">$0</span>
+                                                <div><small class="text-muted fw-normal"><span id="finalTotalLineas">0</span> líneas</small></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Botón principal de emisión -->
+                                <button id="btnEmitir" type="button" class="btn btn-nexo-success w-100 py-2 mb-2" disabled>
+                                    <i class="bi bi-send-fill me-2"></i>
+                                    <span>Emitir Documento</span>
+                                    <span id="spinner_btn" style="display:none" class="spinner-border spinner-border-sm ms-2" role="status"></span>
+                                </button>
+
+                                <!-- Navegación -->
+                                <div class="d-flex gap-2 flex-wrap">
+                                    <button type="button" class="btn btn-nexo-outline btn-nexo-sm flex-fill" id="btnVolverPaso1">
+                                        <i class="bi bi-arrow-left-circle me-1"></i>Volver
+                                    </button>
+                                    <button type="button" class="btn btn-nexo-outline btn-nexo-outline--warning btn-nexo-sm flex-fill" id="btnLimpiarConceptos">
+                                        <i class="bi bi-arrow-clockwise me-1"></i>Limpiar
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -658,67 +813,73 @@
 </div>
 
 <!-- Modal Crear Empresa Rápida -->
-<div class="modal fade" id="modalNuevaEmpresa" tabindex="-1" aria-labelledby="modalNuevaEmpresaLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content" style="border:none; border-radius:var(--nexo-radius-xl); overflow:hidden;">
-            <div class="modal-header py-2 px-3" style="background:linear-gradient(135deg, var(--nexo-secondary) 0%, #2d2d4a 100%); border:none;">
-                <h5 class="modal-title" id="modalNuevaEmpresaLabel" style="color:white; font-weight:600;">
-                    <i class="bi bi-building-add me-2"></i>Crear Nueva Empresa
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+<div class="modal fade rm-modal" id="modalNuevaEmpresa" tabindex="-1" aria-labelledby="modalNuevaEmpresaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="rm-modal-header">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rm-modal-icon rm-modal-icon--blue">
+                        <i class="bi bi-building-add"></i>
+                    </div>
+                    <div>
+                        <h5 class="rm-modal-title" id="modalNuevaEmpresaLabel">Crear Nueva Empresa</h5>
+                        <p class="rm-modal-subtitle">Quedará seleccionada como receptora al guardar</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
-            <div class="modal-body">
+            <div class="rm-modal-body">
                 <form id="formNuevaEmpresa">
                     <div class="row g-2">
                         <div class="col-md-4">
-                            <label class="form-label small fw-bold mb-1">RUT <span class="text-danger">*</span></label>
+                            <label for="empRut" class="form-label small fw-bold mb-1">RUT <span class="text-danger">*</span></label>
                             <input type="text" class="form-control form-control-sm" id="empRut" placeholder="12.345.678-9" required>
                             <div class="invalid-feedback">RUT es obligatorio</div>
                         </div>
                         <div class="col-md-8">
-                            <label class="form-label small fw-bold mb-1">Razón Social <span class="text-danger">*</span></label>
+                            <label for="empRazonSocial" class="form-label small fw-bold mb-1">Razón Social <span class="text-danger">*</span></label>
                             <input type="text" class="form-control form-control-sm" id="empRazonSocial" placeholder="Nombre legal de la empresa" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold mb-1">Nombre Fantasía</label>
+                            <label for="empNombreFantasia" class="form-label small fw-bold mb-1">Nombre Fantasía</label>
                             <input type="text" class="form-control form-control-sm" id="empNombreFantasia" placeholder="Nombre comercial">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold mb-1">Giro <span class="text-danger">*</span></label>
+                            <label for="empGiro" class="form-label small fw-bold mb-1">Giro <span class="text-danger">*</span></label>
                             <input type="text" class="form-control form-control-sm" id="empGiro" placeholder="Actividad económica" required>
                         </div>
                         <div class="col-md-12">
-                            <label class="form-label small fw-bold mb-1">Dirección <span class="text-danger">*</span></label>
+                            <label for="empDireccion" class="form-label small fw-bold mb-1">Dirección <span class="text-danger">*</span></label>
                             <input type="text" class="form-control form-control-sm" id="empDireccion" placeholder="Calle, número, oficina" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold mb-1">Comuna <span class="text-danger">*</span></label>
+                            <label for="empComuna" class="form-label small fw-bold mb-1">Comuna <span class="text-danger">*</span></label>
                             <input type="text" class="form-control form-control-sm" id="empComuna" placeholder="Comuna" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold mb-1">Ciudad <span class="text-danger">*</span></label>
+                            <label for="empCiudad" class="form-label small fw-bold mb-1">Ciudad <span class="text-danger">*</span></label>
                             <input type="text" class="form-control form-control-sm" id="empCiudad" placeholder="Ciudad" required>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small fw-bold mb-1">Teléfono</label>
+                            <label for="empTelefono" class="form-label small fw-bold mb-1">Teléfono</label>
                             <input type="text" class="form-control form-control-sm" id="empTelefono" placeholder="+56 9 1234 5678">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small fw-bold mb-1">Email</label>
+                            <label for="empEmail" class="form-label small fw-bold mb-1">Email</label>
                             <input type="email" class="form-control form-control-sm" id="empEmail" placeholder="contacto@empresa.cl">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small fw-bold mb-1">Código Acteco</label>
+                            <label for="empActeco" class="form-label small fw-bold mb-1">Código Acteco</label>
                             <input type="text" class="form-control form-control-sm" id="empActeco" placeholder="Ej: 461000">
                         </div>
                     </div>
                 </form>
             </div>
-            <div class="modal-footer py-2 px-3">
-                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
+            <div class="rm-modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">
                     <i class="bi bi-x-lg me-1"></i>Cancelar
                 </button>
-                <button type="button" class="btn btn-success btn-sm px-4" id="btnGuardarEmpresa">
+                <button type="button" class="btn btn-nexo-primary" id="btnGuardarEmpresa">
                     <i class="bi bi-check-circle me-1"></i>Guardar y Seleccionar
                 </button>
             </div>
@@ -728,7 +889,7 @@
 
 {% include '../../layout/footer.html' %}
 
-<!-- Select2 JS -->
+<!-- Select2 JS: duplicado de layout/footer.html; retirar junto con emisionDTE.html cuando se limpien ambos -->
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <script>
@@ -1000,7 +1161,7 @@ function eliminarLinea(idx) {
         tbody.innerHTML = `
             <tr id="emptyConceptRow">
                 <td colspan="7" class="text-center text-muted py-4">
-                    <i class="bi bi-card-list" style="font-size:2rem; color:#ccc;"></i>
+                    <i class="bi bi-card-list empty-row-icon"></i>
                     <p class="mt-2 mb-0">No hay conceptos agregados</p>
                     <small>Presione "Agregar Línea" para comenzar</small>
                 </td>
@@ -1070,7 +1231,7 @@ document.getElementById('btnLimpiarConceptos').addEventListener('click', functio
             document.getElementById('conceptosBody').innerHTML = `
                 <tr id="emptyConceptRow">
                     <td colspan="7" class="text-center text-muted py-4">
-                        <i class="bi bi-card-list" style="font-size:2rem; color:#ccc;"></i>
+                        <i class="bi bi-card-list empty-row-icon"></i>
                         <p class="mt-2 mb-0">No hay conceptos agregados</p>
                         <small>Presione "Agregar Línea" para comenzar</small>
                     </td>
@@ -1157,9 +1318,9 @@ document.getElementById('btnEmitir').addEventListener('click', function() {
     Swal.fire({
         title: '<i class="bi bi-shield-check me-2"></i>Confirmar Emisión',
         html: `
-            <div style="text-align:left;">
+            <div class="text-start">
                 <div class="card mb-3">
-                    <div class="card-header bg-primary text-white py-2">
+                    <div class="card-header dte-card-header py-2">
                         <strong><i class="bi bi-file-earmark-text me-1"></i>Documento</strong>
                     </div>
                     <div class="card-body py-2 small">
@@ -1170,13 +1331,13 @@ document.getElementById('btnEmitir').addEventListener('click', function() {
                     </div>
                 </div>
                 <div class="card mb-3">
-                    <div class="card-header bg-success text-white py-2 d-flex justify-content-between">
+                    <div class="card-header dte-card-header py-2 d-flex justify-content-between">
                         <strong><i class="bi bi-list-check me-1"></i>Detalle</strong>
-                        <span class="badge bg-light text-success">${conceptos.length} líneas</span>
+                        <span class="badge badge-nexo-info">${conceptos.length} líneas</span>
                     </div>
                     <div class="card-body p-0">
-                        <div style="max-height:200px; overflow-y:auto;">
-                            <table class="table table-sm mb-0" style="font-size:0.82rem;">
+                        <div class="table-responsive swal-scroll">
+                            <table class="table table-sm small mb-0">
                                 <thead class="table-light">
                                     <tr>
                                         <th>#</th><th>Concepto</th><th class="text-center">Cant.</th><th class="text-center">Unid.</th><th class="text-end">P.Unit.</th><th class="text-end">Subtotal</th>
@@ -1188,7 +1349,7 @@ document.getElementById('btnEmitir').addEventListener('click', function() {
                     </div>
                     <div class="card-footer bg-light">
                         <div class="text-end">
-                            <h5 class="mb-0 text-success"><strong>Total: ${formatCLP(totalFinal)}</strong></h5>
+                            <div class="fs-5 dte-total mb-0">Total: ${formatCLP(totalFinal)}</div>
                         </div>
                     </div>
                 </div>
