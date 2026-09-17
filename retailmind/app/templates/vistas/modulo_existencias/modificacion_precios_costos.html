@@ -1,53 +1,125 @@
 {% load static %}
-{% load permisos_tags %}
 {% include '../../layout/header.html' %}
 {% include '../../layout/menu.html' %}
+
+<style>
+    /* Cabecera de modulo (patron ESTILOS_MODULOS.md / despacho_sucursales.html) */
+    .module-header {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        color: white;
+        padding: 16px 24px;
+        border-radius: 16px 16px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .module-header-left { display: flex; align-items: center; gap: 14px; }
+    .module-header-icon {
+        width: 48px; height: 48px;
+        background: rgba(255,255,255,0.2);
+        border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 24px;
+    }
+    .module-header-info h5 { margin: 0; font-size: 18px; font-weight: 600; color: white; }
+    .module-header-status { display: flex; align-items: center; gap: 6px; font-size: 13px; opacity: 0.9; margin-top: 4px; flex-wrap: wrap; }
+    .module-header-status a { color: #fff; text-decoration: underline; }
+    .status-dot { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    /* btn-nexo-primary global trae padding .625rem 1.25rem y radio 8px: dentro de un
+       input-group hay que igualarlo al .form-control vecino (.5rem .9rem / .25rem). */
+    .input-group > .btn-nexo-primary {
+        padding: .5rem .9rem;
+        border-top-right-radius: .25rem;
+        border-bottom-right-radius: .25rem;
+    }
+
+    .precios-card { border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(64, 81, 137, 0.08); border: none; }
+
+    /* Editor individual: mismo lenguaje cromatico que la cabecera del modulo */
+    .editor-card { border-color: #405189; }
+    .editor-card > .card-header {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        color: #fff;
+        border-bottom: none;
+    }
+    .editor-card > .card-header .card-title { color: #fff; }
+    .label-nuevo { color: var(--nexo-primary); }
+    .margen-nuevo { color: var(--nexo-primary); }
+
+    /* Tablas con scroll interno y encabezado fijo */
+    .tabla-scroll { max-height: 60vh; overflow-y: auto; }
+    .tabla-scroll-sm { max-height: 300px; overflow-y: auto; }
+    .tabla-scroll thead th,
+    .tabla-scroll-sm thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: #f3f6f9;
+        box-shadow: inset 0 -1px 0 #dbdde0;
+    }
+    .fila-clicable { cursor: pointer; }
+
+    /* Inputs numericos de la edicion masiva: montos de 7 digitos completos */
+    .masivo-input { width: 7.5rem; min-width: 6rem; text-align: right; }
+
+    @media (max-width: 768px) {
+        .module-header { padding: 12px 16px; border-radius: 12px 12px 0 0; }
+        .module-header-icon { width: 40px; height: 40px; font-size: 20px; }
+        .tabla-scroll { max-height: 55vh; }
+    }
+</style>
 
 <div class="page-content">
     <div class="container-fluid">
 
-        <div class="row">
-            <div class="col-12">
-                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                    <h4 class="mb-sm-0"><i class="ri-price-tag-3-line text-primary me-2"></i>Modificación de Precios y Costos</h4>
-                    <div class="page-title-right">
-                        <ol class="breadcrumb m-0">
-                            <li class="breadcrumb-item"><a href="/app/home/">Inicio</a></li>
-                            <li class="breadcrumb-item">Existencias</li>
-                            <li class="breadcrumb-item active">Modificación Precios/Costos</li>
-                        </ol>
+        <div class="precios-card card">
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon"><i class="bi bi-tags"></i></div>
+                    <div class="module-header-info">
+                        <h5>Modificación de Precios y Costos</h5>
+                        <div class="module-header-status">
+                            <span class="status-dot"></span>
+                            Cambios con motivo y auditoría
+                            <span aria-hidden="true">|</span>
+                            <a href="/app/home/">Inicio</a>
+                            <span aria-hidden="true">/</span>
+                            Existencias
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="row">
+            <div class="card-body">
+                <div class="row">
                 <!-- Panel Izquierdo: Búsqueda -->
                 <div class="col-lg-7">
                     <div class="card">
                         <div class="card-header">
-                            <h5 class="card-title mb-0"><i class="ri-search-line me-2"></i>Buscar Productos</h5>
+                            <h5 class="card-title mb-0"><i class="bi bi-search me-2"></i>Buscar Productos</h5>
                         </div>
                         <div class="card-body">
                             <div class="input-group mb-3">
-                                <input type="text" id="inputBuscar" class="form-control" placeholder="Buscar por SKU, artículo o descripción (mín 2 caracteres)...">
-                                <button class="btn btn-primary" onclick="buscarProductos()"><i class="ri-search-line"></i> Buscar</button>
+                                <input type="text" id="inputBuscar" class="form-control" aria-label="Buscar producto" placeholder="Buscar por SKU, artículo o descripción (mín 2 caracteres)...">
+                                <button class="btn btn-nexo-primary" onclick="buscarProductos()"><i class="bi bi-search me-1"></i> Buscar</button>
                             </div>
-                            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                            <div class="table-responsive tabla-scroll">
                                 <table class="table table-hover table-sm align-middle">
-                                    <thead class="table-light sticky-top">
+                                    <thead class="table-light">
                                         <tr>
                                             <th>Artículo</th>
-                                            <th>Marca</th>
                                             <th class="text-end">Costo</th>
-                                            <th class="text-end">Sobreprecio</th>
+                                            <th class="text-end d-none d-xl-table-cell">Sobreprecio</th>
                                             <th class="text-end">Precio Venta</th>
                                             <th class="text-end">Margen %</th>
-                                            <th></th>
                                         </tr>
                                     </thead>
                                     <tbody id="tbodyProductos">
-                                        <tr><td colspan="7" class="text-center text-muted">Busque productos para modificar</td></tr>
+                                        <tr><td colspan="5" class="text-center text-muted">Busque productos para modificar</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -56,27 +128,27 @@
 
                     <!-- Edición Masiva -->
                     <div class="card" id="edicionMasivaCard" style="display:none;">
-                        <div class="card-header bg-warning bg-opacity-10">
+                        <div class="card-header">
                             <div class="d-flex justify-content-between align-items-center">
-                                <h5 class="card-title mb-0"><i class="ri-edit-2-line me-2 text-warning"></i>Edición Masiva</h5>
-                                <span class="badge bg-warning" id="badgeMasivos">0 productos</span>
+                                <h5 class="card-title mb-0"><i class="bi bi-pencil me-2"></i>Edición Masiva</h5>
+                                <span class="badge bg-light text-dark border" id="badgeMasivos">0 productos</span>
                             </div>
                         </div>
                         <div class="card-body">
-                            <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                            <div class="table-responsive tabla-scroll-sm">
                                 <table class="table table-sm">
                                     <thead class="table-light"><tr>
-                                        <th>Artículo</th><th class="text-end">Costo</th><th class="text-end">Sobreprecio</th><th class="text-end">Precio</th><th></th>
+                                        <th>Artículo</th><th class="text-end">Costo</th><th class="text-end">Sobreprecio</th><th class="text-end">Precio</th><th><span class="visually-hidden">Acciones</span></th>
                                     </tr></thead>
                                     <tbody id="tbodyMasivos"></tbody>
                                 </table>
                             </div>
                             <div class="mb-3 mt-3">
-                                <label class="form-label">Motivo del cambio masivo</label>
-                                <input type="text" id="inputMotivoMasivo" class="form-control" placeholder="Ej: Ajuste de temporada, cambio de proveedor...">
+                                <label class="form-label" for="inputMotivoMasivo">Motivo del cambio masivo <span class="text-danger">*</span></label>
+                                <input type="text" id="inputMotivoMasivo" class="form-control" required aria-required="true" placeholder="Ej: Ajuste de temporada, cambio de proveedor...">
                             </div>
-                            <button class="btn btn-warning w-100" onclick="aplicarCambiosMasivos()">
-                                <i class="ri-check-double-line me-1"></i> Aplicar Cambios Masivos
+                            <button class="btn btn-nexo-primary w-100" onclick="aplicarCambiosMasivos()">
+                                <i class="bi bi-check2-all me-1"></i> Aplicar Cambios Masivos
                             </button>
                         </div>
                     </div>
@@ -84,9 +156,9 @@
 
                 <!-- Panel Derecho: Editor Individual -->
                 <div class="col-lg-5">
-                    <div class="card border-primary" id="editorCard" style="display:none;">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="card-title mb-0 text-white"><i class="ri-edit-line me-2"></i>Editar Precios y Costos</h5>
+                    <div class="card editor-card" id="editorCard" style="display:none;">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="bi bi-pencil me-2"></i>Editar Precios y Costos</h5>
                         </div>
                         <div class="card-body">
                             <input type="hidden" id="editProductoId">
@@ -97,42 +169,42 @@
 
                             <div class="row g-3">
                                 <div class="col-md-6">
-                                    <label class="form-label fw-semibold">Costo Actual</label>
+                                    <label class="form-label fw-semibold" for="editCostoActual">Costo Actual</label>
                                     <div class="input-group">
                                         <span class="input-group-text">$</span>
                                         <input type="number" id="editCostoActual" class="form-control" disabled>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label fw-semibold text-primary">Nuevo Costo</label>
+                                    <label class="form-label fw-semibold label-nuevo" for="editCostoNuevo">Nuevo Costo</label>
                                     <div class="input-group">
                                         <span class="input-group-text">$</span>
                                         <input type="number" id="editCostoNuevo" class="form-control" oninput="recalcularMargen()">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label fw-semibold">Sobreprecio Actual</label>
+                                    <label class="form-label fw-semibold" for="editSobreprecioActual">Sobreprecio Actual</label>
                                     <div class="input-group">
                                         <span class="input-group-text">$</span>
                                         <input type="number" id="editSobreprecioActual" class="form-control" disabled>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label fw-semibold text-primary">Nuevo Sobreprecio</label>
+                                    <label class="form-label fw-semibold label-nuevo" for="editSobreprecioNuevo">Nuevo Sobreprecio</label>
                                     <div class="input-group">
                                         <span class="input-group-text">$</span>
                                         <input type="number" id="editSobreprecioNuevo" class="form-control">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label fw-semibold">Precio Venta Actual</label>
+                                    <label class="form-label fw-semibold" for="editPrecioActual">Precio Venta Actual</label>
                                     <div class="input-group">
                                         <span class="input-group-text">$</span>
                                         <input type="number" id="editPrecioActual" class="form-control" disabled>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label fw-semibold text-primary">Nuevo Precio Venta</label>
+                                    <label class="form-label fw-semibold label-nuevo" for="editPrecioNuevo">Nuevo Precio Venta</label>
                                     <div class="input-group">
                                         <span class="input-group-text">$</span>
                                         <input type="number" id="editPrecioNuevo" class="form-control" oninput="recalcularMargen()">
@@ -148,13 +220,13 @@
                                 </div>
                                 <div class="d-flex justify-content-between">
                                     <span>Margen nuevo:</span>
-                                    <strong class="text-primary" id="margenNuevo">0%</strong>
+                                    <strong class="margen-nuevo" id="margenNuevo">0%</strong>
                                 </div>
                             </div>
 
                             <div class="mt-3">
-                                <label class="form-label">Motivo del cambio</label>
-                                <input type="text" id="editMotivo" class="form-control" placeholder="Razón del cambio de precios...">
+                                <label class="form-label" for="editMotivo">Motivo del cambio <span class="text-danger">*</span></label>
+                                <input type="text" id="editMotivo" class="form-control" required aria-required="true" placeholder="Razón del cambio de precios...">
                             </div>
 
                             <div class="form-check mt-3">
@@ -171,17 +243,19 @@
                             </div>
 
                             <div class="d-flex gap-2 mt-3">
-                                <button class="btn btn-primary flex-grow-1" onclick="guardarCambios()">
-                                    <i class="ri-save-line me-1"></i> Guardar Cambios
+                                <button class="btn btn-nexo-primary flex-grow-1" onclick="guardarCambios()">
+                                    <i class="bi bi-save me-1"></i> Guardar Cambios
                                 </button>
-                                <button class="btn btn-outline-warning" onclick="agregarAMasivo()">
-                                    <i class="ri-add-line me-1"></i> Agregar a Masivo
+                                <button class="btn btn-outline-secondary" onclick="agregarAMasivo()">
+                                    <i class="bi bi-plus-lg me-1"></i> Agregar a Masivo
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div>
+                </div>
             </div>
+        </div>
 
     </div>
 </div>
@@ -192,6 +266,9 @@
 const CSRF_TOKEN = '{{ csrf_token }}';
 let productosMasivos = [];
 let productosBuscados = [];   // resultados de la última búsqueda (por índice)
+/* Un solo color primario para los botones de SweetAlert: el token NEXO, con el
+   azul del gradiente del módulo como respaldo si la variable no resolviera. */
+const COLOR_PRIMARIO = (getComputedStyle(document.documentElement).getPropertyValue('--nexo-primary') || '').trim() || '#405189';
 
 /* toastr NO está cargado en este proyecto: los avisos van por SweetAlert2,
    que sí viene en el footer. */
@@ -201,7 +278,7 @@ function avisar(mensaje, icono, titulo) {
             icon: icono || 'info',
             title: titulo || 'Precios y costos',
             text: mensaje,
-            confirmButtonColor: '#405189',
+            confirmButtonColor: COLOR_PRIMARIO,
         });
     } else {
         console.warn(mensaje);
@@ -217,7 +294,7 @@ async function confirmar(mensaje) {
         showCancelButton: true,
         confirmButtonText: 'Sí, aplicar',
         cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#405189',
+        confirmButtonColor: COLOR_PRIMARIO,
     });
     return r.isConfirmed;
 }
@@ -236,21 +313,19 @@ async function buscarProductos() {
     const tbody = document.getElementById('tbodyProductos');
     productosBuscados = (data.success && data.productos) ? data.productos : [];
     if (!productosBuscados.length) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Sin resultados</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Sin resultados</td></tr>';
         return;
     }
     // Se pasa el ÍNDICE, no el JSON del producto: incrustar JSON.stringify en un
     // atributo onclick rompía la fila en cuanto la descripción traía comillas.
     tbody.innerHTML = productosBuscados.map((p, idx) => {
         const margenClass = p.margen_porcentaje >= 50 ? 'text-success' : p.margen_porcentaje >= 30 ? 'text-info' : 'text-danger';
-        return `<tr style="cursor:pointer;" onclick="seleccionarProductoPorIndice(${idx})">
-            <td><strong>${escapeHtml(p.articulo)}</strong><br><small class="text-muted">${escapeHtml(p.descripcion)}</small></td>
-            <td>${escapeHtml(p.marca)}</td>
+        return `<tr class="fila-clicable" onclick="seleccionarProductoPorIndice(${idx})">
+            <td><strong>${escapeHtml(p.articulo)}</strong><br><small class="text-muted">${escapeHtml(p.marca)} · ${escapeHtml(p.descripcion)}</small></td>
             <td class="text-end">$${Number(p.costo).toLocaleString('es-CL')}</td>
-            <td class="text-end">$${Number(p.sobreprecio).toLocaleString('es-CL')}</td>
+            <td class="text-end d-none d-xl-table-cell">$${Number(p.sobreprecio).toLocaleString('es-CL')}</td>
             <td class="text-end fw-bold">$${Number(p.precio_venta).toLocaleString('es-CL')}</td>
             <td class="text-end ${margenClass}">${p.margen_porcentaje}%</td>
-            <td><button class="btn btn-sm btn-primary"><i class="ri-edit-line"></i></button></td>
         </tr>`;
     }).join('');
 }
@@ -343,10 +418,10 @@ function renderMasivos() {
     const tbody = document.getElementById('tbodyMasivos');
     tbody.innerHTML = productosMasivos.map((p, idx) => `<tr>
         <td>${p.articulo}</td>
-        <td class="text-end"><input type="number" class="form-control form-control-sm" value="${p.costo}" onchange="productosMasivos[${idx}].costo=parseInt(this.value)" style="width:80px;"></td>
-        <td class="text-end"><input type="number" class="form-control form-control-sm" value="${p.sobreprecio}" onchange="productosMasivos[${idx}].sobreprecio=parseInt(this.value)" style="width:80px;"></td>
-        <td class="text-end"><input type="number" class="form-control form-control-sm" value="${p.precio_venta}" onchange="productosMasivos[${idx}].precio_venta=parseInt(this.value)" style="width:80px;"></td>
-        <td><button class="btn btn-sm btn-outline-danger" onclick="productosMasivos.splice(${idx},1); renderMasivos();"><i class="ri-close-line"></i></button></td>
+        <td class="text-end"><input type="number" class="form-control form-control-sm masivo-input" aria-label="Costo" value="${p.costo}" onchange="productosMasivos[${idx}].costo=parseInt(this.value)"></td>
+        <td class="text-end"><input type="number" class="form-control form-control-sm masivo-input" aria-label="Sobreprecio" value="${p.sobreprecio}" onchange="productosMasivos[${idx}].sobreprecio=parseInt(this.value)"></td>
+        <td class="text-end"><input type="number" class="form-control form-control-sm masivo-input" aria-label="Precio de venta" value="${p.precio_venta}" onchange="productosMasivos[${idx}].precio_venta=parseInt(this.value)"></td>
+        <td><button class="btn btn-sm btn-outline-danger" title="Quitar de la lista" aria-label="Quitar de la lista" onclick="productosMasivos.splice(${idx},1); renderMasivos();"><i class="bi bi-x-lg"></i></button></td>
     </tr>`).join('');
 }
 

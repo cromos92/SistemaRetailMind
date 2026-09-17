@@ -4,11 +4,34 @@
 {% include '../../layout/menu.html' %}
 
 <style>
+    /* Paleta del modulo: alias de ESTILOS_MODULOS.md ("Paleta de Colores Principal").
+       Centraliza los hexadecimales y re-tokeniza el primario morado de Velzon (#4b38b3). */
+    :root {
+        --rm-primary: #405189;
+        --rm-primary-dark: #364574;
+        --rm-accent: #0ab39c;
+        --rm-danger: #f06548;
+        --rm-warning: #ffbe0b;
+        --rm-info: #299cdb;
+        --rm-orange: #fb8c00;
+        --rm-text: #495057;
+        --rm-text-muted: #6c757d;
+        --rm-border: #e9ecef;
+        --rm-status-dot: #4ade80;
+    }
+
+    /* Card principal del modulo: card.shadow > .module-header > .card-body */
+    .card.shadow {
+        border: none;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 20px rgba(64, 81, 137, 0.08);
+    }
+
     .module-header {
-        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        background: linear-gradient(135deg, var(--rm-primary) 0%, var(--rm-accent) 100%);
         color: white;
         padding: 16px 24px;
-        border-radius: 16px 16px 0 0;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -24,32 +47,93 @@
         font-size: 24px;
     }
     .module-header-info h5 { margin: 0; font-size: 18px; font-weight: 600; color: white; }
-    .module-header-status { display: flex; align-items: center; gap: 6px; font-size: 13px; opacity: 0.9; margin-top: 4px; }
-    .status-dot { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; animation: pulse 2s infinite; }
+    .module-header-status { display: flex; align-items: center; gap: 6px; font-size: 13px; opacity: 0.9; margin-top: 4px; flex-wrap: wrap; }
+    .module-header-status a { color: #fff; text-decoration: underline; }
+    .status-dot { width: 8px; height: 8px; background: var(--rm-status-dot); border-radius: 50%; animation: pulse 2s infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .module-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
+    /* En este build .btn-primary / .text-primary son morados (#4b38b3): los llevamos
+       al azul del estandar sobreescribiendo las variables del boton de Velzon. */
+    .page-content { --vz-primary-rgb: 64, 81, 137; }
+    .page-content .btn-primary {
+        --vz-btn-bg: var(--rm-primary);
+        --vz-btn-border-color: var(--rm-primary);
+        --vz-btn-hover-bg: var(--rm-primary-dark);
+        --vz-btn-hover-border-color: var(--rm-primary-dark);
+        --vz-btn-active-bg: var(--rm-primary-dark);
+        --vz-btn-active-border-color: var(--rm-primary-dark);
+        --vz-btn-disabled-bg: var(--rm-primary);
+        --vz-btn-disabled-border-color: var(--rm-primary);
+    }
+    .page-content .btn-outline-primary {
+        --vz-btn-color: var(--rm-primary);
+        --vz-btn-border-color: var(--rm-primary);
+        --vz-btn-hover-bg: var(--rm-primary);
+        --vz-btn-hover-border-color: var(--rm-primary);
+        --vz-btn-active-bg: var(--rm-primary);
+        --vz-btn-active-border-color: var(--rm-primary);
+        --vz-btn-disabled-color: var(--rm-primary);
+    }
+    .page-content .text-primary { color: var(--rm-primary) !important; }
+    /* app.min.css pinta la pestana activa con el morado literal, fuera del alcance
+       de las variables: se re-tokeniza con la especificidad de .page-content. */
+    .page-content .nav-primary.nav-tabs-custom .nav-link.active { color: var(--rm-primary); }
+    .page-content .nav-primary.nav-tabs-custom .nav-link.active::after { background-color: var(--rm-primary); }
+    /* Amarillo #ffbe0b con texto blanco no se lee: badges de "en transito" y pendientes */
+    .page-content .badge.bg-warning { color: #212529; }
+
+    /* Cabeceras de card uniformes: el color lo lleva el icono, no el fondo */
+    .rm-card-header { background: var(--vz-card-bg); border-bottom: 1px solid var(--rm-border); }
+
+    /* KPIs */
     .kpi-card { border-radius: 12px; border: none; transition: all 0.3s ease; overflow: hidden; cursor: pointer; }
     .kpi-card:hover { transform: translateY(-4px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
     .kpi-card .card-body { padding: 12px 16px; }
+    .kpi-value { font-size: 1.3rem; font-weight: 700; line-height: 1.2; margin: 0; color: var(--rm-primary); }
+    .kpi-label { font-size: 0.75rem; font-weight: 500; line-height: 1.2; margin: 0; color: var(--rm-text); }
 
+    /* Fondos y bordes de la tabla "Colores por Tipo de KPI" de ESTILOS_MODULOS.md */
+    .kpi-card--pendiente { background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 4px solid var(--rm-warning); }
+    .kpi-card--info { background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid var(--rm-info); }
+    .kpi-card--por-vencer { background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-left: 4px solid var(--rm-orange); }
+    .kpi-card--vencido { background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); border-left: 4px solid var(--rm-danger); }
+    .kpi-card--vencido .kpi-value { color: var(--rm-danger); }
+
+    /* Controles de paginacion (ESTILOS_MODULOS.md) */
     .pagination-controls {
         background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
         border-radius: 12px;
-        padding: 10px 16px;
-        margin-top: 12px;
+        padding: 16px;
+        margin-top: 16px;
+        margin-bottom: 16px;
         border: 1px solid rgba(64, 81, 137, 0.1);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         display: flex;
         justify-content: space-between;
         align-items: center;
         gap: 12px;
         flex-wrap: wrap;
     }
+    .page-info {
+        min-width: 140px;
+        text-align: center;
+        font-weight: 600;
+        background: white;
+        border-radius: 8px;
+        padding: 6px 12px;
+        color: var(--rm-text);
+    }
 
-    .despacho-card { border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(64, 81, 137, 0.08); border: none; }
+    /* Paneles con scroll propio: misma altura a ambos lados */
+    .rm-scroll-panel { max-height: 400px; overflow-y: auto; }
+
+    /* Estados de carga y vacio */
+    .rm-empty-state { text-align: center; color: var(--rm-text-muted); padding: 1.25rem 0.5rem; }
+    .rm-empty-state > i { display: block; font-size: 1.75rem; margin-bottom: 0.35rem; opacity: 0.55; }
 
     @media (max-width: 768px) {
-        .module-header { padding: 12px 16px; border-radius: 12px 12px 0 0; }
+        .module-header { padding: 12px 16px; }
         .module-header-icon { width: 40px; height: 40px; font-size: 20px; }
         .pagination-controls { flex-direction: column; align-items: stretch; }
         .nav-tabs-custom { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -60,306 +144,294 @@
 <div class="page-content">
     <div class="container-fluid">
 
-        <div class="row">
-            <div class="col-12">
-                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                    <h4 class="mb-sm-0"><i class="ri-truck-line text-primary me-2"></i>Despacho a Sucursales</h4>
-                    <div class="page-title-right">
-                        <ol class="breadcrumb m-0">
-                            <li class="breadcrumb-item"><a href="/app/home/">Inicio</a></li>
-                            <li class="breadcrumb-item">Existencias</li>
-                            <li class="breadcrumb-item active">Despacho Sucursales</li>
-                        </ol>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-12">
-                <div class="despacho-card card mb-3">
-                    <div class="module-header">
-                        <div class="module-header-left">
-                            <div class="module-header-icon"><i class="ri-truck-line"></i></div>
-                            <div class="module-header-info">
-                                <h5>Despacho a Sucursales</h5>
-                                <div class="module-header-status">
-                                    <span class="status-dot"></span>
-                                    Sistema Activo
-                                </div>
-                            </div>
-                        </div>
-                        <div class="module-header-actions">
-                            <a href="/app/dashboard-despachos/" class="btn btn-light btn-sm">
-                                <i class="ri-bar-chart-line me-1"></i>Ver Dashboard Completo
-                            </a>
+        <div class="card shadow">
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon"><i class="bi bi-truck"></i></div>
+                    <div class="module-header-info">
+                        <h5>Despacho a Sucursales</h5>
+                        <div class="module-header-status">
+                            <span class="status-dot"></span>
+                            Sistema Activo
+                            <span aria-hidden="true">|</span>
+                            <a href="/app/home/">Inicio</a>
+                            <span aria-hidden="true">/</span>
+                            Existencias
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- KPIs -->
-        <div class="row g-2 mb-3">
-            <div class="col-6 col-md-3">
-                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 4px solid #ffbe0b;" onclick="document.getElementById('panelPendientes').scrollIntoView({behavior:'smooth'})">
-                    <div class="card-body text-center py-2">
-                        <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiPendientes">0</h4>
-                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Unid. por despachar</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid #299cdb;" onclick="DespachoSucursales.filtrarHistorial('', document.getElementById('tab-total'))">
-                    <div class="card-body text-center py-2">
-                        <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiDespachadas">0</h4>
-                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Unid. despachadas (<span class="kpi-dias">90</span>d)</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-left: 4px solid #fb8c00;" onclick="DespachoSucursales.filtrarHistorial('EN_TRANSITO', document.getElementById('tab-en_transito'))">
-                    <div class="card-body text-center py-2">
-                        <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiEnTransito">0</h4>
-                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Unid. en tránsito</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fdecea 0%, #f9c9c4 100%); border-left: 4px solid #f06548;" onclick="DespachoSucursales.filtrarHistorial('SIN_RECIBIR', document.getElementById('tab-sin_recibir'))">
-                    <div class="card-body text-center py-2">
-                        <h4 class="mb-0 fw-bold" style="color: #b42318;" id="kpiSinRecibir">0</h4>
-                        <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Unid. sin recibir</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Alerta: mercadería despachada que nunca llegó -->
-        <div class="alert alert-danger d-flex align-items-start gap-2 py-2 px-3 mb-3" id="alertaSinRecibir" style="display:none !important;">
-            <i class="ri-alert-line fs-4 lh-1"></i>
-            <div class="flex-grow-1 small">
-                <strong id="alertaSinRecibirTitulo">Hay mercadería despachada que nunca se recibió.</strong>
-                <div class="text-muted" id="alertaSinRecibirDetalle"></div>
-            </div>
-            <button type="button" class="btn btn-sm btn-danger" onclick="DespachoSucursales.filtrarHistorial('SIN_RECIBIR', document.getElementById('tab-sin_recibir'))">
-                Ver documentos
-            </button>
-        </div>
-
-        <div class="row">
-            <!-- Panel Izquierdo: Búsqueda y productos -->
-            <div class="col-lg-7">
-                <!-- Pendientes de Despacho -->
-                <div class="card" id="panelPendientes">
-                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-                        <h5 class="card-title mb-0">
-                            <i class="ri-time-line me-2 text-warning"></i>Pendientes de Despacho
-                            <span class="badge bg-warning ms-1" id="badgePendientesLineas">0</span>
-                        </h5>
-                        <div class="d-flex gap-1">
-                            <a href="{% url 'emision_dte' %}" class="btn btn-sm btn-primary" title="Emitir la guía o factura de traspaso: es el flujo que descuenta estos pendientes y deja el documento para que el destino lo reciba">
-                                <i class="ri-file-paper-2-line"></i> Emitir guía
-                            </a>
-                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="DespachoSucursales.cargarPendientes()"><i class="ri-refresh-line"></i></button>
-                        </div>
-                    </div>
-                    <div class="card-body" id="pendientesContainer">
-                        <div class="text-center text-muted py-3">Cargando pendientes...</div>
-                    </div>
-                </div>
-
-                <!-- Búsqueda de Productos -->
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0"><i class="ri-search-line me-2"></i>Buscar Productos para Despachar</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-2 mb-3">
-                            <div class="col-md-6">
-                                <input type="text" id="inputBuscar" class="form-control" placeholder="Buscar por SKU, artículo o descripción...">
-                            </div>
-                            <div class="col-md-4">
-                                <select id="selectMarcaFiltro" class="form-select">
-                                    <option value="">Todas las marcas</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2 d-flex gap-1">
-                                <button type="button" class="btn btn-primary flex-grow-1" onclick="DespachoSucursales.buscarProductos(1)" title="Buscar"><i class="ri-search-line"></i></button>
-                                <button type="button" class="btn btn-outline-secondary" onclick="DespachoSucursales.traerTodoElStock()" title="Traer todo el stock disponible"><i class="ri-stack-line"></i></button>
-                            </div>
-                        </div>
-                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                            <table class="table table-hover table-sm align-middle">
-                                <thead class="table-light sticky-top">
-                                    <tr>
-                                        <th style="width:36px;"><input type="checkbox" class="form-check-input" id="chkSeleccionarTodos" onchange="DespachoSucursales.toggleSeleccionarTodos(this.checked)"></th>
-                                        <th>SKU</th>
-                                        <th>Artículo</th>
-                                        <th>Talla</th>
-                                        <th class="text-end">Stock</th>
-                                        <th class="text-center">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tbodyProductos">
-                                    <tr><td colspan="6" class="text-center text-muted">Busque productos para despachar</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="pagination-controls" id="paginacionProductos" style="display:none;">
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnPaginaAnterior" onclick="DespachoSucursales.paginaAnterior()"><i class="ri-arrow-left-s-line"></i> Anterior</button>
-                            <span id="paginacionProductosInfo" class="small text-muted"></span>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnPaginaSiguiente" onclick="DespachoSucursales.paginaSiguiente()">Siguiente <i class="ri-arrow-right-s-line"></i></button>
-                        </div>
-                        <div class="d-grid mt-2">
-                            <button type="button" class="btn btn-success" id="btnAgregarSeleccionados" disabled onclick="DespachoSucursales.agregarSeleccionadosAlCarrito()">
-                                Agregar seleccionados
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Panel Derecho: Carrito de Despacho -->
-            <div class="col-lg-5">
-                <div class="card border-primary">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="card-title mb-0 text-white"><i class="ri-shopping-cart-2-line me-2"></i>Carrito de Despacho</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Sucursal Destino</label>
-                            <select id="selectSucursal" class="form-select">
-                                <option value="">-- Seleccionar Sucursal --</option>
-                            </select>
-                        </div>
-
-                        <div id="carritoItems" style="max-height: 350px; overflow-y: auto;">
-                            <div class="text-center text-muted py-3">Agregue productos al carrito</div>
-                        </div>
-
-                        <hr>
-
-                        <div class="d-flex justify-content-between mb-2">
-                            <span class="fw-bold">Total items:</span>
-                            <span class="fw-bold" id="totalItems">0</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span class="fw-bold">Total unidades:</span>
-                            <span class="fw-bold text-primary" id="totalUnidades">0</span>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Observaciones</label>
-                            <textarea id="inputObservaciones" class="form-control" rows="2" placeholder="Observaciones del despacho..."></textarea>
-                        </div>
-
-                        <div class="d-flex gap-2">
-                            <button type="button" class="btn btn-success flex-grow-1" onclick="DespachoSucursales.agregarAlDespachoMasivo()">
-                                <i class="ri-add-line me-1"></i> Agregar a Despacho Masivo
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Despachos acumulados -->
-                <div class="card border-warning" id="despachosMasivos" style="display:none;">
-                    <div class="card-header bg-warning bg-opacity-10">
-                        <h5 class="card-title mb-0"><i class="ri-stack-line me-2 text-warning"></i>Despachos a Enviar</h5>
-                    </div>
-                    <div class="card-body" id="despachosMasivosBody"></div>
-                    <div class="card-footer">
-                        <div class="alert alert-warning py-2 px-2 small mb-2">
-                            <i class="ri-error-warning-line me-1"></i>
-                            Este envío descuenta el stock de la bodega <strong>sin emitir documento tributario</strong>.
-                            Sin guía ni factura, el destino no lo verá en Recepción de Documentos y no podrá ingresarlo.
-                            Para un traspaso normal use
-                            <a href="{% url 'emision_dte' %}" class="alert-link">Emitir guía</a>.
-                        </div>
-                        <button type="button" class="btn btn-primary w-100 btn-lg" onclick="DespachoSucursales.enviarTodosDespachos()">
-                            <i class="ri-send-plane-line me-2"></i> Enviar Todos los Despachos
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Historial real de despachos (reconstruido desde el kardex por DTE) -->
-        <div class="card mt-3">
-            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <h5 class="card-title mb-0">
-                    <i class="ri-history-line me-2 text-primary"></i>Despachos enviados desde esta bodega
-                </h5>
-                <div class="d-flex align-items-center gap-2">
-                    <select id="selectDiasHistorial" class="form-select form-select-sm" style="width:auto;" onchange="DespachoSucursales.cambiarPeriodo(this.value)">
-                        <option value="30">Últimos 30 días</option>
-                        <option value="90" selected>Últimos 90 días</option>
-                        <option value="180">Últimos 180 días</option>
-                        <option value="365">Último año</option>
-                    </select>
-                    <a href="/app/dashboard-despachos/" class="btn btn-sm btn-soft-primary">
-                        <i class="ri-bar-chart-line me-1"></i>Dashboard
+                <div class="module-header-actions">
+                    <a href="/app/dashboard-despachos/" class="btn btn-light btn-sm">
+                        <i class="bi bi-bar-chart-line me-1"></i>Ver Dashboard Completo
                     </a>
                 </div>
             </div>
-            <div class="card-body">
-                <p class="text-muted small mb-2">
-                    <i class="ri-information-line me-1"></i>
-                    Cada fila es un documento de traspaso (guía o factura entre sucursales). Se comparan las unidades
-                    que <strong>salieron</strong> de esta bodega contra las que el destino <strong>ingresó</strong> en
-                    Recepción de Documentos. Las devueltas por nota de crédito no se cuentan como faltantes.
-                </p>
-                <ul class="nav nav-tabs nav-tabs-custom nav-primary mb-3" id="tabsHistorial">
-                    <li class="nav-item">
-                        <a class="nav-link active" id="tab-total" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorial('', this)">
-                            Todos <span class="badge bg-secondary ms-1" id="tab-count-total">0</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" id="tab-sin_recibir" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorial('SIN_RECIBIR', this)">
-                            Sin recibir <span class="badge bg-danger ms-1" id="tab-count-sin_recibir">0</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" id="tab-en_transito" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorial('EN_TRANSITO', this)">
-                            En tránsito <span class="badge bg-warning ms-1" id="tab-count-en_transito">0</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" id="tab-recibido" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorial('RECIBIDO', this)">
-                            Recibidos <span class="badge bg-success ms-1" id="tab-count-recibido">0</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" id="tab-sobre_recibido" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorial('SOBRE_RECIBIDO', this)">
-                            Sobre-recibidos <span class="badge bg-dark ms-1" id="tab-count-sobre_recibido">0</span>
-                        </a>
-                    </li>
-                </ul>
 
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Documento</th>
-                                <th>Destino</th>
-                                <th>Fecha</th>
-                                <th class="text-end">Líneas</th>
-                                <th class="text-end">Enviadas</th>
-                                <th class="text-end">Recibidas</th>
-                                <th class="text-end">Sin recibir</th>
-                                <th>Situación</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbodyHistorial">
-                            <tr><td colspan="8" class="text-center text-muted">Cargando historial...</td></tr>
-                        </tbody>
-                    </table>
+            <div class="card-body">
+
+                <!-- KPIs -->
+                <div class="row g-2 mb-3">
+                    <div class="col-6 col-md-3">
+                        <div class="kpi-card kpi-card--pendiente card h-100" onclick="document.getElementById('panelPendientes').scrollIntoView({behavior:'smooth'})">
+                            <div class="card-body text-center">
+                                <h4 class="kpi-value" id="kpiPendientes">0</h4>
+                                <p class="kpi-label">Unid. por despachar</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="kpi-card kpi-card--info card h-100" onclick="DespachoSucursales.filtrarHistorial('', document.getElementById('tab-total'))">
+                            <div class="card-body text-center">
+                                <h4 class="kpi-value" id="kpiDespachadas">0</h4>
+                                <p class="kpi-label">Unid. despachadas (<span class="kpi-dias">90</span>d)</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="kpi-card kpi-card--por-vencer card h-100" onclick="DespachoSucursales.filtrarHistorial('EN_TRANSITO', document.getElementById('tab-en_transito'))">
+                            <div class="card-body text-center">
+                                <h4 class="kpi-value" id="kpiEnTransito">0</h4>
+                                <p class="kpi-label">Unid. en tránsito</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="kpi-card kpi-card--vencido card h-100" onclick="DespachoSucursales.filtrarHistorial('SIN_RECIBIR', document.getElementById('tab-sin_recibir'))">
+                            <div class="card-body text-center">
+                                <h4 class="kpi-value" id="kpiSinRecibir">0</h4>
+                                <p class="kpi-label">Unid. sin recibir</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="pagination-controls" id="paginacionHistorial" style="display:none;">
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnHistorialAnterior" onclick="DespachoSucursales.historialPaginaAnterior()"><i class="ri-arrow-left-s-line"></i> Anterior</button>
-                    <span id="paginacionHistorialInfo" class="small text-muted"></span>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnHistorialSiguiente" onclick="DespachoSucursales.historialPaginaSiguiente()">Siguiente <i class="ri-arrow-right-s-line"></i></button>
+
+                <!-- Alerta: mercadería despachada que nunca llegó -->
+                <div class="alert alert-danger d-flex align-items-start gap-2 py-2 px-3 mb-3" id="alertaSinRecibir" style="display:none !important;">
+                    <i class="bi bi-exclamation-triangle fs-4 lh-1"></i>
+                    <div class="flex-grow-1 small">
+                        <strong id="alertaSinRecibirTitulo">Hay mercadería despachada que nunca se recibió.</strong>
+                        <div class="text-muted" id="alertaSinRecibirDetalle"></div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-danger" onclick="DespachoSucursales.filtrarHistorial('SIN_RECIBIR', document.getElementById('tab-sin_recibir'))">
+                        Ver documentos
+                    </button>
+                </div>
+
+                <div class="row">
+                    <!-- Panel Izquierdo: Búsqueda y productos -->
+                    <div class="col-lg-7">
+                        <!-- Pendientes de Despacho -->
+                        <div class="card" id="panelPendientes">
+                            <div class="card-header rm-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <h5 class="card-title mb-0">
+                                    <i class="bi bi-clock me-2 text-warning"></i>Pendientes de Despacho
+                                    <span class="badge bg-warning ms-1" id="badgePendientesLineas">0</span>
+                                </h5>
+                                <div class="d-flex gap-1">
+                                    <a href="{% url 'emision_dte' %}" class="btn btn-sm btn-primary" title="Emitir la guía o factura de traspaso: es el flujo que descuenta estos pendientes y deja el documento para que el destino lo reciba">
+                                        <i class="bi bi-file-earmark-text"></i> Emitir guía
+                                    </a>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="DespachoSucursales.cargarPendientes()" title="Recargar pendientes" aria-label="Recargar pendientes"><i class="bi bi-arrow-clockwise"></i></button>
+                                </div>
+                            </div>
+                            <div class="card-body" id="pendientesContainer">
+                                <div class="rm-empty-state">
+                                    <div class="spinner-border spinner-border-sm text-secondary mb-2" role="status"></div>
+                                    <div>Cargando pendientes...</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Búsqueda de Productos -->
+                        <div class="card">
+                            <div class="card-header rm-card-header">
+                                <h5 class="card-title mb-0"><i class="bi bi-search me-2 text-primary"></i>Buscar Productos para Despachar</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-2 mb-3">
+                                    <div class="col-md-6">
+                                        <input type="text" id="inputBuscar" class="form-control" aria-label="Buscar productos por SKU, artículo o descripción" placeholder="Buscar por SKU, artículo o descripción...">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <select id="selectMarcaFiltro" class="form-select" aria-label="Filtrar por marca">
+                                            <option value="">Todas las marcas</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3 d-flex gap-1">
+                                        <button type="button" class="btn btn-primary flex-grow-1" onclick="DespachoSucursales.buscarProductos(1)" title="Buscar" aria-label="Buscar"><i class="bi bi-search"></i></button>
+                                        <button type="button" class="btn btn-outline-secondary" onclick="DespachoSucursales.traerTodoElStock()" title="Traer todo el stock disponible" aria-label="Traer todo el stock disponible"><i class="bi bi-stack"></i></button>
+                                    </div>
+                                </div>
+                                <div class="table-responsive rm-scroll-panel">
+                                    <table class="table table-hover table-sm align-middle">
+                                        <thead class="table-light sticky-top">
+                                            <tr>
+                                                <th style="width:36px;"><input type="checkbox" class="form-check-input" id="chkSeleccionarTodos" aria-label="Seleccionar todos los productos" onchange="DespachoSucursales.toggleSeleccionarTodos(this.checked)"></th>
+                                                <th>SKU</th>
+                                                <th>Artículo</th>
+                                                <th>Talla</th>
+                                                <th class="text-end">Stock</th>
+                                                <th class="text-center">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyProductos">
+                                            <tr><td colspan="6"><div class="rm-empty-state"><i class="bi bi-search"></i>Busque productos para despachar</div></td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="pagination-controls" id="paginacionProductos" style="display:none;">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnPaginaAnterior" onclick="DespachoSucursales.paginaAnterior()"><i class="bi bi-chevron-left"></i> Anterior</button>
+                                    <span id="paginacionProductosInfo" class="page-info small"></span>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnPaginaSiguiente" onclick="DespachoSucursales.paginaSiguiente()">Siguiente <i class="bi bi-chevron-right"></i></button>
+                                </div>
+                                <div class="d-grid mt-2">
+                                    <button type="button" class="btn btn-primary" id="btnAgregarSeleccionados" disabled onclick="DespachoSucursales.agregarSeleccionadosAlCarrito()">
+                                        Agregar seleccionados
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Panel Derecho: Carrito de Despacho -->
+                    <div class="col-lg-5">
+                        <div class="card">
+                            <div class="card-header rm-card-header">
+                                <h5 class="card-title mb-0"><i class="bi bi-cart3 me-2 text-primary"></i>Carrito de Despacho</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold" for="selectSucursal">Sucursal Destino</label>
+                                    <select id="selectSucursal" class="form-select">
+                                        <option value="">-- Seleccionar Sucursal --</option>
+                                    </select>
+                                </div>
+
+                                <div id="carritoItems" class="rm-scroll-panel">
+                                    <div class="rm-empty-state"><i class="bi bi-cart3"></i>Agregue productos al carrito</div>
+                                </div>
+
+                                <hr>
+
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="fw-bold">Total items:</span>
+                                    <span class="fw-bold" id="totalItems">0</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-3">
+                                    <span class="fw-bold">Total unidades:</span>
+                                    <span class="fw-bold text-primary" id="totalUnidades">0</span>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label" for="inputObservaciones">Observaciones</label>
+                                    <textarea id="inputObservaciones" class="form-control" rows="2" placeholder="Observaciones del despacho..."></textarea>
+                                </div>
+
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-primary flex-grow-1" onclick="DespachoSucursales.agregarAlDespachoMasivo()">
+                                        <i class="bi bi-plus-lg me-1"></i> Agregar a Despacho Masivo
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Despachos acumulados -->
+                        <div class="card" id="despachosMasivos" style="display:none;">
+                            <div class="card-header rm-card-header">
+                                <h5 class="card-title mb-0"><i class="bi bi-stack me-2 text-warning"></i>Despachos a Enviar</h5>
+                            </div>
+                            <div class="card-body" id="despachosMasivosBody"></div>
+                            <div class="card-footer">
+                                <div class="alert alert-warning py-2 px-2 small mb-2">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>
+                                    Este envío descuenta el stock de la bodega <strong>sin emitir documento tributario</strong>.
+                                    Sin guía ni factura, el destino no lo verá en Recepción de Documentos y no podrá ingresarlo.
+                                    Para un traspaso normal use
+                                    <a href="{% url 'emision_dte' %}" class="alert-link">Emitir guía</a>.
+                                </div>
+                                <button type="button" class="btn btn-success btn-lg w-100" onclick="DespachoSucursales.enviarTodosDespachos()">
+                                    <i class="bi bi-send me-2"></i> Enviar Todos los Despachos
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Historial real de despachos (reconstruido desde el kardex por DTE) -->
+                <div class="card mt-3">
+                    <div class="card-header rm-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <h5 class="card-title mb-0">
+                            <i class="bi bi-clock-history me-2 text-primary"></i>Despachos enviados desde esta bodega
+                        </h5>
+                        <div class="d-flex align-items-center gap-2">
+                            <select id="selectDiasHistorial" class="form-select form-select-sm" style="width:auto;" aria-label="Período del historial" onchange="DespachoSucursales.cambiarPeriodo(this.value)">
+                                <option value="30">Últimos 30 días</option>
+                                <option value="90" selected>Últimos 90 días</option>
+                                <option value="180">Últimos 180 días</option>
+                                <option value="365">Último año</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-2">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Cada fila es un documento de traspaso (guía o factura entre sucursales). Se comparan las unidades
+                            que <strong>salieron</strong> de esta bodega contra las que el destino <strong>ingresó</strong> en
+                            Recepción de Documentos. Las devueltas por nota de crédito no se cuentan como faltantes.
+                        </p>
+                        <ul class="nav nav-tabs nav-tabs-custom nav-primary mb-3" id="tabsHistorial">
+                            <li class="nav-item">
+                                <a class="nav-link active" id="tab-total" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorial('', this)">
+                                    Todos <span class="badge bg-secondary ms-1" id="tab-count-total">0</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="tab-sin_recibir" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorial('SIN_RECIBIR', this)">
+                                    Sin recibir <span class="badge bg-danger ms-1" id="tab-count-sin_recibir">0</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="tab-en_transito" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorial('EN_TRANSITO', this)">
+                                    En tránsito <span class="badge bg-warning text-dark ms-1" id="tab-count-en_transito">0</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="tab-recibido" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorial('RECIBIDO', this)">
+                                    Recibidos <span class="badge bg-success ms-1" id="tab-count-recibido">0</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" id="tab-sobre_recibido" href="javascript:void(0)" onclick="DespachoSucursales.filtrarHistorial('SOBRE_RECIBIDO', this)">
+                                    Sobre-recibidos <span class="badge bg-dark ms-1" id="tab-count-sobre_recibido">0</span>
+                                </a>
+                            </li>
+                        </ul>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Documento</th>
+                                        <th>Destino</th>
+                                        <th>Fecha</th>
+                                        <th class="text-end">Líneas</th>
+                                        <th class="text-end">Enviadas</th>
+                                        <th class="text-end">Recibidas</th>
+                                        <th class="text-end">Sin recibir</th>
+                                        <th>Situación</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyHistorial">
+                                    <tr><td colspan="8"><div class="rm-empty-state"><div class="spinner-border spinner-border-sm text-secondary mb-2" role="status"></div><div>Cargando historial...</div></div></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="pagination-controls" id="paginacionHistorial" style="display:none;">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnHistorialAnterior" onclick="DespachoSucursales.historialPaginaAnterior()"><i class="bi bi-chevron-left"></i> Anterior</button>
+                            <span id="paginacionHistorialInfo" class="page-info small"></span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnHistorialSiguiente" onclick="DespachoSucursales.historialPaginaSiguiente()">Siguiente <i class="bi bi-chevron-right"></i></button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

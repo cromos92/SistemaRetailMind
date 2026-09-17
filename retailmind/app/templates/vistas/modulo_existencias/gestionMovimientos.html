@@ -3,32 +3,37 @@
 {% include '../../layout/menu.html' %}
 
 <style>
-/* ========== NEXO DESIGN SYSTEM - Variables ========== */
-:root {
-    --nexo-primary: #0066FF;
-    --nexo-primary-dark: #0052CC;
-    --nexo-primary-light: #E6F0FF;
-    --nexo-secondary: #1A1A2E;
-    --nexo-accent: #00D4AA;
-    --nexo-success: #00D4AA;
-    --nexo-warning: #FFB020;
-    --nexo-error: #FF4D4D;
-    --nexo-info: #0066FF;
-    --nexo-gray-900: #1A1A2E;
-    --nexo-gray-700: #4A4A5A;
-    --nexo-gray-500: #8A8A9A;
-    --nexo-gray-300: #D1D1D9;
-    --nexo-gray-100: #F5F5F7;
-    --nexo-white: #FFFFFF;
-    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
-    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
-    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
-    --nexo-radius-sm: 4px;
-    --nexo-radius-md: 8px;
-    --nexo-radius-lg: 12px;
-    --nexo-transition-fast: 150ms ease;
-    --nexo-transition-normal: 250ms ease;
+/* Tokens --nexo-* vienen de css/nexo-design-system.css (cargado en layout/header.html) */
+
+/* ========== MODULE HEADER (estándar de módulo) ========== */
+.module-card {
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(64, 81, 137, 0.08);
+    border: none;
 }
+.module-header {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white;
+    padding: 16px 24px;
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.module-header-left { display: flex; align-items: center; gap: 14px; }
+.module-header-icon {
+    width: 48px; height: 48px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+}
+.module-header-info h5 { margin: 0; font-size: 18px; font-weight: 600; color: white; }
+.module-header-status { display: flex; align-items: center; gap: 6px; font-size: 13px; opacity: 0.9; margin-top: 4px; }
+.status-dot { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; animation: nexo-pulse 2s infinite; }
 
 /* ========== PAGE CONTAINER ========== */
 .nexo-page {
@@ -92,7 +97,7 @@
 }
 
 .nexo-card-header {
-    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2a2a4e 100%);
+    background: var(--nexo-secondary);
     color: var(--nexo-white);
     padding: 1rem 1.5rem;
     border-bottom: none;
@@ -168,13 +173,18 @@
     border: 1px solid var(--nexo-gray-300);
 }
 
-.nexo-table {
-    margin-bottom: 0;
-    font-size: 0.875rem;
+/* Altura propia para las tres tablas: .table-responsive de Bootstrap solo trae
+   overflow-x, y sin tope de alto el scrollport nunca desplaza (el thead sticky
+   no tendría sobre qué quedarse fijo y la paginación caería fuera del pliegue) */
+.nexo-table-container .table-responsive {
+    max-height: 65vh;
+    overflow-y: auto;
 }
 
-.nexo-table thead {
-    background: linear-gradient(135deg, var(--nexo-gray-100) 0%, var(--nexo-white) 100%);
+/* Una sola densidad para las tres tablas (Movimientos, Kardex por Talla, Kardex Agrupado) */
+.nexo-table {
+    margin-bottom: 0;
+    font-size: 0.8125rem;
 }
 
 .nexo-table thead th {
@@ -183,12 +193,14 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--nexo-gray-700);
-    padding: 12px 10px;
+    padding: 10px;
     border-bottom: 2px solid var(--nexo-gray-300);
     white-space: nowrap;
+    /* El fondo opaco es lo que sostiene el thead fijo sobre las filas al desplazar */
+    background: var(--nexo-gray-100);
     position: sticky;
     top: 0;
-    background: var(--nexo-gray-100);
+    z-index: 2;
 }
 
 .nexo-table tbody tr {
@@ -200,7 +212,7 @@
 }
 
 .nexo-table tbody td {
-    padding: 10px;
+    padding: 8px 10px;
     vertical-align: middle;
     border-bottom: 1px solid var(--nexo-gray-300);
     color: var(--nexo-gray-900);
@@ -208,6 +220,22 @@
 
 .nexo-table tbody tr:last-child td {
     border-bottom: none;
+}
+
+/* Columnas numéricas (Entrada / Salida / Saldo / Cant.) alineadas a la derecha */
+.nexo-table .col-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* SKU legible: sin el rosa Velzon de <code> */
+.nexo-table code {
+    color: var(--nexo-gray-900);
+    background: var(--nexo-gray-100);
+    padding: 1px 4px;
+    border-radius: var(--nexo-radius-sm);
+    font-size: 0.75rem;
 }
 
 /* ========== BADGES ========== */
@@ -243,12 +271,14 @@
 }
 
 /* ========== CANTIDAD STYLES ========== */
-.cantidad-positiva {
+/* Van calificadas con `.nexo-table tbody td` para ganarle al color gris que esa
+   misma regla fija en todas las celdas; sueltas nunca llegaban a pintar */
+.nexo-table tbody td.cantidad-positiva {
     color: var(--nexo-success);
     font-weight: 600;
 }
 
-.cantidad-negativa {
+.nexo-table tbody td.cantidad-negativa {
     color: var(--nexo-error);
     font-weight: 600;
 }
@@ -321,45 +351,6 @@
     text-align: center;
 }
 
-/* ========== BUTTONS ========== */
-.nexo-btn-primary {
-    background: var(--nexo-primary);
-    color: var(--nexo-white);
-    border: none;
-    padding: 10px 20px;
-    border-radius: var(--nexo-radius-md);
-    font-weight: 500;
-    font-size: 0.9rem;
-    transition: var(--nexo-transition-fast);
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.nexo-btn-primary:hover {
-    background: var(--nexo-primary-dark);
-    color: var(--nexo-white);
-}
-
-.nexo-btn-success {
-    background: var(--nexo-success);
-    color: var(--nexo-white);
-    border: none;
-    padding: 10px 20px;
-    border-radius: var(--nexo-radius-md);
-    font-weight: 500;
-    font-size: 0.9rem;
-    transition: var(--nexo-transition-fast);
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.nexo-btn-success:hover {
-    background: #00b894;
-    color: var(--nexo-white);
-}
-
 /* ========== INFO BOX ========== */
 .nexo-info-box {
     background: var(--nexo-primary-light);
@@ -406,28 +397,23 @@
     font-size: 0.95rem;
 }
 
-/* ========== REFERENCIA CELL ========== */
-.referencia-cell {
-    max-width: 180px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+/* Los estados de carga usan .nexo-animate-spin del design system (+ .d-inline-block,
+   porque el <i> de bootstrap-icons es inline y no aceptaría el transform) */
+
+/* Badge compacto dentro de celdas de kardex (p. ej. apertura de migración) */
+.nexo-badge-sm {
+    font-size: 0.62rem;
+    padding: 2px 8px;
+    vertical-align: middle;
 }
 
-/* ========== TABLA MOVIMIENTOS COMPACTA ========== */
+/* ========== TABLA MOVIMIENTOS ========== */
+/* Anchos de columna como proporción (table-layout fixed); en pantallas angostas
+   la tabla hace scroll horizontal dentro de .table-responsive en vez de aplastarse */
 #tablaMovimientos {
-    font-size: 0.78rem;
     table-layout: fixed;
     width: 100%;
-}
-
-#tablaMovimientos thead th {
-    padding: 8px 7px;
-    font-size: 0.68rem;
-}
-
-#tablaMovimientos tbody td {
-    padding: 6px 7px;
+    min-width: 870px;
 }
 
 /* Fecha/Hora */
@@ -451,7 +437,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 130px;
+    max-width: 100%;
 }
 .sub-text {
     display: block;
@@ -460,7 +446,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 130px;
+    max-width: 100%;
 }
 
 /* Características */
@@ -474,7 +460,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 96px;
+    max-width: 100%;
 }
 
 /* Talla */
@@ -488,19 +474,19 @@
     width: 88px;
 }
 #tablaMovimientos .col-sku code {
-    font-size: 0.72rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     display: inline-block;
-    max-width: 84px;
+    max-width: 100%;
     vertical-align: bottom;
 }
 
 /* Cantidad */
 #tablaMovimientos .col-cant {
     width: 52px;
-    text-align: center;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
     font-weight: 600;
 }
 
@@ -521,7 +507,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 110px;
 }
 
 /* Responsable + Referencia */
@@ -536,7 +521,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 176px;
+    max-width: 100%;
 }
 /* Referencia como valor claro (no placeholder tenue) */
 .resp-referencia {
@@ -544,7 +529,7 @@
     align-items: center;
     gap: 4px;
     margin-top: 3px;
-    max-width: 176px;
+    max-width: 100%;
 }
 .resp-referencia .ref-vacia {
     color: var(--nexo-gray-300);
@@ -562,7 +547,7 @@
     font-weight: 600;
     line-height: 1.3;
     white-space: nowrap;
-    max-width: 176px;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -617,18 +602,8 @@
         width: 100%;
         justify-content: center;
     }
-    .movimientos-filters .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
-    .kardex-header { flex-direction: column; gap: 0.5rem; }
-    .kardex-header .btn { width: 100%; }
-    .movimiento-detail { font-size: 0.813rem; }
-    .movimientos-table th, .movimientos-table td { padding: 0.5rem; white-space: nowrap; }
-}
-
-@media (max-width: 576px) {
-    .movimientos-table { font-size: 0.75rem; }
-    .fecha-range { flex-direction: column; gap: 0.5rem; }
-    .fecha-range .form-control { width: 100%; }
-    .movimiento-badge { font-size: 0.688rem; padding: 0.2rem 0.4rem; }
+    .module-header { padding: 12px 16px; border-radius: 12px 12px 0 0; }
+    .module-header-icon { width: 40px; height: 40px; font-size: 20px; }
 }
 
 /* ========== SELECT2 NEXO THEME ========== */
@@ -648,43 +623,82 @@
     box-shadow: var(--nexo-shadow-lg) !important;
 }
 
-/* Loader con estilo del proyecto */
-#fullscreenLoader {
+/* ========== LOADER DE PANTALLA COMPLETA ========== */
+.nexo-loader {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1060;
+    background: rgba(26, 26, 46, 0.35);
     backdrop-filter: blur(4px);
+    text-align: center;
 }
-
-#fullscreenLoader .spinner-border {
-    color: #405189 !important;
+.nexo-loader-box {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--nexo-white);
+    padding: 2rem 3rem;
+    border-radius: var(--nexo-radius-lg);
+    box-shadow: var(--nexo-shadow-lg);
+    color: var(--nexo-secondary);
+}
+.nexo-loader-box .spinner-border {
+    width: 2.5rem;
+    height: 2.5rem;
+    color: var(--nexo-primary);
 }
 </style>
 
-<!-- Loader con estilo del proyecto -->
-<div id="fullscreenLoader" style="
-    display: none;
-    position: fixed;
-    z-index: 1060;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(135deg, rgba(64, 81, 137, 0.1) 0%, rgba(10, 179, 156, 0.1) 100%);
-    backdrop-filter: blur(8px);
-    text-align: center;">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 40px 60px; border-radius: 20px; box-shadow: 0 20px 60px rgba(64, 81, 137, 0.3);">
-        <div style="width: 60px; height: 60px; margin: 0 auto 20px; background: linear-gradient(135deg, #405189 0%, #0ab39c 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; animation: pulse 1.5s ease-in-out infinite;">
-            <i class="bi bi-arrow-left-right fs-3 text-white"></i>
-        </div>
-        <div class="spinner-border mb-3" role="status" style="width: 2.5rem; height: 2.5rem; color: #405189;">
+<!-- Loader de pantalla completa (oculto por defecto) -->
+<div id="fullscreenLoader" class="nexo-loader">
+    <div class="nexo-loader-box">
+        <div class="spinner-border mb-3" role="status">
             <span class="visually-hidden">Cargando...</span>
         </div>
-        <p class="mb-0 fw-bold" style="color: #405189;">Cargando movimientos...</p>
+        <p class="mb-0 fw-bold">Cargando movimientos...</p>
         <small class="text-muted">Por favor espera un momento</small>
     </div>
 </div>
 
 <div class="page-content nexo-page">
     <div class="container-fluid">
-        
+
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0"><i class="bi bi-arrow-left-right text-primary me-2"></i>Movimientos de Stock</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="/app/home/">Inicio</a></li>
+                            <li class="breadcrumb-item">Existencias</li>
+                            <li class="breadcrumb-item active">Movimientos</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="module-card mb-3">
+                    <div class="module-header">
+                        <div class="module-header-left">
+                            <div class="module-header-icon"><i class="bi bi-arrow-left-right"></i></div>
+                            <div class="module-header-info">
+                                <h5>Historial y Kardex</h5>
+                                <div class="module-header-status">
+                                    <span class="status-dot"></span>
+                                    Historial de movimientos y Kardex por producto
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- === TABS DE NAVEGACIÓN === -->
         <ul class="nav nexo-tabs" id="movimientosTabs" role="tablist">
             <li class="nav-item" role="presentation">
@@ -717,15 +731,15 @@
                         <div class="nexo-filters">
                             <div class="row g-3">
                                 <div class="col-lg-2 col-md-4 col-6">
-                                    <label class="form-label">Fecha Inicio</label>
+                                    <label class="form-label" for="filtroFechaInicio">Fecha Inicio</label>
                                     <input type="date" class="form-control" id="filtroFechaInicio">
                                 </div>
                                 <div class="col-lg-2 col-md-4 col-6">
-                                    <label class="form-label">Fecha Fin</label>
+                                    <label class="form-label" for="filtroFechaFin">Fecha Fin</label>
                                     <input type="date" class="form-control" id="filtroFechaFin">
                                 </div>
                                 <div class="col-lg-2 col-md-4 col-6">
-                                    <label class="form-label">Tipo</label>
+                                    <label class="form-label" for="filtroTipo">Tipo</label>
                                     <select class="form-select" id="filtroTipo">
                                         <option value="">Todos</option>
                                         <option value="INGRESO">Ingreso</option>
@@ -735,11 +749,11 @@
                                     </select>
                                 </div>
                                 <div class="col-lg-2 col-md-4 col-6">
-                                    <label class="form-label">Artículo</label>
+                                    <label class="form-label" for="filtroArticulo">Artículo</label>
                                     <input type="text" class="form-control" id="filtroArticulo" placeholder="Buscar...">
                                 </div>
                                 <div class="col-lg-2 col-md-4 col-6">
-                                    <label class="form-label">SKU / Código de barra</label>
+                                    <label class="form-label" for="filtroSkuCodigo">SKU / Código de barra</label>
                                     <input type="text" class="form-control" id="filtroSkuCodigo" placeholder="Escanear o buscar...">
                                 </div>
                                 <div class="col-lg-2 col-md-4 col-6 d-flex align-items-end">
@@ -752,7 +766,7 @@
                         
                         <!-- Tabla de movimientos -->
                         <div class="nexo-table-container">
-                            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                            <div class="table-responsive">
                                 <table class="table nexo-table" id="tablaMovimientos">
                                     <thead>
                                         <tr>
@@ -771,7 +785,7 @@
                                         <tr>
                                             <td colspan="9">
                                                 <div class="nexo-empty-state">
-                                                    <i class="bi bi-hourglass-split"></i>
+                                                    <i class="bi bi-hourglass-split nexo-animate-spin d-inline-block"></i>
                                                     <p>Cargando movimientos...</p>
                                                 </div>
                                             </td>
@@ -816,22 +830,22 @@
                         <!-- Filtros para kardex -->
                         <div class="nexo-filters">
                             <div class="row g-3 align-items-end">
-                                <div class="col-lg-4 col-md-6">
-                                    <label class="form-label">Producto con Talla</label>
+                                <div class="col-lg-6 col-md-6">
+                                    <label class="form-label" for="selectProductoKardex">Producto con Talla</label>
                                     <select class="form-select" id="selectProductoKardex">
                                         <option value="">Seleccionar producto...</option>
                                     </select>
                                 </div>
                                 <div class="col-lg-2 col-md-3">
-                                    <label class="form-label">Fecha Inicio</label>
+                                    <label class="form-label" for="filtroFechaInicioKardex">Fecha Inicio</label>
                                     <input type="date" class="form-control" id="filtroFechaInicioKardex">
                                 </div>
                                 <div class="col-lg-2 col-md-3">
-                                    <label class="form-label">Fecha Fin</label>
+                                    <label class="form-label" for="filtroFechaFinKardex">Fecha Fin</label>
                                     <input type="date" class="form-control" id="filtroFechaFinKardex">
                                 </div>
                                 <div class="col-lg-2 col-md-3">
-                                    <button class="nexo-btn-primary w-100" id="btnGenerarKardex">
+                                    <button class="btn btn-nexo-primary w-100" id="btnGenerarKardex">
                                         <i class="bi bi-search"></i> Generar
                                     </button>
                                 </div>
@@ -877,9 +891,9 @@
                                             <th>Fecha</th>
                                             <th>Hora</th>
                                             <th>Concepto</th>
-                                            <th>Entrada</th>
-                                            <th>Salida</th>
-                                            <th>Saldo</th>
+                                            <th class="col-num">Entrada</th>
+                                            <th class="col-num">Salida</th>
+                                            <th class="col-num">Saldo</th>
                                             <th>Responsable</th>
                                             <th>Referencia</th>
                                         </tr>
@@ -897,6 +911,9 @@
                                 </table>
                             </div>
                         </div>
+                        <small class="text-muted d-block mt-2">
+                            <i class="bi bi-info-circle"></i> <strong>Apertura migración</strong>: fila sintética de la migración, no suma al saldo.
+                        </small>
                     </div>
                 </div>
             </div>
@@ -912,22 +929,22 @@
                         <!-- Filtros para kardex agrupado -->
                         <div class="nexo-filters">
                             <div class="row g-3 align-items-end">
-                                <div class="col-lg-4 col-md-6">
-                                    <label class="form-label">Producto</label>
+                                <div class="col-lg-6 col-md-6">
+                                    <label class="form-label" for="selectProductoKardexAgrupado">Producto</label>
                                     <select class="form-select" id="selectProductoKardexAgrupado">
                                         <option value="">Seleccionar producto...</option>
                                     </select>
                                 </div>
                                 <div class="col-lg-2 col-md-3">
-                                    <label class="form-label">Fecha Inicio</label>
+                                    <label class="form-label" for="filtroFechaInicioKardexAgrupado">Fecha Inicio</label>
                                     <input type="date" class="form-control" id="filtroFechaInicioKardexAgrupado">
                                 </div>
                                 <div class="col-lg-2 col-md-3">
-                                    <label class="form-label">Fecha Fin</label>
+                                    <label class="form-label" for="filtroFechaFinKardexAgrupado">Fecha Fin</label>
                                     <input type="date" class="form-control" id="filtroFechaFinKardexAgrupado">
                                 </div>
                                 <div class="col-lg-2 col-md-3">
-                                    <button class="nexo-btn-success w-100" id="btnGenerarKardexAgrupado">
+                                    <button class="btn btn-nexo-primary w-100" id="btnGenerarKardexAgrupado">
                                         <i class="bi bi-search"></i> Generar
                                     </button>
                                 </div>
@@ -967,9 +984,9 @@
                                             <th>Fecha</th>
                                             <th>Hora</th>
                                             <th>Concepto</th>
-                                            <th>Entrada</th>
-                                            <th>Salida</th>
-                                            <th>Saldo</th>
+                                            <th class="col-num">Entrada</th>
+                                            <th class="col-num">Salida</th>
+                                            <th class="col-num">Saldo</th>
                                             <th>Responsable</th>
                                             <th>Referencia</th>
                                             <th>Detalle</th>
@@ -988,12 +1005,14 @@
                                 </table>
                             </div>
                         </div>
+                        <small class="text-muted d-block mt-2">
+                            <i class="bi bi-info-circle"></i> <strong>Apertura migración</strong>: fila sintética de la migración, no suma al saldo.
+                        </small>
                         
                         <!-- Paginación para kardex agrupado -->
                         <div class="nexo-pagination">
-                            <div class="nexo-pagination-info">
-                                <span>50 elementos por página</span>
-                            </div>
+                            <!-- El backend fija 50 por página en este kardex: sin selector, igual que el resto de la paginación del módulo -->
+                            <div class="nexo-pagination-info"></div>
                             <div class="nexo-pagination-controls">
                                 <button class="nexo-pagination-btn" id="btnPrevPageKardexAgrupado" aria-label="Anterior">
                                     <i class="bi bi-chevron-left"></i>
@@ -1061,7 +1080,7 @@ function cargarMovimientos(page = 1) {
         <tr>
             <td colspan="9">
                 <div class="nexo-empty-state">
-                    <i class="bi bi-hourglass-split" style="animation: spin 1s linear infinite;"></i>
+                    <i class="bi bi-hourglass-split nexo-animate-spin d-inline-block"></i>
                     <p>Cargando movimientos...</p>
                 </div>
             </td>
@@ -1225,10 +1244,9 @@ function formatearConcepto(concepto, sucursalDestino) {
 // legacy migrada ya contiene esas unidades — sumarlas era doble conteo).
 function badgeApertura(mov) {
     if (!mov.es_apertura) return '';
-    return ' <span class="nexo-badge nexo-badge-ajuste" ' +
-        'style="font-size: 0.62rem; padding: 2px 8px; vertical-align: middle;" ' +
+    return ' <span class="nexo-badge nexo-badge-ajuste nexo-badge-sm" ' +
         'title="Fila sintética creada por la migración: el stock inicial ya está contenido en la historia legacy, por eso no suma al saldo.">' +
-        'Apertura migración — no suma al saldo</span>';
+        'Apertura migración</span>';
 }
 
 function updatePaginationMovimientos(pagination) {
@@ -1341,9 +1359,9 @@ function cargarKardex(page = 1) {
                             <td>${formatearFecha(mov.fecha)}</td>
                             <td>${mov.hora}</td>
                             <td>${formatearConcepto(mov.concepto, mov.sucursal_destino)}${badgeApertura(mov)}</td>
-                            <td class="cantidad-positiva">${mov.entrada || '-'}</td>
-                            <td class="cantidad-negativa">${mov.salida || '-'}</td>
-                            <td><strong>${mov.saldo}</strong></td>
+                            <td class="col-num ${mov.entrada ? 'cantidad-positiva' : 'text-muted'}">${mov.entrada || '—'}</td>
+                            <td class="col-num ${mov.salida ? 'cantidad-negativa' : 'text-muted'}">${mov.salida || '—'}</td>
+                            <td class="col-num"><strong>${mov.saldo}</strong></td>
                             <td>${mov.responsable}</td>
                             <td>${mov.referencia || '-'}</td>
                         </tr>`;
@@ -1475,7 +1493,7 @@ function cargarKardexAgrupado(page = 1) {
                     // Crear botón de detalle si hay múltiples tallas
                     let detalleBtn = '';
                     if (mov.detalle_tallas && mov.detalle_tallas.length > 1) {
-                        detalleBtn = `<button class="btn btn-sm btn-outline-info" onclick="mostrarDetalleTallas('${JSON.stringify(mov.detalle_tallas).replace(/"/g, '&quot;')}')" title="Ver detalle por tallas">
+                        detalleBtn = `<button class="btn btn-sm btn-outline-primary" onclick="mostrarDetalleTallas('${JSON.stringify(mov.detalle_tallas).replace(/"/g, '&quot;')}')" title="Ver detalle por tallas">
                             <i class="bi bi-eye"></i>
                         </button>`;
                     } else if (mov.detalle_tallas && mov.detalle_tallas.length === 1) {
@@ -1487,9 +1505,9 @@ function cargarKardexAgrupado(page = 1) {
                             <td>${formatearFecha(mov.fecha)}</td>
                             <td>${mov.hora}</td>
                             <td>${formatearConcepto(mov.concepto, mov.sucursal_destino)}${badgeApertura(mov)}</td>
-                            <td class="cantidad-positiva">${mov.entrada || '-'}</td>
-                            <td class="cantidad-negativa">${mov.salida || '-'}</td>
-                            <td><strong>${mov.saldo}</strong></td>
+                            <td class="col-num ${mov.entrada ? 'cantidad-positiva' : 'text-muted'}">${mov.entrada || '—'}</td>
+                            <td class="col-num ${mov.salida ? 'cantidad-negativa' : 'text-muted'}">${mov.salida || '—'}</td>
+                            <td class="col-num"><strong>${mov.saldo}</strong></td>
                             <td>${mov.responsable}</td>
                             <td>${mov.referencia || '-'}</td>
                             <td>${detalleBtn}</td>
@@ -1517,26 +1535,26 @@ function mostrarDetalleTallas(detalleJson) {
                     <tr>
                         <th>Talla</th>
                         <th>SKU</th>
-                        <th>Cantidad</th>
+                        <th class="col-num">Cantidad</th>
                     </tr>
                 </thead>
                 <tbody>
     `;
-    
+
     detalle.forEach(function(item) {
         const cantidadClass = item.cantidad > 0 ? 'cantidad-positiva' : 'cantidad-negativa';
         const cantidadSign = item.cantidad > 0 ? '+' : '';
-        contenido += `<tr><td>${item.talla}</td><td><code>${item.sku}</code></td><td class="${cantidadClass}">${cantidadSign}${item.cantidad}</td></tr>`;
+        contenido += `<tr><td>${item.talla}</td><td><code>${item.sku}</code></td><td class="col-num ${cantidadClass}">${cantidadSign}${item.cantidad}</td></tr>`;
     });
-    
+
     contenido += '</tbody></table></div>';
-    
+
     Swal.fire({
         title: 'Detalle por Tallas',
         html: contenido,
         width: '600px',
         confirmButtonText: 'Cerrar',
-        confirmButtonColor: '#0066FF'
+        confirmButtonColor: getComputedStyle(document.documentElement).getPropertyValue('--nexo-primary').trim() || '#0066FF'
     });
 }
 
@@ -1736,14 +1754,4 @@ $(document).ready(function() {
         }
     });
 });
-
-// Animación de carga
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-    }
-`;
-document.head.appendChild(style);
 </script>

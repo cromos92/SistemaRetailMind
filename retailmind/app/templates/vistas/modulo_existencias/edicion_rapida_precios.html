@@ -4,38 +4,74 @@
 {% include 'layout/menu.html' %}
 
 <style>
-/* ========== NEXO DESIGN SYSTEM VARIABLES ========== */
+/* La paleta --nexo-* viene de nexo-design-system.css (cargado en layout/header.html).
+   Aquí solo los tonos derivados para texto sobre tinte, que el global aún no define. */
 :root {
-    --nexo-primary: #0066FF;
-    --nexo-primary-dark: #0052CC;
-    --nexo-primary-light: #E6F0FF;
-    --nexo-secondary: #1A1A2E;
-    --nexo-accent: #00D4AA;
-    --nexo-success: #00D4AA;
-    --nexo-warning: #FFB020;
-    --nexo-error: #FF4D4D;
-    --nexo-info: #0066FF;
-    --nexo-gray-900: #1A1A2E;
-    --nexo-gray-700: #4A4A5A;
-    --nexo-gray-500: #8A8A9A;
-    --nexo-gray-300: #D1D1D9;
-    --nexo-gray-100: #F5F5F7;
-    --nexo-white: #FFFFFF;
-    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
-    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
-    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
-    --nexo-radius-sm: 4px;
-    --nexo-radius-md: 8px;
-    --nexo-radius-lg: 12px;
-    --nexo-transition-fast: 150ms ease;
-    --nexo-transition-normal: 250ms ease;
+    --nexo-accent-dark: #008866;
+    --nexo-warning-dark: #996B00;
+    --nexo-error-dark: #CC3333;
+    --nexo-accent-soft: rgba(0, 212, 170, 0.12);
+    --nexo-warning-soft: rgba(255, 176, 32, 0.15);
+    --nexo-error-soft: rgba(255, 77, 77, 0.12);
+    --nexo-primary-soft: rgba(0, 102, 255, 0.1);
 }
 
-/* ========== PÁGINA PRINCIPAL ========== */
-.gestion-precios-page {
-    background: var(--nexo-gray-100);
-    min-height: 100vh;
+/* ========== ESTRUCTURA DE MÓDULO (ESTILOS_MODULOS.md) ========== */
+.card.shadow {
+    border: none;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(64, 81, 137, 0.1);
 }
+
+.module-header {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.module-header-left { display: flex; align-items: center; gap: 14px; }
+.module-header-icon {
+    width: 48px; height: 48px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+}
+.module-header-info h5 { margin: 0; font-size: 18px; font-weight: 600; color: white; }
+.module-header-status {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+    font-size: 13px; opacity: 0.9; margin-top: 4px;
+}
+.module-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.module-header-actions .btn { border-radius: 10px; font-weight: 500; padding: 8px 14px; font-size: 13px; }
+.module-header-actions .badge-count {
+    background: var(--nexo-secondary);
+    color: var(--nexo-white);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 700;
+    margin-left: 4px;
+}
+
+/* Escala tipográfica de la pantalla: módulo h5 18px (module-header),
+   panel/modal 15px, subtítulo de sección 13px, meta 12px. */
+.panel-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--nexo-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.panel-title i { color: var(--nexo-primary); }
+.panel-title .badge { font-size: 12px; }
 
 /* ========== MODAL HISTORIAL ========== */
 .modal-historial-overlay {
@@ -77,7 +113,7 @@
 }
 
 .modal-historial-header {
-    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
+    background: var(--nexo-secondary);
     color: var(--nexo-white);
     padding: 20px 24px;
     display: flex;
@@ -87,7 +123,7 @@
 
 .modal-historial-header h3 {
     margin: 0;
-    font-size: 18px;
+    font-size: 15px;
     font-weight: 600;
     display: flex;
     align-items: center;
@@ -98,12 +134,12 @@
     color: var(--nexo-accent);
 }
 
-.modal-historial-header .btn-close-modal {
+.btn-close-modal {
     background: rgba(255, 255, 255, 0.1);
     border: none;
     color: var(--nexo-white);
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     border-radius: var(--nexo-radius-md);
     cursor: pointer;
     font-size: 18px;
@@ -113,8 +149,11 @@
     transition: var(--nexo-transition-fast);
 }
 
-.modal-historial-header .btn-close-modal:hover {
+.btn-close-modal:hover,
+.btn-close-modal:focus-visible {
     background: rgba(255, 255, 255, 0.2);
+    outline: 2px solid var(--nexo-accent);
+    outline-offset: 2px;
 }
 
 .modal-historial-body {
@@ -134,7 +173,7 @@
 .historial-producto-info h4 {
     margin: 0 0 8px 0;
     color: var(--nexo-secondary);
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
 }
 
@@ -144,10 +183,15 @@
     font-size: 13px;
 }
 
+.historial-table-wrapper {
+    overflow-x: auto;
+}
+
 .historial-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 13px;
+    font-variant-numeric: tabular-nums;
 }
 
 .historial-table th {
@@ -181,6 +225,12 @@
 
 .historial-table tbody tr:last-child td {
     border-bottom: none;
+}
+
+.historial-table th.col-monto,
+.historial-table td.col-monto {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
 }
 
 .historial-table .precio-anterior {
@@ -221,68 +271,54 @@
 }
 
 .historial-table .fecha-texto small {
-    color: var(--nexo-gray-500);
+    color: var(--nexo-gray-700);
     display: block;
     margin-top: 2px;
-}
-
-.historial-empty {
-    text-align: center;
-    padding: 40px 20px;
-    color: var(--nexo-gray-500);
-}
-
-.historial-empty i {
-    font-size: 48px;
-    color: var(--nexo-gray-300);
-    margin-bottom: 12px;
-}
-
-.historial-empty h4 {
-    color: var(--nexo-secondary);
-    margin: 0 0 8px 0;
 }
 
 .historial-loading {
     text-align: center;
     padding: 40px 20px;
-    color: var(--nexo-gray-500);
+    color: var(--nexo-gray-700);
 }
 
-.historial-loading .spinner-historial {
-    width: 40px;
-    height: 40px;
+/* ========== SPINNER ÚNICO (tres tamaños) ========== */
+.spinner,
+.spinner-historial,
+.spinner-search,
+.search-input-wrapper .input-loading {
     border: 3px solid var(--nexo-gray-300);
     border-top-color: var(--nexo-primary);
     border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 16px;
+    animation: spin 0.9s linear infinite;
 }
+
+.spinner { width: 50px; height: 50px; border-width: 4px; margin: 0 auto 20px; }
+.spinner-historial,
+.spinner-search { width: 40px; height: 40px; margin: 0 auto 16px; }
 
 /* Botón de historial */
 .btn-historial {
     background: var(--nexo-primary-light);
     color: var(--nexo-primary);
     border: none;
-    padding: 6px 12px;
+    padding: 8px 12px;
+    min-height: 44px;
     border-radius: var(--nexo-radius-sm);
     font-size: 12px;
+    font-weight: 600;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     gap: 4px;
     transition: var(--nexo-transition-fast);
-    margin-left: 8px;
 }
 
-.btn-historial:hover {
+.btn-historial:hover,
+.btn-historial:focus-visible {
     background: var(--nexo-primary);
     color: var(--nexo-white);
-}
-
-.btn-historial-small {
-    padding: 4px 8px;
-    font-size: 11px;
+    outline: none;
 }
 
 /* Badge de historial en resultados de búsqueda */
@@ -299,7 +335,7 @@
 /* Estadísticas del historial */
 .historial-stats {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 12px;
     margin-bottom: 20px;
 }
@@ -313,12 +349,12 @@
 }
 
 .historial-stat-card.tendencia-up {
-    background: rgba(0, 212, 170, 0.1);
+    background: var(--nexo-accent-soft);
     border-color: var(--nexo-success);
 }
 
 .historial-stat-card.tendencia-down {
-    background: rgba(255, 77, 77, 0.1);
+    background: var(--nexo-error-soft);
     border-color: var(--nexo-error);
 }
 
@@ -327,17 +363,18 @@
     font-weight: 700;
     color: var(--nexo-secondary);
     margin-bottom: 4px;
+    font-variant-numeric: tabular-nums;
 }
 
 .historial-stat-card .stat-label {
-    font-size: 11px;
-    color: var(--nexo-gray-500);
+    font-size: 12px;
+    color: var(--nexo-gray-700);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
 .historial-stat-card.tendencia-up .stat-value {
-    color: var(--nexo-success);
+    color: var(--nexo-accent-dark);
 }
 
 .historial-stat-card.tendencia-down .stat-value {
@@ -349,7 +386,7 @@
     display: inline-block;
     padding: 3px 8px;
     border-radius: 12px;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
 }
@@ -360,13 +397,13 @@
 }
 
 .tipo-cambio-badge.tipo-promocion {
-    background: rgba(255, 176, 32, 0.15);
-    color: #996B00;
+    background: var(--nexo-warning-soft);
+    color: var(--nexo-warning-dark);
 }
 
 .tipo-cambio-badge.tipo-ajuste {
-    background: rgba(0, 212, 170, 0.15);
-    color: #008866;
+    background: var(--nexo-accent-soft);
+    color: var(--nexo-accent-dark);
 }
 
 .tipo-cambio-badge.tipo-importacion {
@@ -376,8 +413,8 @@
 
 /* Motivo del cambio */
 .motivo-cambio {
-    font-size: 11px;
-    color: var(--nexo-gray-500);
+    font-size: 12px;
+    color: var(--nexo-gray-700);
     font-style: italic;
     margin-top: 4px;
     display: block;
@@ -453,8 +490,8 @@
 .timeline-fecha small {
     display: block;
     font-weight: 400;
-    color: var(--nexo-gray-500);
-    font-size: 11px;
+    color: var(--nexo-gray-700);
+    font-size: 12px;
     margin-top: 2px;
 }
 
@@ -470,8 +507,8 @@
 }
 
 .timeline-precio-box .label {
-    font-size: 10px;
-    color: var(--nexo-gray-500);
+    font-size: 12px;
+    color: var(--nexo-gray-700);
     text-transform: uppercase;
     margin-bottom: 2px;
 }
@@ -479,6 +516,7 @@
 .timeline-precio-box .value {
     font-size: 16px;
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
 }
 
 .timeline-precio-box .value.anterior {
@@ -492,7 +530,7 @@
 
 .timeline-flecha {
     font-size: 20px;
-    color: var(--nexo-gray-400);
+    color: var(--nexo-gray-500);
 }
 
 .timeline-variacion {
@@ -503,12 +541,12 @@
 }
 
 .timeline-variacion.positivo {
-    background: rgba(0, 212, 170, 0.1);
-    color: var(--nexo-success);
+    background: var(--nexo-accent-soft);
+    color: var(--nexo-accent-dark);
 }
 
 .timeline-variacion.negativo {
-    background: rgba(255, 77, 77, 0.1);
+    background: var(--nexo-error-soft);
     color: var(--nexo-error);
 }
 
@@ -529,6 +567,7 @@
 
 .historial-view-toggle button {
     padding: 8px 16px;
+    min-height: 44px;
     border: 1px solid var(--nexo-gray-300);
     background: var(--nexo-white);
     border-radius: var(--nexo-radius-sm);
@@ -538,45 +577,17 @@
     transition: var(--nexo-transition-fast);
 }
 
-.historial-view-toggle button:hover {
+.historial-view-toggle button:hover,
+.historial-view-toggle button:focus-visible {
     border-color: var(--nexo-primary);
     color: var(--nexo-primary);
+    outline: none;
 }
 
 .historial-view-toggle button.active {
     background: var(--nexo-primary);
     color: var(--nexo-white);
     border-color: var(--nexo-primary);
-}
-
-/* ========== PANEL HISTORIAL RECIENTE ========== */
-.btn-historial-header {
-    background: rgba(255, 255, 255, 0.15);
-    color: var(--nexo-white);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    padding: 10px 18px;
-    border-radius: var(--nexo-radius-md);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    transition: var(--nexo-transition-fast);
-}
-
-.btn-historial-header:hover {
-    background: rgba(255, 255, 255, 0.25);
-    border-color: var(--nexo-accent);
-}
-
-.btn-historial-header .badge-count {
-    background: var(--nexo-accent);
-    color: var(--nexo-secondary);
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 700;
 }
 
 /* ========== MODAL AUDITORÍA DE PRECIOS ========== */
@@ -621,7 +632,7 @@
 }
 
 .modal-auditoria-header {
-    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
+    background: var(--nexo-secondary);
     color: var(--nexo-white);
     padding: 18px 24px;
     display: flex;
@@ -632,7 +643,7 @@
 
 .modal-auditoria-header h3 {
     margin: 0;
-    font-size: 17px;
+    font-size: 15px;
     font-weight: 600;
     display: flex;
     align-items: center;
@@ -653,6 +664,7 @@
 
 .auditoria-tab-btn {
     padding: 12px 20px;
+    min-height: 44px;
     border: none;
     background: transparent;
     font-size: 13px;
@@ -694,52 +706,28 @@
     margin-bottom: 16px;
 }
 
-.auditoria-filtros .filtro-group {
+/* Grupo label+control compartido por filtros de auditoría y filtros avanzados */
+.filtro-group {
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-.auditoria-filtros label {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--nexo-gray-700);
-    text-transform: uppercase;
-}
-
-.auditoria-filtros select,
-.auditoria-filtros input {
-    padding: 8px 10px;
-    border: 1px solid var(--nexo-gray-300);
-    border-radius: var(--nexo-radius-sm);
-    font-size: 13px;
-    background: var(--nexo-white);
-    color: var(--nexo-secondary);
-}
-
-.auditoria-filtros select:focus,
-.auditoria-filtros input:focus {
-    outline: none;
-    border-color: var(--nexo-primary);
-}
-
-.btn-auditoria-aplicar {
-    padding: 9px 18px;
-    background: var(--nexo-primary);
-    color: var(--nexo-white);
-    border: none;
-    border-radius: var(--nexo-radius-sm);
+.filtro-group .form-label {
     font-size: 12px;
     font-weight: 600;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    transition: var(--nexo-transition-fast);
+    color: var(--nexo-gray-700);
+    margin-bottom: 0;
 }
 
-.btn-auditoria-aplicar:hover {
-    background: var(--nexo-primary-dark);
+.filtro-group .form-control,
+.filtro-group .form-select {
+    min-height: 38px;
+}
+
+.filtro-group-ancho {
+    flex: 1;
+    min-width: 160px;
 }
 
 .kpi-cards-grid {
@@ -758,21 +746,22 @@
 }
 
 .kpi-card-aud .valor {
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 700;
     color: var(--nexo-secondary);
+    font-variant-numeric: tabular-nums;
 }
 
 .kpi-card-aud .etiqueta {
-    font-size: 11px;
-    color: var(--nexo-gray-500);
+    font-size: 12px;
+    color: var(--nexo-gray-700);
     text-transform: uppercase;
     margin-top: 4px;
 }
 
 .kpi-card-aud.alerta {
     border-color: rgba(255, 77, 77, 0.4);
-    background: rgba(255, 77, 77, 0.06);
+    background: var(--nexo-error-soft);
 }
 
 .kpi-card-aud.alerta .valor {
@@ -783,6 +772,7 @@
     width: 100%;
     border-collapse: collapse;
     font-size: 12px;
+    font-variant-numeric: tabular-nums;
 }
 
 .tabla-auditoria th {
@@ -790,7 +780,7 @@
     color: var(--nexo-white);
     padding: 10px 12px;
     text-align: left;
-    font-size: 11px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     white-space: nowrap;
@@ -817,9 +807,10 @@
 }
 
 .alerta-seccion h4 {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
-    color: var(--nexo-secondary);
+    text-transform: uppercase;
+    color: var(--nexo-gray-700);
     margin: 0 0 10px 0;
     display: flex;
     align-items: center;
@@ -827,7 +818,7 @@
 }
 
 .alerta-card {
-    background: rgba(255, 176, 32, 0.08);
+    background: var(--nexo-warning-soft);
     border: 1px solid rgba(255, 176, 32, 0.35);
     border-left: 4px solid var(--nexo-warning);
     border-radius: var(--nexo-radius-md);
@@ -848,7 +839,7 @@
 }
 
 .alerta-card.critica {
-    background: rgba(255, 77, 77, 0.06);
+    background: var(--nexo-error-soft);
     border-color: rgba(255, 77, 77, 0.35);
     border-left-color: var(--nexo-error);
 }
@@ -859,11 +850,12 @@
     align-items: center;
     margin-top: 14px;
     font-size: 12px;
-    color: var(--nexo-gray-500);
+    color: var(--nexo-gray-700);
 }
 
 .paginacion-auditoria button {
     padding: 6px 14px;
+    min-height: 44px;
     border: 1px solid var(--nexo-gray-300);
     background: var(--nexo-white);
     border-radius: var(--nexo-radius-sm);
@@ -886,23 +878,6 @@
 /* ========== FILTROS AVANZADOS DE BÚSQUEDA ========== */
 .btn-toggle-filtros {
     margin-top: 10px;
-    padding: 8px 14px;
-    background: var(--nexo-gray-100);
-    border: 1px solid var(--nexo-gray-300);
-    border-radius: var(--nexo-radius-md);
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--nexo-gray-700);
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    transition: var(--nexo-transition-fast);
-}
-
-.btn-toggle-filtros:hover {
-    border-color: var(--nexo-primary);
-    color: var(--nexo-primary);
 }
 
 .btn-toggle-filtros .badge-filtros {
@@ -910,7 +885,7 @@
     color: var(--nexo-white);
     border-radius: 10px;
     padding: 1px 7px;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 700;
     display: none;
 }
@@ -934,37 +909,8 @@
 
 .filtros-avanzados .filtros-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 10px;
-}
-
-.filtros-avanzados .filtro-group {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.filtros-avanzados label {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--nexo-gray-700);
-    text-transform: uppercase;
-}
-
-.filtros-avanzados select,
-.filtros-avanzados input {
-    padding: 8px 10px;
-    border: 1px solid var(--nexo-gray-300);
-    border-radius: var(--nexo-radius-sm);
-    font-size: 13px;
-    background: var(--nexo-white);
-    width: 100%;
-}
-
-.filtros-avanzados select:focus,
-.filtros-avanzados input:focus {
-    outline: none;
-    border-color: var(--nexo-primary);
 }
 
 .filtros-avanzados .filtros-actions {
@@ -973,30 +919,8 @@
     margin-top: 12px;
 }
 
-.filtros-avanzados .filtros-actions button {
+.filtros-avanzados .filtros-actions .btn {
     flex: 1;
-    padding: 9px;
-    border-radius: var(--nexo-radius-sm);
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    border: none;
-    transition: var(--nexo-transition-fast);
-}
-
-.btn-aplicar-filtros {
-    background: var(--nexo-primary);
-    color: var(--nexo-white);
-}
-
-.btn-aplicar-filtros:hover {
-    background: var(--nexo-primary-dark);
-}
-
-.btn-limpiar-filtros {
-    background: var(--nexo-white);
-    color: var(--nexo-gray-700);
-    border: 1px solid var(--nexo-gray-300) !important;
 }
 
 .historial-reciente-item {
@@ -1030,8 +954,8 @@
 }
 
 .historial-reciente-item .fecha-badge {
-    font-size: 11px;
-    color: var(--nexo-gray-500);
+    font-size: 12px;
+    color: var(--nexo-gray-700);
     background: var(--nexo-white);
     padding: 3px 8px;
     border-radius: 12px;
@@ -1057,20 +981,24 @@
     font-size: 15px;
 }
 
-.historial-reciente-item .variacion-badge {
+.historial-reciente-item .precios-row .flecha {
+    color: var(--nexo-gray-700);
+}
+
+.variacion-badge {
     padding: 3px 8px;
     border-radius: 12px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
 }
 
-.historial-reciente-item .variacion-badge.positivo {
-    background: rgba(0, 212, 170, 0.15);
-    color: var(--nexo-success);
+.variacion-badge.positivo {
+    background: var(--nexo-accent-soft);
+    color: var(--nexo-accent-dark);
 }
 
-.historial-reciente-item .variacion-badge.negativo {
-    background: rgba(255, 77, 77, 0.15);
+.variacion-badge.negativo {
+    background: var(--nexo-error-soft);
     color: var(--nexo-error);
 }
 
@@ -1078,10 +1006,17 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 10px;
     padding-top: 10px;
     border-top: 1px dashed var(--nexo-gray-300);
-    font-size: 11px;
-    color: var(--nexo-gray-500);
+    font-size: 12px;
+    color: var(--nexo-gray-700);
+}
+
+.historial-reciente-item .item-footer.item-footer-secundario {
+    border-top: none;
+    padding-top: 4px;
 }
 
 .historial-reciente-item .usuario-info {
@@ -1094,29 +1029,47 @@
     color: var(--nexo-primary);
 }
 
-/* Estado "sin resultados" en búsqueda */
+/* ========== ESTADO VACÍO / ERROR (un solo patrón para las tres clases) ========== */
+.empty-list,
+.historial-empty,
 .historial-no-results {
     text-align: center;
-    padding: 30px 20px;
-    color: var(--nexo-gray-500);
+    padding: 40px 20px;
+    color: var(--nexo-gray-700);
 }
 
+.empty-list i,
+.historial-empty i,
 .historial-no-results i {
     font-size: 40px;
     color: var(--nexo-gray-300);
-    margin-bottom: 10px;
+    margin-bottom: 12px;
     display: block;
 }
 
+.empty-list h4,
+.historial-empty h4,
 .historial-no-results h4 {
     margin: 0 0 6px 0;
-    font-size: 14px;
-    color: var(--nexo-gray-600);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--nexo-gray-700);
 }
 
+.empty-list p,
+.historial-empty p,
 .historial-no-results p {
     margin: 0;
-    font-size: 12px;
+    font-size: 13px;
+}
+
+.estado-error i,
+.estado-error h4 {
+    color: var(--nexo-error);
+}
+
+.estado-ok i {
+    color: var(--nexo-accent);
 }
 
 .historial-no-results .search-term {
@@ -1124,46 +1077,17 @@
     font-weight: 600;
 }
 
-@media (max-width: 600px) {
-    .historial-stats {
-        grid-template-columns: repeat(2, 1fr);
-    }
+.historial-footer-nota {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--nexo-gray-700);
 }
 
-.page-header-nexo {
-    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
-    padding: 24px 0;
-    margin-bottom: 24px;
-    border-bottom: 3px solid var(--nexo-accent);
-}
-
-.page-header-nexo h1 {
+.module-header-status .badge-sucursal {
+    background: rgba(255, 255, 255, 0.2);
     color: var(--nexo-white);
-    font-size: 28px;
-    font-weight: 700;
-    margin: 0 0 8px 0;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.page-header-nexo h1 i {
-    color: var(--nexo-accent);
-}
-
-.page-header-nexo .subtitle {
-    color: var(--nexo-gray-300);
-    font-size: 14px;
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.page-header-nexo .subtitle .badge-sucursal {
-    background: var(--nexo-primary);
-    color: var(--nexo-white);
-    padding: 4px 12px;
+    padding: 3px 10px;
     border-radius: 20px;
     font-weight: 600;
     font-size: 12px;
@@ -1171,23 +1095,26 @@
 
 /* ========== GRID PRINCIPAL ========== */
 .quick-edit-container {
-    padding: 0 20px 20px;
     display: grid;
-    grid-template-columns: 1fr 520px;
-    gap: 24px;
+    grid-template-columns: minmax(0, 1fr) minmax(380px, 440px);
+    gap: 20px;
     min-height: 600px;
     max-height: calc(100vh - 200px);
 }
 
 /* ========== PANEL DE BÚSQUEDA ========== */
-.search-panel {
+.search-panel,
+.edit-panel {
     background: var(--nexo-white);
     border-radius: var(--nexo-radius-lg);
-    padding: 24px;
-    box-shadow: var(--nexo-shadow-md);
+    padding: 20px;
+    border: 1px solid var(--nexo-gray-300);
+    min-width: 0;
+}
+
+.search-panel {
     overflow-y: auto;
     max-height: calc(100vh - 200px);
-    border: 1px solid var(--nexo-gray-300);
 }
 
 .search-box {
@@ -1200,18 +1127,8 @@
     z-index: 10;
 }
 
-.search-box h3 {
-    margin: 0 0 12px 0;
-    color: var(--nexo-secondary);
-    font-size: 16px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.search-box h3 i {
-    color: var(--nexo-primary);
+.search-box .panel-title {
+    margin-bottom: 12px;
 }
 
 .search-input {
@@ -1265,14 +1182,14 @@
     gap: 4px;
     padding: 4px 10px;
     border-radius: 20px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     margin-right: 6px;
 }
 
 .info-badge-sucursales {
-    background: rgba(255, 176, 32, 0.15);
-    color: #996B00;
+    background: var(--nexo-warning-soft);
+    color: var(--nexo-warning-dark);
     border: 1px solid rgba(255, 176, 32, 0.3);
 }
 
@@ -1283,15 +1200,10 @@
 }
 
 .info-badge-alerta {
-    background: rgba(255, 77, 77, 0.1);
+    background: var(--nexo-error-soft);
     color: var(--nexo-error);
     border: 1px solid rgba(255, 77, 77, 0.2);
-    animation: pulse-alert 2s infinite;
-}
-
-@keyframes pulse-alert {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
+    animation: pulse 2s infinite;
 }
 
 .product-info-line {
@@ -1309,7 +1221,7 @@
 
 .product-meta {
     font-size: 12px;
-    color: var(--nexo-gray-500);
+    color: var(--nexo-gray-700);
 }
 
 /* ===== PILLS DE ATRIBUTOS DEL PRODUCTO ===== */
@@ -1319,7 +1231,7 @@
     gap: 3px;
     padding: 2px 8px;
     border-radius: 10px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     white-space: nowrap;
 }
@@ -1331,15 +1243,15 @@
 }
 
 .attr-color {
-    background: rgba(0, 212, 170, 0.1);
-    color: #00776B;
+    background: var(--nexo-accent-soft);
+    color: var(--nexo-accent-dark);
     border: 1px solid rgba(0, 212, 170, 0.25);
 }
 
 .attr-genero {
-    background: rgba(138, 43, 226, 0.08);
-    color: #6b1fa8;
-    border: 1px solid rgba(138, 43, 226, 0.2);
+    background: rgba(26, 26, 46, 0.06);
+    color: var(--nexo-secondary);
+    border: 1px solid rgba(26, 26, 46, 0.18);
 }
 
 .attr-otro {
@@ -1349,8 +1261,8 @@
 }
 
 .attr-temporada {
-    background: rgba(255, 176, 32, 0.1);
-    color: #8a5a00;
+    background: var(--nexo-warning-soft);
+    color: var(--nexo-warning-dark);
     border: 1px solid rgba(255, 176, 32, 0.25);
 }
 
@@ -1362,51 +1274,20 @@
 
 /* ========== PANEL DE EDICIÓN ========== */
 .edit-panel {
-    background: var(--nexo-white);
-    border-radius: var(--nexo-radius-lg);
-    padding: 24px;
-    box-shadow: var(--nexo-shadow-md);
     display: flex;
     flex-direction: column;
     max-height: calc(100vh - 200px);
-    border: 1px solid var(--nexo-gray-300);
 }
 
 .edit-list-header {
-    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
-    color: var(--nexo-white);
-    padding: 18px 20px;
-    border-radius: var(--nexo-radius-md);
-    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--nexo-gray-100);
+    margin-bottom: 16px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-}
-
-.edit-list-header h3 {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
+    flex-wrap: wrap;
     gap: 8px;
-    color: var(--nexo-white);
-}
-
-.edit-list-header .btn-expand-all {
-    background: rgba(255,255,255,0.2);
-    color: var(--nexo-white);
-    border: 1px solid rgba(255,255,255,0.3);
-    padding: 8px 14px;
-    border-radius: var(--nexo-radius-sm);
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 500;
-    transition: var(--nexo-transition-fast);
-}
-
-.edit-list-header .btn-expand-all:hover {
-    background: rgba(255,255,255,0.3);
 }
 
 .edit-list-body {
@@ -1461,11 +1342,29 @@
 .collapsed-info {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
+    gap: 12px;
 }
 
 .collapsed-left {
     flex: 1;
+    min-width: 0;
+}
+
+.collapsed-left .collapsed-nombre {
+    display: block;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.edit-item-meta {
+    font-size: 12px;
+    color: var(--nexo-gray-700);
+    margin-top: 4px;
 }
 
 .collapsed-prices {
@@ -1479,15 +1378,15 @@
 }
 
 .price-box-small .label {
-    font-size: 10px;
-    color: var(--nexo-gray-500);
-    text-transform: uppercase;
+    font-size: 12px;
+    color: var(--nexo-gray-700);
     font-weight: 500;
 }
 
 .price-box-small .value {
     font-size: 15px;
     font-weight: 700;
+    font-variant-numeric: tabular-nums;
 }
 
 .expand-icon {
@@ -1501,37 +1400,55 @@
     transform: rotate(180deg);
 }
 
-/* ========== TOTALES ========== */
+/* ========== TOTALES (KPI cards del estándar) ========== */
 .totales-section {
-    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
-    color: var(--nexo-white);
-    padding: 20px;
-    border-radius: var(--nexo-radius-md);
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 }
 
 .totales-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-    margin-bottom: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+    margin-bottom: 10px;
 }
 
-.total-item {
-    text-align: center;
+.kpi-card {
+    border-radius: 12px;
+    border: none;
+    border-left: 4px solid #299cdb;
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    overflow: hidden;
 }
+.kpi-card .card-body { padding: 10px 12px; text-align: center; }
+.kpi-card.kpi-neutro { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-left-color: #405189; }
+.kpi-card.kpi-positivo { background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left-color: #0ab39c; }
+.kpi-card.kpi-negativo { background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); border-left-color: #f06548; }
 
 .total-label {
-    font-size: 11px;
-    opacity: 0.7;
-    text-transform: uppercase;
-    margin-bottom: 4px;
+    font-size: 12px;
+    color: var(--nexo-gray-700);
+    margin-bottom: 2px;
     font-weight: 500;
 }
 
 .total-value {
     font-size: 20px;
     font-weight: 700;
+    color: #405189;
+    font-variant-numeric: tabular-nums;
+}
+.kpi-positivo .total-value { color: var(--nexo-accent-dark); }
+.kpi-negativo .total-value { color: var(--nexo-error-dark); }
+
+.totales-resumen {
+    text-align: center;
+    font-size: 13px;
+    color: var(--nexo-gray-700);
+}
+.totales-resumen .totales-aviso {
+    font-size: 12px;
+    margin-top: 4px;
+    display: inline-block;
 }
 
 /* ========== CAMPOS DE EDICIÓN ========== */
@@ -1542,6 +1459,12 @@
     margin-bottom: 14px;
     padding-bottom: 12px;
     border-bottom: 1px solid var(--nexo-gray-300);
+}
+
+.edit-item-acciones {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .edit-item-title {
@@ -1555,21 +1478,35 @@
     color: var(--nexo-white);
     border: none;
     padding: 6px 12px;
+    min-height: 44px;
     border-radius: var(--nexo-radius-sm);
     cursor: pointer;
-    font-size: 11px;
-    font-weight: 500;
+    font-size: 12px;
+    font-weight: 600;
     transition: var(--nexo-transition-fast);
 }
 
-.btn-remove:hover {
-    background: #E53E3E;
+.btn-remove:hover,
+.btn-remove:focus-visible {
+    background: var(--nexo-error-dark);
+    outline: none;
 }
 
 .edit-fields {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 12px;
+}
+
+/* input + boton de confirmar en una linea (antes iba inline en el JS) */
+.field-inline {
+    display: flex;
+    gap: 6px;
+}
+
+.field-inline .field-input {
+    flex: 1;
+    min-width: 0;
 }
 
 .field-group {
@@ -1578,11 +1515,10 @@
 }
 
 .field-label {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
-    color: var(--nexo-gray-500);
+    color: var(--nexo-gray-700);
     margin-bottom: 6px;
-    text-transform: uppercase;
 }
 
 .field-input {
@@ -1602,47 +1538,35 @@
     box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
 }
 
-.field-input.changed {
-    border-color: var(--nexo-accent);
-    background: rgba(0, 212, 170, 0.1);
-}
-
 /* ========== BOTONES RÁPIDOS ========== */
 .quick-actions {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
     gap: 8px;
     margin-top: 12px;
 }
 
+/* Mismo aspecto y mismos valores que los atajos del modal de precio */
 .btn-quick {
     padding: 8px 12px;
-    border: none;
-    border-radius: var(--nexo-radius-sm);
-    font-size: 12px;
+    min-height: 44px;
+    border: 2px solid var(--nexo-gray-300);
+    background: var(--nexo-white);
+    border-radius: var(--nexo-radius-md);
+    font-size: 13px;
     font-weight: 600;
+    color: var(--nexo-gray-700);
     cursor: pointer;
     transition: var(--nexo-transition-fast);
 }
 
-.btn-quick:hover {
-    transform: scale(1.05);
-}
-
-.btn-quick-10 { 
-    background: rgba(255, 176, 32, 0.15); 
-    color: #996B00;
-    border: 1px solid rgba(255, 176, 32, 0.3);
-}
-.btn-quick-20 { 
-    background: rgba(255, 140, 0, 0.15); 
-    color: #CC6600;
-    border: 1px solid rgba(255, 140, 0, 0.3);
-}
-.btn-quick-30 { 
-    background: rgba(255, 77, 77, 0.15); 
-    color: #CC3333;
-    border: 1px solid rgba(255, 77, 77, 0.3);
+.btn-quick:hover,
+.btn-quick:focus-visible,
+.btn-quick.active {
+    border-color: var(--nexo-primary);
+    color: var(--nexo-primary);
+    background: var(--nexo-primary-soft);
+    outline: none;
 }
 
 /* ========== PREVIEW DE RESULTADOS ========== */
@@ -1669,7 +1593,13 @@
     font-weight: 600;
 }
 
-.result-good { color: var(--nexo-accent); }
+.result-value-destacado {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--nexo-secondary);
+}
+
+.result-good { color: var(--nexo-accent-dark); }
 .result-warning { color: var(--nexo-warning); }
 .result-danger { color: var(--nexo-error); }
 
@@ -1716,7 +1646,7 @@
 
 .btn-apply-all {
     flex: 1;
-    background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+    background: var(--nexo-primary);
     color: var(--nexo-white);
     border: none;
     padding: 16px;
@@ -1731,16 +1661,15 @@
     gap: 8px;
 }
 
-.btn-apply-all:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 102, 255, 0.4);
+.btn-apply-all:hover,
+.btn-apply-all:focus-visible {
+    background: var(--nexo-primary-dark);
+    outline: none;
 }
 
 .btn-apply-all:disabled {
     background: var(--nexo-gray-300);
     cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
 }
 
 .btn-clear-list {
@@ -1757,29 +1686,6 @@
 .btn-clear-list:hover {
     background: var(--nexo-gray-300);
     border-color: var(--nexo-gray-500);
-}
-
-/* ========== ESTADO VACÍO ========== */
-.empty-list {
-    text-align: center;
-    padding: 50px 20px;
-    color: var(--nexo-gray-500);
-}
-
-.empty-list i {
-    font-size: 48px;
-    margin-bottom: 16px;
-    color: var(--nexo-gray-300);
-}
-
-.empty-list h4 {
-    color: var(--nexo-gray-700);
-    margin-bottom: 8px;
-    font-weight: 600;
-}
-
-.empty-list p {
-    font-size: 13px;
 }
 
 /* ========== LOADING OVERLAY ========== */
@@ -1804,16 +1710,6 @@
     box-shadow: var(--nexo-shadow-lg);
 }
 
-.spinner {
-    border: 4px solid var(--nexo-gray-100);
-    border-top: 4px solid var(--nexo-primary);
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 20px;
-}
-
 .loading-content h4 {
     color: var(--nexo-secondary);
     margin-bottom: 8px;
@@ -1835,6 +1731,8 @@
     color: var(--nexo-white);
     border: none;
     padding: 10px 12px;
+    min-height: 44px;
+    min-width: 44px;
     border-radius: var(--nexo-radius-sm);
     cursor: pointer;
     font-size: 14px;
@@ -1845,9 +1743,10 @@
     justify-content: center;
 }
 
-.btn-confirm:hover {
-    background: #00B894;
-    transform: scale(1.05);
+.btn-confirm:hover,
+.btn-confirm:focus-visible {
+    background: var(--nexo-accent-dark);
+    outline: none;
 }
 
 /* ========== INDICADOR DE SINCRONIZACIÓN ========== */
@@ -1859,9 +1758,17 @@
     background: rgba(0, 212, 170, 0.1);
     border: 1px solid rgba(0, 212, 170, 0.3);
     border-radius: 20px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
-    color: #00997A;
+    color: var(--nexo-accent-dark);
+}
+
+/* Dentro de la cabecera de modulo el indicador va sobre el gradiente */
+.module-header-status .sync-indicator {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.35);
+    color: var(--nexo-white);
+    padding: 3px 10px;
 }
 
 .sync-indicator i {
@@ -1884,12 +1791,6 @@
 }
 
 .search-loading .spinner-search {
-    width: 40px;
-    height: 40px;
-    border: 3px solid var(--nexo-gray-200);
-    border-top: 3px solid var(--nexo-primary);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
     margin-bottom: 16px;
 }
 
@@ -1916,9 +1817,7 @@
     transform: translateY(-50%);
     width: 20px;
     height: 20px;
-    border: 2px solid var(--nexo-gray-200);
-    border-top: 2px solid var(--nexo-primary);
-    border-radius: 50%;
+    border-width: 2px;
     animation: spin 0.8s linear infinite;
     display: none;
 }
@@ -1932,24 +1831,52 @@
 }
 
 /* ========== RESPONSIVE ========== */
+@media (max-width: 1400px) {
+    .quick-edit-container {
+        grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
+    }
+}
+
 @media (max-width: 1200px) {
     .quick-edit-container {
         grid-template-columns: 1fr;
+        max-height: none;
     }
-    
+
+    /* En una columna ningun panel conserva scroll propio: se scrollea la pagina */
+    .search-panel,
     .edit-panel {
+        max-height: none;
+        overflow: visible;
+    }
+
+    .search-box {
+        position: static;
+    }
+
+    .edit-list-body {
         max-height: none;
     }
 }
 
 @media (max-width: 768px) {
-    .edicion-rapida-form .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
-    .edicion-rapida-actions { flex-direction: column; gap: 0.5rem; }
-    .edicion-rapida-actions .btn { width: 100%; }
-}
-@media (max-width: 576px) {
-    .edicion-rapida-table { font-size: 0.75rem; }
-    .edicion-rapida-table input { min-height: 44px; font-size: 16px !important; width: 80px !important; }
+    .collapsed-info {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .collapsed-prices {
+        justify-content: space-between;
+    }
+
+    .action-buttons {
+        flex-direction: column;
+    }
+
+    .totales-grid {
+        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    }
 }
 
 /* ========== MODAL PRECIO RÁPIDO (tocar producto → escribir precio → Enter) ========== */
@@ -1988,13 +1915,13 @@
 }
 
 .modal-precio-header {
-    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2A2A4E 100%);
+    background: var(--nexo-secondary);
     color: var(--nexo-white);
     padding: 16px 20px;
 }
 
 .modal-precio-header .mp-nombre {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     margin: 0;
     line-height: 1.3;
@@ -2029,9 +1956,7 @@
 .mp-precio-label {
     font-size: 12px;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--nexo-gray-500);
+    color: var(--nexo-gray-700);
     margin-bottom: 6px;
     display: block;
 }
@@ -2089,6 +2014,7 @@
 .mp-btn-quick {
     flex: 1;
     padding: 9px 4px;
+    min-height: 44px;
     border: 2px solid var(--nexo-gray-300);
     background: var(--nexo-white);
     border-radius: var(--nexo-radius-md);
@@ -2099,10 +2025,13 @@
     transition: var(--nexo-transition-fast);
 }
 
-.mp-btn-quick:hover, .mp-btn-quick.active {
-    border-color: var(--nexo-error);
-    color: var(--nexo-error);
-    background: #FFF5F5;
+.mp-btn-quick:hover,
+.mp-btn-quick:focus-visible,
+.mp-btn-quick.active {
+    border-color: var(--nexo-primary);
+    color: var(--nexo-primary);
+    background: var(--nexo-primary-soft);
+    outline: none;
 }
 
 .mp-preview {
@@ -2122,11 +2051,9 @@
 }
 
 .mp-preview .mp-prev-label {
-    font-size: 10px;
-    text-transform: uppercase;
-    color: var(--nexo-gray-500);
+    font-size: 12px;
+    color: var(--nexo-gray-700);
     font-weight: 600;
-    letter-spacing: 0.5px;
 }
 
 .mp-preview .mp-prev-value {
@@ -2134,14 +2061,15 @@
     font-weight: 700;
     color: var(--nexo-secondary);
     margin-top: 2px;
+    font-variant-numeric: tabular-nums;
 }
 
 .mp-aviso-sync {
     margin-top: 12px;
     font-size: 12px;
-    color: #854d0e;
-    background: #fef9c3;
-    border: 1px solid #fde68a;
+    color: var(--nexo-warning-dark);
+    background: var(--nexo-warning-soft);
+    border: 1px solid rgba(255, 176, 32, 0.4);
     border-radius: var(--nexo-radius-md);
     padding: 8px 12px;
     display: none;
@@ -2156,6 +2084,7 @@
 .mp-btn-confirmar {
     flex: 2;
     padding: 12px;
+    min-height: 48px;
     background: var(--nexo-primary);
     color: var(--nexo-white);
     border: none;
@@ -2166,13 +2095,16 @@
     transition: var(--nexo-transition-fast);
 }
 
-.mp-btn-confirmar:hover {
+.mp-btn-confirmar:hover,
+.mp-btn-confirmar:focus-visible {
     background: var(--nexo-primary-dark);
+    outline: none;
 }
 
 .mp-btn-cancelar {
     flex: 1;
     padding: 12px;
+    min-height: 48px;
     background: var(--nexo-white);
     color: var(--nexo-gray-700);
     border: 2px solid var(--nexo-gray-300);
@@ -2183,14 +2115,16 @@
     transition: var(--nexo-transition-fast);
 }
 
-.mp-btn-cancelar:hover {
+.mp-btn-cancelar:hover,
+.mp-btn-cancelar:focus-visible {
     border-color: var(--nexo-gray-500);
+    outline: none;
 }
 
 .mp-hint {
     text-align: center;
-    font-size: 11px;
-    color: var(--nexo-gray-500);
+    font-size: 12px;
+    color: var(--nexo-gray-700);
     margin-top: 10px;
 }
 
@@ -2199,7 +2133,27 @@
     border: 1px solid var(--nexo-gray-300);
     border-radius: 4px;
     padding: 1px 5px;
-    font-size: 10px;
+    font-size: 12px;
+}
+
+/* Responsive del modal de precio rapido: va DESPUES de sus reglas base */
+@media (max-width: 576px) {
+    .mp-fila-secundaria {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .mp-quick-btns {
+        flex-wrap: wrap;
+    }
+
+    .mp-desc-group {
+        width: 100%;
+    }
+
+    .mp-preview {
+        flex-wrap: wrap;
+    }
 }
 
 /* Flash del ítem recién agregado/actualizado en la lista de edición */
@@ -2223,174 +2177,220 @@
 .result-en-lista .precio-cambiado {
     color: var(--nexo-error);
 }
+
+/* Utilidades de texto: antes se repetian como style= en el JS */
+.text-nexo-error { color: var(--nexo-error); }
+.text-nexo-primary { color: var(--nexo-primary); }
+.text-nexo-accent { color: var(--nexo-accent-dark); }
+.text-nexo-muted { color: var(--nexo-gray-700); }
+.text-nexo-warning { color: var(--nexo-warning); }
+
+.badges-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.registro-auditoria-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 10px;
+}
+
+.historial-detalle-item {
+    margin-right: 16px;
+}
+
+.historial-detalle-sucursal {
+    color: var(--nexo-accent-dark);
+    font-size: 12px;
+}
+
+.tabla-auditoria .celda-usuario {
+    font-weight: 600;
+}
+
+.tabla-auditoria .celda-nowrap {
+    white-space: nowrap;
+}
+
+.tabla-auditoria .dato-fuerte {
+    font-weight: 700;
+}
 </style>
 
 <!-- El main-content ya está incluido en layout/menu.html -->
 <div class="page-content gestion-precios-page">
-    <!-- Header de la página -->
-    <div class="page-header-nexo">
-        <div class="container-fluid">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                <div>
-                    <h1>
-                        <i class="ri-price-tag-3-line"></i> Gestión de Precios
-                    </h1>
-                    <p class="subtitle">
-                        Edición rápida con navegación por Tab ⚡
-                        {% if alias_sucursal %}
-                        <span class="badge-sucursal">
-                            <i class="ri-store-2-line"></i> {{ alias_sucursal }}
-                        </span>
-                        {% endif %}
-                        <span class="sync-indicator" title="Los cambios se sincronizan automáticamente a otras sucursales">
-                            <i class="ri-refresh-line"></i> Sincronización activa
-                        </span>
-                    </p>
-                </div>
-                <button class="btn-historial-header" onclick="window.location.href='/app/gestion-precios/revisar-pendientes/?tab=alertas'"
-                        title="Abrir el hub de precios: cambios, historial, auditoría y alertas en un solo lugar">
-                    <i class="ri-history-line"></i>
-                    Historial / Auditoría de Precios
-                    <span class="badge-count" id="historialCount" title="Ediciones de hoy">0</span>
-                </button>
-            </div>
-        </div>
-    </div>
-
     <div class="container-fluid">
-        <div class="quick-edit-container">
-            <!-- Panel Izquierdo: Búsqueda -->
-            <div class="search-panel">
-                <div class="search-box">
-                    <h3>
-                        <i class="ri-search-line"></i> Buscar Productos
-                    </h3>
-                    <div class="search-input-wrapper" id="searchInputWrapper">
-                        <input type="text" 
-                               id="quickSearch" 
-                               class="search-input"
-                               placeholder="Escribe nombre, SKU o categoría... (Enter para buscar)"
-                               onkeydown="if(event.key==='Enter'){event.preventDefault(); buscarProductosRapido(); return false;}">
-                        <div class="input-loading"></div>
+        <div class="card shadow">
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon">
+                        <i class="bi bi-tags"></i>
                     </div>
-                    <button onclick="buscarProductosRapido()"
-                            style="display: none;" id="btnSearchHidden"></button>
-
-                    <button type="button" class="btn-toggle-filtros" onclick="toggleFiltrosBusqueda()">
-                        <i class="ri-filter-3-line"></i> Filtros avanzados
-                        <span class="badge-filtros" id="badgeFiltrosActivos">0</span>
-                    </button>
-
-                    <div class="filtros-avanzados" id="filtrosAvanzados">
-                        <div class="filtros-grid">
-                            <div class="filtro-group">
-                                <label for="filtroSucursal">Sucursal</label>
-                                <select id="filtroSucursal">
-                                    <option value="">Sucursal actual</option>
-                                </select>
-                            </div>
-                            <div class="filtro-group">
-                                <label for="filtroCategoria">Categoría</label>
-                                <select id="filtroCategoria">
-                                    <option value="">Todas</option>
-                                </select>
-                            </div>
-                            <div class="filtro-group">
-                                <label for="filtroMarca">Marca</label>
-                                <select id="filtroMarca">
-                                    <option value="">Todas</option>
-                                </select>
-                            </div>
-                            <div class="filtro-group">
-                                <label for="filtroAntiguedad">Antigüedad inventario</label>
-                                <select id="filtroAntiguedad">
-                                    <option value="">Cualquiera</option>
-                                    <option value="nuevo">Nuevo (&lt; 6 meses)</option>
-                                    <option value="medio">Medio (6-12 meses)</option>
-                                    <option value="antiguo">Antiguo (&gt; 1 año)</option>
-                                </select>
-                            </div>
-                            <div class="filtro-group">
-                                <label for="filtroPrecioMin">Precio mínimo</label>
-                                <input type="number" id="filtroPrecioMin" placeholder="Ej: 10000" step="1000" min="0">
-                            </div>
-                            <div class="filtro-group">
-                                <label for="filtroPrecioMax">Precio máximo</label>
-                                <input type="number" id="filtroPrecioMax" placeholder="Ej: 80000" step="1000" min="0">
-                            </div>
-                            <div class="filtro-group">
-                                <label for="filtroMargenMin">Margen mínimo %</label>
-                                <input type="number" id="filtroMargenMin" placeholder="Ej: 20" step="1">
-                            </div>
-                            <div class="filtro-group">
-                                <label for="filtroAnio">Año de ingreso</label>
-                                <input type="number" id="filtroAnio" placeholder="Ej: 2024" min="2000" max="2100">
-                            </div>
-                            <div class="filtro-group">
-                                <label for="filtroSinStock">Productos sin stock</label>
-                                <select id="filtroSinStock">
-                                    <option value="">Ocultar (solo con stock)</option>
-                                    <option value="1">Incluir sin stock</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="filtros-actions">
-                            <button type="button" class="btn-aplicar-filtros" onclick="buscarProductosRapido()">
-                                <i class="ri-search-line"></i> Buscar con filtros
-                            </button>
-                            <button type="button" class="btn-limpiar-filtros" onclick="limpiarFiltrosBusqueda()">
-                                <i class="ri-eraser-line"></i> Limpiar
-                            </button>
+                    <div class="module-header-info">
+                        <h5>Gestión de Precios</h5>
+                        <div class="module-header-status">
+                            <span>Edición rápida con navegación por Tab</span>
+                            {% if alias_sucursal %}
+                            <span class="badge-sucursal">
+                                <i class="bi bi-shop"></i> {{ alias_sucursal }}
+                            </span>
+                            {% endif %}
+                            <span class="sync-indicator" title="Los cambios se sincronizan automáticamente a otras sucursales">
+                                <i class="bi bi-arrow-repeat"></i> Sincronización activa
+                            </span>
                         </div>
                     </div>
                 </div>
-
-                <div id="searchResults">
-                    <div class="empty-list">
-                        <i class="ri-search-line"></i>
-                        <h4>Busca productos</h4>
-                        <p>Escribe en el campo superior y presiona Enter</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Panel Derecho: Lista de Edición -->
-            <div class="edit-panel">
-                <div class="edit-list-header">
-                    <h3>
-                        <i class="ri-list-check"></i> 
-                        Lista de Edición (<span id="itemCount">0</span>)
-                    </h3>
-                    <button onclick="toggleExpandirTodos()" 
-                            class="btn-expand-all"
-                            id="btnExpandirTodos">
-                        <i class="ri-expand-diagonal-line"></i> Expandir Todos
-                    </button>
-                </div>
-
-                <div class="edit-list-body" id="editList">
-                    <div class="empty-list">
-                        <i class="ri-inbox-line"></i>
-                        <h4>Lista vacía</h4>
-                        <p>Toca un resultado de búsqueda, escribe el precio nuevo y presiona Enter</p>
-                    </div>
-                </div>
-
-                <!-- Totales -->
-                <div id="totalesSection" class="totales-section" style="display: none;">
-                    <!-- Se llenará dinámicamente -->
-                </div>
-
-                <div class="action-buttons">
-                    <button class="btn-clear-list" onclick="limpiarLista()">
-                        <i class="ri-delete-bin-line"></i> Limpiar
-                    </button>
-                    <button class="btn-apply-all" onclick="aplicarTodosCambios()">
-                        <i class="ri-check-double-line"></i> Aplicar Todos (<span id="applyCount">0</span>)
+                <div class="module-header-actions">
+                    <button class="btn btn-light" onclick="window.location.href='/app/gestion-precios/revisar-pendientes/?tab=alertas'"
+                            title="Abrir el hub de precios: cambios, historial, auditoría y alertas en un solo lugar">
+                        <i class="bi bi-clock-history"></i>
+                        Historial / Auditoría de Precios
+                        <span class="badge-count" id="historialCount" title="Ediciones de hoy">0</span>
                     </button>
                 </div>
             </div>
+
+            <div class="card-body">
+                <div class="quick-edit-container">
+                    <!-- Panel Izquierdo: Búsqueda -->
+                    <div class="search-panel">
+                        <div class="search-box">
+                            <h6 class="panel-title">
+                                <i class="bi bi-search"></i> Buscar Productos
+                            </h6>
+                            <div class="search-input-wrapper" id="searchInputWrapper">
+                                <input type="text" 
+                                       id="quickSearch" 
+                                       class="search-input"
+                                       placeholder="Escribe nombre, SKU o categoría... (Enter para buscar)"
+                                       onkeydown="if(event.key==='Enter'){event.preventDefault(); buscarProductosRapido(); return false;}">
+                                <div class="input-loading"></div>
+                            </div>
+                            <button onclick="buscarProductosRapido()"
+                                    style="display: none;" id="btnSearchHidden"></button>
+
+                            <button type="button" class="btn btn-sm btn-outline-secondary btn-toggle-filtros" onclick="toggleFiltrosBusqueda()">
+                                <i class="bi bi-funnel"></i> Filtros avanzados
+                                <span class="badge-filtros" id="badgeFiltrosActivos">0</span>
+                            </button>
+
+                            <div class="filtros-avanzados" id="filtrosAvanzados">
+                                <div class="filtros-grid">
+                                    <div class="filtro-group">
+                                        <label class="form-label" for="filtroSucursal">Sucursal</label>
+                                        <select id="filtroSucursal" class="form-select form-select-sm">
+                                            <option value="">Mi sucursal</option>
+                                        </select>
+                                    </div>
+                                    <div class="filtro-group">
+                                        <label class="form-label" for="filtroCategoria">Categoría</label>
+                                        <select id="filtroCategoria" class="form-select form-select-sm">
+                                            <option value="">Todas</option>
+                                        </select>
+                                    </div>
+                                    <div class="filtro-group">
+                                        <label class="form-label" for="filtroMarca">Marca</label>
+                                        <select id="filtroMarca" class="form-select form-select-sm">
+                                            <option value="">Todas</option>
+                                        </select>
+                                    </div>
+                                    <div class="filtro-group">
+                                        <label class="form-label" for="filtroAntiguedad">Antigüedad inventario</label>
+                                        <select id="filtroAntiguedad" class="form-select form-select-sm">
+                                            <option value="">Cualquiera</option>
+                                            <option value="nuevo">Nuevo (&lt; 6 meses)</option>
+                                            <option value="medio">Medio (6-12 meses)</option>
+                                            <option value="antiguo">Antiguo (&gt; 1 año)</option>
+                                        </select>
+                                    </div>
+                                    <div class="filtro-group">
+                                        <label class="form-label" for="filtroPrecioMin">Precio mínimo</label>
+                                        <input type="number" id="filtroPrecioMin" class="form-control form-control-sm" placeholder="10000" step="1000" min="0">
+                                    </div>
+                                    <div class="filtro-group">
+                                        <label class="form-label" for="filtroPrecioMax">Precio máximo</label>
+                                        <input type="number" id="filtroPrecioMax" class="form-control form-control-sm" placeholder="80000" step="1000" min="0">
+                                    </div>
+                                    <div class="filtro-group">
+                                        <label class="form-label" for="filtroMargenMin">Margen mínimo %</label>
+                                        <input type="number" id="filtroMargenMin" class="form-control form-control-sm" placeholder="20" step="1">
+                                    </div>
+                                    <div class="filtro-group">
+                                        <label class="form-label" for="filtroAnio">Año de ingreso</label>
+                                        <input type="number" id="filtroAnio" class="form-control form-control-sm" placeholder="2024" min="2000" max="2100">
+                                    </div>
+                                    <div class="filtro-group">
+                                        <label class="form-label" for="filtroSinStock">Productos sin stock</label>
+                                        <select id="filtroSinStock" class="form-select form-select-sm">
+                                            <option value="">Ocultar (solo con stock)</option>
+                                            <option value="1">Incluir sin stock</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="filtros-actions">
+                                    <button type="button" class="btn btn-primary btn-sm" onclick="buscarProductosRapido()">
+                                        <i class="bi bi-search"></i> Buscar con filtros
+                                    </button>
+                                    <button type="button" class="btn btn-light btn-sm" onclick="limpiarFiltrosBusqueda()">
+                                        <i class="bi bi-eraser"></i> Limpiar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="searchResults">
+                            <div class="empty-list">
+                                <i class="bi bi-search"></i>
+                                <h4>Busca productos</h4>
+                                <p>Escribe en el campo superior y presiona Enter</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Panel Derecho: Lista de Edición -->
+                    <div class="edit-panel">
+                        <div class="edit-list-header">
+                            <h6 class="panel-title">
+                                <i class="bi bi-list-check"></i>
+                                Lista de Edición (<span id="itemCount">0</span>)
+                            </h6>
+                            <button onclick="toggleExpandirTodos()"
+                                    class="btn btn-sm btn-light"
+                                    id="btnExpandirTodos">
+                                <i class="bi bi-arrows-angle-expand"></i> Expandir Todos
+                            </button>
+                        </div>
+
+                        <div class="edit-list-body" id="editList">
+                            <div class="empty-list">
+                                <i class="bi bi-inbox"></i>
+                                <h4>Lista vacía</h4>
+                                <p>Toca un resultado de búsqueda, escribe el precio nuevo y presiona Enter</p>
+                            </div>
+                        </div>
+
+                        <!-- Totales -->
+                        <div id="totalesSection" class="totales-section" style="display: none;">
+                            <!-- Se llenará dinámicamente -->
+                        </div>
+
+                        <div class="action-buttons">
+                            <button class="btn-clear-list" onclick="limpiarLista()">
+                                <i class="bi bi-trash3"></i> Limpiar
+                            </button>
+                            <button class="btn-apply-all" onclick="aplicarTodosCambios()">
+                                <i class="bi bi-check2-all"></i> Aplicar Todos (<span id="applyCount">0</span>)
+                            </button>
+                        </div>
+                    </div>
+                </div><!-- quick-edit-container -->
+            </div><!-- card-body -->
         </div>
+        <!-- card -->
     </div>
     <!-- container-fluid -->
 </div>
@@ -2413,8 +2413,9 @@
                 <i class="ri-shield-check-line"></i>
                 Auditoría de Precios
             </h3>
-            <button class="btn-close-modal" onclick="cerrarAuditoriaPrecios()">
-                <i class="ri-close-line"></i>
+            <button class="btn-close-modal" onclick="cerrarAuditoriaPrecios()"
+                    aria-label="Cerrar" title="Cerrar">
+                <i class="ri-close-line" aria-hidden="true"></i>
             </button>
         </div>
 
@@ -2432,22 +2433,22 @@
             <div id="tabRegistro">
                 <div class="auditoria-filtros">
                     <div class="filtro-group">
-                        <label for="audUsuario">Usuario</label>
-                        <select id="audUsuario">
+                        <label class="form-label" for="audUsuario">Usuario</label>
+                        <select id="audUsuario" class="form-select form-select-sm">
                             <option value="">Todos</option>
                         </select>
                     </div>
                     <div class="filtro-group">
-                        <label for="audDesde">Desde</label>
-                        <input type="date" id="audDesde">
+                        <label class="form-label" for="audDesde">Desde</label>
+                        <input type="date" id="audDesde" class="form-control form-control-sm">
                     </div>
                     <div class="filtro-group">
-                        <label for="audHasta">Hasta</label>
-                        <input type="date" id="audHasta">
+                        <label class="form-label" for="audHasta">Hasta</label>
+                        <input type="date" id="audHasta" class="form-control form-control-sm">
                     </div>
                     <div class="filtro-group">
-                        <label for="audTipo">Tipo de cambio</label>
-                        <select id="audTipo">
+                        <label class="form-label" for="audTipo">Tipo de cambio</label>
+                        <select id="audTipo" class="form-select form-select-sm">
                             <option value="">Todos</option>
                             <option value="MANUAL">Manual</option>
                             <option value="MASIVO">Masivo</option>
@@ -2460,19 +2461,20 @@
                         </select>
                     </div>
                     <div class="filtro-group">
-                        <label for="audAlcance">Alcance</label>
-                        <select id="audAlcance">
+                        <label class="form-label" for="audAlcance">Alcance</label>
+                        <select id="audAlcance" class="form-select form-select-sm">
                             <option value="todas">Todas las sucursales</option>
                             <option value="actual">Sucursal actual</option>
                         </select>
                     </div>
-                    <div class="filtro-group" style="flex: 1; min-width: 160px;">
-                        <label for="audSearch">Artículo / SKU / usuario</label>
-                        <input type="text" id="audSearch" placeholder="Artículo, SKU (dígitos) o usuario..."
+                    <div class="filtro-group filtro-group-ancho">
+                        <label class="form-label" for="audSearch">Artículo / SKU / usuario</label>
+                        <input type="text" id="audSearch" class="form-control form-control-sm"
+                               placeholder="Artículo, SKU (dígitos) o usuario..."
                                onkeydown="if(event.key==='Enter'){event.preventDefault(); cargarRegistroAuditoria(1);}">
                     </div>
-                    <button type="button" class="btn-auditoria-aplicar" onclick="cargarRegistroAuditoria(1)">
-                        <i class="ri-search-line"></i> Filtrar
+                    <button type="button" class="btn btn-primary btn-sm" onclick="cargarRegistroAuditoria(1)">
+                        <i class="bi bi-search"></i> Filtrar
                     </button>
                 </div>
 
@@ -2498,8 +2500,8 @@
             <div id="tabKpis" style="display: none;">
                 <div class="auditoria-filtros">
                     <div class="filtro-group">
-                        <label for="kpiPeriodo">Período</label>
-                        <select id="kpiPeriodo" onchange="cambioPeriodoKpis()">
+                        <label class="form-label" for="kpiPeriodo">Período</label>
+                        <select id="kpiPeriodo" class="form-select form-select-sm" onchange="cambioPeriodoKpis()">
                             <option value="7">Últimos 7 días</option>
                             <option value="30" selected>Últimos 30 días</option>
                             <option value="90">Últimos 90 días</option>
@@ -2507,22 +2509,22 @@
                         </select>
                     </div>
                     <div class="filtro-group" id="kpiDesdeGroup" style="display: none;">
-                        <label for="kpiDesde">Desde</label>
-                        <input type="date" id="kpiDesde">
+                        <label class="form-label" for="kpiDesde">Desde</label>
+                        <input type="date" id="kpiDesde" class="form-control form-control-sm">
                     </div>
                     <div class="filtro-group" id="kpiHastaGroup" style="display: none;">
-                        <label for="kpiHasta">Hasta</label>
-                        <input type="date" id="kpiHasta">
+                        <label class="form-label" for="kpiHasta">Hasta</label>
+                        <input type="date" id="kpiHasta" class="form-control form-control-sm">
                     </div>
                     <div class="filtro-group">
-                        <label for="kpiAlcance">Alcance</label>
-                        <select id="kpiAlcance">
+                        <label class="form-label" for="kpiAlcance">Alcance</label>
+                        <select id="kpiAlcance" class="form-select form-select-sm">
                             <option value="todas">Todas las sucursales</option>
                             <option value="actual">Sucursal actual</option>
                         </select>
                     </div>
-                    <button type="button" class="btn-auditoria-aplicar" onclick="cargarKpisAuditoria()">
-                        <i class="ri-refresh-line"></i> Actualizar
+                    <button type="button" class="btn btn-primary btn-sm" onclick="cargarKpisAuditoria()">
+                        <i class="bi bi-arrow-clockwise"></i> Actualizar
                     </button>
                 </div>
 
@@ -2613,8 +2615,9 @@
                 <i class="ri-history-line"></i> 
                 Historial de Precios
             </h3>
-            <button class="btn-close-modal" onclick="cerrarModalHistorial()">
-                <i class="ri-close-line"></i>
+            <button class="btn-close-modal" onclick="cerrarModalHistorial()"
+                    aria-label="Cerrar" title="Cerrar">
+                <i class="ri-close-line" aria-hidden="true"></i>
             </button>
         </div>
         <div class="modal-historial-body">
@@ -2740,8 +2743,8 @@ async function cargarRegistroAuditoria(page = 1) {
             renderizarRegistroAuditoria(data);
         } else {
             container.innerHTML = `
-                <div class="historial-no-results">
-                    <i class="ri-error-warning-line" style="color: var(--nexo-error);"></i>
+                <div class="historial-no-results estado-error">
+                    <i class="ri-error-warning-line"></i>
                     <h4>Error al cargar el registro</h4>
                     <p>${data.error || 'Intenta nuevamente'}</p>
                 </div>
@@ -2750,8 +2753,8 @@ async function cargarRegistroAuditoria(page = 1) {
     } catch (error) {
         console.error('Error cargando registro de auditoría:', error);
         container.innerHTML = `
-            <div class="historial-no-results">
-                <i class="ri-wifi-off-line" style="color: var(--nexo-error);"></i>
+            <div class="historial-no-results estado-error">
+                <i class="ri-wifi-off-line"></i>
                 <h4>Error de conexión</h4>
                 <p>No se pudo cargar el registro</p>
             </div>
@@ -2774,7 +2777,7 @@ function renderizarRegistroAuditoria(data) {
         return;
     }
 
-    let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px;">';
+    let html = '<div class="registro-auditoria-grid">';
 
     data.historial.forEach(item => {
         const variacion = item.diferencia || (item.precio_nuevo - item.precio_anterior);
@@ -2793,7 +2796,7 @@ function renderizarRegistroAuditoria(data) {
 
                 <div class="precios-row">
                     <span class="precio-anterior">${formatearMoneda(item.precio_anterior)}</span>
-                    <span style="color: var(--nexo-gray-400);">→</span>
+                    <span class="flecha">→</span>
                     <span class="precio-nuevo">${formatearMoneda(item.precio_nuevo)}</span>
                     <span class="variacion-badge ${variacionClass}">
                         ${variacionIcon} ${variacion >= 0 ? '+' : ''}${item.porcentaje_cambio.toFixed(1)}%
@@ -2808,7 +2811,7 @@ function renderizarRegistroAuditoria(data) {
                         <i class="ri-store-2-line"></i> ${item.sucursal || 'N/A'}
                     </span>
                 </div>
-                <div class="item-footer" style="border-top: none; padding-top: 4px;">
+                <div class="item-footer item-footer-secundario">
                     <span><i class="ri-price-tag-3-line"></i> ${item.tipo_cambio}</span>
                     ${fechaAlta}
                 </div>
@@ -2872,8 +2875,8 @@ async function cargarKpisAuditoria() {
             renderizarKpisAuditoria(data);
         } else {
             container.innerHTML = `
-                <div class="historial-no-results">
-                    <i class="ri-error-warning-line" style="color: var(--nexo-error);"></i>
+                <div class="historial-no-results estado-error">
+                    <i class="ri-error-warning-line"></i>
                     <h4>Error al calcular KPIs</h4>
                     <p>${data.error || 'Intenta nuevamente'}</p>
                 </div>
@@ -2882,8 +2885,8 @@ async function cargarKpisAuditoria() {
     } catch (error) {
         console.error('Error cargando KPIs de auditoría:', error);
         container.innerHTML = `
-            <div class="historial-no-results">
-                <i class="ri-wifi-off-line" style="color: var(--nexo-error);"></i>
+            <div class="historial-no-results estado-error">
+                <i class="ri-wifi-off-line"></i>
                 <h4>Error de conexión</h4>
                 <p>No se pudieron calcular los KPIs</p>
             </div>
@@ -2916,8 +2919,8 @@ function renderizarKpisAuditoria(data) {
             <div class="kpi-card-aud"><div class="valor">${g.total}</div><div class="etiqueta">Cambios</div></div>
             <div class="kpi-card-aud"><div class="valor">${g.usuarios}</div><div class="etiqueta">Usuarios</div></div>
             <div class="kpi-card-aud"><div class="valor">${g.productos}</div><div class="etiqueta">Productos</div></div>
-            <div class="kpi-card-aud"><div class="valor" style="color: var(--nexo-accent);">${g.alzas}</div><div class="etiqueta">Alzas</div></div>
-            <div class="kpi-card-aud"><div class="valor" style="color: var(--nexo-error);">${g.rebajas}</div><div class="etiqueta">Rebajas</div></div>
+            <div class="kpi-card-aud"><div class="valor text-nexo-accent">${g.alzas}</div><div class="etiqueta">Alzas</div></div>
+            <div class="kpi-card-aud"><div class="valor text-nexo-error">${g.rebajas}</div><div class="etiqueta">Rebajas</div></div>
             <div class="kpi-card-aud ${g.rebajas_fuertes > 0 ? 'alerta' : ''}"><div class="valor">${g.rebajas_fuertes}</div><div class="etiqueta">Rebajas ≥ ${umbral}%</div></div>
             <div class="kpi-card-aud ${g.bajo_costo > 0 ? 'alerta' : ''}"><div class="valor">${g.bajo_costo}</div><div class="etiqueta">Bajo costo</div></div>
             <div class="kpi-card-aud ${g.fuera_horario > 0 ? 'alerta' : ''}"><div class="valor">${g.fuera_horario}</div><div class="etiqueta">Fuera de horario</div></div>
@@ -2947,16 +2950,16 @@ function renderizarKpisAuditoria(data) {
         data.por_usuario.forEach(u => {
             html += `
                 <tr>
-                    <td style="font-weight: 600;"><i class="ri-user-line" style="color: var(--nexo-primary);"></i> ${u.usuario}</td>
+                    <td class="celda-usuario"><i class="ri-user-line text-nexo-primary"></i> ${u.usuario}</td>
                     <td>${u.total}</td>
-                    <td style="color: var(--nexo-accent);">${u.alzas}</td>
-                    <td style="color: var(--nexo-error);">${u.rebajas}</td>
+                    <td class="text-nexo-accent">${u.alzas}</td>
+                    <td class="text-nexo-error">${u.rebajas}</td>
                     <td>${u.pct_promedio >= 0 ? '+' : ''}${u.pct_promedio}%</td>
                     <td>${u.rebaja_max}%</td>
                     <td>${u.productos}</td>
-                    <td>${u.bajo_costo > 0 ? `<span style="color: var(--nexo-error); font-weight: 700;">${u.bajo_costo}</span>` : '0'}</td>
-                    <td>${u.fuera_horario > 0 ? `<span style="color: var(--nexo-warning); font-weight: 700;">${u.fuera_horario}</span>` : '0'}</td>
-                    <td style="white-space: nowrap;">${u.ultima_fecha || '-'}</td>
+                    <td>${u.bajo_costo > 0 ? `<span class="text-nexo-error dato-fuerte">${u.bajo_costo}</span>` : '0'}</td>
+                    <td>${u.fuera_horario > 0 ? `<span class="text-nexo-warning dato-fuerte">${u.fuera_horario}</span>` : '0'}</td>
+                    <td class="celda-nowrap">${u.ultima_fecha || '-'}</td>
                 </tr>
             `;
         });
@@ -2982,8 +2985,8 @@ function renderizarAlertasAuditoria(alertas) {
 
     if (!tieneAlertas) {
         return `
-            <div class="alerta-seccion">
-                <h4><i class="ri-checkbox-circle-line" style="color: var(--nexo-accent);"></i> Nada llama la atención en este período</h4>
+            <div class="alerta-seccion estado-ok">
+                <h4><i class="ri-checkbox-circle-line"></i> Nada llama la atención en este período</h4>
             </div>
         `;
     }
@@ -3206,8 +3209,8 @@ async function buscarProductosRapido() {
                 mostrarAlertaSucursal();
             } else {
                 container.innerHTML = `
-                    <div class="empty-list">
-                        <i class="ri-error-warning-line" style="color: var(--nexo-error);"></i>
+                    <div class="empty-list estado-error">
+                        <i class="ri-error-warning-line"></i>
                         <h4>Error en la búsqueda</h4>
                         <p>${data.error || 'Intenta nuevamente'}</p>
                     </div>
@@ -3217,8 +3220,8 @@ async function buscarProductosRapido() {
     } catch (error) {
         console.error('❌ Error buscando:', error);
         container.innerHTML = `
-            <div class="empty-list">
-                <i class="ri-wifi-off-line" style="color: var(--nexo-error);"></i>
+            <div class="empty-list estado-error">
+                <i class="ri-wifi-off-line"></i>
                 <h4>Error de conexión</h4>
                 <p>No se pudo conectar con el servidor</p>
             </div>
@@ -3372,7 +3375,7 @@ function renderizarResultadosBusqueda(productos) {
                     Margen: ${margen.toFixed(1)}%
                 </span>
             </div>
-            <div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px;">
+            <div class="badges-row">
                 ${sucursalesInfo}
                 ${historialInfo}
                 ${alertaSync}
@@ -3651,7 +3654,7 @@ function renderizarListaEdicion() {
                 <div class="alert-sucursales">
                     <i class="ri-notification-badge-line"></i>
                     <div class="alert-sucursales-content">
-                        <div class="alert-sucursales-title">🔔 Se notificará a otras sucursales</div>
+                        <div class="alert-sucursales-title">Se notificará a otras sucursales</div>
                         <div class="alert-sucursales-text">
                             Este cambio creará una alerta para: <strong>${listaSuc}</strong>
                         </div>
@@ -3665,15 +3668,15 @@ function renderizarListaEdicion() {
             <div class="edit-item-collapsed" onclick="toggleExpand(${item.id})">
                 <div class="collapsed-info">
                     <div class="collapsed-left">
-                        <strong style="font-size: 14px; color: var(--nexo-secondary);">${index + 1}. ${item.nombre}</strong>
-                        <div style="font-size: 11px; color: var(--nexo-gray-500); margin-top: 4px;" id="info-${item.id}">
+                        <strong class="collapsed-nombre" title="${(item.nombre || '').replace(/"/g, '&quot;')}">${index + 1}. ${item.nombre}</strong>
+                        <div class="edit-item-meta" id="info-${item.id}">
                             Costo: ${formatearMoneda(item.costo)} ${descuentoText} | ${infoExtra}
                         </div>
                     </div>
                     <div class="collapsed-prices">
                         <div class="price-box-small">
                             <div class="label">Original</div>
-                            <div class="value" style="color: var(--nexo-gray-500);">${formatearMoneda(item.precio_original)}</div>
+                            <div class="value text-nexo-muted">${formatearMoneda(item.precio_original)}</div>
                         </div>
                         <div style="color: ${diferenciaColor}; font-size: 20px;" id="flecha-${item.id}">
                             <i class="${diferenciaIcon}"></i>
@@ -3694,12 +3697,12 @@ function renderizarListaEdicion() {
             <div class="edit-item-header">
                 <div>
                     <span class="edit-item-title">${item.nombre}</span>
-                    <div style="font-size: 11px; color: var(--nexo-gray-500); margin-top: 4px;">
+                    <div class="edit-item-meta">
                         ${infoExtra}
                     </div>
                 </div>
-                <div style="display: flex; gap: 8px;">
-                    <button class="btn-historial btn-historial-small" onclick="verHistorial(${item.id}, '${item.nombre.replace(/'/g, "\\'")}', '${item.talla || ''}', ${item.costo || 0}, ${item.precio_original || 0})">
+                <div class="edit-item-acciones">
+                    <button class="btn-historial" onclick="verHistorial(${item.id}, '${item.nombre.replace(/'/g, "\\'")}', '${item.talla || ''}', ${item.costo || 0}, ${item.precio_original || 0})">
                         <i class="ri-history-line"></i> Historial
                     </button>
                     <button class="btn-remove" onclick="removerDeLista(${item.id})">
@@ -3710,15 +3713,14 @@ function renderizarListaEdicion() {
             
             <div class="edit-fields">
                 <div class="field-group">
-                    <label class="field-label">Desc. %</label>
-                    <div style="display: flex; gap: 6px;">
+                    <label class="field-label" for="desc-${item.id}">Desc. %</label>
+                    <div class="field-inline">
                         <input type="number" 
                                id="desc-${item.id}"
                                class="field-input" 
                                value="${item.descuento_porcentaje}"
                                placeholder="0"
                                step="1"
-                               style="flex: 1;"
                                onkeydown="if(event.key==='Enter'){event.preventDefault(); aplicarDescuentoPorcentaje(${item.id}, this.value); return false;}"
                                onfocus="marcarEdicion(${item.id})"
                                onblur="desmarcarEdicion(${item.id})">
@@ -3731,15 +3733,14 @@ function renderizarListaEdicion() {
                 </div>
                 
                 <div class="field-group">
-                    <label class="field-label">Desc. $</label>
-                    <div style="display: flex; gap: 6px;">
+                    <label class="field-label" for="descPesos-${item.id}">Desc. $</label>
+                    <div class="field-inline">
                         <input type="number" 
                                id="descPesos-${item.id}"
                                class="field-input" 
                                value="${item.descuento_pesos}"
                                placeholder="0"
                                step="100"
-                               style="flex: 1;"
                                onkeydown="if(event.key==='Enter'){event.preventDefault(); aplicarDescuentoPesos(${item.id}, this.value); return false;}"
                                onfocus="marcarEdicion(${item.id})"
                                onblur="desmarcarEdicion(${item.id})">
@@ -3752,14 +3753,13 @@ function renderizarListaEdicion() {
                 </div>
                 
                 <div class="field-group">
-                    <label class="field-label">Precio Nuevo</label>
-                    <div style="display: flex; gap: 6px;">
+                    <label class="field-label" for="precioDirecto-${item.id}">Precio Nuevo</label>
+                    <div class="field-inline">
                         <input type="number" 
                                id="precioDirecto-${item.id}"
                                class="field-input" 
                                value="${Math.round(item.precio_nuevo)}"
                                step="10"
-                               style="flex: 1;"
                                onkeydown="if(event.key==='Enter'){event.preventDefault(); aplicarPrecioDirecto(${item.id}, this.value); return false;}"
                                onfocus="marcarEdicion(${item.id})"
                                onblur="desmarcarEdicion(${item.id})">
@@ -3772,14 +3772,13 @@ function renderizarListaEdicion() {
                 </div>
                 
                 <div class="field-group">
-                    <label class="field-label">Margen Obj. %</label>
-                    <div style="display: flex; gap: 6px;">
+                    <label class="field-label" for="margenObj-${item.id}">Margen Obj. %</label>
+                    <div class="field-inline">
                         <input type="number" 
                                id="margenObj-${item.id}"
                                class="field-input" 
                                placeholder="Ej: 30"
                                step="1"
-                               style="flex: 1;"
                                onkeydown="if(event.key==='Enter'){event.preventDefault(); aplicarMargenObjetivo(${item.id}, this.value); return false;}"
                                onfocus="marcarEdicion(${item.id})"
                                onblur="desmarcarEdicion(${item.id})">
@@ -3793,15 +3792,16 @@ function renderizarListaEdicion() {
             </div>
             
             <div class="quick-actions">
-                <button class="btn-quick btn-quick-10" onclick="aplicarDescuentoRapido(${item.id}, 10)">-10%</button>
-                <button class="btn-quick btn-quick-20" onclick="aplicarDescuentoRapido(${item.id}, 20)">-20%</button>
-                <button class="btn-quick btn-quick-30" onclick="aplicarDescuentoRapido(${item.id}, 30)">-30%</button>
+                <button class="btn-quick" onclick="aplicarDescuentoRapido(${item.id}, 10)">-10%</button>
+                <button class="btn-quick" onclick="aplicarDescuentoRapido(${item.id}, 20)">-20%</button>
+                <button class="btn-quick" onclick="aplicarDescuentoRapido(${item.id}, 30)">-30%</button>
+                <button class="btn-quick" onclick="aplicarDescuentoRapido(${item.id}, 40)">-40%</button>
             </div>
             
             <div class="result-preview">
                 <div class="result-row">
                     <span class="result-label">Costo:</span>
-                    <span class="result-value" style="color: var(--nexo-error);">${formatearMoneda(item.costo)}</span>
+                    <span class="result-value text-nexo-error">${formatearMoneda(item.costo)}</span>
                 </div>
                 <div class="result-row">
                     <span class="result-label">Precio Original:</span>
@@ -3809,7 +3809,7 @@ function renderizarListaEdicion() {
                 </div>
                 <div class="result-row">
                     <span class="result-label">Precio Nuevo:</span>
-                    <span class="result-value" style="font-size: 16px; font-weight: 700; color: var(--nexo-secondary);">${formatearMoneda(item.precio_nuevo)}</span>
+                    <span class="result-value result-value-destacado">${formatearMoneda(item.precio_nuevo)}</span>
                 </div>
                 <div class="result-row">
                     <span class="result-label">Margen:</span>
@@ -3904,25 +3904,31 @@ function renderizarTotales() {
     
     totalesSection.innerHTML = `
         <div class="totales-grid">
-            <div class="total-item">
-                <div class="total-label">Total Original</div>
-                <div class="total-value">${formatearMoneda(Math.round(totalOriginal))}</div>
+            <div class="kpi-card kpi-neutro">
+                <div class="card-body">
+                    <div class="total-label">Total Original</div>
+                    <div class="total-value">${formatearMoneda(Math.round(totalOriginal))}</div>
+                </div>
             </div>
-            <div class="total-item">
-                <div class="total-label">Total Nuevo</div>
-                <div class="total-value">${formatearMoneda(Math.round(totalNuevo))}</div>
+            <div class="kpi-card kpi-neutro">
+                <div class="card-body">
+                    <div class="total-label">Total Nuevo</div>
+                    <div class="total-value">${formatearMoneda(Math.round(totalNuevo))}</div>
+                </div>
             </div>
-            <div class="total-item">
-                <div class="total-label">Diferencia</div>
-                <div class="total-value" style="color: ${diferencia < 0 ? '#FFB4B4' : '#A8F0DC'};">
-                    ${diferencia < 0 ? '' : '+'}${formatearMoneda(Math.round(diferencia))}
+            <div class="kpi-card ${diferencia < 0 ? 'kpi-negativo' : 'kpi-positivo'}">
+                <div class="card-body">
+                    <div class="total-label">Diferencia</div>
+                    <div class="total-value">
+                        ${diferencia < 0 ? '' : '+'}${formatearMoneda(Math.round(diferencia))}
+                    </div>
                 </div>
             </div>
         </div>
-        <div style="text-align: center; font-size: 13px; opacity: 0.9;">
+        <div class="totales-resumen">
             Variación Total: ${porcentajeTotal >= 0 ? '+' : ''}${porcentajeTotal.toFixed(1)}%
-            ${sucursalesNotificadas.size > 0 ? `<br><span style="font-size: 11px; margin-top: 4px; display: inline-block;">
-                <i class="ri-notification-line"></i> Se notificará a ${sucursalesNotificadas.size} sucursal${sucursalesNotificadas.size > 1 ? 'es' : ''}
+            ${sucursalesNotificadas.size > 0 ? `<br><span class="totales-aviso">
+                <i class="bi bi-bell"></i> Se notificará a ${sucursalesNotificadas.size} sucursal${sucursalesNotificadas.size > 1 ? 'es' : ''}
             </span>` : ''}
         </div>
     `;
@@ -4421,8 +4427,8 @@ async function verHistorial(productoId, nombre, talla, costo, precioActual) {
     // Actualizar info del producto
     nombreEl.textContent = nombre;
     detalleEl.innerHTML = `
-        <span style="margin-right: 16px;"><strong>Talla:</strong> ${talla || 'N/A'}</span>
-        <span style="margin-right: 16px;"><strong>Costo:</strong> ${formatearMoneda(costo)}</span>
+        <span class="historial-detalle-item"><strong>Talla:</strong> ${talla || 'N/A'}</span>
+        <span class="historial-detalle-item"><strong>Costo:</strong> ${formatearMoneda(costo)}</span>
         <span><strong>Precio Actual:</strong> ${formatearMoneda(precioActual)}</span>
     `;
     
@@ -4446,7 +4452,7 @@ async function verHistorial(productoId, nombre, talla, costo, precioActual) {
                 if (subtituloExtra) {
                     subtituloExtra.textContent = `Sucursal: ${data.producto_sucursal}`;
                 } else {
-                    detalleEl.innerHTML += ` &nbsp; <span style="color:var(--nexo-teal);font-size:0.8rem;"><i class="ri-store-2-line me-1"></i>${data.producto_sucursal}</span>`;
+                    detalleEl.innerHTML += ` &nbsp; <span class="historial-detalle-sucursal"><i class="ri-store-2-line me-1"></i>${data.producto_sucursal}</span>`;
                 }
             }
         } else {
@@ -4461,8 +4467,8 @@ async function verHistorial(productoId, nombre, talla, costo, precioActual) {
     } catch (error) {
         console.error('Error cargando historial:', error);
         contentEl.innerHTML = `
-            <div class="historial-empty">
-                <i class="ri-wifi-off-line" style="color: var(--nexo-error);"></i>
+            <div class="historial-empty estado-error">
+                <i class="ri-wifi-off-line"></i>
                 <h4>Error de conexión</h4>
                 <p>No se pudo cargar el historial. Intenta nuevamente.</p>
             </div>
@@ -4520,7 +4526,7 @@ function renderizarHistorial(historial, container) {
             ${historialVistaActual === 'timeline' ? renderizarTimeline(historial) : renderizarTabla(historial)}
         </div>
         
-        <div style="text-align: center; margin-top: 16px; font-size: 12px; color: var(--nexo-gray-500);">
+        <div class="historial-footer-nota">
             <i class="ri-information-line"></i> Mostrando los últimos ${historial.length} cambios de precio
         </div>
     `;
@@ -4633,8 +4639,8 @@ function renderizarTimeline(historial) {
                 </div>` : ''}
                 
                 ${cambio.sucursales_afectadas && cambio.sucursales_afectadas.length > 0 ? `
-                <div style="margin-top:6px;padding:6px 8px;background:rgba(0,150,136,0.07);border-radius:6px;">
-                    <small style="color:#009688;font-weight:600;"><i class="ri-global-line me-1"></i>Sucursales sincronizadas:</small>
+                <div style="margin-top:6px;padding:6px 8px;background:var(--nexo-accent-soft);border-radius:6px;">
+                    <small style="color:var(--nexo-accent-dark);font-weight:600;"><i class="ri-global-line me-1"></i>Sucursales sincronizadas:</small>
                     <div class="d-flex flex-wrap gap-1 mt-1">
                         ${cambio.sucursales_afectadas.map(s => `<span style="font-size:0.65rem;background:#e0f2f1;color:#00695c;border-radius:4px;padding:2px 6px;">${s.alias}</span>`).join('')}
                     </div>
@@ -4650,14 +4656,15 @@ function renderizarTimeline(historial) {
 // Renderizar vista Tabla
 function renderizarTabla(historial) {
     let html = `
+        <div class="historial-table-wrapper">
         <table class="historial-table">
             <thead>
                 <tr>
                     <th>Fecha</th>
                     <th>Tipo</th>
-                    <th>Precio Anterior</th>
-                    <th>Precio Nuevo</th>
-                    <th>Variación</th>
+                    <th class="col-monto">Precio Anterior</th>
+                    <th class="col-monto">Precio Nuevo</th>
+                    <th class="col-monto">Variación</th>
                     <th>Usuario</th>
                 </tr>
             </thead>
@@ -4693,9 +4700,9 @@ function renderizarTabla(historial) {
                 <td>
                     <span class="tipo-cambio-badge ${tipoClass}">${tipoCambio}</span>
                 </td>
-                <td class="precio-anterior">${formatearMoneda(cambio.precio_anterior)}</td>
-                <td class="precio-nuevo">${formatearMoneda(cambio.precio_nuevo)}</td>
-                <td class="${variacionClass}">
+                <td class="precio-anterior col-monto">${formatearMoneda(cambio.precio_anterior)}</td>
+                <td class="precio-nuevo col-monto">${formatearMoneda(cambio.precio_nuevo)}</td>
+                <td class="${variacionClass} col-monto">
                     <i class="${variacionIcon}"></i>
                     ${variacion >= 0 ? '+' : ''}${formatearMoneda(variacion)}
                     <br>
@@ -4711,7 +4718,7 @@ function renderizarTabla(historial) {
         `;
     });
     
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     return html;
 }
 

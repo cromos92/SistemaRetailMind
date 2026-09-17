@@ -3,258 +3,152 @@
 {% include 'layout/header.html' %}
 {% include 'layout/menu.html' %}
 <style>
-    .price-management-container {
-        padding: 20px;
+    /* ==================== GESTIÓN DE PRECIOS (estándar ESTILOS_MODULOS + tokens NEXO) ==================== */
+
+    .card.shadow.gp-card {
+        border: none;
+        border-radius: 16px;
+        overflow: hidden;
     }
 
-    .filters-card {
-        background: white;
+    /* === module-header estándar === */
+    .module-header {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        color: white;
+        padding: 16px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .module-header-left { display: flex; align-items: center; gap: 14px; }
+    .module-header-icon {
+        width: 48px; height: 48px;
+        background: rgba(255,255,255,0.2);
+        border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 24px;
+    }
+    .module-header-info h5 { margin: 0; font-size: 18px; font-weight: 600; color: white; }
+    .module-header-status { display: flex; align-items: center; gap: 6px; font-size: 13px; opacity: 0.9; margin-top: 4px; }
+
+    /* Botón primario del módulo (gradiente #405189 como gestionDteCompras, acotado a esta pantalla) */
+    .gp-card .btn-primary,
+    .gp-modal .btn-primary {
+        background: linear-gradient(135deg, #405189 0%, #364574 100%);
+        border: none;
+    }
+    .gp-card .btn-primary:hover,
+    .gp-modal .btn-primary:hover {
+        background: linear-gradient(135deg, #364574 0%, #2d3a62 100%);
+    }
+
+    /* === KPIs (kpi-card estándar, colores por tipo de ESTILOS_MODULOS) === */
+    .kpi-card { border-radius: 12px; border: none; overflow: hidden; }
+    .kpi-card .card-body { padding: 12px 16px; }
+    .kpi-card .kpi-icon {
+        width: 36px; height: 36px;
         border-radius: 10px;
-        padding: 20px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        margin-bottom: 20px;
+        margin: 0 auto 6px;
+        display: flex; align-items: center; justify-content: center;
+        color: #fff;
     }
+    .kpi-card h4 { color: #405189; }
+    .kpi-card p { font-size: 0.75rem; }
+    .kpi-total { background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 4px solid #ffbe0b; }
+    .kpi-total .kpi-icon { background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%); }
+    .kpi-info { background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid #299cdb; }
+    .kpi-info .kpi-icon { background: linear-gradient(135deg, #299cdb 0%, #1976d2 100%); }
+    .kpi-ok { background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 4px solid #0ab39c; }
+    .kpi-ok .kpi-icon { background: linear-gradient(135deg, #0ab39c 0%, #099885 100%); }
+    .kpi-error { background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); border-left: 4px solid #f06548; }
+    .kpi-error .kpi-icon { background: linear-gradient(135deg, #f06548 0%, #d9534f 100%); }
 
+    /* === Filtros === */
     .filters-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: 15px;
         margin-bottom: 15px;
     }
-
-    .filter-group {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .filter-group label {
-        font-size: 12px;
+    .filter-group { display: flex; flex-direction: column; }
+    .filter-group .form-label {
+        margin-bottom: 4px;
+        font-size: 0.8rem;
         font-weight: 600;
-        color: #666;
-        margin-bottom: 5px;
+        color: var(--nexo-gray-700);
     }
+    .search-filter { background: var(--nexo-gray-100); }
+    .search-filter:focus { background: #fff; }
+    .filter-group select[size] { max-height: 250px; overflow-y: auto; }
+    .action-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
 
-    .filter-group input,
-    .filter-group select {
-        padding: 8px 12px;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        font-size: 14px;
-    }
-
-    .filter-group input[type="text"].search-filter {
-        border: 2px solid #3498db;
-        background: #f0f8ff;
-    }
-
-    .filter-group input[type="text"].search-filter:focus {
-        outline: none;
-        border-color: #2980b9;
-        background: white;
-    }
-
-    .filter-group select[size] {
-        max-height: 250px;
-        overflow-y: auto;
-    }
-
-    .action-buttons {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-    }
-
-    .btn-search {
-        background: #3498db;
-        color: white;
-        padding: 10px 20px;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        font-weight: 600;
-    }
-
-    .btn-search:hover {
-        background: #2980b9;
-    }
-
-    .btn-clear {
-        background: #95a5a6;
-        color: white;
-        padding: 10px 20px;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-    }
-
-    .results-card {
-        background: white;
-        border-radius: 10px;
-        padding: 20px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-
+    /* === Resultados === */
     .results-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 20px;
-        padding-bottom: 15px;
-        border-bottom: 2px solid #f0f0f0;
-    }
-
-    .results-count {
-        font-size: 18px;
-        font-weight: 600;
-        color: #2c3e50;
-    }
-
-    .bulk-actions {
-        display: flex;
+        flex-wrap: wrap;
         gap: 10px;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--nexo-gray-100);
     }
+    .results-count { font-size: 15px; font-weight: 600; color: #405189; }
+    .bulk-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-    .btn-bulk {
-        padding: 8px 15px;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 13px;
-        font-weight: 600;
-    }
+    .products-table > :not(caption) > * > * { padding: .35rem .6rem; }
+    .products-table th { font-size: 13px; font-weight: 600; white-space: nowrap; }
+    .products-table td { font-size: 13px; }
+    .checkbox-cell { width: 40px; text-align: center; }
 
-    .btn-bulk-edit {
-        background: #f39c12;
-        color: white;
-    }
-
-    .btn-bulk-sync {
-        background: #9b59b6;
-        color: white;
-    }
-
-    .btn-recommendations {
-        background: #1abc9c;
-        color: white;
-    }
-
-    .products-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 10px;
-    }
-
-    .products-table th {
-        background: #34495e;
-        color: white;
-        padding: 12px;
-        text-align: left;
-        font-size: 13px;
-        font-weight: 600;
-        position: sticky;
-        top: 0;
-    }
-
-    .products-table td {
-        padding: 10px 12px;
-        border-bottom: 1px solid #ecf0f1;
-        font-size: 13px;
-    }
-
-    .products-table tbody tr:hover {
-        background: #f8f9fa;
-    }
-
-    .checkbox-cell {
-        width: 40px;
-        text-align: center;
-    }
-
+    /* El JS pinta borde/fondo inline al editar (#27ae60/#d4edda y #ffc107/#fff3cd): el base coincide con el estado "sin cambios" */
     .editable-price {
-        background: #fff3cd;
-        border: 1px solid #ffc107;
-        border-radius: 3px;
-        padding: 5px 8px;
+        display: inline-block;
         width: 100px;
         text-align: right;
+        padding: .25rem .5rem;
+        background: #fff3cd;
+        border-color: #ffc107;
     }
 
-    .margin-badge {
+    /* Badges de estado: un solo componente para margen, markup, stock y antigüedad (paleta KPI de ESTILOS_MODULOS) */
+    .margin-badge, .stock-badge, .age-badge {
         display: inline-block;
         padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.3;
+    }
+    .margin-good, .stock-high { background: #e8f5e9; color: #0b5e52; }
+    .margin-warning, .stock-medium { background: #fff3e0; color: #8a4b00; }
+    .margin-danger, .stock-low { background: #ffebee; color: #a4231a; }
+    .age-new { background: #e3f2fd; color: #14567f; }
+    .age-old { background: #ffebee; color: #a4231a; }
+
+    /* Paginación estándar */
+    .pagination-controls {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
         border-radius: 12px;
-        font-size: 11px;
-        font-weight: 600;
+        padding: 10px 16px;
+        margin-top: 12px;
+        border: 1px solid rgba(64, 81, 137, 0.1);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
     }
 
-    .margin-good {
-        background: #d4edda;
-        color: #155724;
-    }
+    /* Estado vacío (patrón lotes_producto.html) */
+    .empty-state { text-align: center; padding: 60px 20px; }
+    .empty-state i { display: block; font-size: 3rem; color: #adb5bd; margin-bottom: 12px; }
+    .empty-state h6 { color: #405189; font-weight: 600; }
 
-    .margin-warning {
-        background: #fff3cd;
-        color: #856404;
-    }
-
-    .margin-danger {
-        background: #f8d7da;
-        color: #721c24;
-    }
-
-    .stock-badge {
-        display: inline-block;
-        padding: 3px 8px;
-        border-radius: 3px;
-        font-size: 12px;
-        font-weight: 600;
-    }
-
-    .stock-high {
-        background: #d4edda;
-        color: #155724;
-    }
-
-    .stock-medium {
-        background: #fff3cd;
-        color: #856404;
-    }
-
-    .stock-low {
-        background: #f8d7da;
-        color: #721c24;
-    }
-
-    .age-badge {
-        display: inline-block;
-        padding: 3px 8px;
-        border-radius: 3px;
-        font-size: 11px;
-        font-weight: 600;
-    }
-
-    .age-new {
-        background: #d1ecf1;
-        color: #0c5460;
-    }
-
-    .age-old {
-        background: #f8d7da;
-        color: #721c24;
-    }
-
-    .recommendation-icon {
-        cursor: pointer;
-        color: #1abc9c;
-        font-size: 18px;
-        transition: transform 0.2s;
-    }
-
-    .recommendation-icon:hover {
-        transform: scale(1.2);
-    }
-
-    .modal {
+    /* === Modales propios (el JS los abre/cierra con style.display; no son modales Bootstrap) === */
+    .gp-modal {
         display: none;
         position: fixed;
         z-index: 9999;
@@ -264,445 +158,324 @@
         height: 100%;
         background-color: rgba(0,0,0,0.5);
     }
-
-    .modal-content {
-        background-color: white;
+    .gp-modal .modal-content {
         margin: 5% auto;
         padding: 0;
-        border-radius: 10px;
         width: 90%;
         max-width: 800px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         max-height: 85vh;
         overflow-y: auto;
-    }
-
-    .modal-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 20px;
-        border-radius: 10px 10px 0 0;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .modal-header h2 {
-        margin: 0;
-        font-size: 22px;
-    }
-
-    .close {
-        color: white;
-        font-size: 28px;
-        font-weight: bold;
-        cursor: pointer;
-        background: none;
         border: none;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }
-
-    .close:hover {
-        opacity: 0.8;
+    .gp-modal .modal-header {
+        background: linear-gradient(135deg, #405189 0%, #364574 100%);
+        color: white;
+        padding: 16px 24px;
+        border-radius: 12px 12px 0 0;
     }
+    .gp-modal .modal-title { margin: 0; font-size: 1rem; font-weight: 700; letter-spacing: .3px; color: white; }
+    .gp-modal .modal-body { padding: 24px; }
+    .gp-modal .modal-footer { border-top: 1px solid #edf0f5; padding: 14px 24px; gap: 8px; }
 
-    .modal-body {
-        padding: 25px;
-    }
-
+    /* Modal de recomendaciones */
     .recommendation-section {
-        margin-bottom: 20px;
-        padding: 15px;
-        background: #f8f9fa;
+        margin-bottom: 16px;
+        padding: 14px 16px;
+        background: var(--nexo-gray-100);
         border-radius: 8px;
-        border-left: 4px solid #1abc9c;
+        border-left: 4px solid #0ab39c;
     }
-
-    .recommendation-section h3 {
-        margin-top: 0;
-        color: #2c3e50;
-        font-size: 16px;
-    }
-
+    .recommendation-section h6 { margin: 0 0 8px; font-weight: 600; color: #405189; }
     .recommendation-item {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 10px 0;
-        border-bottom: 1px solid #e0e0e0;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--nexo-gray-300);
+        font-size: 13px;
     }
-
-    .recommendation-item:last-child {
-        border-bottom: none;
-    }
-
-    .recommendation-label {
-        font-weight: 600;
-        color: #555;
-    }
-
-    .recommendation-value {
-        font-size: 16px;
-        font-weight: 700;
-        color: #1abc9c;
-    }
-
+    .recommendation-item:last-child { border-bottom: none; }
+    .recommendation-label { font-weight: 600; color: var(--nexo-gray-700); }
+    .recommendation-value { font-size: 15px; font-weight: 700; color: #0ab39c; }
     .price-suggestion {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+        border-left: 4px solid #0ab39c;
+        color: #405189;
         padding: 20px;
         border-radius: 8px;
         text-align: center;
-        margin-top: 20px;
+        margin-top: 16px;
     }
-
-    .price-suggestion h3 {
-        margin: 0 0 10px 0;
-    }
-
-    .suggested-price {
-        font-size: 36px;
-        font-weight: 700;
-        margin: 10px 0;
-    }
-
-    .apply-suggestion-btn {
-        background: white;
-        color: #667eea;
-        border: none;
-        padding: 12px 30px;
-        border-radius: 25px;
-        font-weight: 600;
-        cursor: pointer;
-        margin-top: 15px;
-        transition: transform 0.2s;
-    }
-
-    .apply-suggestion-btn:hover {
-        transform: scale(1.05);
-    }
-
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 15px;
-        margin-bottom: 20px;
-    }
-
-    .stat-card {
-        background: white;
-        padding: 15px;
-        border-radius: 8px;
-        border-left: 4px solid #3498db;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-
-    .stat-label {
-        font-size: 12px;
-        color: #7f8c8d;
-        margin-bottom: 5px;
-    }
-
-    .stat-value {
-        font-size: 24px;
-        font-weight: 700;
-        color: #2c3e50;
-    }
-
-    .loading {
-        text-align: center;
-        padding: 40px;
-        color: #7f8c8d;
-    }
-
-    .loading-spinner {
-        border: 4px solid #f3f3f3;
-        border-top: 4px solid #3498db;
-        border-radius: 50%;
-        width: 40px;
-        height: 40px;
-        animation: spin 1s linear infinite;
-        margin: 0 auto 15px;
-    }
-
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-
-    .empty-state {
-        text-align: center;
-        padding: 60px 20px;
-        color: #95a5a6;
-    }
-
-    .empty-state i {
-        font-size: 64px;
-        margin-bottom: 15px;
-    }
-
-    .pagination {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 10px;
-        margin-top: 20px;
-        padding-top: 20px;
-        border-top: 1px solid #ecf0f1;
-    }
-
-    .pagination button {
-        padding: 8px 15px;
-        border: 1px solid #ddd;
-        background: white;
-        border-radius: 5px;
-        cursor: pointer;
-    }
-
-    .pagination button:hover:not(:disabled) {
-        background: #3498db;
-        color: white;
-    }
-
-    .pagination button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    .pagination .page-info {
-        font-size: 14px;
-        color: #7f8c8d;
-    }
+    .price-suggestion h6 { margin: 0 0 8px; font-weight: 600; }
+    .suggested-price { font-size: 32px; font-weight: 700; margin: 8px 0; color: #0ab39c; }
 
     @media (max-width: 768px) {
-        .precios-filters .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
-        .precios-actions { flex-wrap: wrap; gap: 0.5rem; }
-        .precios-actions .btn { flex: 1 1 auto; }
-    }
-    @media (max-width: 576px) {
-        .tabla-precios { font-size: 0.75rem; }
-        .tabla-precios th, .tabla-precios td { padding: 0.375rem 0.5rem; }
-        .precio-input { width: 80px !important; min-height: 44px; font-size: 16px !important; }
+        .module-header { padding: 12px 16px; }
+        .module-header-icon { width: 40px; height: 40px; font-size: 20px; }
+        .results-header { flex-direction: column; align-items: stretch; }
+        .bulk-actions .btn { flex: 1 1 auto; }
+        .gp-modal .modal-content { width: 96%; margin: 3% auto; max-height: 92vh; }
+        .gp-modal .modal-body { padding: 16px; }
+        .editable-price { font-size: 16px; min-height: 44px; }
     }
 </style>
 
 <div class="page-content">
     <div class="container-fluid">
-<div class="price-management-container">
-    <!-- Header -->
-    <div style="margin-bottom: 20px;">
-        <h1 style="color: #2c3e50; font-size: 28px; margin: 0 0 5px 0;">
-            <i class="fas fa-tags"></i> Gestión de Precios
-        </h1>
-        <p style="color: #7f8c8d; margin: 0;">Administra precios de productos con recomendaciones inteligentes</p>
-    </div>
 
-    <!-- Stats Cards -->
-    <div class="stats-grid" id="statsGrid">
-        <div class="stat-card">
-            <div class="stat-label">Total Productos</div>
-            <div class="stat-value" id="statTotalProducts">-</div>
-        </div>
-        <div class="stat-card" style="border-left-color: #2ecc71;">
-            <div class="stat-label">Valor Inventario</div>
-            <div class="stat-value" id="statTotalValue">-</div>
-        </div>
-        <div class="stat-card" style="border-left-color: #f39c12;">
-            <div class="stat-label">Margen Promedio</div>
-            <div class="stat-value" id="statAvgMargin">-</div>
-        </div>
-        <div class="stat-card" style="border-left-color: #e74c3c;">
-            <div class="stat-label">Inventario Antiguo</div>
-            <div class="stat-value" id="statOldInventory">-</div>
-        </div>
-    </div>
-
-    <!-- Filters Card -->
-    <div class="filters-card">
-        <h3 style="margin-top: 0; color: #2c3e50;">
-            <i class="fas fa-filter"></i> Filtros de Búsqueda
-        </h3>
-        
-        <div class="filters-grid">
-            <div class="filter-group">
-                <label>Búsqueda</label>
-                <input type="text" id="searchTerm" placeholder="Nombre, SKU, código...">
-            </div>
-
-            <div class="filter-group">
-                <label>Categoría</label>
-                <input type="text" id="searchCategoria" class="search-filter" placeholder="🔍 Buscar categoría..." 
-                       style="margin-bottom: 5px;" oninput="filtrarSelect('searchCategoria', 'filterCategoria')">
-                <select id="filterCategoria" size="1" onchange="cerrarSelectDespuesSeleccion('searchCategoria', 'filterCategoria')">
-                    <option value="">Todas las categorías</option>
-                </select>
-            </div>
-
-            <div class="filter-group">
-                <label>Marca (Atributo 1)</label>
-                <input type="text" id="searchMarca" class="search-filter" placeholder="🔍 Buscar marca..." 
-                       style="margin-bottom: 5px;" oninput="filtrarSelect('searchMarca', 'filterMarca')">
-                <select id="filterMarca" size="1" onchange="cerrarSelectDespuesSeleccion('searchMarca', 'filterMarca')">
-                    <option value="">Todas las marcas</option>
-                </select>
-            </div>
-
-            <div class="filter-group">
-                <label>Sucursal</label>
-                <select id="filterSucursal">
-                    <option value="">Todas las sucursales</option>
-                </select>
-            </div>
-
-            <div class="filter-group">
-                <label>Precio Venta (Min)</label>
-                <input type="number" id="filterPrecioMin" placeholder="0">
-            </div>
-
-            <div class="filter-group">
-                <label>Precio Venta (Max)</label>
-                <input type="number" id="filterPrecioMax" placeholder="999999">
-            </div>
-
-            <div class="filter-group">
-                <label>Margen (Min %)</label>
-                <input type="number" id="filterMargenMin" placeholder="0">
-            </div>
-
-            <div class="filter-group">
-                <label>Stock (Min)</label>
-                <input type="number" id="filterStockMin" placeholder="0">
-            </div>
-
-            <div class="filter-group">
-                <label>Antigüedad</label>
-                <select id="filterAntiguedad">
-                    <option value="">Todas</option>
-                    <option value="nuevo">Nuevo (< 6 meses)</option>
-                    <option value="medio">Medio (6-12 meses)</option>
-                    <option value="antiguo">Antiguo (> 12 meses)</option>
-                </select>
-            </div>
-
-            <div class="filter-group">
-                <label>Año de Ingreso</label>
-                <select id="filterAnio">
-                    <option value="">Todos los años</option>
-                </select>
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0"><i class="bi bi-tags text-primary me-2"></i>Gestión de Precios</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="/app/home/">Inicio</a></li>
+                            <li class="breadcrumb-item">Existencias</li>
+                            <li class="breadcrumb-item active">Gestión de Precios</li>
+                        </ol>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="action-buttons">
-            <button class="btn-search" onclick="buscarProductos()">
-                <i class="fas fa-search"></i> Buscar Productos
-            </button>
-            <button class="btn-clear" onclick="limpiarFiltros()">
-                <i class="fas fa-eraser"></i> Limpiar Filtros
-            </button>
-        </div>
-    </div>
-
-    <!-- Results Card -->
-    <div class="results-card">
-        <div class="results-header">
-            <div class="results-count" id="resultsCount">
-                0 productos encontrados
-            </div>
-            <div class="bulk-actions">
-                <button class="btn-bulk btn-bulk-edit" onclick="abrirModificacionMasiva()" disabled id="btnBulkEdit">
-                    <i class="fas fa-edit"></i> Modificar Seleccionados
-                </button>
-                <button class="btn-bulk btn-bulk-sync" onclick="abrirSincronizacion()" disabled id="btnBulkSync">
-                    <i class="fas fa-sync"></i> Sincronizar Sucursales
-                </button>
-            </div>
-        </div>
-
-        <div id="loadingIndicator" class="loading" style="display: none;">
-            <div class="loading-spinner"></div>
-            <p>Cargando productos...</p>
-        </div>
-
-        <div id="emptyState" class="empty-state">
-            <i class="fas fa-search"></i>
-            <h3>Realiza una búsqueda</h3>
-            <p>Utiliza los filtros para encontrar productos y gestionar sus precios</p>
-        </div>
-
-        <div id="resultsTable" style="display: none;">
-            <div style="overflow-x: auto;">
-                <table class="products-table">
-                    <thead>
-                        <tr>
-                            <th class="checkbox-cell">
-                                <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
-                            </th>
-                            <th>SKU</th>
-                            <th>Producto</th>
-                            <th>Talla</th>
-                            <th>Categoría</th>
-                            <th>Marca</th>
-                            <th>Sucursal</th>
-                            <th>Costo</th>
-                            <th>Precio Venta</th>
-                            <th>Margen %</th>
-                            <th>Markup %</th>
-                            <th>Stock</th>
-                            <th>Antigüedad</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody id="productsTableBody">
-                        <!-- Rows will be populated by JavaScript -->
-                    </tbody>
-                </table>
+        <div class="card shadow gp-card">
+            <!-- Header -->
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon"><i class="bi bi-tags"></i></div>
+                    <div class="module-header-info">
+                        <h5>Gestión de Precios</h5>
+                        <div class="module-header-status">Administra precios de productos con recomendaciones inteligentes</div>
+                    </div>
+                </div>
             </div>
 
-            <div class="pagination" id="paginationControls">
-                <button id="btnPrevPage" onclick="cambiarPagina(-1)">
-                    <i class="fas fa-chevron-left"></i> Anterior
-                </button>
-                <span class="page-info" id="pageInfo">Página 1 de 1</span>
-                <button id="btnNextPage" onclick="cambiarPagina(1)">
-                    Siguiente <i class="fas fa-chevron-right"></i>
-                </button>
+            <div class="card-body">
+                <!-- Stats Cards -->
+                <div class="row g-3 mb-4" id="statsGrid">
+                    <div class="col-6 col-md-3">
+                        <div class="kpi-card card h-100 kpi-total">
+                            <div class="card-body text-center py-2">
+                                <div class="kpi-icon"><i class="bi bi-box-seam fs-5"></i></div>
+                                <h4 class="mb-0 fw-bold" id="statTotalProducts">-</h4>
+                                <p class="text-muted mb-0 small fw-medium">Total Productos</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="kpi-card card h-100 kpi-info">
+                            <div class="card-body text-center py-2">
+                                <div class="kpi-icon"><i class="bi bi-cash-stack fs-5"></i></div>
+                                <h4 class="mb-0 fw-bold" id="statTotalValue">-</h4>
+                                <p class="text-muted mb-0 small fw-medium">Valor Inventario</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="kpi-card card h-100 kpi-ok">
+                            <div class="card-body text-center py-2">
+                                <div class="kpi-icon"><i class="bi bi-percent fs-5"></i></div>
+                                <h4 class="mb-0 fw-bold" id="statAvgMargin">-</h4>
+                                <p class="text-muted mb-0 small fw-medium">Margen Promedio</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="kpi-card card h-100 kpi-error">
+                            <div class="card-body text-center py-2">
+                                <div class="kpi-icon"><i class="bi bi-hourglass-split fs-5"></i></div>
+                                <h4 class="mb-0 fw-bold" id="statOldInventory">-</h4>
+                                <p class="text-muted mb-0 small fw-medium">Inventario Antiguo</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filtros -->
+                <h6 class="fw-semibold mb-3"><i class="bi bi-funnel me-1"></i>Filtros de Búsqueda</h6>
+
+                <div class="filters-grid">
+                    <div class="filter-group">
+                        <label class="form-label" for="searchTerm">Búsqueda</label>
+                        <input type="text" class="form-control" id="searchTerm" placeholder="Nombre, SKU, código...">
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="form-label" for="filterCategoria">Categoría</label>
+                        <input type="text" id="searchCategoria" class="form-control form-control-sm search-filter mb-1" placeholder="Buscar categoría..."
+                               aria-label="Buscar categoría" oninput="filtrarSelect('searchCategoria', 'filterCategoria')">
+                        <select id="filterCategoria" class="form-select" size="1" onchange="cerrarSelectDespuesSeleccion('searchCategoria', 'filterCategoria')">
+                            <option value="">Todas las categorías</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="form-label" for="filterMarca">Marca (Atributo 1)</label>
+                        <input type="text" id="searchMarca" class="form-control form-control-sm search-filter mb-1" placeholder="Buscar marca..."
+                               aria-label="Buscar marca" oninput="filtrarSelect('searchMarca', 'filterMarca')">
+                        <select id="filterMarca" class="form-select" size="1" onchange="cerrarSelectDespuesSeleccion('searchMarca', 'filterMarca')">
+                            <option value="">Todas las marcas</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="form-label" for="filterSucursal">Sucursal</label>
+                        <select id="filterSucursal" class="form-select">
+                            <option value="">Todas las sucursales</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="form-label" for="filterPrecioMin">Precio Venta (Min)</label>
+                        <input type="number" class="form-control" id="filterPrecioMin" placeholder="Mínimo">
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="form-label" for="filterPrecioMax">Precio Venta (Max)</label>
+                        <input type="number" class="form-control" id="filterPrecioMax" placeholder="Máximo">
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="form-label" for="filterMargenMin">Margen (Min %)</label>
+                        <input type="number" class="form-control" id="filterMargenMin" placeholder="Mínimo">
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="form-label" for="filterStockMin">Stock (Min)</label>
+                        <input type="number" class="form-control" id="filterStockMin" placeholder="Mínimo">
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="form-label" for="filterAntiguedad">Antigüedad</label>
+                        <select id="filterAntiguedad" class="form-select">
+                            <option value="">Todas</option>
+                            <option value="nuevo">Nuevo (< 6 meses)</option>
+                            <option value="medio">Medio (6-12 meses)</option>
+                            <option value="antiguo">Antiguo (> 12 meses)</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="form-label" for="filterAnio">Año de Ingreso</label>
+                        <select id="filterAnio" class="form-select">
+                            <option value="">Todos los años</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="action-buttons mb-4">
+                    <button type="button" class="btn btn-primary" onclick="buscarProductos()">
+                        <i class="bi bi-search me-1"></i>Buscar Productos
+                    </button>
+                    <button type="button" class="btn btn-light" onclick="limpiarFiltros()">
+                        <i class="bi bi-eraser me-1"></i>Limpiar Filtros
+                    </button>
+                </div>
+
+                <!-- Resultados -->
+                <div class="results-header">
+                    <div class="results-count" id="resultsCount">
+                        0 productos encontrados
+                    </div>
+                    <div class="bulk-actions">
+                        <button type="button" class="btn btn-warning btn-sm" onclick="abrirModificacionMasiva()" disabled id="btnBulkEdit">
+                            <i class="bi bi-pencil-square me-1"></i>Modificar Seleccionados
+                        </button>
+                        <button type="button" class="btn btn-info btn-sm" onclick="abrirSincronizacion()" disabled id="btnBulkSync">
+                            <i class="bi bi-arrow-repeat me-1"></i>Sincronizar Sucursales
+                        </button>
+                    </div>
+                </div>
+
+                <div id="loadingIndicator" class="text-center py-4" style="display: none;">
+                    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando productos...</span></div>
+                    <p class="text-muted mt-2 mb-0">Cargando productos...</p>
+                </div>
+
+                <div id="emptyState" class="empty-state">
+                    <i class="bi bi-search"></i>
+                    <h6>Realiza una búsqueda</h6>
+                    <p class="text-muted mb-0">Utiliza los filtros para encontrar productos y gestionar sus precios</p>
+                </div>
+
+                <div id="resultsTable" style="display: none;">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm align-middle products-table mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="checkbox-cell">
+                                        <input type="checkbox" class="form-check-input" id="selectAll" aria-label="Seleccionar todos" onchange="toggleSelectAll(this)">
+                                    </th>
+                                    <th>SKU</th>
+                                    <th>Producto</th>
+                                    <th class="text-center">Talla</th>
+                                    <th>Categoría</th>
+                                    <th>Marca</th>
+                                    <th>Sucursal</th>
+                                    <th class="text-end">Costo</th>
+                                    <th class="text-end">Precio Venta</th>
+                                    <th class="text-end" title="Bueno: más de 30% · Regular: más de 15% · Bajo: 15% o menos">Margen %</th>
+                                    <th class="text-end" title="Bueno: más de 40% · Regular: más de 20% · Bajo: 20% o menos">Markup %</th>
+                                    <th class="text-end" title="Alto: más de 10 · Medio: más de 3 · Bajo: 3 o menos">Stock</th>
+                                    <th class="text-center">Antigüedad</th>
+                                    <th class="text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="productsTableBody">
+                                <!-- Rows will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="pagination-controls" id="paginationControls">
+                        <button type="button" class="btn btn-light btn-sm" id="btnPrevPage" onclick="cambiarPagina(-1)">
+                            <i class="bi bi-chevron-left me-1"></i>Anterior
+                        </button>
+                        <span class="text-muted small" id="pageInfo">Página 1 de 1</span>
+                        <button type="button" class="btn btn-light btn-sm" id="btnNextPage" onclick="cambiarPagina(1)">
+                            Siguiente<i class="bi bi-chevron-right ms-1"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-</div>
 
 <!-- Modal de Recomendaciones -->
-<div id="modalRecommendations" class="modal">
+<div id="modalRecommendations" class="modal gp-modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h2><i class="fas fa-lightbulb"></i> Recomendaciones de Precio</h2>
-            <span class="close" onclick="cerrarModal('modalRecommendations')">&times;</span>
+            <h5 class="modal-title"><i class="bi bi-lightbulb me-2"></i>Recomendaciones de Precio</h5>
+            <button type="button" class="btn-close btn-close-white" aria-label="Cerrar" onclick="cerrarModal('modalRecommendations')"></button>
         </div>
         <div class="modal-body" id="recommendationsContent">
             <!-- Content will be populated by JavaScript -->
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-light" onclick="cerrarModal('modalRecommendations')">Cerrar</button>
         </div>
     </div>
 </div>
 
 <!-- Modal de Modificación Masiva -->
-<div id="modalBulkEdit" class="modal">
+<div id="modalBulkEdit" class="modal gp-modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h2><i class="fas fa-edit"></i> Modificación Masiva de Precios</h2>
-            <span class="close" onclick="cerrarModal('modalBulkEdit')">&times;</span>
+            <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Modificación Masiva de Precios</h5>
+            <button type="button" class="btn-close btn-close-white" aria-label="Cerrar" onclick="cerrarModal('modalBulkEdit')"></button>
         </div>
         <div class="modal-body">
-            <div style="margin-bottom: 20px;">
-                <p><strong>Productos seleccionados: <span id="selectedCount">0</span></strong></p>
-            </div>
+            <p class="mb-3"><strong>Productos seleccionados: <span id="selectedCount">0</span></strong></p>
 
             <!-- Información de productos editados -->
             <div id="productosEditadosInfo" style="display: none;">
                 <!-- Se llenará dinámicamente -->
             </div>
 
-            <div class="filter-group" style="margin-bottom: 20px;">
-                <label>Tipo de Modificación</label>
-                <select id="bulkEditType" onchange="actualizarCamposModificacion()">
+            <div class="filter-group mb-3">
+                <label class="form-label" for="bulkEditType">Tipo de Modificación</label>
+                <select id="bulkEditType" class="form-select" onchange="actualizarCamposModificacion()">
                     <option value="fixed">Precio Fijo</option>
                     <option value="percentage">Incremento/Decremento (%)</option>
                     <option value="amount">Incremento/Decremento ($)</option>
@@ -710,83 +483,77 @@
                 </select>
             </div>
 
-            <div class="filter-group" id="fixedPriceField" style="margin-bottom: 20px;">
-                <label>Nuevo Precio de Venta</label>
-                <input type="number" id="bulkFixedPrice" placeholder="Ej: 9990">
+            <div class="filter-group mb-3" id="fixedPriceField">
+                <label class="form-label" for="bulkFixedPrice">Nuevo Precio de Venta</label>
+                <input type="number" class="form-control" id="bulkFixedPrice" placeholder="Ej: 9990">
             </div>
 
-            <div class="filter-group" id="percentageField" style="margin-bottom: 20px; display: none;">
-                <label>Porcentaje (usar negativo para descuento)</label>
-                <input type="number" id="bulkPercentage" placeholder="Ej: 10 o -15" step="0.1">
+            <div class="filter-group mb-3" id="percentageField" style="display: none;">
+                <label class="form-label" for="bulkPercentage">Porcentaje (usar negativo para descuento)</label>
+                <input type="number" class="form-control" id="bulkPercentage" placeholder="Ej: 10 o -15" step="0.1">
             </div>
 
-            <div class="filter-group" id="amountField" style="margin-bottom: 20px; display: none;">
-                <label>Monto en Pesos (usar negativo para descuento)</label>
-                <input type="number" id="bulkAmount" placeholder="Ej: 1000 o -500">
+            <div class="filter-group mb-3" id="amountField" style="display: none;">
+                <label class="form-label" for="bulkAmount">Monto en Pesos (usar negativo para descuento)</label>
+                <input type="number" class="form-control" id="bulkAmount" placeholder="Ej: 1000 o -500">
             </div>
 
-            <div class="filter-group" id="marginField" style="margin-bottom: 20px; display: none;">
-                <label>Margen de Ganancia Objetivo (%)</label>
-                <input type="number" id="bulkMargin" placeholder="Ej: 35" step="0.1">
+            <div class="filter-group mb-3" id="marginField" style="display: none;">
+                <label class="form-label" for="bulkMargin">Margen de Ganancia Objetivo (%)</label>
+                <input type="number" class="form-control" id="bulkMargin" placeholder="Ej: 35" step="0.1">
             </div>
 
-            <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-                <p style="margin: 0; color: #856404;">
-                    <i class="fas fa-info-circle"></i> 
-                    <strong>Importante:</strong> Esta acción modificará los precios de todos los productos seleccionados.
-                </p>
+            <div class="alert alert-warning mb-0" role="alert">
+                <i class="bi bi-info-circle me-1"></i>
+                <strong>Importante:</strong> Esta acción modificará los precios de todos los productos seleccionados.
             </div>
-
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button class="btn-clear" onclick="cerrarModal('modalBulkEdit')">
-                    Cancelar
-                </button>
-                <button class="btn-search" onclick="aplicarModificacionMasiva()">
-                    <i class="fas fa-check"></i> Aplicar Cambios
-                </button>
-            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-light" onclick="cerrarModal('modalBulkEdit')">
+                Cancelar
+            </button>
+            <button type="button" class="btn btn-primary" onclick="aplicarModificacionMasiva()">
+                <i class="bi bi-check-lg me-1"></i>Aplicar Cambios
+            </button>
         </div>
     </div>
 </div>
 
 <!-- Modal de Sincronización Multi-Sucursal -->
-<div id="modalSync" class="modal">
+<div id="modalSync" class="modal gp-modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h2><i class="fas fa-sync"></i> Sincronización Multi-Sucursal</h2>
-            <span class="close" onclick="cerrarModal('modalSync')">&times;</span>
+            <h5 class="modal-title"><i class="bi bi-arrow-repeat me-2"></i>Sincronización Multi-Sucursal</h5>
+            <button type="button" class="btn-close btn-close-white" aria-label="Cerrar" onclick="cerrarModal('modalSync')"></button>
         </div>
         <div class="modal-body">
             <p>Sincronizar precios de productos similares en otras sucursales</p>
-            
-            <div class="filter-group" style="margin-bottom: 20px;">
-                <label>Sucursales Destino</label>
+
+            <div class="filter-group mb-3">
+                <label class="form-label">Sucursales Destino</label>
                 <div id="sucursalesCheckboxes">
                     <!-- Will be populated by JavaScript -->
                 </div>
             </div>
 
-            <div class="filter-group" style="margin-bottom: 20px;">
-                <label>Ajuste de Precio por Zona (%)</label>
-                <input type="number" id="syncPriceAdjustment" placeholder="0" step="0.1" value="0">
-                <small style="color: #7f8c8d;">Ej: 10 para aumentar 10%, -5 para disminuir 5%</small>
+            <div class="filter-group mb-3">
+                <label class="form-label" for="syncPriceAdjustment">Ajuste de Precio por Zona (%)</label>
+                <input type="number" class="form-control" id="syncPriceAdjustment" placeholder="0" step="0.1" value="0">
+                <small class="text-muted mt-1">Ej: 10 para aumentar 10%, -5 para disminuir 5%</small>
             </div>
 
-            <div style="background: #d1ecf1; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-                <p style="margin: 0; color: #0c5460;">
-                    <i class="fas fa-info-circle"></i> 
-                    Se buscarán productos con el mismo nombre y atributos en las sucursales seleccionadas.
-                </p>
+            <div class="alert alert-info mb-0" role="alert">
+                <i class="bi bi-info-circle me-1"></i>
+                Se buscarán productos con el mismo nombre y atributos en las sucursales seleccionadas.
             </div>
-
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button class="btn-clear" onclick="cerrarModal('modalSync')">
-                    Cancelar
-                </button>
-                <button class="btn-search" onclick="aplicarSincronizacion()">
-                    <i class="fas fa-sync"></i> Sincronizar Precios
-                </button>
-            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-light" onclick="cerrarModal('modalSync')">
+                Cancelar
+            </button>
+            <button type="button" class="btn btn-primary" onclick="aplicarSincronizacion()">
+                <i class="bi bi-arrow-repeat me-1"></i>Sincronizar Precios
+            </button>
         </div>
     </div>
 </div>
@@ -976,9 +743,9 @@ function renderizarTabla(productos) {
         document.getElementById('resultsTable').style.display = 'none';
         document.getElementById('emptyState').style.display = 'block';
         document.getElementById('emptyState').innerHTML = `
-            <i class="fas fa-inbox"></i>
-            <h3>No se encontraron productos</h3>
-            <p>Intenta ajustar los filtros de búsqueda</p>
+            <i class="bi bi-inbox"></i>
+            <h6>No se encontraron productos</h6>
+            <p class="text-muted mb-0">Intenta ajustar los filtros de búsqueda</p>
         `;
         return;
     }
@@ -997,32 +764,33 @@ function renderizarTabla(productos) {
         row.id = `row-${producto.id}`;
         row.innerHTML = `
             <td class="checkbox-cell">
-                <input type="checkbox" class="product-checkbox" data-id="${producto.id}">
+                <input type="checkbox" class="form-check-input product-checkbox" data-id="${producto.id}" aria-label="Seleccionar ${producto.sku}">
             </td>
             <td><strong>${producto.sku}</strong></td>
             <td>${producto.nombre}</td>
-            <td>${producto.talla || 'N/A'}</td>
+            <td class="text-center">${producto.talla || 'N/A'}</td>
             <td>${producto.categoria || '-'}</td>
             <td>${producto.marca || '-'}</td>
-            <td><span class="badge" style="background: #e3f2fd; color: #1976d2; padding: 3px 8px; border-radius: 3px; font-size: 11px;">${producto.sucursal}</span></td>
-            <td id="costo-${producto.id}" data-costo="${producto.costo}">${formatearMoneda(producto.costo)}</td>
-            <td>
-                <input type="number" 
-                       class="editable-price" 
+            <td><span class="badge badge-soft-info">${producto.sucursal}</span></td>
+            <td class="text-end" id="costo-${producto.id}" data-costo="${producto.costo}">${formatearMoneda(producto.costo)}</td>
+            <td class="text-end">
+                <input type="number"
+                       class="form-control editable-price"
                        value="${producto.precio_venta}"
                        data-id="${producto.id}"
                        data-original="${producto.precio_venta}"
                        data-costo="${producto.costo}"
+                       aria-label="Precio de venta ${producto.sku}"
                        oninput="recalcularMargenes(this)">
             </td>
-            <td><span class="margin-badge ${margenClass}" id="margen-${producto.id}">${margen.toFixed(1)}%</span></td>
-            <td><span class="margin-badge ${markupClass}" id="markup-${producto.id}">${markup.toFixed(1)}%</span></td>
-            <td><span class="stock-badge ${stockClass}">${producto.stock}</span></td>
-            <td><span class="age-badge ${ageClass}">${formatearAntiguedad(producto.dias_inventario)}</span></td>
-            <td>
-                <i class="fas fa-lightbulb recommendation-icon" 
-                   onclick="mostrarRecomendaciones(${producto.id})"
-                   title="Ver recomendaciones"></i>
+            <td class="text-end"><span class="margin-badge ${margenClass}" id="margen-${producto.id}">${margen.toFixed(1)}%</span></td>
+            <td class="text-end"><span class="margin-badge ${markupClass}" id="markup-${producto.id}">${markup.toFixed(1)}%</span></td>
+            <td class="text-end"><span class="stock-badge ${stockClass}">${producto.stock}</span></td>
+            <td class="text-center"><span class="age-badge ${ageClass}">${formatearAntiguedad(producto.dias_inventario)}</span></td>
+            <td class="text-center">
+                <button type="button" class="btn btn-sm btn-soft-info"
+                        onclick="mostrarRecomendaciones(${producto.id})"
+                        title="Ver recomendaciones" aria-label="Ver recomendaciones"><i class="bi bi-lightbulb"></i></button>
             </td>
         `;
         tbody.appendChild(row);
@@ -1040,13 +808,13 @@ async function mostrarRecomendaciones(productoId) {
             const rec = data.recomendaciones;
             
             content.innerHTML = `
-                <div style="margin-bottom: 20px;">
-                    <h3 style="margin-top: 0;">${rec.producto_nombre} - ${rec.sku}</h3>
-                    <p style="color: #7f8c8d;">Análisis inteligente de precio basado en múltiples factores</p>
+                <div class="mb-3">
+                    <h6 class="fw-semibold mb-1">${rec.producto_nombre} - ${rec.sku}</h6>
+                    <p class="text-muted small mb-0">Análisis inteligente de precio basado en múltiples factores</p>
                 </div>
 
                 <div class="recommendation-section">
-                    <h3>📊 Análisis Actual</h3>
+                    <h6><i class="bi bi-bar-chart me-1"></i>Análisis Actual</h6>
                     <div class="recommendation-item">
                         <span class="recommendation-label">Precio Actual:</span>
                         <span class="recommendation-value">${formatearMoneda(rec.precio_actual)}</span>
@@ -1070,7 +838,7 @@ async function mostrarRecomendaciones(productoId) {
                 </div>
 
                 <div class="recommendation-section">
-                    <h3>💡 Análisis de Rotación</h3>
+                    <h6><i class="bi bi-lightbulb me-1"></i>Análisis de Rotación</h6>
                     <div class="recommendation-item">
                         <span class="recommendation-label">Ventas (30 días):</span>
                         <span>${rec.ventas_30_dias} unidades</span>
@@ -1086,7 +854,7 @@ async function mostrarRecomendaciones(productoId) {
                 </div>
 
                 <div class="recommendation-section">
-                    <h3>🎯 Factores de Ajuste</h3>
+                    <h6><i class="bi bi-bullseye me-1"></i>Factores de Ajuste</h6>
                     <div class="recommendation-item">
                         <span class="recommendation-label">Factor Antigüedad:</span>
                         <span>${rec.factor_antiguedad > 0 ? '+' : ''}${(rec.factor_antiguedad * 100).toFixed(1)}%</span>
@@ -1102,16 +870,16 @@ async function mostrarRecomendaciones(productoId) {
                 </div>
 
                 <div class="price-suggestion">
-                    <h3>💰 Precio Recomendado</h3>
+                    <h6><i class="bi bi-cash-coin me-1"></i>Precio Recomendado</h6>
                     <div class="suggested-price">${formatearMoneda(rec.precio_recomendado)}</div>
-                    <p style="margin: 10px 0;">
+                    <p class="mb-1">
                         Margen proyectado: <strong>${rec.margen_recomendado.toFixed(1)}%</strong>
                     </p>
-                    <p style="font-size: 13px; opacity: 0.9; margin: 5px 0;">
+                    <p class="small text-muted mb-3">
                         ${rec.justificacion}
                     </p>
-                    <button class="apply-suggestion-btn" onclick="aplicarPrecioRecomendado(${productoId}, ${rec.precio_recomendado})">
-                        Aplicar Precio Recomendado
+                    <button type="button" class="btn btn-success" onclick="aplicarPrecioRecomendado(${productoId}, ${rec.precio_recomendado})">
+                        <i class="bi bi-check-lg me-1"></i>Aplicar Precio Recomendado
                     </button>
                 </div>
             `;
@@ -1134,22 +902,6 @@ async function aplicarPrecioRecomendado(productoId, precioRecomendado) {
     }
     
     aplicarPrecioDirecto(productoId, precioRecomendado);
-    
-    /* MODO CON APROBACIÓN (comentado por defecto):
-    
-    // Preguntar si aplicar inmediatamente o enviar a aprobación
-    const opcion = confirm(
-        `¿Cómo deseas proceder con el precio de ${formatearMoneda(precioRecomendado)}?\n\n` +
-        `OK = Aplicar INMEDIATAMENTE (sin aprobación)\n` +
-        `Cancelar = Enviar a APROBACIÓN (requiere revisar)`
-    );
-    
-    if (opcion) {
-        aplicarPrecioDirecto(productoId, precioRecomendado);
-    } else {
-        proponeprCambioParaAprobacion(productoId, precioRecomendado);
-    }
-    */
 }
 
 // Aplicar precio directamente (sin aprobación)
@@ -1251,16 +1003,16 @@ function abrirModificacionMasiva() {
     const infoEditados = document.getElementById('productosEditadosInfo');
     if (productosEditados.length > 0) {
         infoEditados.innerHTML = `
-            <div style="background: #d4edda; padding: 10px; border-radius: 5px; margin-bottom: 15px; border-left: 4px solid #28a745;">
-                <strong>✓ ${productosEditados.length} productos con precios editados en la tabla</strong><br>
+            <div class="alert alert-success mb-3" role="alert">
+                <strong><i class="bi bi-check-lg me-1"></i>${productosEditados.length} productos con precios editados en la tabla</strong><br>
                 <small>Puedes aplicar estos cambios directamente o usar modificación por criterio</small>
             </div>
-            <div style="margin-bottom: 15px;">
-                <button class="btn-search" onclick="aplicarPreciosEditados()" style="width: 100%;">
-                    <i class="fas fa-check-double"></i> Aplicar Precios Editados (${productosEditados.length})
+            <div class="mb-3">
+                <button type="button" class="btn btn-primary w-100" onclick="aplicarPreciosEditados()">
+                    <i class="bi bi-check2-all me-1"></i>Aplicar Precios Editados (${productosEditados.length})
                 </button>
             </div>
-            <div style="text-align: center; margin: 15px 0; color: #7f8c8d;">
+            <div class="text-center text-muted my-3">
                 <strong>— O usa modificación por criterio —</strong>
             </div>
         `;
@@ -1436,8 +1188,8 @@ async function abrirSincronizacion() {
             const div = document.createElement('div');
             div.style.marginBottom = '8px';
             div.innerHTML = `
-                <label style="display: flex; align-items: center; cursor: pointer;">
-                    <input type="checkbox" name="sucursal_sync" value="${suc.id}" style="margin-right: 8px;">
+                <label class="form-check-label d-flex align-items-center" style="cursor: pointer;">
+                    <input type="checkbox" class="form-check-input me-2 mt-0" name="sucursal_sync" value="${suc.id}">
                     <span>${suc.alias}</span>
                 </label>
             `;

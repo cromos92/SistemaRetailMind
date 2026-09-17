@@ -94,19 +94,19 @@
     function cargarPendientes() {
         const container = document.getElementById('pendientesContainer');
         if (!container) return;
-        container.innerHTML = '<div class="text-center text-muted py-3">Cargando pendientes...</div>';
+        container.innerHTML = '<div class="rm-empty-state"><div class="spinner-border spinner-border-sm text-secondary mb-2" role="status"></div><div>Cargando pendientes...</div></div>';
         fetch(CFG.urls.pendientes)
             .then((r) => r.json())
             .then((data) => {
                 if (!data.success) {
-                    container.innerHTML = `<div class="text-center text-danger py-2">${escapeHtml(data.error || 'No se pudieron cargar los pendientes')}</div>`;
+                    container.innerHTML = `<div class="rm-empty-state text-danger"><i class="bi bi-exclamation-triangle"></i>${escapeHtml(data.error || 'No se pudieron cargar los pendientes')}</div>`;
                     return;
                 }
                 const grupos = data.pendientes_por_sucursal || [];
                 actualizarKpiPendientes(data.total_unidades || 0);
                 setTextIfExists('badgePendientesLineas', `${data.total_lineas || 0} líneas`);
                 if (!grupos.length) {
-                    container.innerHTML = '<div class="text-center text-muted py-2">No hay pendientes de despacho</div>';
+                    container.innerHTML = '<div class="rm-empty-state"><i class="bi bi-inbox"></i>No hay pendientes de despacho</div>';
                     return;
                 }
                 // Un acordeón por destino: en producción hay más de mil líneas
@@ -119,7 +119,7 @@
                             <button class="accordion-button ${idx === 0 ? '' : 'collapsed'} py-2" type="button"
                                     data-bs-toggle="collapse" data-bs-target="#pend-${suc.sucursal_id}">
                                 <span class="flex-grow-1">
-                                    <i class="ri-store-2-line me-1 text-primary"></i>
+                                    <i class="bi bi-shop me-1 text-primary"></i>
                                     <strong>${escapeHtml(suc.alias)}</strong>
                                     <span class="badge bg-warning ms-2">${suc.total_unidades} uds</span>
                                     <span class="badge bg-light text-dark ms-1">${suc.total_lineas} líneas</span>
@@ -141,7 +141,7 @@
                             <td>${escapeHtml(item.talla)}</td>
                             <td class="text-end fw-bold">${item.cantidad_restante}</td>
                             <td class="text-end ${item.dias >= 30 ? 'text-danger fw-bold' : 'text-muted'}">${item.dias}</td>
-                            <td class="text-center"><button type="button" class="btn btn-sm btn-outline-primary" onclick="DespachoSucursales.agregarPendienteAlCarrito('${escapeHtml(item.sku)}', ${suc.sucursal_id})" title="Buscar este SKU para agregarlo al carrito"><i class="ri-add-line"></i></button></td>
+                            <td class="text-center"><button type="button" class="btn btn-sm btn-outline-primary" onclick="DespachoSucursales.agregarPendienteAlCarrito('${escapeHtml(item.sku)}', ${suc.sucursal_id})" title="Buscar este SKU para agregarlo al carrito"><i class="bi bi-plus-lg"></i></button></td>
                         </tr>`;
                     });
                     html += '</tbody></table></div>';
@@ -154,7 +154,7 @@
                 container.innerHTML = html;
             })
             .catch(() => {
-                container.innerHTML = '<div class="text-center text-danger py-2">Error de conexión al cargar pendientes</div>';
+                container.innerHTML = '<div class="rm-empty-state text-danger"><i class="bi bi-exclamation-triangle"></i>Error de conexión al cargar pendientes</div>';
             });
     }
 
@@ -227,7 +227,7 @@
         const tbody = document.getElementById('tbodyProductos');
         if (!tbody) return;
         if (!productos.length) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Sin resultados</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6"><div class="rm-empty-state"><i class="bi bi-search"></i>Sin resultados</div></td></tr>';
             return;
         }
         let html = '';
@@ -241,7 +241,7 @@
                 <td class="text-end fw-bold">${p.stock}</td>
                 <td class="text-center">
                     <button type="button" class="btn btn-sm btn-primary" onclick='DespachoSucursales.agregarAlCarrito(${JSON.stringify(p)})'>
-                        <i class="ri-add-line"></i>
+                        <i class="bi bi-plus-lg"></i>
                     </button>
                 </td>
             </tr>`;
@@ -339,7 +339,7 @@
         const container = document.getElementById('carritoItems');
         if (!container) return;
         if (!carrito.length) {
-            container.innerHTML = '<div class="text-center text-muted py-3">Agregue productos al carrito</div>';
+            container.innerHTML = '<div class="rm-empty-state"><i class="bi bi-cart3"></i>Agregue productos al carrito</div>';
             document.getElementById('totalItems').textContent = '0';
             document.getElementById('totalUnidades').textContent = '0';
             return;
@@ -353,7 +353,7 @@
                 </div>
                 <input type="number" class="form-control form-control-sm" style="width:70px;" min="1" max="${item.stock_max}" value="${item.cantidad}"
                     onchange="DespachoSucursales.actualizarCantidad(${idx}, this.value)">
-                <button type="button" class="btn btn-sm btn-outline-danger" onclick="DespachoSucursales.quitarDelCarrito(${idx})"><i class="ri-delete-bin-line"></i></button>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="DespachoSucursales.quitarDelCarrito(${idx})"><i class="bi bi-trash"></i></button>
             </div>`;
         });
         container.innerHTML = html;
@@ -398,10 +398,10 @@
             const totalUn = d.items.reduce((a, b) => a + b.cantidad, 0);
             html += `<div class="mb-2 p-2 border rounded bg-light">
                 <div class="d-flex justify-content-between align-items-center">
-                    <strong><i class="ri-store-2-line me-1"></i>${escapeHtml(d.sucursal_alias)}</strong>
+                    <strong><i class="bi bi-shop me-1"></i>${escapeHtml(d.sucursal_alias)}</strong>
                     <div>
                         <span class="badge bg-primary me-1">${d.items.length} items / ${totalUn} uds</span>
-                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="DespachoSucursales.quitarDespacho(${idx})"><i class="ri-close-line"></i></button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="DespachoSucursales.quitarDespacho(${idx})"><i class="bi bi-x-lg"></i></button>
                     </div>
                 </div>
             </div>`;
@@ -472,7 +472,7 @@
             .then((data) => {
                 if (!data.success) {
                     const tbody = document.getElementById('tbodyHistorial');
-                    if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">${escapeHtml(data.error || 'No se pudo cargar el historial')}</td></tr>`;
+                    if (tbody) tbody.innerHTML = `<tr><td colspan="8"><div class="rm-empty-state text-danger"><i class="bi bi-exclamation-triangle"></i>${escapeHtml(data.error || 'No se pudo cargar el historial')}</div></td></tr>`;
                     return;
                 }
                 renderTablaHistorial(data.despachos);
@@ -485,7 +485,7 @@
         const tbody = document.getElementById('tbodyHistorial');
         if (!tbody) return;
         if (!despachos.length) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Sin despachos en el período seleccionado</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8"><div class="rm-empty-state"><i class="bi bi-clock-history"></i>Sin despachos en el período seleccionado</div></td></tr>';
             return;
         }
         let html = '';
@@ -497,7 +497,7 @@
             html += `<tr class="${alerta ? 'table-danger' : ''}">
                 <td><span class="fw-semibold">#${escapeHtml(d.numero_documento)}</span><br>
                     <small class="text-muted">${escapeHtml(d.tipo_documento)}</small></td>
-                <td><i class="ri-store-2-line me-1 text-primary"></i>${escapeHtml(d.destino)}</td>
+                <td><i class="bi bi-shop me-1 text-primary"></i>${escapeHtml(d.destino)}</td>
                 <td>${escapeHtml(d.fecha)}<br><small class="text-muted">hace ${d.dias} d</small></td>
                 <td class="text-end">${d.items}</td>
                 <td class="text-end">${d.enviadas}</td>

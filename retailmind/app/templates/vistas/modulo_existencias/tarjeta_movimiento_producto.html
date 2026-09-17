@@ -10,20 +10,45 @@
                      3) Llegadas → 4) Historial de vida
    ===================================================================== */
 
-/* ---------- Header del módulo ---------- */
-.tm-header {
-    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
-    border-radius: 16px;
+/* ---------- Tokens del módulo (paleta ESTILOS_MODULOS + neutros NEXO) ---------- */
+.page-content {
+    --tm-primary: #405189;
+    --tm-accent: #0ab39c;
+    --tm-gradient: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    --tm-tint: #eef1f8;            /* fondo azulado de apoyo */
+    --tm-border: #eef0f4;          /* divisor suave */
+    --tm-border-strong: #e3e6ee;   /* borde marcado (cabeceras, totales) */
+    --tm-surface: #f3f6f9;         /* cabecera y pie de tabla */
+    --tm-surface-soft: #fbfcfe;    /* filas y bloques secundarios */
+}
+
+/* ---------- Cabecera de módulo (estándar ESTILOS_MODULOS.md) ---------- */
+.module-header {
+    background: var(--tm-gradient);
     color: #fff;
-    padding: 1.15rem 1.5rem;
-    box-shadow: 0 4px 20px rgba(64, 81, 137, .18);
+    padding: 16px 24px;
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
 }
-.tm-header h4 { color: #fff; margin: 0; font-weight: 700; font-size: 1.15rem; }
-.tm-header .tm-sub { color: rgba(255,255,255,.85); font-size: .85rem; margin-top: .15rem; }
-.tm-header-icon {
-    width: 48px; height: 48px; background: rgba(255,255,255,.2); border-radius: 12px;
-    display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0;
+.module-header-left { display: flex; align-items: center; gap: 14px; }
+.module-header-icon {
+    width: 48px; height: 48px;
+    background: rgba(255,255,255,.2);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; flex-shrink: 0;
 }
+.module-header-info h5 { margin: 0; font-size: 18px; font-weight: 600; color: #fff; }
+.module-header-status { display: flex; align-items: center; gap: 6px; font-size: 13px; opacity: .9; margin-top: 4px; }
+.status-dot { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; animation: pulse 2s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+.module-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+/* La card que envuelve la cabecera recorta el gradiente en sus esquinas */
+.tm-module-card { border: none; border-radius: 16px; overflow: hidden; }
 
 /* ---------- Card genérica del módulo ---------- */
 .tm-card {
@@ -32,63 +57,68 @@
 }
 .tm-card-title {
     display: flex; align-items: center; gap: .6rem;
-    font-weight: 700; color: #1A1A2E; font-size: 1rem; margin: 0;
+    font-weight: 700; color: var(--nexo-gray-900); font-size: 1rem; margin: 0;
 }
 .tm-step {
     width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
-    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
-    color: #fff; font-size: .78rem; font-weight: 700;
+    background: var(--tm-gradient);
+    color: #fff; font-size: .8125rem; font-weight: 700;
     display: inline-flex; align-items: center; justify-content: center;
 }
-.tm-card-hint { font-size: .78rem; color: #8A8A9A; margin: .2rem 0 0 2.1rem; }
+.tm-card-hint { font-size: .8125rem; color: var(--nexo-gray-500); margin: .2rem 0 0 2.1rem; }
 
 /* ---------- Buscador ---------- */
-#inputSku { font-size: 1.05rem; font-weight: 600; letter-spacing: .01em; }
-#listaAyudaProductos .list-group-item-action:hover { background: #eef1f8; }
+#inputSku { font-size: 1rem; font-weight: 600; letter-spacing: .01em; }
+#listaAyudaProductos {
+    z-index: 1050; max-height: 340px; overflow-y: auto;
+    left: calc(var(--vz-gutter-x, 1.5rem) * .5); right: calc(var(--vz-gutter-x, 1.5rem) * .5);   /* el padding real de la columna: a ras del input */
+}
+#listaAyudaProductos .list-group-item-action:hover { background: var(--tm-tint); }
 
 /* ---------- 1. Ficha del artículo ---------- */
 .tm-ficha {
     border-radius: 16px; overflow: hidden; background: #fff;
     box-shadow: 0 2px 10px rgba(26,26,46,.06);
-    border-top: 4px solid #405189;
+    border-top: 4px solid var(--tm-primary);
 }
 .tm-ficha-top { display: flex; flex-wrap: wrap; gap: 1rem; padding: 1.1rem 1.35rem; }
 .tm-ficha-avatar {
     width: 62px; height: 62px; border-radius: 14px; flex-shrink: 0;
-    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
-    color: #fff; font-size: 1.7rem;
+    background: var(--tm-gradient);
+    color: #fff; font-size: 1.5rem;
     display: flex; align-items: center; justify-content: center;
 }
-.tm-ficha-nombre { font-size: 1.3rem; font-weight: 800; color: #1A1A2E; line-height: 1.2; margin: 0; }
+.tm-ficha-datos { min-width: 240px; }
+.tm-ficha-nombre { font-size: 1.25rem; font-weight: 800; color: var(--nexo-gray-900); line-height: 1.2; margin: 0; }
 .tm-ficha-codigo {
-    font-family: 'SF Mono','Consolas',monospace; font-size: .95rem; font-weight: 700;
-    background: #eef1f8; color: #405189; border-radius: 7px; padding: .12rem .5rem;
+    font-family: 'SF Mono','Consolas',monospace; font-size: .875rem; font-weight: 700;
+    background: var(--tm-tint); color: var(--tm-primary); border-radius: 7px; padding: .12rem .5rem;
 }
 .tm-attr {
     display: inline-flex; align-items: center; gap: .3rem;
-    background: #f5f5f7; color: #4A4A5A; border-radius: 999px;
-    padding: .18rem .65rem; font-size: .78rem; font-weight: 600;
+    background: var(--nexo-gray-100); color: var(--nexo-gray-700); border-radius: 999px;
+    padding: .18rem .65rem; font-size: .8125rem; font-weight: 600;
 }
-.tm-attr i { color: #8A8A9A; font-size: .85rem; }
+.tm-attr i { color: var(--nexo-gray-500); font-size: .875rem; }
 .tm-precio-box { text-align: right; margin-left: auto; }
-.tm-precio-lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: #8A8A9A; font-weight: 700; }
-.tm-precio-val { font-size: 1.6rem; font-weight: 800; color: #0ab39c; line-height: 1.1; }
-.tm-costo-val { font-size: .82rem; color: #8A8A9A; font-weight: 600; }
+.tm-precio-lbl { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--nexo-gray-700); font-weight: 700; }
+.tm-precio-val { font-size: 1.25rem; font-weight: 800; color: var(--nexo-gray-900); line-height: 1.1; }
+.tm-costo-val { font-size: .8125rem; color: var(--nexo-gray-500); font-weight: 600; }
 
 /* Fila de métricas dentro de la ficha */
 .tm-metricas {
     display: grid; grid-template-columns: repeat(5, 1fr);
-    border-top: 1px solid #eef0f4; background: #fbfcfe;
+    border-top: 1px solid var(--tm-border); background: var(--tm-surface-soft);
 }
-.tm-metrica { padding: .75rem 1rem; border-right: 1px solid #eef0f4; }
+.tm-metrica { padding: .75rem 1rem; border-right: 1px solid var(--tm-border); }
 .tm-metrica:last-child { border-right: none; }
 .tm-metrica-lbl {
-    font-size: .68rem; text-transform: uppercase; letter-spacing: .05em;
-    color: #8A8A9A; font-weight: 700; display: flex; align-items: center; gap: .3rem;
+    font-size: .75rem; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--nexo-gray-700); font-weight: 700; display: flex; align-items: center; gap: .3rem;
 }
-.tm-metrica-val { font-size: 1.35rem; font-weight: 800; color: #1A1A2E; line-height: 1.15; }
-.tm-metrica-sub { font-size: .74rem; color: #8A8A9A; }
-.tm-metrica-val.ok   { color: #0ab39c; }
+.tm-metrica-val { font-size: 1.25rem; font-weight: 800; color: var(--nexo-gray-900); line-height: 1.15; }
+.tm-metrica-sub { font-size: .75rem; color: var(--nexo-gray-500); }
+.tm-metrica-val.ok   { color: var(--tm-accent); }
 .tm-metrica-val.warn { color: #f7b84b; }
 .tm-metrica-val.bad  { color: #f06548; }
 
@@ -96,20 +126,20 @@
 .tm-nav {
     position: sticky; top: 70px; z-index: 20;
     background: rgba(255,255,255,.94); backdrop-filter: blur(6px);
-    border: 1px solid #eef0f4; border-radius: 12px;
+    border: 1px solid var(--tm-border); border-radius: 12px;
     padding: .45rem .55rem; display: flex; flex-wrap: wrap; gap: .35rem; align-items: center;
     box-shadow: 0 2px 8px rgba(26,26,46,.06);
 }
 .tm-nav-btn {
     border: 1px solid transparent; background: transparent; border-radius: 9px;
-    padding: .35rem .8rem; font-size: .82rem; font-weight: 600; color: #4A4A5A;
+    padding: .45rem .8rem; font-size: .8125rem; font-weight: 600; color: var(--nexo-gray-700);
     display: inline-flex; align-items: center; gap: .4rem; transition: all .18s ease;
 }
-.tm-nav-btn:hover { background: #eef1f8; color: #405189; }
-.tm-nav-btn.active { background: #405189; color: #fff; box-shadow: 0 2px 8px rgba(64,81,137,.3); }
+.tm-nav-btn:hover { background: var(--tm-tint); color: var(--tm-primary); }
+.tm-nav-btn.active { background: var(--tm-primary); color: #fff; box-shadow: 0 2px 8px rgba(64,81,137,.3); }
 .tm-nav-btn .tm-nav-n {
-    width: 18px; height: 18px; border-radius: 6px; background: rgba(0,0,0,.08);
-    font-size: .68rem; display: inline-flex; align-items: center; justify-content: center; font-weight: 700;
+    width: 20px; height: 20px; border-radius: 6px; background: rgba(0,0,0,.08);
+    font-size: .75rem; display: inline-flex; align-items: center; justify-content: center; font-weight: 700;
 }
 .tm-nav-btn.active .tm-nav-n { background: rgba(255,255,255,.25); }
 .tm-seccion { scroll-margin-top: 130px; }
@@ -117,71 +147,78 @@
 /* ---------- 2. Matriz talla × sucursal ---------- */
 .tm-talla-resumen { display: flex; flex-wrap: wrap; gap: .4rem; }
 .tm-talla-tot {
-    border: 1px solid #e3e6ee; border-radius: 10px; padding: .3rem .55rem;
-    text-align: center; min-width: 58px; background: #fff; cursor: pointer;
+    border: 1px solid var(--tm-border-strong); border-radius: 10px; padding: .4rem .6rem;
+    text-align: center; min-width: 58px; min-height: 46px; background: #fff; cursor: pointer;
     transition: all .15s ease;
 }
-.tm-talla-tot:hover { border-color: #405189; transform: translateY(-2px); }
-.tm-talla-tot.activa { border-color: #405189; background: #eef1f8; box-shadow: 0 0 0 2px rgba(64,81,137,.15); }
-.tm-talla-tot.vacia { opacity: .45; }
-.tm-talla-tot .t { font-size: .72rem; font-weight: 700; color: #8A8A9A; text-transform: uppercase; }
-.tm-talla-tot .n { font-size: 1.05rem; font-weight: 800; color: #1A1A2E; line-height: 1.1; }
+.tm-talla-tot:hover { border-color: var(--tm-primary); transform: translateY(-2px); }
+.tm-talla-tot.activa { border-color: var(--tm-primary); background: var(--tm-tint); box-shadow: 0 0 0 2px rgba(64,81,137,.15); }
+.tm-talla-tot.vacia { opacity: .55; }
+.tm-talla-tot .t { font-size: .75rem; font-weight: 700; color: var(--nexo-gray-500); text-transform: uppercase; }
+.tm-talla-tot .n { font-size: 1rem; font-weight: 800; color: var(--nexo-gray-900); line-height: 1.1; }
 
 .tm-matriz-wrap {
-    border: 1px solid #eef0f4; border-radius: 12px; overflow: auto; max-height: 62vh;
+    border: 1px solid var(--tm-border); border-radius: 12px; overflow: auto; max-height: 62vh;
 }
 table.tm-matriz { margin: 0; border-collapse: separate; border-spacing: 0; width: 100%; }
-table.tm-matriz th, table.tm-matriz td { padding: .45rem .55rem; font-size: .82rem; white-space: nowrap; }
-table.tm-matriz thead th {
-    position: sticky; top: 0; z-index: 3; background: #f3f6f9; color: #405189;
-    font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
-    text-align: center; border-bottom: 2px solid #e3e6ee; cursor: pointer;
+table.tm-matriz th, table.tm-matriz td { padding: .45rem .55rem; font-size: .8125rem; white-space: nowrap; }
+
+/* Una sola definición de cabecera sticky para las dos tablas de la página */
+table.tm-matriz thead th,
+#tablaMovimientos thead th {
+    position: sticky; top: 0; background: var(--tm-surface); color: var(--tm-primary);
+    font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+    border-bottom: 2px solid var(--tm-border-strong);
 }
-table.tm-matriz thead th:hover { background: #e8edf6; }
+table.tm-matriz thead th { z-index: 3; text-align: center; cursor: pointer; }
+#tablaMovimientos thead th { z-index: 5; }
+table.tm-matriz thead th:hover { background: var(--tm-tint); }
 table.tm-matriz thead th.tm-col-suc,
 table.tm-matriz tbody td.tm-col-suc,
 table.tm-matriz tfoot td.tm-col-suc {
     position: sticky; left: 0; z-index: 2; background: #fff; text-align: left;
-    border-right: 2px solid #eef0f4; min-width: 168px;
+    border-right: 2px solid var(--tm-border); min-width: 168px;
 }
-table.tm-matriz thead th.tm-col-suc { z-index: 4; background: #f3f6f9; }
-table.tm-matriz tbody tr:hover td { background: #f7f9fc; }
-table.tm-matriz tbody tr:hover td.tm-col-suc { background: #f7f9fc; }
-table.tm-matriz tbody td { text-align: center; border-bottom: 1px solid #f2f4f8; }
+table.tm-matriz thead th.tm-col-suc { z-index: 4; background: var(--tm-surface); }
+table.tm-matriz tbody tr:hover td { background: var(--tm-surface-soft); }
+table.tm-matriz tbody tr:hover td.tm-col-suc { background: var(--tm-surface-soft); }
+table.tm-matriz tbody td { text-align: center; border-bottom: 1px solid var(--tm-border); }
 table.tm-matriz tfoot td {
-    position: sticky; bottom: 0; z-index: 2; background: #f3f6f9; font-weight: 800;
-    color: #405189; text-align: center; border-top: 2px solid #e3e6ee;
+    position: sticky; bottom: 0; z-index: 2; background: var(--tm-surface); font-weight: 800;
+    color: var(--tm-primary); text-align: center; border-top: 2px solid var(--tm-border-strong);
 }
-table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: #f3f6f9; text-align: left; }
-.tm-col-activa { box-shadow: inset 3px 0 0 #405189, inset -3px 0 0 #405189; }
+table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: var(--tm-surface); text-align: left; }
+.tm-col-activa { box-shadow: inset 3px 0 0 var(--tm-primary), inset -3px 0 0 var(--tm-primary); }
+/* Columna "Total" de la matriz: la misma línea vertical en cabecera, cuerpo y pie */
+.tm-col-total { border-left: 2px solid var(--tm-border-strong); }
 
 /* Celda de stock: mapa de calor */
 .tm-cel {
     display: inline-flex; align-items: center; justify-content: center;
-    min-width: 34px; height: 26px; border-radius: 7px;
-    font-weight: 700; font-size: .82rem; cursor: pointer; transition: transform .12s ease;
+    min-width: 40px; height: 36px; border-radius: 7px;
+    font-weight: 700; font-size: .8125rem; cursor: pointer; transition: transform .12s ease;
 }
 .tm-cel:hover { transform: scale(1.12); }
-.tm-cel.n0 { background: #f5f5f7; color: #c9c9d3; font-weight: 500; }
+.tm-cel.n0 { background: var(--nexo-gray-100); color: var(--nexo-gray-500); font-weight: 600; }
 .tm-cel.n1 { background: rgba(10,179,156,.14); color: #0a8a78; }
 .tm-cel.n2 { background: rgba(10,179,156,.30); color: #077a69; }
 .tm-cel.n3 { background: rgba(10,179,156,.55); color: #05564a; }
-.tm-cel.n4 { background: #0ab39c; color: #fff; }
+.tm-cel.n4 { background: var(--tm-accent); color: #fff; }
 
-.tm-suc-nombre { font-weight: 700; color: #1A1A2E; }
-.tm-suc-total { font-weight: 800; color: #405189; }
+.tm-suc-nombre { font-weight: 700; color: var(--nexo-gray-900); }
+.tm-suc-total { font-weight: 800; color: var(--tm-primary); }
 .tm-tag {
     display: inline-block; border-radius: 999px; padding: .05rem .45rem;
-    font-size: .66rem; font-weight: 700; margin-left: .3rem; vertical-align: middle;
+    font-size: .75rem; font-weight: 700; margin-left: .3rem; vertical-align: middle;
 }
 .tm-tag-cd    { background: #e8f7f2; color: #0a8a78; }
-.tm-tag-aqui  { background: #e9f0ff; color: #405189; }
-.tm-fila-cero td { opacity: .55; }
+.tm-tag-aqui  { background: var(--tm-tint); color: var(--tm-primary); }
+.tm-fila-cero td { opacity: .7; }
 
 /* ---------- 3. Llegadas ---------- */
 .tm-llegadas { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: .85rem; }
 .tm-llegada {
-    border: 1px solid #eef0f4; border-left: 4px solid #0ab39c; border-radius: 12px;
+    border: 1px solid var(--tm-border); border-left: 4px solid var(--tm-accent); border-radius: 12px;
     background: #fff; padding: .8rem .95rem; transition: box-shadow .18s ease, transform .18s ease;
 }
 .tm-llegada:hover { box-shadow: 0 8px 18px rgba(26,26,46,.09); transform: translateY(-2px); }
@@ -190,95 +227,106 @@ table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: #f3f6f9; text-alig
     width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1rem;
 }
-.tm-llegada-titulo { font-weight: 700; color: #1A1A2E; font-size: .92rem; line-height: 1.25; }
-.tm-llegada-fecha { font-size: .76rem; color: #8A8A9A; }
+.tm-llegada-txt { min-width: 0; }
+.tm-llegada-titulo { font-weight: 700; color: var(--nexo-gray-900); font-size: .875rem; line-height: 1.25; }
+.tm-llegada-fecha { font-size: .75rem; color: var(--nexo-gray-500); }
 .tm-llegada-uds { text-align: right; margin-left: auto; }
-.tm-llegada-uds .n { font-size: 1.5rem; font-weight: 800; color: #0ab39c; line-height: 1; }
-.tm-llegada-uds .u { font-size: .68rem; color: #8A8A9A; text-transform: uppercase; font-weight: 700; }
+.tm-llegada-uds .n { font-size: 1.25rem; font-weight: 800; color: var(--tm-accent); line-height: 1; }
+.tm-llegada-uds .u { font-size: .75rem; color: var(--nexo-gray-500); text-transform: uppercase; font-weight: 700; }
 .tm-llegada-ruta {
     display: flex; flex-wrap: wrap; align-items: center; gap: .35rem;
-    font-size: .8rem; color: #4A4A5A; margin: .6rem 0 .45rem;
+    font-size: .8125rem; color: var(--nexo-gray-700); margin: .6rem 0 .45rem;
 }
-.tm-llegada-ruta .b { font-weight: 700; color: #1A1A2E; }
-.tm-llegada-meta { font-size: .74rem; color: #8A8A9A; display: flex; flex-wrap: wrap; gap: .7rem; }
+.tm-llegada-ruta .b { font-weight: 700; color: var(--nexo-gray-900); }
+.tm-llegada-meta { font-size: .75rem; color: var(--nexo-gray-500); display: flex; flex-wrap: wrap; gap: .7rem; }
 .tm-lt {
     display: inline-flex; align-items: baseline; gap: .22rem;
-    background: #f5f5f7; border-radius: 7px; padding: .1rem .45rem;
-    font-size: .74rem; font-weight: 600; color: #4A4A5A;
+    background: var(--nexo-gray-100); border-radius: 7px; padding: .1rem .45rem;
+    font-size: .75rem; font-weight: 600; color: var(--nexo-gray-700);
 }
-.tm-lt b { color: #0ab39c; font-size: .8rem; }
+.tm-lt b { color: var(--tm-accent); font-size: .8125rem; }
+/* Dentro de una alerta el chip hereda el color del mensaje: nada de verde de éxito sobre un aviso */
+.alert .tm-lt { background: rgba(255,255,255,.7); color: var(--nexo-gray-900); }
+.alert .tm-lt b { color: inherit; }
 .tm-dias {
-    font-size: .68rem; font-weight: 700; border-radius: 999px; padding: .1rem .5rem;
-    background: #f5f5f7; color: #8A8A9A; white-space: nowrap;
+    font-size: .75rem; font-weight: 700; border-radius: 999px; padding: .1rem .5rem;
+    background: var(--nexo-gray-100); color: var(--nexo-gray-700); white-space: nowrap;
 }
 .tm-dias.reciente { background: #e8f7f2; color: #0a8a78; }
 
 /* ---------- 4. Historial de vida ---------- */
-.tm-tabs .nav-link { font-weight: 600; color: #6c757d; border: none; border-bottom: 2px solid transparent; }
-.tm-tabs .nav-link.active { color: #405189; border-bottom-color: #405189; background: transparent; }
+.tm-tabs .nav-link { font-weight: 600; color: var(--nexo-gray-700); border: none; border-bottom: 2px solid transparent; }
+.tm-tabs .nav-link.active { color: var(--tm-primary); border-bottom-color: var(--tm-primary); background: transparent; }
 
 .tm-timeline { position: relative; padding-left: 2rem; margin-top: .5rem; }
 .tm-timeline::before {
     content: ''; position: absolute; left: 11px; top: 4px; bottom: 4px;
-    width: 2px; background: linear-gradient(180deg,#e3e6ee,#eef0f4);
+    width: 2px; background: var(--tm-border-strong);
 }
 .tm-tl-item { position: relative; padding: 0 0 1.1rem 0; }
 .tm-tl-dot {
     position: absolute; left: -1.62rem; top: 2px; width: 24px; height: 24px;
     border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    color: #fff; font-size: .8rem; box-shadow: 0 0 0 4px #fff, 0 2px 5px rgba(0,0,0,.12);
+    color: #fff; font-size: .8125rem; box-shadow: 0 0 0 4px #fff, 0 2px 5px rgba(0,0,0,.12);
 }
-.tm-tl-body { background: #fff; border: 1px solid #eef0f4; border-radius: 10px; padding: .55rem .8rem; transition: box-shadow .15s ease; }
+.tm-tl-body { background: #fff; border: 1px solid var(--tm-border); border-radius: 10px; padding: .55rem .8rem; transition: box-shadow .15s ease; }
 .tm-tl-item:hover .tm-tl-body { box-shadow: 0 6px 14px rgba(26,26,46,.10); }
-.tm-tl-title { font-weight: 700; color: #1A1A2E; font-size: .9rem; }
-.tm-tl-meta { font-size: .78rem; color: #8A8A9A; }
-.tm-tl-detail { font-size: .82rem; color: #4A4A5A; }
+.tm-tl-title { font-weight: 700; color: var(--nexo-gray-900); font-size: .875rem; }
+.tm-tl-meta { font-size: .75rem; color: var(--nexo-gray-500); }
+.tm-tl-detail { font-size: .8125rem; color: var(--nexo-gray-700); }
 .tm-tl-sep { position: relative; text-align: left; margin: .35rem 0 .9rem -2rem; padding-left: 2rem; }
 .tm-tl-sep span {
-    display: inline-block; background: #405189; color: #fff;
-    font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    display: inline-block; background: var(--tm-primary); color: #fff;
+    font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
     border-radius: 999px; padding: .18rem .7rem; box-shadow: 0 2px 6px rgba(64,81,137,.25);
 }
 .tm-tl-fecha-chip {
-    background: #f1f3f8; color: #4A4A5A; border-radius: 6px;
-    padding: .08rem .45rem; font-size: .72rem; font-weight: 600; white-space: nowrap;
+    background: var(--tm-tint); color: var(--nexo-gray-700); border-radius: 6px;
+    padding: .08rem .45rem; font-size: .75rem; font-weight: 600; white-space: nowrap;
 }
 
 /* Kardex */
-.tm-filter-bar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
-.tm-filter-bar select, .tm-filter-bar input { min-width: 130px; }
+.tm-filter-bar {
+    display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 1px solid rgba(64, 81, 137, .1); border-radius: 12px; padding: 10px 16px;
+}
+/* Solo los selects: la regla genérica sobre input estiraba el switch a 130px */
+.tm-filter-bar select { min-width: 130px; }
 #tablaMovimientos td, #tablaMovimientos th { vertical-align: middle; }
 #panelKardex .table-responsive { max-height: 65vh; }
-#tablaMovimientos thead th {
-    position: sticky; top: 0; z-index: 5; background: #f3f6f9;
-    font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: #405189;
-}
-.tm-badge-entrada  { background: #e8f7f2; color: #0a9; }
+.tm-badge-entrada  { background: #e8f7f2; color: #0a8a78; }
 .tm-badge-salida   { background: #fdecec; color: #e14b4b; }
 .tm-badge-traspaso { background: #fff4d6; color: #b8860b; }
+/* Las filas especiales tiñen la variable de tabla de Velzon en vez del fondo de
+   cada td con !important: así el hover y cualquier estilo posterior siguen vivos. */
+.tm-serie-row { --vz-table-bg: var(--tm-tint); }
 .tm-serie-row td {
-    background: linear-gradient(90deg, #eef1f8 0%, #f7f9fc 100%) !important;
-    font-weight: 700; color: #405189; font-size: .8rem;
-    border-top: 2px solid #d8dce8 !important; padding: .45rem .75rem !important;
+    font-weight: 700; color: var(--tm-primary); font-size: .8125rem;
+    border-top: 2px solid var(--tm-border-strong); padding: .45rem .75rem;
 }
+.tm-apertura-row { --vz-table-bg: var(--tm-surface-soft); }
 .tm-apertura-row td {
-    background: #fbfcfe !important; font-style: italic; color: #5a5a6a;
-    border-bottom: 1px dashed #d8dce8 !important;
+    font-style: italic; color: var(--nexo-gray-700);
+    border-bottom: 1px dashed var(--tm-border-strong);
 }
+.tm-total-row { --vz-table-bg: var(--tm-surface); }
 .tm-total-row td {
-    background: #f3f6f9 !important; font-weight: 700; color: #405189;
-    border-top: 2px solid #d8dce8 !important;
+    font-weight: 700; color: var(--tm-primary);
+    border-top: 2px solid var(--tm-border-strong);
 }
 .tm-saldo {
     display: inline-block; min-width: 44px; text-align: center;
-    background: #eef1f8; color: #1A1A2E; font-weight: 700;
+    background: var(--tm-tint); color: var(--nexo-gray-900); font-weight: 700;
     border-radius: 6px; padding: .1rem .45rem;
 }
 .tm-saldo.neg { background: #fdecec; color: #e14b4b; }
 
 /* ---------- Estados ---------- */
-.tm-empty { text-align: center; color: #8A8A9A; padding: 2.5rem 1rem; }
+.tm-empty { text-align: center; color: var(--nexo-gray-500); padding: 2.5rem 1rem; }
 .tm-empty i { font-size: 3rem; opacity: .4; display: block; margin-bottom: .5rem; }
+.tm-empty h6 { font-size: 1rem; font-weight: 700; margin-bottom: .35rem; }
+.tm-empty--grid { grid-column: 1 / -1; }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 991px) {
@@ -286,11 +334,20 @@ table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: #f3f6f9; text-alig
     .tm-metrica:nth-child(3) { border-right: none; }
     .tm-nav { top: 60px; }
 }
+@media (max-width: 767px) {
+    .module-header { padding: 12px 16px; border-radius: 12px 12px 0 0; }
+    .module-header-icon { width: 40px; height: 40px; font-size: 20px; }
+}
 @media (max-width: 575px) {
     .tm-metricas { grid-template-columns: repeat(2, 1fr); }
     .tm-precio-box { margin-left: 0; text-align: left; }
     .tm-llegadas { grid-template-columns: 1fr; }
-    .tm-nav-btn span.tm-nav-txt { display: none; }
+    /* El nombre de la sección se oculta a la vista pero sigue disponible para
+       lectores de pantalla (antes era display:none y anunciaba solo "1"). */
+    .tm-nav-btn span.tm-nav-txt {
+        position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+        overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+    }
 }
 </style>
 
@@ -298,19 +355,39 @@ table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: #f3f6f9; text-alig
     <div class="container-fluid">
 
         <!-- ================= Encabezado ================= -->
-        <div class="tm-header d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
-            <div class="d-flex align-items-center gap-3">
-                <div class="tm-header-icon"><i class="ri-route-line"></i></div>
-                <div>
-                    <h4>Tarjeta de Movimiento del Producto</h4>
-                    <div class="tm-sub">Artículo · tallas en todas las sucursales · llegadas · historial de vida</div>
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0"><i class="ri-route-line text-primary me-2"></i>Tarjeta de Movimiento del Producto</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="/app/home/">Inicio</a></li>
+                            <li class="breadcrumb-item">Existencias</li>
+                            <li class="breadcrumb-item active">Tarjeta de Movimiento</li>
+                        </ol>
+                    </div>
                 </div>
             </div>
-            <ol class="breadcrumb m-0 bg-transparent p-0" style="--bs-breadcrumb-divider-color:rgba(255,255,255,.6);">
-                <li class="breadcrumb-item"><a href="/app/home/" class="text-white-50">Inicio</a></li>
-                <li class="breadcrumb-item text-white-50">Existencias</li>
-                <li class="breadcrumb-item active text-white">Tarjeta de Movimiento</li>
-            </ol>
+        </div>
+
+        <div class="card tm-module-card shadow mb-3">
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon"><i class="ri-route-line"></i></div>
+                    <div class="module-header-info">
+                        <h5>Tarjeta de Movimiento del Producto</h5>
+                        <div class="module-header-status">
+                            <span class="status-dot"></span>
+                            Artículo · tallas en todas las sucursales · llegadas · historial de vida
+                        </div>
+                    </div>
+                </div>
+                <div class="module-header-actions">
+                    <button class="btn btn-light btn-sm" onclick="exportarExcel()" id="btnExportar" style="display:none;" title="Exportar a CSV el kardex que se está viendo">
+                        <i class="ri-download-2-line me-1"></i>Exportar CSV
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- ================= Buscador ================= -->
@@ -318,33 +395,28 @@ table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: #f3f6f9; text-alig
             <div class="card-body">
                 <div class="row g-3 align-items-end">
                     <div class="col-lg-5 col-md-12 position-relative">
-                        <label class="form-label fw-semibold mb-1">
+                        <label class="form-label fw-semibold mb-1" for="inputSku">
                             <i class="ri-barcode-line me-1 text-primary"></i>SKU, código o nombre del artículo
                         </label>
-                        <div class="input-group input-group-lg">
+                        <div class="input-group">
                             <span class="input-group-text bg-white"><i class="ri-search-line text-muted"></i></span>
                             <input type="text" id="inputSku" class="form-control" placeholder="Escanee o escriba…" autocomplete="off" autofocus>
-                            <button class="btn btn-primary px-4" onclick="buscarMovimientos()">Buscar</button>
+                            <button class="btn btn-primary px-4" onclick="buscarMovimientos()"><i class="ri-search-line me-1"></i>Buscar</button>
                         </div>
-                        <div id="listaAyudaProductos" class="list-group position-absolute shadow mt-1" style="z-index:1050; display:none; max-height:340px; overflow-y:auto; width:100%;"></div>
+                        <div id="listaAyudaProductos" class="list-group position-absolute shadow mt-1" style="display:none;"></div>
                     </div>
                     <div class="col-lg-2 col-md-3 col-6">
-                        <label class="form-label fw-semibold mb-1">Desde</label>
+                        <label class="form-label fw-semibold mb-1" for="inputFechaDesde">Desde</label>
                         <input type="date" id="inputFechaDesde" class="form-control">
                     </div>
                     <div class="col-lg-2 col-md-3 col-6">
-                        <label class="form-label fw-semibold mb-1">Hasta</label>
+                        <label class="form-label fw-semibold mb-1" for="inputFechaHasta">Hasta</label>
                         <input type="date" id="inputFechaHasta" class="form-control">
                     </div>
                     <div class="col-lg-3 col-md-6">
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-light border flex-fill" onclick="limpiarFechas()" title="Ver toda la historia del producto">
-                                <i class="ri-history-line me-1"></i> Toda la historia
-                            </button>
-                            <button class="btn btn-outline-success" onclick="exportarExcel()" id="btnExportar" style="display:none;" title="Exportar el kardex que se está viendo">
-                                <i class="ri-file-excel-2-line"></i>
-                            </button>
-                        </div>
+                        <button class="btn btn-light border w-100" onclick="limpiarFechas()" title="Ver toda la historia del producto">
+                            <i class="ri-history-line me-1"></i> Toda la historia
+                        </button>
                     </div>
                 </div>
             </div>
@@ -360,7 +432,7 @@ table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: #f3f6f9; text-alig
         <div id="tmInicial" class="card tm-card">
             <div class="card-body tm-empty">
                 <i class="ri-barcode-line"></i>
-                <h5 class="text-muted">Busque un artículo para ver su tarjeta</h5>
+                <h6 class="text-muted">Busque un artículo para ver su tarjeta</h6>
                 <p class="mb-0">Verá en este orden: <strong>1)</strong> la ficha del artículo,
                    <strong>2)</strong> qué tallas hay en cada sucursal, <strong>3)</strong> cuándo llegó cada partida
                    y <strong>4)</strong> todo su historial de vida.</p>
@@ -374,10 +446,10 @@ table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: #f3f6f9; text-alig
             <div class="tm-ficha mb-3 tm-seccion" id="secArticulo">
                 <div class="tm-ficha-top">
                     <div class="tm-ficha-avatar"><i class="ri-price-tag-3-line"></i></div>
-                    <div class="flex-grow-1" style="min-width:240px;">
+                    <div class="flex-grow-1 tm-ficha-datos">
                         <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
                             <span class="tm-ficha-codigo" id="pArticulo">-</span>
-                            <h3 class="tm-ficha-nombre" id="pDescripcion">-</h3>
+                            <h5 class="tm-ficha-nombre" id="pDescripcion">-</h5>
                         </div>
                         <div class="d-flex flex-wrap gap-1">
                             <span class="tm-attr"><i class="ri-award-line"></i><span id="pMarca">-</span></span>
@@ -423,16 +495,16 @@ table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: #f3f6f9; text-alig
 
             <!-- ---------- Navegación entre secciones ---------- -->
             <div class="tm-nav mb-3" id="tmNav">
-                <button class="tm-nav-btn active" data-goto="secArticulo">
+                <button class="tm-nav-btn active" data-goto="secArticulo" title="Artículo">
                     <span class="tm-nav-n">1</span> <span class="tm-nav-txt">Artículo</span>
                 </button>
-                <button class="tm-nav-btn" data-goto="secTallas">
+                <button class="tm-nav-btn" data-goto="secTallas" title="Tallas por sucursal">
                     <span class="tm-nav-n">2</span> <span class="tm-nav-txt">Tallas por sucursal</span>
                 </button>
-                <button class="tm-nav-btn" data-goto="secLlegadas">
+                <button class="tm-nav-btn" data-goto="secLlegadas" title="Llegadas">
                     <span class="tm-nav-n">3</span> <span class="tm-nav-txt">Llegadas</span>
                 </button>
-                <button class="tm-nav-btn" data-goto="secHistorial">
+                <button class="tm-nav-btn" data-goto="secHistorial" title="Historial de vida">
                     <span class="tm-nav-n">4</span> <span class="tm-nav-txt">Historial de vida</span>
                 </button>
                 <span class="ms-auto small text-muted d-none d-lg-inline" id="tmRangoInfo"></span>
@@ -443,7 +515,7 @@ table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: #f3f6f9; text-alig
                 <div class="card-body">
                     <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
                         <div>
-                            <h5 class="tm-card-title"><span class="tm-step">2</span> Tallas en todas las sucursales</h5>
+                            <h6 class="tm-card-title"><span class="tm-step">2</span> Tallas en todas las sucursales</h6>
                             <div class="tm-card-hint">Stock de hoy. Haga clic en una celda para ver el kardex de esa bodega y talla.</div>
                         </div>
                         <div class="d-flex flex-wrap gap-3 align-items-center">
@@ -481,7 +553,7 @@ table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: #f3f6f9; text-alig
                 <div class="card-body">
                     <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
                         <div>
-                            <h5 class="tm-card-title"><span class="tm-step">3</span> Llegadas de mercadería</h5>
+                            <h6 class="tm-card-title"><span class="tm-step">3</span> Llegadas de mercadería</h6>
                             <div class="tm-card-hint">Cada vez que entró producto a una bodega, con las tallas que vinieron.</div>
                         </div>
                         <div class="btn-group btn-group-sm" id="filtroLlegadas" role="group">
@@ -505,7 +577,7 @@ table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: #f3f6f9; text-alig
             <div class="card tm-card tm-seccion" id="secHistorial">
                 <div class="card-body">
                     <div class="mb-2">
-                        <h5 class="tm-card-title"><span class="tm-step">4</span> Historial de vida</h5>
+                        <h6 class="tm-card-title"><span class="tm-step">4</span> Historial de vida</h6>
                         <div class="tm-card-hint">La línea de tiempo resume los hitos; el kardex muestra movimiento por movimiento.</div>
                     </div>
 
@@ -523,9 +595,9 @@ table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: #f3f6f9; text-alig
                     <!-- Panel Kardex -->
                     <div id="panelKardex" style="display:none;">
                         <div class="tm-filter-bar mb-3">
-                            <select id="filtroBodega" class="form-select form-select-sm"><option value="">Todas las bodegas</option></select>
-                            <select id="filtroTalla" class="form-select form-select-sm"><option value="">Todas las tallas</option></select>
-                            <select id="filtroTipo" class="form-select form-select-sm">
+                            <select id="filtroBodega" class="form-select"><option value="">Todas las bodegas</option></select>
+                            <select id="filtroTalla" class="form-select"><option value="">Todas las tallas</option></select>
+                            <select id="filtroTipo" class="form-select">
                                 <option value="">Todos los tipos</option>
                                 <option value="INGRESO">Ingresos</option>
                                 <option value="EGRESO">Egresos</option>
@@ -534,7 +606,7 @@ table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: #f3f6f9; text-alig
                                 <option value="DEVOLUCION">Devoluciones</option>
                                 <option value="PERDIDA">Pérdidas</option>
                             </select>
-                            <button class="btn btn-sm btn-light border" onclick="limpiarFiltrosKardex()">
+                            <button class="btn btn-light border" onclick="limpiarFiltrosKardex()">
                                 <i class="ri-filter-off-line me-1"></i>Limpiar
                             </button>
                             <div class="form-check form-switch mb-0 ms-1">
@@ -550,7 +622,7 @@ table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: #f3f6f9; text-alig
                         <div id="kardexAvisos"></div>
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0" id="tablaMovimientos">
-                                <thead class="table-light">
+                                <thead>
                                     <tr>
                                         <th>Fecha</th><th>Hora</th><th>Bodega</th><th>Talla</th>
                                         <th>Tipo</th><th>Concepto</th>
@@ -650,7 +722,7 @@ function buscarMovimientos() {
         if (!data.success) {
             document.getElementById('tmInicial').style.display = '';
             document.getElementById('tmInicial').querySelector('.tm-empty').innerHTML =
-                `<i class="ri-error-warning-line text-danger"></i><h5 class="text-danger">${escapeHtml(data.error || 'Error')}</h5>`;
+                `<i class="ri-error-warning-line text-danger"></i><h6 class="text-danger">${escapeHtml(data.error || 'Error')}</h6>`;
             return;
         }
         movimientosData = data.movimientos;
@@ -699,7 +771,7 @@ function renderListaAyuda(productos) {
                     <small class="text-muted d-block">${escapeHtml(p.descripcion)}</small>
                     <small class="text-muted">${escapeHtml(p.marca)} · ${escapeHtml(p.num_bodegas)} bodega(s)</small>
                 </div>
-                <span class="badge bg-primary-subtle text-primary align-self-start">Stock ${escapeHtml(p.stock)}</span>
+                <span class="badge bg-light text-dark border align-self-start">Stock ${escapeHtml(p.stock)}</span>
             </div>
         </button>`).join('');
     lista.style.display = '';
@@ -837,7 +909,7 @@ function renderMatriz() {
         head += `<th data-talla="${escapeHtml(t)}" class="${tallaActiva === t ? 'tm-col-activa' : ''}"
                      title="Ver solo la talla ${escapeHtml(t)}">${escapeHtml(t)}</th>`;
     });
-    head += '<th style="border-left:2px solid #e3e6ee;">Total</th>';
+    head += '<th class="tm-col-total">Total</th>';
     document.getElementById('matrizHead').innerHTML = head;
 
     // --- Cuerpo
@@ -859,7 +931,7 @@ function renderMatriz() {
                       title="${escapeHtml(b.bodega)} · talla ${escapeHtml(t)}: ${n} u — clic para ver su kardex">${n}</span>
             </td>`;
         });
-        fila += `<td style="border-left:2px solid #eef0f4;"><span class="tm-suc-total">${fmtNum(b.stock_total)}</span></td>`;
+        fila += `<td class="tm-col-total"><span class="tm-suc-total">${fmtNum(b.stock_total)}</span></td>`;
         body += `<tr class="${b.stock_total <= 0 ? 'tm-fila-cero' : ''}">${fila}</tr>`;
     });
     cont.innerHTML = body || '<tr><td class="tm-empty">Ninguna sucursal tiene stock de este artículo</td></tr>';
@@ -872,7 +944,7 @@ function renderMatriz() {
         gran += n;
         foot += `<td class="${tallaActiva === t ? 'tm-col-activa' : ''}">${n}</td>`;
     });
-    foot += `<td style="border-left:2px solid #e3e6ee;">${fmtNum(gran)}</td>`;
+    foot += `<td class="tm-col-total">${fmtNum(gran)}</td>`;
     document.getElementById('matrizFoot').innerHTML = foot;
 
     // --- Nota de lo que se está ocultando
@@ -939,7 +1011,7 @@ function renderLlegadas() {
     const lista = llegadasFiltradas();
 
     if (!lista.length) {
-        cont.innerHTML = `<div class="tm-empty" style="grid-column:1/-1;">
+        cont.innerHTML = `<div class="tm-empty tm-empty--grid">
             <i class="ri-inbox-unarchive-line"></i>Sin llegadas registradas para este filtro</div>`;
         document.getElementById('masLlegadasBox').style.display = 'none';
         return;
@@ -963,7 +1035,7 @@ function renderLlegadas() {
         <div class="tm-llegada" style="border-left-color:${l.color};">
             <div class="tm-llegada-top">
                 <div class="tm-llegada-ico" style="background:${l.color};"><i class="${l.icono}"></i></div>
-                <div style="min-width:0;">
+                <div class="tm-llegada-txt">
                     <div class="tm-llegada-titulo">${escapeHtml(l.titulo)}</div>
                     <div class="tm-llegada-fecha">
                         ${escapeHtml(l.fecha)}${l.hora ? ' · ' + escapeHtml(l.hora) : ''}
@@ -982,7 +1054,7 @@ function renderLlegadas() {
             <div class="d-flex flex-wrap gap-1 mb-2">${chips}</div>
             <div class="tm-llegada-meta">${doc}${resp}${costo}</div>
             <div class="mt-2">
-                <button class="btn btn-sm btn-light border py-0 px-2" style="font-size:.72rem;"
+                <button class="btn btn-sm btn-light border"
                         onclick="irAlKardex(${l.bodega_id}, '')">
                     <i class="ri-table-line me-1"></i>Ver kardex de ${escapeHtml(l.bodega)}
                 </button>

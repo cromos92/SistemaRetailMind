@@ -9,7 +9,6 @@
         background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
         color: white;
         padding: 16px 24px;
-        border-radius: 16px 16px 0 0;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -29,37 +28,89 @@
     .status-dot { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; animation: pulse 2s infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .module-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    /* El hover (elevación + sombra) lo da la regla global .btn:hover */
+    .module-header-actions .btn {
+        border-radius: 10px;
+        font-weight: 500;
+        padding: 8px 14px;
+        font-size: 13px;
+        border: none;
+        transition: all 0.2s ease;
+    }
 
+    /* Botón de acción del módulo: el azul de Bootstrap/Velzon es morado (#4b38b3)
+       y desentona con el navy/teal de la cabecera. */
+    .btn-traza {
+        --vz-btn-color: #fff;
+        --vz-btn-bg: #405189;
+        --vz-btn-border-color: #405189;
+        --vz-btn-hover-color: #fff;
+        --vz-btn-hover-bg: #364574;
+        --vz-btn-hover-border-color: #364574;
+        --vz-btn-active-color: #fff;
+        --vz-btn-active-bg: #364574;
+        --vz-btn-active-border-color: #364574;
+    }
+    /* a:hover de Bootstrap (0-1-1) gana a .traza-link (0-1-0) y lo pinta
+       de morado (--vz-link-hover-color), justo el color que se quiso evitar. */
+    .traza-link { color: #405189; }
+    a.traza-link:hover, a.traza-link:focus { color: #364574; }
+
+    /* KPIs (sin hover: ninguna tarjeta es clicable en esta pantalla) */
     .kpi-card { border-radius: 12px; border: none; transition: all 0.3s ease; overflow: hidden; }
-    .kpi-card:hover { transform: translateY(-4px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
     .kpi-card .card-body { padding: 12px 16px; }
+    .kpi-valor { color: #405189; }
+    .kpi-label { font-size: 0.75rem; }
+    .kpi-azul { background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid #299cdb; }
+    .kpi-verde { background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 4px solid #0ab39c; }
+    .kpi-gris { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-left: 4px solid #adb5bd; }
+    .kpi-amarillo { background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 4px solid #ffbe0b; }
 
-    .traza-card { border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(64, 81, 137, 0.08); border: none; }
+    /* Ficha de datos maestros del producto */
+    .traza-ficha { border-left: 4px solid #405189; }
+
+    /* Pestañas: con 7 solapas se salen del ancho bajo 992px -> scroll horizontal */
+    .traza-tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .traza-tabs .nav-link { white-space: nowrap; }
+
+    /* Un solo alto de scroll para las 7 pestañas, así el card no salta */
+    .traza-scroll { max-height: 60vh; overflow-y: auto; }
+    /* Kardex y recepciones tienen 12 y 14 columnas: mejor scroll que aplastarlas */
+    .traza-table-wide { min-width: 1250px; }
+    .traza-progress { height: 18px; }
+    .traza-progress .progress-bar { background-color: #0ab39c; }
 
     /* Timeline */
     .timeline-item { position: relative; padding-left: 40px; margin-bottom: 1.5rem; }
     .timeline-item::before { content: ''; position: absolute; left: 15px; top: 28px; bottom: -24px; width: 2px; background: #e9ecef; }
     .timeline-item:last-child::before { display: none; }
     .timeline-icon { position: absolute; left: 4px; top: 4px; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; color: white; z-index: 1; }
+    .timeline-icon i { font-size: 11px; }
     .tab-pane .table { margin-bottom: 0; }
+    .tab-pane .table td { vertical-align: middle; }
 
     /* Kardex */
     .traza-saldo {
         display: inline-block; min-width: 46px; text-align: center;
-        background: #eef1f8; color: #1A1A2E; font-weight: 700;
+        background: #eef1f8; color: var(--nexo-secondary); font-weight: 700;
         border-radius: 6px; padding: .1rem .45rem;
     }
-    .traza-saldo.neg { background: #fdecec; color: #e14b4b; }
-    .traza-apertura td { background: #f8f9fa !important; font-style: italic; color: #495057; border-top: 2px solid #dee2e6 !important; }
-    #tbodyMovimientos tr td { vertical-align: middle; }
+    .traza-saldo.neg { background: #fdecec; color: #f06548; }
+    /* La fila de apertura se tinta por variable (el build Velzon pinta cada celda
+       con --vz-table-bg y el striped con --vz-table-accent-bg), no con !important.
+       El id gana al selector del striped, que es .table-striped>tbody>tr:nth-of-type(odd)>*. */
+    #tbodyMovimientos .traza-apertura td {
+        --vz-table-bg: #f8f9fa;
+        --vz-table-accent-bg: transparent;
+        font-style: italic; color: #495057; border-top: 2px solid #dee2e6;
+    }
     /* Movimientos que NO están COMPLETADO: se muestran, pero atenuados y sin
        saldo, para que no se lean como parte del kardex. */
-    .traza-no-computa td { opacity: .62; }
+    .traza-no-computa td { opacity: .8; }
     .traza-no-computa td:first-child { border-left: 3px solid #adb5bd; }
-    #tbodyRecepciones tr td { vertical-align: middle; }
 
     @media (max-width: 768px) {
-        .module-header { padding: 12px 16px; border-radius: 12px 12px 0 0; }
+        .module-header { padding: 12px 16px; }
         .module-header-icon { width: 40px; height: 40px; font-size: 20px; }
     }
 </style>
@@ -67,234 +118,210 @@
 <div class="page-content">
     <div class="container-fluid">
 
-        <div class="row">
-            <div class="col-12">
-                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                    <h4 class="mb-sm-0"><i class="ri-route-line text-primary me-2"></i>Trazabilidad Completa de Producto</h4>
-                    <div class="page-title-right">
-                        <ol class="breadcrumb m-0">
-                            <li class="breadcrumb-item"><a href="/app/home/">Inicio</a></li>
-                            <li class="breadcrumb-item">Existencias</li>
-                            <li class="breadcrumb-item active">Trazabilidad</li>
-                        </ol>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-12">
-                <div class="traza-card card mb-3">
-                    <div class="module-header">
-                        <div class="module-header-left">
-                            <div class="module-header-icon"><i class="ri-route-line"></i></div>
-                            <div class="module-header-info">
-                                <h5>Trazabilidad de Producto</h5>
-                                <div class="module-header-status">
-                                    <span class="status-dot"></span>
-                                    Kardex, lotes FIFO con su DTE de origen, compras/recepciones, traspasos y precios de un SKU
-                                </div>
-                            </div>
-                        </div>
-                        <div class="module-header-actions">
-                            <a href="/app/tarjeta-movimiento/" class="btn btn-light btn-sm">
-                                <i class="ri-table-line me-1"></i>Tarjeta de Movimiento (todas las bodegas)
-                            </a>
+        <div class="card shadow">
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon"><i class="ri-route-line"></i></div>
+                    <div class="module-header-info">
+                        <h5>Trazabilidad de Producto</h5>
+                        <div class="module-header-status">
+                            <span class="status-dot"></span>
+                            Kardex, lotes FIFO con su DTE de origen, compras/recepciones, traspasos y precios de un SKU
                         </div>
                     </div>
                 </div>
+                <div class="module-header-actions">
+                    <a href="/app/tarjeta-movimiento/" class="btn btn-light" title="Tarjeta de Movimiento (todas las bodegas)">
+                        <i class="ri-table-line me-1"></i>Tarjeta de Movimiento
+                    </a>
+                </div>
             </div>
-        </div>
 
-            <!-- Buscador -->
-            <div class="row mb-3">
-                <div class="col-12">
-                    <div class="card">
+            <div class="card-body">
+
+                <!-- Buscador -->
+                <div class="row g-3 align-items-end mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold" for="inputSku">SKU del Producto</label>
+                        <input type="text" id="inputSku" class="form-control form-control-lg" placeholder="Ingrese SKU para trazabilidad completa..." autofocus>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-traza btn-lg w-100" onclick="buscarTrazabilidad()">
+                            <i class="ri-search-line me-1"></i> Buscar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Info Producto -->
+                <div id="contenidoTrazabilidad" style="display:none;">
+
+                    <div class="card traza-ficha mb-3">
                         <div class="card-body">
-                            <div class="row g-3 align-items-end">
-                                <div class="col-md-4">
-                                    <label class="form-label fw-semibold">SKU del Producto</label>
-                                    <input type="text" id="inputSku" class="form-control form-control-lg" placeholder="Ingrese SKU para trazabilidad completa..." autofocus>
+                            <div class="row g-3">
+                                <div class="col-6 col-md-4 col-xl-2">
+                                    <h6 class="text-muted mb-1">Artículo</h6>
+                                    <p class="fw-bold mb-0" id="pArticulo">-</p>
                                 </div>
-                                <div class="col-md-2">
-                                    <button class="btn btn-primary btn-lg w-100" onclick="buscarTrazabilidad()">
-                                        <i class="ri-search-line me-1"></i> Buscar
-                                    </button>
+                                <div class="col-6 col-md-4 col-xl-2">
+                                    <h6 class="text-muted mb-1">SKU / Talla</h6>
+                                    <p class="fw-bold mb-0"><span id="pSku">-</span> / <span id="pTalla">-</span></p>
+                                </div>
+                                <div class="col-6 col-md-4 col-xl-2">
+                                    <h6 class="text-muted mb-1">Marca</h6>
+                                    <p class="fw-bold mb-0" id="pMarca">-</p>
+                                </div>
+                                <div class="col-6 col-md-4 col-xl-2">
+                                    <h6 class="text-muted mb-1">Categoría</h6>
+                                    <p class="fw-bold mb-0" id="pCategoria">-</p>
+                                </div>
+                                <div class="col-6 col-md-4 col-xl-2">
+                                    <h6 class="text-muted mb-1">Stock</h6>
+                                    <p class="fw-bold mb-0 text-nowrap" id="pStock">-</p>
+                                </div>
+                                <div class="col-6 col-md-4 col-xl-2">
+                                    <h6 class="text-muted mb-1">Costo</h6>
+                                    <p class="fw-bold mb-0 text-nowrap" id="pCosto">-</p>
+                                </div>
+                                <div class="col-6 col-md-4 col-xl-2">
+                                    <h6 class="text-muted mb-1">Sobreprecio</h6>
+                                    <p class="fw-bold mb-0 text-nowrap" id="pSobreprecio">-</p>
+                                </div>
+                                <div class="col-6 col-md-4 col-xl-2">
+                                    <h6 class="text-muted mb-1">Precio Venta</h6>
+                                    <p class="fw-bold mb-0 text-nowrap" id="pPrecio">-</p>
+                                </div>
+                                <div class="col-6 col-md-4 col-xl-3">
+                                    <h6 class="text-muted mb-1">Sucursal / Creación</h6>
+                                    <p class="fw-bold mb-0"><span id="pSucursal">-</span><br><small class="text-muted" id="pFechaCreacion">-</small></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- KPIs: stock vs kardex -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-6 col-md-3">
+                            <div class="kpi-card kpi-azul card h-100">
+                                <div class="card-body text-center">
+                                    <h4 class="mb-0 fw-bold kpi-valor" id="kpiStock">0</h4>
+                                    <p class="text-muted mb-0 small fw-medium kpi-label">Stock actual (sistema)</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="kpi-card kpi-verde card h-100">
+                                <div class="card-body text-center">
+                                    <h4 class="mb-0 fw-bold kpi-valor" id="kpiSaldoKardex">0</h4>
+                                    <p class="text-muted mb-0 small fw-medium kpi-label">Saldo según kardex</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="kpi-card kpi-gris card h-100" id="kpiCardDiferencia">
+                                <div class="card-body text-center">
+                                    <h4 class="mb-0 fw-bold kpi-valor" id="kpiDiferencia">0</h4>
+                                    <p class="text-muted mb-0 small fw-medium kpi-label" id="kpiDiferenciaLabel">Diferencia stock − kardex</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="kpi-card kpi-amarillo card h-100">
+                                <div class="card-body text-center">
+                                    <h4 class="mb-0 fw-bold kpi-valor" id="kpiMovimientos">0</h4>
+                                    <p class="text-muted mb-0 small fw-medium kpi-label">Movimientos históricos</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabs -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <ul class="nav nav-tabs card-header-tabs traza-tabs" role="tablist">
+                                        <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tabTimeline" role="tab" aria-controls="tabTimeline" aria-selected="true"><i class="ri-time-line me-1"></i>Timeline</a></li>
+                                        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabMovimientos" role="tab" aria-controls="tabMovimientos" aria-selected="false"><i class="ri-arrow-left-right-line me-1"></i>Movimientos <span class="badge badge-soft-dark ms-1" id="badgeMov">0</span></a></li>
+                                        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabLotes" role="tab" aria-controls="tabLotes" aria-selected="false"><i class="ri-stack-line me-1"></i>Lotes FIFO <span class="badge badge-soft-dark ms-1" id="badgeLotes">0</span></a></li>
+                                        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabRecepciones" role="tab" aria-controls="tabRecepciones" aria-selected="false"><i class="ri-inbox-archive-line me-1"></i>Origen / Compras <span class="badge badge-soft-dark ms-1" id="badgeRecepciones">0</span></a></li>
+                                        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabTraspasos" role="tab" aria-controls="tabTraspasos" aria-selected="false"><i class="ri-truck-line me-1"></i>Traspasos <span class="badge badge-soft-dark ms-1" id="badgeTraspasos">0</span></a></li>
+                                        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabPrecios" role="tab" aria-controls="tabPrecios" aria-selected="false"><i class="ri-price-tag-3-line me-1"></i>Historial Precios <span class="badge badge-soft-dark ms-1" id="badgePrecios">0</span></a></li>
+                                        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabPendientes" role="tab" aria-controls="tabPendientes" aria-selected="false"><i class="ri-time-line me-1"></i>Pendientes <span class="badge badge-soft-dark ms-1" id="badgePendientes">0</span></a></li>
+                                    </ul>
+                                </div>
+                                <div class="card-body">
+                                    <div class="tab-content">
+                                        <!-- Timeline -->
+                                        <div class="tab-pane active" id="tabTimeline" role="tabpanel">
+                                            <div id="avisoTimeline"></div>
+                                            <div id="timelineContainer" class="traza-scroll"></div>
+                                        </div>
+                                        <!-- Movimientos -->
+                                        <div class="tab-pane" id="tabMovimientos" role="tabpanel">
+                                            <div id="avisoMovimientos"></div>
+                                            <div class="table-responsive traza-scroll">
+                                                <table class="table table-hover table-sm table-striped traza-table-wide"><thead class="table-light sticky-top"><tr>
+                                                    <th>Fecha</th><th>Hora</th><th>Tipo</th><th>Concepto</th><th class="text-end">Cantidad</th><th class="text-end">Saldo</th><th class="text-end">Costo</th><th>Origen</th><th>Destino</th><th>Responsable</th><th>Ref</th><th>Estado</th>
+                                                </tr></thead><tbody id="tbodyMovimientos"></tbody></table>
+                                            </div>
+                                        </div>
+                                        <!-- Lotes -->
+                                        <div class="tab-pane" id="tabLotes" role="tabpanel">
+                                            <div id="avisoLotes"></div>
+                                            <div class="table-responsive traza-scroll">
+                                                <table class="table table-hover table-sm"><thead class="table-light sticky-top"><tr>
+                                                    <th>Fecha Ingreso</th><th>N° Lote</th><th>DTE Origen</th><th>Proveedor / Emisor</th><th class="text-end">Inicial</th><th class="text-end">Disponible</th><th class="text-end">Costo</th><th class="text-end">Precio</th><th>% Consumido</th><th>Estado</th>
+                                                </tr></thead><tbody id="tbodyLotes"></tbody></table>
+                                            </div>
+                                        </div>
+                                        <!-- Origen / Compras (recepciones) -->
+                                        <div class="tab-pane" id="tabRecepciones" role="tabpanel">
+                                            <div id="avisoRecepciones"></div>
+                                            <div class="table-responsive traza-scroll">
+                                                <table class="table table-hover table-sm table-striped traza-table-wide"><thead class="table-light sticky-top"><tr>
+                                                    <th>Fecha</th><th>Origen</th><th>Documento</th><th>Proveedor</th><th>Orden de compra</th>
+                                                    <th class="text-end">Esperado</th><th class="text-end">Recibido</th><th class="text-end">Faltante</th><th class="text-end">Dañado</th><th class="text-end">Sobrante</th>
+                                                    <th>Estado</th><th>Destino</th><th>Recepcionó</th><th>Mov.</th>
+                                                </tr></thead><tbody id="tbodyRecepciones"></tbody></table>
+                                            </div>
+                                        </div>
+                                        <!-- Traspasos -->
+                                        <div class="tab-pane" id="tabTraspasos" role="tabpanel">
+                                            <div id="avisoTraspasos"></div>
+                                            <div class="table-responsive traza-scroll">
+                                                <table class="table table-hover table-sm"><thead class="table-light sticky-top"><tr>
+                                                    <th>#</th><th>Fecha</th><th>Sentido</th><th>Origen</th><th>Destino</th><th>Estado</th><th class="text-end">Cantidad</th><th class="text-end">Recibida</th><th class="text-end">Costo</th><th>Referencia</th>
+                                                </tr></thead><tbody id="tbodyTraspasos"></tbody></table>
+                                            </div>
+                                        </div>
+                                        <!-- Precios -->
+                                        <div class="tab-pane" id="tabPrecios" role="tabpanel">
+                                            <div class="table-responsive traza-scroll">
+                                                <table class="table table-hover table-sm"><thead class="table-light sticky-top"><tr>
+                                                    <th>Fecha</th><th>Tipo</th><th class="text-end">Anterior</th><th class="text-end">Nuevo</th><th>Usuario</th><th>Motivo</th>
+                                                </tr></thead><tbody id="tbodyPrecios"></tbody></table>
+                                            </div>
+                                        </div>
+                                        <!-- Pendientes -->
+                                        <div class="tab-pane" id="tabPendientes" role="tabpanel">
+                                            <div class="table-responsive traza-scroll">
+                                                <table class="table table-hover table-sm"><thead class="table-light sticky-top"><tr>
+                                                    <th>Fecha</th><th>Origen</th><th>Destino</th><th class="text-end">Cantidad</th><th class="text-end">Despachada</th><th class="text-end">Restante</th><th>Estado</th>
+                                                </tr></thead><tbody id="tbodyPendientes"></tbody></table>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+                <!-- /#contenidoTrazabilidad -->
+
             </div>
-
-            <!-- Info Producto -->
-            <div id="contenidoTrazabilidad" style="display:none;">
-
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <div class="card border-primary">
-                            <div class="card-body">
-                                <div class="row">
-                                    <div class="col-md-2">
-                                        <h6 class="text-muted mb-1">Artículo</h6>
-                                        <p class="fw-bold mb-0" id="pArticulo">-</p>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <h6 class="text-muted mb-1">SKU / Talla</h6>
-                                        <p class="fw-bold mb-0"><span id="pSku">-</span> / <span id="pTalla">-</span></p>
-                                    </div>
-                                    <div class="col-md-1">
-                                        <h6 class="text-muted mb-1">Marca</h6>
-                                        <p class="fw-bold mb-0" id="pMarca">-</p>
-                                    </div>
-                                    <div class="col-md-1">
-                                        <h6 class="text-muted mb-1">Categoría</h6>
-                                        <p class="fw-bold mb-0" id="pCategoria">-</p>
-                                    </div>
-                                    <div class="col-md-1">
-                                        <h6 class="text-muted mb-1">Stock</h6>
-                                        <p class="fw-bold fs-5 text-primary mb-0" id="pStock">-</p>
-                                    </div>
-                                    <div class="col-md-1">
-                                        <h6 class="text-muted mb-1">Costo</h6>
-                                        <p class="fw-bold mb-0" id="pCosto">-</p>
-                                    </div>
-                                    <div class="col-md-1">
-                                        <h6 class="text-muted mb-1">Sobreprecio</h6>
-                                        <p class="fw-bold mb-0" id="pSobreprecio">-</p>
-                                    </div>
-                                    <div class="col-md-1">
-                                        <h6 class="text-muted mb-1">Precio Venta</h6>
-                                        <p class="fw-bold fs-5 text-success mb-0" id="pPrecio">-</p>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <h6 class="text-muted mb-1">Sucursal / Creación</h6>
-                                        <p class="fw-bold mb-0"><span id="pSucursal">-</span><br><small class="text-muted" id="pFechaCreacion">-</small></p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- KPIs: stock vs kardex -->
-                <div class="row g-2 mb-3">
-                    <div class="col-6 col-md-3">
-                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid #299cdb;">
-                            <div class="card-body text-center py-2">
-                                <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiStock">0</h4>
-                                <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Stock actual (sistema)</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 4px solid #0ab39c;">
-                            <div class="card-body text-center py-2">
-                                <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiSaldoKardex">0</h4>
-                                <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Saldo según kardex</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="kpi-card card h-100" id="kpiCardDiferencia" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-left: 4px solid #adb5bd;">
-                            <div class="card-body text-center py-2">
-                                <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiDiferencia">0</h4>
-                                <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;" id="kpiDiferenciaLabel">Diferencia stock − kardex</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-6 col-md-3">
-                        <div class="kpi-card card h-100" style="background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 4px solid #ffbe0b;">
-                            <div class="card-body text-center py-2">
-                                <h4 class="mb-0 fw-bold" style="color: #405189;" id="kpiMovimientos">0</h4>
-                                <p class="text-muted mb-0 small fw-medium" style="font-size: 0.75rem;">Movimientos históricos</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tabs -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <ul class="nav nav-tabs card-header-tabs" role="tablist">
-                                    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tabTimeline"><i class="ri-time-line me-1"></i>Timeline</a></li>
-                                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabMovimientos"><i class="ri-arrow-left-right-line me-1"></i>Movimientos <span class="badge bg-info ms-1" id="badgeMov">0</span></a></li>
-                                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabLotes"><i class="ri-stack-line me-1"></i>Lotes FIFO <span class="badge bg-success ms-1" id="badgeLotes">0</span></a></li>
-                                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabRecepciones"><i class="ri-inbox-archive-line me-1"></i>Origen / Compras <span class="badge bg-primary ms-1" id="badgeRecepciones">0</span></a></li>
-                                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabTraspasos"><i class="ri-truck-line me-1"></i>Traspasos <span class="badge bg-warning ms-1" id="badgeTraspasos">0</span></a></li>
-                                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabPrecios"><i class="ri-price-tag-3-line me-1"></i>Historial Precios <span class="badge bg-purple ms-1" id="badgePrecios">0</span></a></li>
-                                    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabPendientes"><i class="ri-time-line me-1"></i>Pendientes <span class="badge bg-danger ms-1" id="badgePendientes">0</span></a></li>
-                                </ul>
-                            </div>
-                            <div class="card-body">
-                                <div class="tab-content">
-                                    <!-- Timeline -->
-                                    <div class="tab-pane active" id="tabTimeline">
-                                        <div id="avisoTimeline"></div>
-                                        <div id="timelineContainer" style="max-height: 600px; overflow-y: auto;"></div>
-                                    </div>
-                                    <!-- Movimientos -->
-                                    <div class="tab-pane" id="tabMovimientos">
-                                        <div id="avisoMovimientos"></div>
-                                        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
-                                            <table class="table table-hover table-sm table-striped"><thead class="table-light sticky-top"><tr>
-                                                <th>Fecha</th><th>Hora</th><th>Tipo</th><th>Concepto</th><th class="text-end">Cantidad</th><th class="text-end">Saldo</th><th class="text-end">Costo</th><th>Origen</th><th>Destino</th><th>Responsable</th><th>Ref</th><th>Estado</th>
-                                            </tr></thead><tbody id="tbodyMovimientos"></tbody></table>
-                                        </div>
-                                    </div>
-                                    <!-- Lotes -->
-                                    <div class="tab-pane" id="tabLotes">
-                                        <div id="avisoLotes"></div>
-                                        <div class="table-responsive">
-                                            <table class="table table-hover table-sm"><thead class="table-light"><tr>
-                                                <th>Fecha Ingreso</th><th>N° Lote</th><th>DTE Origen</th><th>Proveedor / Emisor</th><th class="text-end">Inicial</th><th class="text-end">Disponible</th><th class="text-end">Costo</th><th class="text-end">Precio</th><th>% Consumido</th><th>Estado</th>
-                                            </tr></thead><tbody id="tbodyLotes"></tbody></table>
-                                        </div>
-                                    </div>
-                                    <!-- Origen / Compras (recepciones) -->
-                                    <div class="tab-pane" id="tabRecepciones">
-                                        <div id="avisoRecepciones"></div>
-                                        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
-                                            <table class="table table-hover table-sm table-striped"><thead class="table-light sticky-top"><tr>
-                                                <th>Fecha</th><th>Origen</th><th>Documento</th><th>Proveedor</th><th>Orden de compra</th>
-                                                <th class="text-end">Esperado</th><th class="text-end">Recibido</th><th class="text-end">Faltante</th><th class="text-end">Dañado</th><th class="text-end">Sobrante</th>
-                                                <th>Estado</th><th>Destino</th><th>Recepcionó</th><th>Mov.</th>
-                                            </tr></thead><tbody id="tbodyRecepciones"></tbody></table>
-                                        </div>
-                                    </div>
-                                    <!-- Traspasos -->
-                                    <div class="tab-pane" id="tabTraspasos">
-                                        <div id="avisoTraspasos"></div>
-                                        <div class="table-responsive">
-                                            <table class="table table-hover table-sm"><thead class="table-light"><tr>
-                                                <th>#</th><th>Fecha</th><th>Sentido</th><th>Origen</th><th>Destino</th><th>Estado</th><th class="text-end">Cantidad</th><th class="text-end">Recibida</th><th class="text-end">Costo</th><th>Referencia</th>
-                                            </tr></thead><tbody id="tbodyTraspasos"></tbody></table>
-                                        </div>
-                                    </div>
-                                    <!-- Precios -->
-                                    <div class="tab-pane" id="tabPrecios">
-                                        <div class="table-responsive">
-                                            <table class="table table-hover table-sm"><thead class="table-light"><tr>
-                                                <th>Fecha</th><th>Tipo</th><th class="text-end">Anterior</th><th class="text-end">Nuevo</th><th>Usuario</th><th>Motivo</th>
-                                            </tr></thead><tbody id="tbodyPrecios"></tbody></table>
-                                        </div>
-                                    </div>
-                                    <!-- Pendientes -->
-                                    <div class="tab-pane" id="tabPendientes">
-                                        <div class="table-responsive">
-                                            <table class="table table-hover table-sm"><thead class="table-light"><tr>
-                                                <th>Fecha</th><th>Origen</th><th>Destino</th><th class="text-end">Cantidad</th><th class="text-end">Despachada</th><th class="text-end">Restante</th><th>Estado</th>
-                                            </tr></thead><tbody id="tbodyPendientes"></tbody></table>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <!-- /.card-body -->
+        </div>
+        <!-- /.card.shadow -->
 
     </div>
 </div>
@@ -375,10 +402,10 @@ function renderProductoInfo(p) {
         if (!aviso) {
             aviso = document.createElement('div');
             aviso.id = 'avisoSkuDuplicado';
-            aviso.className = 'alert alert-warning d-flex align-items-center gap-2';
+            aviso.className = 'alert alert-warning small py-2 d-flex align-items-center gap-2';
             cont.prepend(aviso);
         }
-        aviso.innerHTML = `<i class="ri-error-warning-line fs-5"></i>
+        aviso.innerHTML = `<i class="ri-error-warning-line"></i>
             <div><strong>SKU duplicado:</strong> este código existe en <b>${escapeHtml(p.sku_ocurrencias)}</b> productos/tallas.
             Se muestra la trazabilidad del de la sucursal activa (<b>${escapeHtml(p.sucursal)}</b>). Conviene depurar el SKU duplicado.</div>`;
     } else if (aviso) {
@@ -414,7 +441,7 @@ function renderTimeline(items, total) {
     const avisoBox = document.getElementById('avisoTimeline');
     const omitidos = Math.max((total || 0) - (items ? items.length : 0), 0);
     avisoBox.innerHTML = omitidos > 0
-        ? `<div class="alert alert-light border small py-2"><i class="ri-history-line me-1 text-primary"></i>
+        ? `<div class="alert alert-light border small py-2"><i class="ri-history-line me-1 traza-link"></i>
            Se muestran los <strong>${fmtNum(items.length)}</strong> eventos más recientes de <strong>${fmtNum(total)}</strong>.
            Los <strong>${fmtNum(omitidos)}</strong> restantes están en la pestaña <strong>Movimientos</strong>.</div>`
         : '';
@@ -422,7 +449,7 @@ function renderTimeline(items, total) {
     let html = '';
     items.forEach(t => {
         html += `<div class="timeline-item">
-            <div class="timeline-icon" style="background:${escapeHtml(t.color)};"><i class="${escapeHtml(t.icono)}" style="font-size:11px;"></i></div>
+            <div class="timeline-icon" style="background:${escapeHtml(t.color)};"><i class="${escapeHtml(t.icono)}"></i></div>
             <div class="card card-body p-2 mb-0">
                 <div class="d-flex justify-content-between">
                     <strong>${escapeHtml(t.titulo)}</strong>
@@ -476,18 +503,18 @@ function renderMovimientos(items, meta) {
         // Los movimientos que no movieron stock (ANULADO, PENDIENTE...) se muestran
         // atenuados y sin saldo: siguen visibles, pero no se confunden con el kardex.
         const saldoCelda = m.computa_saldo
-            ? `<span class="traza-saldo ${m.saldo < 0 ? 'neg' : ''}">${m.saldo}</span>`
+            ? `<span class="traza-saldo ${m.saldo < 0 ? 'neg' : ''}">${fmtNum(m.saldo)}</span>`
             : '<span class="text-muted" title="No afecta el saldo: el movimiento no está COMPLETADO">—</span>';
         return `<tr class="${m.computa_saldo ? '' : 'traza-no-computa'}" title="${escapeHtml(m.observaciones || '')}">
             <td class="text-nowrap">${escapeHtml(m.fecha)}</td><td>${escapeHtml(m.hora)}</td>
-            <td><span class="badge bg-${badge}-subtle text-${badge}">${escapeHtml(etiquetaTipo)}</span></td>
+            <td><span class="badge badge-soft-${badge}">${escapeHtml(etiquetaTipo)}</span></td>
             <td class="small">${escapeHtml(m.concepto)}</td>
-            <td class="text-end ${m.cantidad > 0 ? 'text-success' : 'text-danger'} fw-bold">${m.cantidad > 0 ? '+' : ''}${m.cantidad}</td>
+            <td class="text-end text-nowrap ${m.cantidad > 0 ? 'text-success' : 'text-danger'} fw-bold">${m.cantidad > 0 ? '+' : ''}${fmtNum(m.cantidad)}</td>
             <td class="text-end">${saldoCelda}</td>
-            <td class="text-end">${fmtMoneda(m.costo)}</td>
+            <td class="text-end text-nowrap">${fmtMoneda(m.costo)}</td>
             <td>${escapeHtml(m.origen)}</td><td>${escapeHtml(m.destino)}</td>
             <td class="small">${escapeHtml(m.responsable)}</td><td class="small">${escapeHtml(ref)}</td>
-            <td><span class="badge bg-${m.computa_saldo ? 'success' : 'secondary'}-subtle text-dark">${escapeHtml(m.estado)}</span></td></tr>`;
+            <td><span class="badge badge-soft-${m.computa_saldo ? 'success' : 'dark'}">${escapeHtml(m.estado)}</span></td></tr>`;
     }).join('');
 
     // La tabla va de lo más nuevo a lo más viejo: la apertura cierra el listado.
@@ -497,7 +524,7 @@ function renderMovimientos(items, meta) {
                 ? `Saldo de apertura (acumulado de ${fmtNum(meta.omitidos)} movimiento(s) anteriores no mostrados)`
                 : 'Saldo de apertura (sin movimientos previos)'}
         </td>
-        <td class="text-end"><span class="traza-saldo ${meta.saldo_apertura < 0 ? 'neg' : ''}">${meta.saldo_apertura}</span></td>
+        <td class="text-end"><span class="traza-saldo ${meta.saldo_apertura < 0 ? 'neg' : ''}">${fmtNum(meta.saldo_apertura)}</span></td>
         <td colspan="6"></td></tr>`;
 
     tbody.innerHTML = html;
@@ -518,7 +545,7 @@ function renderLotes(items, meta) {
             <strong>${fmtNum(meta.mostrados)}</strong> más recientes.</div>`;
     }
     if (meta.sin_origen > 0) {
-        aviso += `<div class="alert alert-light border small py-2"><i class="ri-information-line me-1 text-primary"></i>
+        aviso += `<div class="alert alert-light border small py-2"><i class="ri-information-line me-1 traza-link"></i>
             <strong>${fmtNum(meta.sin_origen)}</strong> de los lotes mostrados no tienen DTE de origen registrado
             (lotes creados por ajustes, migración legacy o ingresos sin documento).</div>`;
     }
@@ -531,7 +558,7 @@ function renderLotes(items, meta) {
     tbody.innerHTML = items.map(l => {
         const estado = l.agotado ? '<span class="badge bg-danger">Agotado</span>' : l.activo ? '<span class="badge bg-success">Activo</span>' : '<span class="badge bg-secondary">Inactivo</span>';
         const dte = l.dte_id
-            ? `<a href="${escapeHtml(l.dte_url)}" target="_blank" class="text-primary fw-semibold" title="${escapeHtml(l.dte_tipo)}${l.dte_fecha ? ' · ' + escapeHtml(l.dte_fecha) : ''}">
+            ? `<a href="${escapeHtml(l.dte_url)}" target="_blank" class="traza-link fw-semibold" title="${escapeHtml(l.dte_tipo)}${l.dte_fecha ? ' · ' + escapeHtml(l.dte_fecha) : ''}">
                    #${escapeHtml(l.dte_folio)}</a>
                <br><small class="text-muted">${escapeHtml(l.dte_tipo)}${l.dte_fecha ? ' · ' + escapeHtml(l.dte_fecha) : ''}</small>`
             : '<span class="text-muted" title="El lote no tiene DTE de origen registrado">Sin documento</span>';
@@ -541,10 +568,10 @@ function renderLotes(items, meta) {
         return `<tr><td class="text-nowrap">${escapeHtml(l.fecha_ingreso)}</td><td>${escapeHtml(l.numero_lote)}</td>
             <td class="small">${dte}</td>
             <td class="small">${proveedor}</td>
-            <td class="text-end">${l.cantidad_inicial}</td><td class="text-end fw-bold">${l.cantidad_disponible}</td>
-            <td class="text-end">${fmtMoneda(l.costo_unitario)}</td>
-            <td class="text-end">${fmtMoneda(l.precio_venta)}</td>
-            <td><div class="progress" style="height:18px;"><div class="progress-bar" style="width:${l.porcentaje_consumido}%;">${l.porcentaje_consumido}%</div></div></td>
+            <td class="text-end">${fmtNum(l.cantidad_inicial)}</td><td class="text-end fw-bold">${fmtNum(l.cantidad_disponible)}</td>
+            <td class="text-end text-nowrap">${fmtMoneda(l.costo_unitario)}</td>
+            <td class="text-end text-nowrap">${fmtMoneda(l.precio_venta)}</td>
+            <td><div class="progress traza-progress"><div class="progress-bar" style="width:${l.porcentaje_consumido}%;">${l.porcentaje_consumido}%</div></div></td>
             <td>${estado}</td></tr>`;
     }).join('');
 }
@@ -560,7 +587,7 @@ function renderRecepciones(items, meta) {
     let aviso = '';
     if (meta.total > 0) {
         aviso += `<div class="alert alert-light border small py-2 d-flex flex-wrap gap-3">
-            <span><i class="ri-inbox-archive-line me-1 text-primary"></i><strong>${fmtNum(meta.total)}</strong> recepción(es)</span>
+            <span><i class="ri-inbox-archive-line me-1 traza-link"></i><strong>${fmtNum(meta.total)}</strong> recepción(es)</span>
             <span>Esperado: <strong>${fmtNum(meta.total_esperado)}</strong></span>
             <span>Recibido: <strong>${fmtNum(meta.total_recibido)}</strong></span>
             <span class="${meta.total_faltante ? 'text-danger' : ''}">Faltante: <strong>${fmtNum(meta.total_faltante)}</strong></span>
@@ -587,25 +614,25 @@ function renderRecepciones(items, meta) {
         return;
     }
     tbody.innerHTML = items.map(r => {
-        const badge = r.tiene_problemas ? 'danger' : (r.estado === 'RECEPCIONADO_OK' ? 'success' : 'secondary');
+        const badge = r.tiene_problemas ? 'danger' : (r.estado === 'RECEPCIONADO_OK' ? 'success' : 'dark');
         const doc = r.dte_url
-            ? `<a href="${escapeHtml(r.dte_url)}" target="_blank" class="text-primary">${escapeHtml(r.documento)}</a>`
+            ? `<a href="${escapeHtml(r.dte_url)}" target="_blank" class="traza-link">${escapeHtml(r.documento)}</a>`
             : escapeHtml(r.documento);
         const mov = r.sin_movimiento
-            ? '<span class="badge bg-warning-subtle text-dark" title="Recepción sin movimiento de stock vinculado">Sin vínculo</span>'
-            : `<span class="badge bg-success-subtle text-dark" title="Movimiento #${escapeHtml(r.movimiento_id)}">#${escapeHtml(r.movimiento_id)}</span>`;
+            ? '<span class="badge badge-soft-warning" title="Recepción sin movimiento de stock vinculado">Sin vínculo</span>'
+            : `<span class="badge badge-soft-success" title="Movimiento #${escapeHtml(r.movimiento_id)}">#${escapeHtml(r.movimiento_id)}</span>`;
         return `<tr title="${escapeHtml(r.observaciones || '')}">
             <td class="text-nowrap">${escapeHtml(r.fecha)} ${escapeHtml(r.hora || '')}</td>
-            <td><span class="badge bg-info-subtle text-info">${escapeHtml(r.origen)}</span>${r.es_historica ? ' <span class="badge bg-secondary-subtle text-dark">Histórica</span>' : ''}</td>
+            <td><span class="badge badge-soft-info">${escapeHtml(r.origen)}</span>${r.es_historica ? ' <span class="badge badge-soft-dark">Histórica</span>' : ''}</td>
             <td class="small">${doc}</td>
             <td class="small">${escapeHtml(r.proveedor)}</td>
             <td class="small">${escapeHtml(r.orden_compra)}</td>
-            <td class="text-end">${r.esperado}</td>
-            <td class="text-end fw-bold">${r.recibido}</td>
-            <td class="text-end ${r.faltante ? 'text-danger fw-bold' : 'text-muted'}">${r.faltante}</td>
-            <td class="text-end ${r.danado ? 'text-danger fw-bold' : 'text-muted'}">${r.danado}</td>
-            <td class="text-end ${r.sobrante ? 'text-warning fw-bold' : 'text-muted'}">${r.sobrante}</td>
-            <td><span class="badge bg-${badge}-subtle text-dark">${escapeHtml(r.estado_display)}</span></td>
+            <td class="text-end">${fmtNum(r.esperado)}</td>
+            <td class="text-end fw-bold">${fmtNum(r.recibido)}</td>
+            <td class="text-end ${r.faltante ? 'text-danger fw-bold' : 'text-muted'}">${fmtNum(r.faltante)}</td>
+            <td class="text-end ${r.danado ? 'text-danger fw-bold' : 'text-muted'}">${fmtNum(r.danado)}</td>
+            <td class="text-end ${r.sobrante ? 'text-warning fw-bold' : 'text-muted'}">${fmtNum(r.sobrante)}</td>
+            <td><span class="badge badge-soft-${badge}">${escapeHtml(r.estado_display)}</span></td>
             <td class="small">${escapeHtml(r.destino)}</td>
             <td class="small">${escapeHtml(r.recepcionado_por)}</td>
             <td>${mov}</td></tr>`;
@@ -626,7 +653,7 @@ function renderTraspasos(items, meta) {
             La tabla de traspasos formales no tiene registros para este producto, por eso no hay número
             de traspaso ni cantidad recibida por separado.</div>`;
     } else if (meta.fuente === 'movimientos' && !items.length) {
-        aviso = `<div class="alert alert-light border small py-2"><i class="ri-information-line me-1 text-primary"></i>
+        aviso = `<div class="alert alert-light border small py-2"><i class="ri-information-line me-1 traza-link"></i>
             Este SKU no registra movimientos de traspaso entre bodegas. Recuerde que cada bodega tiene su
             propio SKU: los traspasos de este artículo pueden estar en el SKU de otra sucursal
             (véalos todos en <a href="/app/tarjeta-movimiento/">Tarjeta de Movimiento</a>).</div>`;
@@ -644,15 +671,15 @@ function renderTraspasos(items, meta) {
     tbody.innerHTML = items.map(t => {
         const badge = {PENDIENTE:'warning',APROBADO:'info',EN_TRANSITO:'primary',RECIBIDO:'success',RECHAZADO:'danger',ANULADO:'secondary',COMPLETADO:'success'}[t.estado] || 'secondary';
         const sentido = t.sentido === 'ENTRADA'
-            ? '<span class="badge bg-success-subtle text-success">Entrada</span>'
-            : '<span class="badge bg-danger-subtle text-danger">Salida</span>';
+            ? '<span class="badge badge-soft-success">Entrada</span>'
+            : '<span class="badge badge-soft-danger">Salida</span>';
         return `<tr><td>${escapeHtml(t.numero)}</td><td class="text-nowrap">${escapeHtml(t.fecha)} ${escapeHtml(t.hora || '')}</td>
             <td>${sentido}</td>
             <td>${escapeHtml(t.origen)}</td><td>${escapeHtml(t.destino)}</td>
             <td><span class="badge bg-${badge}">${escapeHtml(t.estado)}</span></td>
-            <td class="text-end fw-bold">${t.cantidad_solicitada}</td>
-            <td class="text-end">${t.cantidad_recibida != null ? t.cantidad_recibida : '—'}</td>
-            <td class="text-end">${fmtMoneda(t.costo)}</td>
+            <td class="text-end fw-bold">${fmtNum(t.cantidad_solicitada)}</td>
+            <td class="text-end">${t.cantidad_recibida != null ? fmtNum(t.cantidad_recibida) : '—'}</td>
+            <td class="text-end text-nowrap">${fmtMoneda(t.costo)}</td>
             <td class="small">${escapeHtml(t.referencia || '')}</td></tr>`;
     }).join('');
 }
@@ -664,8 +691,8 @@ function renderPrecios(items) {
         return;
     }
     tbody.innerHTML = items.map(p => `<tr><td>${escapeHtml(p.fecha)}</td><td>${escapeHtml(p.tipo)}</td>
-        <td class="text-end">${fmtMoneda(p.valor_anterior)}</td>
-        <td class="text-end fw-bold">${fmtMoneda(p.valor_nuevo)}</td>
+        <td class="text-end text-nowrap">${fmtMoneda(p.valor_anterior)}</td>
+        <td class="text-end text-nowrap fw-bold">${fmtMoneda(p.valor_nuevo)}</td>
         <td>${escapeHtml(p.usuario)}</td><td class="small">${escapeHtml(p.motivo || '-')}</td></tr>`).join('');
 }
 
@@ -676,8 +703,8 @@ function renderPendientes(items) {
         return;
     }
     tbody.innerHTML = items.map(p => `<tr><td>${escapeHtml(p.fecha)}</td><td>${escapeHtml(p.origen)}</td><td>${escapeHtml(p.destino)}</td>
-        <td class="text-end">${p.cantidad}</td><td class="text-end">${p.despachada}</td>
-        <td class="text-end fw-bold">${p.restante}</td><td>${escapeHtml(p.estado)}</td></tr>`).join('');
+        <td class="text-end">${fmtNum(p.cantidad)}</td><td class="text-end">${fmtNum(p.despachada)}</td>
+        <td class="text-end fw-bold">${fmtNum(p.restante)}</td><td>${escapeHtml(p.estado)}</td></tr>`).join('');
 }
 
 document.getElementById('inputSku').addEventListener('keydown', e => { if (e.key === 'Enter') buscarTrazabilidad(); });

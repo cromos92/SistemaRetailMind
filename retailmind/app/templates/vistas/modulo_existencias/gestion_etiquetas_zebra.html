@@ -3,62 +3,78 @@
 {% include '../../layout/menu.html' %}
 
 <style>
-/* ========== NEXO DESIGN SYSTEM - Variables ========== */
+/* Los tokens --nexo-* vienen de nexo-design-system.css (cargado en layout/header.html).
+   Aquí solo se derivan los tonos oscuros de success/error usados en hovers y textos. */
 :root {
-    --nexo-primary: #0066FF;
-    --nexo-primary-dark: #0052CC;
-    --nexo-primary-light: #E6F0FF;
-    --nexo-secondary: #1A1A2E;
-    --nexo-accent: #00D4AA;
-    --nexo-success: #00D4AA;
-    --nexo-warning: #FFB020;
-    --nexo-error: #FF4D4D;
-    --nexo-info: #0066FF;
-    --nexo-gray-900: #1A1A2E;
-    --nexo-gray-700: #4A4A5A;
-    --nexo-gray-500: #8A8A9A;
-    --nexo-gray-300: #D1D1D9;
-    --nexo-gray-100: #F5F5F7;
-    --nexo-white: #FFFFFF;
-    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
-    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
-    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
-    --nexo-radius-sm: 4px;
-    --nexo-radius-md: 8px;
-    --nexo-radius-lg: 12px;
-    --nexo-transition-fast: 150ms ease;
-    --nexo-transition-normal: 250ms ease;
+    --nexo-success-dark: #00B894;
+    --nexo-error-dark: #CC3D3D;
 }
 
-/* ========== PAGE CONTAINER ========== */
-.nexo-page {
-    background: linear-gradient(135deg, var(--nexo-gray-100) 0%, var(--nexo-white) 100%);
-    min-height: calc(100vh - 60px);
-    padding: 1.5rem;
+/* ========== ESTRUCTURA DE MÓDULO (ESTILOS_MODULOS.md) ========== */
+.page-content {
+    background: #ffffff !important;
 }
 
-/* ========== HEADER ========== */
-.nexo-page-header {
+.card.shadow {
+    border: none;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(64, 81, 137, 0.1);
+}
+
+.module-header {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white;
+    padding: 16px 24px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1.5rem;
     flex-wrap: wrap;
-    gap: 1rem;
-}
-
-.nexo-page-title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--nexo-secondary);
-    display: flex;
-    align-items: center;
     gap: 12px;
 }
-
-.nexo-page-title i {
-    color: var(--nexo-primary);
+.module-header-left { display: flex; align-items: center; gap: 14px; }
+.module-header-icon {
+    width: 48px; height: 48px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
 }
+.module-header-info h5 { margin: 0; font-size: 18px; font-weight: 600; color: white; }
+.module-header-status { display: flex; align-items: center; gap: 6px; font-size: 13px; opacity: 0.9; margin-top: 4px; }
+.module-header-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.module-header-actions .btn {
+    border-radius: 10px;
+    font-weight: 500;
+    padding: 8px 14px;
+    font-size: 13px;
+    border: none;
+    transition: all 0.2s ease;
+}
+.module-header-actions .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+
+.pagination-controls {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 12px;
+    padding: 10px 16px;
+    margin-top: 12px;
+    border: 1px solid rgba(64, 81, 137, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+/* KPI cards del estándar (colores por tipo según ESTILOS_MODULOS.md) */
+.kpi-card { border-radius: 12px; border: none; overflow: hidden; }
+.kpi-card.card { margin-bottom: 0; }
+.kpi-card .card-body { padding: 12px 16px; }
+.kpi-card h4 { color: #405189; }
+.kpi-card p { font-size: 0.75rem; }
+.kpi-card.kpi-info { background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid #299cdb; }
+.kpi-card.kpi-success { background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 4px solid #0ab39c; }
+.kpi-card.kpi-pending { background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 4px solid #ffbe0b; }
 
 /* ========== CARD COMPONENT ========== */
 .nexo-card {
@@ -74,9 +90,14 @@
     box-shadow: var(--nexo-shadow-md);
 }
 
-.nexo-card-header {
+/* Gradiente navy compartido por cabeceras de tarjeta y de modal */
+.nexo-card-header,
+.modal-header-print {
     background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2a2a4e 100%);
     color: var(--nexo-white);
+}
+
+.nexo-card-header {
     padding: 1rem 1.5rem;
     border-bottom: none;
 }
@@ -121,8 +142,6 @@
 .nexo-filters .form-select {
     border: 1px solid var(--nexo-gray-300);
     border-radius: var(--nexo-radius-sm);
-    padding: 8px 12px;
-    font-size: 0.9rem;
     transition: var(--nexo-transition-fast);
     background: var(--nexo-white);
 }
@@ -164,7 +183,7 @@
 }
 
 .nexo-btn-success:hover {
-    background: #00b894;
+    background: var(--nexo-success-dark);
     color: var(--nexo-white);
 }
 
@@ -182,6 +201,35 @@
 .nexo-btn-lg {
     padding: 12px 24px;
     font-size: 1rem;
+}
+
+.nexo-btn-sm {
+    padding: 5px 10px;
+    min-height: 30px;
+    font-size: 0.78rem;
+    gap: 5px;
+    white-space: nowrap;
+}
+
+.nexo-btn-danger-soft {
+    background: rgba(255, 77, 77, 0.1);
+    color: var(--nexo-error-dark);
+    border: 1px solid rgba(255, 77, 77, 0.2);
+}
+
+.nexo-btn-danger-soft:hover {
+    background: rgba(255, 77, 77, 0.18);
+    color: var(--nexo-error-dark);
+}
+
+/* Botón alineado con un .form-control normal */
+.nexo-btn-input-h {
+    height: 38px;
+}
+
+/* Columna "Cant." del buscador por SKU */
+.col-cant {
+    width: 80px;
 }
 
 /* ========== TABLE STYLES ========== */
@@ -222,7 +270,59 @@
 }
 
 .nexo-table tbody tr.selected {
-    background: var(--nexo-primary-light);
+    background: rgba(0, 102, 255, 0.12);
+}
+
+.nexo-table tbody tr.selected td:first-child {
+    box-shadow: inset 3px 0 0 var(--nexo-primary);
+}
+
+/* Columnas numéricas y utilidades de celda */
+.col-num,
+.nexo-table .col-num {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.col-check {
+    width: 36px;
+}
+
+.col-obs {
+    max-width: 320px;
+    font-size: 0.78rem;
+    color: var(--nexo-gray-700);
+}
+
+.sku-code {
+    font-family: 'Courier New', monospace;
+    color: var(--nexo-gray-900);
+    font-size: 0.85rem;
+}
+
+.precio-sec {
+    font-size: 0.75rem;
+    color: var(--nexo-gray-700);
+}
+
+.doc-row {
+    cursor: pointer;
+}
+
+.check-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.producto-check {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
 }
 
 /* ========== BADGES ========== */
@@ -235,96 +335,52 @@
     font-weight: 600;
 }
 
-.nexo-badge-success {
-    background: rgba(0, 212, 170, 0.15);
-    color: #00a389;
+/* .nexo-badge-success / -warning / -info vienen de nexo-design-system.css */
+.nexo-badge-neutral {
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
 }
 
-.nexo-badge-warning {
-    background: rgba(255, 176, 32, 0.15);
-    color: #cc8c00;
-}
-
-.nexo-badge-info {
-    background: rgba(0, 102, 255, 0.15);
-    color: var(--nexo-primary);
-}
-
-/* ========== STATS CARDS ========== */
-.nexo-stats-card {
-    background: var(--nexo-white);
-    border: 1px solid var(--nexo-gray-300);
-    border-radius: var(--nexo-radius-md);
-    padding: 1rem 1.25rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
-.nexo-stats-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: var(--nexo-radius-md);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.25rem;
-}
-
-.nexo-stats-icon.primary {
-    background: var(--nexo-primary-light);
-    color: var(--nexo-primary);
-}
-
-.nexo-stats-icon.success {
-    background: rgba(0, 212, 170, 0.15);
-    color: var(--nexo-success);
-}
-
-.nexo-stats-icon.warning {
-    background: rgba(255, 176, 32, 0.15);
-    color: var(--nexo-warning);
-}
-
-.nexo-stats-content h4 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--nexo-secondary);
-    margin: 0;
-}
-
-.nexo-stats-content p {
-    font-size: 0.85rem;
-    color: var(--nexo-gray-500);
-    margin: 0;
+.nexo-badge-on-dark {
+    background: rgba(255, 255, 255, 0.2);
+    color: var(--nexo-white);
+    margin-left: 6px;
 }
 
 /* ========== ZEBRA PRINT STATUS ========== */
 .zebra-status {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 16px;
+    padding: 4px 12px;
     border-radius: var(--nexo-radius-md);
-    font-size: 0.9rem;
-    font-weight: 500;
+    font-size: 0.82rem;
+    font-weight: 600;
 }
 
 .zebra-status.connected {
-    background: rgba(0, 212, 170, 0.15);
-    color: #00a389;
+    background: rgba(0, 212, 170, 0.28);
+    color: var(--nexo-white);
 }
 
 .zebra-status.disconnected {
-    background: rgba(255, 77, 77, 0.15);
-    color: var(--nexo-error);
+    background: rgba(255, 77, 77, 0.35);
+    color: var(--nexo-white);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--nexo-success);
+    display: inline-block;
+    flex-shrink: 0;
+    animation: pulse 2s infinite;
 }
 
 .zebra-status .status-dot {
     width: 10px;
     height: 10px;
-    border-radius: 50%;
-    animation: pulse 2s infinite;
 }
 
 .zebra-status.connected .status-dot {
@@ -346,7 +402,7 @@
     border: 2px dashed var(--nexo-gray-300);
     border-radius: var(--nexo-radius-md);
     padding: 1rem;
-    background: #fafafa;
+    background: var(--nexo-gray-100);
     font-family: 'Courier New', monospace;
     font-size: 0.8rem;
     line-height: 1.4;
@@ -359,6 +415,20 @@
     width: 200px;
     min-height: 120px;
 }
+
+/* Mockup de etiqueta (página y modal comparten tamaños) */
+.lbl-preview { font-size: 10px; }
+.lbl-barcode {
+    border: 1px solid #000;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+}
+.lbl-sku, .lbl-precio { font-size: 14px; }
+.lbl-talla { font-size: 16px; }
+.lbl-foot { font-size: 9px; }
 
 /* ========== QUANTITY INPUT ========== */
 .quantity-input {
@@ -387,25 +457,25 @@
 .nexo-alert-warning {
     background: rgba(255, 176, 32, 0.15);
     border: 1px solid var(--nexo-warning);
-    color: #8a6914;
+    color: #996B00;
 }
 
 .nexo-alert-success {
     background: rgba(0, 212, 170, 0.15);
     border: 1px solid var(--nexo-success);
-    color: #00a389;
+    color: #00A080;
 }
 
 .nexo-alert-error {
     background: rgba(255, 77, 77, 0.15);
     border: 1px solid var(--nexo-error);
-    color: #cc3d3d;
+    color: var(--nexo-error-dark);
 }
 
 .nexo-alert-info {
     background: rgba(0, 102, 255, 0.1);
     border: 1px solid var(--nexo-primary);
-    color: #0052CC;
+    color: var(--nexo-primary-dark);
 }
 
 /* ========== LOADING OVERLAY ========== */
@@ -443,9 +513,18 @@
 }
 
 /* ========== MODAL IMPRIMIR ========== */
-.modal-header-print {
-    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2a2a4e 100%);
-    color: var(--nexo-white);
+.modal-header-print .modal-title i {
+    color: var(--nexo-accent);
+}
+
+.modal-title-sub {
+    font-weight: 400;
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+
+.modal-print-body {
+    min-height: 420px;
 }
 
 .modal-preview-panel {
@@ -453,9 +532,16 @@
     border-left: 1px solid var(--nexo-gray-300);
 }
 
+@media (max-width: 991.98px) {
+    .modal-preview-panel {
+        border-left: 0;
+        border-top: 1px solid var(--nexo-gray-300);
+    }
+}
+
 .quantity-stepper {
     display: inline-flex;
-    align-items: center;
+    align-items: stretch;
     border: 1px solid var(--nexo-gray-300);
     border-radius: var(--nexo-radius-sm);
     overflow: hidden;
@@ -464,7 +550,9 @@
 .quantity-stepper button {
     background: var(--nexo-gray-100);
     border: none;
-    padding: 4px 10px;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 4px 8px;
     font-size: 1rem;
     line-height: 1;
     cursor: pointer;
@@ -494,6 +582,23 @@
     background: var(--nexo-primary-light);
 }
 
+body.pos-kiosk .quantity-stepper button {
+    min-width: 48px;
+    min-height: 48px;
+    font-size: 1.2rem;
+}
+
+body.pos-kiosk .producto-check {
+    width: 24px;
+    height: 24px;
+}
+
+body.pos-kiosk .nexo-btn-sm {
+    min-height: 44px;
+    padding: 8px 14px;
+    font-size: 0.875rem;
+}
+
 /* SKU search result rows - hover updates preview */
 .sku-result-row {
     cursor: pointer;
@@ -501,12 +606,7 @@
 }
 
 .sku-result-row:hover {
-    background: var(--nexo-primary-light) !important;
-}
-
-.sku-result-row.sku-selected {
     background: var(--nexo-primary-light);
-    border-left: 3px solid var(--nexo-primary);
 }
 
 /* ========== ARTICLE GROUP CARDS ========== */
@@ -620,26 +720,6 @@
     background: var(--nexo-primary-light);
 }
 
-.btn-imprimir-articulo {
-    background: var(--nexo-success);
-    color: var(--nexo-white);
-    border: none;
-    border-radius: var(--nexo-radius-sm);
-    padding: 5px 12px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    transition: var(--nexo-transition-fast);
-    white-space: nowrap;
-}
-
-.btn-imprimir-articulo:hover {
-    background: #00b894;
-}
-
 .sku-count-badge {
     background: var(--nexo-primary);
     color: #fff;
@@ -661,54 +741,6 @@
     color: var(--nexo-primary);
 }
 
-/* Ya impreso badge en tabla productos */
-.badge-impreso {
-    background: rgba(0, 212, 170, 0.12);
-    color: #007a63;
-    border: 1px solid rgba(0, 212, 170, 0.3);
-    border-radius: 20px;
-    padding: 2px 8px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    white-space: nowrap;
-}
-
-.badge-nuevo {
-    background: rgba(139,139,155,0.1);
-    color: #666;
-    border: 1px solid rgba(139,139,155,0.25);
-    border-radius: 20px;
-    padding: 2px 8px;
-    font-size: 0.7rem;
-    font-weight: 500;
-}
-
-/* Modal print summary footer */
-.modal-print-summary {
-    background: var(--nexo-gray-100);
-    border-radius: var(--nexo-radius-md);
-    padding: 10px 16px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-
-.modal-print-summary .stat {
-    text-align: center;
-}
-
-.modal-print-summary .stat-value {
-    font-size: 1.4rem;
-    font-weight: 700;
-    color: var(--nexo-secondary);
-    display: block;
-    line-height: 1;
-}
-
-.modal-print-summary .stat-label {
-    font-size: 0.75rem;
-    color: var(--nexo-gray-500);
-}
 .nexo-card-body-collapsible {
     transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.25s ease;
     overflow: hidden;
@@ -749,72 +781,137 @@
 }
 
 /* ========== SORT INDICATOR ========== */
-.sort-active {
-    color: var(--nexo-primary) !important;
-}
-
-th.sort-asc::after { content: ' ↑'; font-size: 0.7em; opacity: 0.7; }
 th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-primary); }
 
 /* ========== DOCUMENTOS TABLE - dynamic height ========== */
 .docs-table-wrapper {
+    overflow-x: auto;
     overflow-y: auto;
     max-height: 42vh;
     min-height: 220px;
 }
 
+.docs-table-wrapper .nexo-table th,
+.docs-table-wrapper .nexo-table td {
+    white-space: nowrap;
+}
+
+.docs-table-wrapper .nexo-table td.empty-state { white-space: normal; }
+
+/* ========== CONTENEDORES CON SCROLL ========== */
+.scroll-box { overflow-y: auto; }
+.scroll-box-sm { max-height: 260px; }
+.scroll-box-md { max-height: 380px; }
+.scroll-box-lg { max-height: 55vh; }
+.scroll-box-xl { max-height: 60vh; }
+
+/* ========== SUBTÍTULOS DE SECCIÓN ========== */
+.section-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--nexo-gray-500);
+    margin-bottom: 0.75rem;
+}
+
+/* ========== ESTADOS VACÍOS Y DE CARGA ========== */
+.empty-state {
+    text-align: center;
+    padding: 1.5rem 0;
+    color: var(--nexo-gray-500);
+}
+
+.empty-state i {
+    font-size: 2.5rem;
+    color: var(--nexo-gray-300);
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+    margin: 0;
+}
+
+.nexo-table td.empty-state {
+    padding: 1.5rem 1rem;
+    color: var(--nexo-gray-500);
+}
+
+.loading-icon {
+    font-size: 2rem;
+    color: var(--nexo-gray-500);
+}
+
 /* ========== RESPONSIVE ========== */
 @media (max-width: 768px) {
-    .nexo-page {
-        padding: 1rem;
-    }
-    
+    .module-header { padding: 12px 16px; }
+    .module-header-icon { width: 40px; height: 40px; font-size: 20px; }
+    .pagination-controls { flex-direction: column; align-items: stretch; }
+
     .nexo-table {
         font-size: 0.8rem;
     }
-    
+
     .nexo-table thead th,
     .nexo-table tbody td {
         padding: 8px 10px;
     }
-    
+
     .docs-table-wrapper {
         max-height: 320px;
     }
 
-    .etiquetas-filters .row > [class*="col-"] { flex: 0 0 100%; max-width: 100%; margin-bottom: 0.5rem; }
     .etiqueta-preview { transform: scale(0.85); transform-origin: top left; }
-    .etiquetas-actions { flex-direction: column; gap: 0.5rem; }
-    .etiquetas-actions .btn { width: 100%; }
 }
 @media (max-width: 576px) {
     .etiqueta-preview { transform: scale(0.7); }
-    .tabla-etiquetas { font-size: 0.75rem; }
 }
 </style>
 
-<div class="nexo-page">
-    <!-- Header -->
-    <div class="nexo-page-header">
-        <h1 class="nexo-page-title">
-            <i class="ri-printer-line"></i>
-            Impresión de Etiquetas Zebra
-        </h1>
-        <div class="d-flex align-items-center gap-3">
-            <!-- Estado de Impresora -->
-            <div id="zebraStatus" class="zebra-status disconnected">
-                <span class="status-dot"></span>
-                <span id="zebraStatusText">Buscando impresora...</span>
+<div class="page-content">
+    <div class="container-fluid">
+
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <h4 class="mb-sm-0"><i class="ri-printer-line text-primary me-2"></i>Etiquetas Zebra</h4>
+                <div class="page-title-right">
+                    <ol class="breadcrumb m-0">
+                        <li class="breadcrumb-item"><a href="/app/home/">Inicio</a></li>
+                        <li class="breadcrumb-item">Existencias</li>
+                        <li class="breadcrumb-item active">Etiquetas Zebra</li>
+                    </ol>
+                </div>
             </div>
-            <button class="nexo-btn nexo-btn-outline" onclick="buscarImpresora()">
-                <i class="ri-refresh-line"></i>
-                Reconectar
-            </button>
-            <button class="nexo-btn nexo-btn-outline" onclick="abrirPruebaImpresion()"
-                    title="Imprime 1 fila de prueba (2 etiquetas) directo a la Zebra, sin registrar historial">
-                <i class="ri-test-tube-line"></i>
-                Prueba
-            </button>
+        </div>
+    </div>
+
+    <!-- Header de módulo -->
+    <div class="card shadow mb-3">
+        <div class="module-header">
+            <div class="module-header-left">
+                <div class="module-header-icon"><i class="ri-printer-line"></i></div>
+                <div class="module-header-info">
+                    <h5>Impresión por documento y por SKU</h5>
+                    <div class="module-header-status">
+                        <!-- Estado de Impresora -->
+                        <div id="zebraStatus" class="zebra-status disconnected">
+                            <span class="status-dot"></span>
+                            <span id="zebraStatusText">Buscando impresora...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="module-header-actions">
+                <button class="btn btn-light btn-sm" onclick="buscarImpresora()">
+                    <i class="ri-refresh-line me-1"></i>Reconectar
+                </button>
+                <button class="btn btn-light btn-sm" onclick="abrirPruebaImpresion()"
+                        title="Imprime 1 fila de prueba (2 etiquetas) directo a la Zebra, sin registrar historial">
+                    <i class="ri-test-tube-line me-1"></i>Prueba
+                </button>
+            </div>
         </div>
     </div>
 
@@ -825,7 +922,7 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                 <div class="nexo-card-header">
                     <h5>
                         <i class="ri-file-list-3-line"></i> Documentos Disponibles
-                        <span id="docCount" class="nexo-badge" style="background:rgba(255,255,255,0.2);color:#fff;font-size:0.7rem;margin-left:6px;"></span>
+                        <span id="docCount" class="nexo-badge nexo-badge-on-dark"></span>
                     </h5>
                 </div>
                 <div class="nexo-card-body">
@@ -833,7 +930,7 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                     <div class="nexo-filters mb-3">
                         <div class="row g-2 align-items-end">
                             <div class="col-xl-2 col-md-4">
-                                <label class="form-label">Sucursal</label>
+                                <label class="form-label" for="filtroSucursal">Sucursal</label>
                                 <select id="filtroSucursal" class="form-select form-select-sm" onchange="cargarDocumentos()">
                                     <option value="">Todas</option>
                                     {% for sucursal in sucursales %}
@@ -844,14 +941,14 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                                 </select>
                             </div>
                             <div class="col-xl-2 col-md-4">
-                                <label class="form-label">Fuente</label>
+                                <label class="form-label" for="filtroFuente">Fuente</label>
                                 <select id="filtroFuente" class="form-select form-select-sm" onchange="cargarDocumentos()">
-                                    <option value="postgres">PostgreSQL</option>
-                                    <option value="mysql">MySQL</option>
+                                    <option value="postgres">Sistema actual</option>
+                                    <option value="mysql">Sistema anterior (histórico)</option>
                                 </select>
                             </div>
                             <div class="col-xl-2 col-md-4">
-                                <label class="form-label">Tipo</label>
+                                <label class="form-label" for="filtroTipo">Tipo</label>
                                 <select id="filtroTipo" class="form-select form-select-sm" onchange="cargarDocumentos()">
                                     <option value="todos">Todos</option>
                                     <option value="compra">Facturas Compra</option>
@@ -860,15 +957,15 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                                 </select>
                             </div>
                             <div class="col-xl-2 col-md-4">
-                                <label class="form-label">Desde</label>
+                                <label class="form-label" for="filtroFechaInicio">Desde</label>
                                 <input type="date" id="filtroFechaInicio" class="form-control form-control-sm" onchange="cargarDocumentos()">
                             </div>
                             <div class="col-xl-2 col-md-4">
-                                <label class="form-label">Hasta</label>
+                                <label class="form-label" for="filtroFechaFin">Hasta</label>
                                 <input type="date" id="filtroFechaFin" class="form-control form-control-sm" onchange="cargarDocumentos()">
                             </div>
                             <div class="col-xl-2 col-md-4">
-                                <label class="form-label">Buscar</label>
+                                <label class="form-label" for="filtroSearch">Buscar</label>
                                 <input type="text" id="filtroSearch" class="form-control form-control-sm" placeholder="N° doc o proveedor..." onkeyup="debounceSearch()">
                             </div>
                         </div>
@@ -881,18 +978,18 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                                 <tr>
                                     <th>Tipo</th>
                                     <th>N° Documento</th>
-                                    <th class="sort-desc" title="Ordenado por fecha DTE, más reciente primero">Fecha DTE</th>
+                                    <th class="sort-desc text-center" title="Ordenado por fecha DTE, más reciente primero">Fecha DTE</th>
                                     <th>Origen / Proveedor</th>
                                     <th>Destino</th>
-                                    <th>Productos</th>
+                                    <th class="col-num">Productos</th>
                                     <th>Estado</th>
-                                    <th></th>
+                                    <th class="text-center"><span class="visually-hidden">Abrir</span></th>
                                 </tr>
                             </thead>
                             <tbody id="tablaDocumentos">
                                 <tr>
                                     <td colspan="8" class="text-center py-4">
-                                        <i class="ri-loader-4-line ri-spin" style="font-size: 2rem; color: var(--nexo-gray-500);"></i>
+                                        <i class="ri-loader-4-line ri-spin loading-icon"></i>
                                         <p class="mt-2 mb-0 text-muted">Cargando documentos...</p>
                                     </td>
                                 </tr>
@@ -901,13 +998,13 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                     </div>
 
                     <!-- Paginación -->
-                    <div class="d-flex justify-content-between align-items-center mt-3">
+                    <div class="pagination-controls">
                         <span id="paginacionInfo" class="text-muted small">Mostrando 0 de 0</span>
                         <div class="btn-group">
-                            <button class="nexo-btn nexo-btn-outline" id="btnPrevPage" onclick="cambiarPagina(-1)" disabled>
+                            <button class="nexo-btn nexo-btn-outline" id="btnPrevPage" onclick="cambiarPagina(-1)" disabled title="Página anterior" aria-label="Página anterior">
                                 <i class="ri-arrow-left-s-line"></i>
                             </button>
-                            <button class="nexo-btn nexo-btn-outline" id="btnNextPage" onclick="cambiarPagina(1)" disabled>
+                            <button class="nexo-btn nexo-btn-outline" id="btnNextPage" onclick="cambiarPagina(1)" disabled title="Página siguiente" aria-label="Página siguiente">
                                 <i class="ri-arrow-right-s-line"></i>
                             </button>
                         </div>
@@ -922,24 +1019,24 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
         <!-- Búsqueda por Artículo / SKU -->
         <div class="col-lg-5">
             <div class="nexo-card">
-                <div class="nexo-card-header" style="background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%);">
+                <div class="nexo-card-header">
                     <h5><i class="ri-price-tag-3-line"></i> Imprimir por Artículo / SKU</h5>
                 </div>
                 <div class="nexo-card-body">
                     <div class="row g-2 align-items-end mb-3">
                         <div class="col">
-                            <label class="form-label small">Buscar por SKU, artículo o descripción</label>
+                            <label class="form-label small" for="busquedaSkuRapida">Buscar por SKU, artículo o descripción</label>
                             <input type="text" id="busquedaSkuRapida" class="form-control" 
                                 placeholder="Ej: 100234, Polera, Nike..." 
                                 onkeyup="debounceSkuSearch(event)">
                         </div>
-                        <div class="col-auto" style="width: 80px;">
-                            <label class="form-label small">Cant.</label>
+                        <div class="col-auto col-cant">
+                            <label class="form-label small" for="cantidadSkuRapida">Cant.</label>
                             <input type="number" id="cantidadSkuRapida" class="form-control" 
                                 value="1" min="1" max="999">
                         </div>
                         <div class="col-auto">
-                            <button class="nexo-btn nexo-btn-primary" onclick="buscarSkuRapido()" style="height:38px;">
+                            <button class="nexo-btn nexo-btn-primary nexo-btn-input-h" onclick="buscarSkuRapido()" title="Buscar" aria-label="Buscar">
                                 <i class="ri-search-line"></i>
                             </button>
                         </div>
@@ -949,11 +1046,11 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                     <div id="resultadosSkuRapido" style="display: none;">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <span class="text-muted small" id="resumenBusqueda"></span>
-                            <button class="nexo-btn nexo-btn-outline" style="padding:3px 10px;font-size:0.75rem;" onclick="limpiarBusqueda()" title="Limpiar resultados">
+                            <button class="nexo-btn nexo-btn-outline nexo-btn-sm" onclick="limpiarBusqueda()" title="Limpiar resultados">
                                 <i class="ri-close-line"></i> Limpiar
                             </button>
                         </div>
-                        <div id="listaArticulosResultados" style="max-height: 380px; overflow-y: auto;">
+                        <div id="listaArticulosResultados" class="scroll-box scroll-box-md">
                         </div>
                     </div>
                 </div>
@@ -975,27 +1072,27 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                         <div class="col-md-5">
                             <div class="etiqueta-preview">
                                 <div class="etiqueta-preview-box" id="previewEtiqueta">
-                                    <div style="font-size: 10px;">
+                                    <div class="lbl-preview">
                                         <div class="d-flex justify-content-between">
                                             <span id="prevSucursal">SUCURSAL</span>
                                             <span id="prevDesc">DESCRIPCIÓN COMPLETA</span>
                                         </div>
                                         <div class="text-center my-2">
-                                            <div style="border: 1px solid #000; height: 40px; display: flex; align-items: center; justify-content: center;">
+                                            <div class="lbl-barcode">
                                                 |||||||||||||||||||
                                             </div>
-                                            <strong style="font-size: 14px;" id="prevSku">0000000</strong>
+                                            <strong class="lbl-sku" id="prevSku">0000000</strong>
                                         </div>
                                         <div class="d-flex justify-content-between">
                                             <span id="prevArt">ARTICULO</span>
-                                            <strong style="font-size: 14px;" id="prevPrecio">$0</strong>
+                                            <strong class="lbl-precio" id="prevPrecio">$0</strong>
                                         </div>
                                         <div class="d-flex justify-content-between mt-1">
                                             <span>G/F <span id="prevFactura">00000</span></span>
-                                            <strong style="font-size: 16px;" id="prevTalla">00</strong>
+                                            <strong class="lbl-talla" id="prevTalla">00</strong>
                                             <span id="prevMarca">MARCA</span>
                                         </div>
-                                        <div class="d-flex justify-content-between" style="font-size: 9px;">
+                                        <div class="d-flex justify-content-between lbl-foot">
                                             <span id="prevFecha">01-01-2026</span>
                                             <span id="prevColor">COLOR</span>
                                         </div>
@@ -1004,13 +1101,13 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                             </div>
                         </div>
                         <div class="col-md-7">
-                            <h6 class="text-muted mb-3">Configuración de Impresión</h6>
+                            <h6 class="section-label">Configuración de Impresión</h6>
                             <div class="mb-3">
-                                <label class="form-label small">Fecha de Impresión</label>
+                                <label class="form-label small" for="fechaImpresion">Fecha de Impresión</label>
                                 <input type="date" id="fechaImpresion" class="form-control">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label small">Sucursal (para etiqueta)</label>
+                                <label class="form-label small" for="sucursalEtiqueta">Sucursal (para etiqueta)</label>
                                 <input type="text" id="sucursalEtiqueta" class="form-control" maxlength="8" placeholder="Máx. 8 caracteres">
                             </div>
                             <div class="nexo-alert nexo-alert-warning small">
@@ -1033,31 +1130,31 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                 </div>
                 <div class="nexo-card-body">
                     {% if ultimas_impresiones %}
-                    <div class="table-responsive" style="max-height: 260px; overflow-y: auto;">
+                    <div class="table-responsive scroll-box scroll-box-sm">
                         <table class="nexo-table">
                             <thead>
                                 <tr>
-                                    <th>Fecha</th>
+                                    <th class="text-center">Fecha</th>
                                     <th>Origen</th>
                                     <th>Documento</th>
                                     <th>Sucursal</th>
                                     <th>Usuario</th>
-                                    <th>Productos</th>
-                                    <th>Etiquetas</th>
+                                    <th class="col-num">Productos</th>
+                                    <th class="col-num">Etiquetas</th>
                                     <th>Observaciones</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for imp in ultimas_impresiones %}
                                 <tr>
-                                    <td>{{ imp.fecha_impresion|date:'d/m/Y H:i' }}</td>
+                                    <td class="text-center">{{ imp.fecha_impresion|date:'d/m/Y H:i' }}</td>
                                     <td><span class="nexo-badge nexo-badge-info">{{ imp.get_tipo_origen_display }}</span></td>
                                     <td><strong>{{ imp.numero_documento|default:'—' }}</strong></td>
                                     <td>{{ imp.sucursal.alias|default:'—' }}</td>
                                     <td>{{ imp.usuario.get_full_name|default:imp.usuario.username|default:'Sistema' }}</td>
-                                    <td>{{ imp.total_productos }}</td>
-                                    <td><span class="nexo-badge nexo-badge-success">{{ imp.total_etiquetas }}</span></td>
-                                    <td style="max-width:320px;font-size:.78rem;color:var(--nexo-gray-700);">
+                                    <td class="col-num">{{ imp.total_productos }}</td>
+                                    <td class="col-num"><span class="nexo-badge nexo-badge-success">{{ imp.total_etiquetas }}</span></td>
+                                    <td class="col-obs">
                                         {{ imp.observaciones|default:'' }}
                                     </td>
                                 </tr>
@@ -1066,59 +1163,58 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                         </table>
                     </div>
                     {% else %}
-                    <p class="text-muted mb-0 text-center py-3">
-                        <i class="ri-inbox-line" style="font-size:1.6rem;"></i><br>
-                        Todavía no hay impresiones registradas en esta empresa.
-                    </p>
+                    <div class="empty-state">
+                        <i class="ri-inbox-line"></i>
+                        <p>Todavía no hay impresiones registradas en esta empresa.</p>
+                    </div>
                     {% endif %}
                 </div>
             </div>
         </div>
     </div>
-</div>
+
+    </div><!-- /container-fluid -->
+</div><!-- /page-content -->
 
 <!-- ========== MODAL: DOCUMENTO (Productos del DTE) ========== -->
 <div class="modal fade" id="modalDocumento" tabindex="-1" aria-labelledby="modalDocumentoLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header" style="background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2a2a4e 100%); color: var(--nexo-white);">
+            <div class="modal-header modal-header-print">
                 <div>
                     <h5 class="modal-title mb-0" id="modalDocumentoLabel">
-                        <i class="ri-file-text-line me-2" style="color: var(--nexo-accent);"></i>
+                        <i class="ri-file-text-line me-2"></i>
                         <span id="tituloDocumento">Documento</span>
                     </h5>
                     <small id="docSubtitulo" class="opacity-75"></small>
                 </div>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
 
             <div class="modal-body">
                 <!-- Stats -->
-                <div class="row g-3 mb-3">
-                    <div class="col-md-4">
-                        <div class="nexo-stats-card">
-                            <div class="nexo-stats-icon primary"><i class="ri-box-3-line"></i></div>
-                            <div class="nexo-stats-content">
-                                <h4 id="statTotalProductos">0</h4>
-                                <p>Productos en doc.</p>
+                <div class="row g-2 mb-3">
+                    <div class="col-4">
+                        <div class="kpi-card kpi-info card h-100">
+                            <div class="card-body text-center py-2">
+                                <h4 class="mb-0 fw-bold" id="statTotalProductos">0</h4>
+                                <p class="text-muted mb-0 small fw-medium">Productos en doc.</p>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="nexo-stats-card">
-                            <div class="nexo-stats-icon success"><i class="ri-price-tag-3-line"></i></div>
-                            <div class="nexo-stats-content">
-                                <h4 id="statTotalEtiquetas">0</h4>
-                                <p>Etiquetas selec.</p>
+                    <div class="col-4">
+                        <div class="kpi-card kpi-success card h-100">
+                            <div class="card-body text-center py-2">
+                                <h4 class="mb-0 fw-bold" id="statTotalEtiquetas">0</h4>
+                                <p class="text-muted mb-0 small fw-medium">Etiquetas selec.</p>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="nexo-stats-card">
-                            <div class="nexo-stats-icon warning"><i class="ri-checkbox-multiple-line"></i></div>
-                            <div class="nexo-stats-content">
-                                <h4 id="statSeleccionados">0</h4>
-                                <p>Seleccionados</p>
+                    <div class="col-4">
+                        <div class="kpi-card kpi-pending card h-100">
+                            <div class="card-body text-center py-2">
+                                <h4 class="mb-0 fw-bold" id="statSeleccionados">0</h4>
+                                <p class="text-muted mb-0 small fw-medium">Seleccionados</p>
                             </div>
                         </div>
                     </div>
@@ -1144,28 +1240,28 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                 </div>
 
                 <!-- Tabla de Productos -->
-                <div class="table-responsive" style="max-height: 55vh; overflow-y: auto;">
+                <div class="table-responsive scroll-box scroll-box-lg">
                     <table class="nexo-table">
                         <thead>
                             <tr>
-                                <th style="width: 36px;">
-                                    <input type="checkbox" id="checkAll" onchange="toggleAll(this)">
+                                <th class="col-check">
+                                    <input type="checkbox" id="checkAll" class="producto-check" onchange="toggleAll(this)" title="Seleccionar todos" aria-label="Seleccionar todos">
                                 </th>
                                 <th>SKU</th>
                                 <th>Artículo</th>
                                 <th>Marca</th>
-                                <th>Talla</th>
+                                <th class="text-center">Talla</th>
                                 <th>Color</th>
-                                <th title="Precio que se imprimirá en la etiqueta">Precio etiqueta</th>
-                                <th>Cant.</th>
-                                <th>Etiquetas</th>
-                                <th title="Etiquetas impresas anteriormente">Prev.</th>
+                                <th class="col-num" title="Precio que se imprimirá en la etiqueta">Precio etiqueta</th>
+                                <th class="col-num">Cant.</th>
+                                <th class="col-num">Etiquetas</th>
+                                <th class="text-center" title="Etiquetas impresas anteriormente">Prev.</th>
                             </tr>
                         </thead>
                         <tbody id="tablaProductos">
                             <tr>
                                 <td colspan="10" class="text-center py-4">
-                                    <i class="ri-loader-4-line ri-spin" style="font-size: 2rem; color: var(--nexo-gray-500);"></i>
+                                    <i class="ri-loader-4-line ri-spin loading-icon"></i>
                                     <p class="mt-2 mb-0 text-muted">Cargando productos...</p>
                                 </td>
                             </tr>
@@ -1176,7 +1272,7 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
 
             <div class="modal-footer">
                 <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">
-                    <i class="ri-close-line"></i> Cerrar
+                    <i class="ri-close-line"></i> Cancelar
                 </button>
                 <button class="nexo-btn nexo-btn-success nexo-btn-lg" onclick="abrirModalDesdeDocumento()" id="btnImprimir" disabled>
                     <i class="ri-printer-line"></i> Revisar e Imprimir
@@ -1192,18 +1288,18 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
         <div class="modal-content">
             <div class="modal-header modal-header-print">
                 <h5 class="modal-title" id="modalImprimirLabel">
-                    <i class="ri-printer-line me-2" style="color: var(--nexo-accent);"></i>
+                    <i class="ri-printer-line me-2"></i>
                     Revisar e Imprimir Etiquetas
-                    <span class="ms-2" id="modalDocTitulo" style="font-weight:400; font-size:0.9rem; opacity:0.8;"></span>
+                    <span class="ms-2 modal-title-sub" id="modalDocTitulo"></span>
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body p-0">
-                <div class="d-flex" style="min-height: 420px;">
+                <div class="row g-0 modal-print-body">
                     <!-- Columna izquierda: tabla de productos -->
-                    <div class="flex-grow-1 p-3" style="overflow-y: auto; max-height: 60vh;">
+                    <div class="col-lg-8 p-3 scroll-box scroll-box-xl">
                         <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="mb-0 fw-semibold">Productos seleccionados</h6>
+                            <h6 class="section-label mb-0">Productos seleccionados</h6>
                             <div class="d-flex gap-2">
                                 <span class="nexo-badge nexo-badge-info" id="modalResumenProductos">0 productos</span>
                                 <span class="nexo-badge nexo-badge-success" id="modalResumenEtiquetas">0 etiquetas</span>
@@ -1215,10 +1311,10 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                                     <tr>
                                         <th>SKU</th>
                                         <th>Artículo</th>
-                                        <th>Talla</th>
-                                        <th>Precio</th>
-                                        <th>Etiquetas</th>
-                                        <th></th>
+                                        <th class="text-center">Talla</th>
+                                        <th class="col-num">Precio</th>
+                                        <th class="col-num">Etiquetas</th>
+                                        <th class="text-center"><span class="visually-hidden">Quitar</span></th>
                                     </tr>
                                 </thead>
                                 <tbody id="modalProductosList"></tbody>
@@ -1227,31 +1323,31 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                     </div>
 
                     <!-- Columna derecha: preview + config -->
-                    <div class="modal-preview-panel p-3 flex-shrink-0" style="width: 280px;">
-                        <p class="text-muted small fw-semibold mb-2 text-uppercase" style="letter-spacing:.5px;">Vista Previa</p>
+                    <div class="col-lg-4 modal-preview-panel p-3">
+                        <h6 class="section-label mb-2">Vista Previa</h6>
                         <div class="etiqueta-preview mb-3">
                             <div class="etiqueta-preview-box" id="modalPreviewBox">
-                                <div style="font-size: 10px;">
+                                <div class="lbl-preview">
                                     <div class="d-flex justify-content-between">
                                         <span id="mprevSucursal">SUCURSAL</span>
                                         <span id="mprevDesc">DESCRIPCIÓN</span>
                                     </div>
                                     <div class="text-center my-2">
-                                        <div style="border:1px solid #000;height:36px;display:flex;align-items:center;justify-content:center;font-size:8px;">
+                                        <div class="lbl-barcode">
                                             |||||||||||||||||||
                                         </div>
-                                        <strong style="font-size:13px;" id="mprevSku">0000000</strong>
+                                        <strong class="lbl-sku" id="mprevSku">0000000</strong>
                                     </div>
                                     <div class="d-flex justify-content-between">
                                         <span id="mprevArt">ARTICULO</span>
-                                        <strong style="font-size:13px;" id="mprevPrecio">$0</strong>
+                                        <strong class="lbl-precio" id="mprevPrecio">$0</strong>
                                     </div>
                                     <div class="d-flex justify-content-between mt-1">
                                         <span>G/F <span id="mprevFactura">00000</span></span>
-                                        <strong style="font-size:15px;" id="mprevTalla">00</strong>
+                                        <strong class="lbl-talla" id="mprevTalla">00</strong>
                                         <span id="mprevMarca">MARCA</span>
                                     </div>
-                                    <div class="d-flex justify-content-between" style="font-size:9px;">
+                                    <div class="d-flex justify-content-between lbl-foot">
                                         <span id="mprevFecha">01-01-2026</span>
                                         <span id="mprevColor">COLOR</span>
                                     </div>
@@ -1259,31 +1355,41 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                             </div>
                         </div>
 
-                        <p class="text-muted small fw-semibold mb-2 text-uppercase" style="letter-spacing:.5px;">Configuración</p>
+                        <h6 class="section-label mb-2">Configuración</h6>
                         <div class="mb-2">
-                            <label class="form-label small mb-1">Fecha de impresión</label>
+                            <label class="form-label small mb-1" for="modalFechaImpresion">Fecha de impresión</label>
                             <input type="date" id="modalFechaImpresion" class="form-control form-control-sm" onchange="sincronizarFechaModal()">
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small mb-1">Sucursal (etiqueta)</label>
+                            <label class="form-label small mb-1" for="modalSucursalEtiqueta">Sucursal (etiqueta)</label>
                             <input type="text" id="modalSucursalEtiqueta" class="form-control form-control-sm" maxlength="8" placeholder="Máx. 8 car." oninput="sincronizarSucursalModal()">
                         </div>
 
                         <!-- Resumen totales -->
-                        <div class="modal-print-summary">
-                            <div class="stat">
-                                <span class="stat-value" id="modalStatProductos">0</span>
-                                <span class="stat-label">Productos</span>
+                        <div class="row g-2">
+                            <div class="col-4">
+                                <div class="kpi-card kpi-info card h-100">
+                                    <div class="card-body text-center py-2 px-1">
+                                        <h4 class="mb-0 fw-bold" id="modalStatProductos">0</h4>
+                                        <p class="text-muted mb-0 small fw-medium">Productos</p>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="vr"></div>
-                            <div class="stat">
-                                <span class="stat-value text-success" id="modalStatEtiquetas">0</span>
-                                <span class="stat-label">Etiquetas</span>
+                            <div class="col-4">
+                                <div class="kpi-card kpi-success card h-100">
+                                    <div class="card-body text-center py-2 px-1">
+                                        <h4 class="mb-0 fw-bold" id="modalStatEtiquetas">0</h4>
+                                        <p class="text-muted mb-0 small fw-medium">Etiquetas</p>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="vr"></div>
-                            <div class="stat">
-                                <span class="stat-value" id="modalStatFilas">0</span>
-                                <span class="stat-label">Filas ZPL</span>
+                            <div class="col-4">
+                                <div class="kpi-card kpi-pending card h-100">
+                                    <div class="card-body text-center py-2 px-1">
+                                        <h4 class="mb-0 fw-bold" id="modalStatFilas">0</h4>
+                                        <p class="text-muted mb-0 small fw-medium">Filas ZPL</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1293,12 +1399,12 @@ th.sort-desc::after { content: ' ↓'; font-size: 0.7em; color: var(--nexo-prima
                 <div id="modalAlertaImpresora" class="nexo-alert nexo-alert-warning small py-1 px-2 mb-0 me-auto" style="display:none;">
                     <i class="ri-alert-line"></i>
                     <span>Sin impresora — inicia Zebra Browser Print</span>
-                    <button class="nexo-btn nexo-btn-outline ms-2" style="padding:2px 10px;font-size:0.78rem;" onclick="reconectarDesdeModal()">
+                    <button class="nexo-btn nexo-btn-outline nexo-btn-sm ms-2" onclick="reconectarDesdeModal()">
                         <i class="ri-refresh-line"></i> Reconectar
                     </button>
                 </div>
                 <div id="modalAlertaConectada" class="nexo-alert nexo-alert-success small py-1 px-2 mb-0 me-auto" style="display:none;">
-                    <span class="status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--nexo-success);display:inline-block;margin-right:6px;animation:pulse 2s infinite;"></span>
+                    <span class="status-dot me-2"></span>
                     <span id="modalNombreImpresora">Zebra conectada</span>
                 </div>
                 <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">
@@ -1705,7 +1811,7 @@ async function cargarDocumentos() {
     tbody.innerHTML = `
         <tr>
             <td colspan="8" class="text-center py-4">
-                <i class="ri-loader-4-line ri-spin" style="font-size: 2rem; color: var(--nexo-gray-500);"></i>
+                <i class="ri-loader-4-line ri-spin loading-icon"></i>
                 <p class="mt-2 mb-0 text-muted">Cargando documentos...</p>
             </td>
         </tr>
@@ -1732,8 +1838,8 @@ async function cargarDocumentos() {
         } else {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="8" class="text-center py-4 text-danger">
-                        <i class="ri-error-warning-line" style="font-size: 2rem;"></i>
+                    <td colspan="8" class="empty-state text-danger">
+                        <i class="ri-error-warning-line text-danger"></i>
                         <p class="mt-2 mb-0">${data.error || 'Error al cargar documentos'}</p>
                     </td>
                 </tr>
@@ -1743,8 +1849,8 @@ async function cargarDocumentos() {
         console.error('Error:', error);
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="8" class="text-center py-4 text-danger">
-                        <i class="ri-wifi-off-line" style="font-size: 2rem;"></i>
+                    <td colspan="8" class="empty-state text-danger">
+                        <i class="ri-wifi-off-line text-danger"></i>
                         <p class="mt-2 mb-0">Error de conexión</p>
                     </td>
                 </tr>
@@ -1758,9 +1864,9 @@ function renderizarDocumentos(documentos) {
     if (!documentos || documentos.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" class="text-center py-4">
-                    <i class="ri-file-search-line" style="font-size: 3rem; color: var(--nexo-gray-300);"></i>
-                    <p class="mt-2 mb-0 text-muted">No se encontraron documentos</p>
+                <td colspan="8" class="empty-state">
+                    <i class="ri-file-search-line"></i>
+                    <p>No se encontraron documentos</p>
                 </td>
             </tr>
         `;
@@ -1770,30 +1876,30 @@ function renderizarDocumentos(documentos) {
     tbody.innerHTML = documentos.map(doc => `
         <tr class="doc-row ${documentoSeleccionado?.id === doc.id && documentoSeleccionado?.tipo === doc.tipo ? 'selected' : ''}" 
             data-tipo="${doc.tipo}" data-doc-id="${doc.id}"
-            onclick="seleccionarDocumento('${doc.tipo}', ${doc.id})" style="cursor: pointer;">
+            onclick="seleccionarDocumento('${doc.tipo}', ${doc.id})">
             <td>
                 <span class="nexo-badge ${doc.tipo === 'DTE_COMPRA' ? 'nexo-badge-info' : 'nexo-badge-success'}">
                     ${doc.tipo_display}
                 </span>
             </td>
             <td><strong>${doc.numero}</strong></td>
-            <td>${doc.fecha}</td>
+            <td class="text-center">${doc.fecha}</td>
             <td title="${doc.origen}">${doc.origen.substring(0, 25)}${doc.origen.length > 25 ? '...' : ''}</td>
             <td title="${doc.destino || ''}">${(doc.destino || '-').substring(0, 15)}</td>
-            <td><span class="nexo-badge nexo-badge-warning">${doc.total_productos} uds</span></td>
+            <td class="col-num"><span class="nexo-badge nexo-badge-warning">${doc.total_productos} uds</span></td>
             <td>
                 ${doc.ya_impreso ? `
                     <span class="nexo-badge nexo-badge-success" title="${doc.ultima_impresion || 'Impreso'}">
                         <i class="ri-printer-fill"></i> ${doc.veces_impreso > 1 ? doc.veces_impreso + 'x' : 'Impreso'}
                     </span>
                 ` : `
-                    <span class="nexo-badge" style="background: rgba(150,150,150,0.15); color: #666;">
+                    <span class="nexo-badge nexo-badge-neutral">
                         <i class="ri-printer-line"></i> Nuevo
                     </span>
                 `}
             </td>
-            <td>
-                <button class="nexo-btn nexo-btn-primary" onclick="event.stopPropagation(); seleccionarDocumento('${doc.tipo}', ${doc.id})">
+            <td class="text-center">
+                <button class="nexo-btn nexo-btn-primary nexo-btn-sm" onclick="event.stopPropagation(); seleccionarDocumento('${doc.tipo}', ${doc.id})" title="Abrir documento" aria-label="Abrir documento">
                     <i class="ri-arrow-right-line"></i>
                 </button>
             </td>
@@ -1903,20 +2009,20 @@ async function reconectarDesdeModal() {
 function renderizarModalProductos() {
     const tbody = document.getElementById('modalProductosList');
     if (!modalProductos || modalProductos.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-3 text-muted">Sin productos</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state"><i class="ri-inbox-line"></i><p>Sin productos</p></td></tr>`;
         return;
     }
 
     tbody.innerHTML = modalProductos.map((prod, idx) => `
         <tr class="sku-result-row" onclick="actualizarModalPreview(modalProductos[${idx}])">
-            <td><code style="font-size:.82rem;">${prod.sku}</code></td>
+            <td><span class="sku-code">${prod.sku}</span></td>
             <td title="${escaparAtributo((prod.descripcion || prod.articulo) + (prod.sucursal ? ' — ' + prod.sucursal : ''))}">
                 ${(prod.articulo || '').substring(0, 18)}
-                ${prod.sucursal ? `<div style="font-size:.66rem;color:var(--nexo-gray-500);">${prod.sucursal}</div>` : ''}
+                ${prod.sucursal ? `<div class="precio-sec">${prod.sucursal}</div>` : ''}
             </td>
-            <td><strong>${prod.talla || '—'}</strong></td>
-            <td>${renderPrecioCelda(prod)}</td>
-            <td>
+            <td class="text-center"><strong>${prod.talla || '—'}</strong></td>
+            <td class="col-num">${renderPrecioCelda(prod)}</td>
+            <td class="col-num">
                 <div class="quantity-stepper">
                     <button type="button" onclick="event.stopPropagation(); cambiarCantidadModal(${idx}, -1)">−</button>
                     <input type="number" min="0" max="999"
@@ -1926,9 +2032,9 @@ function renderizarModalProductos() {
                     <button type="button" onclick="event.stopPropagation(); cambiarCantidadModal(${idx}, 1)">+</button>
                 </div>
             </td>
-            <td>
-                <button class="nexo-btn" style="padding:3px 8px; background:rgba(255,77,77,0.1); color:#cc3d3d; border:1px solid rgba(255,77,77,0.2);"
-                    onclick="event.stopPropagation(); eliminarDeModal(${idx})" title="Quitar">
+            <td class="text-center">
+                <button class="nexo-btn nexo-btn-danger-soft nexo-btn-sm"
+                    onclick="event.stopPropagation(); eliminarDeModal(${idx})" title="Quitar" aria-label="Quitar">
                     <i class="ri-delete-bin-line"></i>
                 </button>
             </td>
@@ -2250,26 +2356,26 @@ async function abrirPruebaImpresion() {
         html: `
             <div class="text-start">
                 <p class="text-muted small mb-2">Imprime <b>1 fila</b> (etiqueta A izquierda + B derecha) directo a la Zebra. No pasa por el servidor ni queda en el historial.</p>
-                <label class="form-label small mb-1">Caso</label>
+                <label class="form-label small mb-1" for="pruebaCaso">Caso</label>
                 <select id="pruebaCaso" class="form-select form-select-sm mb-2">
                     ${opcionesCasos}
                     <option value="producto">Producto real (por SKU o nombre)</option>
                     <option value="personalizado">Personalizado</option>
                 </select>
                 <div id="pruebaProducto" hidden>
-                    <label class="form-label small mb-1">SKU o nombre</label>
+                    <label class="form-label small mb-1" for="pruebaTermino">SKU o nombre</label>
                     <input id="pruebaTermino" class="form-control form-control-sm" placeholder="Ej: 1234567 o ZAPATILLA">
                     <div class="form-text">Salen los 2 primeros resultados (si hay uno solo, va en A y en B).${sucursalPanel ? ` Sucursal en etiqueta: <b>${escaparAtributo(sucursalPanel)}</b>.` : ''}</div>
                 </div>
                 <div id="pruebaPersonalizado" hidden>
                     <div class="row g-2">
-                        <div class="col-8"><label class="form-label small mb-1">Artículo</label><input id="pruebaArt" class="form-control form-control-sm" value="ZAPATILLA SKECHERS GO WALK 6 NEGRA"></div>
-                        <div class="col-4"><label class="form-label small mb-1">Precio</label><input id="pruebaPrecio" type="number" min="0" class="form-control form-control-sm" value="1299990"></div>
-                        <div class="col-8"><label class="form-label small mb-1">Descripción</label><input id="pruebaDesc" class="form-control form-control-sm" value="ZAPATILLA URBANA HOMBRE"></div>
-                        <div class="col-4"><label class="form-label small mb-1">SKU</label><input id="pruebaSku" class="form-control form-control-sm" value="1234567"></div>
-                        <div class="col-4"><label class="form-label small mb-1">Marca</label><input id="pruebaMarca" class="form-control form-control-sm" value="SKECHERS"></div>
-                        <div class="col-4"><label class="form-label small mb-1">Color</label><input id="pruebaColor" class="form-control form-control-sm" value="NEGRO"></div>
-                        <div class="col-4"><label class="form-label small mb-1">Talla</label><input id="pruebaTalla" class="form-control form-control-sm" value="42"></div>
+                        <div class="col-8"><label class="form-label small mb-1" for="pruebaArt">Artículo</label><input id="pruebaArt" class="form-control form-control-sm" value="ZAPATILLA SKECHERS GO WALK 6 NEGRA"></div>
+                        <div class="col-4"><label class="form-label small mb-1" for="pruebaPrecio">Precio</label><input id="pruebaPrecio" type="number" min="0" class="form-control form-control-sm" value="1299990"></div>
+                        <div class="col-8"><label class="form-label small mb-1" for="pruebaDesc">Descripción</label><input id="pruebaDesc" class="form-control form-control-sm" value="ZAPATILLA URBANA HOMBRE"></div>
+                        <div class="col-4"><label class="form-label small mb-1" for="pruebaSku">SKU</label><input id="pruebaSku" class="form-control form-control-sm" value="1234567"></div>
+                        <div class="col-4"><label class="form-label small mb-1" for="pruebaMarca">Marca</label><input id="pruebaMarca" class="form-control form-control-sm" value="SKECHERS"></div>
+                        <div class="col-4"><label class="form-label small mb-1" for="pruebaColor">Color</label><input id="pruebaColor" class="form-control form-control-sm" value="NEGRO"></div>
+                        <div class="col-4"><label class="form-label small mb-1" for="pruebaTalla">Talla</label><input id="pruebaTalla" class="form-control form-control-sm" value="42"></div>
                     </div>
                     <div class="form-text">Se imprime el mismo dato en A y en B.</div>
                 </div>
@@ -2441,9 +2547,9 @@ function renderizarArticulosAgrupados() {
 
     if (keys.length === 0) {
         container.innerHTML = `
-            <div class="text-center py-4 text-muted">
-                <i class="ri-search-line" style="font-size:2rem; color:var(--nexo-gray-300);"></i>
-                <p class="mt-2 mb-0">Sin resultados</p>
+            <div class="empty-state">
+                <i class="ri-search-line"></i>
+                <p>Sin resultados</p>
             </div>`;
         return;
     }
@@ -2455,16 +2561,16 @@ function renderizarArticulosAgrupados() {
 
         const skuRows = grupo.skus.map((s, sIdx) => `
             <tr class="sku-result-row" onmouseenter="actualizarPreview(articulosAgrupados['${artKey}'].skus[${sIdx}])">
-                <td><code style="font-size:.8rem;">${s.sku}</code></td>
-                <td><strong>${s.talla || '—'}</strong></td>
+                <td><span class="sku-code">${s.sku}</span></td>
+                <td class="text-center"><strong>${s.talla || '—'}</strong></td>
                 <td>${s.color || '—'}</td>
-                <td>${renderPrecioCelda(s)}</td>
-                <td title="Stock del SKU en ${escaparAtributo(s.sucursal || '')}">
+                <td class="col-num">${renderPrecioCelda(s)}</td>
+                <td class="col-num" title="Stock del SKU en ${escaparAtributo(s.sucursal || '')}">
                     ${s.stock > 0
-                        ? `<span class="nexo-badge nexo-badge-success" style="font-size:.62rem;">${s.stock}</span>`
-                        : `<span class="nexo-badge" style="font-size:.62rem;background:rgba(150,150,150,.15);color:#666;">0</span>`}
+                        ? `<span class="nexo-badge nexo-badge-success">${s.stock}</span>`
+                        : `<span class="nexo-badge nexo-badge-neutral">0</span>`}
                 </td>
-                <td onclick="event.stopPropagation()">
+                <td class="col-num" onclick="event.stopPropagation()">
                     <div class="quantity-stepper">
                         <button type="button" onclick="ajustarCantArticuloSku('${artKey}', ${sIdx}, -1)">−</button>
                         <input type="number" class="sku-art-cantidad" data-art="${artKey}" data-sIdx="${sIdx}"
@@ -2472,10 +2578,10 @@ function renderizarArticulosAgrupados() {
                         <button type="button" onclick="ajustarCantArticuloSku('${artKey}', ${sIdx}, 1)">+</button>
                     </div>
                 </td>
-                <td>
-                    <button class="nexo-btn nexo-btn-success" style="padding:3px 8px;font-size:0.78rem;"
+                <td class="text-center">
+                    <button class="nexo-btn nexo-btn-success nexo-btn-sm"
                         onclick="event.stopPropagation(); imprimirSkuIndividual('${artKey}', ${sIdx})"
-                        title="Imprimir este SKU">
+                        title="Imprimir este SKU" aria-label="Imprimir este SKU">
                         <i class="ri-printer-line"></i>
                     </button>
                 </td>
@@ -2488,17 +2594,17 @@ function renderizarArticulosAgrupados() {
                 <div class="articulo-group-info">
                     <div class="art-name">
                         ${grupo.articulo || artKey}
-                        ${grupo.sucursal ? `<span class="nexo-badge nexo-badge-info ms-1" style="font-size:.62rem;">${grupo.sucursal}</span>` : ''}
+                        ${grupo.sucursal ? `<span class="nexo-badge nexo-badge-info ms-1">${grupo.sucursal}</span>` : ''}
                     </div>
                     <div class="art-desc">${grupo.descripcion} ${grupo.marca ? '· ' + grupo.marca : ''} · ${rangoPrecios(grupo.skus)}</div>
                 </div>
                 <div class="articulo-group-meta">
                     <span class="sku-count-badge">${skuCount} SKU${skuCount > 1 ? 's' : ''}</span>
                     ${skuCount > 1 ? `
-                    <button class="btn-imprimir-articulo" onclick="event.stopPropagation(); imprimirArticuloCompleto('${artKey}')" title="Imprimir todas las tallas/colores de este artículo">
+                    <button class="nexo-btn nexo-btn-success nexo-btn-sm" onclick="event.stopPropagation(); imprimirArticuloCompleto('${artKey}')" title="Imprimir todas las tallas/colores de este artículo">
                         <i class="ri-printer-fill"></i> Imprimir Todo
                     </button>` : ''}
-                    <button class="btn-imprimir-articulo" style="background:rgba(0,102,255,.1);color:#0052CC;"
+                    <button class="nexo-btn nexo-btn-outline nexo-btn-sm"
                         onclick="event.stopPropagation(); usarStockComoCantidad('${artKey}')"
                         title="Poner en cada talla tantas etiquetas como unidades en stock">
                         <i class="ri-stack-line"></i> Cant = stock
@@ -2512,12 +2618,12 @@ function renderizarArticulosAgrupados() {
                         <thead>
                             <tr>
                                 <th>SKU</th>
-                                <th>Talla</th>
+                                <th class="text-center">Talla</th>
                                 <th>Color</th>
-                                <th>Precio</th>
-                                <th title="Unidades en stock del SKU en esa sucursal">Stock</th>
-                                <th>Etiq.</th>
-                                <th></th>
+                                <th class="col-num">Precio</th>
+                                <th class="col-num" title="Unidades en stock del SKU en esa sucursal">Stock</th>
+                                <th class="col-num">Etiq.</th>
+                                <th class="text-center"><span class="visually-hidden">Imprimir</span></th>
                             </tr>
                         </thead>
                         <tbody>${skuRows}</tbody>
@@ -2640,7 +2746,7 @@ async function seleccionarDocumento(tipo, id) {
     document.getElementById('tablaProductos').innerHTML = `
         <tr>
             <td colspan="10" class="text-center py-4">
-                <i class="ri-loader-4-line ri-spin" style="font-size: 2rem; color: var(--nexo-gray-500);"></i>
+                <i class="ri-loader-4-line ri-spin loading-icon"></i>
                 <p class="mt-2 mb-0 text-muted">Cargando productos...</p>
             </td>
         </tr>`;
@@ -2714,9 +2820,9 @@ function renderizarProductos() {
     if (!productosDocumento || productosDocumento.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="9" class="text-center py-4">
-                    <i class="ri-box-3-line" style="font-size: 3rem; color: var(--nexo-gray-300);"></i>
-                    <p class="mt-2 mb-0 text-muted">No hay productos en este documento</p>
+                <td colspan="10" class="empty-state">
+                    <i class="ri-box-3-line"></i>
+                    <p>No hay productos en este documento</p>
                 </td>
             </tr>
         `;
@@ -2727,28 +2833,30 @@ function renderizarProductos() {
         <tr class="${prod.seleccionado ? 'selected' : ''} sku-result-row"
             onmouseenter="actualizarPreview(productosDocumento[${index}])"
             onclick="toggleProducto(${index})">
-            <td onclick="event.stopPropagation()">
-                <input type="checkbox" class="producto-check" data-index="${index}"
-                    ${prod.seleccionado ? 'checked' : ''} onchange="toggleProducto(${index})">
+            <td class="col-check" onclick="event.stopPropagation()">
+                <label class="check-cell">
+                    <input type="checkbox" class="producto-check" data-index="${index}"
+                        ${prod.seleccionado ? 'checked' : ''} onchange="toggleProducto(${index})">
+                </label>
             </td>
-            <td><code>${prod.sku}</code></td>
+            <td><span class="sku-code">${prod.sku}</span></td>
             <td title="${escaparAtributo(prod.descripcion)}">${(prod.articulo || '').substring(0, 14)}</td>
             <td>${prod.marca || ''}</td>
-            <td><strong>${prod.talla || ''}</strong></td>
+            <td class="text-center"><strong>${prod.talla || ''}</strong></td>
             <td>${prod.color || ''}</td>
-            <td>${renderPrecioCelda(prod)}</td>
-            <td>${prod.cantidad}</td>
-            <td onclick="event.stopPropagation()">
+            <td class="col-num">${renderPrecioCelda(prod)}</td>
+            <td class="col-num">${prod.cantidad}</td>
+            <td class="col-num" onclick="event.stopPropagation()">
                 <input type="number" class="quantity-input etiquetas-input" data-index="${index}"
                     value="${prod.cantidad_etiquetas || prod.cantidad}" min="0" max="999"
                     onchange="actualizarCantidadEtiquetas(${index}, this.value)">
             </td>
-            <td>
+            <td class="text-center">
                 ${prod.ya_impreso
-                    ? `<span class="badge-impreso" title="${prod.etiquetas_impresas} etiq. en ${prod.veces_impreso} sesión(es) previas">
+                    ? `<span class="nexo-badge nexo-badge-success" title="${prod.etiquetas_impresas} etiq. en ${prod.veces_impreso} sesión(es) previas">
                             <i class="ri-printer-fill"></i> ${prod.etiquetas_impresas}×
                        </span>`
-                    : `<span class="badge-nuevo">Nuevo</span>`}
+                    : `<span class="nexo-badge nexo-badge-neutral">Nuevo</span>`}
             </td>
         </tr>
     `).join('');
@@ -2778,29 +2886,29 @@ function renderPrecioCelda(prod) {
     if (estado === 'CAMPANA') {
         const lista = prod.precio_lista ? `$${formatearPrecio(prod.precio_lista)}` : '';
         return `${precio}
-            <span class="nexo-badge nexo-badge-warning ms-1" style="font-size:.62rem;"
+            <span class="nexo-badge nexo-badge-warning ms-1"
                   title="${escaparAtributo('Precio de campaña "' + (prod.campana_nombre || '') + '"' +
                           (prod.campana_fin ? ' (termina el ' + prod.campana_fin + ')' : '') +
                           '. Precio de lista: ' + lista + '. Al cerrar la campaña esta etiqueta queda desactualizada.')}">
                 <i class="ri-price-tag-3-line"></i> CAMPAÑA
             </span>
-            ${lista ? `<div style="font-size:.68rem;color:var(--nexo-gray-500);text-decoration:line-through;">${lista}</div>` : ''}`;
+            ${lista ? `<div class="precio-sec text-decoration-line-through">${lista}</div>` : ''}`;
     }
     if (estado === 'DIVERGE') {
         return `${precio}
-            <span class="nexo-badge nexo-badge-info ms-1" style="font-size:.62rem;"
+            <span class="nexo-badge nexo-badge-info ms-1"
                   title="${escaparAtributo('Se imprime el precio de ' + (prod.sucursal_destino || 'destino') +
                           ' ($' + formatearPrecio(prod.precio_destino) + '), que es el que cobra ese POS. ' +
                           'En ' + (prod.sucursal_origen || 'origen') + ' el precio es $' + formatearPrecio(prod.precio_origen) + '.')}">
                 ${prod.sucursal_destino || 'destino'}
             </span>
-            <div style="font-size:.68rem;color:var(--nexo-gray-500);">
+            <div class="precio-sec">
                 ${prod.sucursal_origen || 'origen'}: $${formatearPrecio(prod.precio_origen)}
             </div>`;
     }
     if (estado === 'SIN_DESTINO') {
         return `${precio}
-            <span class="nexo-badge nexo-badge-warning ms-1" style="font-size:.62rem;"
+            <span class="nexo-badge nexo-badge-warning ms-1"
                   title="${escaparAtributo('El artículo todavía no existe en ' + (prod.sucursal_destino || 'la sucursal destino') +
                           '. Se imprime el precio de ' + (prod.sucursal_origen || 'origen') + '; verifícalo antes de imprimir.')}">
                 <i class="ri-question-line"></i> sin precio en destino
@@ -2808,14 +2916,14 @@ function renderPrecioCelda(prod) {
     }
     if (estado === 'SKU_DISTINTO') {
         return `${precio}
-            <span class="nexo-badge nexo-badge-warning ms-1" style="font-size:.62rem;"
+            <span class="nexo-badge nexo-badge-warning ms-1"
                   title="${escaparAtributo('El mismo artículo/talla tiene otro SKU en ' + (prod.sucursal_destino || 'destino') +
                           ': ' + (prod.sku_destino || '') + '. Revisa cuál corresponde al código de barras.')}">
                 <i class="ri-alert-line"></i> SKU distinto
             </span>`;
     }
     if (!prod.precio) {
-        return `<span class="nexo-badge nexo-badge-warning" style="font-size:.62rem;">
+        return `<span class="nexo-badge nexo-badge-warning">
                     <i class="ri-alert-line"></i> sin precio</span>`;
     }
     return precio;

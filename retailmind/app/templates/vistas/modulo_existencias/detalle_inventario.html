@@ -3,33 +3,94 @@
 {% include '../../layout/menu.html' %}
 
 <style>
-/* ========== ESTILOS BASE (reutilizados de gestion_inventarios) ========== */
+/* La paleta --nexo-* la carga nexo-design-system.css (via layout/header.html).
+   Aquí solo los tonos oscuros de texto por estado, que el global no define. */
 :root {
-    --nexo-primary: #0066FF;
-    --nexo-primary-dark: #0052CC;
-    --nexo-primary-light: #E6F0FF;
-    --nexo-secondary: #1A1A2E;
-    --nexo-accent: #00D4AA;
-    --nexo-success: #00D4AA;
-    --nexo-warning: #FFB020;
-    --nexo-error: #FF4D4D;
-    --nexo-gray-900: #1A1A2E;
-    --nexo-gray-700: #4A4A5A;
-    --nexo-gray-500: #8A8A9A;
-    --nexo-gray-300: #D1D1D9;
-    --nexo-gray-100: #F5F5F7;
-    --nexo-white: #FFFFFF;
-    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
-    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
-    --nexo-radius-sm: 4px;
-    --nexo-radius-md: 8px;
-    --nexo-radius-lg: 12px;
+    --nexo-success-dark: #008866;
+    --nexo-warning-dark: #b87900;
+    --nexo-error-dark: #cc3d3d;
 }
+
+/* ========== MODULE HEADER (estándar ESTILOS_MODULOS.md) ========== */
+.inventarios-card {
+    border: none;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(64, 81, 137, 0.08);
+}
+.module-header {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.module-header-left { display: flex; align-items: center; gap: 14px; }
+.module-header-icon {
+    width: 48px; height: 48px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+}
+.module-header-info h5 { margin: 0; font-size: 18px; font-weight: 600; color: white; }
+.module-header-status { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 6px; flex-wrap: wrap; }
+.module-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Espacio para la barra de acciones flotante: no debe tapar la última fila */
+.inventarios-card .card-body { padding-bottom: 5rem; }
+
+/* ========== KPI CARDS (estándar; las 4 de diferencias filtran la tabla) ========== */
+.kpi-card {
+    border-radius: 12px;
+    border: none;
+    transition: all 0.3s ease;
+    overflow: hidden;
+    padding: 0;
+    text-align: center;
+    font-family: inherit;
+    color: inherit;
+}
+button.kpi-card { cursor: pointer; }
+button.kpi-card:hover,
+button.kpi-card:focus-visible {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    outline: none;
+}
+.kpi-card .card-body { padding: 12px 16px; }
+.kpi-card .kpi-value { display: block; font-size: 1.5rem; font-weight: 700; line-height: 1.2; color: #405189; }
+.kpi-card .kpi-label { display: block; font-size: 0.75rem; font-weight: 500; color: #6c757d; }
+.kpi-pistola    { background: linear-gradient(135deg, #eef1f7 0%, #dfe4ef 100%); border-left: 4px solid #405189; }
+.kpi-sistema    { background: linear-gradient(135deg, #eef1f7 0%, #dfe4ef 100%); border-left: 4px solid #405189; }
+.kpi-sobrantes  { background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 4px solid #0ab39c; }
+.kpi-faltantes  { background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); border-left: 4px solid #f06548; }
+.kpi-coinciden  { background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid #299cdb; }
+.kpi-pendientes { background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 4px solid #ffbe0b; }
+
+/* ========== TÍTULO DE SECCIÓN (un solo estilo en toda la pantalla) ========== */
+.section-subtitle {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--nexo-gray-700);
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.section-subtitle i { color: #405189; }
 
 /* ========== PROCESO STEPS ========== */
 .process-steps-mini {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 8px;
     margin-bottom: 1rem;
 }
@@ -43,7 +104,7 @@
     font-size: 0.75rem;
     font-weight: 600;
     background: var(--nexo-gray-100);
-    color: var(--nexo-gray-500);
+    color: var(--nexo-gray-700);
     transition: all 0.2s;
 }
 
@@ -54,7 +115,7 @@
 
 .step-mini.completed {
     background: var(--nexo-success);
-    color: white;
+    color: var(--nexo-secondary);
 }
 
 .step-mini i {
@@ -67,180 +128,6 @@
     background: var(--nexo-gray-300);
 }
 
-/* ========== PANEL COMPARACIÓN ========== */
-.comparison-panel {
-    background: linear-gradient(135deg, var(--nexo-gray-100) 0%, var(--nexo-white) 100%);
-    border-radius: var(--nexo-radius-lg);
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-    border: 1px solid var(--nexo-gray-300);
-}
-
-.comparison-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-}
-
-.comparison-title {
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--nexo-secondary);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.comparison-title i {
-    color: var(--nexo-primary);
-}
-
-.comparison-grid {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    gap: 1rem;
-    align-items: stretch;
-}
-
-.comparison-box {
-    background: var(--nexo-white);
-    border-radius: var(--nexo-radius-md);
-    padding: 1.25rem;
-    text-align: center;
-    border: 2px solid var(--nexo-gray-300);
-    transition: all 0.2s;
-}
-
-.comparison-box.pistola {
-    border-color: var(--nexo-primary);
-    background: linear-gradient(135deg, rgba(0, 102, 255, 0.05) 0%, var(--nexo-white) 100%);
-}
-
-.comparison-box.sistema {
-    border-color: var(--nexo-accent);
-    background: linear-gradient(135deg, rgba(0, 212, 170, 0.05) 0%, var(--nexo-white) 100%);
-}
-
-.comparison-box-icon {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    margin: 0 auto 0.75rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-}
-
-.comparison-box.pistola .comparison-box-icon {
-    background: var(--nexo-primary-light);
-    color: var(--nexo-primary);
-}
-
-.comparison-box.sistema .comparison-box-icon {
-    background: rgba(0, 212, 170, 0.15);
-    color: var(--nexo-accent);
-}
-
-.comparison-box-label {
-    font-size: 0.75rem;
-    color: var(--nexo-gray-500);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 0.5rem;
-}
-
-.comparison-box-value {
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--nexo-secondary);
-    line-height: 1;
-}
-
-.comparison-vs {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-}
-
-.comparison-vs-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: var(--nexo-gray-100);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.25rem;
-    color: var(--nexo-gray-700);
-}
-
-.comparison-vs-text {
-    font-size: 0.7rem;
-    color: var(--nexo-gray-500);
-    text-transform: uppercase;
-}
-
-/* ========== RESUMEN DE DIFERENCIAS ========== */
-.diferencias-dashboard {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-}
-
-.diferencia-card {
-    background: var(--nexo-white);
-    border-radius: var(--nexo-radius-md);
-    padding: 1rem;
-    text-align: center;
-    border: 1px solid var(--nexo-gray-300);
-    transition: all 0.2s;
-}
-
-.diferencia-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--nexo-shadow-md);
-}
-
-.diferencia-card.sobrantes {
-    border-left: 4px solid var(--nexo-success);
-}
-
-.diferencia-card.faltantes {
-    border-left: 4px solid var(--nexo-error);
-}
-
-.diferencia-card.coinciden {
-    border-left: 4px solid var(--nexo-primary);
-}
-
-.diferencia-card.pendientes {
-    border-left: 4px solid var(--nexo-warning);
-}
-
-.diferencia-card-value {
-    font-size: 1.75rem;
-    font-weight: 700;
-    line-height: 1;
-    margin-bottom: 0.25rem;
-}
-
-.diferencia-card.sobrantes .diferencia-card-value { color: var(--nexo-success); }
-.diferencia-card.faltantes .diferencia-card-value { color: var(--nexo-error); }
-.diferencia-card.coinciden .diferencia-card-value { color: var(--nexo-primary); }
-.diferencia-card.pendientes .diferencia-card-value { color: var(--nexo-warning); }
-
-.diferencia-card-label {
-    font-size: 0.7rem;
-    color: var(--nexo-gray-500);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
 /* ========== FILTROS SEGMENTACIÓN ========== */
 .segmentation-filters {
     background: var(--nexo-white);
@@ -248,20 +135,6 @@
     padding: 1rem;
     margin-bottom: 1rem;
     border: 1px solid var(--nexo-gray-300);
-}
-
-.segmentation-title {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: var(--nexo-secondary);
-    margin-bottom: 0.75rem;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.segmentation-title i {
-    color: var(--nexo-primary);
 }
 
 .segment-chips {
@@ -275,17 +148,19 @@
     border-radius: 20px;
     font-size: 0.8rem;
     font-weight: 500;
+    font-family: inherit;
     background: var(--nexo-gray-100);
     color: var(--nexo-gray-700);
     border: 1px solid var(--nexo-gray-300);
     cursor: pointer;
     transition: all 0.2s;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 6px;
 }
 
-.segment-chip:hover {
+.segment-chip:hover,
+.segment-chip:focus-visible {
     background: var(--nexo-primary-light);
     border-color: var(--nexo-primary);
 }
@@ -296,78 +171,27 @@
     border-color: var(--nexo-primary);
 }
 
+.segment-chip:focus-visible {
+    outline: 2px solid var(--nexo-secondary);
+    outline-offset: 2px;
+}
+
 .segment-chip .chip-count {
     background: rgba(0,0,0,0.1);
     padding: 2px 6px;
     border-radius: 10px;
-    font-size: 0.65rem;
+    font-size: 0.7rem;
 }
 
 .segment-chip.active .chip-count {
     background: rgba(255,255,255,0.3);
 }
 
-/* ========== BTN EXPORTAR DIFERENCIAS GRANDE ========== */
-.btn-export-diferencias-lg {
-    background: linear-gradient(135deg, var(--nexo-error) 0%, #cc3d3d 100%);
-    color: white;
-    padding: 12px 28px;
-    border-radius: var(--nexo-radius-md);
-    font-weight: 700;
-    font-size: 0.95rem;
-    border: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    cursor: pointer;
-    transition: all 0.2s;
-    box-shadow: 0 4px 15px rgba(255, 77, 77, 0.35);
-}
-
-.btn-export-diferencias-lg:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(255, 77, 77, 0.45);
-    color: white;
-}
-
-.btn-export-diferencias-lg i {
-    font-size: 1.2rem;
-}
-
-.nexo-page {
-    background: linear-gradient(135deg, var(--nexo-gray-100) 0%, var(--nexo-white) 100%);
-    min-height: calc(100vh - 60px);
-    padding: 1.5rem;
-}
-
-/* Header del inventario */
-.inventory-header {
-    background: var(--nexo-white);
-    border-radius: var(--nexo-radius-lg);
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-    border: 1px solid var(--nexo-gray-300);
-    box-shadow: var(--nexo-shadow-sm);
-}
-
-.inventory-title {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1rem;
-}
-
-.inventory-title h1 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--nexo-secondary);
-    margin: 0;
-}
-
+/* ========== METADATOS DE LA TOMA ========== */
 .inventory-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 2rem;
+    gap: 1.5rem;
 }
 
 .meta-item {
@@ -377,9 +201,8 @@
 }
 
 .meta-item .label {
-    font-size: 0.75rem;
-    color: var(--nexo-gray-500);
-    text-transform: uppercase;
+    font-size: 0.78rem;
+    color: var(--nexo-gray-700);
 }
 
 .meta-item .value {
@@ -387,84 +210,57 @@
     color: var(--nexo-secondary);
 }
 
-/* Progress bar grande */
-.progress-large {
-    background: var(--nexo-gray-100);
-    border-radius: var(--nexo-radius-lg);
-    padding: 1rem 1.5rem;
-    margin-bottom: 1.5rem;
-}
-
-.progress-large .progress-info {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 0.5rem;
-}
-
-.progress-large .progress-bar-container {
+/* ========== PROGRESO (Bootstrap .progress, igual que el Swal de ajustes) ========== */
+.progress-conteo {
     height: 12px;
+    border-radius: 6px;
     background: var(--nexo-gray-300);
-    border-radius: 6px;
-    overflow: hidden;
 }
 
-.progress-large .progress-fill {
-    height: 100%;
-    background: linear-gradient(90deg, var(--nexo-primary), var(--nexo-accent));
-    border-radius: 6px;
-    transition: width 0.5s ease;
+.progress-text {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--nexo-gray-700);
 }
 
-/* Badges */
+/* Barra del Swal de aplicacion de ajustes (antes iba con style= inline) */
+.progress-ajustes {
+    height: 22px;
+    border-radius: 11px;
+}
+
+.progress-ajustes .progress-bar {
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+/* ========== STATUS BADGES: un solo mapa estado -> color ========== */
 .nexo-badge {
     display: inline-flex;
     align-items: center;
-    padding: 4px 12px;
+    padding: 4px 10px;
     border-radius: 20px;
     font-size: 0.75rem;
     font-weight: 600;
-    text-transform: uppercase;
+    white-space: nowrap;
 }
 
-.nexo-badge-borrador { background: rgba(138, 138, 154, 0.15); color: var(--nexo-gray-700); }
-.nexo-badge-en_conteo { background: var(--nexo-primary-light); color: var(--nexo-primary); }
-.nexo-badge-conteo_finalizado { background: rgba(0, 212, 170, 0.15); color: #00a883; }
-.nexo-badge-en_revision { background: rgba(255, 176, 32, 0.15); color: #cc8c00; }
-.nexo-badge-pendiente_aprobacion { background: rgba(255, 176, 32, 0.3); color: #996600; }
-.nexo-badge-aprobado { background: rgba(0, 212, 170, 0.25); color: #008866; }
-.nexo-badge-completado { background: rgba(0, 212, 170, 0.4); color: #006644; }
-.nexo-badge-cancelado { background: rgba(255, 77, 77, 0.15); color: #cc3d3d; }
+/* gris: borrador */
+.nexo-badge-borrador { background: rgba(255, 255, 255, 0.92); color: var(--nexo-gray-700); }
+/* azul: en curso */
+.nexo-badge-en_conteo,
+.nexo-badge-aplicando { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+/* ámbar: esperando revisión / aprobación */
+.nexo-badge-en_revision,
+.nexo-badge-pendiente_aprobacion { background: #fff8e1; color: var(--nexo-warning-dark); }
+/* verde: cerrado correctamente */
+.nexo-badge-conteo_finalizado,
+.nexo-badge-aprobado,
+.nexo-badge-completado { background: #e8f5e9; color: var(--nexo-success-dark); }
+/* rojo: cancelado */
+.nexo-badge-cancelado { background: #ffebee; color: var(--nexo-error-dark); }
 
-/* Cards */
-.nexo-card {
-    background: var(--nexo-white);
-    border: 1px solid var(--nexo-gray-300);
-    border-radius: var(--nexo-radius-lg);
-    box-shadow: var(--nexo-shadow-sm);
-    overflow: hidden;
-}
-
-.nexo-card-header {
-    background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2a2a4e 100%);
-    color: var(--nexo-white);
-    padding: 1rem 1.5rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.nexo-card-header h5 {
-    margin: 0;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.nexo-card-header h5 i { color: var(--nexo-accent); }
-.nexo-card-body { padding: 1.5rem; }
-
-/* Filtros */
+/* ========== FILTROS ========== */
 .nexo-filters {
     background: var(--nexo-gray-100);
     border-radius: var(--nexo-radius-md);
@@ -472,7 +268,12 @@
     margin-bottom: 1rem;
 }
 
-/* Tabla de conteo */
+/* ========== TABLA DE CONTEO ========== */
+.tabla-conteo-wrap {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
 .conteo-table {
     font-size: 0.875rem;
 }
@@ -486,14 +287,9 @@
     padding: 10px 8px;
     border-bottom: 2px solid var(--nexo-gray-300);
     white-space: nowrap;
-}
-
-.conteo-table tbody tr {
-    transition: background 0.15s;
-}
-
-.conteo-table tbody tr:hover {
-    background: var(--nexo-primary-light);
+    position: sticky;
+    top: 0;
+    z-index: 2;
 }
 
 .conteo-table tbody td {
@@ -502,14 +298,32 @@
     border-bottom: 1px solid var(--nexo-gray-300);
 }
 
+/* Anchos de columna (antes iban como style= en cada <th>) */
+.conteo-table .w-sku { width: 100px; }
+.conteo-table .w-num { width: 90px; }
+.conteo-table .w-conteo { width: 110px; }
+.conteo-table .w-estado { width: 90px; }
+.conteo-table .w-acciones { width: 130px; }
+
+/* Estado de fila: Velzon pinta cada celda con --vz-table-bg, así que el color
+   va en la variable y no en el fondo del <tr> (si no, cualquier .table-* lo anula). */
+.conteo-table tbody tr:hover > td { --vz-table-bg: var(--nexo-primary-light); }
+.conteo-table tr.row-contado > td { --vz-table-bg: rgba(0, 212, 170, 0.08); }
+.conteo-table tr.row-reconteo > td { --vz-table-bg: rgba(255, 176, 32, 0.12); }
+.conteo-table tr.row-reconteo:hover > td { --vz-table-bg: rgba(255, 176, 32, 0.20); }
+.conteo-table tr.row-excluido { opacity: 0.6; }
+.conteo-table tr.row-excluido > td { --vz-table-bg: var(--nexo-gray-100); }
+
 /* Input de conteo */
 .input-conteo {
-    width: 80px;
-    text-align: center;
+    width: 90px;
+    text-align: right;
     border: 2px solid var(--nexo-gray-300);
     border-radius: var(--nexo-radius-sm);
-    padding: 6px 8px;
-    font-size: 0.9rem;
+    padding: 8px 10px;
+    padding-right: 1.75rem;
+    min-height: 44px;
+    font-size: 0.95rem;
     font-weight: 600;
     transition: all 0.2s;
 }
@@ -531,11 +345,10 @@
 }
 
 /* Diferencias */
-.diferencia-positiva { color: var(--nexo-success); font-weight: 700; }
-.diferencia-negativa { color: var(--nexo-error); font-weight: 700; }
-.row-excluido { opacity: 0.6; background: #f5f5f7; }
+.diferencia-positiva { color: var(--nexo-success-dark); font-weight: 700; }
+.diferencia-negativa { color: var(--nexo-error-dark); font-weight: 700; }
 
-/* Botones */
+/* ========== BOTONES ========== */
 .nexo-btn {
     padding: 10px 20px;
     border-radius: var(--nexo-radius-md);
@@ -551,12 +364,17 @@
 
 .nexo-btn-primary { background: var(--nexo-primary); color: white; }
 .nexo-btn-primary:hover { background: var(--nexo-primary-dark); color: white; }
-.nexo-btn-success { background: var(--nexo-success); color: white; }
-.nexo-btn-success:hover { background: #00b894; color: white; }
-.nexo-btn-warning { background: var(--nexo-warning); color: white; }
+.nexo-btn-success { background: var(--nexo-success); color: var(--nexo-secondary); }
+.nexo-btn-success:hover { background: var(--nexo-accent); color: var(--nexo-secondary); }
+/* amarillo con texto oscuro: en blanco el contraste era ~1.8:1 */
+.nexo-btn-warning { background: var(--nexo-warning); color: var(--nexo-secondary); }
+.nexo-btn-warning:hover { background: #e69a12; color: var(--nexo-secondary); }
+/* acción irreversible (aplicar ajustes al stock) */
+.nexo-btn-danger { background: var(--nexo-error-dark); color: white; }
+.nexo-btn-danger:hover { background: #f06548; color: white; }
 .nexo-btn-outline { background: transparent; border: 1px solid var(--nexo-gray-300); color: var(--nexo-gray-700); }
 .nexo-btn-outline:hover { background: var(--nexo-gray-100); }
-.nexo-btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+.nexo-btn-sm { padding: 8px 12px; font-size: 0.8rem; min-height: 44px; }
 
 /* Barra de escaneo (POS 1366x768: alto contenido, sin scroll extra) */
 .scan-bar {
@@ -592,8 +410,8 @@
     min-height: 44px;
 }
 
-.scan-qty { width: 130px; }
-.scan-qty input { min-height: 38px; text-align: center; font-weight: 600; }
+.scan-qty { width: 140px; }
+.scan-qty input { min-height: 44px; text-align: center; font-weight: 600; }
 
 .scan-feedback {
     flex: 1 1 100%;
@@ -602,294 +420,294 @@
     min-height: 20px;
 }
 
-.scan-feedback.ok { color: #00997d; }
-.scan-feedback.err { color: var(--nexo-error); }
+.scan-feedback.ok { color: var(--nexo-success-dark); }
+.scan-feedback.err { color: var(--nexo-error-dark); }
 
 .modo-ciego .col-stock-sistema,
 .modo-ciego .col-diferencia { display: none; }
 
-/* Acciones flotantes */
+/* ========== ACCIONES FLOTANTES ========== */
 .floating-actions {
     position: fixed;
     bottom: 20px;
     right: 20px;
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 10px;
     z-index: 1000;
+    max-width: calc(100% - 40px);
 }
 
 .floating-actions .nexo-btn {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* Estado de fila */
-.row-contado {
-    background: rgba(0, 212, 170, 0.05);
-}
-
-.row-reconteo {
-    background: rgba(255, 176, 32, 0.1);
-}
-
-/* Paginación */
-.nexo-pagination {
+/* ========== PAGINACIÓN (estándar) ========== */
+.pagination-controls {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 12px;
+    padding: 10px 16px;
+    margin-top: 12px;
+    border: 1px solid rgba(64, 81, 137, 0.1);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1rem 0;
-    border-top: 1px solid var(--nexo-gray-300);
-    margin-top: 1rem;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
-.nexo-pagination-btn {
-    width: 36px;
-    height: 36px;
-    border: 1px solid var(--nexo-gray-300);
-    background: white;
-    border-radius: var(--nexo-radius-sm);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.nexo-pagination-btn:hover:not(.disabled) {
-    background: var(--nexo-primary);
-    color: white;
-    border-color: var(--nexo-primary);
-}
-
-.nexo-pagination-btn.disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
-/* Quick stats */
-.quick-stats {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 1rem;
-}
-
-.stat-item {
-    background: var(--nexo-white);
-    border: 1px solid var(--nexo-gray-300);
-    border-radius: var(--nexo-radius-md);
-    padding: 0.75rem 1rem;
+.page-info {
+    min-width: 140px;
     text-align: center;
-    flex: 1;
+    font-weight: 600;
+    background: white;
+    border-radius: 8px;
+    padding: 4px 10px;
 }
 
-.stat-item .stat-value {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--nexo-secondary);
+/* ========== MODALES (gradiente estándar del módulo) ========== */
+.modal-header-nexo {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: var(--nexo-white);
 }
 
-.stat-item .stat-label {
-    font-size: 0.7rem;
-    color: var(--nexo-gray-500);
-    text-transform: uppercase;
+.modal-header-nexo .modal-title {
+    color: var(--nexo-white);
 }
 
-/* Responsive */
+.modal-header-nexo .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+/* ========== RESPONSIVE (selectores reales de esta pantalla) ========== */
+@media (max-width: 1024px) {
+    .step-connector { display: none; }
+}
+
 @media (max-width: 768px) {
-    .inventory-meta { flex-direction: column; gap: 1rem; }
-    .quick-stats { flex-wrap: wrap; }
-    .stat-item { min-width: calc(50% - 0.5rem); }
-    .inventario-detail-header { flex-direction: column; gap: 0.5rem; }
-    .inventario-progress { margin: 0.5rem 0; }
-    .inventario-detail .row > [class*="col-md-"],
-    .inventario-detail .row > [class*="col-lg-"] { flex: 0 0 100%; max-width: 100%; }
+    .module-header { padding: 12px 16px; }
+    .module-header-icon { width: 40px; height: 40px; font-size: 20px; }
+    .inventory-meta { flex-direction: column; gap: 0.5rem; }
+    .pagination-controls { flex-direction: column; align-items: stretch; }
+    .segment-chips { max-height: 140px; overflow-y: auto; }
+    .floating-actions { left: 12px; right: 12px; max-width: none; }
+    .floating-actions .nexo-btn { flex: 1 1 auto; justify-content: center; }
+    .tabla-conteo-wrap { max-height: none; }
 }
+
 @media (max-width: 576px) {
-    .inventario-detail-table { font-size: 0.75rem; }
-    .inventario-detail-table input { min-height: 44px; font-size: 16px !important; }
-    .import-zone { padding: 1rem; }
+    .conteo-table { font-size: 0.8rem; }
+    .input-conteo { width: 80px; font-size: 16px; }
+}
+
+/* Pantallas táctiles (POS): nada por debajo de 48px */
+@media (pointer: coarse) {
+    .input-conteo,
+    .scan-qty input,
+    .scan-input-wrap input { min-height: 48px; font-size: 1rem; }
+    .nexo-btn-sm { min-height: 48px; padding: 10px 14px; }
+    .segment-chip { min-height: 48px; padding: 8px 16px; }
+    .pagination-controls .btn { min-height: 48px; min-width: 48px; display: inline-flex; align-items: center; justify-content: center; }
+    .module-header-actions .btn { min-height: 48px; display: inline-flex; align-items: center; justify-content: center; }
 }
 </style>
 
 <div class="page-content nexo-page">
     <div class="container-fluid">
-        
-        <!-- Header del inventario -->
-        <div class="inventory-header">
-            <div class="inventory-title">
-                <a href="/app/gestion-inventarios/" class="nexo-btn nexo-btn-outline nexo-btn-sm">
-                    <i class="bi bi-arrow-left"></i>
-                </a>
-                <h1 id="nombreInventario">{{ inventario.nombre }}</h1>
-                <span class="nexo-badge" id="badgeEstado">{{ inventario.get_estado_display }}</span>
-            </div>
-            <div class="inventory-meta">
-                <div class="meta-item">
-                    <span class="label">Número:</span>
-                    <span class="value" id="numeroInventario">{{ inventario.numero_inventario }}</span>
-                </div>
-                <div class="meta-item">
-                    <span class="label">Tipo:</span>
-                    <span class="value">{{ inventario.get_tipo_inventario_display }}</span>
-                </div>
-                <div class="meta-item">
-                    <span class="label">Fecha Corte:</span>
-                    <span class="value">{{ inventario.fecha_corte|date:"d/m/Y H:i" }}</span>
-                </div>
-                <div class="meta-item">
-                    <span class="label">Sucursal:</span>
-                    <span class="value">{{ inventario.sucursal.alias }}</span>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Mini Steps del Proceso -->
-        <div class="process-steps-mini" id="processSteps">
-            <div class="step-mini" id="step1">
-                <i class="bi bi-plus-circle"></i> Crear
-            </div>
-            <div class="step-connector"></div>
-            <div class="step-mini" id="step2">
-                <i class="bi bi-upc-scan"></i> Cargar Pistola
-            </div>
-            <div class="step-connector"></div>
-            <div class="step-mini" id="step3">
-                <i class="bi bi-arrows-expand"></i> Comparar
-            </div>
-            <div class="step-connector"></div>
-            <div class="step-mini" id="step4">
-                <i class="bi bi-graph-up-arrow"></i> Analizar
-            </div>
-            <div class="step-connector"></div>
-            <div class="step-mini" id="step5">
-                <i class="bi bi-check2-circle"></i> Aprobar
-            </div>
-        </div>
-        
-        <!-- Panel de Comparación PISTOLA vs SISTEMA -->
-        <div class="comparison-panel">
-            <div class="comparison-header">
-                <div class="comparison-title">
-                    <i class="bi bi-arrows-expand"></i> Comparación: Conteo Físico vs Stock Sistema
-                </div>
-                <div class="d-flex gap-2">
-                    <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="abrirModalImportarConteo()">
-                        <i class="bi bi-upload"></i> Cargar Archivo Pistola
-                    </button>
-                </div>
-            </div>
-            <div class="comparison-grid">
-                <div class="comparison-box pistola">
-                    <div class="comparison-box-icon">
-                        <i class="bi bi-upc-scan"></i>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0"><i class="bi bi-clipboard-check text-primary me-2"></i>Detalle de Toma de Inventario</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="/app/home/">Inicio</a></li>
+                            <li class="breadcrumb-item">Existencias</li>
+                            <li class="breadcrumb-item"><a href="/app/gestion-inventarios/">Tomas de Inventario</a></li>
+                            <li class="breadcrumb-item active">{{ inventario.numero_inventario }}</li>
+                        </ol>
                     </div>
-                    <div class="comparison-box-label">Conteo Físico (Pistola)</div>
-                    <div class="comparison-box-value" id="totalPistola">0</div>
-                    <small class="text-muted">unidades contadas</small>
-                </div>
-                <div class="comparison-vs">
-                    <div class="comparison-vs-icon">
-                        <i class="bi bi-arrow-left-right"></i>
-                    </div>
-                    <div class="comparison-vs-text">VS</div>
-                </div>
-                <div class="comparison-box sistema">
-                    <div class="comparison-box-icon">
-                        <i class="bi bi-database"></i>
-                    </div>
-                    <div class="comparison-box-label">Stock Sistema</div>
-                    <div class="comparison-box-value" id="totalSistema">0</div>
-                    <small class="text-muted">unidades registradas</small>
                 </div>
             </div>
         </div>
-        
-        <!-- Dashboard de Diferencias -->
-        <div class="diferencias-dashboard">
-            <div class="diferencia-card sobrantes" onclick="filtrarPorTipoDiferencia('sobrantes')">
-                <div class="diferencia-card-value" id="cardSobrantes">0</div>
-                <div class="diferencia-card-label">Productos Sobrantes</div>
-            </div>
-            <div class="diferencia-card faltantes" onclick="filtrarPorTipoDiferencia('faltantes')">
-                <div class="diferencia-card-value" id="cardFaltantes">0</div>
-                <div class="diferencia-card-label">Productos Faltantes</div>
-            </div>
-            <div class="diferencia-card coinciden" onclick="filtrarPorTipoDiferencia('coinciden')">
-                <div class="diferencia-card-value" id="cardCoinciden">0</div>
-                <div class="diferencia-card-label">Coinciden Exacto</div>
-            </div>
-            <div class="diferencia-card pendientes" onclick="filtrarPorTipoDiferencia('pendientes')">
-                <div class="diferencia-card-value" id="cardPendientes">0</div>
-                <div class="diferencia-card-label">Pendientes Contar</div>
-            </div>
-        </div>
-        
-        <!-- Progress bar -->
-        <div class="progress-large">
-            <div class="progress-info">
-                <span>Progreso del conteo</span>
-                <span id="progresoTexto">0%</span>
-            </div>
-            <div class="progress-bar-container">
-                <div class="progress-fill" id="progresoBar" style="width: 0%"></div>
-            </div>
-        </div>
-        
-        <!-- Filtros de Segmentación por Departamento/Marca -->
-        <div class="segmentation-filters" id="segmentFilters">
-            <div class="row align-items-start">
-                <div class="col-md-6">
-                    <div class="segmentation-title">
-                        <i class="bi bi-building"></i> Filtrar por Departamento
-                    </div>
-                    <div class="segment-chips" id="chipsDepartamentos">
-                        <div class="segment-chip active" data-filter="">
-                            <i class="bi bi-grid-3x3-gap"></i> Todos
-                            <span class="chip-count" id="countTodosDept">0</span>
+
+        <div class="card shadow inventarios-card">
+            <!-- === HEADER DEL MÓDULO === -->
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon"><i class="bi bi-clipboard-check"></i></div>
+                    <div class="module-header-info">
+                        <h5 id="nombreInventario">{{ inventario.nombre }}</h5>
+                        <div class="module-header-status">
+                            <span class="nexo-badge nexo-badge-{{ inventario.estado|lower }}" id="badgeEstado">{{ inventario.get_estado_display }}</span>
+                            <span>N° <strong id="numeroInventario">{{ inventario.numero_inventario }}</strong></span>
                         </div>
-                        <!-- Se llenan dinámicamente -->
                     </div>
                 </div>
-                <div class="col-md-6">
-                    <div class="segmentation-title">
-                        <i class="bi bi-tag"></i> Filtrar por Marca
+                <div class="module-header-actions">
+                    <a href="/app/gestion-inventarios/" class="btn btn-light btn-sm" title="Volver a tomas de inventario" aria-label="Volver a tomas de inventario">
+                        <i class="bi bi-arrow-left me-1"></i>Volver
+                    </a>
+                    <button type="button" class="btn btn-light btn-sm" onclick="abrirModalImportarConteo()" title="Cargar el archivo de la pistola">
+                        <i class="bi bi-upload me-1"></i>Cargar pistola
+                    </button>
+                    <button type="button" class="btn btn-light btn-sm" onclick="exportarInventario()" title="Exportar el inventario completo a Excel">
+                        <i class="bi bi-download me-1"></i>Exportar todo
+                    </button>
+                    <button type="button" class="btn btn-light btn-sm fw-semibold" onclick="exportarDiferencias()" id="btnExportarDiferencias" title="Exportar solo las diferencias a Excel">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Exportar diferencias
+                    </button>
+                </div>
+            </div>
+
+            <div class="card-body">
+
+                <!-- === METADATOS DE LA TOMA === -->
+                <div class="inventory-meta mb-3">
+                    <div class="meta-item">
+                        <span class="label">Tipo:</span>
+                        <span class="value">{{ inventario.get_tipo_inventario_display }}</span>
                     </div>
-                    <div class="segment-chips" id="chipsMarcas">
-                        <div class="segment-chip active" data-filter="">
-                            <i class="bi bi-grid-3x3-gap"></i> Todas
-                            <span class="chip-count" id="countTodasMarcas">0</span>
+                    <div class="meta-item">
+                        <span class="label">Fecha de corte:</span>
+                        <span class="value">{{ inventario.fecha_corte|date:"d/m/Y H:i" }}</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="label">Sucursal:</span>
+                        <span class="value">{{ inventario.sucursal.alias }}</span>
+                    </div>
+                </div>
+
+                <!-- === KPIs: totales y diferencias (las 4 de diferencias filtran la tabla) === -->
+                <div class="row g-2 mb-3">
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <div class="kpi-card kpi-pistola card h-100">
+                            <div class="card-body text-center py-2">
+                                <span class="kpi-value" id="totalPistola">—</span>
+                                <span class="kpi-label"><i class="bi bi-upc-scan me-1"></i>Unid. contadas (pistola)</span>
+                            </div>
                         </div>
-                        <!-- Se llenan dinámicamente -->
+                    </div>
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <div class="kpi-card kpi-sistema card h-100">
+                            <div class="card-body text-center py-2">
+                                <span class="kpi-value" id="totalSistema">—</span>
+                                <span class="kpi-label"><i class="bi bi-database me-1"></i>Unid. en sistema</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <button type="button" class="kpi-card kpi-sobrantes card h-100 w-100" onclick="filtrarPorTipoDiferencia('sobrantes')" title="Ver solo los productos sobrantes">
+                            <div class="card-body text-center py-2">
+                                <span class="kpi-value" id="cardSobrantes">—</span>
+                                <span class="kpi-label"><i class="bi bi-arrow-up-circle me-1"></i>Productos sobrantes</span>
+                            </div>
+                        </button>
+                    </div>
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <button type="button" class="kpi-card kpi-faltantes card h-100 w-100" onclick="filtrarPorTipoDiferencia('faltantes')" title="Ver solo los productos faltantes">
+                            <div class="card-body text-center py-2">
+                                <span class="kpi-value" id="cardFaltantes">—</span>
+                                <span class="kpi-label"><i class="bi bi-arrow-down-circle me-1"></i>Productos faltantes</span>
+                            </div>
+                        </button>
+                    </div>
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <button type="button" class="kpi-card kpi-coinciden card h-100 w-100" onclick="filtrarPorTipoDiferencia('coinciden')" title="Ver solo los productos que coinciden">
+                            <div class="card-body text-center py-2">
+                                <span class="kpi-value" id="cardCoinciden">—</span>
+                                <span class="kpi-label"><i class="bi bi-check2-circle me-1"></i>Coinciden exacto</span>
+                            </div>
+                        </button>
+                    </div>
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <button type="button" class="kpi-card kpi-pendientes card h-100 w-100" onclick="filtrarPorTipoDiferencia('pendientes')" title="Ver solo los productos sin contar">
+                            <div class="card-body text-center py-2">
+                                <span class="kpi-value" id="cardPendientes">—</span>
+                                <span class="kpi-label"><i class="bi bi-hourglass-split me-1"></i>Pendientes de contar</span>
+                            </div>
+                        </button>
                     </div>
                 </div>
-            </div>
-        </div>
-        
-        <!-- Card de conteo -->
-        <div class="nexo-card">
-            <div class="nexo-card-header">
-                <h5><i class="bi bi-list-check"></i> Detalle de Productos</h5>
-                <div class="d-flex gap-2 align-items-center">
-                    <button class="btn-export-diferencias-lg" onclick="exportarDiferencias()" id="btnExportarDiferencias">
-                        <i class="bi bi-file-earmark-excel"></i> Exportar Diferencias a Excel
-                    </button>
-                    <button class="nexo-btn nexo-btn-sm nexo-btn-outline" style="background: rgba(255,255,255,0.1);" onclick="abrirModalImportarConteo()">
-                        <i class="bi bi-upload"></i> Cargar Pistola
-                    </button>
-                    <button class="nexo-btn nexo-btn-sm nexo-btn-outline" style="background: rgba(255,255,255,0.1);" onclick="exportarInventario()">
-                        <i class="bi bi-download"></i> Exportar Todo
-                    </button>
+
+                <!-- === PASOS DEL PROCESO === -->
+                <div class="process-steps-mini" id="processSteps">
+                    <div class="step-mini" id="step1">
+                        <i class="bi bi-plus-circle"></i> Crear
+                    </div>
+                    <div class="step-connector"></div>
+                    <div class="step-mini" id="step2">
+                        <i class="bi bi-upc-scan"></i> Cargar Pistola
+                    </div>
+                    <div class="step-connector"></div>
+                    <div class="step-mini" id="step3">
+                        <i class="bi bi-arrows-expand"></i> Comparar
+                    </div>
+                    <div class="step-connector"></div>
+                    <div class="step-mini" id="step4">
+                        <i class="bi bi-graph-up-arrow"></i> Analizar
+                    </div>
+                    <div class="step-connector"></div>
+                    <div class="step-mini" id="step5">
+                        <i class="bi bi-check2-circle"></i> Aprobar
+                    </div>
                 </div>
-            </div>
-            <div class="nexo-card-body">
+
+                <!-- === PROGRESO DEL CONTEO === -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="section-subtitle mb-0"><i class="bi bi-activity"></i> Progreso del conteo</span>
+                        <span class="progress-text" id="progresoTexto">—</span>
+                    </div>
+                    <div class="progress progress-conteo">
+                        <div class="progress-bar bg-success" id="progresoBar" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- === SEGMENTACIÓN POR DEPARTAMENTO / MARCA === -->
+                <div class="segmentation-filters" id="segmentFilters">
+                    <div class="row align-items-start g-3">
+                        <div class="col-md-6">
+                            <div class="section-subtitle">
+                                <i class="bi bi-building"></i> Filtrar por Departamento
+                            </div>
+                            <div class="segment-chips" id="chipsDepartamentos">
+                                <button type="button" class="segment-chip active" data-filter="">
+                                    <i class="bi bi-grid-3x3-gap"></i> Todos
+                                    <span class="chip-count" id="countTodosDept">0</span>
+                                </button>
+                                <!-- Se llenan dinámicamente -->
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="section-subtitle">
+                                <i class="bi bi-tag"></i> Filtrar por Marca
+                            </div>
+                            <div class="segment-chips" id="chipsMarcas">
+                                <button type="button" class="segment-chip active" data-filter="">
+                                    <i class="bi bi-grid-3x3-gap"></i> Todas
+                                    <span class="chip-count" id="countTodasMarcas">0</span>
+                                </button>
+                                <!-- Se llenan dinámicamente -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <h5 class="card-title mb-2"><i class="bi bi-list-check me-1"></i>Detalle de Productos</h5>
+
                 <!-- Escáner: el lector teclea el SKU y manda Enter -->
                 <div class="scan-bar">
                     <div class="scan-input-wrap">
                         <i class="bi bi-upc-scan"></i>
+                        <label for="inputEscaner" class="visually-hidden">Escanee o escriba el SKU</label>
                         <input type="text" id="inputEscaner" class="form-control"
                                placeholder="Escanee o escriba el SKU y presione Enter"
                                autocomplete="off" autofocus>
                     </div>
                     <div class="scan-qty">
-                        <label class="form-label small mb-0">Suma por lectura</label>
+                        <label class="form-label small mb-0" for="cantidadPorLectura">Suma por lectura</label>
                         <input type="number" id="cantidadPorLectura" class="form-control" value="1" min="1" step="1">
                     </div>
                     <div class="form-check form-switch ms-2">
@@ -903,13 +721,13 @@
 
                 <!-- Filtros rápidos -->
                 <div class="nexo-filters">
-                    <div class="row g-2 align-items-center">
-                        <div class="col-md-3">
-                            <label class="form-label small mb-1">Buscar producto</label>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-lg-3 col-md-4 col-6">
+                            <label class="form-label small mb-1" for="filtroSearch">Buscar producto</label>
                             <input type="text" class="form-control form-control-sm" id="filtroSearch" placeholder="SKU, código o nombre...">
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label small mb-1">Estado conteo</label>
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <label class="form-label small mb-1" for="filtroEstadoConteo">Estado conteo</label>
                             <select class="form-select form-select-sm" id="filtroEstadoConteo">
                                 <option value="">Todos</option>
                                 <option value="pendiente">Pendientes</option>
@@ -917,69 +735,68 @@
                                 <option value="reconteo">Requiere Reconteo</option>
                             </select>
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label small mb-1">Marca</label>
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <label class="form-label small mb-1" for="filtroMarca">Marca</label>
                             <select class="form-select form-select-sm" id="filtroMarca">
                                 <option value="">Todas las marcas</option>
                             </select>
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label small mb-1">Departamento</label>
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <label class="form-label small mb-1" for="filtroCategoria">Departamento</label>
                             <select class="form-select form-select-sm" id="filtroCategoria">
                                 <option value="">Todos los departamentos</option>
                             </select>
                         </div>
-                        <div class="col-md-2">
-                            <label class="form-label small mb-1">&nbsp;</label>
-                            <div class="form-check mt-1">
+                        <div class="col-lg-2 col-md-4 col-6">
+                            <div class="form-check form-switch mb-1">
                                 <input type="checkbox" class="form-check-input" id="filtroDiferencias">
                                 <label class="form-check-label small" for="filtroDiferencias">Solo con diferencias</label>
                             </div>
                         </div>
-                        <div class="col-md-1 d-flex align-items-end">
-                            <button class="nexo-btn nexo-btn-sm nexo-btn-outline w-100" onclick="limpiarFiltros()" title="Limpiar filtros">
-                                <i class="bi bi-x-lg"></i>
+                        <div class="col-lg-1 col-md-4 col-6">
+                            <button type="button" class="btn btn-light btn-sm w-100" onclick="limpiarFiltros()" title="Limpiar filtros">
+                                <i class="bi bi-x-lg me-1"></i>Limpiar
                             </button>
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Tabla de conteo -->
-                <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                <div class="table-responsive tabla-conteo-wrap">
                     <table class="table conteo-table" id="tablaConteo">
                         <thead>
                             <tr>
-                                <th style="width: 100px;">SKU</th>
+                                <th class="w-sku">SKU</th>
                                 <th>Producto</th>
                                 <th>Talla</th>
                                 <th>Marca</th>
-                                <th style="width: 80px;" class="col-stock-sistema" title="Stock del sistema al momento del conteo (corte + movimientos posteriores)">Stock Sist.</th>
-                                <th style="width: 100px;">Conteo</th>
-                                <th style="width: 80px;" class="col-diferencia">Diferencia</th>
-                                <th style="width: 80px;">Estado</th>
-                                <th style="width: 120px;">Acciones</th>
+                                <th class="w-num text-end col-stock-sistema" title="Stock del sistema al momento del conteo (corte + movimientos posteriores)">Stock Sist.</th>
+                                <th class="w-conteo text-end">Conteo</th>
+                                <th class="w-num text-end col-diferencia">Diferencia</th>
+                                <th class="w-estado">Estado</th>
+                                <th class="w-acciones">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="tbodyConteo">
                             <tr>
                                 <td colspan="9" class="text-center py-4">
-                                    <i class="bi bi-hourglass-split fs-3 text-muted"></i>
-                                    <p class="text-muted mb-0">Cargando productos...</p>
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Cargando...</span>
+                                    </div>
+                                    <p class="text-muted mb-0 mt-2">Cargando productos...</p>
                                 </td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
-                
+
                 <!-- Paginación -->
-                <div class="nexo-pagination">
-                    <div class="d-flex align-items-center gap-3">
-                        <span class="text-muted small">Mostrando <strong id="paginacionInfo">0</strong> productos</span>
-                    </div>
+                <div class="pagination-controls">
+                    <span class="text-muted small">Mostrando <strong id="paginacionInfo">0</strong> productos</span>
                     <div class="d-flex gap-2 align-items-center">
-                        <button class="nexo-pagination-btn" id="btnPrevPage"><i class="bi bi-chevron-left"></i></button>
-                        <span id="pageInfo" class="px-3">Página 1 de 1</span>
-                        <button class="nexo-pagination-btn" id="btnNextPage"><i class="bi bi-chevron-right"></i></button>
+                        <button type="button" class="btn btn-light btn-sm" id="btnPrevPage" title="Página anterior" aria-label="Página anterior"><i class="bi bi-chevron-left"></i></button>
+                        <span id="pageInfo" class="page-info">Página 1 de 1</span>
+                        <button type="button" class="btn btn-light btn-sm" id="btnNextPage" title="Página siguiente" aria-label="Página siguiente"><i class="bi bi-chevron-right"></i></button>
                     </div>
                 </div>
             </div>
@@ -989,45 +806,45 @@
 
 <!-- Acciones flotantes -->
 <div class="floating-actions" id="floatingActions">
-    <button class="nexo-btn nexo-btn-warning" onclick="guardarConteos()" id="btnGuardar" style="display: none;">
+    <button type="button" class="nexo-btn nexo-btn-primary" onclick="guardarConteos()" id="btnGuardar" style="display: none;">
         <i class="bi bi-save"></i> Guardar Conteos
     </button>
-    <button class="nexo-btn nexo-btn-success" onclick="finalizarConteo()" id="btnFinalizar" style="display: none;">
+    <button type="button" class="nexo-btn nexo-btn-success" onclick="finalizarConteo()" id="btnFinalizar" style="display: none;">
         <i class="bi bi-check-circle"></i> Finalizar Conteo
     </button>
-    <button class="nexo-btn nexo-btn-warning" onclick="enviarAprobacionDesdeDetalle()" id="btnEnviarAprobacion" style="display: none;">
+    <button type="button" class="nexo-btn nexo-btn-primary" onclick="enviarAprobacionDesdeDetalle()" id="btnEnviarAprobacion" style="display: none;">
         <i class="bi bi-send"></i> Enviar a Aprobación
     </button>
-    <button class="nexo-btn nexo-btn-warning" onclick="aplicarAjustesDesdeDetalle()" id="btnAplicarAjustes" style="display: none;">
+    <button type="button" class="nexo-btn nexo-btn-danger" onclick="aplicarAjustesDesdeDetalle()" id="btnAplicarAjustes" style="display: none;">
         <i class="bi bi-arrow-right-circle"></i> Aplicar Ajustes al Stock
     </button>
 </div>
 
 <!-- Modal Importar Conteo Pistola -->
-<div class="modal fade" id="modalImportarConteo" tabindex="-1">
-    <div class="modal-dialog">
+<div class="modal fade" id="modalImportarConteo" tabindex="-1" aria-labelledby="tituloModalImportar" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header modal-header-nexo">
-                <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Importar Conteo</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h5 class="modal-title" id="tituloModalImportar"><i class="bi bi-upload me-2"></i>Importar Conteo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <label class="form-label">Archivo (CSV/TXT/XLSX)</label>
+                    <label class="form-label" for="archivoConteo">Archivo (CSV/TXT/XLSX)</label>
                     <input type="file" class="form-control" id="archivoConteo" accept=".csv,.txt,.xlsx" />
                     <small class="text-muted d-block mt-2">
                         Formato esperado: <code>sku,cantidad</code> (con o sin encabezados).
                     </small>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">Nombre de hoja (opcional)</label>
+                    <label class="form-label" for="nombreHojaConteo">Nombre de hoja (opcional)</label>
                     <input type="text" class="form-control" id="nombreHojaConteo" placeholder="Ej: Conteo Enero" />
                     <small class="text-muted d-block mt-2">
                         Si se deja vacío se usa la primera hoja.
                     </small>
                 </div>
                 <div class="mb-3" id="previewSection" style="display: none;">
-                    <label class="form-label">Preview</label>
+                    <div class="form-label">Preview</div>
                     <div class="table-responsive">
                         <table class="table table-sm">
                             <thead>
@@ -1042,17 +859,17 @@
                     </div>
                     <div class="text-muted small" id="previewInfo"></div>
                 </div>
-                <div class="progress mt-2" id="importProgress" style="display: none;">
-                    <div class="progress-bar" id="importProgressBar" role="progressbar" style="width: 0%"></div>
+                <div class="progress progress-conteo mt-2" id="importProgress" style="display: none;">
+                    <div class="progress-bar bg-success" id="importProgressBar" role="progressbar" style="width: 0%"></div>
                 </div>
                 <div class="text-muted small mt-2" id="importStatus"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="nexo-btn nexo-btn-outline" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="nexo-btn nexo-btn-outline" onclick="previsualizarConteoPistola()">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-outline-primary" onclick="previsualizarConteoPistola()">
                     <i class="bi bi-search me-1"></i> Previsualizar
                 </button>
-                <button type="button" class="nexo-btn nexo-btn-primary" onclick="importarConteoPistola()">
+                <button type="button" class="btn btn-primary" onclick="importarConteoPistola()">
                     <i class="bi bi-upload me-1"></i> Importar
                 </button>
             </div>
@@ -1109,7 +926,7 @@ function cargarProductos(page = 1) {
                 <tr>
                     <td colspan="9" class="text-center py-4">
                         <i class="bi bi-inbox fs-3 text-muted"></i>
-                        <p class="text-muted mb-0">No hay productos para mostrar</p>
+                        <p class="text-muted mb-0 mt-2">No hay productos para mostrar</p>
                     </td>
                 </tr>
             `);
@@ -1137,8 +954,8 @@ function cargarProductos(page = 1) {
                         <td><strong>${p.producto_nombre}</strong></td>
                         <td>${p.talla_nombre || '-'}</td>
                         <td><small>${p.marca_nombre || '-'}</small></td>
-                        <td class="text-center fw-bold col-stock-sistema">${p.stock_sistema_ajustado}</td>
-                        <td>
+                        <td class="text-end fw-bold col-stock-sistema">${p.stock_sistema_ajustado}</td>
+                        <td class="text-end">
                             <input type="number"
                                    class="input-conteo ${inputClass}"
                                    data-id="${p.id}"
@@ -1148,8 +965,8 @@ function cargarProductos(page = 1) {
                                    min="0"
                                    onchange="registrarConteo(this)">
                         </td>
-                        <td class="text-center col-diferencia">${diferenciaHtml}</td>
-                        <td class="text-center">${p.excluido ? '<span class="badge bg-dark">Excluido</span>' : estadoHtml}</td>
+                        <td class="text-end col-diferencia">${diferenciaHtml}</td>
+                        <td class="text-center">${p.excluido ? '<span class="badge bg-light text-body text-decoration-line-through">Excluido</span>' : estadoHtml}</td>
                         <td>
                             <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="verDetalleProducto(${p.id})" title="Ver detalle">
                                 <i class="bi bi-eye"></i>
@@ -1248,14 +1065,14 @@ function poblarSegmentos(segmentos) {
 
     const chipsDept = $('#chipsDepartamentos');
     categorias.slice(0, 12).forEach(c => {
-        chipsDept.append(`<div class="segment-chip" data-filter="${c.valor}">
-            ${c.valor} <span class="chip-count">${c.total}</span></div>`);
+        chipsDept.append(`<button type="button" class="segment-chip" data-filter="${c.valor}">
+            ${c.valor} <span class="chip-count">${c.total}</span></button>`);
     });
 
     const chipsMarca = $('#chipsMarcas');
     marcas.slice(0, 12).forEach(m => {
-        chipsMarca.append(`<div class="segment-chip" data-filter="${m.valor}">
-            ${m.valor} <span class="chip-count">${m.total}</span></div>`);
+        chipsMarca.append(`<button type="button" class="segment-chip" data-filter="${m.valor}">
+            ${m.valor} <span class="chip-count">${m.total}</span></button>`);
     });
 
     $('#countTodosDept').text(categorias.reduce((s, c) => s + c.total, 0));
@@ -1379,8 +1196,12 @@ function realizarReconteo(detalleId) {
         html: `
             <p>Este producto tiene una diferencia significativa.</p>
             <p>Por favor, realice un nuevo conteo:</p>
-            <input type="number" id="inputReconteo" class="form-control mt-3" placeholder="Nueva cantidad" min="0">
-            <textarea id="obsReconteo" class="form-control mt-2" placeholder="Observaciones (opcional)" rows="2"></textarea>
+            <div class="text-start mt-3">
+                <label class="form-label small mb-1" for="inputReconteo">Nueva cantidad</label>
+                <input type="number" id="inputReconteo" class="form-control" placeholder="Nueva cantidad" min="0">
+                <label class="form-label small mb-1 mt-2" for="obsReconteo">Observaciones (opcional)</label>
+                <textarea id="obsReconteo" class="form-control" placeholder="Observaciones (opcional)" rows="2"></textarea>
+            </div>
         `,
         showCancelButton: true,
         confirmButtonText: 'Confirmar Reconteo',
@@ -1491,9 +1312,9 @@ function verDetalleProducto(detalleId) {
                 ${fila('Reconteo', p.reconteo_requerido ? 'Requerido' : (p.stock_reconteo !== null ? `Hecho: ${p.stock_reconteo}` : 'No'))}
             </table>
             <div class="text-start">
-                <label class="form-label small mb-1">Ubicación (pasillo / estante)</label>
+                <label class="form-label small mb-1" for="detUbicacion">Ubicación (pasillo / estante)</label>
                 <input id="detUbicacion" class="form-control mb-2" value="${(p.ubicacion || '').replace(/"/g, '&quot;')}" ${p.contado ? '' : 'disabled'}>
-                <label class="form-label small mb-1">Observaciones</label>
+                <label class="form-label small mb-1" for="detObs">Observaciones</label>
                 <textarea id="detObs" class="form-control" rows="2" ${p.contado ? '' : 'disabled'}>${p.observaciones || ''}</textarea>
                 ${p.contado ? '' : '<div class="text-muted small mt-2">Registre primero el conteo para poder anotar ubicación y observaciones.</div>'}
             </div>
@@ -1927,8 +1748,7 @@ function aplicarAjustesDesdeDetalle() {
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Sí, Aplicar Ajustes',
-        cancelButtonText: 'Cancelar',
-        confirmButtonColor: '#FFB020'
+        cancelButtonText: 'Cancelar'
     }).then(result => {
         if (result.isConfirmed) {
             $.ajax({
@@ -1956,9 +1776,9 @@ function _iniciarPollingAjustes() {
         title: 'Aplicando Ajustes de Inventario',
         html: `
             <div class="mb-3">
-                <div class="progress" style="height: 22px; border-radius: 11px;">
+                <div class="progress progress-ajustes">
                     <div id="swal-det-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-warning"
-                         role="progressbar" style="width: 0%; font-size: 0.8rem; font-weight: 700;">0%</div>
+                         role="progressbar" style="width: 0%;">0%</div>
                 </div>
             </div>
             <p id="swal-det-texto" class="mb-1" style="font-size: 0.9rem;">Iniciando proceso...</p>
