@@ -27,6 +27,7 @@ import requests
 from contextlib import contextmanager
 
 from django.db import IntegrityError, connection, transaction
+from django.db.models import Q
 from django.db.utils import OperationalError
 from django.utils import timezone
 
@@ -1329,7 +1330,13 @@ def _props_no_soportadas(error, body):
             if p and p in body and p not in ('type', 'transactions', 'config')]
 
 
-def _resolver_previos_antes_de_cobrar(config, correlativo, presupuesto):
+def _normalizar_payment_ids(payment_ids):
+    """Set de str no vacíos a partir de lo que mande el POS (lista, set, None)."""
+    return {str(p).strip() for p in (payment_ids or ()) if str(p or '').strip()}
+
+
+def _resolver_previos_antes_de_cobrar(config, correlativo, presupuesto,
+                                      payment_ids_cargados=None):
     """Antes de emitir una orden nueva, cerrar o denunciar lo que haya vivo.
 
     Hace RED (consultas y cancelaciones a MP), así que corre FUERA del candado.
@@ -1337,15 +1344,34 @@ def _resolver_previos_antes_de_cobrar(config, correlativo, presupuesto):
     las reservas fantasma y caduca lo vencido; lo que sobrevive acá es un cobro
     que de verdad puede terminar en plata.
 
+    `payment_ids_cargados`: ids de pago (payment_id o payment_id_mp) de los
+    cobros MP que el POS YA tiene cargados como pagos del ticket. Una aprobada
+    que está ahí no es un cobro huérfano sino la primera tarjeta de una venta
+    con varias, y no debe bloquear la siguiente.
+
     Devuelve los ids que ya quedaron atendidos, para que la revisión de adentro
     del candado solo bloquee por filas que aparecieron DESPUÉS (que es su
     verdadero trabajo: atrapar al otro request que está creando en paralelo).
     """
+    cargados = _normalizar_payment_ids(payment_ids_cargados)
     atendidos = set()
     for previa in cobros_vivos_de_ticket(config.sucursal_id, correlativo,
                                          refrescar=True, presupuesto=presupuesto):
         atendidos.add(previa.id)
         if previa.estado == 'APROBADA':
+            # ── Dos tarjetas en el mismo ticket ─────────────────────────────
+            # Caso real: el cliente paga $5.000 con una tarjeta y $7.000 con
+            # otra, las dos por Mercado Pago. La primera queda APROBADA sin
+            # consumir (se consume recién al cerrar la venta) y bloqueaba la
+            # segunda con "ya hay un cobro APROBADO". Si el POS dice que esa
+            # aprobada ya está cargada como pago del ticket, no es un cobro
+            # perdido: se deja en `atendidos` (no bloquea el candado) y se
+            # sigue. Una aprobada que el POS NO tiene cargada sigue bloqueando
+            # exactamente como antes: esa sí es plata sin respaldo.
+            ids_previa = {str(previa.payment_id or '').strip(),
+                          str(previa.payment_id_mp or '').strip()} - {''}
+            if cargados and ids_previa & cargados:
+                continue
             raise CobroEnCursoError(
                 f'Ya hay un cobro APROBADO de ${previa.monto:,} en Mercado Pago para '
                 f'este ticket (pago {previa.payment_id_mp or previa.payment_id or previa.external_reference}). '
@@ -1526,7 +1552,7 @@ def _enviar_orden(transaccion, body, sufijo='', _reintento=False):
 
 
 def crear_orden(config, correlativo, monto, descripcion='', canal='QR', usuario=None,
-                permitir_en_curso=False):
+                permitir_en_curso=False, payment_ids_cargados=None):
     """Crea el cobro en MP (Orders API) y su TransaccionMercadoPago local.
 
     Devuelve **(transaccion, qr_data)**, igual que siempre. Dos diferencias
@@ -1544,6 +1570,11 @@ def crear_orden(config, correlativo, monto, descripcion='', canal='QR', usuario=
     `permitir_en_curso=True` salta el guard de cobro previo. NOTA: ningún
     llamador lo usa; los cobros PRUEBA-/DIRECTO- de la pestaña de gestión se
     saltan el guard por PREFIJOS_CORRELATIVO_SIN_TICKET, no por este flag.
+
+    `payment_ids_cargados`: payment_id / payment_id_mp de los cobros MP que el
+    POS ya cargó como pagos de este ticket (segunda tarjeta del mismo ticket).
+    Solo afecta a la rama APROBADA del guard; ver
+    _resolver_previos_antes_de_cobrar.
     """
     # ── FASE 0: validación pura. Sin fila, sin candado, sin red ─────────────
     # Cualquier error de CONFIGURACIÓN tiene que reventar acá: si dejara fila,
@@ -1570,7 +1601,9 @@ def crear_orden(config, correlativo, monto, descripcion='', canal='QR', usuario=
     # ── FASE 1: resolver lo previo (hace red, va FUERA del candado) ─────────
     ids_atendidos = set()
     if not permitir_en_curso:
-        ids_atendidos = _resolver_previos_antes_de_cobrar(config, correlativo, presupuesto)
+        ids_atendidos = _resolver_previos_antes_de_cobrar(
+            config, correlativo, presupuesto,
+            payment_ids_cargados=payment_ids_cargados)
 
     # ── FASE 2: reservar la fila (candado corto, sin red) ──────────────────
     transaccion = _reservar_fila(config, correlativo, monto, canal, usuario,
@@ -2477,12 +2510,23 @@ def devolver_por_nc(dte, monto, usuario=None):
 
 # ==================== GUARD SERVER-SIDE ====================
 
-def consumir_transaccion_aprobada(sucursal_id, correlativo, monto, detalle_pago=None):
+def consumir_transaccion_aprobada(sucursal_id, correlativo, monto, detalle_pago=None,
+                                  payment_id=None):
     """Guard de registrar_pagos_ticket: busca una VENTA APROBADA no consumida
     para (sucursal, correlativo) con monto suficiente y la marca consumida
-    atómicamente. Devuelve la transacción o None si no existe."""
+    atómicamente. Devuelve la transacción o None si no existe.
+
+    `payment_id` (el `voucher` del pago: payment_id o payment_id_mp del cobro)
+    manda cuando viene. Caso de las dos tarjetas: filas de $7.000 (creada
+    primero) y $5.000 para el mismo ticket; si el pago de $5.000 llega
+    primero, "la más antigua con monto suficiente" consumía la de $7.000 y el
+    pago de $7.000 se quedaba sin fila que lo respalde. Con el id se consume
+    la fila que de verdad corresponde y, si no calza ninguna, se cae al
+    criterio de siempre.
+    """
+    pid = str(payment_id or '').strip()
     with transaction.atomic():
-        transaccion = (
+        candidatas = (
             TransaccionMercadoPago.objects.select_for_update()
             .filter(
                 sucursal_id=sucursal_id,
@@ -2493,8 +2537,13 @@ def consumir_transaccion_aprobada(sucursal_id, correlativo, monto, detalle_pago=
                 monto__gte=int(monto),
             )
             .order_by('creado_en')
-            .first()
         )
+        transaccion = None
+        if pid:
+            transaccion = candidatas.filter(
+                Q(payment_id=pid) | Q(payment_id_mp=pid)).first()
+        if transaccion is None:
+            transaccion = candidatas.first()
         if not transaccion:
             return None
         transaccion.consumida = True
@@ -2634,6 +2683,9 @@ def resumen_cobro(trx):
         # del guard de cierre.
         'incierto': es_incierta(trx),
         'fase': fase_cobro(trx),
+        # N° del panel de MP (llega por webhook): el POS lo usa para reconocer
+        # por voucher un cobro que ya cargó como pago (segunda tarjeta).
+        'payment_id_mp': trx.payment_id_mp,
         'bloquea_cierre': not (es_incierta(trx)
                                and _edad_seg(trx) > MP_INCIERTA_BLOQUEO_CIERRE_SEG),
     }

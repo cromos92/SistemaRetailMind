@@ -572,19 +572,35 @@ class GestionTabMPTests(BaseMPTest):
         self.assertEqual(resp.status_code, 403)
 
     def test_guardar_config_admin_ok(self):
+        """Una segunda caja de la sucursal NO destrona a la principal (la de
+        BaseMPTest) salvo que el admin la marque con es_principal=1; y la
+        sucursal nunca queda con dos principales."""
         self.client.force_login(self.admin)
-        resp = self.client.post('/app/pos/mercadopago/gestion/config/', {
+        datos = {
             'sucursal_id': self.sucursal.id,
             'nombre': 'Caja test',
             'external_store_id': 'NICK2',
             'external_pos_id': 'NICK2CAJA1',
             'habilitado': '1',
-        })
+        }
+        resp = self.client.post('/app/pos/mercadopago/gestion/config/', datos)
         self.assertEqual(resp.status_code, 200, resp.content)
         cfg = MercadoPagoConfig.objects.get(sucursal=self.sucursal, nombre='Caja test')
         self.assertTrue(cfg.habilitado)
-        self.assertTrue(cfg.es_principal)
         self.assertEqual(cfg.external_pos_id, 'NICK2CAJA1')
+        self.assertFalse(cfg.es_principal)
+        self.config.refresh_from_db()
+        self.assertTrue(self.config.es_principal)
+
+        resp = self.client.post('/app/pos/mercadopago/gestion/config/',
+                                dict(datos, config_id=cfg.id, es_principal='1'))
+        self.assertEqual(resp.status_code, 200, resp.content)
+        cfg.refresh_from_db()
+        self.config.refresh_from_db()
+        self.assertTrue(cfg.es_principal)
+        self.assertFalse(self.config.es_principal)
+        self.assertEqual(MercadoPagoConfig.objects.filter(
+            sucursal=self.sucursal, es_principal=True).count(), 1)
 
     def test_datos_endpoint(self):
         self.client.force_login(self.admin)

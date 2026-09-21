@@ -45,6 +45,31 @@ def _sucursal_sesion(request):
 
 # ==================== COBRO DESDE EL POS ====================
 
+# Tope de ids de pago que el POS puede declarar como "ya cargados" en un
+# ticket: nadie paga con más de 20 tarjetas y así el campo no sirve para
+# meter basura en el guard.
+_MAX_PAGOS_MP_CARGADOS = 20
+
+
+def _payment_ids_cargados(crudo):
+    """Sanea `pagos_mp_cargados` del body: lista (o string separado por comas)
+    de vouchers. Devuelve set de str no vacíos, ≤64 chars, máximo 20."""
+    if crudo is None:
+        return None
+    if isinstance(crudo, str):
+        crudo = crudo.split(',')
+    if not isinstance(crudo, (list, tuple, set)):
+        return None
+    limpios = []
+    for v in crudo:
+        s = str(v or '').strip()
+        if s and len(s) <= 64 and s not in limpios:
+            limpios.append(s)
+        if len(limpios) >= _MAX_PAGOS_MP_CARGADOS:
+            break
+    return set(limpios)
+
+
 @api_view(['POST'])
 @login_required
 def crear_pago_qr_mp(request):
@@ -66,11 +91,15 @@ def crear_pago_qr_mp(request):
         return Response({'success': False, 'error': 'Monto inválido'},
                         status=status.HTTP_400_BAD_REQUEST)
     canal = str(request.data.get('canal') or 'QR').upper()
+    # Cobros MP que el POS ya cargó como pagos de este ticket (segunda tarjeta
+    # del mismo ticket). Sin el campo, el guard se comporta igual que siempre.
+    pagos_mp_cargados = _payment_ids_cargados(request.data.get('pagos_mp_cargados'))
     try:
         config = mp.obtener_config(sucursal_id)
         transaccion, qr_data = mp.crear_orden(
             config, correlativo, monto, canal=canal,
             descripcion=f'Venta {correlativo}', usuario=request.user,
+            payment_ids_cargados=pagos_mp_cargados,
         )
     except MercadoPagoError as e:
         cuerpo = {'success': False, 'error': e.mensaje}
@@ -176,6 +205,73 @@ def cancelar_pago_mp(request, transaccion_id):
     except MercadoPagoError as e:
         return Response({'success': False, 'error': e.mensaje, 'estado': transaccion.estado},
                         status=status.HTTP_400_BAD_REQUEST)
+    return Response({'success': True, 'estado': transaccion.estado})
+
+
+@api_view(['POST'])
+@login_required
+def expirar_pago_mp(request, transaccion_id):
+    """POST /app/pos/mercadopago/expirar/<id>/ — «Marcar expirado en el sistema».
+
+    Caso real (PAO4, 21-09): un cobro Point de $3.333 quedó PENDIENTE en la
+    pantalla de la máquina; MP no lo deja cancelar por API (409 cannot_cancel
+    mientras está at_terminal) y reiniciar la máquina no sirve porque la orden
+    vive en MP y la vuelve a bajar. El cajero necesita poder sacarla del
+    sistema. Esto marca la fila EXPIRADA (estado final: deja de bloquear el
+    ticket y de contar como viva), pero NO toca la orden en MP: hay que
+    cancelarla igual en la máquina. Es reversible: si el cliente paga igual,
+    _aplicar_estado permite FINAL→APROBADA y el webhook la revive.
+
+    Solo filas CREADA/PENDIENTE CON order_id. Una fila sin order_id (incierta
+    o reserva) NO se puede dar por muerta a ciegas: es la protección contra el
+    doble cobro del 13-09 y acá no se relaja.
+    """
+    transaccion = _transaccion_de_sesion(request, transaccion_id)
+    if not transaccion:
+        return Response({'success': False, 'error': 'Transacción no encontrada'},
+                        status=status.HTTP_404_NOT_FOUND)
+    msg_aprobada = ('El cliente alcanzó a pagar: el cobro quedó APROBADO. '
+                    'Corresponde devolución, no expirarlo.')
+    if transaccion.estado == 'APROBADA':
+        return Response({'success': False, 'error': msg_aprobada, 'estado': 'APROBADA'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    if transaccion.estado in mp.ESTADOS_FINALES_MP:
+        return Response({'success': True, 'estado': transaccion.estado})
+    if transaccion.estado not in ('CREADA', 'PENDIENTE'):
+        return Response({'success': False, 'estado': transaccion.estado,
+                         'error': f'El cobro está {transaccion.estado}: no se puede expirar a mano.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    if not transaccion.order_id:
+        return Response({
+            'success': False, 'estado': transaccion.estado,
+            'error': ('No pudimos confirmar con Mercado Pago si este cobro existe, '
+                      'así que no se puede dar por expirado. Usa «Liberar máquina» '
+                      'en Máquinas POS o espera unos minutos a que se resuelva solo.'),
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # Última mirada a MP antes de cerrarla: si el cliente pagó mientras tanto,
+    # no se puede expirar. Sin red se decide con lo que hay en la base.
+    try:
+        transaccion = mp.consultar_estado(transaccion, forzar=True)
+    except Exception:  # noqa: BLE001 — sin red igual se sigue con la BD
+        logger.warning("MP: no se pudo consultar %s antes de expirarla a mano",
+                       transaccion.external_reference)
+    if transaccion.estado == 'APROBADA':
+        return Response({'success': False, 'error': msg_aprobada, 'estado': 'APROBADA'},
+                        status=status.HTTP_400_BAD_REQUEST)
+    if transaccion.estado in mp.ESTADOS_FINALES_MP:
+        return Response({'success': True, 'estado': transaccion.estado})
+
+    usuario = getattr(request.user, 'username', '') or 'sistema'
+    transaccion = mp._aplicar_estado(
+        transaccion, 'EXPIRADA',
+        detalle=f'Expirada a mano por {usuario}; cancélala en la máquina')
+    logger.warning(
+        "MP: cobro %s (id=%s, $%s, ticket %s) marcado EXPIRADO a mano por %s; "
+        "la orden %s sigue en MP hasta cancelarla en la máquina",
+        transaccion.external_reference, transaccion.id, transaccion.monto,
+        transaccion.correlativo_ticket, usuario, transaccion.order_id,
+    )
     return Response({'success': True, 'estado': transaccion.estado})
 
 

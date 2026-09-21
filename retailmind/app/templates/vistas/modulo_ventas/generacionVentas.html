@@ -12701,6 +12701,23 @@ body {
     }
 
     /**
+     * Vouchers (payment_id) de los pagos Mercado Pago integrados que YA están
+     * cargados en el ticket. Se mandan a /pos/mercadopago/qr/crear/ para que
+     * el guard del servidor no confunda la primera tarjeta con un cobro
+     * huérfano: el cliente que paga $5.000 con una tarjeta y $7.000 con otra
+     * quedaba bloqueado en la segunda con "ya hay un cobro APROBADO".
+     * origen_pago vacío cuenta como integrado (el servidor lo asume así).
+     */
+    function _vouchersMPCargados() {
+        return pagosActuales
+            .filter(p => String(p.metodo_pago || '').startsWith('MP_')
+                      && (!p.origen_pago || p.origen_pago === 'POS_INTEGRADO')
+                      && String(p.voucher || '').trim())
+            .map(p => String(p.voucher).trim());
+    }
+    window._vouchersMPCargados = _vouchersMPCargados;
+
+    /**
      * Qué hacer con la respuesta de /pos/mercadopago/qr/crear/.
      * Devuelve true solo si corresponde abrir el modal de espera normal.
      *
@@ -12765,11 +12782,20 @@ body {
         if (!data || !data.success || !(data.cobros || []).length) return;
         // Los cobros que los pagos MP ya cargados explican no son problema: es
         // el caso normal de volver al paso 3 después de cobrar en la máquina.
-        // Mismo emparejamiento greedy que hace el guard del servidor.
-        const pendientesMP = (data.cobros || []).filter(c => c.aprobada)
+        // Primero por voucher (con dos tarjetas en el ticket, la primera
+        // aprobada volvía a ofrecerse con «Agregar al ticket» al cerrar la
+        // venta); lo que no calza por voucher, con el mismo emparejamiento
+        // greedy por monto que hace el guard del servidor.
+        const vouchersCargados = _vouchersMPCargados();
+        const _idsCobro = c => [c.payment_id, c.payment_id_mp]
+            .map(v => String(v || '').trim()).filter(Boolean);
+        const pendientesMP = (data.cobros || [])
+            .filter(c => c.aprobada && !_idsCobro(c).some(v => vouchersCargados.includes(v)))
             .sort((a, b) => a.monto - b.monto);
+        const idsAprobados = (data.cobros || []).filter(c => c.aprobada).flatMap(_idsCobro);
         pagosActuales
-            .filter(p => String(p.metodo_pago || '').startsWith('MP_'))
+            .filter(p => String(p.metodo_pago || '').startsWith('MP_')
+                      && !idsAprobados.includes(String(p.voucher || '').trim()))
             .map(p => Number(p.monto))
             .sort((a, b) => b - a)
             .forEach(monto => {
@@ -12893,7 +12919,8 @@ body {
             const resp = await fetch('/app/pos/mercadopago/qr/crear/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-                body: JSON.stringify({ correlativo: correlativoMP, monto: montoCobrar })
+                body: JSON.stringify({ correlativo: correlativoMP, monto: montoCobrar,
+                                       pagos_mp_cargados: _vouchersMPCargados() })
             });
             creacion = await resp.json();
         } catch (e) {
@@ -13076,7 +13103,8 @@ body {
             const resp = await fetch('/app/pos/mercadopago/qr/crear/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
-                body: JSON.stringify({ correlativo: correlativoMP, monto: montoCobrar, canal: 'POINT' })
+                body: JSON.stringify({ correlativo: correlativoMP, monto: montoCobrar, canal: 'POINT',
+                                       pagos_mp_cargados: _vouchersMPCargados() })
             });
             creacion = await resp.json();
         } catch (e) {

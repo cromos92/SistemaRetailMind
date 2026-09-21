@@ -5082,8 +5082,13 @@ def registrar_pagos_ticket(request, correlativo):
         # carrera falta, se loggea y la conciliación diaria lo levanta.
         if _detalle_mp is not None and origen_pago_val == 'POS_INTEGRADO' and MP_VALIDAR_PAGO_SERVER:
             from .services import mercadopago_service as _mp_srv
+            # El voucher es el payment_id del cobro MP: con dos tarjetas en el
+            # mismo ticket (filas de $7.000 y $5.000) elegir "la más antigua
+            # con monto suficiente" cruzaba las filas y dejaba un pago sin
+            # respaldo; con el id se consume la que corresponde.
             _consumida = _mp_srv.consumir_transaccion_aprobada(
                 ticket.sucursal_id, correlativo, monto, detalle_pago=_detalle_mp,
+                payment_id=(pago.get('voucher') or '').strip(),
             )
             if _consumida is None:
                 logger.error(
