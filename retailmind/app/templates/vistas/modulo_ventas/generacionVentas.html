@@ -692,16 +692,13 @@
                                     </div>
                                 </div>
 
-                                <!-- (c) Métodos de pago: B (52px, tres identidades) · C (44px, manuales) · D (44px, especiales) -->
+                                <!-- (c) Métodos de pago: B (52px, principales: Efectivo · Mercado Pago) · C (44px, MP manual débito/crédito + Transf. + Internet)
+                                     · D (44px, especiales + MP otro) · E (40px, Transbank: POS integrado + débito/crédito manual F6/F7, secundario) -->
                                 <div class="pv-pay">
                                     <div class="pv-pay-b">
                                         <button class="btn pos-pago-btn pv-pago pv-pago-efectivo" type="button" onclick="agregarPago('EFECTIVO')" id="btnPagoEfectivo" title="Pago en efectivo (F5)">
                                             <span class="pv-pago-main"><i class="ri-money-dollar-circle-line"></i><span class="pv-pago-label">Efectivo</span></span>
                                             <span class="pv-pago-sub"><kbd class="pos-kbd-badge">F5</kbd></span>
-                                        </button>
-                                        <button class="btn pos-pago-btn pv-pago pv-pago-tbk" type="button" onclick="pagarConPOSTransbank()" id="btn-pos-transbank" title="Cobro automático vía POS Transbank Web Serial (integrado)">
-                                            <span class="pv-pago-main"><i class="ri-bank-card-line"></i><span class="pv-pago-label">POS TBK</span></span>
-                                            <span class="pv-pago-sub">Transbank</span>
                                         </button>
                                         {% if mp_point_habilitado %}
                                         {# Con máquina Point, ella es el botón MP principal; el QR queda en la fila D #}
@@ -718,11 +715,15 @@
                                     </div>
 
                                     <div class="pv-pay-c">
-                                        <button class="btn pos-pago-btn pv-pago pv-pago-out" type="button" onclick="agregarPago('TBK_DEBITO_POS')" id="btnPagoDebito" title="Débito manual — ingreso manual de voucher (F6)">
-                                            <span class="pv-pago-main"><i class="ri-bank-card-line"></i><span class="pv-pago-label">Débito</span></span><kbd class="pos-kbd-badge">F6</kbd>
+                                        {# MP Débito / MP Crédito: cobro YA hecho en la máquina Point / Point Tap, se registra con el N° de operación del voucher. #}
+                                        {# Es el MP_MANUAL con el tipo de tarjeta preseleccionado: cae en el bucket Mercado Pago de la cuadratura, nunca en Transbank. #}
+                                        <button class="btn pos-pago-btn pv-pago pv-pago-out pv-pago-mpman" type="button" onclick="agregarPago('MP_MANUAL', 'debit_card')" id="btnPagoMpDebito" title="Mercado Pago débito — registrar un cobro ya hecho en la máquina Point con el N° de operación del voucher (cuadra en Mercado Pago)">
+                                            <span class="pv-pago-main"><i class="ri-bank-card-line"></i><span class="pv-pago-label">MP Débito</span></span>
+                                            <span class="pv-pago-sub">MP · N° op</span>
                                         </button>
-                                        <button class="btn pos-pago-btn pv-pago pv-pago-out" type="button" onclick="agregarPago('TBK_CREDITO_POS')" id="btnPagoCredito" title="Crédito manual — ingreso manual de voucher (F7)">
-                                            <span class="pv-pago-main"><i class="ri-bank-card-2-line"></i><span class="pv-pago-label">Crédito</span></span><kbd class="pos-kbd-badge">F7</kbd>
+                                        <button class="btn pos-pago-btn pv-pago pv-pago-out pv-pago-mpman" type="button" onclick="agregarPago('MP_MANUAL', 'credit_card')" id="btnPagoMpCredito" title="Mercado Pago crédito — registrar un cobro ya hecho en la máquina Point con el N° de operación del voucher (cuadra en Mercado Pago)">
+                                            <span class="pv-pago-main"><i class="ri-bank-card-2-line"></i><span class="pv-pago-label">MP Crédito</span></span>
+                                            <span class="pv-pago-sub">MP · N° op</span>
                                         </button>
                                         <button class="btn pos-pago-btn pv-pago pv-pago-out" type="button" onclick="agregarPago('TRANSFERENCIA')" id="btnPagoTransferencia" title="Transferencia bancaria (F8)">
                                             <span class="pv-pago-main"><i class="ri-exchange-line"></i><span class="pv-pago-label">Transf.</span></span><kbd class="pos-kbd-badge">F8</kbd>
@@ -751,12 +752,27 @@
                                             <span class="pv-pago-main"><i class="ri-qr-code-line"></i><span class="pv-pago-label">MP QR</span></span>
                                         </button>
                                         {% endif %}
-                                        <!-- Contingencia: cobro de Mercado Pago hecho FUERA del POS (Point Tap, app de MP,
-                                             o un cobro que la maquina aprobo y el POS no capturo). Va al FINAL para no mover
-                                             ningun boton de sitio, y siempre visible: no depende de que la sucursal tenga
-                                             MP integrado. ({# #} de Django es de UNA linea: en varias se imprime literal.) -->
-                                        <button class="btn pos-pago-btn pv-pago pv-pago-out pv-pago-manual" type="button" onclick="agregarPago('MP_MANUAL')" id="btnPagoMpManual" title="Registrar un cobro de Mercado Pago ya hecho fuera del sistema (Point Tap, app MP, o cobro que la maquina aprobo y el POS no alcanzo a capturar). Pide el N. de operacion.">
-                                            <span class="pv-pago-main"><i class="ri-smartphone-line"></i><span class="pv-pago-label">MP<br>manual</span></span>
+                                        <!-- MP otro: cobro de Mercado Pago hecho FUERA del POS que no es debito ni credito
+                                             (dinero en cuenta, app de MP, link de pago, o cobro que la maquina aprobo y el POS
+                                             no capturo). Debito y credito tienen su boton en la fila C. Siempre visible: no
+                                             depende de que la sucursal tenga MP integrado. ({# #} de Django es de UNA linea.) -->
+                                        <button class="btn pos-pago-btn pv-pago pv-pago-out pv-pago-manual" type="button" onclick="agregarPago('MP_MANUAL')" id="btnPagoMpManual" title="Registrar otro cobro de Mercado Pago ya hecho fuera del sistema (dinero en cuenta, app MP, link de pago, o cobro que la maquina aprobo y el POS no alcanzo a capturar). Pide el N. de operacion. Para debito o credito usa MP Debito / MP Credito.">
+                                            <span class="pv-pago-main"><i class="ri-smartphone-line"></i><span class="pv-pago-label">MP<br>otro</span></span>
+                                        </button>
+                                    </div>
+
+                                    <!-- (E) Transbank, secundario y al final: POS integrado + débito/crédito MANUAL con voucher TBK.
+                                         F6/F7 conservan exactamente su función de siempre (agregarPago TBK_*_POS): solo cambió el sitio y el texto. -->
+                                    <div class="pv-pay-e">
+                                        <span class="pv-pay-e-label" title="Cobros con máquina Transbank: cuadran en el bucket Transbank, no en Mercado Pago">Transbank</span>
+                                        <button class="btn pos-pago-btn pv-pago pv-pago-out" type="button" onclick="pagarConPOSTransbank()" id="btn-pos-transbank" title="Transbank integrado — cobro automático vía POS Transbank Web Serial">
+                                            <span class="pv-pago-main"><i class="ri-bank-card-line"></i><span class="pv-pago-label">POS TBK</span></span>
+                                        </button>
+                                        <button class="btn pos-pago-btn pv-pago pv-pago-out" type="button" onclick="agregarPago('TBK_DEBITO_POS')" id="btnPagoDebito" title="Transbank débito MANUAL — voucher de la máquina Transbank, registra como Transbank (F6). Si el cobro fue en la máquina de Mercado Pago usa MP Débito.">
+                                            <span class="pv-pago-main"><i class="ri-bank-card-line"></i><span class="pv-pago-label">TBK Débito</span></span><kbd class="pos-kbd-badge">F6</kbd>
+                                        </button>
+                                        <button class="btn pos-pago-btn pv-pago pv-pago-out" type="button" onclick="agregarPago('TBK_CREDITO_POS')" id="btnPagoCredito" title="Transbank crédito MANUAL — voucher de la máquina Transbank, registra como Transbank (F7). Si el cobro fue en la máquina de Mercado Pago usa MP Crédito.">
+                                            <span class="pv-pago-main"><i class="ri-bank-card-2-line"></i><span class="pv-pago-label">TBK Crédito</span></span><kbd class="pos-kbd-badge">F7</kbd>
                                         </button>
                                     </div>
 
@@ -1706,7 +1722,7 @@
   --pv-fs-xs:11px; --pv-fs-sm:12px; --pv-fs-md:13px; --pv-fs-base:14px; --pv-fs-lg:16px; --pv-fs-xl:20px; --pv-fs-hero:30px;
   --pv-ctrl:44px; --pv-ctrl-lg:52px; --pv-ctrl-xl:56px; --pv-row:52px; --pv-gap:6px; --pv-gap-lg:10px;
   /* Alturas de la columna de cobro (paso 3). Se reducen bajo 700px de alto y crecen en FHD. */
-  --pv-h-f4:64px; --pv-h-cta:72px; --pv-h-payb:68px; --pv-h-payc:56px; --pv-h-payd:52px;
+  --pv-h-f4:64px; --pv-h-cta:72px; --pv-h-payb:68px; --pv-h-payc:56px; --pv-h-payd:52px; --pv-h-paye:40px;
   --pv-radius:var(--nexo-radius-md); --pv-radius-lg:var(--nexo-radius-lg);
   /* Derivados semánticos aptos para TEXTO (AA ≥ 4.5 sobre blanco/tinte) */
   --pv-success-dark:#00875F; --pv-warning-dark:#9A6400; --pv-error-dark:#D93636;
@@ -1716,8 +1732,10 @@
 @media (min-width:1401px) and (min-height:801px){ :root{
   --pv-fs-xs:12px; --pv-fs-sm:13px; --pv-fs-md:14px; --pv-fs-base:15px; --pv-fs-lg:17px; --pv-fs-xl:22px; --pv-fs-hero:38px;
   --pv-ctrl:48px; --pv-ctrl-lg:56px; --pv-ctrl-xl:64px; --pv-row:60px; --pv-gap:8px; --pv-gap-lg:14px;
-  --pv-h-f4:72px; --pv-h-cta:80px; --pv-h-payb:76px; --pv-h-payc:62px; --pv-h-payd:58px;
+  --pv-h-f4:72px; --pv-h-cta:80px; --pv-h-payb:76px; --pv-h-payc:62px; --pv-h-payd:58px; --pv-h-paye:48px;
 } }
+/* Kiosk táctil (pos-kiosk.css no escala estas variables): la fila E no baja del piso de 48px sea cual sea la resolución */
+body.pos-kiosk{--pv-h-paye:48px}
 
 /* ==================== PV · SHELL (ancla #pvApp = .page-content del POS) ====================
    Toda regla nueva del POS se escribe `#pvApp .pv-x …` (1,n,0): gana a `body.pos-kiosk .x`
@@ -2218,7 +2236,7 @@ body .ai-fab{width:48px;height:48px;bottom:8px;right:12px}
 
 /* (c) Métodos de pago */
 #pvApp .pv-pay{flex:0 0 auto;display:flex;flex-direction:column;gap:var(--pv-gap)}
-#pvApp .pv-pay-b,#pvApp .pv-pay-c,#pvApp .pv-pay-d{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:var(--pv-gap)}
+#pvApp .pv-pay-b,#pvApp .pv-pay-c,#pvApp .pv-pay-d,#pvApp .pv-pay-e{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:var(--pv-gap)}
 #pvApp .pv-pay .btn{margin:0} /* anula body.pos-kiosk .btn + .btn{margin-left:.5rem} */
 #pvApp .pv-pago{display:flex;align-items:center;justify-content:center;gap:4px;min-width:0;padding:0 4px;line-height:1.1;white-space:normal;
   background:#fff;border:2px solid var(--nexo-gray-300);color:var(--nexo-gray-700);border-radius:var(--pv-radius);font-weight:600;
@@ -2227,7 +2245,7 @@ body .ai-fab{width:48px;height:48px;bottom:8px;right:12px}
 #pvApp .pv-pago i{font-size:20px;line-height:1;flex:0 0 auto}
 #pvApp .pv-pago-label{font-size:var(--pv-fs-md);font-weight:600;min-width:0}
 #pvApp .pv-pago kbd{margin-left:2px;flex:0 0 auto}
-/* Fila B (52px): ícono + label 13px arriba, sub-label 11px (nombre del terminal / F5) abajo. Tres identidades NEXO. */
+/* Fila B (52px): ícono + label 13px arriba, sub-label 11px (nombre del terminal / F5) abajo. Dos botones anchos: Efectivo y Mercado Pago. */
 #pvApp .pv-pay-b .pv-pago{flex-direction:column;gap:3px;height:var(--pv-h-payb);min-height:var(--pv-h-payb);padding:0 6px}
 #pvApp .pv-pay-b .pv-pago i{font-size:26px}
 #pvApp .pv-pay-b .pv-pago-label{font-size:calc(var(--pv-fs-lg) + 1px);font-weight:700;white-space:nowrap}
@@ -2250,6 +2268,21 @@ body .ai-fab{width:48px;height:48px;bottom:8px;right:12px}
 #pvApp .pv-pay-c .pv-pago-main{overflow:hidden}
 #pvApp .pv-pay-c .pv-pago-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #pvApp .pv-pay-c .pv-pago kbd{margin-left:0;padding:0 4px}
+/* MP Débito / MP Crédito (fila C): label arriba + sub-etiqueta «MP · N° op» abajo; el ícono lleva el azul MP
+   para que se lea como Mercado Pago sin salir del outline gris de la fila. */
+#pvApp .pv-pay-c .pv-pago-mpman{flex-direction:column;gap:1px;padding:0 4px}
+#pvApp .pv-pay-c .pv-pago-mpman i{color:var(--nexo-primary)}
+#pvApp .pv-pay-c .pv-pago-mpman .pv-pago-sub{display:block;height:auto;font-size:var(--pv-fs-xs);font-weight:600;text-transform:none;letter-spacing:0;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+/* Fila E (40px, secundaria): rótulo «Transbank» + POS integrado + débito/crédito manual TBK (F6/F7). Borde más suave que
+   el resto para que se lea como secundaria; en kiosk la variable sube a 48px. */
+#pvApp .pv-pay-e{grid-template-columns:max-content repeat(3,minmax(0,1fr));align-items:center}
+#pvApp .pv-pay-e-label{font-size:var(--pv-fs-xs);font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--nexo-gray-700);
+  padding:0 2px;white-space:nowrap;line-height:1}
+#pvApp .pv-pay-e .pv-pago{height:var(--pv-h-paye);min-height:var(--pv-h-paye);gap:4px;padding:0 4px;border-width:1px;border-color:var(--nexo-gray-300);color:var(--nexo-gray-700)}
+#pvApp .pv-pay-e .pv-pago i{font-size:16px;color:var(--nexo-gray-500)}
+#pvApp .pv-pay-e .pv-pago-label{font-size:var(--pv-fs-md);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pvApp .pv-pay-e .pv-pago-main{min-width:0;overflow:hidden}
+#pvApp .pv-pay-e .pv-pago kbd{margin-left:0;padding:0 4px}
 #pvApp .pv-pay-d .pv-pago{gap:5px;padding:0 4px} /* con la columna al 51% hay ~107px por botón a 1366 */
 #pvApp .pv-pay-d .pv-pago-label{font-size:var(--pv-fs-md);font-weight:600}
 #pvApp .pv-pay-d .pv-pago-label{text-align:center} /* la fila D ya va a 2 lineas: centrada queda simetrica con la C */
@@ -2264,7 +2297,7 @@ body .ai-fab{width:48px;height:48px;bottom:8px;right:12px}
 /* 1366x633 (Chrome maximizado + barra de tareas): el alto útil de la columna es ~444px. Se recorta un punto
    cada fila para que 'Pagos registrados' conserve 2 filas visibles; nada baja del piso táctil de 44px. */
 @media (max-height:700px){
-  :root{--pv-h-f4:56px;--pv-h-cta:64px;--pv-h-payb:58px;--pv-h-payc:48px;--pv-h-payd:44px}
+  :root{--pv-h-f4:56px;--pv-h-cta:64px;--pv-h-payb:58px;--pv-h-payc:48px;--pv-h-payd:44px;--pv-h-paye:40px}
   #pvApp .pos-hero-amount{font-size:calc(var(--pv-fs-hero) + 14px)} /* 44px a 15" */
   #pvApp .pv-hero-card > .card-body{padding:6px 10px}
   #pvApp .pv-pago-item{min-height:calc(var(--pv-ctrl) + 8px)} /* 52px: el ultimo pago cabe entero en el hueco que queda */
@@ -6354,11 +6387,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // === FUNCIONES DE PAGOS ===
 
-    function agregarPago(metodo) {
+    // tipoPreset (opcional, solo MP_MANUAL): 'debit_card' | 'credit_card' — preselecciona el tipo de tarjeta
+    // (botones MP Débito / MP Crédito de la fila C). confirmarPago sigue traduciendo a MP_POINT_DEBITO/CREDITO.
+    function agregarPago(metodo, tipoPreset) {
         document.getElementById('pagoMetodo').value = metodo;
         // PV D-3: nombre humano del método en el subheader del modal (#pagoMetodo sigue siendo la fuente para el JS)
         var _pvNm = document.getElementById('pvPagoMetodoNombre');
-        if (_pvNm) _pvNm.textContent = obtenerNombreMetodoPago(metodo);
+        if (_pvNm) _pvNm.textContent = obtenerNombreMetodoPago(metodo)
+            + (metodo === 'MP_MANUAL' && tipoPreset === 'debit_card' ? ' · Débito'
+               : metodo === 'MP_MANUAL' && tipoPreset === 'credit_card' ? ' · Crédito' : '');
 
         // Mostrar/ocultar campos según el método
         const campoTarjeta = document.getElementById('campoTarjeta');
@@ -6411,6 +6448,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 <option value="credit_card">Crédito</option>
                 <option value="account_money">Dinero en cuenta MP</option>
             `;
+            if (tipoPreset) {
+                // MP Débito / MP Crédito: el tipo viene decidido por el botón; se deja visible por si hay que corregirlo
+                selectTipoTarjeta.value = tipoPreset;
+                labelTarjeta.textContent = 'Tipo de tarjeta';
+            }
         } else if (metodo === 'VENTA_INTERNET') {
             campoTarjeta.style.display = 'block';
             campoVoucher.style.display = 'block';
@@ -11089,8 +11131,8 @@ body {
             'CREDITO_TRABAJADOR': 'Crédito Trabajador',
             'CREDITO_EXTERNO': 'Crédito Externo',
             'TBK_POS_INTEGRADO': 'POS Transbank (Integrado)',
-            'TBK_DEBITO_POS': 'Débito Manual',
-            'TBK_CREDITO_POS': 'Crédito Manual',
+            'TBK_DEBITO_POS': 'Transbank Débito (manual)',
+            'TBK_CREDITO_POS': 'Transbank Crédito (manual)',
             'TBK_PREPAGO_POS': 'Prepago Manual',
             'MP_MANUAL': 'Mercado Pago — registro manual',
             'MP_QR': 'Mercado Pago QR',
@@ -14182,8 +14224,8 @@ if (typeof Transbank !== 'undefined' && Transbank.POS) {
                 <small class="text-muted fw-bold text-uppercase">Pagos (Paso 3)</small>
                 <div class="d-flex justify-content-between py-1 border-bottom"><span>Pago rápido efectivo total</span><kbd>F4</kbd></div>
                 <div class="d-flex justify-content-between py-1 border-bottom"><span>Efectivo</span><kbd>F5</kbd></div>
-                <div class="d-flex justify-content-between py-1 border-bottom"><span>Débito</span><kbd>F6</kbd></div>
-                <div class="d-flex justify-content-between py-1 border-bottom"><span>Crédito</span><kbd>F7</kbd></div>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>TBK Débito (Transbank manual)</span><kbd>F6</kbd></div>
+                <div class="d-flex justify-content-between py-1 border-bottom"><span>TBK Crédito (Transbank manual)</span><kbd>F7</kbd></div>
                 <div class="d-flex justify-content-between py-1 border-bottom"><span>Transferencia</span><kbd>F8</kbd></div>
                 <div class="d-flex justify-content-between py-1 border-bottom"><span>Venta Internet</span><kbd>F9</kbd></div>
             </div>
