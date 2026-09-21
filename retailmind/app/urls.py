@@ -546,6 +546,7 @@ from .views_mercadopago import (
     gestion_resumen_dia_mp,
     gestion_cobrar_terminal_mp,
     gestion_imprimir_cierre_terminal_mp,
+    gestion_liberar_terminal_mp,
     gestion_mi_caja_mp,
 )
 from .views_dashboards_kpi import (
@@ -1184,6 +1185,7 @@ urlpatterns = [
     path('pos/mercadopago/gestion/terminal/cobrar/', gestion_cobrar_terminal_mp, name='mp_gestion_terminal_cobrar'),
     path('pos/mercadopago/gestion/mi-caja/', gestion_mi_caja_mp, name='mp_gestion_mi_caja'),
     path('pos/mercadopago/gestion/terminal/imprimir-cierre/', gestion_imprimir_cierre_terminal_mp, name='mp_gestion_terminal_imprimir'),
+    path('pos/mercadopago/gestion/terminal/liberar/', gestion_liberar_terminal_mp, name='mp_gestion_terminal_liberar'),
     # Pantalla Dineros MP (pendiente de liberación / liberado / depositado)
     path('ventas/dineros-mercadopago/', dineros_mercadopago, name='dineros_mercadopago'),
     path('api/mercadopago/dineros/', api_dineros_mercadopago, name='api_dineros_mercadopago'),

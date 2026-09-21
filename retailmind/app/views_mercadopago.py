@@ -245,21 +245,47 @@ def _es_admin(request):
     return getattr(request.user, 'rol', '') in ('administrador', 'administracion')
 
 
-def _pendiente_en_terminal(config):
-    """Cobro Point que el sistema ve vivo en esa máquina, para poder explicar un
-    `already_queued_order_on_terminal` con datos concretos (qué hay que cancelar
-    en la pantalla del terminal). Devuelve '' si no hay ninguno."""
-    trx = (TransaccionMercadoPago.objects
-           .filter(config=config, canal='POINT', estado__in=('CREADA', 'PENDIENTE'))
-           .order_by('-creado_en').first())
-    if not trx:
-        return ''
+_SUGERIR_LIBERAR_TERMINAL = (' Usa «Liberar máquina» en Máquinas POS para ver qué tiene '
+                             'encolado Mercado Pago y cancelar lo que se pueda.')
+
+
+def _describir_cobro_terminal(trx):
     hora = timezone.localtime(trx.creado_en).strftime('%H:%M')
     monto = f'{trx.monto:,}'.replace(',', '.')
     corr = trx.correlativo_ticket or ''
     ref = ('suelto' if corr.startswith(('DIRECTO-', 'PRUEBA-'))
            else (f'del ticket {corr}' if corr else 'sin ticket'))
-    return (f' Pendiente en esa máquina: un cobro {ref} por ${monto} enviado a las {hora}.')
+    return ref, monto, hora
+
+
+def _pendiente_en_terminal(config):
+    """Explica un `already_queued_order_on_terminal` con datos concretos.
+
+    Primero, un cobro Point que el sistema ve VIVO en esa caja (hay que
+    terminarlo o cancelarlo en la pantalla del terminal). Si no hay ninguno,
+    lo ÚLTIMO que esa caja mandó a la máquina en 7 días, en cualquier estado:
+    una fila cerrada local (ERROR/EXPIRADA/CANCELADA) puede seguir viva en MP
+    y ser justo lo que ocupa la ranura. Siempre cierra sugiriendo «Liberar
+    máquina». Devuelve '' solo si no hay nada de nada.
+    """
+    trx = (TransaccionMercadoPago.objects
+           .filter(config=config, canal='POINT', estado__in=('CREADA', 'PENDIENTE'))
+           .order_by('-creado_en').first())
+    if trx:
+        ref, monto, hora = _describir_cobro_terminal(trx)
+        return (f' Pendiente en esa máquina: un cobro {ref} por ${monto} enviado a las {hora}.'
+                + _SUGERIR_LIBERAR_TERMINAL)
+    ultimo = (TransaccionMercadoPago.objects
+              .filter(config=config, canal='POINT',
+                      creado_en__gte=timezone.now() - timedelta(days=7))
+              .exclude(order_id='')
+              .order_by('-creado_en').first())
+    if not ultimo:
+        return ''
+    ref, monto, hora = _describir_cobro_terminal(ultimo)
+    cuando = timezone.localtime(ultimo.creado_en).strftime('%d-%m')
+    return (f' Lo último enviado a esa máquina: cobro {ref} por ${monto} el {cuando} a las '
+            f'{hora}, estado local {ultimo.estado}.' + _SUGERIR_LIBERAR_TERMINAL)
 
 
 def _config_operable(request, config_id=None, requerir_habilitada=False):
@@ -775,6 +801,24 @@ def gestion_reasignar_device_mp(request):
                        .order_by('-es_principal', 'id').first())
         if destino is None:
             destino = MercadoPagoConfig(sucursal=sucursal, nombre=nombre or 'Caja principal')
+        liberadas = [p for p in previas if p.id != destino.id]
+
+        # ── Nada se mueve mientras una caja que pierde la máquina tenga un
+        # cobro en curso en ella: la orden seguiría viva en la pantalla del
+        # terminal, ocupando la única ranura, y la caja nueva no podría cobrar
+        # (already_queued) sin que nadie sepa de dónde viene. Va ANTES de
+        # cualquier escritura.
+        for p in liberadas:
+            en_curso = (TransaccionMercadoPago.objects
+                        .filter(config=p, canal='POINT', estado__in=('CREADA', 'PENDIENTE'))
+                        .order_by('-creado_en').first())
+            if en_curso:
+                monto = f'{en_curso.monto:,}'.replace(',', '.')
+                return JsonResponse({'success': False, 'error': (
+                    f'«{p.sucursal.alias} · {p.nombre}» tiene un cobro en curso en esa máquina '
+                    f'(ticket {en_curso.correlativo_ticket or "sin ticket"}, ${monto}). Termínalo o '
+                    'cancélalo en la máquina, o usa «Liberar máquina», antes de moverla.')},
+                    status=400)
 
         # ── Una caja = una cuenta MP. Si la caja destino ya cobra con OTRA
         # cuenta, sus cobros históricos resuelven el token por la config
@@ -804,7 +848,6 @@ def gestion_reasignar_device_mp(request):
                     destino.external_pos_id = ''
                     destino.external_store_id = ''
 
-        liberadas = [p for p in previas if p.id != destino.id]
         for p in liberadas:
             p.device_id = ''
             p.modo = 'QR'
@@ -1315,6 +1358,45 @@ def gestion_cobrar_terminal_mp(request):
         'mensaje': ('No pudimos confirmar el envío a Mercado Pago. Estamos '
                     'verificando: NO cobres de nuevo todavía.') if incierto else '',
     })
+
+
+@login_required
+@require_POST
+def gestion_liberar_terminal_mp(request):
+    """POST gestion/terminal/liberar/ — qué tiene encolado Mercado Pago en la
+    máquina de una caja y, con ``aplicar=1``, cancelar lo cancelable. Solo
+    admin.
+
+    Body: config_id (obligatorio; la caja cuya máquina se revisa), aplicar
+    ('1' = cancelar; cualquier otra cosa = solo mirar), dias (default 10,
+    tope 30). Con aplicar=0 es solo lectura salvo una cosa: si MP dice que una
+    orden está PAGADA y localmente no figuraba APROBADA, se refleja
+    (``pagadas_detectadas``) — es plata real y tiene que verse en Dineros.
+    """
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
+    config_id = _int_o_cero(request.POST.get('config_id'))
+    if not config_id:
+        return JsonResponse({'success': False, 'error': 'Falta la caja (config_id).'}, status=400)
+    config, err = _config_operable(request, config_id)
+    if err:
+        return err
+    if not config.device_id:
+        return JsonResponse({'success': False, 'error': 'Esa caja no tiene máquina Point asociada.'},
+                            status=400)
+    aplicar = (request.POST.get('aplicar') or '').strip() == '1'
+    dias = min(max(_int_o_cero(request.POST.get('dias')) or 10, 1), 30)
+    try:
+        informe = mp.liberar_terminal(config, dias=dias, aplicar=aplicar, usuario=request.user)
+    except mp.MercadoPagoError as e:
+        return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
+    logger.warning("MP gestión: liberar máquina %s (caja %s, %s días) por %s: %s encontradas, "
+                   "%s canceladas, %s no cancelables, %s pagadas detectadas, %s errores%s",
+                   config.device_id, config.id, dias, request.user.username,
+                   len(informe['encontradas']), len(informe['canceladas']),
+                   len(informe['no_cancelables']), len(informe['pagadas_detectadas']),
+                   len(informe['errores']), '' if aplicar else ' (solo lectura)')
+    return JsonResponse({'success': True, **informe})
 
 
 @login_required

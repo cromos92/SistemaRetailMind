@@ -2857,8 +2857,11 @@ function _renderMaquinasMP(data) {
             <td class="text-end text-nowrap">
                 <button class="btn btn-sm btn-outline-primary py-0 px-2 mb-1" style="font-size:.68rem;"
                         onclick="asignarMaquinaMP(${i})"><i class="bi bi-shop"></i> Asignar a sucursal</button><br>
-                <button class="btn btn-sm ${integrada ? 'btn-outline-secondary' : 'btn-outline-success'} py-0 px-2" style="font-size:.68rem;"
-                        onclick="cambiarModoMaquinaMP(${i})">${integrada ? 'Pasar a manual' : 'Pasar a integrada'}</button>
+                <button class="btn btn-sm ${integrada ? 'btn-outline-secondary' : 'btn-outline-success'} py-0 px-2 mb-1" style="font-size:.68rem;"
+                        onclick="cambiarModoMaquinaMP(${i})">${integrada ? 'Pasar a manual' : 'Pasar a integrada'}</button><br>
+                <button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:.68rem;"
+                        title="Pregunta a Mercado Pago qué órdenes de este sistema siguen encoladas en la máquina y cancela las que se puedan"
+                        onclick="liberarMaquinaMP(${i})"><i class="bi bi-eraser"></i> Liberar máquina</button>
             </td>
         </tr>`;
     }).join('');
@@ -2895,6 +2898,146 @@ function cambiarModoMaquinaMP(i) {
         empresaId: m.empresa_id, deviceId: m.device_id,
         modoNuevo: m.operating_mode === 'PDV' ? 'STANDALONE' : 'PDV',
         onDone: () => { cargarMaquinasMP(true); cargarMiCajaMP(true); },
+    });
+}
+
+// ── «Liberar máquina»: qué tiene encolado Mercado Pago en el terminal ─────
+// MP admite UNA operación encolada por máquina (already_queued_order_on_terminal):
+// una orden vieja que nadie terminó ni canceló —aunque el sistema la haya
+// cerrado— bloquea todos los cobros nuevos. Esto pregunta a MP orden por
+// orden y cancela las que la API deja cancelar (las que ya están en la
+// pantalla de la máquina se cancelan solo desde la máquina).
+const _MP_STATUS_ORDEN_TXT = {
+    created: 'creada (todavía no en pantalla)',
+    at_terminal: 'en la pantalla de la máquina',
+    processing: 'procesando el pago',
+    action_required: 'esperando acción en la máquina',
+    processed: 'PAGADA',
+};
+
+function _plataLiberarMP(n) {
+    return '$' + Number(n || 0).toLocaleString('es-CL');
+}
+
+function _postLiberarMaquinaMP(configId, aplicar, dias) {
+    Swal.fire({
+        title: aplicar ? 'Cancelando en Mercado Pago…' : 'Preguntando a Mercado Pago qué tiene encolado…',
+        text: aplicar ? '' : 'Consulta una a una las órdenes de los últimos ' + dias + ' días.',
+        didOpen: () => Swal.showLoading(), showConfirmButton: false, allowOutsideClick: false,
+    });
+    const fd = new FormData();
+    fd.append('config_id', configId);
+    fd.append('aplicar', aplicar ? '1' : '0');
+    fd.append('dias', dias);
+    fd.append('csrfmiddlewaretoken', _csrfMP());
+    return fetch('/app/pos/mercadopago/gestion/terminal/liberar/', { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                Swal.fire({ icon: 'error', title: 'No se pudo consultar la máquina',
+                            html: `<div class="text-start small">${_escMP(data.error || 'Error')}</div>` });
+                return null;
+            }
+            return data;
+        })
+        .catch(() => { Swal.fire({ icon: 'error', title: 'Error de conexión' }); return null; });
+}
+
+function _filasOrdenesTerminalMP(lista) {
+    return (lista || []).map(o => `<tr>
+        <td class="text-nowrap">${_escMP(o.creado_en)}</td>
+        <td>${_escMP(o.sucursal)} · ${_escMP(o.caja)}</td>
+        <td>${_escMP(o.correlativo) || '—'}</td>
+        <td class="text-end text-nowrap">${_escMP(_plataLiberarMP(o.monto))}</td>
+        <td>${_escMP(_MP_STATUS_ORDEN_TXT[o.status_mp] || o.status_mp)}${o.terminal_coincide ? '' : ' <span class="text-warning" title="La respuesta de Mercado Pago no dice a qué máquina va">(máquina no confirmada)</span>'}
+            <div class="text-muted" style="font-size:.6rem;">sistema: ${_escMP(o.estado_local)}</div></td>
+        <td class="text-center">${o.cancelable ? '<span class="text-success">sí</span>' : '<span class="text-danger">no</span>'}</td>
+    </tr>`).join('');
+}
+
+function _extrasLiberarMP(data) {
+    const pagadas = data.pagadas_detectadas || [];
+    const errores = data.errores || [];
+    let html = '';
+    if (pagadas.length) {
+        html += `<div class="alert alert-warning py-1 px-2 mt-2 mb-0 text-start" style="font-size:.7rem;">
+            <i class="bi bi-cash-coin"></i> <strong>${pagadas.length} cobro(s) figuran PAGADOS en Mercado Pago</strong> y el
+            sistema no los tenía como aprobados: se marcaron aprobados. Revísalos en <strong>Dineros Mercado Pago</strong>
+            (pueden ser cobros huérfanos):<br>${pagadas.map(o => `${_escMP(o.creado_en)} · ${_escMP(o.sucursal)} · ticket ${_escMP(o.correlativo) || '—'} · ${_escMP(_plataLiberarMP(o.monto))}`).join('<br>')}
+        </div>`;
+    }
+    if (errores.length) {
+        html += `<div class="alert alert-secondary py-1 px-2 mt-2 mb-0 text-start" style="font-size:.7rem;">
+            <i class="bi bi-wifi-off"></i> ${errores.length} orden(es) no se pudieron consultar:<br>${errores.map(e => `${e.order_id ? _escMP(e.order_id) + ': ' : ''}${_escMP(e.error)}`).join('<br>')}
+        </div>`;
+    }
+    return html;
+}
+
+function liberarMaquinaMP(i) {
+    const m = _mpMaquinas[i];
+    if (!m) return;
+    const asig = (m.asignaciones || [])[0];
+    if (!asig || !asig.config_id) {
+        Swal.fire({ icon: 'info', title: 'Primero asigna la máquina a una sucursal',
+            html: `<div class="text-start small">Para preguntarle a Mercado Pago qué tiene encolado la máquina
+                <code>${_escMP(m.device_id)}</code> hace falta una caja del sistema que la use.
+                Usa <strong>«Asignar a sucursal»</strong> y vuelve a intentar.</div>` });
+        return;
+    }
+    const dias = 10;
+    _postLiberarMaquinaMP(asig.config_id, 0, dias).then(data => {
+        if (!data) return;
+        const enc = data.encontradas || [];
+        if (!enc.length) {
+            Swal.fire({ icon: 'info', title: 'Nada de este sistema encolado',
+                html: `<div class="text-start small">Mercado Pago no reporta órdenes de este sistema encoladas en esa máquina
+                    en los últimos ${dias} días. Puede ser una impresión de cierre o algo creado fuera del sistema:
+                    en la máquina, apretá <strong>«Actualizar»</strong> en la pantalla de reposo y cancelá lo que baje;
+                    si no baja nada, apagarla y encenderla.${_extrasLiberarMP(data)}</div>` });
+            if ((data.pagadas_detectadas || []).length) cargarMiCajaMP(true);
+            return;
+        }
+        const cancelables = enc.filter(o => o.cancelable);
+        const noCanc = enc.filter(o => !o.cancelable);
+        const html = `<div class="text-start small">
+            <div class="mb-2">Máquina <code>${_escMP(m.device_id)}</code> · ${_escMP(asig.sucursal)} · ${_escMP(asig.caja)}</div>
+            <div class="table-responsive"><table class="table table-sm table-bordered align-middle mb-2" style="font-size:.7rem;">
+                <thead class="table-light"><tr><th>Hora</th><th>Sucursal · caja</th><th>Ticket</th><th>Monto</th><th>Estado en MP</th><th>¿Cancelable?</th></tr></thead>
+                <tbody>${_filasOrdenesTerminalMP(enc)}</tbody></table></div>
+            ${noCanc.length ? `<div class="alert alert-warning py-1 px-2 mb-2" style="font-size:.7rem;">
+                <i class="bi bi-phone-vibrate"></i> <strong>${noCanc.length}</strong> no se puede(n) cancelar desde el sistema: están en la
+                pantalla del terminal. En la máquina: <strong>Actualizar</strong> en la pantalla de reposo, o el
+                <strong>botón rojo / atrás</strong> sobre el cobro.</div>` : ''}
+            ${cancelables.length ? `<div class="text-muted">Al confirmar se cancelan en Mercado Pago las <strong>${cancelables.length}</strong>
+                marcadas «sí». No se cobra ni se crea nada.</div>` : ''}
+            ${_extrasLiberarMP(data)}
+        </div>`;
+        Swal.fire({
+            title: `${enc.length} orden(es) encolada(s)`, html, width: 760,
+            showCancelButton: true, showConfirmButton: cancelables.length > 0,
+            confirmButtonText: `Cancelar ${cancelables.length} orden(es)`, confirmButtonColor: '#dc3545',
+            cancelButtonText: 'Cerrar sin tocar',
+        }).then(r => {
+            if (!r.isConfirmed) return;
+            _postLiberarMaquinaMP(asig.config_id, 1, dias).then(res => {
+                if (!res) return;
+                const canc = res.canceladas || [], nc = res.no_cancelables || [], err = res.errores || [];
+                Swal.fire({
+                    icon: canc.length && !err.length ? 'success' : 'warning',
+                    title: canc.length ? `${canc.length} orden(es) cancelada(s)` : 'No se canceló ninguna orden',
+                    width: 700,
+                    html: `<div class="text-start small">
+                        ${canc.length ? `<div class="mb-1"><i class="bi bi-check-circle text-success"></i> Canceladas en Mercado Pago:<br>${canc.map(o => `${_escMP(o.creado_en)} · ${_escMP(o.sucursal)} · ticket ${_escMP(o.correlativo) || '—'} · ${_escMP(_plataLiberarMP(o.monto))}`).join('<br>')}</div>` : ''}
+                        ${nc.length ? `<div class="alert alert-warning py-1 px-2 mb-1" style="font-size:.7rem;"><i class="bi bi-phone-vibrate"></i> ${nc.length} siguen en la pantalla del terminal (cancelar EN la máquina):<br>${nc.map(o => `${_escMP(o.creado_en)} · ticket ${_escMP(o.correlativo) || '—'} · ${_escMP(_plataLiberarMP(o.monto))} · ${_escMP(_MP_STATUS_ORDEN_TXT[o.status_mp] || o.status_mp)}`).join('<br>')}</div>` : ''}
+                        ${err.length ? `<div class="alert alert-danger py-1 px-2 mb-1" style="font-size:.7rem;">${err.length} con error:<br>${err.map(e => `${e.order_id ? _escMP(e.order_id) + ': ' : ''}${_escMP(e.error)}`).join('<br>')}</div>` : ''}
+                        ${_extrasLiberarMP(res)}
+                    </div>`,
+                });
+                cargarMaquinasMP(true);
+                cargarMiCajaMP(true);
+            });
+        });
     });
 }
 
