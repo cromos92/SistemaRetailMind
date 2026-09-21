@@ -225,7 +225,12 @@ def _breaker_registrar_exito():
 
 
 def _request(config, metodo, path, json_body=None, idempotency_key=None, params=None,
-             timeout=None):
+             timeout=None, cuenta_breaker=True):
+    """``cuenta_breaker=False``: un fallo de red de ESTA llamada no suma al
+    circuit breaker global del proceso. Lo usan los barridos de diagnóstico
+    (liberar terminal): un admin consultando 30 órdenes con MP lento no puede
+    dejar 30 s sin cobrar a las cajas de todas las tiendas de este worker. El
+    breaker abierto por otros sí se respeta."""
     if _breaker_abierto():
         # No se envió NADA: es seguro decirlo, no hay incertidumbre que resolver.
         raise MercadoPagoError(
@@ -246,7 +251,8 @@ def _request(config, metodo, path, json_body=None, idempotency_key=None, params=
         )
     except requests.RequestException as e:
         logger.error(f"MP: error de red en {metodo} {path}: {e}")
-        _breaker_registrar_fallo()
+        if cuenta_breaker:
+            _breaker_registrar_fallo()
         # OJO: sin la palabra "Reintente". Ese texto es literalmente la
         # instrucción que produjo el doble cobro del 13-09: ante un timeout NO
         # se sabe si MP recibió la orden, así que reintentar a ciegas es lo peor
@@ -1964,8 +1970,35 @@ def cancelar(transaccion):
 # orden qué sigue vivo en ESA máquina y cancelan lo que la API deja cancelar.
 
 # Status de orden que MP considera vivos (ocupan la ranura del terminal).
+# La referencia de la Orders API para Point documenta como vivos SOLO
+# created / at_terminal / action_required (finales: processed, failed,
+# refunded, expired, canceled). 'processing' se tolera por si aparece en
+# alguna respuesta, pero no está documentado: nunca se ha visto llegar.
 ORDENES_NO_FINALES_MP = ('created', 'processing', 'action_required', 'at_terminal')
 TERMINAL_DESCONOCIDO = 'desconocido'
+
+# Estados locales que NUNCA registraron plata: son los únicos que un
+# `processed` de MP puede promover a APROBADA. DEVUELTA y CONTRACARGO también
+# vienen de una orden `processed` (la devolución va por /payments/{id}/refunds
+# y el contracargo se registra sobre el payment: la orden no cambia), así que
+# promoverlos volvería a mostrar como cobrada una venta devuelta o disputada.
+ESTADOS_PROMOVIBLES_A_APROBADA = ('CREADA', 'PENDIENTE', 'RECHAZADA', 'CANCELADA',
+                                  'EXPIRADA', 'ERROR')
+
+# Status de orden finales que, para una fila local todavía viva
+# (CREADA/PENDIENTE), se sincronizan al barrer: MP ya la cerró y nadie más
+# lo iba a reflejar (consultar_estado solo corre desde el polling del POS).
+# 'refunded' queda fuera a propósito: una fila que nunca pasó por APROBADA no
+# se marca DEVUELTA a ciegas.
+_SYNC_FINAL_AL_LIBERAR = {'canceled': 'CANCELADA', 'cancelled': 'CANCELADA',
+                          'expired': 'EXPIRADA', 'failed': 'RECHAZADA'}
+
+# Presupuesto de red del comando (no corre detrás de gunicorn).
+MP_PRESUPUESTO_LIBERAR_CMD_SEG = 180
+
+
+def _aviso_barrido(texto):
+    return {'transaccion_id': None, 'order_id': '', 'correlativo': '', 'error': texto}
 
 
 def _terminal_de_orden(data, trx):
@@ -2015,29 +2048,56 @@ def _dict_orden_terminal(trx, status_mp, terminal_id, coincide):
     }
 
 
-def ordenes_en_terminal(config, dias=10, max_ordenes=60, informe=None):
+def _prioridad_candidata(trx, device_id):
+    """0 = atribuible a ESTA máquina; 1 = caja sin máquina (pudo tenerla
+    antes); 2 = caja con otra máquina y sin rastro de a cuál fue."""
+    if trx.config.device_id == device_id or _rm(trx).get('device_id') == device_id:
+        return 0
+    if not trx.config.device_id:
+        return 1
+    return 2
+
+
+def ordenes_en_terminal(config, dias=10, max_ordenes=60, informe=None, presupuesto=None):
     """Órdenes Point de este sistema que MP reporta VIVAS en la máquina de
-    ``config`` (o de terminal desconocido). Lista de dicts, más nueva primero.
+    ``config`` (o de terminal desconocido). Lista de dicts, en el orden en
+    que se consultaron (primero las atribuibles a esta máquina, más nueva
+    primero dentro de cada grupo).
 
     Candidatas: filas POINT con order_id de los últimos ``dias`` días, de
     CUALQUIER caja que cobre con la misma cuenta MP (la máquina pertenece a la
     cuenta; la caja que la usaba antes pudo ser de otra sucursal) y en
     CUALQUIER estado local (una fila cerrada como ERROR/EXPIRADA/CANCELADA
-    puede seguir viva en MP). Se consulta cada una con GET /v1/orders/{id}
-    y timeout corto; un fallo de red no corta el barrido.
+    puede seguir viva en MP). Las que según sus metadatos ``_rm`` fueron a
+    OTRA máquina no se consultan (no hace falta gastar red). El tope
+    ``max_ordenes`` se aplica DESPUÉS de ordenar por atribución y lo que
+    queda fuera se cuenta en ``informe['omitidas']``.
 
-    Efecto lateral, y deliberado: si MP dice ``processed`` para una fila que
-    localmente NO está APROBADA, se aplica APROBADA (es plata real que tiene
-    que aparecer en Dineros / huérfanos). Nunca se reabre una fila final a
-    PENDIENTE.
+    Se consulta cada una con GET /v1/orders/{id} y timeout corto. Un fallo de
+    red aislado no corta el barrido, pero el barrido NO suma al circuit
+    breaker global (cuenta_breaker=False) y se rinde solo ante dos fallos de
+    red seguidos propios, ante un breaker abierto por otros, o cuando se agota
+    ``presupuesto`` (_Presupuesto): un diagnóstico de admin no puede frenar
+    las cajas ni matar el worker.
+
+    Efectos laterales, deliberados y todos hacia estados MÁS cerrados o hacia
+    plata real: (1) ``processed`` para una fila que nunca registró plata
+    (ESTADOS_PROMOVIBLES_A_APROBADA) → APROBADA (``pagadas_detectadas``);
+    una DEVUELTA/CONTRACARGO no se toca. (2) status final canceled/expired/
+    failed para una fila local viva → se cierra local (``cerradas_local``).
+    Nunca se reabre una fila final a PENDIENTE.
 
     Si se pasa ``informe`` (dict), se le anotan ``errores``,
-    ``pagadas_detectadas`` y ``consultadas``.
+    ``pagadas_detectadas``, ``cerradas_local``, ``consultadas``,
+    ``total_candidatas`` y ``omitidas``.
     """
     informe = informe if isinstance(informe, dict) else {}
     errores = informe.setdefault('errores', [])
     pagadas = informe.setdefault('pagadas_detectadas', [])
+    cerradas = informe.setdefault('cerradas_local', [])
+    informe.setdefault('consultadas', 0)
     dias = max(1, int(dias or 10))
+    max_ordenes = max(1, int(max_ordenes or 60))
     device_id = config.device_id or ''
     cache_cuentas = {}
     clave_propia = _clave_cuenta(config, cache_cuentas)
@@ -2052,31 +2112,51 @@ def ordenes_en_terminal(config, dias=10, max_ordenes=60, informe=None):
     for trx in qs.iterator():
         if _clave_cuenta(trx.config, cache_cuentas) != clave_propia:
             continue
+        rm_device = str(_rm(trx).get('device_id') or '')
+        if rm_device and rm_device != device_id:
+            continue  # se sabe que fue a OTRA máquina: no ocupa esta ranura
         candidatas.append(trx)
-        if len(candidatas) >= max_ordenes:
-            break
+    # sort es estable: dentro de cada grupo se conserva "más nueva primero".
+    candidatas.sort(key=lambda t: _prioridad_candidata(t, device_id))
+    informe['total_candidatas'] = len(candidatas)
+    informe['omitidas'] = max(0, len(candidatas) - max_ordenes)
+    candidatas = candidatas[:max_ordenes]
 
     encontradas = []
-    for trx in candidatas:
+    fallos_red_seguidos = 0
+    for i, trx in enumerate(candidatas):
+        if presupuesto is not None and not presupuesto.hay():
+            errores.append(_aviso_barrido(
+                f'Se agotó el tiempo: se revisaron {i} de {len(candidatas)} órdenes; '
+                'vuelve a consultar (o repite con menos días).'))
+            break
         try:
             resp = _request(trx.config, 'GET', f'/v1/orders/{trx.order_id}',
-                            timeout=MP_RECUPERACION_TIMEOUT)
+                            timeout=MP_RECUPERACION_TIMEOUT, cuenta_breaker=False)
             data = _json_o_error(resp, f'liberar terminal: consultar orden {trx.order_id}')
         except MercadoPagoError as e:
             errores.append({'transaccion_id': trx.id, 'order_id': trx.order_id,
                             'correlativo': trx.correlativo_ticket or '', 'error': e.mensaje})
-            if e.red and _breaker_abierto():
+            if not e.red:
+                continue
+            fallos_red_seguidos += 1
+            if _breaker_abierto():
                 # Sin red no tiene sentido martillar las que faltan.
-                errores.append({'transaccion_id': None, 'order_id': '',
-                                'correlativo': '', 'error': 'Mercado Pago no responde: '
-                                'se dejó de consultar el resto de las órdenes.'})
+                errores.append(_aviso_barrido('Mercado Pago no responde: se dejó de '
+                                              'consultar el resto de las órdenes.'))
+                break
+            if fallos_red_seguidos >= MP_BREAKER_FALLOS:
+                errores.append(_aviso_barrido(
+                    'Mercado Pago está lento: se dejó de consultar el resto para no '
+                    'frenar los cobros de las cajas.'))
                 break
             continue
-        informe['consultadas'] = informe.get('consultadas', 0) + 1
+        fallos_red_seguidos = 0
+        informe['consultadas'] += 1
         status_mp = str(data.get('status') or '').lower()
         terminal_id = _terminal_de_orden(data, trx)
 
-        if status_mp == 'processed' and trx.estado != 'APROBADA':
+        if status_mp == 'processed' and trx.estado in ESTADOS_PROMOVIBLES_A_APROBADA:
             estado_antes = trx.estado
             payment = _extraer_payment_de_orden(data)
             _aplicar_estado(trx, 'APROBADA',
@@ -2093,6 +2173,23 @@ def ordenes_en_terminal(config, dias=10, max_ordenes=60, informe=None):
             continue
 
         if status_mp not in ORDENES_NO_FINALES_MP:
+            estado_final = _SYNC_FINAL_AL_LIBERAR.get(status_mp)
+            if estado_final and trx.estado in ('CREADA', 'PENDIENTE'):
+                # MP ya la cerró y el POS que la creó no está abierto para
+                # enterarse: si no se cierra acá, la fila "viva" bloquea
+                # reasignar la máquina y «Liberar máquina» dice que no hay nada.
+                estado_antes = trx.estado
+                _aplicar_estado(trx, estado_final,
+                                detalle=f"{data.get('status_detail') or status_mp} "
+                                        '(sincronizado al liberar terminal)',
+                                payment=_extraer_payment_de_orden(data) or None, raw=data)
+                logger.warning("MP: liberar terminal %s: la orden %s (%s) estaba %s local y MP "
+                               "la reporta %s -> %s",
+                               device_id, trx.order_id, trx.external_reference,
+                               estado_antes, status_mp, estado_final)
+                cerradas.append({**_dict_orden_terminal(trx, status_mp, terminal_id,
+                                                        terminal_id == device_id),
+                                 'estado_anterior': estado_antes, 'cancelable': False})
             continue
         coincide = bool(device_id) and terminal_id == device_id
         if not coincide and terminal_id != TERMINAL_DESCONOCIDO:
@@ -2101,18 +2198,33 @@ def ordenes_en_terminal(config, dias=10, max_ordenes=60, informe=None):
     return encontradas
 
 
-def liberar_terminal(config, dias=10, aplicar=False, usuario=None):
+def liberar_terminal(config, dias=10, aplicar=False, usuario=None, solo_ids=None,
+                     max_ordenes=60, presupuesto_seg=None):
     """Informe de lo que MP tiene encolado en la máquina de ``config`` y, con
     ``aplicar=True``, cancelación de lo cancelable (status ``created`` y
     terminal coincidente) vía POST /v1/orders/{id}/cancel.
 
+    ``solo_ids``: con aplicar=True, cancelar ÚNICAMENTE esas transaccion_id
+    (las que el admin vio y confirmó). Entre la consulta y el clic un cajero
+    pudo mandar un cobro real a esa misma máquina; sin la lista, el segundo
+    barrido lo encontraría ``created`` y lo mataría. Lo que no esté en la
+    lista va a no_cancelables. Cinturón aparte: una orden con menos de
+    MP_RESERVA_MAX_SEG de vida nunca se cancela (puede ser un cobro que
+    está pasando a la pantalla en este momento).
+
+    ``presupuesto_seg``: techo de segundos de red del barrido + cancelaciones
+    (default MP_PRESUPUESTO_CREAR_SEG, bien debajo del --timeout 60 de
+    gunicorn). ``max_ordenes``: tope de órdenes a consultar.
+
     Devuelve dict: device_id, encontradas, canceladas, no_cancelables
-    (at_terminal/processing/action_required o terminal desconocido: hay que
-    cancelarlas EN la máquina o apretar Actualizar en su pantalla), errores,
-    pagadas_detectadas, aplicado. JAMÁS crea órdenes ni cobra.
+    (at_terminal/action_required o terminal desconocido: hay que cancelarlas
+    EN la máquina o apretar Actualizar en su pantalla), errores,
+    pagadas_detectadas, cerradas_local, consultadas, total_candidatas,
+    omitidas, aplicado. JAMÁS crea órdenes ni cobra.
     """
     if not config.device_id:
         raise MercadoPagoError('Esa caja no tiene máquina Point asociada.')
+    presupuesto = _Presupuesto(presupuesto_seg or MP_PRESUPUESTO_CREAR_SEG)
     informe = {
         'device_id': config.device_id,
         'dias': max(1, int(dias or 10)),
@@ -2121,11 +2233,17 @@ def liberar_terminal(config, dias=10, aplicar=False, usuario=None):
         'no_cancelables': [],
         'errores': [],
         'pagadas_detectadas': [],
+        'cerradas_local': [],
+        'consultadas': 0,
+        'total_candidatas': 0,
+        'omitidas': 0,
         'aplicado': bool(aplicar),
     }
-    encontradas = ordenes_en_terminal(config, dias=informe['dias'], informe=informe)
+    encontradas = ordenes_en_terminal(config, dias=informe['dias'], max_ordenes=max_ordenes,
+                                      informe=informe, presupuesto=presupuesto)
     informe['encontradas'] = encontradas
     quien = getattr(usuario, 'username', None) or 'sistema'
+    solo_ids = {int(x) for x in solo_ids} if solo_ids is not None else None
 
     for orden in encontradas:
         if not orden['cancelable']:
@@ -2133,21 +2251,37 @@ def liberar_terminal(config, dias=10, aplicar=False, usuario=None):
             continue
         if not aplicar:
             continue
+        if solo_ids is not None and orden['transaccion_id'] not in solo_ids:
+            informe['no_cancelables'].append({
+                **orden, 'cancelable': False,
+                'motivo': 'Apareció después de la revisión: vuelve a consultar antes de '
+                          'cancelarla.'})
+            continue
+        if not presupuesto.hay():
+            informe['errores'].append(_aviso_barrido(
+                'Se agotó el tiempo antes de cancelar todas: vuelve a consultar.'))
+            break
         trx = (TransaccionMercadoPago.objects.select_related('config', 'config__sucursal')
                .filter(pk=orden['transaccion_id']).first())
         if trx is None or trx.estado == 'APROBADA':
             informe['errores'].append({**orden, 'error': 'La fila local figura APROBADA: '
                                        'no se cancela (corresponde devolución).'})
             continue
+        if _edad_seg(trx) < MP_RESERVA_MAX_SEG:
+            informe['no_cancelables'].append({
+                **orden, 'cancelable': False,
+                'motivo': 'Recién enviada: puede ser un cobro en curso de la caja. '
+                          'Espera un momento y vuelve a consultar.'})
+            continue
         try:
             resp = _request(trx.config, 'POST', f'/v1/orders/{trx.order_id}/cancel',
                             idempotency_key=f'{trx.external_reference}-cancel',
-                            timeout=MP_RECUPERACION_TIMEOUT)
+                            timeout=MP_RECUPERACION_TIMEOUT, cuenta_breaker=False)
         except MercadoPagoError as e:
             informe['errores'].append({**orden, 'error': e.mensaje})
             continue
         try:
-            _json_o_error(resp, f'liberar terminal: cancelar orden {trx.order_id}')
+            data = _json_o_error(resp, f'liberar terminal: cancelar orden {trx.order_id}')
         except MercadoPagoError as e:
             if resp.status_code == 409 or 'cannot_cancel' in str(e.detalle):
                 informe['no_cancelables'].append({
@@ -2156,6 +2290,20 @@ def liberar_terminal(config, dias=10, aplicar=False, usuario=None):
                               'pantalla de la máquina.'})
             else:
                 informe['errores'].append({**orden, 'error': e.mensaje})
+            continue
+        status_resp = str((data or {}).get('status') or '').lower() if isinstance(data, dict) else ''
+        if resp.status_code != 200 and status_resp not in ('canceled', 'cancelled'):
+            # La Orders API responde 202 cuando la orden ya está at_terminal:
+            # "aceptada; efectiva cuando llegue la notificación". Cerrarla local
+            # acá sacaría la fila de cobros_vivos con el cobro todavía en la
+            # pantalla: el vector del doble cobro. La cierra el webhook.
+            informe['no_cancelables'].append({
+                **orden, 'cancelable': False,
+                'motivo': 'Mercado Pago aceptó la cancelación pero la confirmará por '
+                          'notificación: revisa la pantalla de la máquina.'})
+            logger.warning("MP: liberar terminal %s: cancel de %s respondió %s (%s): no se "
+                           "cierra local, se espera el webhook",
+                           config.device_id, trx.order_id, resp.status_code, status_resp or '-')
             continue
         _aplicar_estado(trx, 'CANCELADA', detalle=f'Liberada del terminal por {quien}'[:120])
         logger.warning("MP: liberar terminal %s: orden %s (%s, ticket %s, $%s, estaba %s) "

@@ -2919,7 +2919,7 @@ function _plataLiberarMP(n) {
     return '$' + Number(n || 0).toLocaleString('es-CL');
 }
 
-function _postLiberarMaquinaMP(configId, aplicar, dias) {
+function _postLiberarMaquinaMP(configId, aplicar, dias, ids) {
     Swal.fire({
         title: aplicar ? 'Cancelando en Mercado Pago…' : 'Preguntando a Mercado Pago qué tiene encolado…',
         text: aplicar ? '' : 'Consulta una a una las órdenes de los últimos ' + dias + ' días.',
@@ -2929,6 +2929,10 @@ function _postLiberarMaquinaMP(configId, aplicar, dias) {
     fd.append('config_id', configId);
     fd.append('aplicar', aplicar ? '1' : '0');
     fd.append('dias', dias);
+    // Con aplicar=1 se mandan los transaccion_id que el admin VIO y confirmó:
+    // el backend cancela solo esos (un cobro real que un cajero mandó a la
+    // máquina entre la consulta y el clic no se toca).
+    if (aplicar) fd.append('ids', (ids || []).join(','));
     fd.append('csrfmiddlewaretoken', _csrfMP());
     return fetch('/app/pos/mercadopago/gestion/terminal/liberar/', { method: 'POST', body: fd, credentials: 'same-origin' })
         .then(r => r.json())
@@ -2955,10 +2959,52 @@ function _filasOrdenesTerminalMP(lista) {
     </tr>`).join('');
 }
 
+function _resumenNoCancelablesMP(lista, claseAlert) {
+    // Dos motivos distintos: las que MP confirma en ESA máquina (se cancelan
+    // en la pantalla) y las que MP no dice a qué máquina van (no se cancelan
+    // solas porque podrían ser de otra Point de la cuenta).
+    const fila = o => `${_escMP(o.creado_en)} · ${_escMP(o.sucursal)} · ticket ${_escMP(o.correlativo) || '—'} · ${_escMP(_plataLiberarMP(o.monto))} · ${_escMP(_MP_STATUS_ORDEN_TXT[o.status_mp] || o.status_mp)}${o.motivo ? ' — ' + _escMP(o.motivo) : ''}`;
+    const sinMaquina = (lista || []).filter(o => !o.terminal_coincide);
+    // Motivo propio del backend que NO es "está en la pantalla" (recién
+    // enviada, apareció después de la revisión, cancelación aceptada a
+    // confirmar por notificación): se lista aparte con su motivo.
+    const otroMotivo = (lista || []).filter(o => o.terminal_coincide && o.motivo && !/pantalla/i.test(o.motivo));
+    const enPantalla = (lista || []).filter(o => o.terminal_coincide && !otroMotivo.includes(o));
+    let html = '';
+    if (otroMotivo.length) {
+        html += `<div class="alert ${claseAlert} py-1 px-2 mb-1" style="font-size:.7rem;">
+            <i class="bi bi-hourglass-split"></i> <strong>${otroMotivo.length}</strong> no se cancelaron ahora:<br>${otroMotivo.map(fila).join('<br>')}</div>`;
+    }
+    if (enPantalla.length) {
+        html += `<div class="alert ${claseAlert} py-1 px-2 mb-1" style="font-size:.7rem;">
+            <i class="bi bi-phone-vibrate"></i> <strong>${enPantalla.length}</strong> está(n) en la pantalla del terminal y no se
+            cancela(n) desde el sistema. En la máquina: <strong>Actualizar</strong> en la pantalla de reposo, o el
+            <strong>botón rojo / atrás</strong> sobre el cobro:<br>${enPantalla.map(fila).join('<br>')}</div>`;
+    }
+    if (sinMaquina.length) {
+        html += `<div class="alert alert-secondary py-1 px-2 mb-1" style="font-size:.7rem;">
+            <i class="bi bi-question-circle"></i> <strong>${sinMaquina.length}</strong> no se cancela(n) sola(s) porque Mercado Pago no
+            confirma a qué máquina de la cuenta van (podrían estar en otra Point):<br>${sinMaquina.map(fila).join('<br>')}</div>`;
+    }
+    return html;
+}
+
 function _extrasLiberarMP(data) {
     const pagadas = data.pagadas_detectadas || [];
+    const cerradas = data.cerradas_local || [];
     const errores = data.errores || [];
     let html = '';
+    if (data.total_candidatas > (data.consultadas || 0) || data.omitidas) {
+        html += `<div class="text-muted mt-2" style="font-size:.7rem;"><i class="bi bi-info-circle"></i>
+            Se revisaron <strong>${Number(data.consultadas || 0)}</strong> de <strong>${Number(data.total_candidatas || 0)}</strong> órdenes
+            de esta cuenta en el período${data.omitidas ? ` (${Number(data.omitidas)} quedaron fuera del tope por consulta)` : ''}.</div>`;
+    }
+    if (cerradas.length) {
+        html += `<div class="alert alert-info py-1 px-2 mt-2 mb-0 text-start" style="font-size:.7rem;">
+            <i class="bi bi-check2-circle"></i> <strong>${cerradas.length} cobro(s) que el sistema tenía vivos ya estaban cerrados en Mercado Pago</strong>:
+            se cerraron también en el sistema:<br>${cerradas.map(o => `${_escMP(o.creado_en)} · ${_escMP(o.sucursal)} · ticket ${_escMP(o.correlativo) || '—'} · ${_escMP(_plataLiberarMP(o.monto))} · MP: ${_escMP(o.status_mp)} → ${_escMP(o.estado_local)}`).join('<br>')}
+        </div>`;
+    }
     if (pagadas.length) {
         html += `<div class="alert alert-warning py-1 px-2 mt-2 mb-0 text-start" style="font-size:.7rem;">
             <i class="bi bi-cash-coin"></i> <strong>${pagadas.length} cobro(s) figuran PAGADOS en Mercado Pago</strong> y el
@@ -2988,6 +3034,9 @@ function liberarMaquinaMP(i) {
     const dias = 10;
     _postLiberarMaquinaMP(asig.config_id, 0, dias).then(data => {
         if (!data) return;
+        // La consulta puede haber escrito (APROBADA detectadas, cerradas en
+        // MP): «Tu caja» se refresca pase lo que pase después.
+        if ((data.pagadas_detectadas || []).length || (data.cerradas_local || []).length) cargarMiCajaMP(true);
         const enc = data.encontradas || [];
         if (!enc.length) {
             Swal.fire({ icon: 'info', title: 'Nada de este sistema encolado',
@@ -2995,7 +3044,6 @@ function liberarMaquinaMP(i) {
                     en los últimos ${dias} días. Puede ser una impresión de cierre o algo creado fuera del sistema:
                     en la máquina, apretá <strong>«Actualizar»</strong> en la pantalla de reposo y cancelá lo que baje;
                     si no baja nada, apagarla y encenderla.${_extrasLiberarMP(data)}</div>` });
-            if ((data.pagadas_detectadas || []).length) cargarMiCajaMP(true);
             return;
         }
         const cancelables = enc.filter(o => o.cancelable);
@@ -3005,10 +3053,7 @@ function liberarMaquinaMP(i) {
             <div class="table-responsive"><table class="table table-sm table-bordered align-middle mb-2" style="font-size:.7rem;">
                 <thead class="table-light"><tr><th>Hora</th><th>Sucursal · caja</th><th>Ticket</th><th>Monto</th><th>Estado en MP</th><th>¿Cancelable?</th></tr></thead>
                 <tbody>${_filasOrdenesTerminalMP(enc)}</tbody></table></div>
-            ${noCanc.length ? `<div class="alert alert-warning py-1 px-2 mb-2" style="font-size:.7rem;">
-                <i class="bi bi-phone-vibrate"></i> <strong>${noCanc.length}</strong> no se puede(n) cancelar desde el sistema: están en la
-                pantalla del terminal. En la máquina: <strong>Actualizar</strong> en la pantalla de reposo, o el
-                <strong>botón rojo / atrás</strong> sobre el cobro.</div>` : ''}
+            ${_resumenNoCancelablesMP(noCanc, 'alert-warning')}
             ${cancelables.length ? `<div class="text-muted">Al confirmar se cancelan en Mercado Pago las <strong>${cancelables.length}</strong>
                 marcadas «sí». No se cobra ni se crea nada.</div>` : ''}
             ${_extrasLiberarMP(data)}
@@ -3020,7 +3065,7 @@ function liberarMaquinaMP(i) {
             cancelButtonText: 'Cerrar sin tocar',
         }).then(r => {
             if (!r.isConfirmed) return;
-            _postLiberarMaquinaMP(asig.config_id, 1, dias).then(res => {
+            _postLiberarMaquinaMP(asig.config_id, 1, dias, cancelables.map(o => o.transaccion_id)).then(res => {
                 if (!res) return;
                 const canc = res.canceladas || [], nc = res.no_cancelables || [], err = res.errores || [];
                 Swal.fire({
@@ -3029,8 +3074,7 @@ function liberarMaquinaMP(i) {
                     width: 700,
                     html: `<div class="text-start small">
                         ${canc.length ? `<div class="mb-1"><i class="bi bi-check-circle text-success"></i> Canceladas en Mercado Pago:<br>${canc.map(o => `${_escMP(o.creado_en)} · ${_escMP(o.sucursal)} · ticket ${_escMP(o.correlativo) || '—'} · ${_escMP(_plataLiberarMP(o.monto))}`).join('<br>')}</div>` : ''}
-                        ${nc.length ? `<div class="alert alert-warning py-1 px-2 mb-1" style="font-size:.7rem;"><i class="bi bi-phone-vibrate"></i> ${nc.length} siguen en la pantalla del terminal (cancelar EN la máquina):<br>${nc.map(o => `${_escMP(o.creado_en)} · ticket ${_escMP(o.correlativo) || '—'} · ${_escMP(_plataLiberarMP(o.monto))} · ${_escMP(_MP_STATUS_ORDEN_TXT[o.status_mp] || o.status_mp)}`).join('<br>')}</div>` : ''}
-                        ${err.length ? `<div class="alert alert-danger py-1 px-2 mb-1" style="font-size:.7rem;">${err.length} con error:<br>${err.map(e => `${e.order_id ? _escMP(e.order_id) + ': ' : ''}${_escMP(e.error)}`).join('<br>')}</div>` : ''}
+                        ${_resumenNoCancelablesMP(nc, 'alert-warning')}
                         ${_extrasLiberarMP(res)}
                     </div>`,
                 });

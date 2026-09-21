@@ -16,10 +16,15 @@ QUÉ HACE:
     reflejar como APROBADA una orden que MP reporta PAGADA y el sistema no
     tenía como aprobada (plata real: revisar en Dineros / huérfanos).
   * Con --apply: cancela en MP las que están en status `created` y van a esta
-    máquina (POST /v1/orders/{id}/cancel) y las marca CANCELADA local. Las que
-    ya están en la pantalla del terminal (at_terminal/processing) MP no las
-    deja cancelar por API: se cancelan EN la máquina (Actualizar en la
-    pantalla de reposo o botón rojo). JAMÁS crea órdenes ni cobra.
+    máquina (POST /v1/orders/{id}/cancel) y las marca CANCELADA local. Con
+    --ids solo cancela las que se vieron en el dry-run (el dry-run imprime la
+    línea lista para copiar). Las que ya están en la pantalla del terminal
+    (at_terminal/action_required) MP no las deja cancelar por API: se
+    cancelan EN la máquina (Actualizar en la pantalla de reposo o botón
+    rojo). Una orden con menos de 30 s de vida no se cancela (puede ser un
+    cobro en curso). JAMÁS crea órdenes ni cobra.
+  * Efecto lateral en ambos modos: una fila que el sistema tenía viva y MP
+    ya cerró (canceled/expired/failed) se cierra también local.
 
 USO:
     # Ver qué tiene encolado la máquina de PAO3 (no escribe nada)
@@ -61,6 +66,12 @@ class Command(BaseCommand):
                             help='Días hacia atrás a revisar (default 10, tope 30)')
         parser.add_argument('--apply', action='store_true',
                             help='CANCELA en Mercado Pago las órdenes cancelables (sin esto es dry-run)')
+        parser.add_argument('--ids', type=str, default=None,
+                            help='Con --apply: cancelar SOLO estos transaccion_id (separados por coma), '
+                                 'los que se vieron en el dry-run. Sin --ids se cancela todo lo '
+                                 'cancelable que encuentre este barrido.')
+        parser.add_argument('--max-ordenes', type=int, default=60,
+                            help='Tope de órdenes a consultar (default 60; se priorizan las de esta máquina)')
 
     # ------------------------------------------------------------------
     def handle(self, *args, **options):
@@ -72,8 +83,16 @@ class Command(BaseCommand):
             f'[{etiqueta}] Liberar maquina Point {config.device_id} '
             f'({config.sucursal.alias} · {config.nombre}, caja {config.id}), ultimos {dias} dias'))
 
+        solo_ids = None
+        if options['ids']:
+            solo_ids = [int(x) for x in options['ids'].split(',') if x.strip().isdigit()]
+            if not solo_ids:
+                raise CommandError('--ids no trae ningun transaccion_id valido')
         try:
-            informe = mp.liberar_terminal(config, dias=dias, aplicar=aplicar, usuario=None)
+            informe = mp.liberar_terminal(
+                config, dias=dias, aplicar=aplicar, usuario=None, solo_ids=solo_ids,
+                max_ordenes=max(1, int(options['max_ordenes'] or 60)),
+                presupuesto_seg=mp.MP_PRESUPUESTO_LIBERAR_CMD_SEG)
         except mp.MercadoPagoError as e:
             raise CommandError(e.mensaje)
 
@@ -122,7 +141,16 @@ class Command(BaseCommand):
 
     def _imprimir(self, informe, aplicar):
         encontradas = informe['encontradas']
-        self.stdout.write(f"Ordenes consultadas: {informe.get('consultadas', 0)}")
+        total = informe.get('total_candidatas', 0)
+        omitidas = informe.get('omitidas', 0)
+        self.stdout.write(f"Ordenes consultadas: {informe.get('consultadas', 0)} de {total} de la cuenta en el periodo"
+                          + (f" ({omitidas} fuera del tope: subir --max-ordenes)" if omitidas else ''))
+        if informe.get('cerradas_local'):
+            self.stdout.write(self.style.NOTICE(
+                f"\nCobros que el sistema tenia vivos y ya estaban cerrados en Mercado Pago: "
+                f"{len(informe['cerradas_local'])} (se cerraron tambien en el sistema)"))
+            for o in informe['cerradas_local']:
+                self.stdout.write(self._fila(o) + f"  (estaba {o.get('estado_anterior', '?')})")
         if not encontradas:
             self.stdout.write(self.style.SUCCESS(
                 '\nMercado Pago no reporta ordenes de este sistema encoladas en esa maquina. '
@@ -140,11 +168,19 @@ class Command(BaseCommand):
             for o in informe['canceladas']:
                 self.stdout.write(self._fila(o))
         if informe['no_cancelables']:
-            self.stdout.write(self.style.WARNING(
-                f"\nNo cancelables desde el sistema: {len(informe['no_cancelables'])} "
-                '(estan en la pantalla del terminal: "Actualizar" en la pantalla de reposo o boton rojo EN la maquina)'))
-            for o in informe['no_cancelables']:
-                self.stdout.write(self._fila(o) + (f"  -> {o['motivo']}" if o.get('motivo') else ''))
+            en_pantalla = [o for o in informe['no_cancelables'] if o.get('terminal_coincide')]
+            sin_maquina = [o for o in informe['no_cancelables'] if not o.get('terminal_coincide')]
+            if en_pantalla:
+                self.stdout.write(self.style.WARNING(
+                    f"\nEn la pantalla del terminal (no se cancelan desde el sistema): {len(en_pantalla)} "
+                    '("Actualizar" en la pantalla de reposo o boton rojo EN la maquina)'))
+                for o in en_pantalla:
+                    self.stdout.write(self._fila(o) + (f"  -> {o['motivo']}" if o.get('motivo') else ''))
+            if sin_maquina:
+                self.stdout.write(self.style.WARNING(
+                    f"\nMercado Pago no confirma a que maquina van (no se cancelan solas): {len(sin_maquina)}"))
+                for o in sin_maquina:
+                    self.stdout.write(self._fila(o) + (f"  -> {o['motivo']}" if o.get('motivo') else ''))
         if informe['pagadas_detectadas']:
             self.stdout.write(self.style.WARNING(
                 f"\nPAGADAS en Mercado Pago que el sistema no tenia aprobadas: {len(informe['pagadas_detectadas'])} "
@@ -158,4 +194,6 @@ class Command(BaseCommand):
 
         cancelables = [o for o in encontradas if o['cancelable']]
         if cancelables and not aplicar:
-            self.stdout.write(f'\nPara cancelar las {len(cancelables)} cancelable(s), repetir el comando con --apply')
+            ids = ','.join(str(o['transaccion_id']) for o in cancelables)
+            self.stdout.write(f'\nPara cancelar SOLO las {len(cancelables)} cancelable(s) de arriba, repetir el '
+                              f'comando con --apply --ids {ids}')

@@ -809,9 +809,21 @@ def gestion_reasignar_device_mp(request):
         # (already_queued) sin que nadie sepa de dónde viene. Va ANTES de
         # cualquier escritura.
         for p in liberadas:
-            en_curso = (TransaccionMercadoPago.objects
-                        .filter(config=p, canal='POINT', estado__in=('CREADA', 'PENDIENTE'))
-                        .order_by('-creado_en').first())
+            en_curso = None
+            vivas = (TransaccionMercadoPago.objects
+                     .filter(config=p, canal='POINT', estado__in=('CREADA', 'PENDIENTE'))
+                     .order_by('-creado_en'))
+            for t in vivas:
+                # Una reserva vencida (el worker murió antes del POST: nunca
+                # existió en MP) no es un cobro en curso; se cierra igual que
+                # hace cobros_vivos_de_ticket. Si bloqueara, «Liberar máquina»
+                # tampoco la listaría (no tiene order_id): callejón sin salida.
+                # Una incierta (ENVIADA sin order_id) sí sigue bloqueando.
+                if mp.es_reserva(t) and mp._edad_seg(t) > mp.MP_RESERVA_MAX_SEG:
+                    mp._aplicar_estado(t, 'ERROR', detalle='No se alcanzó a enviar a Mercado Pago')
+                    continue
+                en_curso = t
+                break
             if en_curso:
                 monto = f'{en_curso.monto:,}'.replace(',', '.')
                 return JsonResponse({'success': False, 'error': (
@@ -1369,9 +1381,12 @@ def gestion_liberar_terminal_mp(request):
 
     Body: config_id (obligatorio; la caja cuya máquina se revisa), aplicar
     ('1' = cancelar; cualquier otra cosa = solo mirar), dias (default 10,
-    tope 30). Con aplicar=0 es solo lectura salvo una cosa: si MP dice que una
-    orden está PAGADA y localmente no figuraba APROBADA, se refleja
-    (``pagadas_detectadas``) — es plata real y tiene que verse en Dineros.
+    tope 30), ids (con aplicar=1: transaccion_id separados por coma de las
+    órdenes que el admin vio y confirmó; solo esas se cancelan). Con aplicar=0
+    es solo lectura salvo dos cosas: si MP dice que una orden está PAGADA y
+    localmente nunca registró plata, se refleja (``pagadas_detectadas``) — es
+    plata real y tiene que verse en Dineros —, y si MP ya cerró una orden que
+    el sistema tenía viva, se cierra local (``cerradas_local``).
     """
     if not _es_admin(request):
         return JsonResponse({'success': False, 'error': 'Solo Administrador.'}, status=403)
@@ -1386,16 +1401,26 @@ def gestion_liberar_terminal_mp(request):
                             status=400)
     aplicar = (request.POST.get('aplicar') or '').strip() == '1'
     dias = min(max(_int_o_cero(request.POST.get('dias')) or 10, 1), 30)
+    solo_ids = None
+    if aplicar:
+        # Sin lista (cliente viejo o vacía) no se cancela nada a ciegas: todo
+        # lo cancelable va a no_cancelables con el motivo "vuelve a consultar".
+        solo_ids = [i for i in (_int_o_cero(x) for x in
+                                (request.POST.get('ids') or '').split(',')) if i > 0]
     try:
-        informe = mp.liberar_terminal(config, dias=dias, aplicar=aplicar, usuario=request.user)
+        informe = mp.liberar_terminal(config, dias=dias, aplicar=aplicar, usuario=request.user,
+                                      solo_ids=solo_ids, max_ordenes=30)
     except mp.MercadoPagoError as e:
         return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
-    logger.warning("MP gestión: liberar máquina %s (caja %s, %s días) por %s: %s encontradas, "
-                   "%s canceladas, %s no cancelables, %s pagadas detectadas, %s errores%s",
+    logger.warning("MP gestión: liberar máquina %s (caja %s, %s días) por %s: %s/%s consultadas, "
+                   "%s encontradas, %s canceladas, %s no cancelables, %s pagadas detectadas, "
+                   "%s cerradas local, %s errores%s",
                    config.device_id, config.id, dias, request.user.username,
+                   informe['consultadas'], informe['total_candidatas'],
                    len(informe['encontradas']), len(informe['canceladas']),
                    len(informe['no_cancelables']), len(informe['pagadas_detectadas']),
-                   len(informe['errores']), '' if aplicar else ' (solo lectura)')
+                   len(informe['cerradas_local']), len(informe['errores']),
+                   '' if aplicar else ' (solo lectura)')
     return JsonResponse({'success': True, **informe})
 
 
