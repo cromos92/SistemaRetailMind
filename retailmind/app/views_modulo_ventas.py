@@ -1942,11 +1942,11 @@ def dashboard_stats(request):
         promedio_venta = (ventas_hoy / tickets_pagados) if tickets_pagados > 0 else 0
 
         # Tickets pendientes del día (últimos 20) - INCLUYENDO AMBOS TIPOS
-        tickets_recientes = tickets_hoy.filter(estado='PENDIENTE').select_related(
+        tickets_recientes = list(tickets_hoy.filter(estado='PENDIENTE').select_related(
             'vendedor', 'sucursal'
         ).prefetch_related(
             'ticket_productos__ProductoTalla__producto',
-        ).order_by('-created_at')[:20]
+        ).order_by('-created_at')[:20])
         
         tickets_data = []
         for ticket in tickets_recientes:
@@ -1981,12 +1981,15 @@ def dashboard_stats(request):
                 **_check_stock_ticket(ticket, sucursal_id),
             })
 
+        # Origen (cotización), documento sugerido y repetidos del listado
+        _enriquecer_pendientes_con_origen(tickets_data, tickets_recientes)
+
         # Tickets pendientes para el wizard (con más detalles)
-        tickets_pendientes_query = tickets_hoy.filter(estado='PENDIENTE').select_related(
+        tickets_pendientes_query = list(tickets_hoy.filter(estado='PENDIENTE').select_related(
             'vendedor'
         ).prefetch_related(
             'ticket_productos__ProductoTalla__producto',
-        )[:10]
+        )[:10])
         tickets_pendientes_data = []
         for ticket in tickets_pendientes_query:
             # Determinar tipo de ticket
@@ -2015,6 +2018,8 @@ def dashboard_stats(request):
             })
 
         # TICKETS DE CAMBIOS/DEVOLUCIONES PENDIENTES (sin límite de fecha)
+        _enriquecer_pendientes_con_origen(tickets_pendientes_data, tickets_pendientes_query)
+
         tickets_cambio_pendientes = Ticket.objects.filter(
             sucursal_id=sucursal_id,
             estado='PENDIENTE',
@@ -2668,6 +2673,139 @@ def guardar_o_actualizar_cliente(datos_cliente, usuario=None):
 
 # ========== FUNCIONES TICKET POS ==========
 
+def _rut_parece_empresa(rut):
+    """Mismo criterio que `esRutEmpresa` del POS: cuerpo >= 50.000.000."""
+    cuerpo = re.sub(r'[^0-9]', '', str(rut or '').split('-')[0])
+    return cuerpo.isdigit() and int(cuerpo) >= 50_000_000
+
+
+def _cotizacion_origen_de_ticket(ticket, detalle_ids=None):
+    """Cotización (objeto) que originó un ticket, o None si es una venta normal.
+
+    Dos pistas, en este orden: los `cotizacion_detalle_id` de sus líneas (solo
+    las pendientes de despacho lo llevan) y la marca textual que deja
+    registrar_pagos_ticket en `observaciones_adicionales`
+    (`Ticket.numero_cotizacion_origen`), única pista para líneas con SKU.
+    """
+    from .models import Cotizacion_Empresa, Cotizacion_Empresa_Detalle
+    if detalle_ids is None:
+        detalle_ids = [tp.cotizacion_detalle_id for tp in ticket.ticket_productos.all()]
+    ids = [d for d in detalle_ids if d]
+    if ids:
+        det = (Cotizacion_Empresa_Detalle.objects
+               .filter(id__in=ids[:5]).select_related('cotizacion').first())
+        if det is not None and det.cotizacion_id is not None:
+            return det.cotizacion
+    numero = ticket.numero_cotizacion_origen
+    if not numero:
+        return None
+    return (Cotizacion_Empresa.objects
+            .filter(numero_cotizacion=numero, sucursal_id=ticket.sucursal_id)
+            .order_by('-id').first())
+
+
+def _resumen_cotizacion(cot):
+    """Dict serializable de la cotización de origen para el POS (None si no hay)."""
+    if cot is None:
+        return None
+    return {
+        'id': cot.id,
+        'numero_cotizacion': cot.numero_cotizacion,
+        'fecha_emision': cot.fecha_emision.strftime('%Y-%m-%d') if cot.fecha_emision else '',
+        'fecha_validez': cot.fecha_validez.strftime('%Y-%m-%d') if cot.fecha_validez else '',
+        'facturada': bool(cot.facturada),
+        'numero_factura': cot.numero_factura or '',
+    }
+
+
+def _ticket_pendiente_de_cotizacion(sucursal, cotizacion):
+    """Ticket PENDIENTE de esta sucursal que ya nació de `cotizacion`.
+
+    Cada intento de cobrar una cotización creaba un ticket nuevo: si el cierre
+    fallaba después (p.ej. Mercado Pago sin respaldo), el cajero reintentaba y
+    el dashboard se llenaba de tickets pendientes idénticos (8 seguidos el
+    22-09-2026). Se reutiliza el último pendiente en vez de crear otro.
+    """
+    filtro = Q(observaciones_adicionales__startswith=(
+        f'Facturación de cotización {cotizacion.numero_cotizacion}.'))
+    detalle_ids = list(cotizacion.items.values_list('id', flat=True))
+    if detalle_ids:
+        filtro |= Q(ticket_productos__cotizacion_detalle_id__in=detalle_ids)
+    return (
+        Ticket.objects
+        .filter(sucursal=sucursal, estado='PENDIENTE')
+        .filter(filtro)
+        .exclude(modulo_origen='CAMBIO_DEVOLUCION')
+        .order_by('-id')
+        .distinct()
+        .first()
+    )
+
+
+def _enriquecer_pendientes_con_origen(filas, tickets):
+    """Completa las filas del dashboard de tickets pendientes con su origen.
+
+    Agrega `cotizacion_id` / `numero_cotizacion` (si el ticket nació de una
+    cotización), `doc_sugerido` (FACTURA para cotizaciones y RUT de empresa,
+    BOLETA en el resto) y `repetido` (cuántos pendientes del listado son el
+    mismo cobro: misma cotización, o mismo RUT y total). Usa las líneas ya
+    prefetched: una sola query extra, por los detalles de cotización.
+    """
+    from collections import Counter
+    from .models import Cotizacion_Empresa, Cotizacion_Empresa_Detalle
+
+    detalle_por_ticket = {}
+    numero_por_ticket = {}
+    for t in tickets:
+        for tp in t.ticket_productos.all():
+            if tp.cotizacion_detalle_id:
+                detalle_por_ticket[t.id] = tp.cotizacion_detalle_id
+                break
+        if t.id not in detalle_por_ticket:
+            numero = t.numero_cotizacion_origen
+            if numero:
+                numero_por_ticket[t.id] = numero
+    cot_por_detalle = {}
+    if detalle_por_ticket:
+        filas_det = (Cotizacion_Empresa_Detalle.objects
+                     .filter(id__in=set(detalle_por_ticket.values()))
+                     .values_list('id', 'cotizacion_id', 'cotizacion__numero_cotizacion'))
+        cot_por_detalle = {d: (c, n or '') for d, c, n in filas_det}
+    id_por_numero = {}
+    if numero_por_ticket:
+        id_por_numero = dict(
+            Cotizacion_Empresa.objects
+            .filter(numero_cotizacion__in=set(numero_por_ticket.values()),
+                    sucursal_id__in={t.sucursal_id for t in tickets})
+            .values_list('numero_cotizacion', 'id')
+        )
+
+    claves = []
+    for fila, t in zip(filas, tickets):
+        cot_id, numero = cot_por_detalle.get(detalle_por_ticket.get(t.id), (None, ''))
+        if not numero and t.id in numero_por_ticket:
+            numero = numero_por_ticket[t.id]
+            cot_id = id_por_numero.get(numero)
+        fila['cotizacion_id'] = cot_id
+        fila['numero_cotizacion'] = numero
+        es_empresa = _rut_parece_empresa(t.cliente_rut) or bool((t.cliente_giro or '').strip())
+        fila['doc_sugerido'] = 'FACTURA' if (numero or es_empresa) else 'BOLETA'
+        rut = (t.cliente_rut or '').strip()
+        if t.modulo_origen == 'CAMBIO_DEVOLUCION':
+            clave = None
+        elif numero:
+            clave = ('COT', numero)
+        elif rut:
+            clave = ('RUT', rut, int(t.total or 0))
+        else:
+            clave = None
+        claves.append(clave)
+    conteo = Counter(c for c in claves if c)
+    for fila, clave in zip(filas, claves):
+        n = conteo.get(clave, 0) if clave else 0
+        fila['repetido'] = n if n > 1 else 0
+
+
 def construir_ticket_data(ticket):
     """Construir datos completos del ticket para POS"""
     from app.services.realsport_imagenes_service import resolver_foto_portada_url
@@ -2676,6 +2814,7 @@ def construir_ticket_data(ticket):
     subtotal = 0
 
     empresa_id_ticket = ticket.sucursal.empresa_id if ticket.sucursal_id else None
+    detalle_ids_cot = []
 
     for tp in ticket.ticket_productos.select_related(
         'ProductoTalla',
@@ -2688,6 +2827,8 @@ def construir_ticket_data(ticket):
     ).all():
         producto_talla = tp.ProductoTalla
         producto = producto_talla.producto if producto_talla else None
+        if tp.cotizacion_detalle_id:
+            detalle_ids_cot.append(tp.cotizacion_detalle_id)
 
         marca = ''
         if producto:
@@ -2756,6 +2897,9 @@ def construir_ticket_data(ticket):
     if saldo_por_pagar < 0:
         saldo_por_pagar = 0
 
+    cotizacion_origen = _resumen_cotizacion(
+        _cotizacion_origen_de_ticket(ticket, detalle_ids=detalle_ids_cot))
+
     return {
         'ticket_id': ticket.correlativo,
         'fecha': ticket.fecha.strftime('%Y-%m-%d'),
@@ -2763,6 +2907,16 @@ def construir_ticket_data(ticket):
         'tipo_documento': 'TICKET',
         'estado': ticket.estado,
         'modulo_origen': ticket.modulo_origen,  # ✅ Agregar módulo de origen para identificar tickets de cambio
+        # Cotización que originó el ticket (None en una venta normal). El POS la
+        # usa para preseleccionar Factura y volver a mandar cotizacion_id al
+        # cerrar, de modo que la cotización quede FACTURADA aunque el ticket se
+        # retome desde el dashboard.
+        'cotizacion_id': cotizacion_origen['id'] if cotizacion_origen else None,
+        'numero_cotizacion': cotizacion_origen['numero_cotizacion'] if cotizacion_origen else '',
+        'cotizacion': cotizacion_origen,
+        'cliente_es_empresa': bool(
+            _rut_parece_empresa(ticket.cliente_rut) or (ticket.cliente_giro or '').strip()
+        ),
         'metodo_pago_principal': ticket.metodo_pago,
         'total_pagado': total_pagado,
         'saldo_por_pagar': saldo_por_pagar,
@@ -3902,8 +4056,18 @@ def registrar_pagos_ticket(request, correlativo):
                 sucursal_id,
             )
             
-            # Obtener siguiente correlativo para ticket
-            nuevo_correlativo = obtener_siguiente_correlativo(sucursal, 'TICKET')
+            # Reutilizar el ticket pendiente que dejó un intento anterior de
+            # esta misma cotización (si no, cada reintento creaba uno nuevo).
+            ticket_reutilizado = _ticket_pendiente_de_cotizacion(sucursal, cotizacion_obj)
+            if ticket_reutilizado is not None:
+                nuevo_correlativo = ticket_reutilizado.correlativo
+                logger.info(
+                    "Reutilizando ticket pendiente=%s de cotizacion=%s",
+                    nuevo_correlativo, cotizacion_obj.numero_cotizacion,
+                )
+            else:
+                # Obtener siguiente correlativo para ticket
+                nuevo_correlativo = obtener_siguiente_correlativo(sucursal, 'TICKET')
             
             # Calcular totales
             subtotal_calc = sum(p.get('subtotal', 0) for p in productos_cotizacion)
@@ -3926,9 +4090,8 @@ def registrar_pagos_ticket(request, correlativo):
                             'error': 'No hay vendedores configurados para esta sucursal'
                         }, status=400)
             
-            # Crear el ticket
-            ticket = Ticket.objects.create(
-                correlativo=nuevo_correlativo,
+            # Crear (o reutilizar) el ticket
+            campos_ticket = dict(
                 sucursal=sucursal,
                 vendedor=vendedor,
                 subTotal=int(subtotal_calc),  # Campo es subTotal con T mayúscula
@@ -3948,6 +4111,19 @@ def registrar_pagos_ticket(request, correlativo):
                 cliente_email_facturacion=datos_cliente.get('email_facturacion', cotizacion_obj.cliente.correoAdministrador or ''),
                 modulo_origen='POS'  # Usar POS ya que COTIZACION no existe en choices
             )
+            if ticket_reutilizado is not None:
+                ticket = ticket_reutilizado
+                for _campo, _valor in campos_ticket.items():
+                    setattr(ticket, _campo, _valor)
+                ticket.save()
+                # Las líneas, pagos y referencias del intento anterior se
+                # reescriben con lo que trae este cobro (un ticket PENDIENTE no
+                # descontó stock ni consumió cobros).
+                ticket.ticket_productos.all().delete()
+                ticket.pagos.all().delete()
+                ticket.referencias.all().delete()
+            else:
+                ticket = Ticket.objects.create(correlativo=nuevo_correlativo, **campos_ticket)
             
             # Crear productos del ticket
             # ✅ IMPORTANTE: Usar producto_talla_id si está disponible
@@ -4132,6 +4308,34 @@ def registrar_pagos_ticket(request, correlativo):
         payload = json.loads(request.body or '{}')
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Formato JSON inválido'}, status=400)
+
+    # Ticket numérico que nació de una cotización y se retoma desde "Pagar" del
+    # dashboard (el POS manda cotizacion_id al reconocerlo): se enlaza para que
+    # la cotización quede FACTURADA, el TXT use sus descripciones y los cobros
+    # MP hechos bajo COT-… respalden estos pagos. Solo si las líneas del ticket
+    # realmente vienen de esa cotización.
+    if cotizacion_obj is None and payload.get('cotizacion_id'):
+        from .models import Cotizacion_Empresa as _CotEmp
+        _cot = _CotEmp.objects.filter(id=payload.get('cotizacion_id')).first()
+        _cot_origen = _cotizacion_origen_de_ticket(ticket)
+        _cot_enlazada = bool(_cot) and _cot_origen is not None and _cot_origen.id == _cot.id
+        if _cot_enlazada:
+            if _cot.facturada:
+                return JsonResponse({
+                    'success': False,
+                    'error': (f'La cotización {_cot.numero_cotizacion} ya fue facturada '
+                              f'con documento {_cot.numero_factura}'),
+                }, status=400)
+            cotizacion_obj = _cot
+            logger.info(
+                "Ticket=%s enlazado a cotizacion=%s desde el payload",
+                ticket.correlativo, _cot.numero_cotizacion,
+            )
+        elif _cot is not None:
+            logger.warning(
+                "Ticket=%s mando cotizacion_id=%s pero sus lineas no vienen de ella; se ignora",
+                ticket.correlativo, _cot.id,
+            )
 
     datos_cliente = payload.get('cliente', {})
     ticket.cliente_nombre = datos_cliente.get('nombre') or ''
@@ -4832,6 +5036,15 @@ def registrar_pagos_ticket(request, correlativo):
     # con monto suficiente. Corre acá porque todavía no se escribió nada: el
     # 400 sale con el ticket intacto. El consumo (marcar usada) ocurre más
     # abajo, al crear cada TicketDetallePago.
+    # Identificadores bajo los que pudo crearse un cobro MP de esta venta: el
+    # ticket y, si nació de una cotización, su número. El POS cobra en la Point
+    # con `COT-…` ANTES de que exista el ticket; buscar solo por el número
+    # nuevo devolvía MP_SIN_RESPALDO en cada intento (y cada intento creaba
+    # otro ticket pendiente). Ver mercadopago_service._correlativos_de.
+    _correlativos_mp = [str(correlativo)]
+    if cotizacion_obj is not None and cotizacion_obj.numero_cotizacion:
+        _correlativos_mp.append(str(cotizacion_obj.numero_cotizacion))
+
     if MP_VALIDAR_PAGO_SERVER:
         _pagos_mp = []
         for _p in pagos:
@@ -4850,7 +5063,7 @@ def registrar_pagos_ticket(request, correlativo):
             from .models import TransaccionMercadoPago
             _disponibles = sorted(TransaccionMercadoPago.objects.filter(
                 sucursal_id=ticket.sucursal_id,
-                correlativo_ticket=str(correlativo),
+                correlativo_ticket__in=_correlativos_mp,
                 tipo='VENTA', estado='APROBADA', consumida=False,
             ).values_list('monto', flat=True))
             # Matching greedy: al pago más grande la transacción más chica que
@@ -4891,7 +5104,7 @@ def registrar_pagos_ticket(request, correlativo):
         # con la red mala, gunicorn mata el worker a los 60s en medio del cierre
         # y el cajero ve un 502 sin saber si la venta quedó grabada.
         _mp_vivos = _mp_guard.cobros_no_respaldados(
-            ticket.sucursal_id, correlativo, _pagos_mp, refrescar=True,
+            ticket.sucursal_id, _correlativos_mp, _pagos_mp, refrescar=True,
             presupuesto=_mp_guard._Presupuesto(20),
         )
         if _mp_vivos:
@@ -5087,7 +5300,7 @@ def registrar_pagos_ticket(request, correlativo):
             # con monto suficiente" cruzaba las filas y dejaba un pago sin
             # respaldo; con el id se consume la que corresponde.
             _consumida = _mp_srv.consumir_transaccion_aprobada(
-                ticket.sucursal_id, correlativo, monto, detalle_pago=_detalle_mp,
+                ticket.sucursal_id, _correlativos_mp, monto, detalle_pago=_detalle_mp,
                 payment_id=(pago.get('voucher') or '').strip(),
             )
             if _consumida is None:

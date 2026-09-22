@@ -97,6 +97,14 @@ MP_LOCK_ESPERA_SEG = int(os.environ.get('MP_LOCK_ESPERA_SEG', '3'))
 MP_RECUPERACION_TIMEOUT = (3, 7)
 # Presupuesto de red de un request de creación (gunicorn corta a los 60s).
 MP_PRESUPUESTO_CREAR_SEG = int(os.environ.get('MP_PRESUPUESTO_CREAR_SEG', '35'))
+# Segunda tarjeta en la Point: tras aprobar un cobro la máquina sigue unos
+# segundos mostrando el resultado / imprimiendo y MP rechaza la orden nueva con
+# `already_queued_order_on_terminal`. Si el último cobro de esa caja terminó
+# hace poco, se espera y se replaya la MISMA orden (mismo idempotency key: el
+# 4xx prueba que no se creó nada) en vez de devolverle el error al cajero.
+MP_TERMINAL_OCUPADO_REINTENTOS = int(os.environ.get('MP_TERMINAL_OCUPADO_REINTENTOS', '3'))
+MP_TERMINAL_OCUPADO_ESPERA_SEG = float(os.environ.get('MP_TERMINAL_OCUPADO_ESPERA_SEG', '3'))
+MP_TERMINAL_RECIEN_USADO_SEG = int(os.environ.get('MP_TERMINAL_RECIEN_USADO_SEG', '120'))
 # Tope de intentos por (sucursal, correlativo). 99 y no más: 'i100' volvería a
 # hacer que 'i10' sea prefijo de otra referencia (ver _resolver_transaccion_por_payment).
 MP_MAX_INTENTOS_TICKET = 99
@@ -1343,7 +1351,8 @@ def _normalizar_payment_ids(payment_ids):
 
 
 def _resolver_previos_antes_de_cobrar(config, correlativo, presupuesto,
-                                      payment_ids_cargados=None):
+                                      payment_ids_cargados=None,
+                                      montos_cargados=None):
     """Antes de emitir una orden nueva, cerrar o denunciar lo que haya vivo.
 
     Hace RED (consultas y cancelaciones a MP), así que corre FUERA del candado.
@@ -1361,6 +1370,16 @@ def _resolver_previos_antes_de_cobrar(config, correlativo, presupuesto,
     verdadero trabajo: atrapar al otro request que está creando en paralelo).
     """
     cargados = _normalizar_payment_ids(payment_ids_cargados)
+    # Montos de los pagos MP ya cargados que NO traen id: se emparejan por
+    # monto (greedy, mismo criterio que cobros_no_respaldados al cerrar).
+    montos_libres = []
+    for _m in (montos_cargados or ()):
+        try:
+            _m = int(_m)
+        except (TypeError, ValueError):
+            continue
+        if _m > 0:
+            montos_libres.append(_m)
     atendidos = set()
     for previa in cobros_vivos_de_ticket(config.sucursal_id, correlativo,
                                          refrescar=True, presupuesto=presupuesto):
@@ -1378,6 +1397,11 @@ def _resolver_previos_antes_de_cobrar(config, correlativo, presupuesto,
             ids_previa = {str(previa.payment_id or '').strip(),
                           str(previa.payment_id_mp or '').strip()} - {''}
             if cargados and ids_previa & cargados:
+                continue
+            # Sin id que calce: si el POS tiene cargado un pago MP por este
+            # mismo monto, es esta aprobada (el cobro se crea 1:1 con el pago).
+            if previa.monto in montos_libres:
+                montos_libres.remove(previa.monto)
                 continue
             raise CobroEnCursoError(
                 f'Ya hay un cobro APROBADO de ${previa.monto:,} en Mercado Pago para '
@@ -1476,6 +1500,55 @@ def _reservar_fila(config, correlativo, monto, canal, usuario, permitir_en_curso
         detalle=str(ultimo_integrity))
 
 
+def _terminal_ocupado(error):
+    """True si MP rechazó la orden porque la máquina ya tiene una operación."""
+    try:
+        crudo = json.dumps(error.detalle, ensure_ascii=False).lower()
+    except (TypeError, ValueError):
+        crudo = str(error.detalle).lower()
+    return 'already_queued_order_on_terminal' in crudo
+
+
+def _terminal_recien_usado(transaccion):
+    """¿La caja de esta orden terminó otro cobro Point hace segundos?
+
+    Es el caso de la segunda tarjeta del mismo ticket: la máquina todavía
+    muestra el resultado del anterior. Una operación vieja sin terminar (la
+    del incidente PAO4) NO cuenta: ahí el error es real y se informa al tiro.
+    """
+    desde = timezone.now() - _dt.timedelta(seconds=MP_TERMINAL_RECIEN_USADO_SEG)
+    return (
+        TransaccionMercadoPago.objects
+        .filter(config_id=transaccion.config_id, canal='POINT',
+                estado__in=('APROBADA', 'CANCELADA', 'RECHAZADA'),
+                actualizado_en__gte=desde)
+        .exclude(pk=transaccion.pk)
+        .exists()
+    )
+
+
+def completar_ids_aprobada(transaccion):
+    """APROBADA sin `payment_id` ni `payment_id_mp`: consulta la orden UNA vez y
+    completa ids, medio y últimos 4. Sin red si ya los tiene o no hay order_id.
+
+    El POS usa el id como voucher del pago y como prueba de que la aprobada ya
+    está cargada (segunda tarjeta); sin id, la segunda tarjeta se bloqueaba.
+    """
+    if (transaccion.estado != 'APROBADA' or transaccion.payment_id
+            or transaccion.payment_id_mp or not transaccion.order_id):
+        return transaccion
+    try:
+        resp = _request(transaccion.config, 'GET', f'/v1/orders/{transaccion.order_id}')
+        data = _json_o_error(resp, f'completar ids orden {transaccion.order_id}')
+    except MercadoPagoError:
+        return transaccion
+    payment = _extraer_payment_de_orden(data)
+    if not payment:
+        return transaccion
+    return _aplicar_estado(transaccion, 'APROBADA',
+                           detalle=transaccion.estado_detalle, payment=payment, raw=data)
+
+
 def _enviar_orden(transaccion, body, sufijo='', _reintento=False):
     """Marca la fila ENVIADA y postea. Devuelve (transaccion, qr_data).
 
@@ -1503,36 +1576,56 @@ def _enviar_orden(transaccion, body, sufijo='', _reintento=False):
                enviada_en=timezone.now().isoformat())
 
     idem = transaccion.external_reference + sufijo
-    try:
-        resp = _request(transaccion.config, 'POST', '/v1/orders',
-                        json_body=body, idempotency_key=idem)
-        data = _json_o_error(resp, f'crear orden {transaccion.external_reference}')
-    except MercadoPagoError as e:
-        if e.red:
-            # ── EL CASO DEL 13-09 ──────────────────────────────────────────
-            # MP puede haber recibido la orden. La fila queda ENVIADA (incierta)
-            # y el caller decide: el POS la vigila, el guard la respeta y
-            # resolver_incierta la cierra o la recupera más tarde.
-            logger.warning(
-                "MP: cobro INCIERTO %s ($%s, %s): %s",
-                transaccion.external_reference, transaccion.monto,
-                transaccion.canal, e.mensaje,
-            )
-            return transaccion, None
-        # Auto-corrección: MP rechaza propiedades puntuales según sitio/versión.
-        props = _props_no_soportadas(e, body) if not _reintento else []
-        if props:
-            logger.warning(f"MP: reintento de orden sin propiedades no soportadas: {props}")
-            body_min = {k: v for k, v in body.items() if k not in props}
-            # El sufijo y el body minimizado se PERSISTEN antes de postear: sin
-            # esto, la recuperación re-postearía el body original con la key
-            # original mientras MP tiene la orden bajo la key '-r' → 2ª orden.
-            return _enviar_orden(transaccion, body_min, sufijo='-r', _reintento=True)
-        # 4xx determinista: MP rechazó, la orden NUNCA se creó. Cerrar la fila
-        # para no dejarla bloqueando el ticket, y relanzar con el detalle crudo.
-        _aplicar_estado(transaccion, 'ERROR',
-                        detalle=f'Mercado Pago rechazó la orden: {e.mensaje[:80]}')
-        raise
+    esperas_ocupado = 0
+    while True:
+        try:
+            resp = _request(transaccion.config, 'POST', '/v1/orders',
+                            json_body=body, idempotency_key=idem)
+            data = _json_o_error(resp, f'crear orden {transaccion.external_reference}')
+            break
+        except MercadoPagoError as e:
+            if e.red:
+                # ── EL CASO DEL 13-09 ──────────────────────────────────────
+                # MP puede haber recibido la orden. La fila queda ENVIADA
+                # (incierta) y el caller decide: el POS la vigila, el guard la
+                # respeta y resolver_incierta la cierra o la recupera después.
+                logger.warning(
+                    "MP: cobro INCIERTO %s ($%s, %s): %s",
+                    transaccion.external_reference, transaccion.monto,
+                    transaccion.canal, e.mensaje,
+                )
+                return transaccion, None
+            # Point recién liberada de otro cobro (segunda tarjeta del mismo
+            # ticket): esperar y replay con la MISMA key. El 4xx prueba que la
+            # orden no se creó, así que el replay no puede duplicar nada.
+            if (transaccion.canal == 'POINT'
+                    and esperas_ocupado < MP_TERMINAL_OCUPADO_REINTENTOS
+                    and _terminal_ocupado(e)
+                    and _terminal_recien_usado(transaccion)):
+                esperas_ocupado += 1
+                logger.info(
+                    "MP: terminal ocupado tras un cobro reciente; espera %ss y reintenta "
+                    "%s (%s/%s)", MP_TERMINAL_OCUPADO_ESPERA_SEG,
+                    transaccion.external_reference, esperas_ocupado,
+                    MP_TERMINAL_OCUPADO_REINTENTOS,
+                )
+                time.sleep(MP_TERMINAL_OCUPADO_ESPERA_SEG)
+                continue
+            # Auto-corrección: MP rechaza propiedades puntuales según sitio/versión.
+            props = _props_no_soportadas(e, body) if not _reintento else []
+            if props:
+                logger.warning(f"MP: reintento de orden sin propiedades no soportadas: {props}")
+                body_min = {k: v for k, v in body.items() if k not in props}
+                # El sufijo y el body minimizado se PERSISTEN antes de postear:
+                # sin esto, la recuperación re-postearía el body original con la
+                # key original mientras MP tiene la orden bajo la key '-r'.
+                return _enviar_orden(transaccion, body_min, sufijo='-r', _reintento=True)
+            # 4xx determinista: MP rechazó, la orden NUNCA se creó. Cerrar la
+            # fila para no dejarla bloqueando el ticket, y relanzar con el
+            # detalle crudo.
+            _aplicar_estado(transaccion, 'ERROR',
+                            detalle=f'Mercado Pago rechazó la orden: {e.mensaje[:80]}')
+            raise
 
     order_id = str(data.get('id') or '')
     qr_data = (data.get('type_response') or {}).get('qr_data') or data.get('qr_data')
@@ -1559,7 +1652,8 @@ def _enviar_orden(transaccion, body, sufijo='', _reintento=False):
 
 
 def crear_orden(config, correlativo, monto, descripcion='', canal='QR', usuario=None,
-                permitir_en_curso=False, payment_ids_cargados=None):
+                permitir_en_curso=False, payment_ids_cargados=None,
+                montos_cargados=None):
     """Crea el cobro en MP (Orders API) y su TransaccionMercadoPago local.
 
     Devuelve **(transaccion, qr_data)**, igual que siempre. Dos diferencias
@@ -1582,6 +1676,11 @@ def crear_orden(config, correlativo, monto, descripcion='', canal='QR', usuario=
     POS ya cargó como pagos de este ticket (segunda tarjeta del mismo ticket).
     Solo afecta a la rama APROBADA del guard; ver
     _resolver_previos_antes_de_cobrar.
+
+    `montos_cargados`: montos de esos mismos pagos MP ya cargados. Respaldo
+    del anterior para cuando el pago cargado no trae id (el polling de una
+    orden Point puede aprobar antes de que MP informe el payment_id): sin
+    esto, la segunda tarjeta se bloqueaba con "ya hay un cobro APROBADO".
     """
     # ── FASE 0: validación pura. Sin fila, sin candado, sin red ─────────────
     # Cualquier error de CONFIGURACIÓN tiene que reventar acá: si dejara fila,
@@ -1610,7 +1709,8 @@ def crear_orden(config, correlativo, monto, descripcion='', canal='QR', usuario=
     if not permitir_en_curso:
         ids_atendidos = _resolver_previos_antes_de_cobrar(
             config, correlativo, presupuesto,
-            payment_ids_cargados=payment_ids_cargados)
+            payment_ids_cargados=payment_ids_cargados,
+            montos_cargados=montos_cargados)
 
     # ── FASE 2: reservar la fila (candado corto, sin red) ──────────────────
     transaccion = _reservar_fila(config, correlativo, monto, canal, usuario,
@@ -2537,7 +2637,7 @@ def consumir_transaccion_aprobada(sucursal_id, correlativo, monto, detalle_pago=
             TransaccionMercadoPago.objects.select_for_update()
             .filter(
                 sucursal_id=sucursal_id,
-                correlativo_ticket=str(correlativo),
+                correlativo_ticket__in=_correlativos_de(correlativo, incluir_sin_ticket=True),
                 tipo='VENTA',
                 estado='APROBADA',
                 consumida=False,
@@ -2580,6 +2680,75 @@ ESTADOS_EN_VUELO_MP = ('CREADA', 'PENDIENTE')
 PREFIJOS_CORRELATIVO_SIN_TICKET = ('PRUEBA-', 'DIRECTO-')
 
 
+def _correlativos_de(correlativo, incluir_sin_ticket=False):
+    """Normaliza `correlativo` (str/int o lista de ellos) a una lista de str.
+
+    Un mismo cobro puede haberse creado bajo más de un identificador: una
+    cotización se cobra en la Point como `COT-AAAAMM-NNNN` y recién al cerrar
+    la venta nace el ticket numérico. Los guards y el consumo reciben entonces
+    `[correlativo_ticket, numero_cotizacion]` y miran ambos.
+
+    Los correlativos sin ticket (PRUEBA-/DIRECTO-) se descartan salvo que se
+    pida lo contrario: nunca bloquean ni respaldan una venta.
+    """
+    if isinstance(correlativo, (list, tuple, set, frozenset)):
+        crudos = list(correlativo)
+    else:
+        crudos = [correlativo]
+    vistos = []
+    for c in crudos:
+        c = str(c if c is not None else '').strip()
+        if not c or c in vistos:
+            continue
+        if not incluir_sin_ticket and c.startswith(PREFIJOS_CORRELATIVO_SIN_TICKET):
+            continue
+        vistos.append(c)
+    return vistos
+
+
+def correlativos_equivalentes_de_ticket(sucursal_id, correlativo):
+    """`[correlativo]` más el número de la cotización que originó ese ticket.
+
+    Un ticket nacido de una cotización lleva sus líneas con
+    `cotizacion_detalle_id`; los cobros MP hechos ANTES de que existiera el
+    ticket quedaron bajo `COT-…`. Sirve para que `en-curso/<ticket>/` los vea
+    cuando el cajero retoma un ticket pendiente desde el dashboard.
+    """
+    correlativos = _correlativos_de(correlativo, incluir_sin_ticket=True)
+    if len(correlativos) != 1 or not correlativos[0].isdigit():
+        return correlativos
+    from app.models import Cotizacion_Empresa_Detalle, Ticket, Ticket_Productos
+    ticket = (
+        Ticket.objects
+        .filter(sucursal_id=sucursal_id, correlativo=int(correlativos[0]))
+        .only('id', 'observaciones_adicionales')
+        .order_by('-id').first()
+    )
+    if ticket is None:
+        return correlativos
+    numeros = []
+    # Marca textual (líneas con SKU) — ver Ticket.numero_cotizacion_origen.
+    if ticket.numero_cotizacion_origen:
+        numeros.append(ticket.numero_cotizacion_origen)
+    # Líneas pendientes de despacho (llevan el detalle de la cotización).
+    detalle_ids = list(
+        Ticket_Productos.objects
+        .filter(idTicket=ticket, cotizacion_detalle_id__isnull=False)
+        .values_list('cotizacion_detalle_id', flat=True)[:5]
+    )
+    if detalle_ids:
+        numeros.extend(
+            Cotizacion_Empresa_Detalle.objects
+            .filter(id__in=detalle_ids)
+            .values_list('cotizacion__numero_cotizacion', flat=True)
+            .distinct()
+        )
+    for numero in numeros:
+        if numero and numero not in correlativos:
+            correlativos.append(numero)
+    return correlativos
+
+
 def metodo_pago_ticket_de(transaccion):
     """Método de `METODO_PAGO_TICKET_CHOICES` que corresponde a este cobro.
 
@@ -2608,12 +2777,12 @@ def cobros_vivos_de_ticket(sucursal_id, correlativo, refrescar=False, presupuest
     convierte "se cerró la ventana y el cliente pagó igual" en un dato conocido
     ANTES de cerrar la venta con otro medio.
     """
-    correlativo = str(correlativo)
-    if correlativo.startswith(PREFIJOS_CORRELATIVO_SIN_TICKET):
+    correlativos = _correlativos_de(correlativo)
+    if not correlativos:
         return []
     candidatas = (
         TransaccionMercadoPago.objects
-        .filter(sucursal_id=sucursal_id, correlativo_ticket=correlativo, tipo='VENTA')
+        .filter(sucursal_id=sucursal_id, correlativo_ticket__in=correlativos, tipo='VENTA')
         .exclude(estado__in=list(ESTADOS_FINALES_MP))
         .select_related('config')
         .order_by('creado_en')

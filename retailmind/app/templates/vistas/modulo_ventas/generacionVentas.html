@@ -4061,6 +4061,22 @@ document.addEventListener('DOMContentLoaded', function() {
             // ──────────────────────────────────────────────────────────────
 
             const clienteNombre = ticket.cliente_nombre || 'Sin nombre';
+
+            // Origen y documento: chip «Cotización» (con su número bajo el RUT),
+            // «Factura» cuando el RUT es de empresa y «×N» si el listado trae el
+            // mismo cobro repetido (reintentos de una cotización que fallaron al
+            // cerrar): se paga uno y se anulan los demás.
+            const esCot = !!ticket.numero_cotizacion;
+            const esCambioRow = ticket.modulo_origen === 'CAMBIO_DEVOLUCION';
+            let chipsOrigen = esCot
+                ? `<span class="pv-chip pv-chip-info" title="Ticket creado desde la cotización ${escHtmlPos(ticket.numero_cotizacion)}">Cotización</span>`
+                : `<span class="pv-chip pv-chip-${tipoTicketClass}" title="${tipoDetalle}">${tipoTicket}</span>`;
+            if (ticket.doc_sugerido === 'FACTURA' && !esCambioRow) {
+                chipsOrigen += ` <span class="pv-chip pv-chip-warning" title="RUT de empresa: al pagar se preselecciona Factura Electrónica">Factura</span>`;
+            }
+            if (ticket.repetido > 1) {
+                chipsOrigen += ` <span class="pv-chip pv-chip-danger" title="${ticket.repetido} tickets pendientes iguales (mismo cliente y total): pague uno y anule el resto">×${ticket.repetido}</span>`;
+            }
             return `
                 <tr class="pv-dash-row ${rowClass}" onclick="pagarTicket(${ticket.correlativo})" title="Clic para pagar ticket">
                     <td>
@@ -4068,13 +4084,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         ${stockBadge}
                     </td>
                     <td>
-                        <span class="pv-chip pv-chip-${tipoTicketClass}" title="${tipoDetalle}">${tipoTicket}</span>
+                        ${chipsOrigen}
                     </td>
                     <td><span class="pv-dash-hora">${ticket.hora}</span></td>
                     <td>
                         <div class="pv-dash-cli">
                             <span class="pv-dash-cli-nom" title="${escHtmlPos(clienteNombre)}">${escHtmlPos(clienteNombre)}</span>
-                            <span class="pv-dash-cli-rut">${escHtmlPos(ticket.cliente_rut || '')}</span>
+                            <span class="pv-dash-cli-rut">${escHtmlPos(ticket.cliente_rut || '')}${esCot ? ` · ${escHtmlPos(ticket.numero_cotizacion)}` : ''}</span>
                         </div>
                     </td>
                     <td><span class="pv-dash-vend">${escHtmlPos(ticket.vendedor_nombre)}</span></td>
@@ -5097,6 +5113,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // FIN FUNCIONES DE COTIZACIONES
     // =========================================================================
 
+    /** RUT de empresa (o giro) en el cliente del ticket: la venta es a empresa. */
+    function esClienteEmpresaTicket(ticket) {
+        if (!ticket || ticket.modulo_origen === 'CAMBIO_DEVOLUCION') return false;
+        if (ticket.cliente_es_empresa) return true;
+        const cli = ticket.cliente || {};
+        if ((cli.giro || '').trim()) return true;
+        try { return !!(cli.rut && esRutEmpresa(cli.rut)); } catch (e) { return false; }
+    }
+
     function cargarTicket(ticket) {
         ticketActual = ticket;
 
@@ -5116,15 +5141,20 @@ document.addEventListener('DOMContentLoaded', function() {
         // =========================================================================
         // NUEVO: Detectar si es una cotización y configurar apropiadamente
         // =========================================================================
-        if (ticket.es_cotizacion) {
+        // `es_cotizacion`: cotización cargada como pseudo-ticket (COT-…).
+        // `cotizacion_id`: ticket numérico que YA nació de una cotización (un
+        // intento anterior de cobro) y se retoma desde el dashboard / por N°.
+        // En ambos se preselecciona Factura y se conserva cotizacion_id para
+        // que al cerrar la cotización quede FACTURADA.
+        if (ticket.es_cotizacion || ticket.cotizacion_id) {
             console.log('🔄 Cargando ticket desde cotización:', ticket.numero_cotizacion);
             
             // Guardar referencia a la cotización
             cotizacionActual = {
                 id: ticket.cotizacion_id,
                 numero_cotizacion: ticket.numero_cotizacion,
-                fecha_emision: ticket.fecha_emision,
-                fecha_validez: ticket.fecha_validez
+                fecha_emision: ticket.fecha_emision || (ticket.cotizacion && ticket.cotizacion.fecha_emision) || '',
+                fecha_validez: ticket.fecha_validez || (ticket.cotizacion && ticket.cotizacion.fecha_validez) || ''
             };
             
             // Pre-seleccionar Factura Electrónica (las cotizaciones son para empresas).
@@ -5172,13 +5202,27 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Mostrar notificación informativa
             mostrarNotificacion(
-                `Cotización ${ticket.numero_cotizacion} cargada. Se recomienda Factura Electrónica.`, 
-                'info', 
-                5000
+                ticket.es_cotizacion
+                    ? `Cotización ${ticket.numero_cotizacion} cargada. Se recomienda Factura Electrónica.`
+                    : `Ticket #${ticket.ticket_id} viene de la cotización ${ticket.numero_cotizacion}: se preseleccionó Factura Electrónica.`,
+                'info',
+                6000
             );
         } else {
             // No es cotización, limpiar variable
             cotizacionActual = null;
+            // Ticket retomado (dashboard / N° de ticket): el tipo de documento
+            // elegido en el paso 2 no se guarda y el radio queda en Boleta.
+            // Con RUT de empresa (o giro) se preselecciona Factura, igual que
+            // hace la búsqueda por RUT. El 22-09 una venta a un club deportivo
+            // salió como boleta por saltar directo al paso 3.
+            if (esClienteEmpresaTicket(ticket)) {
+                sugerirTipoDocumento('FACTURA_ELECTRONICA',
+                    'El RUT del ticket corresponde a una empresa: se preseleccionó Factura Electrónica.');
+                mostrarNotificacion(
+                    'RUT de empresa: se preseleccionó Factura Electrónica. Cámbielo en Datos del Cliente si corresponde boleta.',
+                    'info', 6000);
+            }
             actualizarVisibilidadFidelizacion();
         }
         // =========================================================================
@@ -9491,7 +9535,7 @@ document.addEventListener('DOMContentLoaded', function() {
             metodo_pago: cobro.metodo_pago_ticket || 'MP_POINT',
             monto: cobro.monto,
             tipo_tarjeta: cobro.metodo_pago_mp || 'MERCADO PAGO',
-            voucher: cobro.payment_id || '',
+            voucher: cobro.payment_id || cobro.payment_id_mp || '',
             notas: `MP ${cobro.canal} Aut: ${cobro.codigo_autorizacion || '-'}`
                  + (cobro.ultimos_4_digitos ? ' | ****' + cobro.ultimos_4_digitos : ''),
             origen_pago: 'POS_INTEGRADO'
@@ -10903,6 +10947,9 @@ body {
                             <h6 class="mb-1 fw-bold">
                                 Ticket #${ticket.correlativo}
                                 ${hasStockIssue ? '<span class="badge bg-danger ms-1"><i class="ri-error-warning-fill"></i> Stock</span>' : ''}
+                                ${ticket.numero_cotizacion ? `<span class="badge bg-info ms-1" title="Creado desde esta cotización">${escHtmlPos(ticket.numero_cotizacion)}</span>` : ''}
+                                ${ticket.doc_sugerido === 'FACTURA' ? '<span class="badge bg-warning text-dark ms-1" title="RUT de empresa: se preselecciona Factura">Factura</span>' : ''}
+                                ${ticket.repetido > 1 ? `<span class="badge bg-danger ms-1" title="Tickets pendientes iguales en el listado">×${ticket.repetido}</span>` : ''}
                             </h6>
                             <span class="badge bg-warning text-dark">${formatearMoneda(ticket.total)}</span>
                         </div>
@@ -11041,9 +11088,15 @@ body {
                 mostrarVista('wizard');
                 cargarTicket(data.ticket);
 
-                // Si el ticket tiene cliente, ir directo a pagos (paso 3)
-                // Si no tiene cliente, ir a paso 2 para capturar datos
-                if (data.ticket.cliente && data.ticket.cliente.rut) {
+                // Cotización o RUT de empresa: pasar por Datos del Cliente para
+                // que el cajero CONFIRME Factura Electrónica y los datos
+                // tributarios. Saltar al paso 3 dejaba el radio en Boleta y la
+                // venta salía con el documento equivocado.
+                if (data.ticket.cotizacion_id || esClienteEmpresaTicket(data.ticket)) {
+                    irAPaso(2);
+                    mostrarNotificacion('Venta a empresa: confirme Factura Electrónica y los datos tributarios antes de cobrar.', 'info', 6000);
+                } else if (data.ticket.cliente && data.ticket.cliente.rut) {
+                    // Si el ticket tiene cliente, ir directo a pagos (paso 3)
                     irAPaso(3); // Ir directo a pagos
                     mostrarNotificacion('Ticket cargado. Registre los pagos.', 'success');
                 } else {
@@ -12673,7 +12726,7 @@ body {
                                : (canalTxt === 'QR' ? 'MP_QR' : 'MP_POINT'),
                     monto: data.monto || monto,
                     tipo_tarjeta: data.metodo_pago_mp || 'MERCADO PAGO',
-                    voucher: data.payment_id || '',
+                    voucher: data.payment_id || data.payment_id_mp || '',
                     notas: `MP ${canalTxt} (aprobado tras cerrar la ventana) Aut: ${data.codigo_autorizacion || '-'}`,
                     origen_pago: 'POS_INTEGRADO'
                 });
@@ -12716,6 +12769,21 @@ body {
             .map(p => String(p.voucher).trim());
     }
     window._vouchersMPCargados = _vouchersMPCargados;
+
+    /**
+     * Montos de esos mismos pagos MP integrados. Respaldo de los vouchers: la
+     * orden Point puede aprobarse en el polling antes de que MP informe el
+     * payment_id, y entonces el pago queda cargado SIN voucher; sin este dato
+     * el servidor bloqueaba la segunda tarjeta con "ya hay un cobro APROBADO".
+     */
+    function _montosMPCargados() {
+        return pagosActuales
+            .filter(p => String(p.metodo_pago || '').startsWith('MP_')
+                      && (!p.origen_pago || p.origen_pago === 'POS_INTEGRADO'))
+            .map(p => Number(p.monto) || 0)
+            .filter(m => m > 0);
+    }
+    window._montosMPCargados = _montosMPCargados;
 
     /**
      * Qué hacer con la respuesta de /pos/mercadopago/qr/crear/.
@@ -12840,7 +12908,7 @@ body {
                     metodo_pago: c.metodo_pago_ticket || (c.canal === 'QR' ? 'MP_QR' : 'MP_POINT'),
                     monto: c.monto,
                     tipo_tarjeta: c.metodo_pago_mp || 'MERCADO PAGO',
-                    voucher: c.payment_id || '',
+                    voucher: c.payment_id || c.payment_id_mp || '',
                     notas: `MP ${c.canal} (cobro previo) Aut: ${c.codigo_autorizacion || '-'}`
                          + (c.ultimos_4_digitos ? ' | ****' + c.ultimos_4_digitos : ''),
                     origen_pago: 'POS_INTEGRADO'
@@ -12920,7 +12988,8 @@ body {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
                 body: JSON.stringify({ correlativo: correlativoMP, monto: montoCobrar,
-                                       pagos_mp_cargados: _vouchersMPCargados() })
+                                       pagos_mp_cargados: _vouchersMPCargados(),
+                                       montos_mp_cargados: _montosMPCargados() })
             });
             creacion = await resp.json();
         } catch (e) {
@@ -13006,7 +13075,7 @@ body {
                     metodo_pago: 'MP_QR',
                     monto: montoCobrar,
                     tipo_tarjeta: data.metodo_pago_mp || 'MERCADO PAGO',
-                    voucher: data.payment_id || '',
+                    voucher: data.payment_id || data.payment_id_mp || '',
                     notas: `MP Aut: ${data.codigo_autorizacion || '-'}${data.ultimos_4_digitos ? ' | ****' + data.ultimos_4_digitos : ''}`,
                     origen_pago: 'POS_INTEGRADO'
                 };
@@ -13104,7 +13173,8 @@ body {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
                 body: JSON.stringify({ correlativo: correlativoMP, monto: montoCobrar, canal: 'POINT',
-                                       pagos_mp_cargados: _vouchersMPCargados() })
+                                       pagos_mp_cargados: _vouchersMPCargados(),
+                                       montos_mp_cargados: _montosMPCargados() })
             });
             creacion = await resp.json();
         } catch (e) {
@@ -13197,7 +13267,7 @@ body {
                                    : 'MP_POINT',
                         monto: montoCobrar,
                         tipo_tarjeta: data.metodo_pago_mp || 'MERCADO PAGO POINT',
-                        voucher: data.payment_id || '',
+                        voucher: data.payment_id || data.payment_id_mp || '',
                         notas: `MP Point Aut: ${data.codigo_autorizacion || '-'}${data.ultimos_4_digitos ? ' | ****' + data.ultimos_4_digitos : ''}`,
                         origen_pago: 'POS_INTEGRADO'
                     };

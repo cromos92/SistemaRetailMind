@@ -70,6 +70,27 @@ def _payment_ids_cargados(crudo):
     return set(limpios)
 
 
+def _montos_cargados(crudo):
+    """Montos (int > 0) de los pagos MP integrados que el POS ya tiene cargados.
+
+    Respaldo de `_payment_ids_cargados` para la segunda tarjeta del mismo
+    ticket cuando el primer pago aún no trae id (la orden Point puede quedar
+    APROBADA en el polling antes de que MP informe el payment_id)."""
+    if isinstance(crudo, str):
+        crudo = crudo.split(',')
+    if not isinstance(crudo, (list, tuple)):
+        return []
+    montos = []
+    for v in list(crudo)[:_MAX_PAGOS_MP_CARGADOS]:
+        try:
+            m = int(v)
+        except (TypeError, ValueError):
+            continue
+        if m > 0:
+            montos.append(m)
+    return montos
+
+
 @api_view(['POST'])
 @login_required
 def crear_pago_qr_mp(request):
@@ -94,12 +115,14 @@ def crear_pago_qr_mp(request):
     # Cobros MP que el POS ya cargó como pagos de este ticket (segunda tarjeta
     # del mismo ticket). Sin el campo, el guard se comporta igual que siempre.
     pagos_mp_cargados = _payment_ids_cargados(request.data.get('pagos_mp_cargados'))
+    montos_mp_cargados = _montos_cargados(request.data.get('montos_mp_cargados'))
     try:
         config = mp.obtener_config(sucursal_id)
         transaccion, qr_data = mp.crear_orden(
             config, correlativo, monto, canal=canal,
             descripcion=f'Venta {correlativo}', usuario=request.user,
             payment_ids_cargados=pagos_mp_cargados,
+            montos_cargados=montos_mp_cargados,
         )
     except MercadoPagoError as e:
         cuerpo = {'success': False, 'error': e.mensaje}
@@ -166,6 +189,9 @@ def estado_pago_mp(request, transaccion_id):
         return Response({'success': False, 'error': 'Transacción no encontrada'},
                         status=status.HTTP_404_NOT_FOUND)
     transaccion = mp.consultar_estado(transaccion)
+    # Aprobada sin id de pago (p.ej. aprobación por webhook de orden sin el
+    # detalle del pago): completarlo acá, que es de donde el POS saca el voucher.
+    transaccion = mp.completar_ids_aprobada(transaccion)
     return Response({
         'success': True,
         # OJO: `estado` NO puede salirse de {'CREADA','PENDIENTE'} mientras el
@@ -293,7 +319,10 @@ def cobros_vivos_ticket_mp(request, correlativo):
         return Response({'success': False, 'error': 'No hay sucursal en sesión'},
                         status=status.HTTP_400_BAD_REQUEST)
     refrescar = str(request.GET.get('refrescar') or '') in ('1', 'true', 'True')
-    cobros = mp.cobros_vivos_de_ticket(sucursal_id, correlativo, refrescar=refrescar)
+    # Un ticket nacido de una cotización también busca los cobros hechos bajo
+    # COT-… (se crearon antes de que existiera el ticket).
+    correlativos = mp.correlativos_equivalentes_de_ticket(sucursal_id, correlativo)
+    cobros = mp.cobros_vivos_de_ticket(sucursal_id, correlativos, refrescar=refrescar)
     return Response({
         'success': True,
         'correlativo': str(correlativo),

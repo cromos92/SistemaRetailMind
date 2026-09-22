@@ -2118,6 +2118,116 @@ class DosTarjetasMPTests(BaseMPTest):
                                   payment_ids_cargados=['177422093000'])
         self.assertEqual(trx.estado, 'PENDIENTE')
 
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_aprobada_cargada_sin_voucher_no_bloquea_por_monto(self, m_req):
+        """La orden Point puede aprobarse en el polling antes de que MP informe
+        el payment_id: el POS carga el pago SIN voucher. Con los montos
+        cargados (`montos_cargados`) esa aprobada tampoco bloquea la segunda
+        tarjeta; un monto que no calza sigue bloqueando."""
+        _transaccion(self.config, correlativo='706', monto=5000, payment_id='')
+        with self.assertRaises(mp.MercadoPagoError) as ctx:
+            mp.crear_orden(self.config, '706', 7000, payment_ids_cargados=[],
+                           montos_cargados=[4000])
+        self.assertIn('APROBADO', ctx.exception.mensaje)
+        self._mock_req(m_req)
+        trx, _qr = mp.crear_orden(self.config, '706', 7000, payment_ids_cargados=[],
+                                  montos_cargados=['5000'])
+        self.assertEqual(trx.estado, 'PENDIENTE')
+        self.assertEqual(trx.monto, 7000)
+
+    def _resp(self, status, payload):
+        resp = mock.MagicMock()
+        resp.status_code = status
+        resp.json.return_value = payload
+        return resp
+
+    def _ocupado(self):
+        return self._resp(400, {'errors': [{
+            'code': 'already_queued_order_on_terminal',
+            'message': 'There is already a queued order on the terminal'}]})
+
+    @mock.patch('app.services.mercadopago_service.time.sleep')
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_point_ocupada_tras_aprobar_espera_y_replaya_la_misma_orden(self, m_req, m_sleep):
+        """Segunda tarjeta: la Point sigue mostrando el resultado del cobro
+        anterior y MP responde already_queued. Se espera y se replaya con la
+        MISMA idempotency key; la orden se crea al segundo intento."""
+        self.config.device_id = 'DEV-1'
+        self.config.save(update_fields=['device_id'])
+        _transaccion(self.config, correlativo='710', monto=5000, canal='POINT',
+                     payment_id='PAY710', order_id='ORD-710A')
+        m_req.side_effect = [
+            self._ocupado(),
+            self._resp(201, {'id': 'ORD-710B', 'status': 'created'}),
+        ]
+        trx, _qr = mp.crear_orden(self.config, '710', 7000, canal='POINT',
+                                  payment_ids_cargados={'PAY710'})
+        self.assertEqual(trx.estado, 'PENDIENTE')
+        self.assertEqual(trx.order_id, 'ORD-710B')
+        self.assertEqual(m_req.call_count, 2)
+        keys = {c.kwargs.get('headers', {}).get('X-Idempotency-Key')
+                for c in m_req.call_args_list}
+        self.assertEqual(len(keys), 1, keys)  # replay: mismos headers (misma key)
+        m_sleep.assert_called_once_with(mp.MP_TERMINAL_OCUPADO_ESPERA_SEG)
+
+    @mock.patch('app.services.mercadopago_service.time.sleep')
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_point_ocupada_sin_cobro_reciente_falla_al_tiro(self, m_req, m_sleep):
+        """Sin un cobro Point reciente en la caja, el already_queued es una
+        operación vieja colgada: se informa de inmediato (caso PAO4)."""
+        self.config.device_id = 'DEV-1'
+        self.config.save(update_fields=['device_id'])
+        m_req.return_value = self._ocupado()
+        with self.assertRaises(mp.MercadoPagoError) as ctx:
+            mp.crear_orden(self.config, '711', 7000, canal='POINT')
+        self.assertIn('EN LA MÁQUINA', ctx.exception.mensaje)
+        self.assertEqual(m_req.call_count, 1)
+        m_sleep.assert_not_called()
+        self.assertEqual(TransaccionMercadoPago.objects.get(
+            correlativo_ticket='711').estado, 'ERROR')
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_completar_ids_aprobada_consulta_la_orden_una_vez(self, m_req):
+        trx = _transaccion(self.config, correlativo='712', monto=5000, canal='POINT',
+                           order_id='ORD-712')
+        self.assertEqual(trx.payment_id, '')
+        m_req.return_value = self._resp(200, {
+            'id': 'ORD-712', 'status': 'processed',
+            'transactions': {'payments': [{'id': 'PAY01ZZZ', 'payment_type_id': 'debit_card',
+                                           'card': {'last_four_digits': '4321'}}]},
+        })
+        trx = mp.completar_ids_aprobada(trx)
+        self.assertEqual(trx.payment_id, 'PAY01ZZZ')
+        self.assertEqual(trx.metodo_pago_mp, 'debit_card')
+        self.assertEqual(trx.ultimos_4_digitos, '4321')
+        self.assertEqual(trx.estado, 'APROBADA')
+        # Con ids ya cargados no hay red.
+        m_req.reset_mock()
+        mp.completar_ids_aprobada(trx)
+        m_req.assert_not_called()
+
+    def test_guards_y_consumo_aceptan_lista_de_correlativos(self):
+        """Una cotización se cobra en la Point bajo `COT-…` antes de que exista
+        el ticket: los guards y el consumo reciben ambos identificadores."""
+        self.assertEqual(mp._correlativos_de(['PRUEBA-1', '900', 900, None, '']), ['900'])
+        self.assertEqual(mp._correlativos_de('DIRECTO-x'), [])
+        self.assertEqual(mp._correlativos_de('DIRECTO-x', incluir_sin_ticket=True), ['DIRECTO-x'])
+
+        cot = _transaccion(self.config, correlativo='COT-202609-0001', monto=5000,
+                           payment_id='PAYC')
+        ambos = ['900', 'COT-202609-0001']
+        self.assertEqual([t.id for t in mp.cobros_vivos_de_ticket(self.sucursal.id, ambos)],
+                         [cot.id])
+        self.assertEqual(mp.cobros_vivos_de_ticket(self.sucursal.id, '900'), [])
+        # Con el pago de $5.000 cargado, nada queda sin respaldo.
+        self.assertEqual(mp.cobros_no_respaldados(self.sucursal.id, ambos, [5000],
+                                                  refrescar=False), [])
+        usada = mp.consumir_transaccion_aprobada(self.sucursal.id, ambos, 5000,
+                                                 payment_id='PAYC')
+        self.assertIsNotNone(usada)
+        self.assertEqual(usada.id, cot.id)
+        self.assertTrue(TransaccionMercadoPago.objects.get(pk=cot.pk).consumida)
+
     def test_con_el_set_una_pendiente_igual_se_cancela_y_una_incierta_bloquea(self):
         """El set solo afecta a la rama APROBADA: lo demás no cambia."""
         pendiente = _transaccion(self.config, correlativo='703', monto=5000,

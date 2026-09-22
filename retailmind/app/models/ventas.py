@@ -1,3 +1,5 @@
+import re
+
 from django.db import models
 from django.db.models import Sum
 from django.utils import timezone
@@ -344,6 +346,21 @@ class Ticket(models.Model):
     def saldo_por_pagar(self):
         saldo = (self.total or 0) - self.total_pagado
         return saldo if saldo > 0 else 0
+
+    # Marca textual que deja registrar_pagos_ticket al crear un ticket desde una
+    # cotización: "Facturación de cotización COT-AAAAMM-NNNN. <descripción>".
+    # Es el único vínculo ticket→cotización para las líneas CON SKU (las líneas
+    # pendientes de despacho además llevan cotizacion_detalle_id). No hay FK
+    # porque agregarla exige migración; el punto tras el número evita que
+    # COT-…-0001 calce con COT-…-00010.
+    MARCA_COTIZACION_RE = re.compile(
+        r'Facturaci[oó]n de cotizaci[oó]n\s+(COT-[A-Za-z0-9\-]+)\.')
+
+    @property
+    def numero_cotizacion_origen(self):
+        """Número de la cotización que originó este ticket, o '' si no aplica."""
+        m = self.MARCA_COTIZACION_RE.search(self.observaciones_adicionales or '')
+        return m.group(1) if m else ''
 
 class Ticket_Productos(models.Model):
     ProductoTalla = models.ForeignKey(
