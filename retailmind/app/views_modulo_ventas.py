@@ -2245,13 +2245,40 @@ def anular_ticket_pendiente(request):
                 productos_ticket = Ticket_Productos.objects.filter(idTicket=ticket)
                 
                 for item in productos_ticket:
+                    # Línea sin SKU (ítem pendiente de despacho de una cotización
+                    # o línea manual): no hay stock que devolver. Antes reventaba
+                    # con "'NoneType' object has no attribute 'producto'" y el
+                    # ticket no se podía anular (22-09-2026, tickets de LAS ROCAS).
+                    if item.ProductoTalla_id is None:
+                        continue
+                    # Solo se reingresa lo que de verdad SALIÓ. Un ticket PENDIENTE
+                    # no descuenta stock (el EGRESO nace al pagar), así que anularlo
+                    # no puede crear un reingreso: 8 tickets duplicados anulados
+                    # habrían metido 8 reingresos fantasma al kardex. Si igual hay
+                    # un EGRESO ligado a este ticket (flujos legacy / sync), se
+                    # devuelve exactamente esa cantidad.
+                    egresado = -(Movimientos_Producto.objects.filter(
+                        Q(ticket=ticket)
+                        | Q(referencia_externa=f'TICKET_{ticket.correlativo}',
+                            sucursal_origen=ticket.sucursal),
+                        ProductoTalla=item.ProductoTalla,
+                        tipo_movimiento='EGRESO',
+                    ).aggregate(t=Sum('cantidad'))['t'] or 0)
+                    if egresado <= 0:
+                        logger.debug(
+                            "Anulacion ticket=%s sku=%s sin salida de stock: no se reingresa",
+                            ticket.correlativo, item.ProductoTalla.sku,
+                        )
+                        continue
+                    producto = item.ProductoTalla.producto
                     # Crear movimiento de devolución de stock
                     # ✅ Usar DTE si está disponible, si no usar correlativo del ticket
                     referencia = f'ANULACION_DTE_{ticket.folio_dte}' if ticket.folio_dte else f'ANULACION_TICKET_{ticket.correlativo}'
                     Movimientos_Producto.objects.create(
                         ProductoTalla=item.ProductoTalla,
-                        cantidad=item.stock,  # Positivo para devolver al inventario
-                        costo=item.ProductoTalla.producto.costo,
+                        ticket=ticket,
+                        cantidad=min(int(item.stock or 0), egresado),  # Positivo para devolver al inventario
+                        costo=int((producto.costo if producto else 0) or 0),
                         precio=int(item.precio),
                         concepto='ANULACION_TICKET',
                         tipo_movimiento='INGRESO',
@@ -2265,7 +2292,7 @@ def anular_ticket_pendiente(request):
                         # jul-ago 2026: 412 movimientos / 439 u, todos de este
                         # flujo), lo que cegaba el filtro por sucursal de
                         # diferencias-recepción y los cortes del resumen.
-                        sucursal_destino=item.ProductoTalla.producto.sucursal,
+                        sucursal_destino=producto.sucursal if producto else None,
                     )
             
             # Cambiar estado del ticket a ANULADO

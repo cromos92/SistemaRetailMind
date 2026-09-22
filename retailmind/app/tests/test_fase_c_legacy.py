@@ -62,7 +62,8 @@ class AnulacionTicketDestinoTest(TestCase):
         sesion['idSucursalActual'] = self.sucursal.id
         sesion.save()
 
-    def _crear_ticket_pendiente(self, correlativo=101, talla=None, cantidad=2):
+    def _crear_ticket_pendiente(self, correlativo=101, talla=None, cantidad=2,
+                                con_egreso=True):
         ticket = Ticket.objects.create(
             vendedor=self.vendedor,
             sucursal=self.sucursal,
@@ -79,6 +80,18 @@ class AnulacionTicketDestinoTest(TestCase):
             precio=20000,
             subtotal=20000 * cantidad,
         )
+        if con_egreso:
+            # La anulación solo reingresa lo que salió: se simula el EGRESO que
+            # deja consumir_stock_fifo al pagar (flujo legacy con stock reservado).
+            Movimientos_Producto.objects.create(
+                ProductoTalla=talla or self.talla,
+                ticket=ticket,
+                sucursal_origen=self.sucursal,
+                cantidad=-cantidad,
+                concepto='VENTA_PUBLICO',
+                tipo_movimiento='EGRESO',
+                referencia_externa=f'TICKET_{correlativo}',
+            )
         return ticket
 
     def _anular(self, correlativo):
@@ -119,6 +132,38 @@ class AnulacionTicketDestinoTest(TestCase):
         mov = Movimientos_Producto.objects.get(
             concepto='ANULACION_TICKET', ProductoTalla=talla_ajena)
         self.assertEqual(mov.sucursal_destino_id, otra_sucursal.id)
+
+    def test_pendiente_sin_salida_de_stock_no_crea_reingreso(self):
+        """Un ticket PENDIENTE del POS no descontó stock: anularlo no puede
+        meter un INGRESO al kardex (los 8 duplicados del 22-09-2026 habrían
+        sumado 8 reingresos fantasma)."""
+        ticket = self._crear_ticket_pendiente(correlativo=303, con_egreso=False)
+        resp = self._anular(303)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json().get('success'), resp.json())
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.estado, 'ANULADO')
+        self.assertFalse(Movimientos_Producto.objects.filter(
+            concepto='ANULACION_TICKET').exists())
+
+    def test_linea_sin_sku_no_revienta_la_anulacion(self):
+        """Ítem pendiente de despacho (ProductoTalla=None) en un ticket de
+        cotización: antes 'NoneType' object has no attribute 'producto'."""
+        ticket = self._crear_ticket_pendiente(correlativo=404)
+        Ticket_Productos.objects.create(
+            idTicket=ticket, ProductoTalla=None, stock=3, precio=10000,
+            subtotal=30000, descripcion_linea='Producto por llegar',
+            es_pendiente_despacho=True,
+        )
+        resp = self._anular(404)
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertTrue(resp.json().get('success'), resp.json())
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.estado, 'ANULADO')
+        # Solo la línea con SKU (y con EGRESO previo) genera reingreso.
+        movs = Movimientos_Producto.objects.filter(concepto='ANULACION_TICKET')
+        self.assertEqual(movs.count(), 1)
+        self.assertEqual(movs.get().cantidad, 2)
 
 
 class DespachosProveedorLegacyTest(TestCase):
