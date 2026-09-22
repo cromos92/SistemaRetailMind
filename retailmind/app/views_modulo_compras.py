@@ -4920,3 +4920,159 @@ def desasociar_documento_emitido_compensacion(request, pago_id):
         return JsonResponse({'success': True, 'message': 'Compensación revertida correctamente'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+# ========== DOCUMENTOS VINCULADOS A UN TRASPASO (NC / AJUSTES) ==========
+
+# Estados en los que un traspaso ya pasó por la mesa de recepción. Fuera de esta
+# lista el documento sigue "en camino" y las NC vivas son un riesgo a futuro,
+# no un hecho consumado.
+_ESTADOS_TRASPASO_RECIBIDO = (
+    'RECEPCIONADO_COMPLETO', 'RECEPCIONADO_PARCIAL',
+    'RECEPCIONADO_SOBRANTE', 'EN_REGULARIZACION',
+)
+
+
+@login_required
+@require_GET
+def dte_documentos_vinculados_api(request, dte_id):
+    """Notas de crédito y ajustes emitidos contra un DTE de traspaso.
+
+    La pantalla de recepción avisaba "2 NC" y el número del documento que anula
+    solo vivía en un tooltip: no había forma de abrirlo ni de saber qué líneas
+    tocó cada uno, que es justo lo que se necesita para decidir si un faltante
+    ya quedó cubierto. Acá se devuelve, por documento vinculado, el detalle de
+    líneas y si esas unidades siguen o no contadas dentro del original.
+    """
+    try:
+        dte = Dte.objects.select_related('emisor', 'receptor', 'sucursal').get(id=dte_id)
+    except Dte.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'DTE no encontrado.'}, status=404)
+
+    vinculados = list(
+        Dte.objects.filter(documento_afectado_id=dte.id)
+        .select_related('emisor')
+        .order_by('fecha_emision', 'id')
+    )
+
+    # Lo que realmente entró al stock del destino, por talla. Sirve para decir
+    # si una NC "aún contada" terminó siendo un problema o no.
+    ingresado_por_talla = {}
+    for row in (
+        Productos_Recepcionados.objects
+        .filter(dte_id=dte.id, producto_talla__isnull=False)
+        .values('producto_talla_id')
+        .annotate(arribado=Sum('stockArribado'), danado=Sum('cantidad_danada'))
+    ):
+        neto = int(row['arribado'] or 0) - int(row['danado'] or 0)
+        ingresado_por_talla[row['producto_talla_id']] = max(0, neto)
+
+    ya_recibido = (
+        dte.estado_dte in _ESTADOS_TRASPASO_RECIBIDO or bool(dte.fecha_recepcion)
+    )
+
+    lineas_por_dte = {}
+    if vinculados:
+        for dp in (
+            Dte_Productos.objects
+            .filter(dte_id__in=[d.id for d in vinculados])
+            .select_related(
+                'productoTalla__producto__atributo1',
+                'productoTalla__producto__atributo2',
+            )
+            .order_by('id')
+        ):
+            pt = dp.productoTalla
+            prod = pt.producto if pt else None
+            lineas_por_dte.setdefault(dp.dte_id, []).append({
+                'sku': pt.sku if pt else '-',
+                'articulo': (prod.articulo if prod else '') or '-',
+                'marca': prod.atributo1.valor if (prod and prod.atributo1) else '',
+                'color': prod.atributo2.valor if (prod and prod.atributo2) else '',
+                'talla': pt.talla if pt else '-',
+                'cantidad': int(dp.stock or 0),
+                # Texto congelado al emitir: si la ficha se editó después, esto
+                # es lo que dice el papel.
+                'descripcion': (dp.descripcion or '').strip(),
+                'producto_talla_id': pt.id if pt else None,
+            })
+
+    documentos = []
+    for doc in vinculados:
+        lineas = lineas_por_dte.get(doc.id, [])
+        unidades = sum(l['cantidad'] for l in lineas) or int(doc.unidades_productos or 0)
+        anulado = doc.estado_dte in ('CANCELADO', 'ANULADO')
+        redujo = bool(doc.redujo_lineas_documento)
+
+        # Unidades de esta NC que el documento original sigue contando y que
+        # además entraron al stock del destino.
+        ingresadas = 0
+        if not redujo and not anulado:
+            saldo = {}
+            for linea in lineas:
+                if linea['producto_talla_id']:
+                    saldo[linea['producto_talla_id']] = (
+                        saldo.get(linea['producto_talla_id'], 0) + linea['cantidad']
+                    )
+            for talla_id, uds in saldo.items():
+                ingresadas += min(uds, ingresado_por_talla.get(talla_id, 0))
+
+        if anulado:
+            efecto = 'anulado'
+            efecto_texto = 'Este documento fue anulado: no afecta al original.'
+        elif redujo:
+            efecto = 'descontada'
+            efecto_texto = (
+                f'Las {unidades} uds ya salieron del total del documento original '
+                f'(las líneas se redujeron al emitirla).'
+            )
+        elif not ya_recibido:
+            efecto = 'pre_recepcion'
+            efecto_texto = (
+                f'El documento original SIGUE contando estas {unidades} uds. '
+                f'Al recepcionar no deberían ingresar al stock.'
+            )
+        elif ingresadas > 0:
+            efecto = 'ingresada'
+            efecto_texto = (
+                f'{ingresadas} de estas {unidades} uds se ingresaron igual al stock '
+                f'del destino. Hay que corregirlo.'
+            )
+        else:
+            efecto = 'no_ingresada'
+            efecto_texto = (
+                f'Estas {unidades} uds no ingresaron al stock (se recibieron como '
+                f'faltante). El documento queda cuadrado.'
+            )
+
+        documentos.append({
+            'id': doc.id,
+            'numero_documento': doc.numero_documento,
+            'tipo_documento': doc.tipo_documento,
+            'es_nota_credito': bool(doc.es_nota_credito),
+            'estado_dte': doc.estado_dte,
+            'fecha_emision': doc.fecha_emision.strftime('%d-%m-%Y') if doc.fecha_emision else '-',
+            'responsable': doc.responsable or '-',
+            'motivo': (doc.motivo_nc or doc.referencias or '').strip(),
+            'monto_con_iva': float(doc.monto_con_iva or 0),
+            'unidades': unidades,
+            'redujo_lineas_documento': redujo,
+            'unidades_ingresadas': ingresadas,
+            'efecto': efecto,
+            'efecto_texto': efecto_texto,
+            'lineas': lineas,
+        })
+
+    return JsonResponse({
+        'success': True,
+        'dte': {
+            'id': dte.id,
+            'numero_documento': dte.numero_documento,
+            'tipo_documento': dte.tipo_documento,
+            'estado_dte': dte.estado_dte,
+            'fecha_emision': dte.fecha_emision.strftime('%d-%m-%Y') if dte.fecha_emision else '-',
+            'fecha_recepcion': dte.fecha_recepcion.strftime('%d-%m-%Y') if dte.fecha_recepcion else '',
+            'ya_recibido': ya_recibido,
+        },
+        'documentos': documentos,
+    })

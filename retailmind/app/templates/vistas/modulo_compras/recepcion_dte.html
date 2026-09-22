@@ -2680,7 +2680,7 @@
 
 <!-- Modal Ver DTE Recepcionado -->
 <div class="modal fade" id="modalVerDTERecepcionado" tabindex="-1" aria-labelledby="modalVerDTELabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success">
                 <div>
@@ -2705,16 +2705,45 @@
                                     <div class="col-md-3"><small class="text-muted">Fecha Emisión:</small> <strong id="verDteFechaEmision">-</strong></div>
                                     <div class="col-md-3"><small class="text-muted">Fecha Recepción:</small> <strong id="verDteFechaRecepcion">-</strong></div>
                                     <div class="col-md-3"><small class="text-muted">Estado:</small> <strong id="verDteEstado">-</strong></div>
-                                    <div class="col-md-6"><small class="text-muted">Receptor:</small> <strong id="verDteReceptor">-</strong></div>
+                                    <div class="col-md-3"><small class="text-muted">Receptor:</small> <strong id="verDteReceptor">-</strong></div>
+                                    <div class="col-md-3"><small class="text-muted">Recepcionado por:</small> <strong id="verDteRecepcionadoPor">-</strong></div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
+                <!-- Qué pasó con este documento: faltantes, daños, sobrantes y
+                     las NC que los cubren. Antes había que deducirlo mirando
+                     fila por fila una tabla de 90 líneas. -->
+                <div id="verDteBannerProblemas"></div>
+
+                <!-- Resumen en unidades -->
+                <div class="row g-2 mb-3" id="verDteResumenCards"></div>
+
+                <!-- Filtros de la tabla -->
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Filtrar líneas">
+                        <button type="button" class="btn btn-outline-secondary active" data-filtro-lineas="todos">
+                            Todas <span class="badge bg-secondary ms-1" id="verDteContaTodos">0</span>
+                        </button>
+                        <button type="button" class="btn btn-outline-danger" data-filtro-lineas="problemas">
+                            <i class="bi bi-exclamation-triangle me-1"></i>Solo con problemas
+                            <span class="badge bg-danger ms-1" id="verDteContaProblemas">0</span>
+                        </button>
+                        <button type="button" class="btn btn-outline-success" data-filtro-lineas="ok">
+                            OK <span class="badge bg-success ms-1" id="verDteContaOk">0</span>
+                        </button>
+                    </div>
+                    <div class="input-group input-group-sm" style="max-width: 280px;">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" id="verDteBuscarLinea" placeholder="SKU, artículo, color o talla">
+                    </div>
+                </div>
+
                 <!-- Tabla de Productos -->
                 <div class="table-responsive">
-                    <table class="table table-hover table-sm">
+                    <table class="table table-hover table-sm align-middle">
                         <thead>
                             <tr>
                                 <th>SKU</th>
@@ -2726,40 +2755,46 @@
                                 <th class="text-center">Esperado</th>
                                 <th class="text-center">Recibido</th>
                                 <th class="text-center">Faltantes</th>
+                                <th class="text-center">Dañado</th>
+                                <th class="text-center">Sobrante</th>
                                 <th>Estado</th>
                                 <th>Observaciones</th>
                             </tr>
                         </thead>
                         <tbody id="verDteProductosBody">
                             <tr>
-                                <td colspan="11" class="text-center text-muted py-4">Cargando productos...</td>
+                                <td colspan="13" class="text-center text-muted py-4">Cargando productos...</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
-                <!-- Resumen -->
-                <div class="row mt-3">
-                    <div class="col-12">
-                        <div class="card border-success">
-                            <div class="card-body py-2">
-                                <div class="row text-center">
-                                    <div class="col-4">
-                                        <div class="fw-bold text-success" id="verResumenOK">0</div>
-                                        <small class="text-muted">OK</small>
-                                    </div>
-                                    <div class="col-4">
-                                        <div class="fw-bold text-warning" id="verResumenParcial">0</div>
-                                        <small class="text-muted">Con Problemas</small>
-                                    </div>
-                                    <div class="col-4">
-                                        <div class="fw-bold text-secondary" id="verResumenFaltante">0</div>
-                                        <small class="text-muted">Faltantes</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+<!-- Modal: NC y ajustes emitidos contra un traspaso -->
+<div class="modal fade" id="modalDocsVinculados" tabindex="-1" aria-labelledby="modalDocsVinculadosLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <div>
+                    <h5 class="modal-title mb-1" id="modalDocsVinculadosLabel">
+                        <i class="bi bi-receipt-cutoff me-2"></i>Notas de crédito y ajustes — DTE #<span id="docsVincNumero">-</span>
+                    </h5>
+                    <small class="opacity-75">Documentos que anulan o corrigen este traspaso, y qué efecto tuvo cada uno</small>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" id="docsVinculadosBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-danger"></div>
+                    <p class="mt-2 text-muted">Cargando documentos...</p>
                 </div>
             </div>
             <div class="modal-footer">
@@ -4637,28 +4672,60 @@ function renderTablaRecepciones() {
             const numerosNC = ajustes.filter(a => a.es_nota_credito).map(a => '#' + a.numero_documento);
             const numerosAjuste = ajustes.filter(a => !a.es_nota_credito).map(a => '#' + a.numero_documento);
             const partes = [];
-            if (numerosNC.length) partes.push(`<span class="badge bg-danger me-1" title="NC: ${numerosNC.join(', ')}"><i class="bi bi-receipt-cutoff"></i> ${numerosNC.length} NC</span>`);
-            if (numerosAjuste.length) partes.push(`<span class="badge bg-warning text-dark me-1" title="Ajuste de traspaso: ${numerosAjuste.join(', ')}"><i class="bi bi-pencil-square"></i> ${numerosAjuste.length} Ajuste${numerosAjuste.length > 1 ? 's' : ''}</span>`);
+            // Los badges abren el detalle de las NC/ajustes: hasta ahora el
+            // único lugar donde se veía el número del documento que anula era
+            // un tooltip, y desde ahí no se podía llegar a la NC.
+            if (numerosNC.length) partes.push(`<span role="button" class="badge bg-danger me-1 btn-ver-vinculados" data-dte-id="${doc.id}" title="Ver las NC de este documento: ${numerosNC.join(', ')}"><i class="bi bi-receipt-cutoff"></i> ${numerosNC.length} NC <i class="bi bi-box-arrow-up-right ms-1" style="font-size:9px;"></i></span>`);
+            if (numerosAjuste.length) partes.push(`<span role="button" class="badge bg-warning text-dark me-1 btn-ver-vinculados" data-dte-id="${doc.id}" title="Ver los ajustes de este documento: ${numerosAjuste.join(', ')}"><i class="bi bi-pencil-square"></i> ${numerosAjuste.length} Ajuste${numerosAjuste.length > 1 ? 's' : ''} <i class="bi bi-box-arrow-up-right ms-1" style="font-size:9px;"></i></span>`);
 
             const leyendas = [];
             if (udsDescontadas > 0) {
                 leyendas.push(`<small class="text-muted">${udsDescontadas} uds ya descontadas del total</small>`);
             }
+            // La leyenda de la NC "aún contada" depende de la fase. Antes se
+            // gritaba lo mismo siempre ("no deberían entrar al stock") incluso
+            // sobre documentos ya recibidos donde esas unidades se marcaron
+            // faltantes y la NC de regularización las cerró: el documento está
+            // cuadrado y el aviso rojo hacía dudar de una operación correcta.
             const ncPendiente = Number(doc.total_unidades_nc_pendiente) || 0;
+            const ncSituacion = doc.nc_situacion || (ncPendiente > 0 ? 'pre_recepcion' : 'sin_nc');
+            const ncIngresadas = Number(doc.nc_pendiente_ingresada) || 0;
             if (ncPendiente > 0) {
-                leyendas.push(
-                    `<small class="text-danger fw-semibold" title="Estas unidades tienen NC pero el documento las sigue contando. Al recepcionar NO deberían entrar al stock.">` +
-                    `<i class="bi bi-exclamation-triangle-fill"></i> ${ncPendiente} uds con NC AÚN contadas</small>`
-                );
+                if (ncSituacion === 'ingresada') {
+                    leyendas.push(
+                        `<small class="text-danger fw-semibold" title="Se recepcionaron ${ncIngresadas} uds que ya tenían nota de crédito. Entraron al stock del destino y el documento las sigue contando: hay que corregirlo.">` +
+                        `<i class="bi bi-exclamation-octagon-fill"></i> ${ncIngresadas} uds con NC ENTRARON al stock</small>`
+                    );
+                } else if (ncSituacion === 'no_ingresada') {
+                    leyendas.push(
+                        `<small class="text-success fw-semibold" title="Las ${ncPendiente} uds con nota de crédito no ingresaron al stock (se recibieron como faltante). El documento queda cuadrado: no hay nada pendiente.">` +
+                        `<i class="bi bi-check-circle-fill"></i> ${ncPendiente} uds con NC — no ingresaron (OK)</small>`
+                    );
+                } else {
+                    leyendas.push(
+                        `<small class="text-danger fw-semibold" title="Estas unidades tienen NC pero el documento las sigue contando. Al recepcionar NO deberían entrar al stock.">` +
+                        `<i class="bi bi-exclamation-triangle-fill"></i> ${ncPendiente} uds con NC AÚN contadas</small>`
+                    );
+                }
             }
             indicadorAjuste = `<div class="mt-1">${partes.join('')} ${leyendas.join(' · ')}</div>`;
+
+            // Acceso directo desde Acciones al documento que anula/corrige.
+            // Es la primera pregunta cuando aparece el badge "N NC", y hasta
+            // ahora había que salir del módulo a buscarlo en Gestión DTE.
+            botonesHtml += `<button class="btn btn-outline-danger btn-sm ms-1 btn-ver-vinculados" data-dte-id="${doc.id}" title="Ver las notas de crédito y ajustes de este documento">
+                <i class="bi bi-receipt-cutoff"></i></button>`;
         }
 
         // Total del documento; si hay NC no descontadas, mostrar también el neto.
         const ncPendienteDoc = Number(doc.total_unidades_nc_pendiente) || 0;
+        const ncSituacionDoc = doc.nc_situacion || 'sin_nc';
+        const tituloNeto = ncSituacionDoc === 'no_ingresada'
+            ? `Documento: ${doc.total_unidades} uds · Realmente válidas tras la NC: ${doc.total_unidades_neto} uds`
+            : `Total del documento menos las ${ncPendienteDoc} uds con NC`;
         const totalUnidadesHtml = ncPendienteDoc > 0
-            ? `<span class="badge bg-secondary text-decoration-line-through">${doc.total_unidades}</span>
-               <div class="mt-1"><span class="badge bg-dark" title="Total del documento menos las ${ncPendienteDoc} uds con NC">${doc.total_unidades_neto}</span></div>`
+            ? `<span class="badge bg-secondary text-decoration-line-through" title="Unidades que dice el documento">${doc.total_unidades}</span>
+               <div class="mt-1"><span class="badge ${ncSituacionDoc === 'no_ingresada' ? 'bg-success' : 'bg-dark'}" title="${tituloNeto}">${doc.total_unidades_neto}</span></div>`
             : `<span class="badge bg-dark">${doc.total_unidades}</span>`;
 
         // Origen → Destino: horizontal, resalto la sucursal que soy yo
@@ -5161,7 +5228,11 @@ function getEstadoBadge(estado) {
         'EN_SOLICITUD_REGULARIZACION': '<span class="badge bg-info text-dark"><i class="bi bi-envelope-paper me-1"></i>Solicitud enviada</span>',
         'RECEPCIONADO_SOBRANTE': '<span class="badge bg-info text-dark"><i class="bi bi-plus-circle me-1"></i>Sobrante</span>',
         'SOBRANTE_PENDIENTE': '<span class="badge bg-info text-dark"><i class="bi bi-hourglass me-1"></i>Sobrante pend.</span>',
-        'REGULARIZADO': '<span class="badge bg-success"><i class="bi bi-check2-all me-1"></i>Regularizado</span>',
+        // Azul, no verde: "Regularizado" significa que la mercadería NO llegó
+        // y se cerró con NC/devolución. Con el mismo verde del OK, las líneas
+        // faltantes se perdían entre las correctas y el receptor concluía que
+        // su rechazo no se había registrado.
+        'REGULARIZADO': '<span class="badge bg-info text-dark" title="No llegó: la diferencia se cerró con nota de crédito o devolución al origen"><i class="bi bi-check2-all me-1"></i>No llegó · regularizado</span>',
         'PENDIENTE': '<span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>Pendiente</span>',
     };
     return badges[estado] || `<span class="badge bg-secondary">${estado || '-'}</span>`;
@@ -6710,14 +6781,254 @@ function hideGlobalLoader() {
     $('#fullscreenLoader').fadeOut(100);
 }
 
+// ========== NC / AJUSTES VINCULADOS A UN TRASPASO ==========
+//
+// El listado avisaba "2 NC" y el número del documento que anula solo existía
+// dentro de un title=. Desde acá se ve cada NC con sus líneas y, sobre todo,
+// qué efecto tuvo: si ya salió del total, si sigue contada, o si —estando el
+// traspaso ya recibido— esas unidades entraron igual al stock.
+const DOCS_VINC_EFECTO = {
+    descontada:    { clase: 'alert-secondary',   icono: 'bi-scissors',                  titulo: 'Ya descontada del documento' },
+    pre_recepcion: { clase: 'alert-danger',      icono: 'bi-exclamation-triangle-fill', titulo: 'El documento aún las cuenta' },
+    ingresada:     { clase: 'alert-danger',      icono: 'bi-exclamation-octagon-fill',  titulo: 'Entraron al stock igual' },
+    no_ingresada:  { clase: 'alert-success',     icono: 'bi-check-circle-fill',         titulo: 'No ingresaron al stock (cuadrado)' },
+    anulado:       { clase: 'alert-light border', icono: 'bi-slash-circle',             titulo: 'Documento anulado' },
+};
+
+function verDocumentosVinculados(dteId) {
+    $('#docsVincNumero').text('-');
+    $('#docsVinculadosBody').html(`
+        <div class="text-center py-4">
+            <div class="spinner-border text-danger"></div>
+            <p class="mt-2 text-muted">Cargando documentos...</p>
+        </div>`);
+
+    const modalDocs = new bootstrap.Modal(document.getElementById('modalDocsVinculados'));
+    modalDocs.show();
+
+    $.getJSON(`/app/dte/${dteId}/documentos-vinculados/`)
+        .done(response => {
+            if (!response.success) {
+                $('#docsVinculadosBody').html(
+                    `<div class="alert alert-danger mb-0">${_escapeHtmlDte(response.error || 'No se pudieron cargar los documentos')}</div>`);
+                return;
+            }
+
+            $('#docsVincNumero').text(response.dte.numero_documento);
+            const docs = response.documentos || [];
+
+            if (!docs.length) {
+                $('#docsVinculadosBody').html(
+                    '<div class="alert alert-info mb-0"><i class="bi bi-info-circle me-2"></i>Este documento no tiene notas de crédito ni ajustes asociados.</div>');
+                return;
+            }
+
+            const estadoDoc = response.dte.ya_recibido
+                ? `<span class="badge bg-success">Ya recepcionado${response.dte.fecha_recepcion ? ' el ' + _escapeHtmlDte(response.dte.fecha_recepcion) : ''}</span>`
+                : '<span class="badge bg-primary">Pendiente de recepción</span>';
+
+            let html = `
+                <div class="alert alert-light border d-flex flex-wrap gap-3 align-items-center mb-3">
+                    <div><small class="text-muted d-block">Documento original</small>
+                         <strong>${_escapeHtmlDte(response.dte.tipo_documento)} #${_escapeHtmlDte(response.dte.numero_documento)}</strong></div>
+                    <div><small class="text-muted d-block">Emitido</small><strong>${_escapeHtmlDte(response.dte.fecha_emision)}</strong></div>
+                    <div><small class="text-muted d-block">Situación</small>${estadoDoc}</div>
+                    <div><small class="text-muted d-block">Documentos vinculados</small><strong>${docs.length}</strong></div>
+                </div>`;
+
+            docs.forEach(doc => {
+                const efecto = DOCS_VINC_EFECTO[doc.efecto] || DOCS_VINC_EFECTO.pre_recepcion;
+                const badgeTipo = doc.es_nota_credito
+                    ? '<span class="badge bg-danger"><i class="bi bi-receipt-cutoff me-1"></i>Nota de crédito</span>'
+                    : '<span class="badge bg-warning text-dark"><i class="bi bi-pencil-square me-1"></i>Ajuste de traspaso</span>';
+                const montoFmt = Number(doc.monto_con_iva || 0).toLocaleString('es-CL');
+                const motivo = doc.motivo
+                    ? `<div class="mt-1"><small class="text-muted"><i class="bi bi-chat-left-text me-1"></i>Motivo: <strong>${_escapeHtmlDte(doc.motivo)}</strong></small></div>`
+                    : '';
+
+                const filas = (doc.lineas || []).map(l => `
+                    <tr>
+                        <td><small class="font-monospace">${_escapeHtmlDte(l.sku)}</small></td>
+                        <td><small>${_escapeHtmlDte(l.articulo)}</small></td>
+                        <td><small>${_escapeHtmlDte(l.color || '-')}</small></td>
+                        <td><small>${_escapeHtmlDte(l.marca || '-')}</small></td>
+                        <td class="text-center"><span class="badge bg-secondary">${_escapeHtmlDte(l.talla)}</span></td>
+                        <td class="text-center"><strong>${l.cantidad}</strong></td>
+                    </tr>`).join('');
+
+                const tabla = filas
+                    ? `<div class="table-responsive">
+                           <table class="table table-sm table-hover mb-0">
+                               <thead class="table-light">
+                                   <tr><th>SKU</th><th>Artículo</th><th>Color</th><th>Marca</th>
+                                       <th class="text-center">Talla</th><th class="text-center">Uds</th></tr>
+                               </thead>
+                               <tbody>${filas}</tbody>
+                           </table>
+                       </div>`
+                    : '<p class="text-muted mb-0"><small>Sin detalle de líneas: la NC se emitió por monto, no por producto.</small></p>';
+
+                html += `
+                    <div class="card mb-3">
+                        <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <div>
+                                ${badgeTipo}
+                                <strong class="ms-2">#${_escapeHtmlDte(doc.numero_documento)}</strong>
+                                <small class="text-muted ms-2">${_escapeHtmlDte(doc.fecha_emision)} · ${_escapeHtmlDte(doc.responsable)}</small>
+                                ${motivo}
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-dark">${doc.unidades} uds</span>
+                                <span class="badge bg-light text-dark border ms-1">$${montoFmt}</span>
+                                <span class="badge bg-light text-dark border ms-1">${_escapeHtmlDte(doc.estado_dte)}</span>
+                            </div>
+                        </div>
+                        <div class="card-body pt-2">
+                            <div class="alert ${efecto.clase} py-2 px-3 mb-2">
+                                <i class="bi ${efecto.icono} me-1"></i><strong>${efecto.titulo}.</strong>
+                                <span class="ms-1">${_escapeHtmlDte(doc.efecto_texto)}</span>
+                            </div>
+                            ${tabla}
+                        </div>
+                    </div>`;
+            });
+
+            $('#docsVinculadosBody').html(html);
+        })
+        .fail(xhr => {
+            $('#docsVinculadosBody').html(
+                `<div class="alert alert-danger mb-0">${_escapeHtmlDte(xhr.responseJSON?.error || 'Error de conexión al cargar los documentos')}</div>`);
+        });
+}
+
+// Delegado: los badges "N NC" / "N Ajustes" se re-renderizan en cada carga de
+// la tabla, así que un bind directo se perdería.
+$(document).on('click', '.btn-ver-vinculados', function() {
+    const dteId = $(this).data('dte-id');
+    if (!dteId) return;
+
+    // Bootstrap 5 no apila modales: abrir este encima del de recepción deja
+    // la pantalla negra al cerrar el primero. Se cierra el de abajo y recién
+    // después se abre el de NC.
+    const modalPadre = this.closest('.modal');
+    if (modalPadre && modalPadre.id !== 'modalDocsVinculados') {
+        const instancia = bootstrap.Modal.getInstance(modalPadre);
+        if (instancia) {
+            modalPadre.addEventListener(
+                'hidden.bs.modal',
+                () => verDocumentosVinculados(dteId),
+                { once: true }
+            );
+            instancia.hide();
+            return;
+        }
+    }
+
+    verDocumentosVinculados(dteId);
+});
+
+// Estado de la tabla del modal "DTE Recepcionado": se guarda para poder
+// filtrar sin volver a pedir los datos al servidor.
+let verDteLineas = [];
+let verDteFiltro = 'todos';
+
+// Una línea "tiene problema" si no quedó perfecta. REGULARIZADO cuenta como
+// problema resuelto: la mercadería no llegó, y aunque la NC ya lo cubra, el
+// receptor necesita verla — antes salía con badge verde entre las OK y era
+// invisible en una tabla de 90 filas.
+const VER_DTE_ESTADOS_OK = ['RECEPCIONADO_OK'];
+
+function _verDteEsProblema(prod) {
+    return !VER_DTE_ESTADOS_OK.includes(prod.estado)
+        || (prod.cantidad_faltante || 0) > 0
+        || (prod.cantidad_danada || 0) > 0
+        || (prod.cantidad_sobrante || 0) > 0;
+}
+
+function _verDteRowClass(estado) {
+    return {
+        'RECEPCIONADO_OK': '',
+        'RECEPCIONADO_PARCIAL': 'table-warning',
+        'RECEPCIONADO_DANADO': 'table-danger',
+        'FALTANTE': 'table-danger',
+        'RECHAZADO': 'table-danger',
+        'REGULARIZADO': 'table-info',
+        'EN_REGULARIZACION': 'table-info',
+        'EN_SOLICITUD_REGULARIZACION': 'table-info',
+        'RECEPCIONADO_SOBRANTE': 'table-primary',
+        'SOBRANTE_PENDIENTE': 'table-primary',
+        'PENDIENTE': 'table-light',
+    }[estado] || '';
+}
+
+function _verDteRenderTabla() {
+    const tbody = $('#verDteProductosBody');
+    const termino = ($('#verDteBuscarLinea').val() || '').trim().toLowerCase();
+
+    let visibles = verDteLineas;
+    if (verDteFiltro === 'problemas') visibles = visibles.filter(p => p._problema);
+    else if (verDteFiltro === 'ok') visibles = visibles.filter(p => !p._problema);
+
+    if (termino) {
+        visibles = visibles.filter(p =>
+            `${p.sku} ${p.articulo} ${p.descripcion} ${p.color} ${p.marca} ${p.talla}`
+                .toLowerCase().includes(termino)
+        );
+    }
+
+    tbody.empty();
+    if (!visibles.length) {
+        tbody.html('<tr><td colspan="13" class="text-center text-muted py-3">Sin líneas que coincidan con el filtro</td></tr>');
+        return;
+    }
+
+    visibles.forEach(prod => {
+        const rowClass = _verDteRowClass(prod.estado);
+        const falt = prod.cantidad_faltante || 0;
+        const dan = prod.cantidad_danada || 0;
+        const sob = prod.cantidad_sobrante || 0;
+        // La observación del faltante es el dato que explica qué pasó; se
+        // mostraba truncada visualmente en una columna estrecha.
+        const obs = (prod.observaciones || '').trim();
+        const obsHtml = obs
+            ? `<small class="text-muted" style="white-space: pre-wrap;">${_escapeHtmlDte(obs)}</small>`
+            : '<small class="text-muted">-</small>';
+
+        tbody.append(`
+            <tr class="${rowClass}">
+                <td><small class="font-monospace">${_escapeHtmlDte(prod.sku)}</small></td>
+                <td><small>${_escapeHtmlDte(prod.descripcion)}</small></td>
+                <td><small>${_escapeHtmlDte(prod.articulo || '-')}</small></td>
+                <td><small>${_escapeHtmlDte(prod.color || '-')}</small></td>
+                <td><small>${_escapeHtmlDte(prod.marca || '-')}</small></td>
+                <td class="text-center"><span class="badge bg-secondary">${_escapeHtmlDte(prod.talla)}</span></td>
+                <td class="text-center"><strong>${prod.cantidad_esperada}</strong></td>
+                <td class="text-center"><strong class="${prod.cantidad_recepcionada > 0 ? 'text-success' : 'text-muted'}">${prod.cantidad_recepcionada}</strong></td>
+                <td class="text-center">${falt > 0 ? `<strong class="text-danger">${falt}</strong>` : '<span class="text-muted">-</span>'}</td>
+                <td class="text-center">${dan > 0 ? `<strong class="text-danger">${dan}</strong>` : '<span class="text-muted">-</span>'}</td>
+                <td class="text-center">${sob > 0 ? `<strong class="text-primary">+${sob}</strong>` : '<span class="text-muted">-</span>'}</td>
+                <td>${getEstadoBadge(prod.estado)}</td>
+                <td style="min-width: 220px;">${obsHtml}</td>
+            </tr>
+        `);
+    });
+}
+
 function verDTERecepcionado(dteId) {
     // Mostrar loading
-    $('#verDteProductosBody').html('<tr><td colspan="12" class="text-center py-4"><div class="spinner-border text-success"></div><p class="mt-2 text-muted">Cargando detalles...</p></td></tr>');
-    
+    verDteLineas = [];
+    verDteFiltro = 'todos';
+    $('#verDteBuscarLinea').val('');
+    $('#verDteBannerProblemas').empty();
+    $('#verDteResumenCards').empty();
+    $('[data-filtro-lineas]').removeClass('active');
+    $('[data-filtro-lineas="todos"]').addClass('active');
+    $('#verDteProductosBody').html('<tr><td colspan="13" class="text-center py-4"><div class="spinner-border text-success"></div><p class="mt-2 text-muted">Cargando detalles...</p></td></tr>');
+
     // Abrir modal
     const modalVerDTE = new bootstrap.Modal(document.getElementById('modalVerDTERecepcionado'));
     modalVerDTE.show();
-    
+
     // Cargar datos del DTE recepcionado
     $.getJSON(`/app/dte/obtener_detalle_dte_recepcionado/?dte_id=${dteId}`)
         .done(response => {
@@ -6726,10 +7037,12 @@ function verDTERecepcionado(dteId) {
                 modalVerDTE.hide();
                 return;
             }
-            
+
             const dte = response.dte;
             const productos = response.productos || [];
-            
+            const resumen = response.resumen || {};
+            const vinculados = response.documentos_vinculados || [];
+
             // Llenar información del DTE
             $('#verDteNumero').text(dte.numero_documento);
             $('#verDteTipo').html(dte.tipo_documento === 'FACTURA ELECTRONICA'
@@ -6741,92 +7054,151 @@ function verDTERecepcionado(dteId) {
             // La bodega destino no se mostraba: en un traspaso entre sucursales
             // de la misma empresa, "Receptor" (razón social) no dice a dónde fue.
             $('#verDteDestino').text(dte.sucursal_destino || '-');
+            $('#verDteRecepcionadoPor').text(dte.recepcionado_por || '-');
             $('#verDteFechaEmision').text(dte.fecha_emision ? new Date(dte.fecha_emision).toLocaleDateString('es-CL') : '-');
             $('#verDteFechaRecepcion').text(dte.fecha_recepcion ? new Date(dte.fecha_recepcion).toLocaleDateString('es-CL') : '-');
-            
+
             // Estado del DTE
             let estadoHtml = '';
             if (dte.estado_dte === 'RECEPCIONADO_COMPLETO') {
                 estadoHtml = '<span class="badge badge-recepcionado">✅ Recepcionado Completo</span>';
             } else if (dte.estado_dte === 'RECEPCIONADO_PARCIAL') {
-                estadoHtml = '<span class="badge bg-warning">⚠️ Recepcionado Parcial</span>';
+                estadoHtml = '<span class="badge bg-warning text-dark">⚠️ Recepcionado Parcial</span>';
+            } else if (dte.estado_dte === 'RECEPCIONADO_SOBRANTE') {
+                estadoHtml = '<span class="badge bg-info text-dark">➕ Recepcionado con sobrante</span>';
             } else if (dte.estado_dte === 'EN_REGULARIZACION') {
                 estadoHtml = '<span class="badge bg-info">🔄 En Regularización</span>';
             } else if (dte.estado_dte === 'RECHAZADO') {
                 const motivo = dte.motivo_rechazo || dte.referencias || 'Sin motivo registrado';
                 estadoHtml = `<span class="badge bg-danger">❌ Rechazado</span>`
                     + `<div class="mt-2 alert alert-danger py-2 px-3 mb-0" style="font-size:13px;">`
-                    + `<i class="bi bi-chat-left-text me-1"></i><strong>Motivo:</strong> ${motivo}`
+                    + `<i class="bi bi-chat-left-text me-1"></i><strong>Motivo:</strong> ${_escapeHtmlDte(motivo)}`
                     + `</div>`;
             } else if (dte.estado_dte === 'EMITIDO') {
                 estadoHtml = '<span class="badge bg-primary">📤 Emitido (pendiente recepción)</span>';
             } else {
-                estadoHtml = `<span class="badge bg-secondary">${dte.estado_dte}</span>`;
+                estadoHtml = `<span class="badge bg-secondary">${_escapeHtmlDte(dte.estado_dte)}</span>`;
             }
             $('#verDteEstado').html(estadoHtml);
-            
-            // Llenar tabla de productos
-            const tbody = $('#verDteProductosBody');
-            tbody.empty();
-            
+
+            // ---- Banner: qué pasó con este documento --------------------
+            // El encabezado decía "Recepcionado Parcial" y nada más. Acá va el
+            // resumen de lo que no llegó y si ya está cubierto por una NC, que
+            // es la pregunta real de quien abre este modal.
+            const faltantes = resumen.unidades_faltantes || 0;
+            const danadas = resumen.unidades_danadas || 0;
+            const sobrantes = resumen.unidades_sobrantes || 0;
+            const ncVivas = vinculados.filter(v => v.es_nota_credito
+                && !['CANCELADO', 'ANULADO'].includes(v.estado_dte));
+            const udsNC = ncVivas.reduce((acc, v) => acc + (Number(v.unidades) || 0), 0);
+
+            const avisos = [];
+            if (faltantes > 0) avisos.push(`<strong>${faltantes} uds</strong> no llegaron`);
+            if (danadas > 0) avisos.push(`<strong>${danadas} uds</strong> llegaron dañadas`);
+            if (sobrantes > 0) avisos.push(`<strong>${sobrantes} uds</strong> llegaron de más`);
+
+            let bannerHtml = '';
+            if (avisos.length || ncVivas.length) {
+                const listaNC = ncVivas.map(v =>
+                    `<span class="badge bg-danger me-1">NC #${_escapeHtmlDte(v.numero_documento)}</span>`
+                ).join('');
+                // Faltante cubierto por NC del mismo tamaño = caso cerrado.
+                const cubierto = faltantes > 0 && udsNC >= faltantes;
+                const clase = (avisos.length === 0) ? 'alert-secondary'
+                    : (cubierto && danadas === 0 && sobrantes === 0) ? 'alert-success' : 'alert-warning';
+                const titulo = avisos.length
+                    ? avisos.join(' · ')
+                    : 'Sin diferencias en la recepción';
+                const cierre = !avisos.length ? ''
+                    : cubierto
+                        ? `<div class="mt-1"><i class="bi bi-check-circle-fill text-success me-1"></i>
+                             Cubierto por nota de crédito (${udsNC} uds acreditadas). No queda nada pendiente por este documento.</div>`
+                        : (faltantes > 0 || danadas > 0)
+                            ? `<div class="mt-1"><i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+                                 ${udsNC > 0 ? `Hay ${udsNC} uds acreditadas por NC, menos que la diferencia detectada.` : 'Todavía no hay nota de crédito que cubra esta diferencia.'}</div>`
+                            : '';
+
+                bannerHtml = `
+                    <div class="alert ${clase} py-2 px-3 mb-3">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <div>
+                                <i class="bi bi-clipboard-check me-1"></i><strong>${titulo}</strong>
+                                ${cierre}
+                            </div>
+                            <div class="text-end">
+                                ${listaNC}
+                                ${vinculados.length ? `<button type="button" class="btn btn-sm btn-outline-dark ms-1 btn-ver-vinculados" data-dte-id="${dte.id}">
+                                    <i class="bi bi-receipt-cutoff me-1"></i>Ver NC / ajustes
+                                </button>` : ''}
+                            </div>
+                        </div>
+                    </div>`;
+            }
+            $('#verDteBannerProblemas').html(bannerHtml);
+
+            // ---- Resumen en unidades -----------------------------------
+            const cards = [
+                { valor: resumen.unidades_esperadas || 0, etiqueta: 'Esperadas (documento)', color: 'text-dark' },
+                { valor: resumen.unidades_recibidas || 0, etiqueta: 'Recibidas', color: 'text-success' },
+                { valor: faltantes, etiqueta: 'Faltantes', color: faltantes ? 'text-danger' : 'text-muted' },
+                { valor: danadas, etiqueta: 'Dañadas', color: danadas ? 'text-danger' : 'text-muted' },
+                { valor: sobrantes, etiqueta: 'Sobrantes', color: sobrantes ? 'text-primary' : 'text-muted' },
+                { valor: resumen.lineas_problema || 0, etiqueta: 'Líneas con problema', color: (resumen.lineas_problema || 0) ? 'text-warning' : 'text-muted' },
+            ];
+            $('#verDteResumenCards').html(cards.map(c => `
+                <div class="col-6 col-md-2">
+                    <div class="card h-100 border">
+                        <div class="card-body py-2 text-center">
+                            <div class="fw-bold fs-5 ${c.color}">${c.valor}</div>
+                            <small class="text-muted" style="font-size: 11px;">${c.etiqueta}</small>
+                        </div>
+                    </div>
+                </div>`).join(''));
+
+            // ---- Tabla --------------------------------------------------
             if (productos.length === 0) {
-                tbody.html('<tr><td colspan="12" class="text-center text-muted py-3">Sin productos registrados</td></tr>');
+                $('#verDteContaTodos').text(0);
+                $('#verDteContaProblemas').text(0);
+                $('#verDteContaOk').text(0);
+                $('#verDteProductosBody').html('<tr><td colspan="13" class="text-center text-muted py-3">Sin productos registrados</td></tr>');
                 return;
             }
-            
-            let contOK = 0, contConProblema = 0, contFaltante = 0;
-            
-            productos.forEach(prod => {
-                const recep = prod.cantidad_recepcionada || 0;
-                const esper = prod.cantidad_esperada || 0;
-                const buenas = Math.min(recep, esper);
-                const falt = Math.max(0, esper - recep);
 
-                contOK += buenas;
-                contFaltante += falt;
-                if (prod.estado !== 'RECEPCIONADO_OK') contConProblema++;
+            verDteLineas = productos.map(p => ({ ...p, _problema: _verDteEsProblema(p) }));
+            // Los problemas primero: son 6 filas perdidas entre 90 y hasta
+            // ahora había que buscarlas a ojo.
+            verDteLineas.sort((a, b) => (b._problema ? 1 : 0) - (a._problema ? 1 : 0));
 
-                let rowClass = '';
-                if (prod.estado === 'RECEPCIONADO_OK') {
-                    rowClass = 'table-success';
-                } else if (prod.estado === 'RECEPCIONADO_PARCIAL') {
-                    rowClass = 'table-warning';
-                } else if (prod.estado === 'FALTANTE') {
-                    rowClass = 'table-secondary';
-                } else if (prod.estado === 'RECHAZADO') {
-                    rowClass = 'table-danger';
-                } else if (prod.estado === 'PENDIENTE') {
-                    rowClass = 'table-light';
-                }
-                
-                const estadoBadge = getEstadoBadge(prod.estado);
-                
-                tbody.append(`
-                    <tr class="${rowClass}">
-                        <td><small class="font-monospace">${_escapeHtmlDte(prod.sku)}</small></td>
-                        <td><small>${_escapeHtmlDte(prod.descripcion)}</small></td>
-                        <td><small>${_escapeHtmlDte(prod.articulo || '-')}</small></td>
-                        <td><small>${_escapeHtmlDte(prod.color || '-')}</small></td>
-                        <td><small>${_escapeHtmlDte(prod.marca || '-')}</small></td>
-                        <td class="text-center"><span class="badge bg-secondary">${_escapeHtmlDte(prod.talla)}</span></td>
-                        <td class="text-center"><strong>${prod.cantidad_esperada}</strong></td>
-                        <td class="text-center"><strong class="text-success">${prod.cantidad_recepcionada}</strong></td>
-                        <td class="text-center"><strong class="text-secondary">${prod.cantidad_faltante}</strong></td>
-                        <td>${estadoBadge}</td>
-                        <td><small class="text-muted">${_escapeHtmlDte(prod.observaciones || '-')}</small></td>
-                    </tr>
-                `);
-            });
-            
-            $('#verResumenOK').text(contOK);
-            $('#verResumenParcial').text(contConProblema);
-            $('#verResumenFaltante').text(contFaltante);
+            const nProblemas = verDteLineas.filter(p => p._problema).length;
+            $('#verDteContaTodos').text(verDteLineas.length);
+            $('#verDteContaProblemas').text(nProblemas);
+            $('#verDteContaOk').text(verDteLineas.length - nProblemas);
+
+            // Si hay problemas, abrir directo en esa vista: es a lo que se entra.
+            if (nProblemas > 0) {
+                verDteFiltro = 'problemas';
+                $('[data-filtro-lineas]').removeClass('active');
+                $('[data-filtro-lineas="problemas"]').addClass('active');
+            }
+
+            _verDteRenderTabla();
         })
         .fail(() => {
             Swal.fire('Error', 'No se pudieron cargar los detalles del DTE', 'error');
             modalVerDTE.hide();
         });
 }
+
+$(document).on('click', '[data-filtro-lineas]', function() {
+    verDteFiltro = $(this).data('filtro-lineas');
+    $('[data-filtro-lineas]').removeClass('active');
+    $(this).addClass('active');
+    _verDteRenderTabla();
+});
+
+$(document).on('input', '#verDteBuscarLinea', function() {
+    _verDteRenderTabla();
+});
 
 // ========== CORRECCIÓN DE RECEPCIÓN POR EMISOR ==========
 

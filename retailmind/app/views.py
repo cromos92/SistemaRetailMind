@@ -485,6 +485,13 @@ def recepciones_pendientes_api(request):
         # `redujo_lineas_documento=False`: las otras ya redujeron `dp.stock`
         # y restarlas de nuevo sería contar dos veces la misma devolución.
         nc_pendientes_por_talla = {}
+        # Unidades que REALMENTE entraron al stock del destino, por
+        # (dte, productoTalla). Es lo que convierte la alerta de NC en un dato
+        # accionable: una NC "aún contada" sobre un documento ya recepcionado
+        # solo es problema si esas unidades se ingresaron igual. Si el receptor
+        # las marcó faltantes (el caso normal de la NC de regularización), el
+        # documento cuadra y la alarma roja era ruido.
+        ingresadas_por_talla = {}
         if dte_ids_pagina:
             docs_vinculados_qs = Dte.objects.filter(
                 documento_afectado_id__in=dte_ids_pagina,
@@ -531,6 +538,31 @@ def recepciones_pendientes_api(request):
                     nc_pendientes_por_talla[clave] = (
                         nc_pendientes_por_talla.get(clave, 0) + int(row['total'] or 0)
                     )
+
+                # Lo efectivamente ingresado al destino: lo arribado menos lo
+                # dañado (el daño no suma stock vendible). Solo hace falta para
+                # los DTE que tienen NC "aún contada"; en el resto la consulta
+                # no aporta nada y la pantalla es la más cargada del módulo.
+                #
+                # Productos_Recepcionados viene del import de módulo: un
+                # `from .models import ...` acá lo volvería local para TODA la
+                # función y reventaría el uso de más abajo cuando este bloque
+                # no se ejecuta.
+                padres_con_nc_viva = {
+                    padre_id for (padre_id, _talla_id) in nc_pendientes_por_talla
+                }
+                if padres_con_nc_viva:
+                    for row in (
+                        Productos_Recepcionados.objects
+                        .filter(dte_id__in=padres_con_nc_viva, producto_talla__isnull=False)
+                        .values('dte_id', 'producto_talla_id')
+                        .annotate(arribado=Sum('stockArribado'), danado=Sum('cantidad_danada'))
+                    ):
+                        clave = (row['dte_id'], row['producto_talla_id'])
+                        neto = int(row['arribado'] or 0) - int(row['danado'] or 0)
+                        ingresadas_por_talla[clave] = (
+                            ingresadas_por_talla.get(clave, 0) + max(0, neto)
+                        )
 
         for dte in page_obj.object_list:
             # Solo productos activos (no los anulados por ajuste del emisor).
@@ -621,6 +653,10 @@ def recepciones_pendientes_api(request):
                 for (padre_id, talla_id), uds in nc_pendientes_por_talla.items()
                 if padre_id == dte.id
             }
+            # Copia previa al consumo: el bucle de líneas va descontando
+            # `saldo_nc_talla`, y después hace falta saber cuánto se imputó
+            # de verdad a líneas vivas para compararlo con lo ingresado.
+            nc_talla_inicial = dict(saldo_nc_talla)
             total_nc_pendiente_doc = 0
 
             for detalle in detalles_queryset:
@@ -679,6 +715,37 @@ def recepciones_pendientes_api(request):
             total_unidades_doc = sum(resumen_tallas.values())
             total_unidades_pagina += total_unidades_doc
 
+            # De las unidades con NC que el documento sigue contando, cuántas
+            # entraron igual al stock del destino. Esto separa el aviso real
+            # ("se ingresó mercadería ya acreditada") del ruido: cuando el
+            # receptor las marcó faltantes y después se emitió la NC de
+            # regularización, el documento está cuadrado y no hay nada que hacer.
+            nc_pendiente_ingresada_doc = 0
+            for _talla_id, _uds_inicial in nc_talla_inicial.items():
+                _imputadas = int(_uds_inicial) - int(saldo_nc_talla.get(_talla_id, 0))
+                if _imputadas <= 0:
+                    continue
+                _ingresadas = int(ingresadas_por_talla.get((dte.id, _talla_id), 0))
+                nc_pendiente_ingresada_doc += min(_imputadas, _ingresadas)
+
+            # Semáforo para la pantalla:
+            #   'sin_nc'          -> no hay NC viva sin descontar
+            #   'pre_recepcion'   -> todavía no se recibe: OJO al recepcionar
+            #   'ingresada'       -> ya se recibió y las uds con NC entraron igual
+            #   'no_ingresada'    -> ya se recibió y NO entraron: está cuadrado
+            ya_recepcionado = dte.estado_dte in (
+                'RECEPCIONADO_COMPLETO', 'RECEPCIONADO_PARCIAL',
+                'RECEPCIONADO_SOBRANTE', 'EN_REGULARIZACION',
+            ) or bool(dte.fecha_recepcion)
+            if total_nc_pendiente_doc <= 0:
+                nc_situacion = 'sin_nc'
+            elif not ya_recepcionado:
+                nc_situacion = 'pre_recepcion'
+            elif nc_pendiente_ingresada_doc > 0:
+                nc_situacion = 'ingresada'
+            else:
+                nc_situacion = 'no_ingresada'
+
             ajustes_del_dte = ajustes_por_dte.get(dte.id, [])
 
             items.append({
@@ -706,6 +773,12 @@ def recepciones_pendientes_api(request):
                 # corresponde ingresar a stock.
                 'total_unidades_nc_pendiente': total_nc_pendiente_doc,
                 'total_unidades_neto': max(0, total_unidades_doc - total_nc_pendiente_doc),
+                # Desglose de esas unidades una vez recibido el documento.
+                'nc_pendiente_ingresada': nc_pendiente_ingresada_doc,
+                'nc_pendiente_no_ingresada': max(
+                    0, total_nc_pendiente_doc - nc_pendiente_ingresada_doc
+                ),
+                'nc_situacion': nc_situacion,
                 'referencias': dte.referencias or '',
                 'observaciones': movimiento_origen.observaciones or '',
                 'ajustes_previos': ajustes_del_dte,
@@ -8794,8 +8867,17 @@ def obtener_detalle_dte_recepcionado(request):
                 'cantidad_recepcionada': recepcion.stockArribado,
                 'cantidad_danada': recepcion.cantidad_danada,
                 'cantidad_faltante': recepcion.cantidad_faltante,
+                # El sobrante existía en el modelo pero el modal no lo mostraba:
+                # una línea que llegó de más se veía igual que una correcta.
+                'cantidad_sobrante': recepcion.cantidad_sobrante,
                 'estado': recepcion.estado,
                 'observaciones': recepcion.observaciones or '',
+                'recepcionado_por': recepcion.recepcionado_por or '',
+                'regularizado_por': recepcion.regularizado_por or '',
+                'fecha_regularizacion': (
+                    timezone.localtime(recepcion.fecha_regularizacion).strftime('%d-%m-%Y %H:%M')
+                    if recepcion.fecha_regularizacion else ''
+                ),
             })
 
         # Fallback: si no hay Productos_Recepcionados (caso RECHAZADO o EMITIDO sin
@@ -8823,15 +8905,58 @@ def obtener_detalle_dte_recepcionado(request):
                     'cantidad_recepcionada': 0,
                     'cantidad_danada': 0,
                     'cantidad_faltante': dp.stock if dte.estado_dte == 'RECHAZADO' else 0,
+                    'cantidad_sobrante': 0,
                     'estado': estado_linea,
                     'observaciones': (
                         f'DTE RECHAZADO. Motivo: {dte.motivo_rechazo or "Sin motivo"}'
                         if dte.estado_dte == 'RECHAZADO' else 'Pendiente de recepcion'
                     ),
+                    'recepcionado_por': '',
+                    'regularizado_por': '',
+                    'fecha_regularizacion': '',
                 })
         
+        # Resumen en UNIDADES (esperadas/recibidas/faltantes/dañadas/sobrantes)
+        # más el conteo de LÍNEAS con problema. El modal mezclaba ambas escalas
+        # en la misma tira de números ("OK 180 / Con problemas 6 / Faltantes 12")
+        # y no se entendía qué contaba cada casillero.
+        ESTADOS_LINEA_OK = ('RECEPCIONADO_OK',)
+        resumen = {
+            'unidades_esperadas': sum(p['cantidad_esperada'] or 0 for p in productos_detalle),
+            'unidades_recibidas': sum(p['cantidad_recepcionada'] or 0 for p in productos_detalle),
+            'unidades_faltantes': sum(p['cantidad_faltante'] or 0 for p in productos_detalle),
+            'unidades_danadas': sum(p['cantidad_danada'] or 0 for p in productos_detalle),
+            'unidades_sobrantes': sum(p['cantidad_sobrante'] or 0 for p in productos_detalle),
+            'lineas_total': len(productos_detalle),
+            'lineas_ok': sum(1 for p in productos_detalle if p['estado'] in ESTADOS_LINEA_OK),
+            'lineas_problema': sum(1 for p in productos_detalle if p['estado'] not in ESTADOS_LINEA_OK),
+        }
+        resumen['unidades_ingresadas'] = max(
+            0, resumen['unidades_recibidas'] - resumen['unidades_danadas']
+        )
+
+        # Resumen de NC/ajustes: el modal decía "Recepcionado Parcial" sin
+        # contar que el faltante ya estaba cubierto por una nota de crédito.
+        vinculados_resumen = []
+        for doc_v in (
+            Dte.objects.filter(documento_afectado_id=dte.id)
+            .order_by('fecha_emision', 'id')
+        ):
+            vinculados_resumen.append({
+                'id': doc_v.id,
+                'numero_documento': doc_v.numero_documento,
+                'es_nota_credito': bool(doc_v.es_nota_credito),
+                'estado_dte': doc_v.estado_dte,
+                'unidades': int(doc_v.unidades_productos or 0),
+                'fecha_emision': doc_v.fecha_emision.strftime('%d-%m-%Y') if doc_v.fecha_emision else '',
+                'motivo': (doc_v.motivo_nc or '').strip(),
+                'redujo_lineas_documento': bool(doc_v.redujo_lineas_documento),
+            })
+
         return JsonResponse({
             'success': True,
+            'resumen': resumen,
+            'documentos_vinculados': vinculados_resumen,
             'dte': {
                 'id': dte.id,
                 'numero_documento': dte.numero_documento,
@@ -8849,6 +8974,12 @@ def obtener_detalle_dte_recepcionado(request):
                 'sucursal_destino_id': destino_dte.id if destino_dte else None,
                 'referencias': dte.referencias or '',
                 'motivo_rechazo': dte.motivo_rechazo or '',
+                # Quién hizo la recepción: estaba en cada línea pero el modal
+                # no lo mostraba en ninguna parte.
+                'recepcionado_por': next(
+                    (p['recepcionado_por'] for p in productos_detalle if p['recepcionado_por']),
+                    ''
+                ),
             },
             'productos': productos_detalle
         }, json_dumps_params={'default': str})

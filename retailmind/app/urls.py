@@ -920,6 +920,7 @@ urlpatterns = [
     path('dte/obtener_dtes_con_problemas/', views.obtener_dtes_con_problemas, name='obtener_dtes_con_problemas'),
     path('dte/obtener_detalle_dte_recepcionado/', views.obtener_detalle_dte_recepcionado, name='obtener_detalle_dte_recepcionado'),
     path('dte/<int:dte_id>/audit/', views.dte_audit_api, name='dte_audit_api'),
+    path('dte/<int:dte_id>/documentos-vinculados/', views_modulo_compras.dte_documentos_vinculados_api, name='dte_documentos_vinculados_api'),
     path('debug_session/', views.debug_session, name='debug_session'),
     path('debug_user_empresas/', views.debug_user_empresas, name='debug_user_empresas'),  # Temporal para debug
     path('empresas_clientes/', views.empresas_clientes, name='empresas_clientes'),
