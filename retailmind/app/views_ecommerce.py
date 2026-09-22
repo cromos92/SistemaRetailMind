@@ -1420,6 +1420,16 @@ def _aplicar_filtros_pedidos(qs, params):
     elif medio_pago:
         qs = qs.filter(medio_pago=medio_pago)
 
+    # Cupón del canal. No hay select de códigos porque son de un solo uso (un
+    # hash por cliente: WELCOME-54E9F740), así que listarlos no agrupa nada. Lo
+    # que sirve es "trae cupón o no"; para acotar a UNA campaña se escribe el
+    # prefijo (WELCOME, PTS) en el buscador, que ya mira `coupon_code`.
+    cupon = params.get('cupon', '')
+    if cupon == 'CON':
+        qs = qs.exclude(coupon_code='')
+    elif cupon == 'SIN':
+        qs = qs.filter(coupon_code='')
+
     desde = _parse_fecha_param(params.get('desde', ''))
     if desde:
         qs = qs.filter(fecha_recepcion__date__gte=desde)
@@ -1439,6 +1449,9 @@ def _aplicar_filtros_pedidos(qs, params):
             | django_models.Q(correlativo__icontains=q)
             | django_models.Q(cliente_nombre__icontains=q)
             | django_models.Q(cliente_documento__icontains=q)
+            # Permite acotar a una campaña entera escribiendo el prefijo
+            # (WELCOME, PTS) o caer en un pedido puntual con el código completo.
+            | django_models.Q(coupon_code__icontains=q)
         )
     return qs
 
@@ -1591,6 +1604,7 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
         from app.models import MEDIO_PAGO_ECOMMERCE_CHOICES
         context['medios_pago_choices'] = MEDIO_PAGO_ECOMMERCE_CHOICES
         context['medio_pago_filtro'] = self.request.GET.get('medio_pago', '')
+        context['cupon_filtro'] = self.request.GET.get('cupon', '')
 
         # KPIs del encabezado — solo en render completo (el parcial AJAX no los usa).
         # Cuentan sobre el MISMO scope de empresa + sucursal que el listado, en
@@ -1649,6 +1663,8 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
         context['filtros_activos'] = any([
             context['canal_filtro'],
             context['sub_estado_filtro'],
+            context['medio_pago_filtro'],
+            context['cupon_filtro'],
             context['q'],
             context['desde_filtro'],
             context['hasta_filtro'],
@@ -4142,7 +4158,12 @@ def exportar_pedidos_csv(request):
     writer = csv.writer(response, delimiter=';')
     writer.writerow([
         'N Ticket RM', 'Folio Despacho', 'N Pedido Canal', 'Canal', 'Cliente', 'RUT/Doc',
-        'Sucursal', 'Total', 'Medio Pago', 'Origen Medio Pago',
+        'Sucursal', 'Total',
+        # Descuento + cupón del canal: es lo que explica por qué el total es
+        # menor que la suma de las líneas y lo que permite medir en Excel
+        # cuánto costó una campaña (filtrar por 'Cupon' y sumar 'Descuento').
+        'Descuento', 'Cupon',
+        'Medio Pago', 'Origen Medio Pago',
         'Estado', 'Sub-estado', 'Fecha Recepcion',
         'Fecha Facturacion', 'Ticket #', 'DTE #',
         # Cabecera del DTE: permite detectar en Excel las boletas emitidas con
@@ -4167,6 +4188,8 @@ def exportar_pedidos_csv(request):
             p.cliente_documento,
             p.sucursal.nombre or p.sucursal.alias if p.sucursal else '',
             int(p.total or 0),
+            int(p.descuento or 0),
+            p.coupon_code,
             p.get_medio_pago_display() if p.medio_pago else 'Sin definir',
             p.medio_pago_origen,
             p.estado,

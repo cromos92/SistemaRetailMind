@@ -156,6 +156,18 @@
   border-radius: 20px; margin-top: 3px;
 }
 
+/* Cupón del canal: explica por qué el total no es la suma de las líneas.
+   El descuento se aplica al PEDIDO (no a la línea), así que sin esto el
+   operador ve $115.191 abajo y $127.990 en la tabla y no sabe de dónde
+   salió la diferencia. */
+.cupon-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;
+  font-family: 'SF Mono', 'Consolas', monospace;
+  font-size: .66rem; font-weight: 700; padding: 2px 7px;
+  border-radius: 20px; margin-top: 4px; letter-spacing: .02em;
+}
+
 /* Resumen pie de tabla */
 .resumen-precios {
   background: linear-gradient(135deg, #fff7ed, #fffbeb);
@@ -685,10 +697,15 @@
 
           <!-- Totales -->
           <div class="totals-row d-flex justify-content-end gap-4 px-4 pb-4 flex-wrap">
-            {% if pedido.descuento %}
+            {% if pedido.descuento or pedido.coupon_code %}
             <div class="text-end">
               <div class="info-label">Descuento</div>
-              <div class="info-val" style="color:#dc2626;font-weight:700;">-${{ pedido.descuento|floatformat:0 }}</div>
+              <div class="info-val" style="color:#dc2626;font-weight:700;">-${{ pedido.descuento|default:0|floatformat:0 }}</div>
+              {% if pedido.coupon_code %}
+              <div class="cupon-pill" title="Cupón aplicado por el canal sobre el total del pedido. RetailMind lo recibe en la ingesta: no lo valida ni lo emite, solo lo registra.">
+                <i class="bi bi-ticket-perforated"></i>{{ pedido.coupon_code }}
+              </div>
+              {% endif %}
             </div>
             {% endif %}
             {% if pedido.costo_envio %}

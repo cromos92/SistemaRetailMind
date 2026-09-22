@@ -16,6 +16,7 @@
             <th>Cliente</th>
             <th>Sucursal</th>
             <th class="text-end">Total</th>
+            <th title="Campaña del cupón que aplicó el canal sobre el total del pedido (el código completo está en el tooltip de cada fila).">Cupón</th>
             <th title="Con qué pagó el cliente en el canal. Define cómo se clasifica la venta en la cuadratura de caja.">Medio pago</th>
             <th>Fecha</th>
             <th>Estado</th>
@@ -66,6 +67,20 @@
               {% endif %}
             </td>
             <td class="col-total text-end"><span class="fmt-miles" data-val="{{ p.total|floatformat:0 }}">${{ p.total|floatformat:0 }}</span></td>
+            <td class="col-cupon">
+              {# El descuento del cupón va al PEDIDO, no a la línea: sin esta #}
+              {# columna el total de acá no cuadra con la suma de los ítems de #}
+              {# la ficha y no hay forma de medir qué costó una campaña.       #}
+              {% if p.coupon_code %}
+                <span class="cupon-b" title="Cupón {{ p.coupon_code }} — aplicado por el canal sobre el total del pedido">{{ p.cupon_campana }}</span>
+                {% if p.descuento %}<span class="cupon-monto">-<span class="fmt-miles" data-val="{{ p.descuento|floatformat:0 }}">${{ p.descuento|floatformat:0 }}</span></span>{% endif %}
+              {% elif p.descuento %}
+                {# Descuento sin código: el canal lo informó sin cupón asociado. #}
+                <span class="cupon-monto" title="El canal informó un descuento sin código de cupón">-<span class="fmt-miles" data-val="{{ p.descuento|floatformat:0 }}">${{ p.descuento|floatformat:0 }}</span></span>
+              {% else %}
+                <span class="cupon-na">—</span>
+              {% endif %}
+            </td>
             <td class="col-medio-pago">
               {# SOLO LECTURA: lo informa la tienda en la ingesta (`payment_method` #}
               {# del payload) y RetailMind lo normaliza. Antes había un <select>    #}
@@ -220,6 +235,7 @@
         Estado <strong>{{ estado_filtro|default:"todos" }}</strong>
         {% if canal_filtro %} · canal <strong>{{ canal_filtro }}</strong>{% endif %}
         {% if sub_estado_filtro %} · sub-estado <strong>{{ sub_estado_filtro }}</strong>{% endif %}
+        {% if cupon_filtro == 'CON' %} · solo <strong>con cupón</strong>{% elif cupon_filtro == 'SIN' %} · solo <strong>sin cupón</strong>{% endif %}
         {% if desde_filtro or hasta_filtro %} · recepción <strong>{{ desde_filtro|default:"…" }} → {{ hasta_filtro|default:"…" }}</strong>{% endif %}
         {% if problema_filtro == 'dte_cero' %} · solo boletas con cabecera en 0{% endif %}
         {% if q %} · búsqueda “{{ q }}”{% endif %}

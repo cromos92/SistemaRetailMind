@@ -88,6 +88,18 @@
 .tbl .col-cliente-nombre{font-weight:600;font-size:.87rem;color:#0f172a;}
 .tbl .col-cliente-doc{font-size:.74rem;color:#64748b;}
 
+/* Cupón: se muestra la CAMPAÑA (el prefijo), no el código entero. Los cupones
+   del canal son de un solo uso y llevan un hash por cliente, así que el código
+   completo ocuparía media tabla y no agruparía nada; el código va en el title. */
+.tbl .col-cupon{white-space:nowrap;}
+.tbl .cupon-b{
+  background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;
+  font-size:.64rem;padding:2px 7px;border-radius:20px;font-weight:700;
+  letter-spacing:.02em;white-space:nowrap;
+}
+.tbl .cupon-monto{font-size:.62rem;color:#dc2626;display:block;line-height:1.2;font-weight:600;}
+.tbl .cupon-na{font-size:.78rem;color:#cbd5e1;}
+
 /* ── checkbox ── */
 .cb-pedido{width:15px;height:15px;cursor:pointer;accent-color:#3b82f6;}
 
@@ -224,6 +236,8 @@
   .tbl .col-sucursal{font-size:.75rem;}
   .tbl .col-total{font-size:.84rem;}
   .tbl .col-fecha{font-size:.7rem;}
+  .tbl .cupon-b{font-size:.58rem;padding:1px 5px;}
+  .tbl .cupon-monto{font-size:.58rem;}
   .ticket-rm-badge{font-size:.72rem;padding:1px 5px;}
   .folio-badge{font-size:.7rem;padding:1px 5px;}
   .canal-b{font-size:.6rem;padding:1px 5px;}
@@ -493,6 +507,17 @@
             </select>
           </div>
           <div class="col-md-2 col-6">
+            <label class="filtro-label">Cupón</label>
+            {# Los códigos son de un solo uso (un hash por cliente), así que un #}
+            {# select de códigos no agruparía nada: acá va el "trae o no trae", #}
+            {# y para aislar UNA campaña se escribe el prefijo en el buscador.  #}
+            <select name="cupon" class="form-select form-select-sm" title="Pedidos con descuento por cupón del canal. Para ver una campaña puntual, escribí su prefijo (ej. WELCOME) en el buscador.">
+              <option value="">Todos</option>
+              <option value="CON" {% if cupon_filtro == 'CON' %}selected{% endif %}>Con cupón</option>
+              <option value="SIN" {% if cupon_filtro == 'SIN' %}selected{% endif %}>Sin cupón</option>
+            </select>
+          </div>
+          <div class="col-md-2 col-6">
             <label class="filtro-label">Sucursal</label>
             <select name="sucursal_id" class="form-select form-select-sm" id="filtro-sucursal">
               <option value="" {% if sucursal_filtro == '' and not ver_todas %}selected{% endif %}>Mi sucursal</option>
@@ -524,7 +549,7 @@
             <button type="button" class="btn btn-sm text-white" style="background:#405189;" onclick="aplicarFiltros(1)"><i class="bi bi-funnel me-1"></i>Filtrar</button>
             <button type="button" class="btn btn-outline-secondary btn-sm" onclick="limpiarFiltros()" title="Limpiar todos los filtros"><i class="bi bi-arrow-counterclockwise me-1"></i>Limpiar</button>
             <a id="btn-export-csv" data-base="{% url 'exportar_pedidos_csv' %}"
-               href="{% url 'exportar_pedidos_csv' %}?estado={{ estado_filtro }}&canal={{ canal_filtro }}&sub_estado={{ sub_estado_filtro }}&medio_pago={{ medio_pago_filtro }}&sucursal_id={{ sucursal_filtro }}&q={{ q }}{% if ver_todas %}&ver_todas=1{% endif %}"
+               href="{% url 'exportar_pedidos_csv' %}?estado={{ estado_filtro }}&canal={{ canal_filtro }}&sub_estado={{ sub_estado_filtro }}&medio_pago={{ medio_pago_filtro }}&cupon={{ cupon_filtro }}&sucursal_id={{ sucursal_filtro }}&q={{ q }}{% if ver_todas %}&ver_todas=1{% endif %}"
                class="btn btn-outline-success btn-sm" title="Exportar a CSV lo que estás viendo">
               <i class="bi bi-file-earmark-spreadsheet me-1"></i>CSV
             </a>
@@ -904,7 +929,10 @@ const ZIP_TXT_URL = "{% url 'descargar_txts_zip_ecommerce' %}";
 function construirParams(page){
   const f = document.getElementById('form-filtros');
   const params = new URLSearchParams();
-  ['estado','canal','sub_estado','sucursal_id','q','desde','hasta','problema'].forEach(name => {
+  // OJO: esta lista es la que viaja en el AJAX. Un <select> que no esté acá
+  // se ve en pantalla pero NO filtra al apretar "Filtrar" (solo funcionaba
+  // llegando con el parámetro ya en la URL, como hace el link de la cuadratura).
+  ['estado','canal','sub_estado','medio_pago','cupon','sucursal_id','q','desde','hasta','problema'].forEach(name => {
     const el = f.elements[name];
     if(el && el.value !== '') params.set(name, el.value);
   });
@@ -953,6 +981,8 @@ function limpiarFiltros(){
   f.elements['estado'].value = 'PENDIENTE';   // default de la vista
   f.elements['canal'].value = '';
   f.elements['sub_estado'].value = '';
+  if(f.elements['medio_pago']) f.elements['medio_pago'].value = '';
+  if(f.elements['cupon']) f.elements['cupon'].value = '';
   f.elements['sucursal_id'].value = '';
   f.elements['q'].value = '';
   f.elements['desde'].value = '';
@@ -1081,7 +1111,11 @@ const _seleccion = new Set();      // IDs de pedidos marcados (cruza páginas)
 const _montoPorId = new Map();     // ID → monto de la fila (para el total)
 
 function _montoDeFila(cb){
-  const el = cb.closest('tr')?.querySelector('.fmt-miles');
+  // Anclado a .col-total a propósito: la fila tiene más de un .fmt-miles
+  // (el descuento del cupón también lleva separador de miles) y un
+  // querySelector suelto dependería del orden de las columnas para no
+  // sumar el monto equivocado en el contador de facturación masiva.
+  const el = cb.closest('tr')?.querySelector('.col-total .fmt-miles');
   return el ? (parseInt(el.dataset.val, 10) || 0) : 0;
 }
 

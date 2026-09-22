@@ -481,6 +481,21 @@ class PedidoEcommerce(models.Model):
         """
         return (self.canal_origen or '').upper().strip() in PLATAFORMA_INTERNET_POR_CANAL
 
+    @property
+    def cupon_campana(self):
+        """Campaña del cupón: el prefijo antes del guion (`WELCOME-54E9F740` →
+        `WELCOME`, `PTS-812` → `PTS`).
+
+        Los cupones del canal son de un solo uso y llevan un hash por cliente,
+        así que el código completo no agrupa nada. El prefijo sí: es lo que
+        permite ver en el listado cuántos pedidos trae una misma campaña y
+        cuánto descuento se regaló. El código entero queda en el tooltip.
+        """
+        codigo = (self.coupon_code or '').strip()
+        if not codigo:
+            return ''
+        return codigo.split('-', 1)[0].upper()
+
     def puede_transicionar_sub_estado(self, nuevo_sub_estado):
         """Verifica si la transición de sub-estado es válida."""
         permitidos = TRANSICIONES_SUB_ESTADO.get(self.sub_estado, [])
