@@ -773,7 +773,7 @@
             <select class="form-control-sm-pos" id="mpOpCaja" style="width:auto;min-width:240px;height:34px;" onchange="cargarMiCajaMP(true)"
                     title="Sucursal y caja sobre la que trabajan «Tu caja», «Cobro directo» e «Imprimir cierre en la máquina»">
                 {% if not sesion_tiene_caja_mp %}<option value="" selected>Tu sucursal ({{ sucursal_sesion_alias|default:'sin sesión' }}) no tiene caja MP — elige una o créala abajo</option>{% endif %}
-                {% for cfg in configs_mp %}<option value="{{ cfg.id }}" data-sucursal="{{ cfg.sucursal_id }}"{% if cfg.sucursal_id == sucursal_sesion_id and cfg.es_principal %} selected{% endif %}>{{ cfg.sucursal_alias }} · {{ cfg.nombre }}{% if cfg.device_id %} 📟{% endif %}{% if not cfg.habilitado %} (deshabilitada){% endif %}{% if cfg.sucursal_id == sucursal_sesion_id %} — tu sucursal{% endif %}</option>{% endfor %}
+                {% for cfg in configs_mp %}<option value="{{ cfg.id }}" data-sucursal="{{ cfg.sucursal_id }}"{% if cfg.id == config_mp_sesion_id %} selected{% endif %}>{{ cfg.sucursal_alias }} · {{ cfg.nombre }}{% if cfg.device_id %} 📟{% endif %}{% if not cfg.habilitado %} (deshabilitada){% endif %}{% if cfg.sucursal_id == sucursal_sesion_id %} — tu sucursal{% endif %}</option>{% endfor %}
             </select>
             {% endif %}
             <button type="button" class="btn btn-sm btn-light border" style="height:34px;" onclick="cargarMiCajaMP(true)"
@@ -864,6 +864,9 @@
         <strong>Sin N° de ticket:</strong> queda como cobro suelto y hay que registrarlo a mano en el POS con
         <strong>MP manual</strong> y el N° de operación que aparece al aprobarse; si no, la plata entra a Mercado
         Pago pero la venta no la muestra.
+        <strong>Cobro pegado en la máquina:</strong> usa «Cancelar» en su fila de la tabla de abajo. Si Mercado
+        Pago no deja cancelarlo, cancélalo en la máquina (botón rojo/atrás) o márcalo como expirado en el sistema
+        para que deje de bloquear la venta.
     </div>
     <div class="mt-2">
         <div class="d-flex justify-content-between align-items-center mb-1">
@@ -3316,7 +3319,10 @@ function _renderUltimosCobrosMP(lista) {
                 : ' <i class="bi bi-exclamation-circle text-warning" title="Aprobado y todavía sin usar en una venta"></i>')
             : '';
         const accion = t.vivo
-            ? `<button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.66rem;" onclick="seguirCobroMP(${t.id})"><i class="bi bi-eye"></i> Seguir</button>`
+            ? `<div class="d-flex gap-1 flex-nowrap">
+                 <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.66rem;" onclick="seguirCobroMP(${t.id})"><i class="bi bi-eye"></i> Seguir</button>
+                 <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:.66rem;" onclick="cancelarCobroFilaMP(${t.id})" title="Cancelar este cobro en Mercado Pago"><i class="bi bi-x-circle"></i> Cancelar</button>
+               </div>`
             : '';
         return `<tr>
             <td>${_escMP(t.hora)}</td>
@@ -3330,6 +3336,98 @@ function _renderUltimosCobrosMP(lista) {
             <td>${accion}</td>
         </tr>`;
     }).join('');
+}
+
+/**
+ * «Cancelar» de una fila de «Últimos cobros de hoy». Caso real (PAO4, 21-09):
+ * un cobro Point de $3.333 quedó PENDIENTE en la pantalla de la máquina,
+ * reiniciarla no sirvió (la orden vive en MP y la vuelve a bajar) y el cajero
+ * no tenía cómo sacarla. Primero se intenta cancelar en MP; si MP no deja
+ * (orden en la pantalla del terminal), se ofrece marcarla expirada en el
+ * sistema para que deje de bloquear la venta.
+ */
+async function cancelarCobroFilaMP(id) {
+    const t = ((_miCajaMP && _miCajaMP.ultimos) || []).find(x => x.id === id);
+    if (!t) return;
+    const canalTxt = t.canal === 'POINT' ? 'máquina Point' : 'QR en pantalla';
+    const ticketTxt = t.directo ? 'cobro suelto (sin ticket)' : `ticket <code>${_escMP(t.correlativo)}</code>`;
+    const ok = await Swal.fire({
+        icon: 'question',
+        title: `¿Cancelar el cobro de ${fmtCLP(t.monto)}?`,
+        html: `<div class="text-start small">
+            <div><strong>Por:</strong> ${canalTxt}</div>
+            <div><strong>Ticket:</strong> ${ticketTxt}</div>
+            <div class="text-muted mt-2">Si el cliente ya pasó la tarjeta, el cobro quedará aprobado y no se cancela.</div>
+        </div>`,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, cancelar cobro',
+        cancelButtonText: 'Volver',
+        confirmButtonColor: '#dc3545'
+    });
+    if (!ok.isConfirmed) return;
+
+    Swal.fire({ title: 'Cancelando…', didOpen: () => Swal.showLoading(), showConfirmButton: false, allowOutsideClick: false });
+    let res;
+    try {
+        const r = await fetch(`/app/pos/mercadopago/cancelar/${id}/`, {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'X-CSRFToken': _csrfMP() }
+        });
+        res = await r.json();
+    } catch (e) {
+        res = { success: false, error: 'No se pudo contactar al servidor. Revisa la máquina y vuelve a intentar.' };
+    }
+    if (res && res.success) {
+        Swal.fire({ icon: 'success', title: 'Cobro cancelado', timer: 1800, showConfirmButton: false });
+        cargarMiCajaMP(false);
+        return;
+    }
+    // MP no dejó cancelar (típico: Point con el cobro en pantalla). Si la fila
+    // sigue viva y no es incierta, se puede marcar expirada en el sistema.
+    const estado = (res && res.estado) || t.estado;
+    const puedeExpirar = ['CREADA', 'PENDIENTE'].includes(estado) && !t.incierto;
+    const seg = await Swal.fire({
+        icon: 'warning',
+        title: 'No se pudo cancelar',
+        html: `<div class="text-start small">
+            <div>${_escMP((res && res.error) || 'Mercado Pago no permitió cancelar el cobro.')}</div>
+            ${puedeExpirar ? '<div class="text-muted mt-2">Si el cobro sigue pegado en la máquina, puedes marcarlo como expirado en el sistema: deja de bloquear la venta, pero igual hay que cancelarlo en la máquina.</div>' : ''}
+        </div>`,
+        showConfirmButton: puedeExpirar,
+        confirmButtonText: 'Marcar expirado en el sistema',
+        confirmButtonColor: '#dc3545',
+        showCancelButton: true,
+        cancelButtonText: 'Cerrar'
+    });
+    if (!puedeExpirar || !seg.isConfirmed) { cargarMiCajaMP(false); return; }
+
+    Swal.fire({ title: 'Marcando…', didOpen: () => Swal.showLoading(), showConfirmButton: false, allowOutsideClick: false });
+    let exp;
+    try {
+        const r = await fetch(`/app/pos/mercadopago/expirar/${id}/`, {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'X-CSRFToken': _csrfMP() }
+        });
+        exp = await r.json();
+    } catch (e) {
+        exp = { success: false, error: 'No se pudo contactar al servidor. Vuelve a intentar.' };
+    }
+    if (exp && exp.success) {
+        await Swal.fire({
+            icon: 'success',
+            title: 'Marcada como expirada',
+            html: '<div class="text-start small">Cancélala también en la máquina (botón rojo/atrás) para que no vuelva a aparecer. Si el cliente paga igual, se revivirá como aprobada.</div>',
+            confirmButtonColor: '#0066FF'
+        });
+    } else {
+        await Swal.fire({
+            icon: 'error',
+            title: 'No se pudo marcar como expirada',
+            html: `<div class="text-start small">${_escMP((exp && exp.error) || 'Error desconocido.')}</div>`,
+            confirmButtonColor: '#0066FF'
+        });
+    }
+    cargarMiCajaMP(false);
 }
 
 /** Reabre el modal de espera de un cobro que sigue vivo (p.ej. se cerró la ventana). */
@@ -3734,10 +3832,23 @@ function imprimirCierreEnMaquinaMP() {
         return;
     }
     const fecha = document.getElementById('mpResumenFecha').value || new Date().toISOString().slice(0, 10);
-    const cajaTxt = (MP_ES_ADMIN && sel && sel.value) ? sel.options[sel.selectedIndex].text : 'la máquina de tu sucursal';
+    const opt = (MP_ES_ADMIN && sel && sel.value) ? sel.options[sel.selectedIndex] : null;
+    const cajaTxt = opt ? opt.text : 'la máquina de tu sucursal';
+    // El cierre trae la VENTA DEL DÍA de la sucursal DE LA CAJA. Si el admin
+    // tiene elegida la caja de otra tienda, el papel sale con la venta de esa
+    // otra tienda: se avisa ANTES de imprimir, no después de leer el ticket.
+    const sucursalCaja = opt ? Number(opt.getAttribute('data-sucursal')) : null;
+    const otraSucursal = !!(sucursalCaja && MP_SUCURSAL_SESION && sucursalCaja !== MP_SUCURSAL_SESION);
+    const aviso = otraSucursal
+        ? `<div class="alert alert-warning py-2 px-2 mt-2 mb-0 small text-start">
+             <b>Ojo:</b> esa caja NO es de tu sucursal de sesión. El cierre saldrá con la
+             venta del día de <b>${_escMP(opt.text.split(' · ')[0])}</b>, no de la tuya.
+             Cambia la caja en «Tu caja · Mercado Pago» si no es lo que quieres.
+           </div>`
+        : '';
     Swal.fire({
-        icon: 'question', title: '¿Imprimir cierre en la máquina?',
-        html: `<div class="text-start small">Caja: ${cajaTxt}<br>Fecha: ${fecha}<br><br>El ticket saldrá por la impresora de la propia Point, con fecha, hora y responsable.</div>`,
+        icon: otraSucursal ? 'warning' : 'question', title: '¿Imprimir cierre en la máquina?',
+        html: `<div class="text-start small">Caja: ${_escMP(cajaTxt)}<br>Fecha: ${fecha}<br><br>El ticket saldrá por la impresora de la propia Point, con fecha, hora y responsable.</div>${aviso}`,
         showCancelButton: true, confirmButtonText: '🖨 Imprimir', cancelButtonText: 'Cancelar'
     }).then(r => {
         if (!r.isConfirmed) return;
@@ -3750,7 +3861,18 @@ function imprimirCierreEnMaquinaMP() {
             .then(resp => resp.json())
             .then(data => {
                 if (data.success) {
-                    Swal.fire({ icon: 'success', title: 'Enviado a la máquina', text: 'El cierre está saliendo por la impresora de la Point.', timer: 2500, showConfirmButton: false });
+                    // Se nombra la sucursal impresa: un cierre de otra tienda se
+                    // nota acá y no recién al leer el papel.
+                    const deOtra = data.es_de_tu_sucursal === false;
+                    Swal.fire({
+                        icon: deOtra ? 'warning' : 'success',
+                        title: 'Enviado a la máquina',
+                        html: `<div class="small">Cierre de <b>${_escMP(data.sucursal || '')}</b> · ${_escMP(data.caja || '')}`
+                            + ` — ${_escMP(data.fecha || '')}<br>Está saliendo por la impresora de la Point.`
+                            + (deOtra ? '<br><span class="text-danger">Ojo: esa caja no es de tu sucursal de sesión.</span>' : '')
+                            + '</div>',
+                        timer: deOtra ? undefined : 3000, showConfirmButton: !!deOtra
+                    });
                 } else {
                     Swal.fire({ icon: 'error', title: 'No se pudo imprimir', text: data.error });
                 }

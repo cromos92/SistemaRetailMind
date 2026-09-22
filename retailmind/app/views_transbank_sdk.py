@@ -50,10 +50,14 @@ def gestion_transbank_pos_sdk(request):
     context['es_admin_mp'] = getattr(request.user, 'rol', '') in ('administrador', 'administracion')
     # Sucursal de la sesión: preselecciona su caja en los selectores MP y es
     # la caja que usa el cierre de un usuario no-admin
+    # MISMA resolución de sesión que usan los endpoints de views_mercadopago
+    # (incluye `idSucursalActualPOS`). Con dos reglas distintas, la pantalla
+    # podía creer que no había sucursal mientras el endpoint sí la resolvía.
     try:
         context['sucursal_sesion_id'] = int(
             request.session.get('idSucursalActual')
-            or request.session.get('sucursalActual') or 0
+            or request.session.get('sucursalActual')
+            or request.session.get('idSucursalActualPOS') or 0
         ) or None
     except (TypeError, ValueError):
         context['sucursal_sesion_id'] = None
@@ -77,6 +81,7 @@ def gestion_transbank_pos_sdk(request):
     context['configs_mp'] = []
     context['mp_migraciones_pendientes'] = False
     context['sesion_tiene_caja_mp'] = False
+    context['config_mp_sesion_id'] = None
     try:
         from .models import MercadoPagoConfig, MercadoPagoCuenta
         context['cuentas_mp'] = [{
@@ -97,6 +102,14 @@ def gestion_transbank_pos_sdk(request):
         context['sesion_tiene_caja_mp'] = any(
             c['sucursal_id'] == context['sucursal_sesion_id'] for c in context['configs_mp']
         )
+        # Caja preseleccionada: la MISMA que resuelve el servidor al imprimir el
+        # cierre o cobrar. Antes el `selected` del template exigía además
+        # `es_principal`, así que una sucursal sin principal marcada dejaba el
+        # <select> sin opción elegida y el navegador caía en la PRIMERA de la
+        # lista — la de otra tienda — y el cierre salía con SU venta.
+        from .views_mercadopago import caja_mp_de_sucursal
+        caja_sesion = caja_mp_de_sucursal(context['sucursal_sesion_id'])
+        context['config_mp_sesion_id'] = caja_sesion.id if caja_sesion else None
     except Exception as e:
         # Tablas MP inexistentes (migraciones sin aplicar) u otro error de BD:
         # la pestaña avisa en vez de mostrar selects vacíos sin explicación.

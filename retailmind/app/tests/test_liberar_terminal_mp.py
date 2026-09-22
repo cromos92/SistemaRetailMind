@@ -666,3 +666,121 @@ class BarridoAcotadoTests(BaseLiberarTest):
         self.assertEqual(informe['omitidas'], 1)
         self.assertNotIn('ORD-15011', [u.rsplit('/', 1)[-1] for u in _llamadas(m_req, 'GET')])
         self.assertIsNotNone(ajena.id)
+
+
+class ExpirarManualTests(BaseLiberarTest):
+    """«Marcar expirado en el sistema» (POST /app/pos/mercadopago/expirar/<id>/).
+
+    Caso real (PAO4, 21-09): cobro Point de $3.333 PENDIENTE en la pantalla de
+    la máquina; MP no lo deja cancelar por API y reiniciar la máquina no sirve.
+    La fila se marca EXPIRADA a mano (deja de bloquear el ticket) sin tocar la
+    orden en MP, y sigue siendo reversible si el cliente paga igual.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.cajero = crear_usuario(username='cajero_exp', rol='cajero')
+        cls.cajero_otra = crear_usuario(username='cajero_exp_otra', rol='cajero')
+
+    def _login(self, usuario, sucursal):
+        self.client.force_login(usuario)
+        session = self.client.session
+        session['idSucursalActual'] = sucursal.id
+        session.save()
+
+    def _post(self, trx):
+        return self.client.post(f'/app/pos/mercadopago/expirar/{trx.id}/')
+
+    def test_pendiente_con_order_id_queda_expirada(self):
+        trx = _transaccion(self.config, '16001', monto=3333)
+        self._login(self.cajero, self.sucursal)
+        with mock.patch.object(mp, 'consultar_estado', side_effect=lambda t, **k: t) as m_cons:
+            resp = self._post(trx)
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(resp.json()['estado'], 'EXPIRADA')
+        m_cons.assert_called_once()
+        self.assertTrue(m_cons.call_args.kwargs.get('forzar'))
+        trx.refresh_from_db()
+        self.assertEqual(trx.estado, 'EXPIRADA')
+        self.assertIn('cajero_exp', trx.estado_detalle)
+        self.assertIn('máquina', trx.estado_detalle)
+        # Deja de contar como cobro vivo del ticket.
+        self.assertEqual(mp.cobros_vivos_de_ticket(self.sucursal.id, '16001'), [])
+
+    def test_si_mp_dice_aprobada_no_se_expira(self):
+        trx = _transaccion(self.config, '16002', monto=3333)
+        self._login(self.cajero, self.sucursal)
+        aprobar = lambda t, **k: mp._aplicar_estado(t, 'APROBADA', payment={'id': '177000'})  # noqa: E731
+        with mock.patch.object(mp, 'consultar_estado', side_effect=aprobar):
+            resp = self._post(trx)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.json()['estado'], 'APROBADA')
+        self.assertIn('devolución', resp.json()['error'])
+        trx.refresh_from_db()
+        self.assertEqual(trx.estado, 'APROBADA')
+
+    def test_aprobada_da_400_sin_consultar(self):
+        trx = _transaccion(self.config, '16003', monto=3333, estado='APROBADA')
+        self._login(self.cajero, self.sucursal)
+        with mock.patch.object(mp, 'consultar_estado') as m_cons:
+            resp = self._post(trx)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('devolución', resp.json()['error'])
+        m_cons.assert_not_called()
+        trx.refresh_from_db()
+        self.assertEqual(trx.estado, 'APROBADA')
+
+    def test_ya_final_responde_200_con_el_estado(self):
+        trx = _transaccion(self.config, '16004', monto=3333, estado='CANCELADA')
+        self._login(self.cajero, self.sucursal)
+        resp = self._post(trx)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()['estado'], 'CANCELADA')
+
+    def test_incierta_sin_order_id_no_se_puede_expirar(self):
+        """Protección del 13-09: sin order_id no se sabe si existe en MP."""
+        trx = _transaccion(self.config, '16005', monto=3333, order_id='',
+                           raw_response={'_rm': {'fase': mp.FASE_ENVIADA}})
+        self.assertTrue(mp.es_incierta(trx))
+        self._login(self.cajero, self.sucursal)
+        with mock.patch.object(mp, 'consultar_estado') as m_cons:
+            resp = self._post(trx)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('Liberar máquina', resp.json()['error'])
+        m_cons.assert_not_called()
+        trx.refresh_from_db()
+        self.assertEqual(trx.estado, 'PENDIENTE')
+
+    def test_cajero_de_otra_sucursal_404(self):
+        trx = _transaccion(self.config, '16006', monto=3333)
+        self._login(self.cajero_otra, self.otra_sucursal)
+        resp = self._post(trx)
+        self.assertEqual(resp.status_code, 404)
+        trx.refresh_from_db()
+        self.assertEqual(trx.estado, 'PENDIENTE')
+
+    def test_sin_red_igual_se_expira_con_lo_de_bd(self):
+        trx = _transaccion(self.config, '16007', monto=3333)
+        self._login(self.cajero, self.sucursal)
+        with mock.patch.object(mp, 'consultar_estado', side_effect=RuntimeError('sin red')):
+            resp = self._post(trx)
+        self.assertEqual(resp.status_code, 200, resp.content)
+        trx.refresh_from_db()
+        self.assertEqual(trx.estado, 'EXPIRADA')
+
+    def test_expirada_a_mano_revive_si_el_cliente_paga(self):
+        """Como haría el webhook: FINAL→APROBADA está permitido."""
+        trx = _transaccion(self.config, '16008', monto=3333)
+        self._login(self.cajero, self.sucursal)
+        with mock.patch.object(mp, 'consultar_estado', side_effect=lambda t, **k: t):
+            self._post(trx)
+        trx.refresh_from_db()
+        self.assertEqual(trx.estado, 'EXPIRADA')
+        trx = mp._aplicar_estado(trx, 'APROBADA', detalle='Pagada igual',
+                                 payment={'id': '177422093000',
+                                          'payment_method': {'id': 'debit_card', 'type': 'debit_card'}})
+        trx.refresh_from_db()
+        self.assertEqual(trx.estado, 'APROBADA')
+        self.assertEqual(trx.payment_id_mp, '177422093000')
+        self.assertEqual(len(mp.cobros_vivos_de_ticket(self.sucursal.id, '16008')), 1)

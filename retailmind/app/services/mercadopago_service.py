@@ -1074,6 +1074,13 @@ def contenido_cierre_terminal(caja, fecha):
     if dia:
         partes.append('{center}{w}VENTA DEL DIA - TODOS' + '{br}')
         partes.append('{center}{w}LOS MEDIOS DE PAGO' + '{br}')
+        # De QUÉ tienda es esta venta. El bloque sale de la cuadratura de la
+        # SUCURSAL (todas sus cajas y medios), no de la caja MP del encabezado:
+        # sin decirlo, un cierre sacado con la caja de otra tienda parecía una
+        # venta inflada de la propia.
+        partes.append('{center}{s}' + f"Sucursal: {caja.get('sucursal', '')}" + '{br}')
+        partes.append('{center}{s}(toda la sucursal, no solo' + '{br}')
+        partes.append('{center}{s}esta caja Mercado Pago)' + '{br}')
         for nombre, monto in dia:
             partes.append(linea(f"  {nombre}: {plata(monto)}"))
         if caja.get('dia_nc'):

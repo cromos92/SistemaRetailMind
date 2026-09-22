@@ -642,6 +642,31 @@ def _asegurar_principal_mp(sucursal_id):
         MercadoPagoConfig.objects.filter(id=primera.id).update(es_principal=True)
 
 
+def caja_mp_de_sucursal(sucursal_id, con_maquina=False):
+    """La caja Mercado Pago con la que opera una sucursal, o None.
+
+    ÚNICA regla de resolución del proyecto: la usan el cierre impreso, el cobro
+    directo de un usuario no admin y la preselección del selector del admin. Que
+    sea una sola función es el punto: mientras la pantalla preseleccionaba solo
+    cuando la caja tenía ``es_principal``, una sucursal sin principal marcada
+    dejaba el ``<select>`` sin opción elegida y el navegador caía en la PRIMERA
+    de la lista — la de otra tienda. El cierre salía entonces con la venta de esa
+    otra tienda (NICK1 estando en PAO1), que es justo lo que se reportó.
+
+    `con_maquina=True` exige caja habilitada y con máquina Point asociada (lo que
+    necesita el cierre impreso y el cobro por terminal). `False` sirve para
+    preseleccionar: prefiere igual la que serviría para cobrar, pero si no hay
+    devuelve cualquier caja de la sucursal antes que una ajena.
+    """
+    if not sucursal_id:
+        return None
+    qs = MercadoPagoConfig.objects.select_related('sucursal').filter(sucursal_id=sucursal_id)
+    operable = qs.filter(habilitado=True).exclude(device_id='').order_by('-es_principal', 'id').first()
+    if con_maquina:
+        return operable
+    return operable or qs.order_by('-habilitado', '-es_principal', 'id').first()
+
+
 def _msg_sin_cuenta(request):
     """Error legible cuando la empresa pedida no tiene MercadoPagoCuenta: dice
     QUÉ empresa es y cómo salir del paso (elegir otra cuenta en el formulario)."""
@@ -1257,22 +1282,36 @@ def gestion_imprimir_cierre_terminal_mp(request):
 
     Disponible para CUALQUIER usuario logueado (sacar el cierre es operación
     de tienda): un no-admin queda limitado a la caja de SU sucursal de sesión;
-    el admin puede elegir caja (config_id). El ticket sale con fecha, hora y
-    el usuario responsable que lo pidió.
+    el admin puede elegir caja (config_id) y, si no elige, sale la de su
+    sesión. El ticket lleva fecha, hora y el usuario responsable que lo pidió.
+
+    DE QUÉ SUCURSAL SALE EL PAPEL. El ticket mezcla dos fuentes y conviene no
+    confundirlas:
+
+      - cobros Mercado Pago (QR / Point, por medio, control contra la API):
+        son de la CAJA (`config`);
+      - «VENTA DEL DÍA — todos los medios de pago» y el TOTAL GLOBAL: son de
+        la SUCURSAL de esa caja, calculados con la misma cuadratura del arqueo
+        (`_calcular_cuadratura_data`), no solo con lo cobrado por esa caja.
+
+    Por eso la caja elegida manda sobre TODO el papel: con la caja de otra
+    tienda, el cierre sale con la venta de esa otra tienda. La respuesta
+    devuelve `sucursal` y `es_de_tu_sucursal` para que la pantalla lo diga.
     """
-    if _es_admin(request):
-        config = MercadoPagoConfig.objects.select_related('sucursal').filter(
-            id=_int_o_cero(request.POST.get('config_id'))).first()
+    sucursal_id = _int_o_cero(_sucursal_sesion(request))
+    config_id = _int_o_cero(request.POST.get('config_id'))
+    if _es_admin(request) and config_id:
+        config = MercadoPagoConfig.objects.select_related('sucursal').filter(id=config_id).first()
         if not config:
             return JsonResponse({'success': False, 'error': 'Caja no encontrada.'}, status=404)
     else:
-        sucursal_id = _sucursal_sesion(request)
+        # Sin caja elegida (o usuario no admin) manda la sucursal de la SESIÓN.
+        # Antes un admin sin `config_id` recibía "Caja no encontrada" en vez de
+        # caer en su propia sucursal, y el selector podía traer la caja de otra
+        # tienda: el cierre salía con la venta de esa otra tienda.
         if not sucursal_id:
             return JsonResponse({'success': False, 'error': 'No hay sucursal en sesión.'}, status=400)
-        config = (MercadoPagoConfig.objects.select_related('sucursal')
-                  .filter(sucursal_id=sucursal_id, habilitado=True)
-                  .exclude(device_id='')
-                  .order_by('-es_principal', 'id').first())
+        config = caja_mp_de_sucursal(sucursal_id, con_maquina=True)
         if not config:
             return JsonResponse({'success': False,
                                  'error': 'Tu sucursal no tiene una caja con máquina Point asociada.'},
@@ -1367,9 +1406,21 @@ def gestion_imprimir_cierre_terminal_mp(request):
         if 'already_queued' in str(e.detalle):
             mensaje += _pendiente_en_terminal(config)
         return JsonResponse({'success': False, 'error': mensaje}, status=400)
-    logger.info("MP gestión: cierre %s de caja %s impreso en terminal por %s",
-                fecha, config.id, request.user.username)
-    return JsonResponse({'success': True})
+    logger.info("MP gestión: cierre %s de caja %s (%s) impreso en terminal por %s",
+                fecha, config.id, config.sucursal.alias, request.user.username)
+    if sucursal_id and config.sucursal_id != sucursal_id:
+        # No se bloquea (un admin puede sacar el cierre de otra tienda a
+        # propósito), pero queda el rastro: el papel con la venta de otra
+        # sucursal fue el síntoma que originó esta revisión.
+        logger.warning("MP gestión: %s imprimió el cierre de %s estando en la sucursal %s",
+                       request.user.username, config.sucursal.alias, sucursal_id)
+    # La respuesta dice QUÉ se imprimió: la pantalla lo muestra para que un
+    # cierre de otra sucursal se note antes de mirar el papel.
+    return JsonResponse({'success': True, 'caja': config.nombre,
+                         'sucursal': config.sucursal.alias,
+                         'sucursal_id': config.sucursal_id,
+                         'es_de_tu_sucursal': bool(sucursal_id) and config.sucursal_id == sucursal_id,
+                         'fecha': fecha})
 
 
 @login_required

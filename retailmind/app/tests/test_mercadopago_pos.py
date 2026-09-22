@@ -2063,3 +2063,138 @@ class RegresionesRevisionTests(BaseMPTest):
         m_req.return_value = self._resp(200, {'id': 'ORD-QR', 'status': 'created'})
         trx = mp.consultar_estado(trx, forzar=True)
         self.assertEqual(trx.estado, 'EXPIRADA')
+
+
+@mock.patch.dict('os.environ', ENV_TEST)
+class DosTarjetasMPTests(BaseMPTest):
+    """Dos (o más) tarjetas Mercado Pago en el mismo ticket.
+
+    Caso real: el cliente paga $5.000 con una tarjeta y $7.000 con otra. La
+    primera queda APROBADA sin consumir (se consume recién al cerrar la venta)
+    y el guard de crear_orden bloqueaba la segunda con "ya hay un cobro
+    APROBADO". El POS ahora declara los vouchers que ya cargó
+    (`payment_ids_cargados`) y esas aprobadas no bloquean; una aprobada que el
+    POS NO tiene cargada sigue bloqueando igual que antes.
+    """
+
+    def _mock_req(self, m_req, order_id='ORD-2T'):
+        resp = mock.MagicMock()
+        resp.status_code = 201
+        resp.json.return_value = {'id': order_id, 'status': 'created',
+                                  'type_response': {'qr_data': 'abc'}}
+        m_req.return_value = resp
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_aprobada_ya_cargada_no_bloquea_la_segunda_tarjeta(self, m_req):
+        _transaccion(self.config, correlativo='700', monto=5000, payment_id='123')
+        self._mock_req(m_req)
+        trx, _qr = mp.crear_orden(self.config, '700', 7000,
+                                  payment_ids_cargados={'123'})
+        self.assertEqual(trx.estado, 'PENDIENTE')
+        self.assertEqual(trx.monto, 7000)
+        self.assertEqual(TransaccionMercadoPago.objects.filter(
+            correlativo_ticket='700', tipo='VENTA').count(), 2)
+
+    def test_aprobada_sin_declarar_sigue_bloqueando(self):
+        _transaccion(self.config, correlativo='701', monto=5000, payment_id='123')
+        with self.assertRaises(mp.MercadoPagoError) as ctx:
+            mp.crear_orden(self.config, '701', 7000)
+        self.assertIn('APROBADO', ctx.exception.mensaje)
+        # Y con un set que NO la incluye, también.
+        with self.assertRaises(mp.MercadoPagoError) as ctx:
+            mp.crear_orden(self.config, '701', 7000, payment_ids_cargados={'999', ''})
+        self.assertIn('APROBADO', ctx.exception.mensaje)
+        self.assertEqual(TransaccionMercadoPago.objects.filter(
+            correlativo_ticket='701').count(), 1)
+
+    @mock.patch('app.services.mercadopago_service.requests.request')
+    def test_match_por_payment_id_mp_numerico(self, m_req):
+        """El POS puede tener como voucher el N° del panel (payment_id_mp) en
+        vez del ULID de la Orders API: cualquiera de los dos identifica."""
+        _transaccion(self.config, correlativo='702', monto=5000,
+                     payment_id='PAY01ABC', payment_id_mp='177422093000')
+        self._mock_req(m_req)
+        trx, _qr = mp.crear_orden(self.config, '702', 7000,
+                                  payment_ids_cargados=['177422093000'])
+        self.assertEqual(trx.estado, 'PENDIENTE')
+
+    def test_con_el_set_una_pendiente_igual_se_cancela_y_una_incierta_bloquea(self):
+        """El set solo afecta a la rama APROBADA: lo demás no cambia."""
+        pendiente = _transaccion(self.config, correlativo='703', monto=5000,
+                                 estado='PENDIENTE', order_id='ORD-703')
+        with mock.patch.object(mp, 'cancelar') as m_cancel, \
+             mock.patch.object(mp, 'consultar_estado', side_effect=lambda t, **k: t), \
+             mock.patch('app.services.mercadopago_service.requests.request') as m_req:
+            self._mock_req(m_req, 'ORD-703B')
+            mp.crear_orden(self.config, '703', 7000, payment_ids_cargados={'123'})
+        m_cancel.assert_called_once()
+        self.assertEqual(m_cancel.call_args[0][0].id, pendiente.id)
+
+        _transaccion(self.config, correlativo='704', monto=5000, estado='PENDIENTE',
+                     order_id='', raw_response={'_rm': {'fase': mp.FASE_ENVIADA}})
+        with mock.patch.object(mp, 'consultar_estado', side_effect=lambda t, **k: t), \
+             self.assertRaises(mp.MercadoPagoError) as ctx:
+            mp.crear_orden(self.config, '704', 7000, payment_ids_cargados={'123'})
+        self.assertIn('SIN CONFIRMAR', ctx.exception.mensaje)
+
+    def test_consumir_por_payment_id_elige_la_fila_correcta(self):
+        """Filas de $7.000 (creada antes) y $5.000: con el id del pago, cada
+        pago consume SU fila; sin el id se mantiene el criterio viejo."""
+        siete = _transaccion(self.config, correlativo='705', monto=7000, payment_id='PAY7')
+        siete = _envejecer(siete, 60)
+        cinco = _transaccion(self.config, correlativo='705', monto=5000, payment_id='PAY5',
+                             external_reference='RM-705-cinco')
+        c1 = mp.consumir_transaccion_aprobada(self.sucursal.id, '705', 5000, payment_id='PAY5')
+        self.assertEqual(c1.id, cinco.id)
+        c2 = mp.consumir_transaccion_aprobada(self.sucursal.id, '705', 7000, payment_id='PAY7')
+        self.assertEqual(c2.id, siete.id)
+        self.assertIsNone(mp.consumir_transaccion_aprobada(self.sucursal.id, '705', 5000))
+
+        # Sin payment_id: la más antigua con monto suficiente (la de $7.000),
+        # que es justo el cruce que motivó el cambio.
+        siete_b = _transaccion(self.config, correlativo='706', monto=7000, payment_id='PAY7B')
+        siete_b = _envejecer(siete_b, 60)
+        _transaccion(self.config, correlativo='706', monto=5000, payment_id='PAY5B',
+                     external_reference='RM-706-cinco')
+        viejo = mp.consumir_transaccion_aprobada(self.sucursal.id, '706', 5000)
+        self.assertEqual(viejo.id, siete_b.id)
+        # Un payment_id que no calza con ninguna fila cae al criterio viejo.
+        _transaccion(self.config, correlativo='707', monto=5000, payment_id='PAY5C')
+        self.assertIsNotNone(mp.consumir_transaccion_aprobada(
+            self.sucursal.id, '707', 5000, payment_id='NO-EXISTE'))
+
+    def _login_con_sucursal(self):
+        from app.tests.factories import crear_usuario
+        usuario = crear_usuario(username='cajero_2t', rol='cajero')
+        self.client.force_login(usuario)
+        session = self.client.session
+        session['idSucursalActual'] = self.sucursal.id
+        session.save()
+
+    def test_vista_pasa_los_vouchers_a_crear_orden(self):
+        self._login_con_sucursal()
+        trx = _transaccion(self.config, correlativo='708', monto=7000,
+                           estado='PENDIENTE', order_id='ORD-708')
+        with mock.patch.object(mp, 'crear_orden', return_value=(trx, None)) as m_crear:
+            resp = self.client.post(
+                '/app/pos/mercadopago/qr/crear/',
+                {'correlativo': '708', 'monto': 7000, 'canal': 'POINT',
+                 'pagos_mp_cargados': ['123', ' 456 ', '', 'x' * 80]},
+                content_type='application/json')
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(m_crear.call_args.kwargs['payment_ids_cargados'], {'123', '456'})
+
+        # Formato "a,b" también sirve.
+        with mock.patch.object(mp, 'crear_orden', return_value=(trx, None)) as m_crear:
+            self.client.post('/app/pos/mercadopago/qr/crear/',
+                             {'correlativo': '708', 'monto': 7000,
+                              'pagos_mp_cargados': '123, 456'},
+                             content_type='application/json')
+        self.assertEqual(m_crear.call_args.kwargs['payment_ids_cargados'], {'123', '456'})
+
+        # Sin el campo: None (comportamiento idéntico al de siempre).
+        with mock.patch.object(mp, 'crear_orden', return_value=(trx, None)) as m_crear:
+            self.client.post('/app/pos/mercadopago/qr/crear/',
+                             {'correlativo': '708', 'monto': 7000},
+                             content_type='application/json')
+        self.assertIn(m_crear.call_args.kwargs['payment_ids_cargados'], (None, set()))
