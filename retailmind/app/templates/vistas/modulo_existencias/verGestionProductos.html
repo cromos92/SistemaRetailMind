@@ -3119,6 +3119,10 @@
                                          #estadoCodigoManual cada re-render del panel los destruye. -->
                                     <input type="hidden" name="producto_id_destino" id="hiddenProductoDestinoManual" value="">
                                     <input type="hidden" name="confirmar_duplicado" id="hiddenConfirmarDuplicadoManual" value="false">
+                                    <!-- Vista previa: en qué OTRAS bodegas se aplicará este precio y
+                                         cuáles recibirán aviso. Zona ESTABLE del form (no se destruye
+                                         al re-renderizar el panel de estado del código). -->
+                                    <div id="previewSyncPreciosManual" class="mt-2"></div>
                                 </div>
                             </div>
 
@@ -11958,7 +11962,80 @@ function _ecSeccionSimilares(r, articulo, estado) {
 // producto existente — SIN switch: si el usuario modificó alguno, los precios
 // del producto SE ACTUALIZAN SIEMPRE al crear. Aquí solo se AVISA qué va a
 // cambiar y se fija hiddenActualizarPreciosManual automáticamente.
+// ========== VISTA PREVIA: sincronización de precio a OTRAS bodegas ==========
+// Al crear (o al sumar stock a un existente) el backend aplica los precios del
+// formulario también en las fichas gemelas (misma identidad) de otras
+// sucursales y AVISA a cada tienda cuyo precio de venta cambia. Acá se muestra
+// ANTES de crear qué bodegas cambiarán y cuáles recibirán aviso, con los datos
+// que ya trajo la verificación del código (`productos_otras_sucursales`).
+function calcularSyncPreciosManual() {
+    const est = window._ecUltimoEstadoManual;
+    const r = (est && est.response) || {};
+    const otras = (r.productos_otras_sucursales || []).filter(p =>
+        !p.es_sucursal_actual && p.misma_identidad !== false);
+    const $form = $('#modalCrearProductoManual');
+    const leer = (name) => parseInt($form.find(`input[name="${name}"]`).val()) || 0;
+    const costo = leer('costo'), sobre = leer('sobreprecio'), venta = leer('precioventa');
+    const filas = otras.map(p => {
+        const ventaCambia = venta > 0 && (p.precioventa || 0) !== venta;
+        const costoCambia = costo > 0 && (p.costo || 0) !== costo;
+        const sobreCambia = (p.sobreprecio || 0) !== sobre;
+        return Object.assign({}, p, {
+            venta_nueva: venta, costo_nuevo: costo,
+            venta_cambia: ventaCambia, costo_cambia: costoCambia, sobre_cambia: sobreCambia,
+            cambia: ventaCambia || costoCambia || sobreCambia,
+            avisa: ventaCambia,
+        });
+    });
+    return {
+        listo: venta > 0 && costo > 0,
+        filas: filas,
+        cambian: filas.filter(f => f.cambia),
+        avisan: filas.filter(f => f.avisa),
+    };
+}
+
+function actualizarPreviewSyncPreciosManual() {
+    const $cont = $('#previewSyncPreciosManual');
+    if (!$cont.length) return;
+    const info = calcularSyncPreciosManual();
+    if (!info.filas.length || !info.listo) { $cont.empty(); return; }
+    const fmt = (v) => '$' + Number(v || 0).toLocaleString('es-CL');
+    const filas = info.filas.map(f => {
+        const estado = f.venta_cambia
+            ? '<span class="badge bg-warning text-dark">se actualiza y se avisa</span>'
+            : (f.cambia
+                ? '<span class="badge bg-info text-dark">solo costo/sobreprecio</span>'
+                : '<span class="badge bg-light text-muted border">igual, sin aviso</span>');
+        const venta = f.venta_cambia
+            ? `${fmt(f.precioventa)} → <b>${fmt(f.venta_nueva)}</b>`
+            : fmt(f.precioventa);
+        const stock = (f.stock_total === undefined || f.stock_total === null)
+            ? '' : `${Number(f.stock_total).toLocaleString('es-CL')} uds`;
+        return `<tr><td class="fw-semibold">${escManual(f.sucursal_nombre)}</td><td>${venta}</td><td class="text-end text-muted">${stock}</td><td>${estado}</td></tr>`;
+    }).join('');
+    const nAvisa = info.avisan.length, nCambia = info.cambian.length;
+    const resumen = nAvisa
+        ? `<i class="bi bi-bell-fill text-warning me-1"></i><b>${nAvisa}</b> bodega(s) recibirán el precio nuevo <b>y un aviso</b>: <b>${info.avisan.map(f => escManual(f.sucursal_nombre)).join(', ')}</b>`
+        : (nCambia
+            ? `<i class="bi bi-arrow-repeat me-1"></i>Solo cambia costo/sobreprecio en ${nCambia} bodega(s); el precio de venta ya coincide (sin aviso).`
+            : `<i class="bi bi-check-circle text-success me-1"></i>Las otras bodegas ya tienen estos precios: no se avisa a nadie.`);
+    $cont.html(`
+        <div class="border rounded p-2" style="font-size:.76rem;background:#fff8e1;border-color:#ffe082 !important;">
+            <div class="mb-1"><b>Otras bodegas con este producto</b> — ${resumen}</div>
+            <div class="table-responsive" style="max-height:120px;overflow-y:auto;">
+                <table class="table table-sm mb-0" style="font-size:.74rem;">
+                    <thead class="table-light"><tr><th>Bodega</th><th>Precio venta</th><th class="text-end">Stock</th><th></th></tr></thead>
+                    <tbody>${filas}</tbody>
+                </table>
+            </div>
+        </div>`);
+}
+
 function actualizarComparePrecioManual() {
+    // La vista previa de otras bodegas se recalcula SIEMPRE (también cuando
+    // el producto NO existe localmente pero sí en otras sucursales).
+    actualizarPreviewSyncPreciosManual();
     const $badge = $('#comparePrecioManual');
     const $aviso = $('#avisoPreciosManual');
     const prod = window.productoExistenteManual;
@@ -14075,6 +14152,16 @@ function confirmarCreacionManual(modal, $btnSubmit) {
     const nTallas = tallas.length;
     const articulo = (modal.find('input[name="articulo"]').val() || '').trim();
     const actualizarPrecios = $('#hiddenActualizarPreciosManual').val() === 'true';
+    // Otras bodegas: qué precios cambian y a quién se avisa (mismo cálculo
+    // que la vista previa de la sección Precios)
+    const syncInfo = calcularSyncPreciosManual();
+    const fmtSync = (v) => '$' + Number(v || 0).toLocaleString('es-CL');
+    const avisoSync = syncInfo.avisan.length ? `
+        <div class="alert alert-warning py-1 px-2 mt-2 mb-0" style="font-size:.8rem;">
+            <i class="bi bi-bell-fill me-1"></i>El precio de venta se aplicará también en <b>${syncInfo.avisan.length}</b> bodega(s) y <b>se les avisará</b>:
+            ${syncInfo.avisan.map(f => `<b>${escManual(f.sucursal_nombre)}</b> (${fmtSync(f.precioventa)} → ${fmtSync(f.venta_nueva)})`).join(', ')}
+        </div>` : (syncInfo.cambian.length ? `
+        <div class="text-muted mt-2" style="font-size:.78rem;"><i class="bi bi-arrow-repeat me-1"></i>Costo/sobreprecio se sincronizan en ${syncInfo.cambian.length} bodega(s); el precio de venta ya coincide, sin avisos.</div>` : '');
     const chips = tallas.slice(0, 30).map(t => `<span class="badge bg-light text-dark border">${t}</span>`).join(' ')
         + (tallas.length > 30 ? ` <span class="text-muted">+${tallas.length - 30}</span>` : '');
     const avisoSinStock = tallasSinStock.length ? `
@@ -14096,6 +14183,7 @@ function confirmarCreacionManual(modal, $btnSubmit) {
                 <div>${chips}</div>
                 <div class="text-muted mt-2" style="font-size:.82rem;"><i class="bi bi-info-circle"></i> No se crea un producto nuevo.</div>
                 ${avisoSinStock}
+                ${avisoSync}
             </div>`;
     } else {
         icon = 'question'; confirmText = 'Sí, crear nuevo';
@@ -14106,6 +14194,7 @@ function confirmarCreacionManual(modal, $btnSubmit) {
                 <ul class="mb-2" style="font-size:.9rem;"><li>Tallas a crear: <b>${nTallas}</b> <span class="text-muted">(solo las que tienen unidades)</span></li></ul>
                 <div>${chips}</div>
                 ${avisoSinStock}
+                ${avisoSync}
             </div>`;
     }
     // ✅ Mientras el usuario decide en el Swal, bloquear la verificación de
@@ -14307,8 +14396,17 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
                 // claves reales son productos_sincronizados / sucursales_afectadas.
                 const nSync = res.productos_sincronizados || 0;
                 if (nSync > 0) {
+                    const det = Array.isArray(res.sync_detalle) ? res.sync_detalle : [];
+                    const avisadas = det.filter(d => d.notificado);
                     const sucs = (res.sucursales_afectadas || []).join(', ');
-                    const txtSync = `Precios (venta/costo/sobreprecio) aplicados también en ${nSync} ficha(s) de otras bodegas${sucs ? ': ' + sucs : ''}.`;
+                    let txtSync = `Precios (venta/costo/sobreprecio) aplicados también en ${nSync} ficha(s) de otras bodegas${sucs ? ': ' + sucs : ''}.`;
+                    if (avisadas.length) {
+                        txtSync += ' Aviso de precio enviado a ' + avisadas.map(d =>
+                            `${d.sucursal} ($${Number(d.precio_anterior).toLocaleString('es-CL')} → $${Number(d.precio_nuevo).toLocaleString('es-CL')}, ${d.usuarios_notificados} usuario${d.usuarios_notificados === 1 ? '' : 's'})`
+                        ).join(', ') + '.';
+                    } else {
+                        txtSync += ' El precio de venta ya coincidía: sin avisos a las tiendas.';
+                    }
                     $('#alertaSincManualTexto').text(txtSync);
                     $('#alertaSincManual').removeClass('d-none').addClass('show');
                 }

@@ -15,6 +15,7 @@ Cubren:
    devuelve en `no_sincronizadas`.
 """
 import json
+from unittest import mock
 
 from django.test import TestCase, Client
 
@@ -29,6 +30,14 @@ from .factories import (
 )
 
 CODIGO = '009283623'
+
+
+def _patch_permisos():
+    """`actualizar_precio` exige `puede_editar` (PermisoRol), que la BD de
+    test no tiene poblada: se fuerza a True, como en los demás tests de vistas."""
+    return mock.patch(
+        'app.middleware_permisos.PermisoRol.tiene_permiso', return_value=True
+    )
 
 
 class SyncPrecioIdentidadTest(TestCase):
@@ -154,15 +163,16 @@ class ActualizarPrecioNoPisaOtroProductoTest(TestCase):
         return producto
 
     def test_cambiar_precio_guantes_no_toca_zapatillas(self):
-        resp = self.client.post(
-            '/app/gestion-precios/actualizar-precio/',
-            data=json.dumps({
-                'producto_id': self.guantes.id,
-                'nuevo_precio': 39990,
-                'sincronizar_sucursales': True,
-            }),
-            content_type='application/json',
-        )
+        with _patch_permisos():
+            resp = self.client.post(
+                '/app/gestion-precios/actualizar-precio/',
+                data=json.dumps({
+                    'producto_id': self.guantes.id,
+                    'nuevo_precio': 39990,
+                    'sincronizar_sucursales': True,
+                }),
+                content_type='application/json',
+            )
         self.assertEqual(resp.status_code, 200, resp.content)
         data = resp.json()
         self.assertTrue(data['success'])

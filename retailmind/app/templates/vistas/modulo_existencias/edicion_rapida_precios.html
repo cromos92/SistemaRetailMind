@@ -876,6 +876,75 @@
 }
 
 /* ========== FILTROS AVANZADOS DE BÚSQUEDA ========== */
+/* ===== ALCANCE DE LA BÚSQUEDA: toda la red / una sucursal ===== */
+.scope-toggle {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.scope-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: 20px;
+    background: var(--nexo-white);
+    color: var(--nexo-gray-700);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--nexo-transition-fast);
+}
+
+.scope-btn:hover {
+    border-color: var(--nexo-primary);
+    color: var(--nexo-primary);
+}
+
+.scope-btn.active {
+    background: var(--nexo-primary);
+    border-color: var(--nexo-primary);
+    color: var(--nexo-white);
+}
+
+.scope-hint {
+    font-size: 11px;
+    color: var(--nexo-gray-500);
+}
+
+/* Pill: precios distintos entre sucursales */
+.info-badge-precios {
+    background: var(--nexo-error-soft);
+    color: var(--nexo-error);
+    border: 1px solid rgba(255, 77, 77, 0.25);
+}
+
+/* Pill: la ficha editada es de otra sucursal (búsqueda en toda la red) */
+.info-badge-otra-suc {
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary-dark);
+    border: 1px solid rgba(0, 102, 255, 0.25);
+}
+
+.search-results-meta {
+    font-size: 12px;
+    color: var(--nexo-gray-500);
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.search-results-meta .truncado {
+    color: var(--nexo-warning-dark);
+    font-weight: 600;
+}
+
 .btn-toggle-filtros {
     margin-top: 10px;
 }
@@ -2064,6 +2133,17 @@
     font-variant-numeric: tabular-nums;
 }
 
+.mp-precios-red {
+    display: none;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--nexo-error);
+    background: var(--nexo-error-soft);
+    border: 1px solid rgba(255, 77, 77, 0.25);
+    border-radius: var(--nexo-radius-md);
+    padding: 6px 10px;
+}
+
 .mp-aviso-sync {
     margin-top: 12px;
     font-size: 12px;
@@ -2266,12 +2346,25 @@
                                 <input type="text" 
                                        id="quickSearch" 
                                        class="search-input"
-                                       placeholder="Escribe nombre, SKU o categoría... (Enter para buscar)"
+                                       placeholder="Código, SKU o descripción... (Enter para buscar)"
                                        onkeydown="if(event.key==='Enter'){event.preventDefault(); buscarProductosRapido(); return false;}">
                                 <div class="input-loading"></div>
                             </div>
                             <button onclick="buscarProductosRapido()"
                                     style="display: none;" id="btnSearchHidden"></button>
+
+                            <!-- Alcance: buscar en TODAS las sucursales (agrupado por producto) o en una sola -->
+                            <div class="scope-toggle" id="scopeToggle" role="group" aria-label="Alcance de la búsqueda">
+                                <button type="button" class="scope-btn" data-alcance="red" onclick="setAlcanceBusqueda('red', true)"
+                                        title="Busca en todas las sucursales a las que tienes acceso. El mismo producto en varias sucursales se muestra en UNA fila, con stock y precio por sucursal.">
+                                    <i class="ri-global-line"></i> Toda la red
+                                </button>
+                                <button type="button" class="scope-btn" data-alcance="sucursal" onclick="setAlcanceBusqueda('sucursal', true)"
+                                        title="Solo fichas de una sucursal: la tuya, o la que elijas en filtros avanzados.">
+                                    <i class="ri-store-2-line"></i> Solo <span id="scopeSucursalNombre">{{ alias_sucursal|default:'mi sucursal' }}</span>
+                                </button>
+                                <span class="scope-hint" id="scopeHint"></span>
+                            </div>
 
                             <button type="button" class="btn btn-sm btn-outline-secondary btn-toggle-filtros" onclick="toggleFiltrosBusqueda()">
                                 <i class="bi bi-funnel"></i> Filtros avanzados
@@ -2553,6 +2646,7 @@
                 <span>Costo: <strong id="mpCosto">-</strong></span>
                 <span>Margen: <strong id="mpMargenActual">-</strong></span>
             </div>
+            <div class="mp-precios-red" id="mpPreciosRed"></div>
 
             <label class="mp-precio-label" for="mpPrecioNuevo">Precio nuevo</label>
             <input type="number" id="mpPrecioNuevo" class="mp-precio-input" step="10" min="0"
@@ -2653,6 +2747,13 @@ document.addEventListener('DOMContentLoaded', function() {
     cargarContadorHistorial();
     // Cargar opciones de los filtros avanzados (sucursales, categorías, marcas)
     cargarOpcionesFiltros();
+    // Alcance de la búsqueda (recordado por navegador; default: toda la red)
+    setAlcanceBusqueda(alcanceBusqueda, false);
+    // Elegir una sucursal concreta en filtros avanzados = modo "una sucursal"
+    document.getElementById('filtroSucursal').addEventListener('change', function () {
+        if (this.value) setAlcanceBusqueda('sucursal', false);
+        actualizarNombreScopeSucursal();
+    });
 });
 
 // ========== AUDITORÍA DE PRECIOS (Registro + KPIs por usuario) ==========
@@ -3106,7 +3207,8 @@ async function cargarOpcionesFiltros() {
 
 function obtenerFiltrosActivos() {
     return {
-        sucursal: document.getElementById('filtroSucursal').value,
+        // En modo "Toda la red" la sucursal del filtro no aplica
+        sucursal: (alcanceBusqueda === 'red') ? '' : document.getElementById('filtroSucursal').value,
         categoria: document.getElementById('filtroCategoria').value,
         marca: document.getElementById('filtroMarca').value,
         antiguedad: document.getElementById('filtroAntiguedad').value,
@@ -3131,6 +3233,49 @@ function limpiarFiltrosBusqueda() {
         document.getElementById(id).value = '';
     });
     actualizarBadgeFiltros({});
+    actualizarNombreScopeSucursal();
+}
+
+// ========== ALCANCE DE LA BÚSQUEDA: toda la red vs una sucursal ==========
+// "Toda la red" (default) busca en todas las sucursales del usuario y agrupa
+// el mismo producto en una fila; "Solo sucursal" replica el comportamiento
+// histórico (una ficha por sucursal). La elección se recuerda por navegador.
+let alcanceBusqueda = 'red';
+try { alcanceBusqueda = localStorage.getItem('precios_alcance_busqueda') || 'red'; } catch (e) {}
+if (alcanceBusqueda !== 'red' && alcanceBusqueda !== 'sucursal') alcanceBusqueda = 'red';
+
+function setAlcanceBusqueda(alcance, relanzar) {
+    alcanceBusqueda = (alcance === 'sucursal') ? 'sucursal' : 'red';
+    try { localStorage.setItem('precios_alcance_busqueda', alcanceBusqueda); } catch (e) {}
+    document.querySelectorAll('#scopeToggle .scope-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.alcance === alcanceBusqueda);
+    });
+    const selSuc = document.getElementById('filtroSucursal');
+    const hint = document.getElementById('scopeHint');
+    if (alcanceBusqueda === 'red') {
+        selSuc.disabled = true;
+        selSuc.title = 'En modo "Toda la red" se buscan todas tus sucursales';
+        if (hint) hint.textContent = 'El mismo producto en varias sucursales = 1 fila';
+    } else {
+        selSuc.disabled = false;
+        selSuc.title = '';
+        if (hint) hint.textContent = 'Solo fichas de esa sucursal';
+    }
+    actualizarNombreScopeSucursal();
+    if (relanzar) {
+        const termino = document.getElementById('quickSearch').value.trim();
+        if (termino.length >= 2) buscarProductosRapido();
+    }
+}
+
+function actualizarNombreScopeSucursal() {
+    const selSuc = document.getElementById('filtroSucursal');
+    const label = document.getElementById('scopeSucursalNombre');
+    if (!label || !selSuc) return;
+    const opt = selSuc.options[selSuc.selectedIndex];
+    label.textContent = (selSuc.value && opt)
+        ? opt.textContent.replace(' (actual)', '')
+        : '{{ alias_sucursal|default:"mi sucursal"|escapejs }}';
 }
 
 // Buscar productos
@@ -3176,12 +3321,11 @@ async function buscarProductosRapido() {
     `;
     
     try {
-        // 🔍 Sucursal: la del filtro avanzado, o la de la sesión por defecto
+        // 🔍 Alcance: toda la red (agrupado por producto) o UNA sucursal
+        //    (la del filtro avanzado, o la de la sesión por defecto)
         const sucursalId = filtros.sucursal || '{{ sucursal_actual }}';
-
-        // 🔍 Construir URL con parámetro sucursal explícito + filtros avanzados
-        let url = `/app/gestion-precios/buscar/?search=${encodeURIComponent(termino)}&per_page=20`;
-        if (sucursalId && sucursalId !== 'None') {
+        let url = `/app/gestion-precios/buscar/?search=${encodeURIComponent(termino)}&per_page=20&alcance=${alcanceBusqueda}`;
+        if (alcanceBusqueda === 'sucursal' && sucursalId && sucursalId !== 'None') {
             url += `&sucursal=${sucursalId}`;
         }
         if (filtros.categoria) url += `&categoria=${filtros.categoria}`;
@@ -3200,7 +3344,7 @@ async function buscarProductosRapido() {
         
         if (data.success) {
             productosDisponibles = data.productos;
-            renderizarResultadosBusqueda(data.productos);
+            renderizarResultadosBusqueda(data.productos, data);
             console.log(`✅ ${data.productos.length} productos encontrados`);
         } else {
             // Mostrar error si no hay sucursal o hay otro problema
@@ -3254,22 +3398,40 @@ function mostrarAlertaSucursal() {
 }
 
 // Renderizar resultados de búsqueda
-function renderizarResultadosBusqueda(productos) {
+function renderizarResultadosBusqueda(productos, meta) {
     const container = document.getElementById('searchResults');
-    
+    // Se guarda para re-render (al agregar a la lista se vuelve a pintar)
+    if (meta) window._metaBusquedaPrecios = meta;
+    meta = meta || window._metaBusquedaPrecios || {};
+
     if (productos.length === 0) {
+        const enRed = (meta.alcance || alcanceBusqueda) === 'red';
         container.innerHTML = `
             <div class="empty-list">
                 <i class="ri-inbox-line"></i>
                 <h4>Sin resultados</h4>
-                <p>No se encontraron productos</p>
+                <p>${enRed
+                    ? 'No se encontraron productos en ninguna de tus sucursales'
+                    : 'No se encontraron productos en esta sucursal. Prueba <a href="#" onclick="setAlcanceBusqueda(\'red\', true); return false;">buscar en toda la red</a>'}</p>
             </div>
         `;
         return;
     }
-    
+
     container.innerHTML = '';
-    
+
+    // Cabecera: cuántos resultados, en qué alcance, y si se recortó la búsqueda
+    const pag = meta.pagination || {};
+    const totalTxt = (typeof pag.total_items === 'number') ? pag.total_items : productos.length;
+    const alcanceTxt = (meta.alcance || alcanceBusqueda) === 'red'
+        ? `<i class="ri-global-line"></i> toda la red${meta.sucursales_buscadas ? ` (${meta.sucursales_buscadas} sucursales)` : ''}`
+        : `<i class="ri-store-2-line"></i> una sucursal`;
+    const metaDiv = document.createElement('div');
+    metaDiv.className = 'search-results-meta';
+    metaDiv.innerHTML = `<span>${totalTxt} resultado${totalTxt === 1 ? '' : 's'} · ${alcanceTxt}${pag.total_pages > 1 ? ` · mostrando ${productos.length}` : ''}</span>` +
+        (meta.truncado ? `<span class="truncado" title="Se procesaron solo las primeras coincidencias. Escribe un código más específico o usa filtros."><i class="ri-error-warning-line"></i> Búsqueda muy amplia, afina el término</span>` : '');
+    container.appendChild(metaDiv);
+
     productos.forEach((producto, index) => {
         const margen = calcularMargen(producto.costo, producto.precio_venta);
         const itemEnLista = listaEdicion.find(item => item.id === producto.id);
@@ -3291,8 +3453,8 @@ function renderizarResultadosBusqueda(productos) {
             const totalRed = (typeof producto.stock_total_red === 'number')
                 ? producto.stock_total_red
                 : detalle.reduce((acc, s) => acc + (s.stock || 0), 0);
-            const tooltipTexto = `Stock por sucursal — Total en red: ${totalRed} unid.\n` +
-                detalle.map(s => `${s.es_actual ? '★ ' : ''}${s.alias}: ${s.stock}`).join('\n');
+            const tooltipTexto = `Stock y precio por sucursal — Total en red: ${totalRed} unid.\n` +
+                detalle.map(s => `${s.es_actual ? '★ ' : ''}${s.alias}: ${s.stock} uds${typeof s.precio === 'number' ? ' · ' + formatearMoneda(s.precio) : ''}`).join('\n');
 
             sucursalesInfo = `<span class="info-badge info-badge-sucursales" title="${tooltipTexto}">
                 <i class="ri-store-2-line"></i> ${partesBadge.join(', ')} &nbsp;·&nbsp; Total: ${totalRed}
@@ -3322,11 +3484,33 @@ function renderizarResultadosBusqueda(productos) {
             </span>`;
         }
         
-        // Indicador de alerta si hay sucursales que serán notificadas
+        // Indicador de alerta: a qué tiendas se avisará al cambiar el precio
         let alertaSync = '';
-        if (producto.sucursales_similares > 0) {
+        const notificar = Array.isArray(producto.sucursales_notificar) ? producto.sucursales_notificar : [];
+        if (notificar.length > 0) {
+            alertaSync = `<span class="info-badge info-badge-alerta" title="Al aplicar el cambio se avisará a: ${notificar.join(', ')}">
+                <i class="ri-notification-line"></i> Avisa a ${notificar.length} tienda${notificar.length > 1 ? 's' : ''}
+            </span>`;
+        } else if (producto.sucursales_similares > 0) {
             alertaSync = `<span class="info-badge info-badge-alerta" title="Cambios se sincronizarán a otras sucursales">
                 <i class="ri-notification-line"></i> Sincronización
+            </span>`;
+        }
+
+        // Precios distintos entre sucursales: el cambio los unifica
+        let preciosInfo = '';
+        if (producto.precios_divergentes && Array.isArray(producto.precios_por_sucursal)) {
+            const partesPrecio = producto.precios_por_sucursal.map(p => `${p.alias} ${formatearMoneda(p.precio)}`);
+            preciosInfo = `<span class="info-badge info-badge-precios" title="Este producto tiene precios distintos según la sucursal:\n${partesPrecio.join('\n')}\nAl guardar, el precio nuevo se aplica en todas.">
+                <i class="ri-price-tag-3-line"></i> Precios distintos: ${partesPrecio.join(' · ')}
+            </span>`;
+        }
+
+        // La ficha principal no es de la sucursal de la sesión (búsqueda en toda la red)
+        let fichaOtraInfo = '';
+        if (producto.es_sucursal_sesion === false && producto.sucursal) {
+            fichaOtraInfo = `<span class="info-badge info-badge-otra-suc" title="No hay ficha de este producto en ${producto.sucursal_sesion || 'tu sucursal'}. Editarás la ficha de ${producto.sucursal} y esa tienda recibirá el aviso.">
+                <i class="ri-map-pin-line"></i> Ficha de ${producto.sucursal}
             </span>`;
         }
 
@@ -3377,6 +3561,8 @@ function renderizarResultadosBusqueda(productos) {
             </div>
             <div class="badges-row">
                 ${sucursalesInfo}
+                ${preciosInfo}
+                ${fichaOtraInfo}
                 ${historialInfo}
                 ${alertaSync}
                 ${fechaCreacionBadge}
@@ -3409,8 +3595,25 @@ function abrirModalPrecio(producto) {
     if (producto.talla) partes.push('Talla ' + producto.talla);
     if (producto.marca) partes.push(producto.marca);
     if (producto.color) partes.push(producto.color);
-    if (producto.sucursal) partes.push(producto.sucursal);
+    if (producto.sucursal) {
+        partes.push(producto.es_sucursal_sesion === false
+            ? `Ficha de ${producto.sucursal} (no está en ${producto.sucursal_sesion || 'tu sucursal'})`
+            : producto.sucursal);
+    }
     document.getElementById('mpDetalle').textContent = partes.join(' · ');
+
+    // Precios distintos por sucursal: mostrarlos antes de decidir el nuevo
+    const preciosRed = document.getElementById('mpPreciosRed');
+    if (preciosRed) {
+        if (producto.precios_divergentes && Array.isArray(producto.precios_por_sucursal)) {
+            preciosRed.innerHTML = '<i class="ri-price-tag-3-line"></i> Precios hoy: ' +
+                producto.precios_por_sucursal.map(p => `<b>${p.alias}</b> ${formatearMoneda(p.precio)}`).join(' · ') +
+                ' — el precio nuevo quedará en todas.';
+            preciosRed.style.display = 'block';
+        } else {
+            preciosRed.style.display = 'none';
+        }
+    }
 
     document.getElementById('mpPrecioActual').textContent = formatearMoneda(producto.precio_venta);
     document.getElementById('mpCosto').textContent = formatearMoneda(producto.costo || 0);
@@ -3424,7 +3627,12 @@ function abrirModalPrecio(producto) {
         : '<i class="ri-check-line"></i> Agregar a la lista';
 
     const aviso = document.getElementById('mpAvisoSync');
-    if (producto.sucursales_similares > 0) {
+    const notificarMp = Array.isArray(producto.sucursales_notificar) ? producto.sucursales_notificar : [];
+    if (notificarMp.length > 0) {
+        document.getElementById('mpAvisoSyncTexto').textContent =
+            'Se aplicará en toda la red y se avisará a: ' + notificarMp.join(', ');
+        aviso.style.display = 'block';
+    } else if (producto.sucursales_similares > 0) {
         const listaSuc = (producto.sucursales_lista && producto.sucursales_lista.length > 0)
             ? producto.sucursales_lista.join(', ')
             : `${producto.sucursales_similares} sucursal${producto.sucursales_similares > 1 ? 'es' : ''}`;
@@ -3550,6 +3758,11 @@ function upsertItemPrecio(producto, precioNuevo) {
             sucursales_similares: producto.sucursales_similares || 0,
             sucursales_lista: producto.sucursales_lista || [],
             sucursales_detalle: producto.sucursales_detalle || [],
+            sucursales_notificar: producto.sucursales_notificar || [],
+            sucursal: producto.sucursal || '',
+            es_sucursal_sesion: producto.es_sucursal_sesion,
+            precios_divergentes: !!producto.precios_divergentes,
+            precios_por_sucursal: producto.precios_por_sucursal || [],
             stock_total_red: producto.stock_total_red || 0,
             ultimo_cambio: producto.ultimo_cambio
         };
@@ -3643,20 +3856,28 @@ function renderizarListaEdicion() {
                 ${descuentoAplicado > 0 ? '-' : '+'}${Math.abs(descuentoAplicado).toFixed(1)}%
             </span>` : '';
         
-        // Alerta de sincronización
+        // Alerta de sincronización / avisos a tiendas
         let alertaSucursales = '';
-        if (item.sucursales_similares > 0) {
-            const listaSuc = item.sucursales_lista && item.sucursales_lista.length > 0 
-                ? item.sucursales_lista.join(', ') 
-                : `${item.sucursales_similares} sucursal${item.sucursales_similares > 1 ? 'es' : ''}`;
-            
+        const notificarItem = Array.isArray(item.sucursales_notificar) ? item.sucursales_notificar : [];
+        if (notificarItem.length > 0 || item.sucursales_similares > 0) {
+            const listaSuc = notificarItem.length > 0
+                ? notificarItem.join(', ')
+                : (item.sucursales_lista && item.sucursales_lista.length > 0
+                    ? item.sucursales_lista.join(', ')
+                    : `${item.sucursales_similares} sucursal${item.sucursales_similares > 1 ? 'es' : ''}`);
+            const fichaTxt = (item.es_sucursal_sesion === false && item.sucursal)
+                ? ` · la ficha es de <strong>${item.sucursal}</strong>` : '';
+            const preciosTxt = (item.precios_divergentes && item.precios_por_sucursal.length)
+                ? `<br>Hoy tiene precios distintos: ${item.precios_por_sucursal.map(p => `${p.alias} ${formatearMoneda(p.precio)}`).join(' · ')} → quedará en ${formatearMoneda(item.precio_nuevo)} en todas.`
+                : '';
+
             alertaSucursales = `
                 <div class="alert-sucursales">
                     <i class="ri-notification-badge-line"></i>
                     <div class="alert-sucursales-content">
-                        <div class="alert-sucursales-title">Se notificará a otras sucursales</div>
+                        <div class="alert-sucursales-title">Se avisará a otras tiendas</div>
                         <div class="alert-sucursales-text">
-                            Este cambio creará una alerta para: <strong>${listaSuc}</strong>
+                            El precio se aplica en toda la red y crea una alerta para: <strong>${listaSuc}</strong>${fichaTxt}${preciosTxt}
                         </div>
                     </div>
                 </div>
@@ -4236,17 +4457,17 @@ async function aplicarTodosCambios() {
         return;
     }
     
-    // Contar sucursales que serán notificadas
+    // Contar tiendas que serán avisadas (todas las de la fila salvo la de la sesión)
     const sucursalesNotificadas = new Set();
     cambios.forEach(item => {
-        if (item.sucursales_lista) {
-            item.sucursales_lista.forEach(suc => sucursalesNotificadas.add(suc));
-        }
+        const lista = (item.sucursales_notificar && item.sucursales_notificar.length)
+            ? item.sucursales_notificar : (item.sucursales_lista || []);
+        lista.forEach(suc => sucursalesNotificadas.add(suc));
     });
-    
+
     let mensajeConfirmacion = `¿Aplicar ${cambios.length} cambio${cambios.length > 1 ? 's' : ''} de precio?`;
     if (sucursalesNotificadas.size > 0) {
-        mensajeConfirmacion += `<br><br><small style="color: #996B00;"><i class="ri-notification-line"></i> Se crearán alertas para ${sucursalesNotificadas.size} sucursal${sucursalesNotificadas.size > 1 ? 'es' : ''}</small>`;
+        mensajeConfirmacion += `<br><br><small style="color: #996B00;"><i class="ri-notification-line"></i> El precio se aplicará en toda la red y se avisará a ${sucursalesNotificadas.size} tienda${sucursalesNotificadas.size > 1 ? 's' : ''}: <b>${[...sucursalesNotificadas].join(', ')}</b></small>`;
     }
     
     const confirmResult = await Swal.fire({
@@ -4268,6 +4489,9 @@ async function aplicarTodosCambios() {
     let exitosos = 0;
     let errores = 0;
     let sucursalesNotificadasTotal = 0;
+    let usuariosAvisados = 0;
+    let pendientesAprobacion = 0;
+    const tiendasAvisadas = new Set();
     const noSincronizadas = [];
 
     for (let i = 0; i < cambios.length; i++) {
@@ -4297,6 +4521,9 @@ async function aplicarTodosCambios() {
                 if (data.sucursales_notificadas) {
                     sucursalesNotificadasTotal += data.sucursales_notificadas;
                 }
+                (data.sucursales_notificadas_lista || []).forEach(a => tiendasAvisadas.add(a));
+                usuariosAvisados += (data.notificaciones_creadas || 0);
+                pendientesAprobacion += (data.pendientes_aprobacion || 0);
                 // Fichas que comparten código+marca+color pero son OTRO producto
                 // (distinta categoría/género): no se sincronizan a propósito.
                 (data.no_sincronizadas || []).forEach(f => {
@@ -4319,8 +4546,17 @@ async function aplicarTodosCambios() {
     // Mostrar resultado
     if (exitosos > 0) {
         let mensajeExito = `${exitosos} producto${exitosos > 1 ? 's' : ''} actualizado${exitosos > 1 ? 's' : ''} correctamente`;
-        if (sucursalesNotificadasTotal > 0) {
+        if (tiendasAvisadas.size > 0) {
+            const lista = [...tiendasAvisadas].join(', ');
+            mensajeExito += `<br><br><small><i class="ri-notification-line"></i> Aviso enviado a ${tiendasAvisadas.size} tienda${tiendasAvisadas.size > 1 ? 's' : ''}: <b>${lista}</b>` +
+                (usuariosAvisados > 0 ? ` (${usuariosAvisados} notificaci${usuariosAvisados > 1 ? 'ones' : 'ón'} a usuarios)` : '') + `</small>`;
+        } else if (sucursalesNotificadasTotal > 0) {
             mensajeExito += `<br><br><small><i class="ri-notification-line"></i> ${sucursalesNotificadasTotal} notificaci${sucursalesNotificadasTotal > 1 ? 'ones enviadas' : 'ón enviada'} a otras sucursales</small>`;
+        } else {
+            mensajeExito += `<br><br><small style="color: var(--nexo-gray-500);">Sin avisos: no hay otras tiendas con este producto</small>`;
+        }
+        if (pendientesAprobacion > 0) {
+            mensajeExito += `<br><small style="color: #996B00;"><i class="ri-time-line"></i> ${pendientesAprobacion} cambio${pendientesAprobacion > 1 ? 's quedaron' : ' quedó'} pendiente${pendientesAprobacion > 1 ? 's' : ''} de aprobación por superar el umbral de divergencia</small>`;
         }
         if (errores > 0) {
             mensajeExito += `<br><small style="color: var(--nexo-error);">⚠️ ${errores} error${errores > 1 ? 'es' : ''}</small>`;

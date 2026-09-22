@@ -26,9 +26,13 @@ from .utils_permisos import usuario_puede_ver_todas_sucursales, obtener_sucursal
 from .utils_producto_match import (
     qs_fichas_identidad_otras_sucursales,
     qs_fichas_codigo_otra_identidad,
+    qs_fichas_identidad_de,
     resumen_casi_coincidencias,
+    normalizar_articulo,
 )
+from .utils_tallas import clave_orden_talla
 from .services.historial_precios import registrar_cambios_precio
+from .services.alertas_precio import alertar_precio_sucursal
 from .decorators import requiere_permiso
 
 logger = logging.getLogger('app')
@@ -236,16 +240,50 @@ def obtener_estadisticas(request):
 
 # ========== BÚSQUEDA Y FILTRADO DE PRODUCTOS ==========
 
+# Tope de fichas candidatas que se procesan por búsqueda. Antes no había tope:
+# un término corto ("ZAP") traía miles de fichas y cada una disparaba 4-6
+# queries (lotes por talla, historial, similares, movimientos).
+MAX_FICHAS_BUSQUEDA = 3000
+
+
+def _clave_identidad(f):
+    """Misma identidad que usa la sincronización de precios."""
+    return (
+        normalizar_articulo(f.articulo),
+        f.atributo1_id, f.atributo2_id, f.atributo3_id, f.categoria_id,
+    )
+
+
+def _hace_cuanto(fecha):
+    from django.utils.timesince import timesince
+    return timesince(fecha) if fecha else None
+
+
 @require_GET
 @login_required
 def buscar_productos(request):
-    """Buscar productos con filtros avanzados (agrupados por producto, no por talla)"""
+    """Buscar productos para la edición rápida de precios.
+
+    Dos alcances (`alcance`):
+
+    - ``sucursal`` (histórico): sólo fichas de UNA sucursal (`?sucursal=` o la
+      de la sesión). Si el artículo no tiene ficha ahí, no aparece.
+    - ``red``: fichas de TODAS las sucursales a las que el usuario tiene acceso,
+      agrupadas por identidad (código+marca+color+género+categoría): el mismo
+      producto en N sucursales es UNA fila, con stock y precio por sucursal y
+      un aviso cuando los precios difieren. La ficha "principal" de la fila es
+      la de la sucursal de la sesión si existe; si no, la de más stock.
+
+    En ambos casos cada fila trae qué sucursales serán avisadas al cambiar el
+    precio (`sucursales_notificar`): todas las de la fila salvo la de la sesión.
+
+    Las consultas pesadas (lotes, historial, similares, movimientos) se hacen
+    por lote y sólo para la página pedida, no por ficha.
+    """
     try:
-        # Parámetros de búsqueda
         search = request.GET.get('search', '').strip()
         categoria_id = request.GET.get('categoria')
         marca_id = request.GET.get('marca')
-        sucursal_id = request.GET.get('sucursal') or request.session.get('idSucursalActual')
         precio_min = request.GET.get('precio_min')
         precio_max = request.GET.get('precio_max')
         margen_min = request.GET.get('margen_min')
@@ -253,19 +291,38 @@ def buscar_productos(request):
         antiguedad = request.GET.get('antiguedad')
         anio = request.GET.get('anio')
         incluir_sin_stock = request.GET.get('incluir_sin_stock') == '1'
-        
+        alcance = (request.GET.get('alcance') or 'sucursal').strip().lower()
+        if alcance not in ('sucursal', 'red'):
+            alcance = 'sucursal'
+
+        sucursal_sesion_id = request.session.get('idSucursalActual')
+        try:
+            sucursal_sesion_id = int(sucursal_sesion_id) if sucursal_sesion_id else None
+        except (TypeError, ValueError):
+            sucursal_sesion_id = None
+
+        # ---- Alcance de sucursales ----
+        if alcance == 'red':
+            sucursales_ids = list(
+                obtener_sucursales_usuario(request.user).values_list('id', flat=True)
+            )
+            if sucursal_sesion_id and sucursal_sesion_id not in sucursales_ids:
+                sucursales_ids.append(sucursal_sesion_id)
+            sucursal_id = sucursal_sesion_id
+        else:
+            sucursal_id = request.GET.get('sucursal') or sucursal_sesion_id
+            try:
+                sucursal_id = int(sucursal_id) if sucursal_id else None
+            except (TypeError, ValueError):
+                sucursal_id = None
+            sucursales_ids = [sucursal_id] if sucursal_id else []
+
         logger.debug(
-            "Busqueda productos precios: search=%s, sucursal_get=%s, sucursal_session=%s, "
-            "sucursal_final=%s, usuario=%s",
-            search,
-            request.GET.get('sucursal'),
-            request.session.get('idSucursalActual'),
-            sucursal_id,
-            request.user.username,
+            "Busqueda productos precios: search=%s alcance=%s sucursales=%s usuario=%s",
+            search, alcance, sucursales_ids, request.user.username,
         )
-        
-        # 🚨 VALIDAR QUE HAYA SUCURSAL (OBLIGATORIO)
-        if not sucursal_id:
+
+        if not sucursales_ids:
             logger.warning("Busqueda productos precios sin sucursal activa usuario=%s", request.user.username)
             return JsonResponse({
                 'success': False,
@@ -277,324 +334,333 @@ def buscar_productos(request):
                     'user': request.user.username,
                 }
             }, status=400)
-        
-        # Paginación
+
         page = int(request.GET.get('page', 1))
         per_page = int(request.GET.get('per_page', 50))
-        
-        # Construir queryset base - AGRUPADO POR PRODUCTO
+
+        # ---- Queryset base ----
         queryset = Producto.objects.select_related(
-            'categoria',
-            'atributo1',
-            'atributo2',
-            'atributo3',
-            'atributo4',
-            'sucursal'
-        ).prefetch_related('producto_talla').all()
-        
-        # Filtro de búsqueda por texto
+            'categoria', 'atributo1', 'atributo2', 'atributo3', 'atributo4', 'sucursal'
+        ).prefetch_related('producto_talla').filter(sucursal_id__in=sucursales_ids)
+
         if search:
             queryset = queryset.filter(
                 Q(articulo__icontains=search) |
                 Q(descripcion__icontains=search) |
                 Q(producto_talla__sku__icontains=search)
             ).distinct()
-        
-        # Filtro por categoría
         if categoria_id:
             queryset = queryset.filter(categoria_id=categoria_id)
-        
-        # Filtro por marca (atributo1)
         if marca_id:
             queryset = queryset.filter(atributo1_id=marca_id)
-        
-        # Filtro por sucursal (OBLIGATORIO - ya validado arriba)
-        queryset = queryset.filter(sucursal_id=sucursal_id)
-        total_queryset_inicial = queryset.count()
-        logger.debug("Busqueda productos precios filtrada por sucursal_id=%s total_inicial=%s", sucursal_id, total_queryset_inicial)
-        
-        # Preparar datos para respuesta
-        productos_data = []
+
+        # Orden: coincidencia EXACTA de código primero (buscar "F35556" debe
+        # traer F35556 arriba, no F355560), luego por código y ficha más nueva.
+        from django.db.models import Case, When, Value, IntegerField
+        if search:
+            queryset = queryset.annotate(
+                _exacto=Case(
+                    When(articulo__iexact=search, then=Value(0)),
+                    default=Value(1), output_field=IntegerField(),
+                )
+            ).order_by('_exacto', 'articulo', '-id')
+        else:
+            queryset = queryset.order_by('articulo', '-id')
+
+        fichas = list(queryset[:MAX_FICHAS_BUSQUEDA + 1])
+        truncado = len(fichas) > MAX_FICHAS_BUSQUEDA
+        fichas = fichas[:MAX_FICHAS_BUSQUEDA]
+        logger.debug(
+            "Busqueda productos precios candidatas=%s truncado=%s alcance=%s",
+            len(fichas), truncado, alcance,
+        )
+
+        # ---- Lotes FIFO activos: UNA query para todas las fichas ----
+        ids = [f.id for f in fichas]
+        lotes_agg = {}
+        for i in range(0, len(ids), 1000):
+            for r in (LoteProducto.objects
+                      .filter(producto_talla__producto_id__in=ids[i:i + 1000],
+                              cantidad_disponible__gt=0, activo=True)
+                      .values('producto_talla__producto_id')
+                      .annotate(costo_pond=Sum(F('cantidad_disponible') * F('costo_unitario')),
+                                cant=Sum('cantidad_disponible'),
+                                fecha_min=Min('fecha_ingreso'))):
+                lotes_agg[r['producto_talla__producto_id']] = r
+
+        def stock_ficha(f):
+            return sum(int(pt.stock or 0) for pt in f.producto_talla.all())
+
+        # ---- Agrupar por identidad (solo en modo red) ----
+        grupos = []
+        if alcance == 'red':
+            indice = {}
+            for f in fichas:
+                k = _clave_identidad(f)
+                if k not in indice:
+                    indice[k] = []
+                    grupos.append(indice[k])
+                indice[k].append(f)
+        else:
+            grupos = [[f] for f in fichas]
+
+        # ---- Filtros por fila (baratos, en memoria) ----
+        filas = []
         productos_excluidos = {
-            'sin_tallas': 0,
-            'sin_stock_ni_lotes': 0,
-            'stock_minimo': 0,
-            'precio': 0,
-            'margen': 0,
-            'antiguedad': 0,
-            'anio': 0
+            'sin_tallas': 0, 'sin_stock_ni_lotes': 0, 'stock_minimo': 0,
+            'precio': 0, 'margen': 0, 'antiguedad': 0, 'anio': 0,
         }
-        
-        for producto in queryset:
-            # Obtener todas las tallas del producto
-            tallas = producto.producto_talla.all()
-            
-            if not tallas.exists():
-                logger.debug("Producto excluido de precios sin tallas: producto_id=%s articulo=%s", producto.id, producto.articulo)
+        ahora = timezone.now()
+
+        for grupo in grupos:
+            stocks = {f.id: stock_ficha(f) for f in grupo}
+            # Ficha principal: la de la sucursal de la sesión; si no, la de más
+            # stock; si no, la más reciente. Es la que recibe el precio directo
+            # y desde la que se sincroniza al resto.
+            principal = None
+            if sucursal_sesion_id:
+                principal = next((f for f in grupo if f.sucursal_id == sucursal_sesion_id), None)
+            if principal is None:
+                principal = max(grupo, key=lambda f: (stocks[f.id], f.id))
+
+            tallas = list(principal.producto_talla.all())
+            if not tallas:
                 productos_excluidos['sin_tallas'] += 1
                 continue
-            
-            # Calcular totales de todas las tallas
-            stock_total = 0
-            costo_total_ponderado = 0
-            cantidad_total = 0
+
+            stock_total = stocks[principal.id]
+            stock_total_red = sum(stocks.values())
+
+            # Costo ponderado y antigüedad: en modo red sobre TODAS las fichas
+            # del grupo (el inventario es de la red); en modo sucursal, la ficha.
+            costo_pond = cantidad_total = 0
             fecha_ingreso_mas_antiguo = None
-            tallas_list = []
-            
-            for pt in tallas:
-                stock_total += pt.stock
-                tallas_list.append(pt.talla)
-                
-                # Calcular datos de lotes para cada talla
-                lotes = LoteProducto.objects.filter(
-                    producto_talla=pt,
-                    cantidad_disponible__gt=0,
-                    activo=True
-                )
-                
-                for lote in lotes:
-                    costo_total_ponderado += lote.cantidad_disponible * lote.costo_unitario
-                    cantidad_total += lote.cantidad_disponible
-                    
-                    if fecha_ingreso_mas_antiguo is None or lote.fecha_ingreso < fecha_ingreso_mas_antiguo:
-                        fecha_ingreso_mas_antiguo = lote.fecha_ingreso
-            
-            # ✅ CAMBIO: No excluir productos sin lotes si tienen stock
-            # Si no hay lotes pero hay stock, usar el costo del producto
-            # Con incluir_sin_stock=1 (filtro avanzado) se muestran igual, para
-            # poder editar el precio de fichas en 0 (se sincroniza a toda la red)
-            # ✅ Si el usuario buscó por texto (nombre/SKU/artículo), NO ocultar
-            #    las fichas en 0: buscó ese producto explícitamente para editar su
-            #    precio, aunque no tenga stock en la sucursal seleccionada.
-            if cantidad_total == 0 and stock_total == 0 and not incluir_sin_stock and not search:
-                # Solo excluir si NO tiene stock ni lotes y NO hubo búsqueda por texto
-                logger.debug("Producto excluido de precios sin stock ni lotes: producto_id=%s articulo=%s", producto.id, producto.articulo)
+            for f in grupo:
+                agg = lotes_agg.get(f.id)
+                if not agg:
+                    continue
+                costo_pond += float(agg['costo_pond'] or 0)
+                cantidad_total += int(agg['cant'] or 0)
+                fm = agg['fecha_min']
+                if fm and (fecha_ingreso_mas_antiguo is None or fm < fecha_ingreso_mas_antiguo):
+                    fecha_ingreso_mas_antiguo = fm
+
+            if (cantidad_total == 0 and stock_total_red == 0
+                    and not incluir_sin_stock and not search):
                 productos_excluidos['sin_stock_ni_lotes'] += 1
                 continue
-            
-            # Filtro por stock mínimo
-            if stock_min and stock_total < int(stock_min):
-                logger.debug(
-                    "Producto excluido de precios por stock minimo: producto_id=%s stock=%s stock_min=%s",
-                    producto.id,
-                    stock_total,
-                    stock_min,
-                )
+
+            if stock_min and stock_total_red < int(stock_min):
                 productos_excluidos['stock_minimo'] += 1
                 continue
-            
-            # Calcular costo promedio
+
             if cantidad_total > 0:
-                # Tiene lotes: usar costo ponderado de lotes
-                costo_promedio = costo_total_ponderado / cantidad_total
+                costo_promedio = costo_pond / cantidad_total
             else:
-                # No tiene lotes pero tiene stock: usar costo del producto
-                costo_promedio = float(producto.costo) if producto.costo else 0
-            
-            precio_venta = producto.precioventa
-            
-            # Aplicar filtros de precio
+                costo_promedio = float(principal.costo) if principal.costo else 0
+
+            precio_venta = int(principal.precioventa or 0)
             if precio_min and precio_venta < float(precio_min):
-                logger.debug(
-                    "Producto excluido de precios por precio minimo: producto_id=%s precio=%s precio_min=%s",
-                    producto.id,
-                    precio_venta,
-                    precio_min,
-                )
                 productos_excluidos['precio'] += 1
                 continue
             if precio_max and precio_venta > float(precio_max):
-                logger.debug(
-                    "Producto excluido de precios por precio maximo: producto_id=%s precio=%s precio_max=%s",
-                    producto.id,
-                    precio_venta,
-                    precio_max,
-                )
                 productos_excluidos['precio'] += 1
                 continue
-            
-            # Calcular margen
+
             margen = ((precio_venta - costo_promedio) / precio_venta * 100) if precio_venta > 0 else 0
-            
-            # Aplicar filtro de margen
             if margen_min and margen < float(margen_min):
-                logger.debug(
-                    "Producto excluido de precios por margen minimo: producto_id=%s margen=%.2f margen_min=%s",
-                    producto.id,
-                    margen,
-                    margen_min,
-                )
                 productos_excluidos['margen'] += 1
                 continue
-            
-            # Calcular antigüedad
-            dias_inventario = 0
-            if fecha_ingreso_mas_antiguo:
-                dias_inventario = (timezone.now() - fecha_ingreso_mas_antiguo).days
-            
-            # Aplicar filtro de antigüedad
+
+            dias_inventario = (ahora - fecha_ingreso_mas_antiguo).days if fecha_ingreso_mas_antiguo else 0
             if antiguedad:
                 if antiguedad == 'nuevo' and dias_inventario >= 180:
-                    logger.debug(
-                        "Producto excluido de precios por antiguedad: producto_id=%s dias=%s filtro=%s",
-                        producto.id,
-                        dias_inventario,
-                        antiguedad,
-                    )
                     productos_excluidos['antiguedad'] += 1
                     continue
-                elif antiguedad == 'medio' and (dias_inventario < 180 or dias_inventario >= 365):
-                    logger.debug(
-                        "Producto excluido de precios por antiguedad: producto_id=%s dias=%s filtro=%s",
-                        producto.id,
-                        dias_inventario,
-                        antiguedad,
-                    )
+                if antiguedad == 'medio' and (dias_inventario < 180 or dias_inventario >= 365):
                     productos_excluidos['antiguedad'] += 1
                     continue
-                elif antiguedad == 'antiguo' and dias_inventario < 365:
-                    logger.debug(
-                        "Producto excluido de precios por antiguedad: producto_id=%s dias=%s filtro=%s",
-                        producto.id,
-                        dias_inventario,
-                        antiguedad,
-                    )
+                if antiguedad == 'antiguo' and dias_inventario < 365:
                     productos_excluidos['antiguedad'] += 1
                     continue
-            
-            # Aplicar filtro de año
-            if anio and fecha_ingreso_mas_antiguo:
-                if fecha_ingreso_mas_antiguo.year != int(anio):
-                    logger.debug(
-                        "Producto excluido de precios por anio: producto_id=%s anio_producto=%s anio_filtro=%s",
-                        producto.id,
-                        fecha_ingreso_mas_antiguo.year,
-                        anio,
-                    )
-                    productos_excluidos['anio'] += 1
-                    continue
-            
-            # Buscar último cambio de precio
-            ultimo_cambio = HistorialCambioPrecio.objects.filter(
-                producto=producto
-            ).select_related('usuario').first()
+            if anio and fecha_ingreso_mas_antiguo and fecha_ingreso_mas_antiguo.year != int(anio):
+                productos_excluidos['anio'] += 1
+                continue
 
-            # El MISMO producto en otras sucursales (con stock por sucursal).
-            # Usa la MISMA identidad completa que la sincronización de precios:
-            # este badge promete "Sincronización", así que debe listar exactamente
-            # las fichas que el sync va a tocar, ni más ni menos.
-            productos_similares = qs_fichas_identidad_otras_sucursales(
-                producto.articulo, producto.atributo1_id, producto.atributo2_id,
-                producto.atributo3_id, producto.categoria_id, producto.sucursal_id,
-            ).select_related('sucursal').annotate(
-                stock_sucursal=Sum('producto_talla__stock')
-            )
-
-            # ===== FECHAS DE TRAZABILIDAD =====
-            # 1) fecha_creacion del producto en ESTA sucursal (campo directo).
-            # 2) fecha_ultimo_despacho: último INGRESO de stock considerando TODAS
-            #    las bodegas (sucursal actual + todas las similares con mismo
-            #    articulo y atributos). Útil para decisiones de descuento/precio.
-            productos_red_ids = list(productos_similares.values_list('id', flat=True)) + [producto.id]
-            agg_ingreso = Movimientos_Producto.objects.filter(
-                ProductoTalla__producto_id__in=productos_red_ids,
-                tipo_movimiento='INGRESO',
-            ).aggregate(ultima_fecha=Max('fecha'))
-            fecha_ultimo_despacho_red = agg_ingreso['ultima_fecha']
-            dias_desde_ultimo_despacho = (
-                (timezone.localdate() - fecha_ultimo_despacho_red).days
-                if fecha_ultimo_despacho_red else None
-            )
-            fecha_creacion_local = producto.fecha_creacion.date() if producto.fecha_creacion else None
-
-            # Detalle de stock por sucursal: incluye la sucursal actual + las similares
-            sucursales_detalle = []
-            if producto.sucursal:
-                sucursales_detalle.append({
-                    'alias': producto.sucursal.alias,
-                    'stock': int(stock_total or 0),
-                    'es_actual': True,
-                })
-            for p in productos_similares:
-                if p.sucursal:
-                    sucursales_detalle.append({
-                        'alias': p.sucursal.alias,
-                        'stock': int(p.stock_sucursal or 0),
-                        'es_actual': False,
-                    })
-
-            # Stock total sumado en toda la red de sucursales (actual + similares)
-            stock_total_red = sum(s['stock'] for s in sucursales_detalle)
-
-            # Mantener compatibilidad: lista/cantidad de sucursales "similares" (sin la actual)
-            sucursales_lista = [s['alias'] for s in sucursales_detalle if not s['es_actual']]
-            sucursales_count = len(sucursales_lista)
-            
-            # Agregar a resultados
-            logger.debug(
-                "Producto incluido en busqueda precios: producto_id=%s articulo=%s stock=%s lotes=%s margen=%.2f",
-                producto.id,
-                producto.articulo,
-                stock_total,
-                cantidad_total,
-                margen,
-            )
-            
-            productos_data.append({
-                'id': producto.id,  # ID del producto (no de la talla)
-                'sku': ', '.join([str(t.sku) for t in tallas[:3]]),  # Primeros 3 SKUs
-                'nombre': producto.articulo,
-                'descripcion': producto.descripcion or '',
-                'talla': f"{len(tallas_list)} tallas: {', '.join(str(t) for t in tallas_list[:5])}",  # Mostrar tallas
-                'categoria': producto.categoria.nombre if producto.categoria else None,
-                'marca': producto.atributo1.valor if producto.atributo1 else None,
-                'color': producto.atributo2.valor if producto.atributo2 else None,
-                'genero': producto.atributo3.valor if producto.atributo3 else None,
-                'otro': producto.atributo4.valor if producto.atributo4 else None,
-                'temporada': producto.temporada or None,
-                'anio_temporada': producto.anio_temporada or None,
-                'rango_precio': producto.rango_precio or None,
-                'sucursal': producto.sucursal.alias,
-                'costo': float(costo_promedio),
-                'precio_venta': float(precio_venta),
-                'stock': stock_total,
+            filas.append({
+                'principal': principal,
+                'grupo': grupo,
+                'stocks': stocks,
+                'tallas': tallas,
+                'stock_total': stock_total,
+                'stock_total_red': stock_total_red,
+                'cantidad_lotes': cantidad_total,
+                'costo_promedio': costo_promedio,
+                'precio_venta': precio_venta,
+                'margen': margen,
                 'dias_inventario': dias_inventario,
-                'margen': float(margen),
+            })
+
+        # ---- Paginación ANTES de enriquecer ----
+        paginator = Paginator(filas, per_page)
+        page_obj = paginator.get_page(page)
+        filas_pagina = list(page_obj)
+
+        principales = [r['principal'] for r in filas_pagina]
+        ids_pagina = [p.id for p in principales]
+
+        # Último cambio de precio por ficha principal (una query con subquery)
+        ultimo_cambio = {}
+        if ids_pagina:
+            from django.db.models import OuterRef, Subquery
+            sq = HistorialCambioPrecio.objects.filter(producto_id=OuterRef('pk')).order_by('-fecha_cambio')
+            for r in (Producto.objects.filter(id__in=ids_pagina)
+                      .annotate(_u=Subquery(sq.values('usuario__username')[:1]),
+                                _f=Subquery(sq.values('fecha_cambio')[:1]))
+                      .values('id', '_u', '_f')):
+                if r['_f']:
+                    ultimo_cambio[r['id']] = r
+
+        # Gemelas (misma identidad) en OTRAS sucursales, con stock: una query
+        # para toda la página. Complementa el grupo (que en modo red sólo
+        # cubre las sucursales visibles para el usuario) y en modo sucursal es
+        # la única fuente de "también está en…".
+        gemelas_por_clave = {}
+        if principales:
+            qs_gem = (qs_fichas_identidad_de(principales)
+                      .select_related('sucursal')
+                      .annotate(stock_sucursal=Sum('producto_talla__stock')))
+            for g in qs_gem:
+                gemelas_por_clave.setdefault(_clave_identidad(g), []).append(g)
+
+        # Último INGRESO de stock en cualquier bodega del producto (una query)
+        ids_red = set()
+        for r in filas_pagina:
+            ids_red.update(f.id for f in r['grupo'])
+            for g in gemelas_por_clave.get(_clave_identidad(r['principal']), []):
+                ids_red.add(g.id)
+        ultimo_ingreso = {}
+        if ids_red:
+            for r in (Movimientos_Producto.objects
+                      .filter(ProductoTalla__producto_id__in=list(ids_red), tipo_movimiento='INGRESO')
+                      .values('ProductoTalla__producto_id')
+                      .annotate(f=Max('fecha'))):
+                ultimo_ingreso[r['ProductoTalla__producto_id']] = r['f']
+
+        hoy = timezone.localdate()
+        alias_sesion = request.session.get('alias', '')
+        productos_data = []
+
+        for r in filas_pagina:
+            principal = r['principal']
+            grupo = r['grupo']
+            tallas = sorted(r['tallas'], key=lambda t: clave_orden_talla(t.talla))
+            tallas_list = [t.talla for t in tallas]
+
+            # Detalle por sucursal: grupo ∪ gemelas, sin repetir ficha. La ficha
+            # principal va primero y la de la sesión se marca como actual.
+            vistos = {}
+            def _add(f, stock):
+                if f.id in vistos or f.sucursal is None:
+                    return
+                vistos[f.id] = {
+                    'alias': f.sucursal.alias,
+                    'sucursal_id': f.sucursal_id,
+                    'producto_id': f.id,
+                    'stock': int(stock or 0),
+                    'precio': int(f.precioventa or 0),
+                    'es_actual': f.sucursal_id == sucursal_sesion_id,
+                    'es_principal': f.id == principal.id,
+                }
+            _add(principal, r['stocks'][principal.id])
+            for f in grupo:
+                _add(f, r['stocks'][f.id])
+            for g in gemelas_por_clave.get(_clave_identidad(principal), []):
+                _add(g, g.stock_sucursal)
+            sucursales_detalle = list(vistos.values())
+
+            stock_total_red = sum(s['stock'] for s in sucursales_detalle)
+            # Compatibilidad: "similares" = fichas de OTRAS sucursales que la principal
+            sucursales_lista = [s['alias'] for s in sucursales_detalle
+                                if s['sucursal_id'] != principal.sucursal_id]
+            # Sucursales que recibirán aviso al cambiar el precio: todas salvo
+            # la de la sesión (quien edita ya lo sabe).
+            sucursales_notificar = []
+            for s in sucursales_detalle:
+                if s['sucursal_id'] != sucursal_sesion_id and s['alias'] not in sucursales_notificar:
+                    sucursales_notificar.append(s['alias'])
+            precios = sorted({s['precio'] for s in sucursales_detalle})
+            precios_por_sucursal = [{'alias': s['alias'], 'precio': s['precio']} for s in sucursales_detalle]
+
+            fecha_ultimo_despacho_red = None
+            for s in sucursales_detalle:
+                f = ultimo_ingreso.get(s['producto_id'])
+                if f and (fecha_ultimo_despacho_red is None or f > fecha_ultimo_despacho_red):
+                    fecha_ultimo_despacho_red = f
+            dias_desde_ultimo_despacho = (
+                (hoy - fecha_ultimo_despacho_red).days if fecha_ultimo_despacho_red else None
+            )
+            fecha_creacion_local = principal.fecha_creacion.date() if principal.fecha_creacion else None
+            uc = ultimo_cambio.get(principal.id)
+
+            productos_data.append({
+                'id': principal.id,
+                'sucursal_id': principal.sucursal_id,
+                'sku': ', '.join(str(t.sku) for t in tallas[:3]),
+                'nombre': principal.articulo,
+                'descripcion': principal.descripcion or '',
+                'talla': f"{len(tallas_list)} tallas: {', '.join(str(t) for t in tallas_list[:5])}",
+                'categoria': principal.categoria.nombre if principal.categoria else None,
+                'marca': principal.atributo1.valor if principal.atributo1 else None,
+                'color': principal.atributo2.valor if principal.atributo2 else None,
+                'genero': principal.atributo3.valor if principal.atributo3 else None,
+                'otro': principal.atributo4.valor if principal.atributo4 else None,
+                'temporada': principal.temporada or None,
+                'anio_temporada': principal.anio_temporada or None,
+                'rango_precio': principal.rango_precio or None,
+                'sucursal': principal.sucursal.alias if principal.sucursal else '',
+                'es_sucursal_sesion': principal.sucursal_id == sucursal_sesion_id,
+                'sucursal_sesion': alias_sesion,
+                'costo': float(r['costo_promedio']),
+                'precio_venta': float(r['precio_venta']),
+                'stock': r['stock_total'],
+                'dias_inventario': r['dias_inventario'],
+                'margen': float(r['margen']),
                 'cantidad_tallas': len(tallas_list),
                 'ultimo_cambio': {
-                    'usuario': ultimo_cambio.usuario.username if ultimo_cambio and ultimo_cambio.usuario else None,
-                    'fecha': ultimo_cambio.fecha_cambio.strftime('%d/%m/%Y %H:%M') if ultimo_cambio else None,
-                    'hace_cuanto': ultimo_cambio.hace_cuanto if ultimo_cambio else None
-                } if ultimo_cambio else None,
-                'sucursales_similares': sucursales_count,
+                    'usuario': uc['_u'],
+                    'fecha': timezone.localtime(uc['_f']).strftime('%d/%m/%Y %H:%M'),
+                    'hace_cuanto': _hace_cuanto(uc['_f']),
+                } if uc else None,
+                'sucursales_similares': len(sucursales_lista),
                 'sucursales_lista': sucursales_lista,
                 'sucursales_detalle': sucursales_detalle,
+                'sucursales_notificar': sucursales_notificar,
                 'stock_total_red': stock_total_red,
-                # Fechas de trazabilidad
+                'fichas_red': len(sucursales_detalle),
+                'precios_por_sucursal': precios_por_sucursal,
+                'precios_divergentes': len(precios) > 1,
+                'precio_min_red': precios[0] if precios else None,
+                'precio_max_red': precios[-1] if precios else None,
                 'fecha_creacion': fecha_creacion_local.strftime('%d/%m/%Y') if fecha_creacion_local else None,
                 'fecha_ultimo_despacho': fecha_ultimo_despacho_red.strftime('%d/%m/%Y') if fecha_ultimo_despacho_red else None,
                 'dias_desde_ultimo_despacho': dias_desde_ultimo_despacho,
             })
-        
-        # Paginación manual
-        paginator = Paginator(productos_data, per_page)
-        page_obj = paginator.get_page(page)
-        
-        # Resumen de logging
+
         total_excluidos = sum(productos_excluidos.values())
         logger.info(
-            "Busqueda productos precios completada: sucursal_id=%s incluidos=%s excluidos=%s razones=%s pagina=%s total_paginas=%s",
-            sucursal_id,
-            len(productos_data),
-            total_excluidos,
-            {razon: cantidad for razon, cantidad in productos_excluidos.items() if cantidad > 0},
-            page_obj.number,
-            paginator.num_pages,
+            "Busqueda productos precios completada: alcance=%s sucursales=%s filas=%s excluidos=%s razones=%s pagina=%s/%s truncado=%s",
+            alcance, len(sucursales_ids), len(filas), total_excluidos,
+            {k: v for k, v in productos_excluidos.items() if v > 0},
+            page_obj.number, paginator.num_pages, truncado,
         )
-        
+
         return JsonResponse({
             'success': True,
-            'productos': list(page_obj),
+            'productos': productos_data,
+            'alcance': alcance,
+            'sucursales_buscadas': len(sucursales_ids),
+            'truncado': truncado,
             'pagination': {
                 'current_page': page_obj.number,
                 'total_pages': paginator.num_pages,
@@ -603,8 +669,9 @@ def buscar_productos(request):
                 'has_previous': page_obj.has_previous()
             }
         })
-        
+
     except Exception as e:
+        logger.exception("Error en busqueda de productos para precios")
         return JsonResponse({
             'success': False,
             'error': f'Error al buscar productos: {str(e)}'
@@ -860,9 +927,17 @@ def actualizar_precio(request):
     precio de venta de cualquier producto, saltándose por completo el flujo de
     proponer → revisar → aprobar.
 
-    La sincronización a otras sucursales ya no viene activada por defecto: es una
-    escritura sobre fichas de sucursales distintas de la actual y debe pedirse
-    explícitamente.
+    Avisos a las tiendas (22-sep-2026, ver `services/alertas_precio.py`):
+
+    - La sucursal "desde" la que se hace el cambio es la de la SESIÓN del
+      usuario, no la de la ficha. Con la búsqueda "en toda la red" la ficha
+      editada puede ser de otra sucursal: esa sucursal también recibe alerta
+      (antes se la trataba como origen y nadie ahí se enteraba).
+    - Cada gemela (misma identidad) de otra sucursal que cambie de precio
+      recibe alerta, tenga o no stock.
+
+    La sincronización a otras sucursales no viene activada por defecto: es una
+    escritura sobre fichas de sucursales distintas y debe pedirse explícitamente.
     """
     try:
         data = json.loads(request.body)
@@ -871,49 +946,57 @@ def actualizar_precio(request):
         motivo = data.get('motivo', 'Cambio manual de precio')
         tipo_cambio = data.get('tipo_cambio', 'MANUAL')
         sincronizar_sucursales = data.get('sincronizar_sucursales', False)
-        
+
         if not producto_id or not nuevo_precio:
             return JsonResponse({
                 'success': False,
                 'error': 'Parámetros incompletos'
             })
-        
-        # Convertir a entero
+
         nuevo_precio = int(nuevo_precio)
-        
+
         producto = Producto.objects.select_related('sucursal').get(id=producto_id)
         precio_anterior = producto.precioventa
         sucursal_origen = producto.sucursal
-        
-        # Solo registrar si el precio realmente cambió
+
+        # Sucursal desde la que trabaja el usuario (la de la sesión). Si no
+        # hay, se asume la de la ficha (comportamiento histórico).
+        sucursal_desde = None
+        sesion_id = request.session.get('idSucursalActual')
+        if sesion_id:
+            sucursal_desde = Sucursal.objects.filter(id=sesion_id).first()
+        if sucursal_desde is None:
+            sucursal_desde = sucursal_origen
+        desde_alias = sucursal_desde.alias if sucursal_desde else '-'
+        ficha_de_otra_sucursal = bool(
+            sucursal_origen and sucursal_desde and sucursal_origen.id != sucursal_desde.id
+        )
+
         if precio_anterior == nuevo_precio:
             return JsonResponse({
                 'success': True,
                 'message': 'Sin cambios (precio igual)',
                 'sin_cambios': True
             })
-        
-        # Actualizar precio base del producto
+
         producto.precioventa = nuevo_precio
         producto.save()
-        
-        # Actualizar precio en lotes activos de TODAS las tallas
+
         lotes_actualizados = LoteProducto.objects.filter(
             producto_talla__producto=producto,
             cantidad_disponible__gt=0,
             activo=True
         ).update(precio_venta_unitario=nuevo_precio)
-        
-        # Contar tallas actualizadas
+
         tallas_actualizadas = producto.producto_talla.count()
-        
-        # === REGISTRAR EN HISTORIAL ===
+
         diferencia = nuevo_precio - precio_anterior
         porcentaje = (diferencia / precio_anterior * 100) if precio_anterior > 0 else 0
-        
-        # Obtener IP del usuario
         ip_address = request.META.get('REMOTE_ADDR')
-        
+
+        if ficha_de_otra_sucursal:
+            motivo = f'{motivo} (ficha de {sucursal_origen.alias}, editada desde {desde_alias})'
+
         HistorialCambioPrecio.objects.create(
             producto=producto,
             precio_anterior=precio_anterior,
@@ -927,19 +1010,26 @@ def actualizar_precio(request):
             tallas_afectadas=tallas_actualizadas,
             lotes_afectados=lotes_actualizados
         )
-        
-        # === SINCRONIZAR PRECIOS Y CREAR ALERTAS EN OTRAS SUCURSALES ===
-        # Igual que en creación de producto: sincroniza Y crea alerta
-        sucursales_notificadas = 0
+
+        alertas = []              # detalle de cada aviso creado
         productos_sincronizados = 0
-        notificaciones_creadas = 0
-        # Fichas que comparten código+marca+color pero son otro producto
-        # (distinta categoría/género): quedan fuera del sync y se avisan.
+        pendientes_aprobacion = 0
         no_sincronizadas = []
 
+        # === 1. AVISO A LA SUCURSAL DE LA FICHA (si no es la de la sesión) ===
+        if ficha_de_otra_sucursal:
+            det = alertar_precio_sucursal(
+                producto, precio_anterior, nuevo_precio,
+                usuario=request.user, desde_alias=desde_alias,
+                origen='edición rápida', estado='APLICADO',
+                motivo=f'Precio cambiado desde {desde_alias} (edición rápida, búsqueda en toda la red)',
+                stock_sucursal=None,
+            )
+            if det:
+                alertas.append(det)
+
+        # === 2. SINCRONIZAR GEMELAS Y AVISAR A SUS SUCURSALES ===
         if sincronizar_sucursales:
-            from django.db.models import Sum
-            
             # El MISMO producto en las otras sucursales, por identidad COMPLETA
             # (código+marca+color+género+categoría). Con la clave corta se pisaba
             # el precio de productos distintos que comparten código+marca+color
@@ -953,15 +1043,8 @@ def actualizar_precio(request):
                 stock_total=Sum('producto_talla__stock')
             ).select_related('sucursal')
 
-            logger.debug(
-                "Edicion rapida precios buscando similares en otras sucursales: producto_id=%s encontrados=%s",
-                producto.id,
-                productos_otras_sucursales.count(),
-            )
-
             # Fichas con el mismo código+marca+color pero otro género/categoría:
-            # quedan fuera del sync (son otro producto) y se reportan para avisar
-            # en la respuesta.
+            # quedan fuera del sync (son otro producto) y se reportan.
             _casi_qs = qs_fichas_codigo_otra_identidad(
                 producto.articulo, producto.atributo1_id, producto.atributo2_id,
                 producto.atributo3_id, producto.categoria_id,
@@ -984,197 +1067,115 @@ def actualizar_precio(request):
                     resumen_casi_coincidencias(_casi_qs),
                 )
 
+            # Umbral de divergencia (ParametroGlobal UMBRAL_DIVERGENCIA_PRECIO_PCT):
+            # sobre ese % el cambio NO se aplica en la otra sucursal y queda
+            # PENDIENTE de aprobación. 0 = desactivado.
+            try:
+                umbral_param = ParametroGlobal.objects.filter(
+                    nombre='UMBRAL_DIVERGENCIA_PRECIO_PCT'
+                ).first()
+                umbral_divergencia = umbral_param.valor_entero if umbral_param else 0
+            except Exception:
+                umbral_divergencia = 0
+
             for prod_similar in productos_otras_sucursales:
                 precio_anterior_sync = int(prod_similar.precioventa or 0)
-
-                # Obtener primera talla (sin requerir stock > 0)
-                primera_talla = Producto_Talla.objects.filter(
-                    producto=prod_similar
-                ).first()
-
-                if not primera_talla:
-                    logger.debug(
-                        "Precio similar omitido sin tallas: producto_id=%s sucursal=%s",
-                        prod_similar.id,
-                        prod_similar.sucursal.alias,
-                    )
-                    continue
-
-                stock_display = prod_similar.stock_total or 0
-                logger.debug(
-                    "Precio similar evaluado: producto_id=%s sucursal=%s stock=%s precio_actual=%s",
-                    prod_similar.id,
-                    prod_similar.sucursal.alias,
-                    stock_display,
-                    precio_anterior_sync,
-                )
-                
-                # Solo procesar si hay diferencia de precio
                 if precio_anterior_sync == nuevo_precio:
-                    logger.debug(
-                        "Precio similar omitido sin diferencia: producto_id=%s sucursal=%s precio=%s",
-                        prod_similar.id,
-                        prod_similar.sucursal.alias,
-                        precio_anterior_sync,
-                    )
                     continue
-                
-                # === 1. SINCRONIZAR PRECIO ===
-                prod_similar.precioventa = nuevo_precio
-                prod_similar.save()
-                
-                # Actualizar lotes activos
-                LoteProducto.objects.filter(
-                    producto_talla__producto=prod_similar,
-                    cantidad_disponible__gt=0,
-                    activo=True
-                ).update(precio_venta_unitario=nuevo_precio)
-                
-                # Calcular diferencia para esta sucursal
+                if not Producto_Talla.objects.filter(producto=prod_similar).exists():
+                    logger.debug("Precio similar omitido sin tallas: producto_id=%s", prod_similar.id)
+                    continue
+
                 diferencia_sync = nuevo_precio - precio_anterior_sync
                 porcentaje_sync = round((diferencia_sync / precio_anterior_sync * 100), 2) if precio_anterior_sync else 0
-                
-                # Registrar en historial de la otra sucursal
-                HistorialCambioPrecio.objects.create(
-                    producto=prod_similar,
-                    precio_anterior=precio_anterior_sync,
-                    precio_nuevo=nuevo_precio,
-                    diferencia=diferencia_sync,
-                    porcentaje_cambio=porcentaje_sync,
-                    tipo_cambio='SINCRONIZACION',
-                    motivo=f'Sincronización automática desde edición rápida en {sucursal_origen.alias}',
-                    usuario=request.user,
-                    ip_address=ip_address
-                )
-                
-                # === 2. CREAR ALERTA INFORMATIVA (ya aplicado) ===
-                # Determinar prioridad según la diferencia
-                prioridad = 'MEDIA'
-                if abs(porcentaje_sync) > 20:
-                    prioridad = 'ALTA'
-                if abs(porcentaje_sync) > 50:
-                    prioridad = 'URGENTE'
-                
-                # === UMBRAL DE DIVERGENCIA: Si supera el umbral, crear PENDIENTE (requiere revisión) ===
-                # en lugar de APLICADO (informativo). El parámetro UMBRAL_DIVERGENCIA_PRECIO_PCT
-                # en ParametroGlobal define el % a partir del cual se requiere aprobación manual.
-                # Valor 0 = umbral desactivado (siempre APLICADO automático).
-                try:
-                    umbral_param = ParametroGlobal.objects.filter(
-                        nombre='UMBRAL_DIVERGENCIA_PRECIO_PCT'
-                    ).first()
-                    umbral_divergencia = umbral_param.valor_entero if umbral_param else 0
-                except Exception:
-                    umbral_divergencia = 0
-                
-                # Si el umbral está activo (> 0) y el cambio supera el umbral → PENDIENTE sin auto-aplicar
                 supera_umbral = umbral_divergencia > 0 and abs(porcentaje_sync) >= umbral_divergencia
-                
+
                 if supera_umbral:
-                    # No aplicar precio automáticamente — revertir el cambio hecho en prod_similar
-                    prod_similar.precioventa = precio_anterior_sync
+                    estado_cambio = 'PENDIENTE'
+                    motivo_cambio = (
+                        f'Cambio de precio desde {desde_alias} supera el umbral de divergencia '
+                        f'({umbral_divergencia}%). Requiere aprobación.'
+                    )
+                    mensaje_notif = (
+                        f"⚠️ Cambio de precio pendiente de aprobación en {producto.articulo}: "
+                        f"${precio_anterior_sync:,} → ${nuevo_precio:,} "
+                        f"({abs(porcentaje_sync):.1f}% — supera umbral {umbral_divergencia}%). "
+                        f"Enviado desde {desde_alias}. Requiere revisión."
+                    )
+                    pendientes_aprobacion += 1
+                else:
+                    prod_similar.precioventa = nuevo_precio
                     prod_similar.save()
                     LoteProducto.objects.filter(
                         producto_talla__producto=prod_similar,
                         cantidad_disponible__gt=0,
                         activo=True
-                    ).update(precio_venta_unitario=precio_anterior_sync)
-                    estado_cambio = 'PENDIENTE'
-                    motivo_cambio = (
-                        f'Cambio de precio desde {sucursal_origen.alias} supera el umbral de divergencia '
-                        f'({umbral_divergencia}%). Requiere aprobación.'
+                    ).update(precio_venta_unitario=nuevo_precio)
+                    HistorialCambioPrecio.objects.create(
+                        producto=prod_similar,
+                        precio_anterior=precio_anterior_sync,
+                        precio_nuevo=nuevo_precio,
+                        diferencia=diferencia_sync,
+                        porcentaje_cambio=porcentaje_sync,
+                        tipo_cambio='SINCRONIZACION',
+                        motivo=f'Sincronización automática desde edición rápida en {desde_alias}',
+                        usuario=request.user,
+                        ip_address=ip_address
                     )
-                    productos_sincronizados -= 1  # No se sincronizó, solo queda pendiente
-                else:
                     estado_cambio = 'APLICADO'
-                    motivo_cambio = f'Precio sincronizado automáticamente desde {sucursal_origen.alias}'
-                
-                cambio = CambioPrecioPendiente.objects.create(
-                    producto_talla=primera_talla,
-                    sucursal=prod_similar.sucursal,
-                    precio_anterior=precio_anterior_sync,
-                    precio_nuevo=nuevo_precio,
-                    diferencia=diferencia_sync,
-                    porcentaje_cambio=porcentaje_sync,
-                    tipo_cambio='SINCRONIZACION',
-                    estado=estado_cambio,
-                    motivo=motivo_cambio,
-                    creado_por=request.user,
-                    prioridad=prioridad,
-                    fecha_vencimiento=timezone.now() + timedelta(days=7),
-                    notificado=True
-                )
-                
-                # Crear notificaciones para usuarios de esa sucursal
-                usuarios_sucursal = EmpresaUser.objects.filter(
-                    sucursal=prod_similar.sucursal,
-                    status=True
-                ).select_related('user')
-                
-                if supera_umbral:
-                    mensaje_notif = (
-                        f"⚠️ Cambio de precio pendiente de aprobación en {producto.articulo}: "
-                        f"${precio_anterior_sync:,} → ${nuevo_precio:,} "
-                        f"({abs(porcentaje_sync):.1f}% — supera umbral {umbral_divergencia}%). "
-                        f"Enviado desde {sucursal_origen.alias}. Requiere revisión."
-                    )
-                else:
-                    mensaje_notif = (
-                        f"💰 Precio actualizado en {producto.articulo}: "
-                        f"${precio_anterior_sync:,} → ${nuevo_precio:,} "
-                        f"(desde {sucursal_origen.alias})"
-                    )
-                
-                for empresa_user in usuarios_sucursal:
-                    NotificacionCambioPrecio.objects.create(
-                        cambio_precio=cambio,
-                        usuario=empresa_user.user,
-                        tipo='NUEVA',
-                        mensaje=mensaje_notif
-                    )
-                    notificaciones_creadas += 1
-                
-                if not supera_umbral:
+                    motivo_cambio = f'Precio sincronizado automáticamente desde {desde_alias}'
+                    mensaje_notif = None   # mensaje estándar del servicio
                     productos_sincronizados += 1
-                sucursales_notificadas += 1
+
+                det = alertar_precio_sucursal(
+                    prod_similar, precio_anterior_sync, nuevo_precio,
+                    usuario=request.user, desde_alias=desde_alias,
+                    origen='edición rápida', estado=estado_cambio,
+                    motivo=motivo_cambio, mensaje=mensaje_notif,
+                    stock_sucursal=prod_similar.stock_total or 0,
+                )
+                if det:
+                    alertas.append(det)
+
                 logger.info(
-                    "Precio %s en sucursal similar: producto_id=%s sucursal=%s precio_anterior=%s "
-                    "precio_nuevo=%s notificaciones=%s",
+                    "Precio %s en sucursal similar: producto_id=%s sucursal=%s precio_anterior=%s precio_nuevo=%s",
                     'pendiente_revision' if supera_umbral else 'sincronizado',
-                    prod_similar.id,
-                    prod_similar.sucursal.alias,
-                    precio_anterior_sync,
-                    nuevo_precio,
-                    usuarios_sucursal.count(),
+                    prod_similar.id, prod_similar.sucursal.alias,
+                    precio_anterior_sync, nuevo_precio,
                 )
-            
-            if productos_sincronizados > 0:
-                logger.info(
-                    "Sincronizacion de precios completada: producto_origen_id=%s sincronizados=%s notificaciones=%s",
-                    producto.id,
-                    productos_sincronizados,
-                    notificaciones_creadas,
-                )
-        
+
+        sucursales_notificadas_lista = []
+        for a in alertas:
+            if a['sucursal'] not in sucursales_notificadas_lista:
+                sucursales_notificadas_lista.append(a['sucursal'])
+        notificaciones_creadas = sum(a['usuarios_notificados'] for a in alertas)
+
         return JsonResponse({
             'success': True,
             'message': f'Precio actualizado para {tallas_actualizadas} tallas',
             'lotes_actualizados': lotes_actualizados,
             'tallas_actualizadas': tallas_actualizadas,
             'historial_registrado': True,
-            'sucursales_notificadas': sucursales_notificadas,
+            'sucursal_ficha': sucursal_origen.alias if sucursal_origen else None,
+            'ficha_de_otra_sucursal': ficha_de_otra_sucursal,
+            'sucursales_notificadas': len(sucursales_notificadas_lista),
+            'sucursales_notificadas_lista': sucursales_notificadas_lista,
+            'notificaciones_creadas': notificaciones_creadas,
             'productos_sincronizados': productos_sincronizados,
+            'pendientes_aprobacion': pendientes_aprobacion,
+            'alertas': alertas,
             # Fichas con el mismo código+marca+color que NO se sincronizaron
             # porque son otro producto (distinta categoría/género).
             'no_sincronizadas': no_sincronizadas,
         })
-        
+
     except Producto.DoesNotExist:
         return JsonResponse({
             'success': False,
             'error': 'Producto no encontrado'
         })
     except Exception as e:
+        logger.exception("Error al actualizar precio producto_id=%s", data.get('producto_id') if 'data' in locals() else None)
         return JsonResponse({
             'success': False,
             'error': f'Error al actualizar precio: {str(e)}'

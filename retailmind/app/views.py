@@ -21544,7 +21544,9 @@ def verificar_producto_existente(request):
                 **filtros_otras
             ).exclude(
                 sucursal_id=sucursal_id  # Excluir sucursal actual (ya incluida arriba)
-            ).select_related('sucursal', 'atributo1', 'atributo2')
+            ).select_related('sucursal', 'atributo1', 'atributo2').annotate(
+                stock_total=Sum('producto_talla__stock')
+            )
             
             for op in otros_productos:
                 productos_otras_sucursales.append({
@@ -21558,6 +21560,10 @@ def verificar_producto_existente(request):
                     'marca': op.atributo1.valor if op.atributo1 else '-',
                     'color': op.atributo2.valor if op.atributo2 else '-',
                     'es_sucursal_actual': False,
+                    # Misma identidad completa: es lo que la sincronización
+                    # de precios va a tocar al crear/sumar stock.
+                    'misma_identidad': True,
+                    'stock_total': int(op.stock_total or 0),
                 })
             
             if productos_otras_sucursales:
@@ -21614,7 +21620,9 @@ def verificar_producto_existente(request):
                 # Búsqueda 1: Por artículo exacto (ignorando case)
                 otros_productos = Producto.objects.filter(
                     articulo__iexact=articulo
-                ).select_related('sucursal', 'atributo1', 'atributo2', 'atributo3')
+                ).select_related('sucursal', 'atributo1', 'atributo2', 'atributo3').annotate(
+                    stock_total=Sum('producto_talla__stock')
+                )
                 
                 # Si hay sucursal actual, excluirla
                 if sucursal_id:
@@ -21634,6 +21642,16 @@ def verificar_producto_existente(request):
                     otros_productos = otros_productos.filter(filtros_extras)
                     logger.debug("Productos tras filtrar atributos en otras sucursales: total=%s", otros_productos.count())
                 
+                # ¿Es la MISMA variante que la del formulario? Sólo esas fichas
+                # recibirán la sincronización de precio al crear; las demás son
+                # otros colores/géneros del mismo código y se listan sólo como
+                # referencia.
+                _cat_form_id = filtros.get('categoria_id')
+                def _misma_identidad_op(op):
+                    return ((not marca_id or op.atributo1_id == marca_id) and
+                            (not color_id or op.atributo2_id == color_id) and
+                            (not genero_id or op.atributo3_id == genero_id) and
+                            (not _cat_form_id or op.categoria_id == _cat_form_id))
                 for op in otros_productos:
                     productos_otras_sucursales.append({
                         'producto_id': op.id,
@@ -21644,7 +21662,10 @@ def verificar_producto_existente(request):
                         'sobreprecio': int(op.sobreprecio or 0),
                         'precio_diferente': True,  # Siempre diferente porque no existe local
                         'marca': op.atributo1.valor if op.atributo1 else '-',
-                        'color': op.atributo2.valor if op.atributo2 else '-'
+                        'color': op.atributo2.valor if op.atributo2 else '-',
+                        'es_sucursal_actual': False,
+                        'misma_identidad': _misma_identidad_op(op),
+                        'stock_total': int(op.stock_total or 0),
                     })
                 
                 if productos_otras_sucursales:
@@ -24256,20 +24277,26 @@ def crear_producto_manual(request):
             logger.exception("Error vinculando producto manual a compra/DTE")
             compra_creada = None
         
-        # ========== SINCRONIZAR PRECIOS Y CREAR ALERTAS EN OTRAS SUCURSALES ==========
-        # Sincroniza automáticamente Y crea alertas para que las sucursales revisen el cambio
+        # ========== SINCRONIZAR PRECIOS Y AVISAR A OTRAS SUCURSALES ==========
+        # Aplica los precios del formulario en las fichas gemelas (misma
+        # identidad) de otras sucursales y AVISA a cada tienda cuyo precio de
+        # venta cambió (ver services/alertas_precio.py). Antes sólo se avisaba
+        # si la gemela tenía stock > 0: a una tienda con el producto en 0 se le
+        # cambiaba el precio en silencio. Un cambio sólo de costo/sobreprecio
+        # se sincroniza pero no genera aviso (el precio al público no cambió).
         productos_sincronizados = 0
         sucursales_afectadas = []
         notificaciones_creadas = 0
-        
+        sync_detalle = []
+
         try:
-            from .models import HistorialCambioPrecio, CambioPrecioPendiente, NotificacionCambioPrecio, EmpresaUser
-            from datetime import timedelta
-            
-            # Buscar el MISMO producto en las otras sucursales. La identidad
-            # incluye género y categoría además de código+marca+color: sin ellas
-            # este mismo bloque dejó unas ZAPATILLAS de NICK2 a precio de GUANTE
-            # el 25-07-2026 (código reutilizado). Ver
+            from .services.alertas_precio import alertar_precio_sucursal
+            from .services.historial_precios import registrar_cambios_precio as _reg_hist
+
+            # El MISMO producto en las otras sucursales. La identidad incluye
+            # género y categoría además de código+marca+color: sin ellas este
+            # mismo bloque dejó unas ZAPATILLAS de NICK2 a precio de GUANTE el
+            # 25-07-2026 (código reutilizado). Ver
             # `qs_fichas_identidad_otras_sucursales`.
             from .utils_producto_match import (
                 qs_fichas_identidad_otras_sucursales, qs_fichas_codigo_otra_identidad,
@@ -24283,12 +24310,6 @@ def crear_producto_manual(request):
             ).annotate(
                 stock_total=Sum('producto_talla__stock')
             ).select_related('sucursal')
-
-            logger.debug(
-                "Buscando productos similares para sincronizacion manual: articulo=%s total=%s",
-                articulo,
-                productos_similares.count(),
-            )
 
             # Mismo código+marca+color pero otro género/categoría → otro producto:
             # no se sincroniza y se avisa (código reutilizado o mala categorización).
@@ -24304,145 +24325,95 @@ def crear_producto_manual(request):
                     "por distinta categoria/genero -> %s",
                     _casi.count(), articulo, resumen_casi_coincidencias(_casi),
                 )
-            
-            if productos_similares.exists():
-                for prod_similar in productos_similares:
-                    precio_anterior = int(prod_similar.precioventa or 0)
-                    stock_sucursal = prod_similar.stock_total or 0
-                    
-                    logger.debug(
-                        "Producto similar manual: sucursal=%s stock=%s precio_actual=%s",
-                        prod_similar.sucursal.alias,
-                        stock_sucursal,
-                        precio_anterior,
-                    )
-                    
-                    # Solo procesar si ALGÚN precio difiere. Antes se comparaba
-                    # SOLO la venta: un cambio de costo o sobreprecio con venta
-                    # igual quedaba sin sincronizar para siempre.
-                    if (precio_anterior == int(precioventa)
-                            and int(prod_similar.costo or 0) == int(costo)
-                            and int(prod_similar.sobreprecio or 0) == int(sobreprecio)):
-                        logger.debug("Producto similar manual sin cambio de precio: sucursal=%s producto_id=%s", prod_similar.sucursal.alias, prod_similar.id)
-                        continue
 
-                    # === SINCRONIZAR PRECIO (venta + costo + sobreprecio + sugerido) ===
-                    prod_similar.precioventa = precioventa
-                    prod_similar.costo = costo
-                    prod_similar.sobreprecio = sobreprecio
-                    prod_similar.precioSugerido = precioventa
-                    prod_similar.save()
+            _usuario_sync = request.user if getattr(request.user, 'is_authenticated', False) else None
+            for prod_similar in productos_similares:
+                # OJO: NO reutilizar `precio_anterior` (es el de la ficha LOCAL
+                # y se usa en el mensaje final); antes este loop lo pisaba.
+                precio_anterior_sync = int(prod_similar.precioventa or 0)
+                costo_anterior_sync = int(prod_similar.costo or 0)
+                sobre_anterior_sync = int(prod_similar.sobreprecio or 0)
+                stock_sucursal = int(prod_similar.stock_total or 0)
 
-                    # Actualizar lotes activos (los 3 valores, igual que en la
-                    # ficha local — antes solo se tocaba el precio de venta)
-                    LoteProducto.objects.filter(
-                        producto_talla__producto=prod_similar,
-                        cantidad_disponible__gt=0,
-                        activo=True
-                    ).update(
-                        precio_venta_unitario=int(precioventa),
-                        costo_unitario=int(costo),
-                        sobreprecio_unitario=int(sobreprecio)
+                # Solo procesar si ALGÚN precio difiere (venta, costo o sobreprecio)
+                if (precio_anterior_sync == int(precioventa)
+                        and costo_anterior_sync == int(costo)
+                        and sobre_anterior_sync == int(sobreprecio)):
+                    logger.debug("Producto similar manual sin cambio de precio: sucursal=%s producto_id=%s", prod_similar.sucursal.alias, prod_similar.id)
+                    continue
+
+                # === SINCRONIZAR (venta + costo + sobreprecio + sugerido) ===
+                prod_similar.precioventa = precioventa
+                prod_similar.costo = costo
+                prod_similar.sobreprecio = sobreprecio
+                prod_similar.precioSugerido = precioventa
+                prod_similar.save()
+
+                lotes_sync = LoteProducto.objects.filter(
+                    producto_talla__producto=prod_similar,
+                    cantidad_disponible__gt=0,
+                    activo=True
+                ).update(
+                    precio_venta_unitario=int(precioventa),
+                    costo_unitario=int(costo),
+                    sobreprecio_unitario=int(sobreprecio)
+                )
+
+                # Historial: una fila por campo pisado (venta/costo/sobreprecio)
+                _reg_hist(
+                    prod_similar,
+                    {'costo': costo_anterior_sync, 'sobreprecio': sobre_anterior_sync,
+                     'precioventa': precio_anterior_sync},
+                    usuario=_usuario_sync,
+                    motivo=f'Sincronización automática desde creación de producto en {sucursal.alias}',
+                    tipo_cambio='SINCRONIZACION',
+                    ip_address=request.META.get('REMOTE_ADDR'),
+                    lotes_afectados=lotes_sync,
+                )
+
+                # === AVISO A LA TIENDA (solo si cambió el precio de VENTA) ===
+                det = None
+                venta_cambio = precio_anterior_sync != int(precioventa)
+                if venta_cambio:
+                    det = alertar_precio_sucursal(
+                        prod_similar, precio_anterior_sync, int(precioventa),
+                        usuario=_usuario_sync, desde_alias=sucursal.alias,
+                        origen='creación manual', estado='APLICADO',
+                        motivo=f'Precio sincronizado automáticamente desde {sucursal.alias} (creación manual)',
+                        stock_sucursal=stock_sucursal,
                     )
-                    
-                    # Calcular diferencia
-                    diferencia_sync = int(precioventa) - precio_anterior
-                    porcentaje_sync = round((diferencia_sync / precio_anterior * 100), 2) if precio_anterior else 0
-                    
-                    # Registrar en historial
-                    HistorialCambioPrecio.objects.create(
-                        producto=prod_similar,
-                        precio_anterior=precio_anterior,
-                        precio_nuevo=int(precioventa),
-                        diferencia=diferencia_sync,
-                        porcentaje_cambio=porcentaje_sync,
-                        tipo_cambio='SINCRONIZACION',
-                        motivo=f'Sincronización automática desde creación de producto en {sucursal.alias}',
-                        usuario=request.user if hasattr(request, 'user') and request.user.is_authenticated else None,
-                        ip_address=request.META.get('REMOTE_ADDR')
-                    )
-                    
-                    # === CREAR ALERTA Y NOTIFICACIONES (solo si tiene stock) ===
-                    try:
-                        primera_talla = Producto_Talla.objects.filter(
-                            producto=prod_similar,
-                            stock__gt=0
-                        ).first()
-                        
-                        if not primera_talla:
-                            # No hay stock, precio actualizado pero sin alerta
-                            logger.info("Precio manual actualizado sin alerta por stock cero: sucursal=%s producto_id=%s", prod_similar.sucursal.alias, prod_similar.id)
-                        
-                        if primera_talla:
-                            # Determinar prioridad según la diferencia
-                            prioridad = 'MEDIA'
-                            if abs(porcentaje_sync) > 20:
-                                prioridad = 'ALTA'
-                            if abs(porcentaje_sync) > 50:
-                                prioridad = 'URGENTE'
-                            
-                            # Crear cambio con estado PENDIENTE para que revisen
-                            cambio = CambioPrecioPendiente.objects.create(
-                                producto_talla=primera_talla,
-                                sucursal=prod_similar.sucursal,
-                                precio_anterior=precio_anterior,
-                                precio_nuevo=int(precioventa),
-                                diferencia=diferencia_sync,
-                                porcentaje_cambio=porcentaje_sync,
-                                tipo_cambio='SINCRONIZACION',
-                                estado='APLICADO',  # APLICADO porque ya se sincronizó
-                                motivo=f'Precio sincronizado automáticamente desde {sucursal.alias}',
-                                creado_por=request.user if hasattr(request, 'user') and request.user.is_authenticated else None,
-                                prioridad=prioridad,
-                                fecha_vencimiento=timezone.now() + timedelta(days=7),
-                                notificado=True
-                            )
-                            
-                            # Crear notificaciones para usuarios de esa sucursal
-                            usuarios_sucursal = EmpresaUser.objects.filter(
-                                sucursal=prod_similar.sucursal,
-                                status=True
-                            ).select_related('user')
-                            
-                            mensaje_notif = (
-                                f"💰 Precio actualizado en {articulo}: "
-                                f"${precio_anterior:,} → ${int(precioventa):,} "
-                                f"(desde {sucursal.alias})"
-                            )
-                            
-                            for empresa_user in usuarios_sucursal:
-                                NotificacionCambioPrecio.objects.create(
-                                    cambio_precio=cambio,
-                                    usuario=empresa_user.user,
-                                    tipo='NUEVA',
-                                    mensaje=mensaje_notif
-                                )
-                                notificaciones_creadas += 1
-                            
-                            logger.info(
-                                "Alerta manual de cambio de precio creada: sucursal=%s usuarios_notificados=%s cambio_id=%s",
-                                prod_similar.sucursal.alias,
-                                usuarios_sucursal.count(),
-                                cambio.id,
-                            )
-                            
-                    except Exception as alert_error:
-                        logger.warning("Error creando alerta manual de cambio de precio: producto_id=%s error=%s", prod_similar.id, alert_error)
-                    
-                    productos_sincronizados += 1
-                    if prod_similar.sucursal.alias not in sucursales_afectadas:
-                        sucursales_afectadas.append(prod_similar.sucursal.alias)
-                
-                if productos_sincronizados > 0:
-                    logger.info(
-                        "Sincronizacion manual de precios completada: productos=%s sucursales=%s notificaciones=%s",
-                        productos_sincronizados,
-                        len(sucursales_afectadas),
-                        notificaciones_creadas,
-                    )
+                    if det:
+                        notificaciones_creadas += det['usuarios_notificados']
+
+                sync_detalle.append({
+                    'sucursal': prod_similar.sucursal.alias,
+                    'sucursal_id': prod_similar.sucursal_id,
+                    'producto_id': prod_similar.id,
+                    'precio_anterior': precio_anterior_sync,
+                    'precio_nuevo': int(precioventa),
+                    'costo_anterior': costo_anterior_sync,
+                    'costo_nuevo': int(costo),
+                    'venta_cambio': venta_cambio,
+                    'stock': stock_sucursal,
+                    'notificado': bool(det),
+                    'usuarios_notificados': det['usuarios_notificados'] if det else 0,
+                    'cambio_id': det['cambio_id'] if det else None,
+                })
+
+                productos_sincronizados += 1
+                if prod_similar.sucursal.alias not in sucursales_afectadas:
+                    sucursales_afectadas.append(prod_similar.sucursal.alias)
+
+            if productos_sincronizados > 0:
+                logger.info(
+                    "Sincronizacion manual de precios completada: productos=%s sucursales=%s notificaciones=%s",
+                    productos_sincronizados,
+                    len(sucursales_afectadas),
+                    notificaciones_creadas,
+                )
         except Exception:
             logger.exception("Error en sincronizacion manual de precios")
-        
+
         # Detalle verificable por talla: registrar_movimiento_producto mutó y
         # guardó las MISMAS instancias referenciadas en tallas_creadas, así que
         # el stock final ya está en memoria (sin queries extra). Permite al
@@ -24483,7 +24454,12 @@ def crear_producto_manual(request):
         if especialidades_bodegas > 1:
             mensaje += f'. Especialidades aplicadas en {especialidades_bodegas} bodega(s)'
         if productos_sincronizados > 0:
-            mensaje += f'. Precios sincronizados y alertas enviadas a {len(sucursales_afectadas)} sucursal(es)'
+            mensaje += (f'. Precio aplicado también en {productos_sincronizados} ficha(s) de otras sucursales '
+                        f'({", ".join(sucursales_afectadas)})')
+            _tiendas_avisadas = [d['sucursal'] for d in sync_detalle if d.get('notificado')]
+            if _tiendas_avisadas:
+                mensaje += (f'. Aviso de precio enviado a {", ".join(_tiendas_avisadas)} '
+                            f'({notificaciones_creadas} usuario(s))')
         if compra_creada:
             mensaje += f'. Registrado en compra #{compra_creada.correlativo}'
 
@@ -24500,6 +24476,8 @@ def crear_producto_manual(request):
             'especialidades_bodegas': especialidades_bodegas,
             'productos_sincronizados': productos_sincronizados,
             'sucursales_afectadas': sucursales_afectadas,
+            'notificaciones_creadas': notificaciones_creadas,
+            'sync_detalle': sync_detalle,
             'compra_id': compra_creada.id if compra_creada else None,
         })
         

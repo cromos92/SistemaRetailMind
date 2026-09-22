@@ -122,6 +122,18 @@ class PermisosCambiosTest(TestCase):
             content_type='application/json',
         )
 
+    def _post_aprobar_con_pin(self, pin, vendedor=None):
+        return self.client.post(
+            reverse('aprobar_cambio_generar_ticket'),
+            data=json.dumps({
+                'cambio_id': self.cambio.id,
+                'vendedor_id': (vendedor or self.vendedor).id,
+                'pin_admin': pin,
+                'observaciones': 'Prueba de autorizacion con PIN',
+            }),
+            content_type='application/json',
+        )
+
     def test_jefe_sin_autorizacion_temporal_no_puede_cancelar(self):
         response = self._post_cancelar()
         self.assertEqual(response.status_code, 403)
@@ -357,6 +369,138 @@ class PermisosCambiosTest(TestCase):
         self.cambio.refresh_from_db()
         self.assertFalse(codigo.usado)
         self.assertEqual(self.cambio.estado, 'SOLICITADO')
+
+    # ===== Fuera de plazo con PIN de administrador (22-sep-2026) =====
+    # Crear la solicitud fuera de plazo ya no pide credencial: la firma del
+    # administrador se pide UNA sola vez, al aprobarla, con su PIN de perfil.
+
+    def test_fuera_de_plazo_se_aprueba_con_pin_de_administrador(self):
+        self._marcar_fuera_de_plazo(autorizado_por=None)
+        self.admin.set_pin_autorizacion('246810')
+
+        response = self._post_aprobar_con_pin('246810')
+
+        self.assertNotEqual(response.status_code, 403)
+        self.assertNotIn(
+            response.json().get('code'),
+            ('ADMIN_REQUIRED', 'PIN_INVALIDO', 'PIN_FORMATO', 'CROSS_COMPANY_AUTH',
+             'AUTH_CODE_REQUIRED'),
+        )
+        self.assertFalse(
+            RegistroAutorizacion.objects.filter(
+                cambio_devolucion=self.cambio, exitoso=False
+            ).exists()
+        )
+
+    def test_fuera_de_plazo_rechaza_pin_incorrecto(self):
+        self._marcar_fuera_de_plazo(autorizado_por=None)
+        self.admin.set_pin_autorizacion('246810')
+
+        response = self._post_aprobar_con_pin('111222')
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()['code'], 'PIN_INVALIDO')
+        self.cambio.refresh_from_db()
+        self.assertEqual(self.cambio.estado, 'SOLICITADO')
+        self.assertIsNone(self.cambio.ticket_nuevo_id)
+        # El intento fallido queda registrado: es lo que alimenta el bloqueo
+        # temporal por fuerza bruta.
+        self.assertTrue(
+            RegistroAutorizacion.objects.filter(
+                cambio_devolucion=self.cambio,
+                tipo_operacion='APROBACION_CAMBIO',
+                exitoso=False,
+            ).exists()
+        )
+
+    def test_fuera_de_plazo_rechaza_pin_de_jefe_de_local(self):
+        """El PIN existe para admin y jefe de local; la excepción de plazo es solo de admin."""
+        self._marcar_fuera_de_plazo(autorizado_por=None)
+        self.jefe.set_pin_autorizacion('333444')
+
+        response = self._post_aprobar_con_pin('333444')
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()['code'], 'PIN_INVALIDO')
+        self.cambio.refresh_from_db()
+        self.assertEqual(self.cambio.estado, 'SOLICITADO')
+
+    def test_fuera_de_plazo_rechaza_pin_de_admin_de_otra_empresa(self):
+        self._marcar_fuera_de_plazo(autorizado_por=None)
+        otra_empresa = crear_empresa(nombre='Empresa Admin PIN Ajeno', rut='76.555.555-5')
+        otra_sucursal = crear_sucursal(empresa=otra_empresa, alias='SUC-PIN-AJENA')
+        admin_ajeno = crear_usuario(username='admin-pin-ajeno', rol='administrador')
+        crear_empresa_user(admin_ajeno, otra_empresa, otra_sucursal)
+        admin_ajeno.set_pin_autorizacion('555666')
+
+        response = self._post_aprobar_con_pin('555666')
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()['code'], 'CROSS_COMPANY_AUTH')
+        self.cambio.refresh_from_db()
+        self.assertEqual(self.cambio.estado, 'SOLICITADO')
+
+    def test_crear_cambio_fuera_de_plazo_ya_no_pide_codigo(self):
+        """La solicitud vencida se registra igual y queda esperando al administrador."""
+        _, producto_original = crear_producto_con_talla(
+            self.sucursal,
+            articulo='Zapatilla Vieja',
+            sku=880010,
+            stock=0,
+            precioventa=20000,
+        )
+        _, producto_nuevo = crear_producto_con_talla(
+            self.sucursal,
+            articulo='Zapatilla Nueva',
+            sku=880011,
+            stock=1,
+            precioventa=20000,
+        )
+        crear_lote_fifo(producto_nuevo, cantidad=1)
+        linea = Ticket_Productos.objects.create(
+            idTicket=self.ticket_original,
+            ProductoTalla=producto_original,
+            stock=1,
+            precio=20000,
+            precio_original=20000,
+            subtotal=20000,
+        )
+        # `Ticket.fecha` es auto_now: la fecha vieja hay que forzarla por UPDATE.
+        Ticket.objects.filter(pk=self.ticket_original.pk).update(
+            fecha=timezone.localdate() - timezone.timedelta(days=90)
+        )
+
+        response = self.client.post(
+            reverse('crear_cambio_devolucion'),
+            data=json.dumps({
+                'documento_numero': self.ticket_original.correlativo,
+                'documento_tipo': 'TICKET',
+                'tipo_operacion': 'CAMBIO_SIMPLE',
+                'motivo_principal': 'TALLA_INCORRECTA',
+                'productos': [{
+                    'ticket_producto_id': linea.id,
+                    'cantidad': 1,
+                    'condicion_producto': 'PERFECTO',
+                    'producto_nuevo_id': producto_nuevo.id,
+                    'cantidad_nueva': 1,
+                    'precio_nuevo': 20000,
+                }],
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data.get('success'), data)
+        self.assertTrue(data.get('requiere_pin_admin'))
+
+        creado = CambioDevolucion.objects.exclude(id=self.cambio.id).latest('id')
+        self.assertTrue(creado.es_fuera_de_plazo)
+        self.assertEqual(creado.estado, 'SOLICITADO')
+        self.assertEqual(creado.tipo_cambio_especial, 'FUERA_PLAZO')
+        # Nadie firmó todavía: eso es justamente lo que exige el PIN al aprobar.
+        self.assertIsNone(creado.autorizado_por_usuario)
+        self.assertIsNone(creado.registro_autorizacion)
 
     def test_aprobacion_normal_rechaza_codigo_de_rol_no_supervisor(self):
         """Un código generado por un rol sin atribuciones (vendedor) no aprueba cambios."""

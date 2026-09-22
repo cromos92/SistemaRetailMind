@@ -17521,59 +17521,18 @@ def crear_cambio_devolucion(request):
 
         fecha_limite = fecha_base_plazo + timedelta(days=30)
         fuera_de_plazo = timezone.localdate() > fecha_limite
-        
-        # Los cambios fuera de plazo usan exclusivamente el código dinámico de la navbar.
-        codigo_autorizacion = str(
-            data.get('codigo_autorizacion') or data.get('supervisor_pin') or ''
-        ).strip()
-        supervisor_autorizo = False
-        supervisor = None
-        dias_fuera = 0
-        codigo_dinamico_obj = None
-        sucursal_supervisor = None
 
-        if fuera_de_plazo:
-            dias_fuera = (timezone.localdate() - fecha_limite).days
+        # Fuera de plazo NO bloquea la creación. La solicitud nace igual, marcada
+        # como excepción (`es_fuera_de_plazo` + tipo FUERA_PLAZO), y la firma del
+        # administrador se pide UNA sola vez al aprobarla desde el historial, con
+        # su PIN de autorización.
+        #
+        # Antes se exigía acá el código dinámico de la navbar y otro código al
+        # aprobar: dos firmas de un solo uso para la misma operación. En la
+        # práctica el vendedor no podía ni dejar registrada la solicitud si el
+        # administrador no estaba disponible en ese momento.
+        dias_fuera = (timezone.localdate() - fecha_limite).days if fuera_de_plazo else 0
 
-            if not codigo_autorizacion:
-                return JsonResponse({
-                    'success': False,
-                    'code': 'AUTH_CODE_REQUIRED',
-                    'error': f'El plazo para cambios venció el {fecha_limite.strftime("%d/%m/%Y")}',
-                    'requiere_autorizacion': True,
-                    'fecha_limite': fecha_limite.strftime('%d/%m/%Y'),
-                    'fecha_compra': fecha_base_plazo.strftime('%d/%m/%Y'),
-                    'dias_transcurridos': (timezone.localdate() - fecha_base_plazo).days,
-                    'dias_fuera_de_plazo': dias_fuera,
-                })
-
-            es_valido_cod, mensaje_codigo, codigo_dinamico_obj = \
-                CodigoAutorizacionDinamico.validar_codigo(codigo_autorizacion)
-            supervisor = codigo_dinamico_obj.generado_por if codigo_dinamico_obj else None
-            if not es_valido_cod or not _usuario_es_administrador_activo(supervisor):
-                return JsonResponse({
-                    'success': False,
-                    'code': 'INVALID_AUTH_CODE',
-                    'error': mensaje_codigo if not es_valido_cod else 'El código no pertenece a un administrador activo',
-                    'requiere_autorizacion': True,
-                }, status=403)
-
-            asignacion_supervisor = EmpresaUser.objects.filter(
-                user=supervisor,
-                empresa_id=sucursal.empresa_id,
-                status=True,
-            ).select_related('sucursal').order_by('-active').first()
-            if not asignacion_supervisor:
-                return JsonResponse({
-                    'success': False,
-                    'code': 'CROSS_COMPANY_AUTH',
-                    'error': 'El administrador debe pertenecer a la misma empresa',
-                    'requiere_autorizacion': True,
-                }, status=403)
-            sucursal_supervisor = asignacion_supervisor.sucursal
-
-            supervisor_autorizo = True
-        
         # Validar que no existan cambios con obligaciones financieras pendientes para este ticket
         cambios_con_pago_pendiente = CambioDevolucion.objects.filter(
             ticket_original_id__in=ids_tickets_cadena,
@@ -17620,18 +17579,6 @@ def crear_cambio_devolucion(request):
                 })
 
         with transaction.atomic():
-            if codigo_dinamico_obj:
-                codigo_dinamico_obj = CodigoAutorizacionDinamico.objects.select_for_update().get(
-                    id=codigo_dinamico_obj.id
-                )
-                if not codigo_dinamico_obj.es_valido():
-                    return JsonResponse({
-                        'success': False,
-                        'code': 'AUTH_CODE_ALREADY_USED',
-                        'error': 'El código fue utilizado o venció antes de completar la solicitud',
-                        'requiere_autorizacion': True,
-                    }, status=409)
-
             # Cambios por concepto: monto viene directamente del frontend
             es_concepto = tipo_operacion in ('CAMBIO_CONCEPTO', 'DEVOLUCION_CONCEPTO')
             if es_concepto:
@@ -17655,57 +17602,27 @@ def crear_cambio_devolucion(request):
             
             # Crear cambio/devolución con el monto correcto
             obs_vendedor = data.get('observaciones_vendedor', '')
-            if supervisor_autorizo:
-                obs_vendedor = f'[AUTORIZADO FUERA DE PLAZO por {supervisor.get_full_name() or supervisor.username}] {obs_vendedor}'.strip()
+            if fuera_de_plazo:
+                obs_vendedor = (
+                    f'[FUERA DE PLAZO: {dias_fuera} día(s) vencido el '
+                    f'{fecha_limite.strftime("%d/%m/%Y")} - requiere aprobación de un '
+                    f'administrador] {obs_vendedor}'
+                ).strip()
 
-            # Determinar tipo especial y cross-branch
+            # Determinar tipo especial
             tipo_especial = 'NORMAL'
-            es_cross_branch = False
             if fuera_de_plazo:
                 tipo_especial = 'FUERA_PLAZO'
 
             if tipo_operacion in ('CAMBIO_CONCEPTO', 'DEVOLUCION_CONCEPTO'):
                 tipo_especial = 'CONCEPTO'
 
-            if supervisor:
-                es_cross_branch = bool(
-                    sucursal_supervisor and sucursal_supervisor.id != sucursal.id
-                )
-
-            # Crear registro de autorización con trazabilidad completa
-            registro_auth = None
-            if supervisor_autorizo:
-                from .models import RegistroAutorizacion
-                metodo_auth = 'código de autorización del navbar'
-                registro_auth = RegistroAutorizacion.objects.create(
-                    codigo_usado=codigo_dinamico_obj,
-                    usuario_solicitante=request.user,
-                    usuario_autorizador=supervisor,
-                    tipo_operacion='APROBACION_CAMBIO',
-                    descripcion=f'Autorización fuera de plazo ({dias_fuera} días) vía {metodo_auth} por {supervisor.get_full_name() or supervisor.username}',
-                    ip_origen=request.META.get('REMOTE_ADDR'),
-                    exitoso=True,
-                    sucursal_solicitante=sucursal,
-                    sucursal_autorizador=sucursal_supervisor,
-                    es_cross_branch=es_cross_branch,
-                    requiere_revision=es_cross_branch or dias_fuera > 15,
-                    datos_adicionales={
-                        'dias_fuera_de_plazo': dias_fuera,
-                        'fecha_limite': fecha_limite.strftime('%Y-%m-%d'),
-                        'fecha_compra': fecha_base_plazo.strftime('%Y-%m-%d'),
-                        'supervisor_username': supervisor.username,
-                        'supervisor_sucursal': str(sucursal_supervisor) if sucursal_supervisor else None,
-                        'metodo_autorizacion': metodo_auth,
-                    }
-                )
-                # Marcar el código dinámico como usado (único uso) una vez registrada la autorización
-                if codigo_dinamico_obj:
-                    codigo_dinamico_obj.marcar_como_usado()
+            # La excepción de plazo ya no se firma al crear: el RegistroAutorizacion
+            # con el administrador que la autoriza se crea al aprobar (PIN de admin).
 
             # Determinar si requiere revisión gerencial (auto-escalamiento)
             requiere_revision = (
                 fuera_de_plazo or
-                es_cross_branch or
                 monto_original_calculado > 200000  # Umbral configurable
             )
 
@@ -17718,16 +17635,17 @@ def crear_cambio_devolucion(request):
                 observaciones_cliente=data.get('observaciones_cliente', ''),
                 observaciones_vendedor=obs_vendedor,
                 solicitado_por=request.user,
-                requiere_autorizacion=True if supervisor_autorizo else data.get('requiere_autorizacion', False),
+                requiere_autorizacion=True if fuera_de_plazo else data.get('requiere_autorizacion', False),
                 fecha_limite_cambio=fecha_limite,
-                # Nuevos campos de trazabilidad
-                autorizado_por_usuario=supervisor if supervisor_autorizo else None,
-                sucursal_autorizador=sucursal_supervisor if supervisor_autorizo else None,
-                es_autorizacion_cross_branch=es_cross_branch,
+                # Nuevos campos de trazabilidad. La firma del administrador que
+                # autoriza la excepción de plazo se estampa al APROBAR, no acá.
+                autorizado_por_usuario=None,
+                sucursal_autorizador=None,
+                es_autorizacion_cross_branch=False,
                 es_fuera_de_plazo=fuera_de_plazo,
                 dias_fuera_de_plazo=dias_fuera if fuera_de_plazo else 0,
                 tipo_cambio_especial=tipo_especial,
-                registro_autorizacion=registro_auth,
+                registro_autorizacion=None,
                 es_cambio_concepto=tipo_operacion in ('CAMBIO_CONCEPTO', 'DEVOLUCION_CONCEPTO'),
                 concepto_descripcion=data.get('concepto_descripcion', ''),
                 concepto_monto_original=data.get('concepto_monto_original'),
@@ -17735,11 +17653,6 @@ def crear_cambio_devolucion(request):
                 requiere_revision_gerencial=requiere_revision,
             )
 
-            # Vincular registro de autorización al cambio
-            if registro_auth:
-                registro_auth.cambio_devolucion = cambio
-                registro_auth.save(update_fields=['cambio_devolucion'])
-            
             # Procesar productos
             monto_nuevo_total = 0
             monto_original_real = 0  # Recalcular para asegurar consistencia
@@ -17857,20 +17770,31 @@ def crear_cambio_devolucion(request):
                 accion='CREADO',
                 estado_nuevo='SOLICITADO',
                 usuario=request.user,
-                descripcion=f'Solicitud de {cambio.get_tipo_operacion_display().lower()} creada',
+                descripcion=(
+                    f'Solicitud de {cambio.get_tipo_operacion_display().lower()} creada'
+                    + (f' FUERA DE PLAZO ({dias_fuera} días): queda pendiente de '
+                       f'aprobación de un administrador' if fuera_de_plazo else '')
+                ),
                 datos_adicionales={
                     'motivo': motivo_principal,
                     'productos_count': len(productos_cambio),
-                    'monto_diferencia': float(cambio.diferencia_monto)
+                    'monto_diferencia': float(cambio.diferencia_monto),
+                    'es_fuera_de_plazo': fuera_de_plazo,
+                    'dias_fuera_de_plazo': dias_fuera,
                 }
             )
-        
+
         return JsonResponse({
             'success': True,
             'message': 'Solicitud creada exitosamente',
             'cambio_id': cambio.id,
             'numero_operacion': cambio.numero_operacion,
-            'diferencia_monto': float(cambio.diferencia_monto)
+            'diferencia_monto': float(cambio.diferencia_monto),
+            # El frontend avisa que la solicitud quedó esperando el PIN de un
+            # administrador en vez de dar por cerrada la operación.
+            'es_fuera_de_plazo': fuera_de_plazo,
+            'dias_fuera_de_plazo': dias_fuera,
+            'requiere_pin_admin': fuera_de_plazo,
         })
         
     except json.JSONDecodeError:
@@ -19118,15 +19042,21 @@ def aprobar_cambio_generar_ticket(request):
         cambio_id = data.get('cambio_id')
         vendedor_id = data.get('vendedor_id')
         observaciones = data.get('observaciones', '')
-        # Código dinámico de autorización de la barra superior (6 dígitos).
-        # Fuera de plazo debe ser de un ADMINISTRADOR; dentro de plazo basta admin o jefe de local.
+        # Dos credenciales posibles, ambas de 6 dígitos:
+        #  - `pin_admin`: PIN de autorización de un ADMINISTRADOR (el de Mi perfil,
+        #    el mismo del descuento a la diferencia en POS). Es la vía para los
+        #    cambios FUERA DE PLAZO: la excepción se firma acá, una sola vez,
+        #    porque crear la solicitud ya no pide nada.
+        #  - `codigo_autorizacion`: código dinámico de un solo uso de la barra
+        #    superior, para los cambios normales (admin o jefe de local).
         credencial = str(data.get('codigo_autorizacion') or '').strip()
+        pin_admin = str(data.get('pin_admin') or '').strip()
 
-        if not all([cambio_id, vendedor_id, credencial]):
+        if not cambio_id or not vendedor_id or not (credencial or pin_admin):
             return JsonResponse({
                 'success': False,
                 'code': 'AUTH_CODE_REQUIRED',
-                'error': 'ID de cambio, vendedor y código de autorización requeridos'
+                'error': 'ID de cambio, vendedor y credencial de autorización requeridos'
             }, status=400)
 
         # Obtener cambio
@@ -19147,9 +19077,10 @@ def aprobar_cambio_generar_ticket(request):
             }, status=403)
 
         # ¿Requiere autorización especial de administrador?
-        # La excepción de plazo se autoriza UNA sola vez, al crear la solicitud.
-        # Si el cambio ya trae esa firma, aprobar vuelve a ser un paso normal
-        # (código de administrador o de jefe de local).
+        # La excepción de plazo se firma UNA sola vez, acá: crear la solicitud
+        # fuera de plazo ya no pide credencial. Los cambios creados antes de ese
+        # ajuste traen la firma del admin desde la creación (`autorizacion_previa`)
+        # y para esos aprobar sigue siendo un paso normal.
         #
         # Se evalúa sobre `es_fuera_de_plazo` (marcado al crear) y no sobre
         # `dentro_del_plazo` (que se recalcula contra la fecha de hoy): un cambio
@@ -19158,35 +19089,99 @@ def aprobar_cambio_generar_ticket(request):
         autorizacion_previa = _autorizacion_fuera_plazo_previa(cambio)
         requiere_admin = cambio.es_fuera_de_plazo and autorizacion_previa is None
 
-        # Toda autorización se hace con el código dinámico de la barra superior.
-        es_valido_codigo, mensaje_codigo, codigo_obj = \
-            CodigoAutorizacionDinamico.validar_codigo(credencial)
-        usuario_autorizador = codigo_obj.generado_por if (es_valido_codigo and codigo_obj) else None
+        codigo_obj = None
+        usuario_autorizador = None
+        metodo_autorizacion = 'código dinámico de la barra superior'
 
-        if not es_valido_codigo or not usuario_autorizador:
-            return JsonResponse({
-                'success': False,
-                'code': 'INVALID_AUTH_CODE',
-                'error': mensaje_codigo or 'Código de autorización inválido',
-            }, status=403)
+        if pin_admin:
+            # PIN de administrador: no es de un solo uso, así que necesita su
+            # propio freno de fuerza bruta, acotado a esta operación (mismo
+            # criterio que el descuento a la diferencia en POS).
+            if not re.fullmatch(r'\d{6}', pin_admin):
+                return JsonResponse({
+                    'success': False,
+                    'code': 'PIN_FORMATO',
+                    'error': 'El PIN de administrador debe tener 6 dígitos',
+                }, status=400)
 
-        if not (usuario_autorizador.is_active and getattr(usuario_autorizador, 'es_activo', True)):
-            codigo_obj = None
-            return JsonResponse({
-                'success': False,
-                'code': 'INVALID_AUTH_CODE',
-                'error': 'El código no pertenece a un usuario activo',
-            }, status=403)
+            desde = timezone.now() - timedelta(minutes=VENTANA_INTENTOS_PIN_MINUTOS)
+            intentos_fallidos = RegistroAutorizacion.objects.filter(
+                usuario_solicitante=request.user,
+                tipo_operacion='APROBACION_CAMBIO',
+                exitoso=False,
+                fecha_hora__gte=desde,
+            ).count()
+            if intentos_fallidos >= MAX_INTENTOS_PIN_DESCUENTO:
+                return JsonResponse({
+                    'success': False,
+                    'code': 'PIN_BLOQUEADO',
+                    'error': (f'Demasiados intentos con PIN incorrecto. '
+                              f'Intente nuevamente en {VENTANA_INTENTOS_PIN_MINUTOS} minutos.'),
+                }, status=429)
 
-        # Casos especiales (fuera de plazo) → SOLO el código de un ADMINISTRADOR.
+            usuario_autorizador = User.buscar_admin_por_pin(pin_admin)
+            if not _usuario_es_administrador_activo(usuario_autorizador):
+                RegistroAutorizacion.objects.create(
+                    usuario_solicitante=request.user,
+                    usuario_autorizador=usuario_autorizador,
+                    tipo_operacion='APROBACION_CAMBIO',
+                    descripcion=(f'PIN incorrecto al intentar aprobar el cambio '
+                                 f'{cambio.numero_operacion}'),
+                    ip_origen=request.META.get('REMOTE_ADDR'),
+                    exitoso=False,
+                    cambio_devolucion=cambio,
+                    sucursal_solicitante=cambio.sucursal,
+                    datos_adicionales={
+                        'cambio_id': cambio.id,
+                        'intentos_previos': intentos_fallidos,
+                        'motivo': ('PIN sin coincidencia' if usuario_autorizador is None
+                                   else 'El PIN no es de un administrador activo'),
+                    },
+                )
+                logger.warning(
+                    "PIN de administrador rechazado al aprobar cambio=%s usuario=%s intentos_previos=%s",
+                    cambio.id, request.user.username, intentos_fallidos,
+                )
+                return JsonResponse({
+                    'success': False,
+                    'code': 'PIN_INVALIDO',
+                    'error': ('PIN de administrador incorrecto, o ese administrador no '
+                              'tiene PIN configurado en Mi perfil.'),
+                    'intentos_restantes': max(0, MAX_INTENTOS_PIN_DESCUENTO - intentos_fallidos - 1),
+                }, status=403)
+
+            metodo_autorizacion = 'PIN de administrador'
+        else:
+            # Código dinámico de la barra superior (un solo uso).
+            es_valido_codigo, mensaje_codigo, codigo_obj = \
+                CodigoAutorizacionDinamico.validar_codigo(credencial)
+            usuario_autorizador = codigo_obj.generado_por if (es_valido_codigo and codigo_obj) else None
+
+            if not es_valido_codigo or not usuario_autorizador:
+                return JsonResponse({
+                    'success': False,
+                    'code': 'INVALID_AUTH_CODE',
+                    'error': mensaje_codigo or 'Código de autorización inválido',
+                }, status=403)
+
+            if not (usuario_autorizador.is_active and getattr(usuario_autorizador, 'es_activo', True)):
+                codigo_obj = None
+                return JsonResponse({
+                    'success': False,
+                    'code': 'INVALID_AUTH_CODE',
+                    'error': 'El código no pertenece a un usuario activo',
+                }, status=403)
+
+        # Casos especiales (fuera de plazo) → SOLO un ADMINISTRADOR (su PIN, o su
+        # código dinámico para las solicitudes viejas que aún lo usan).
         # Cambios normales (dentro de plazo) → código de admin o de jefe de local.
         if requiere_admin and not _usuario_es_administrador_activo(usuario_autorizador):
             return JsonResponse({
                 'success': False,
                 'code': 'ADMIN_REQUIRED',
                 'error': (
-                    'Este cambio fuera de plazo no tiene una autorización de administrador '
-                    'vigente, así que requiere el código de un ADMINISTRADOR para aprobarse.'
+                    'Este cambio está FUERA DE PLAZO: para aprobarlo se necesita el '
+                    'PIN de autorización de un ADMINISTRADOR.'
                 ),
             }, status=403)
 
@@ -19298,13 +19293,15 @@ def aprobar_cambio_generar_ticket(request):
                 usuario_autorizador=usuario_autorizador,
                 tipo_operacion='APROBACION_CAMBIO',
                 descripcion=(
-                    (f'Aprobación y ejecución (fuera de plazo) autorizada por {_autorizador_nombre}'
+                    (f'Aprobación y ejecución (fuera de plazo, {cambio.dias_fuera_de_plazo} días) '
+                     f'autorizada por {_autorizador_nombre} vía {metodo_autorizacion}'
                      if requiere_admin else
                      (f'Aprobación y ejecución (fuera de plazo ya autorizada por '
                       f'{autorizacion_previa.get_full_name() or autorizacion_previa.username}) '
-                      f'ejecutada por {_autorizador_nombre}'
+                      f'ejecutada por {_autorizador_nombre} vía {metodo_autorizacion}'
                       if autorizacion_previa else
-                      f'Aprobación y ejecución (cambio normal) autorizada por {_autorizador_nombre}'))
+                      f'Aprobación y ejecución (cambio normal) autorizada por '
+                      f'{_autorizador_nombre} vía {metodo_autorizacion}'))
                 ),
                 ip_origen=request.META.get('REMOTE_ADDR'),
                 exitoso=True,
@@ -19328,6 +19325,10 @@ def aprobar_cambio_generar_ticket(request):
                 datos_adicionales={
                     'cambio_id': cambio.id,
                     'vendedor_id': vendedor_id,
+                    'metodo_autorizacion': metodo_autorizacion,
+                    'es_fuera_de_plazo': cambio.es_fuera_de_plazo,
+                    'dias_fuera_de_plazo': cambio.dias_fuera_de_plazo,
+                    'autorizador_username': usuario_autorizador.username,
                 },
             )
 
