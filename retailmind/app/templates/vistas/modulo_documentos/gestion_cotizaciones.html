@@ -510,7 +510,7 @@
 
 /* Cliente y Estado envuelven (el resto sigue nowrap) */
 #tablaCotizaciones td:nth-child(3),
-#tablaCotizaciones td:nth-child(8) {
+#tablaCotizaciones td:nth-child(7) {
     white-space: normal;
 }
 
@@ -1736,6 +1736,114 @@
         gap: 12px;
     }
 }
+
+/* ===== FILTROS RÁPIDOS (mismo componente que gestion_creditos / gestion_dte) ===== */
+.cot-quick-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+.cot-quick-filters .qf-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--nexo-text-muted);
+    margin-right: 4px;
+}
+.quick-filter-btn {
+    background: var(--nexo-white);
+    border: 1px solid var(--nexo-border-light);
+    border-radius: var(--nexo-radius-full);
+    padding: 5px 13px;
+    min-height: 32px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--nexo-text-secondary);
+    transition: var(--nexo-transition-fast);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.quick-filter-btn:hover {
+    border-color: var(--nexo-primary);
+    color: var(--nexo-primary);
+}
+.quick-filter-btn.active {
+    background: var(--nexo-primary);
+    border-color: var(--nexo-primary);
+    color: var(--nexo-text-inverse);
+}
+.quick-filter-btn.is-riesgo.active { background: var(--nexo-error); border-color: var(--nexo-error); }
+.quick-filter-btn.is-despacho.active { background: var(--cot-despacho); border-color: var(--cot-despacho); }
+.quick-filter-btn .qf-count { font-weight: 700; opacity: 0.75; margin-left: 0.25rem; }
+.quick-filter-btn .qf-count:empty { display: none; }
+
+/* KPI que está actuando como filtro */
+.kpi-card--active { outline: 2px solid var(--nexo-primary); outline-offset: 1px; }
+
+/* Celdas del listado */
+.cot-num { font-weight: 600; color: var(--nexo-primary); }
+.cot-vig-hasta { font-size: 12px; color: var(--nexo-text-secondary); }
+.cot-doc { font-size: 11px; color: var(--nexo-text-secondary); margin-top: 2px; }
+.cot-doc code { font-size: 11px; color: var(--nexo-text-primary); }
+#tablaCotizaciones .btn-facturar-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 30px;
+    padding: 0 10px;
+    margin-right: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: var(--nexo-radius-md);
+    background: var(--nexo-success);
+    color: #fff;
+    border: none;
+    white-space: nowrap;
+}
+#tablaCotizaciones .btn-facturar-row.is-diferido { background: var(--cot-despacho); }
+#tablaCotizaciones .btn-facturar-row:hover { filter: brightness(0.93); color: #fff; }
+#tablaCotizaciones td.cot-td-acciones { white-space: nowrap; }
+
+/* Pantallas chicas: cada fila se apila como tarjeta y cada celda muestra su
+   rótulo (data-label). Antes la tabla de 9 columnas obligaba a scroll lateral. */
+@media (max-width: 767.98px) {
+    #tablaCotizaciones thead { display: none; }
+    #tablaCotizaciones, #tablaCotizaciones tbody, #tablaCotizaciones tr, #tablaCotizaciones td {
+        display: block;
+        width: 100%;
+        white-space: normal;
+    }
+    #tablaCotizaciones tr {
+        border: 1px solid var(--nexo-gray-100);
+        border-radius: var(--nexo-radius-md);
+        margin-bottom: 10px;
+        padding: 6px 0;
+    }
+    #tablaCotizaciones td {
+        padding: 6px 12px;
+        border: 0;
+        text-align: left !important;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    #tablaCotizaciones td::before {
+        content: attr(data-label);
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--nexo-text-muted);
+        flex: 0 0 32%;
+    }
+    #tablaCotizaciones td[colspan] { display: block; }
+    #tablaCotizaciones td[colspan]::before { content: none; }
+    #tablaCotizaciones td.cot-td-acciones { justify-content: flex-end; flex-wrap: wrap; }
+    #tablaCotizaciones td.cot-td-acciones::before { flex-basis: 100%; }
+}
 </style>
 <div class="page-content">
     <div class="container-fluid">
@@ -1773,7 +1881,7 @@
                 <!-- Panel de KPIs (mismos ids que consume actualizarEstadisticas) -->
                 <div class="row g-2 mb-3">
                     <div class="col-xl-2 col-md-4 col-6">
-                        <div class="kpi-card kpi-card--total card h-100">
+                        <div class="kpi-card kpi-card--total kpi-card--clickable card h-100" data-filtro="" role="button" title="Ver todas las cotizaciones">
                             <div class="card-body d-flex align-items-center gap-2">
                                 <div class="kpi-icon text-white"><i class="ri-file-text-line"></i></div>
                                 <div class="flex-grow-1 overflow-hidden">
@@ -1784,7 +1892,7 @@
                         </div>
                     </div>
                     <div class="col-xl-2 col-md-4 col-6">
-                        <div class="kpi-card kpi-card--ok card h-100">
+                        <div class="kpi-card kpi-card--ok kpi-card--clickable card h-100" data-filtro="VIGENTE" role="button" title="Solo las vigentes (aún se pueden facturar). Clic para filtrarlas.">
                             <div class="card-body d-flex align-items-center gap-2">
                                 <div class="kpi-icon text-white"><i class="ri-checkbox-circle-line"></i></div>
                                 <div class="flex-grow-1 overflow-hidden">
@@ -1795,7 +1903,7 @@
                         </div>
                     </div>
                     <div class="col-xl-2 col-md-4 col-6">
-                        <div class="kpi-card kpi-card--vencido kpi-card--clickable card h-100" id="pillVencidas" role="button"
+                        <div class="kpi-card kpi-card--vencido kpi-card--clickable card h-100" id="pillVencidas" data-filtro="VENCIDA" role="button"
                              title="Cotizaciones que pasaron su fecha de validez. Clic para filtrarlas.">
                             <div class="card-body d-flex align-items-center gap-2">
                                 <div class="kpi-icon text-white"><i class="ri-time-line"></i></div>
@@ -1819,7 +1927,7 @@
                         </div>
                     </div>
                     <div class="col-xl-2 col-md-4 col-6">
-                        <div class="kpi-card kpi-card--info card h-100">
+                        <div class="kpi-card kpi-card--info kpi-card--clickable card h-100" data-filtro="FACTURADA" role="button" title="Solo las facturadas. Clic para filtrarlas.">
                             <div class="card-body d-flex align-items-center gap-2">
                                 <div class="kpi-icon text-white"><i class="ri-file-list-line"></i></div>
                                 <div class="flex-grow-1 overflow-hidden">
@@ -1830,7 +1938,7 @@
                         </div>
                     </div>
                     <div class="col-xl-2 col-md-4 col-6">
-                        <div class="kpi-card kpi-card--neutral card h-100">
+                        <div class="kpi-card kpi-card--neutral kpi-card--clickable card h-100" data-filtro="ANULADA" role="button" title="Solo las anuladas. Clic para filtrarlas.">
                             <div class="card-body d-flex align-items-center gap-2">
                                 <div class="kpi-icon text-white"><i class="ri-close-circle-line"></i></div>
                                 <div class="flex-grow-1 overflow-hidden">
@@ -1858,8 +1966,11 @@
                             <select class="form-select nexo-input" id="estadoCotizacion">
                                 <option value="">Todos</option>
                                 <option value="VIGENTE">Vigente</option>
+                                <option value="POR_VENCER">Vigente · vence en 7 días</option>
                                 <option value="VENCIDA">Vencida</option>
                                 <option value="FACTURADA">Facturada</option>
+                                <option value="DESPACHO_PENDIENTE">Facturada · despacho pendiente</option>
+                                <option value="DOC_ANULADO">Facturada · documento anulado / eliminado</option>
                                 <option value="ANULADA">Anulada</option>
                             </select>
                         </div>
@@ -1895,6 +2006,20 @@
                     </div>
                 </div>
 
+                <!-- Filtros rápidos (colas de trabajo). Son accesos al select Estado:
+                     el select sigue siendo la única fuente de verdad del filtro. -->
+                <div class="cot-quick-filters" id="cotQuickFilters" role="group" aria-label="Filtros rápidos">
+                    <span class="qf-label">Ver:</span>
+                    <button type="button" class="quick-filter-btn active" data-filtro="">Todas <span class="qf-count" data-count="total"></span></button>
+                    <button type="button" class="quick-filter-btn" data-filtro="VIGENTE" title="Aún se pueden facturar">Vigentes <span class="qf-count" data-count="vigentes"></span></button>
+                    <button type="button" class="quick-filter-btn" data-filtro="POR_VENCER" title="Vigentes que vencen dentro de 7 días: llamar al cliente">Por vencer <span class="qf-count" data-count="por_vencer"></span></button>
+                    <button type="button" class="quick-filter-btn is-riesgo" data-filtro="VENCIDA" title="Pasaron su validez: renovar para poder facturar">Vencidas <span class="qf-count" data-count="vencidas"></span></button>
+                    <button type="button" class="quick-filter-btn" data-filtro="FACTURADA">Facturadas <span class="qf-count" data-count="facturadas"></span></button>
+                    <button type="button" class="quick-filter-btn is-despacho" data-filtro="DESPACHO_PENDIENTE" title="Facturadas a las que falta sacar stock (ítems sin SKU al facturar: despacho diferido)">Despacho pendiente <span class="qf-count" data-count="despacho_pendiente"></span></button>
+                    <button type="button" class="quick-filter-btn is-riesgo" data-filtro="DOC_ANULADO" title="Facturadas cuyo documento fue anulado por nota de crédito o eliminado: reabrir para volver a facturar">Doc. anulado <span class="qf-count" data-count="doc_anulado"></span></button>
+                    <button type="button" class="quick-filter-btn" data-filtro="ANULADA">Anuladas <span class="qf-count" data-count="anuladas"></span></button>
+                </div>
+
                 <!-- Listado -->
                 <h5 class="nexo-card-title mb-3">
                     <i class="ri-file-list-line text-nexo-primary"></i> Listado de Cotizaciones
@@ -1906,9 +2031,8 @@
                                 <th scope="col">N° Cotización</th>
                                 <th scope="col" class="text-center">Fecha</th>
                                 <th scope="col">Cliente</th>
-                                <th scope="col" class="text-center">Válida Hasta</th>
-                                <th scope="col" class="text-center">Días Rest.</th>
-                                <th scope="col" class="text-center">Items</th>
+                                <th scope="col" class="text-center">Vigencia</th>
+                                <th scope="col" class="text-center">Ítems</th>
                                 <th scope="col" class="text-end">Monto</th>
                                 <th scope="col" class="text-center">Estado</th>
                                 <th scope="col" class="text-end">Acciones</th>
@@ -1916,7 +2040,7 @@
                         </thead>
                         <tbody id="tbodyCotizaciones">
                             <tr>
-                                <td colspan="9" class="text-center py-4">
+                                <td colspan="8" class="text-center py-4">
                                     <div class="spinner-border spinner-nexo" role="status">
                                         <span class="visually-hidden">Cargando...</span>
                                     </div>
@@ -2430,17 +2554,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function configurarEventos() {
-        // KPI "Vencidas" como filtro rápido: es la cola de trabajo real
-        // (cotizaciones que ya no se pueden facturar sin renovarles la validez).
-        const pillVencidas = document.getElementById('pillVencidas');
-        if (pillVencidas) {
-            pillVencidas.addEventListener('click', function() {
+        // KPIs y filtros rápidos son accesos al filtro Estado. Una sola fuente
+        // de verdad: el select #estadoCotizacion (el mismo valor viaja al API).
+        // Clic sobre el que ya está activo lo apaga (vuelve a "Todas").
+        document.querySelectorAll('.kpi-card[data-filtro], #cotQuickFilters .quick-filter-btn').forEach(el => {
+            el.addEventListener('click', function() {
                 const sel = document.getElementById('estadoCotizacion');
-                sel.value = (sel.value === 'VENCIDA') ? '' : 'VENCIDA';
+                const valor = this.dataset.filtro || '';
+                sel.value = (valor !== '' && sel.value === valor) ? '' : valor;
                 paginaActual = 1;
+                sincronizarFiltrosRapidos();
                 cargarCotizaciones();
             });
-        }
+        });
 
         // Relanzar la búsqueda al cambiar cualquier filtro (antes había que
         // pulsar "Buscar" y era fácil quedarse mirando datos viejos).
@@ -2910,7 +3036,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (cotizacionesData.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="9">
+                    <td colspan="8">
                         <div class="empty-state-nexo">
                             <i class="ri-inbox-line"></i>
                             <h4>No se encontraron cotizaciones</h4>
@@ -2978,64 +3104,102 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>`;
             }
             
+            // Vigencia en una sola columna: fecha límite + días (o "vencida hace N").
+            const esFacturada = !!(cot.facturada || cot.estado === 'FACTURADA');
+            const esAnulada = cot.estado === 'ANULADA';
+            let vigenciaHtml = `<div class="cot-vig-hasta">hasta ${formatearFecha(cot.fecha_validez)}</div>`;
+            if (!esFacturada && !esAnulada) {
+                const txtDias = diasRestantes < 0
+                    ? `vencida hace ${Math.abs(diasRestantes)} d`
+                    : (diasRestantes === 0 ? 'vence hoy' : `${diasRestantes} días`);
+                vigenciaHtml += `<span class="${clasesDias}">${txtDias}</span>`;
+            }
+
+            // Estado + qué falta / qué pasó con el documento.
+            let estadoHtml;
+            if (esFacturada) {
+                const docMuerto = cot.documento_muerto && !cot.sin_dte_enlazado;
+                estadoHtml = `
+                    <span class="nexo-badge nexo-badge-info">
+                        <i class="ri-checkbox-circle-fill"></i> FACTURADA
+                    </span>
+                    ${cot.documento
+                        ? `<div class="cot-doc"><code>${cot.documento}</code></div>`
+                        : (cot.numero_factura ? `<div class="cot-doc">${cot.numero_factura}</div>` : '')}
+                    ${cot.sin_dte_enlazado ? `
+                        <div style="margin-top:3px;">
+                            <span class="nexo-badge nexo-badge-soft-error"
+                                  title="Marcada como facturada pero NO tiene documento tributario enlazado en el sistema. Verifique en Gestión de DTE antes de despachar.">
+                                <i class="ri-error-warning-fill"></i> Sin DTE enlazado
+                            </span>
+                        </div>` : ''}
+                    ${docMuerto ? `
+                        <div style="margin-top:3px;">
+                            <span class="nexo-badge nexo-badge-soft-error"
+                                  title="El documento que la respaldaba fue ${cot.documento_descartado ? 'eliminado' : 'anulado (nota de crédito)'}. La cotización sigue marcada FACTURADA: reábrala para poder facturarla de nuevo.">
+                                <i class="ri-file-forbid-line"></i> Documento ${cot.documento_descartado ? 'eliminado' : 'anulado'}
+                            </span>
+                        </div>
+                        <div class="cot-doc text-nexo-error">Reabrir para volver a facturar</div>` : ''}
+                    ${badgeCuadraturaDespacho(cot)}`;
+            } else if (esAnulada) {
+                estadoHtml = `<span class="${obtenerClaseEstado('ANULADA')}"><i class="ri-close-circle-line"></i> ANULADA</span>`;
+            } else if (cot.esta_vencida) {
+                estadoHtml = `
+                    <span class="${obtenerClaseEstado('VENCIDA')}"><i class="ri-time-line"></i> VENCIDA</span>
+                    <div class="cot-doc" title="${cot.motivo_no_facturar || ''}">Sin facturar · renueve la vigencia para facturar</div>`;
+            } else {
+                // Vigente: decir en la misma celda qué falta para facturarla.
+                let queFalta;
+                if (cot.items_sin_stock > 0) {
+                    queFalta = `<div class="cot-doc text-nexo-error">Sin facturar · ${cot.items_sin_stock} sin stock</div>`;
+                } else if (cot.items_cobertura_parcial > 0) {
+                    queFalta = `<div class="cot-doc text-nexo-error">Sin facturar · SKU incompleto</div>`;
+                } else if (cot.items_sin_sku > 0) {
+                    queFalta = `<div class="cot-doc cot-text-warning" title="Se puede facturar: esas líneas salen como despacho diferido y el SKU se asigna cuando llegue el producto">Sin facturar · ${cot.items_sin_sku} sin SKU (despacho diferido)</div>`;
+                } else {
+                    queFalta = `<div class="cot-doc cot-text-success">Sin facturar · lista para facturar</div>`;
+                }
+                estadoHtml = `<span class="${obtenerClaseEstado('VIGENTE')}"><i class="ri-checkbox-circle-line"></i> VIGENTE</span>${queFalta}`;
+            }
+
+            // Facturar desde la fila (antes solo desde el modal de detalle).
+            const puedeFacturarFila = !!cot.puede_facturar && !(cot.items_cobertura_parcial > 0);
+            const facturarBtn = puedeFacturarFila ? `
+                <button type="button" class="btn-facturar-row ${cot.items_sin_sku > 0 ? 'is-diferido' : ''}"
+                        onclick="facturarDesdeListado(${cot.id})"
+                        title="${cot.items_sin_sku > 0
+                            ? cot.items_sin_sku + ' ítem(s) sin SKU: se factura igual, con despacho diferido'
+                            : 'Abrir en el POS para emitir el documento'}">
+                    <i class="ri-file-text-line"></i> Facturar${cot.items_sin_sku > 0 ? ' (dif.)' : ''}
+                </button>` : '';
+
             return `
                 <tr>
-                    <td>
-                        <span class="fw-medium text-nexo-primary">#${cot.numero_cotizacion}</span>
+                    <td data-label="N° Cot.">
+                        <div>
+                            <span class="cot-num">#${cot.numero_cotizacion}</span>
+                            ${cot.vendedor_nombre ? `<div class="cot-doc" title="Vendedor"><i class="ri-user-star-line"></i> ${cot.vendedor_nombre}</div>` : ''}
+                        </div>
                     </td>
-                    <td class="text-center cot-text-secondary">${formatearFecha(cot.fecha_emision)}</td>
-                    <td>
+                    <td data-label="Fecha" class="text-center cot-text-secondary">${formatearFecha(cot.fecha_emision)}</td>
+                    <td data-label="Cliente">
                         <div>
                             <h6 class="mb-0 fs-14 cot-text-dark">${cot.cliente_nombre}</h6>
                             <small class="text-nexo-muted">${cot.cliente_rut}</small>
                         </div>
                     </td>
-                    <td class="text-center cot-text-secondary">${formatearFecha(cot.fecha_validez)}</td>
-                    <td class="text-center">
-                        <span class="${clasesDias}">
-                            ${diasRestantes < 0 ? 'Vencida' : diasRestantes + ' días'}
-                        </span>
-                    </td>
-                    <td class="text-center" title="${estadoItemsTitle}">
-                        <span class="nexo-badge nexo-badge-soft-secondary">${cot.total_items} items</span>
+                    <td data-label="Vigencia" class="text-center">${vigenciaHtml}</td>
+                    <td data-label="Ítems" class="text-center" title="${estadoItemsTitle}">
+                        <span class="nexo-badge nexo-badge-soft-secondary">${cot.total_items} ítems</span>
                         ${estadoItemsHtml}
                     </td>
-                    <td class="text-end">
+                    <td data-label="Monto" class="text-end">
                         <span class="fw-semibold cot-text-dark">${formatearMoneda(cot.monto_total)}</span>
                     </td>
-                    <td class="text-center">
-                        ${cot.facturada || cot.estado === 'FACTURADA' ? `
-                            <span class="nexo-badge nexo-badge-info">
-                                <i class="ri-checkbox-circle-fill"></i> FACTURADA
-                            </span>
-                            ${cot.documento
-                                ? `<div class="cell-sub text-nexo-muted">${cot.documento}</div>`
-                                : (cot.numero_factura ? `<div class="cell-sub text-nexo-muted">${cot.numero_factura}</div>` : '')}
-                            ${cot.sin_dte_enlazado ? `
-                                <div style="margin-top:3px;">
-                                    <span class="nexo-badge nexo-badge-soft-error"
-                                          title="Marcada como facturada pero NO tiene documento tributario enlazado en el sistema. Verifique en Gestión de DTE antes de despachar.">
-                                        <i class="ri-error-warning-fill"></i> Sin DTE enlazado
-                                    </span>
-                                </div>` : ''}
-                            ${(cot.documento_muerto && !cot.sin_dte_enlazado) ? `
-                                <div style="margin-top:3px;">
-                                    <span class="nexo-badge nexo-badge-soft-error"
-                                          title="El documento que la respaldaba fue ${cot.documento_descartado ? 'eliminado' : 'anulado'}. La cotización sigue marcada FACTURADA y no se puede volver a facturar hasta reabrirla.">
-                                        <i class="ri-file-forbid-line"></i> Documento ${cot.documento_descartado ? 'eliminado' : 'anulado'}
-                                    </span>
-                                </div>` : ''}
-                            ${badgeCuadraturaDespacho(cot)}
-                        ` : `
-                            <span class="${obtenerClaseEstado(cot.estado_efectivo || cot.estado)}">${cot.estado_efectivo || cot.estado}</span>
-                            ${cot.esta_vencida ? `
-                                <div class="cell-sub text-nexo-error"
-                                     title="${cot.motivo_no_facturar || ''}">
-                                    <i class="ri-time-line"></i> hace ${Math.abs(diasRestantes)} días
-                                </div>` : ''}
-                        `}
-                    </td>
-                    <td class="text-end">
+                    <td data-label="Estado" class="text-center">${estadoHtml}</td>
+                    <td data-label="Acciones" class="text-end cot-td-acciones">
+                        ${facturarBtn}
                         <div class="btn-group btn-group-sm">
                             <button class="btn btn-action btn-primary" onclick="verDetalle(${cot.id})" title="Ver Detalle">
                                 <i class="ri-eye-line"></i>
@@ -3174,6 +3338,26 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('totalFacturadas').querySelector('.counter-value').textContent = stats.facturadas || 0;
         const elAnuladas = document.getElementById('totalAnuladas');
         if (elAnuladas) elAnuladas.querySelector('.counter-value').textContent = stats.anuladas || 0;
+        sincronizarFiltrosRapidos(stats);
+    }
+
+    // Pinta el filtro activo (chip y KPI) y los contadores de cada cola. Los
+    // contadores vienen del backend calculados ANTES del filtro por estado,
+    // así que no cambian al cambiar de pestaña.
+    function sincronizarFiltrosRapidos(stats) {
+        const valor = document.getElementById('estadoCotizacion').value || '';
+        document.querySelectorAll('#cotQuickFilters .quick-filter-btn').forEach(btn => {
+            btn.classList.toggle('active', (btn.dataset.filtro || '') === valor);
+            if (stats) {
+                const span = btn.querySelector('.qf-count');
+                const clave = span ? span.dataset.count : '';
+                if (span && clave in stats) span.textContent = stats[clave] || 0;
+            }
+        });
+        document.querySelectorAll('.kpi-card[data-filtro]').forEach(card => {
+            const propio = card.dataset.filtro || '';
+            card.classList.toggle('kpi-card--active', propio !== '' && propio === valor);
+        });
     }
 
     function actualizarPaginacion() {
@@ -5293,6 +5477,32 @@ document.addEventListener('DOMContentLoaded', function() {
 
     window.actualizarListado = function() {
         cargarCotizaciones();
+    };
+
+    // Botón "Facturar" de la fila: misma ruta que el del modal de detalle
+    // (convertir → POS). Con ítems sin SKU se confirma el despacho diferido.
+    window.facturarDesdeListado = function(cotizacionId) {
+        const cot = (cotizacionesData || []).find(c => c.id === cotizacionId);
+        if (!cot) return;
+        if (cot.items_sin_sku > 0) {
+            Swal.fire({
+                icon: 'question',
+                title: 'Facturar con despacho diferido',
+                html: `<div class="text-start">
+                    <p><strong>${cot.items_sin_sku} ítem(s)</strong> no tienen SKU asignado.</p>
+                    <p class="mb-1">Se puede facturar igual: esas líneas salen en el documento como
+                       <strong>despacho diferido</strong> y no descuentan stock ahora.</p>
+                    <p class="mb-0 small text-muted">Cuando llegue el producto, asígnele el SKU desde el
+                       botón de despacho (camión) para que salga del inventario.</p>
+                </div>`,
+                showCancelButton: true,
+                confirmButtonText: 'Sí, facturar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#0066FF',
+            }).then(r => { if (r.isConfirmed) ejecutarFacturacion(cotizacionId, true); });
+            return;
+        }
+        ejecutarFacturacion(cotizacionId, false);
     };
 
     window.cambiarPagina = function(pagina) {

@@ -461,6 +461,40 @@ def listar_cotizaciones(request):
         if fecha_hasta:
             cotizaciones = cotizaciones.filter(fecha_emision__lte=fecha_hasta)
 
+        if cliente_id:
+            cotizaciones = cotizaciones.filter(cliente_id=cliente_id)
+        
+        if buscar:
+            cotizaciones = cotizaciones.filter(
+                Q(numero_cotizacion__icontains=buscar) |
+                Q(cliente__nombre__icontains=buscar) |
+                Q(cliente__rut__icontains=buscar) |
+                Q(descripcion__icontains=buscar) |
+                Q(items__descripcion__icontains=buscar)
+            ).distinct()
+        
+        # Colas de trabajo que comparten el filtro "Estado" y los contadores de
+        # los filtros rápidos (una sola definición para filtrar y para contar).
+        _q_facturada = Q(facturada=True) | Q(estado=Cotizacion_Empresa.ESTADO_FACTURADA)
+        _q_por_vencer = Q(
+            estado=Cotizacion_Empresa.ESTADO_VIGENTE,
+            fecha_validez__gte=hoy,
+            fecha_validez__lte=hoy + timedelta(days=7),
+        )
+        _q_despacho_pendiente = _q_facturada & Q(
+            estado_despacho__in=(Cotizacion_Empresa.DESPACHO_PENDIENTE,
+                                 Cotizacion_Empresa.DESPACHO_PARCIAL),
+        )
+        # Facturada cuyo documento ya no respalda nada (NC total / eliminado):
+        # hay que reabrirla para poder volver a facturar. Una facturada legacy
+        # SIN dte enlazado no entra acá (tiene su propio aviso en el listado).
+        _q_doc_anulado = _q_facturada & (
+            Q(dte__descartado=True) | Q(dte__estado_dte__iexact='ANULADO')
+        )
+
+        # Los KPIs/contadores se calculan ANTES del filtro por estado.
+        cotizaciones_sin_estado = cotizaciones
+
         if estado:
             # La vigencia se filtra por FECHA, no por el campo guardado: el
             # estado solo se recalcula dentro de save(), así que hay
@@ -477,21 +511,15 @@ def listar_cotizaciones(request):
                     | Q(estado=Cotizacion_Empresa.ESTADO_VIGENTE,
                         fecha_validez__lt=hoy)
                 )
+            elif estado == 'POR_VENCER':
+                cotizaciones = cotizaciones.filter(_q_por_vencer)
+            elif estado == 'DESPACHO_PENDIENTE':
+                cotizaciones = cotizaciones.filter(_q_despacho_pendiente)
+            elif estado == 'DOC_ANULADO':
+                cotizaciones = cotizaciones.filter(_q_doc_anulado)
             else:
                 cotizaciones = cotizaciones.filter(estado=estado)
 
-        if cliente_id:
-            cotizaciones = cotizaciones.filter(cliente_id=cliente_id)
-        
-        if buscar:
-            cotizaciones = cotizaciones.filter(
-                Q(numero_cotizacion__icontains=buscar) |
-                Q(cliente__nombre__icontains=buscar) |
-                Q(cliente__rut__icontains=buscar) |
-                Q(descripcion__icontains=buscar) |
-                Q(items__descripcion__icontains=buscar)
-            ).distinct()
-        
         # Ordenar
         cotizaciones = cotizaciones.order_by('-fecha_emision', '-numero_cotizacion')
         
@@ -509,7 +537,7 @@ def listar_cotizaciones(request):
             | Q(estado=Cotizacion_Empresa.ESTADO_VIGENTE, fecha_validez__lt=hoy)
         )
         _base_stats = Cotizacion_Empresa.objects.filter(
-            pk__in=cotizaciones.values('pk')
+            pk__in=cotizaciones_sin_estado.values('pk')
         )
         # Los alias NO pueden llamarse `total`: chocan con el campo `total` del
         # modelo y Django responde "Cannot compute Sum('total')".
@@ -522,6 +550,9 @@ def listar_cotizaciones(request):
             m_total=Sum('total'),
             m_vigente=Sum('total', filter=_q_vigente),
             m_vencido=Sum('total', filter=_q_vencida),
+            n_por_vencer=Count('id', filter=_q_por_vencer),
+            n_despacho_pendiente=Count('id', filter=_q_despacho_pendiente),
+            n_doc_anulado=Count('id', filter=_q_doc_anulado),
         )
         estadisticas = {
             'total': _agg['n_total'] or 0,
@@ -534,6 +565,10 @@ def listar_cotizaciones(request):
             'monto_vencido': _agg['m_vencido'] or 0,
             'facturadas': _agg['n_facturadas'] or 0,
             'anuladas': _agg['n_anuladas'] or 0,
+            # Colas de trabajo (filtros rápidos del listado).
+            'por_vencer': _agg['n_por_vencer'] or 0,
+            'despacho_pendiente': _agg['n_despacho_pendiente'] or 0,
+            'doc_anulado': _agg['n_doc_anulado'] or 0,
         }
 
         # Paginación
