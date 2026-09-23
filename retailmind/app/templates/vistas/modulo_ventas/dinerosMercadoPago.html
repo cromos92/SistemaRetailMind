@@ -234,15 +234,28 @@
                 <!-- ===== 2. Liberaciones y banco ===== -->
                 <div class="conc-pane" id="pane-banco">
                     {% if es_admin %}
-                    <div class="row g-3">
+                    <div class="conc-panel d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <div>
+                            <h6 class="mb-1"><i class="ri-radar-line me-1"></i>Detectar retiros</h6>
+                            <div class="conc-help mb-0">Revisa todas las cuentas de Mercado Pago, toma los reportes nuevos y registra
+                                cada retiro con las ventas que se llevó. No hay que elegir nada.</div>
+                        </div>
+                        <button class="btn btn-primary" id="btnDetectarRetiros" onclick="detectarRetiros()" style="min-height:44px;">
+                            <i class="ri-radar-line me-1"></i>Detectar retiros</button>
+                    </div>
+                    <div id="detectarResultado" class="mb-3"></div>
+                    <details class="mb-3">
+                    <summary class="conc-sub" style="cursor:pointer;">Opciones manuales: elegir un reporte, pedir uno nuevo o subir un CSV, y la cartola del banco</summary>
+                    <div class="row g-3 mt-1">
                         <div class="col-lg-6">
                             <div class="conc-panel">
                                 <h6><i class="ri-file-list-3-line me-1"></i>1. Reporte de Liberaciones de Mercado Pago</h6>
                                 <p class="conc-help">Dice qué ventas componen cada retiro al banco. Elija un reporte de la lista y
                                    use «Vista previa»; si se ve bien, «Aplicar».</p>
                                 <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
-                                    <select id="libConfig" class="form-select form-select-sm" style="max-width:240px;" aria-label="Cuenta Mercado Pago" onchange="cargarReportesMP()">
-                                        {% for c in configs %}<option value="{{ c.id }}">{{ c.sucursal__alias }} · {{ c.nombre }}</option>{% endfor %}
+                                    <select id="libConfig" class="form-select form-select-sm" style="max-width:320px;" aria-label="Cuenta Mercado Pago" onchange="cargarReportesMP()"
+                                            title="El retiro es de la CUENTA de Mercado Pago (empresa/RUT), no de una caja: lleva ventas de todas sus cajas">
+                                        {% for c in cuentas_mp %}<option value="{{ c.id }}">{{ c.nombre }}{% if c.rut %} ({{ c.rut }}){% endif %} · cajas: {{ c.cajas }}</option>{% endfor %}
                                     </select>
                                     <button class="btn btn-outline-secondary btn-accion-sm" onclick="cargarReportesMP()"><i class="ri-refresh-line me-1"></i>Actualizar lista</button>
                                     <button class="btn btn-outline-primary btn-accion-sm" onclick="pedirReporteMP()" title="Mercado Pago lo genera en unos minutos; la página avisa cuando esté listo">
@@ -276,6 +289,7 @@
                             </div>
                         </div>
                     </div>
+                    </details>
                     {% endif %}
                     <h6 class="fw-bold mb-2">Retiros de Mercado Pago al banco</h6>
                     <div class="conc-scroll">
@@ -532,7 +546,9 @@
         if (!d.success) { cont.innerHTML = `<div class="text-danger small">${esc(d.error)}</div>`; return; }
         let html = `<div class="small mb-2">${d.aplicado ? '<strong>Aplicado.</strong>' : '<strong>Vista previa</strong> (no se guardó nada).'}
             ${esc(d.origen || '')} · ${d.filas_leidas} filas · ${d.retiros.length} retiro(s) · ${d.pagos_amarrados} ventas del POS asociadas ·
-            ${d.pagos_sin_local} pagos que no son del POS · quedan disponibles en MP ${fmt(d.liberado_sin_retirar)}</div>`;
+            ${d.pagos_manuales ? d.pagos_manuales + ' pagos «MP manual» del POS · ' : ''}${d.pagos_sin_local} pagos sin venta en el sistema ·
+            quedan disponibles en MP ${fmt(d.liberado_sin_retirar)}
+            ${d.numeros_completados && d.numeros_completados.completados ? `<br><span class="conc-chip conc-chip--info">Se completaron ${d.numeros_completados.completados} N° de operación desde Mercado Pago</span>` : ''}</div>`;
         if (!d.retiros.length && (d.encabezados || []).length) {
             html += `<div class="small text-danger mb-2">No se reconoció ningún retiro. Columnas del archivo: <code>${esc(d.encabezados.join(', '))}</code>. Envíelas a soporte para ajustar el lector.</div>`;
         }
@@ -540,8 +556,16 @@
             ['Fecha', f => `${esc(f.fecha)} ${esc(f.hora || '')}`], ['Retiro', f => esc(f.withdrawal_id)],
             ['Monto', f => fmt(f.monto), 'num'], ['Ventas POS', f => `${f.pagos_pos}/${f.pagos}`, 'num'],
             ['Estado', f => `<span class="conc-chip conc-chip--${f.estado === 'CONCILIADO' ? 'ok' : 'err'}">${esc(f.estado)}</span>`],
+            ['De qué caja salió', f => (f.por_caja || []).map(c => `<div class="conc-sub">${esc(c.caja)}: <strong>${fmt(c.monto)}</strong></div>`).join('')],
             ['Detalle', f => `<span class="conc-sub">${esc(f.detalle)}</span>`],
         ], d.retiros);
+        if ((d.muestra_sin_local || []).length) {
+            html += `<details class="mt-1"><summary class="conc-sub" style="cursor:pointer;">Ejemplos de pagos del reporte sin venta en el sistema (${d.pagos_sin_local})</summary>` +
+                tablaSimple([
+                    ['Fecha', f => esc(f.fecha)], ['N° operación', f => esc(f.source_id)], ['Referencia', f => esc(f.external_reference || '—')],
+                    ['Monto', f => fmt(f.monto), 'num'], ['Caja MP', f => esc(f.pos || '—')],
+                ], d.muestra_sin_local) + '</details>';
+        }
         cont.innerHTML = html;
         if (d.aplicado) { cargarDineros(); cargarCobros(); cargarReportesMP(); }
     }
@@ -570,6 +594,37 @@
         fd.append('config_id', libConfig()); fd.append('file_name', fileName);
         if (aplicar) fd.append('aplicar', '1');
         enviarLiberaciones(fd);
+    };
+
+    window.detectarRetiros = function () {
+        const btn = document.getElementById('btnDetectarRetiros');
+        const cont = document.getElementById('detectarResultado');
+        btn.disabled = true;
+        cont.innerHTML = '<div class="conc-sub"><div class="spinner-border spinner-border-sm text-primary"></div> Revisando las cuentas de Mercado Pago… (hasta un minuto)</div>';
+        fetch('/app/api/mercadopago/conciliacion/liberaciones/detectar/', {method: 'POST', headers: {'X-CSRFToken': csrf()}})
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success) { cont.innerHTML = `<div class="text-danger small">${esc(d.error)}</div>`; return; }
+                cont.innerHTML = (d.cuentas || []).map(c => {
+                    let estado;
+                    if (c.error) estado = `<span class="text-danger">${esc(c.error)}</span>`;
+                    else if (c.retiros.length) estado = `<strong>${c.retiros.length} retiro(s) registrados</strong>`;
+                    else estado = 'Sin retiros nuevos';
+                    const aviso = c.por_retiro_activo === false
+                        ? ' · <span class="conc-chip conc-chip--warn">Mercado Pago no genera el reporte tras cada retiro</span>' : '';
+                    const tiempo = c.falto_tiempo ? ' · <span class="conc-chip conc-chip--mute">faltó tiempo: vuelva a apretar</span>' : '';
+                    const tabla = c.retiros.length ? tablaSimple([
+                        ['Fecha', f => `${esc(f.fecha)} ${esc(f.hora || '')}`], ['Monto', f => fmt(f.monto), 'num'],
+                        ['Estado', f => `<span class="conc-chip conc-chip--${f.estado === 'CONCILIADO' ? 'ok' : 'err'}">${esc(f.estado)}</span>`],
+                        ['De qué caja salió', f => (f.por_caja || []).map(x => `<div class="conc-sub">${esc(x.caja)}: <strong>${fmt(x.monto)}</strong></div>`).join('')],
+                    ], c.retiros) : '';
+                    return `<div class="mb-2"><div class="small"><strong>${esc(c.cuenta)}</strong>${c.rut ? ' (' + esc(c.rut) + ')' : ''}
+                        <span class="conc-sub">· cajas ${esc(c.cajas)}</span> — ${estado}${aviso}${tiempo}</div>${tabla}</div>`;
+                }).join('') || '<div class="conc-sub">No hay cuentas de Mercado Pago configuradas.</div>';
+                cargarDineros(); cargarCobros();
+            })
+            .catch(() => { cont.innerHTML = '<div class="text-danger small">Error de conexión.</div>'; })
+            .finally(() => { btn.disabled = false; });
     };
 
     window.cargarReportesMP = function () {

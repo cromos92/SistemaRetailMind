@@ -1724,9 +1724,18 @@ def dineros_mercadopago(request):
     for c in configs:
         if c['sucursal_id'] not in [s['sucursal_id'] for s in sucursales]:
             sucursales.append({'sucursal_id': c['sucursal_id'], 'sucursal__alias': c['sucursal__alias']})
+    # Retiros y reportes de Liberaciones son de la CUENTA (una por empresa/RUT),
+    # no de la caja: el selector muestra una opción por cuenta con sus cajas.
+    cuentas = {}
+    if es_admin:
+        from .services import conciliacion_mp_service as conc
+        for i, info in enumerate(conc.cuentas_mp()):
+            cuentas[i] = {'id': info['config'].id, 'nombre': info['nombre'], 'rut': info['rut'],
+                          'cajas': ', '.join(sorted(info['cajas']))}
     return render(request, 'vistas/modulo_ventas/dinerosMercadoPago.html', {
         'es_admin': es_admin,
         'configs': configs if es_admin else [],
+        'cuentas_mp': list(cuentas.values()),
         'sucursales': sucursales if es_admin else [],
     })
 
@@ -1918,7 +1927,18 @@ def api_conciliacion_liberaciones_mp(request):
                 'error': 'Elija un reporte de la lista de Mercado Pago o suba el archivo CSV.'
             }, status=400)
         filas = conc.leer_csv(contenido)
-        resultado = conc.procesar_reporte_liberaciones(filas, config, aplicar=aplicar, archivo=origen)
+        resultado = conc.procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=origen)
+        # Pagos del reporte que no se cruzaron: casi siempre es porque el cobro
+        # no tiene guardado el N° de operación de MP. Se completa desde la API
+        # (solo campos vacíos) y se vuelve a cruzar.
+        completado = None
+        if resultado['pagos_sin_local']:
+            dias = conc.dias_a_completar(resultado)
+            if dias:
+                completado = conc.completar_numeros_mp(config, dias)
+        if aplicar or (completado and completado['completados']):
+            resultado = conc.procesar_reporte_liberaciones(filas, config, aplicar=aplicar, archivo=origen)
+        resultado['numeros_completados'] = completado
     except MercadoPagoError as e:
         return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
     except Exception as e:  # noqa: BLE001 — archivo con formato inesperado
@@ -1932,6 +1952,25 @@ def api_conciliacion_liberaciones_mp(request):
                     config.id, origen, len(resultado['retiros']), request.user.username)
     return JsonResponse({'success': True, 'aplicado': aplicar, 'filas_leidas': len(filas),
                          'origen': origen, **resultado})
+
+
+@login_required
+@require_POST
+def api_conciliacion_detectar_retiros_mp(request):
+    """POST .../liberaciones/detectar/ (solo admin).
+
+    Revisa TODAS las cuentas de Mercado Pago, aplica los reportes de
+    Liberaciones nuevos que traen retiros y devuelve lo encontrado. No hay que
+    elegir cuenta ni reporte.
+    """
+    from .services import conciliacion_mp_service as conc
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo administradores.'}, status=403)
+    cuentas = conc.detectar_retiros(presupuesto_seg=45)
+    logger.info("Conciliación MP: detectar retiros por %s → %s",
+                request.user.username,
+                [(c['cuenta'], c['reportes_aplicados'], len(c['retiros'])) for c in cuentas])
+    return JsonResponse({'success': True, 'cuentas': cuentas})
 
 
 @login_required

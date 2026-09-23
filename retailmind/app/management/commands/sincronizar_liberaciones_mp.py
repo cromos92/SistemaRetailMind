@@ -5,6 +5,9 @@ banco. Por defecto es DRY-RUN: muestra qué haría. Con --apply escribe.
 
 Uso (`--config` = cualquier caja de la CUENTA MP; el reporte es por cuenta):
 
+    # Detectar y registrar los retiros de TODAS las cuentas (cron cada mañana)
+    python manage.py sincronizar_liberaciones_mp --todas
+
     # Ver los reportes que Mercado Pago ya generó
     python manage.py sincronizar_liberaciones_mp --config 3 --listar
 
@@ -32,9 +35,11 @@ class Command(BaseCommand):
     help = 'Procesa reportes de Liberaciones de Mercado Pago y asocia ventas a retiros (dry-run por defecto)'
 
     def add_arguments(self, parser):
-        parser.add_argument('--config', type=int, required=True,
+        parser.add_argument('--config', type=int, default=None,
                             help='ID de MercadoPagoConfig (cualquier caja de la cuenta)')
         grupo = parser.add_mutually_exclusive_group(required=True)
+        grupo.add_argument('--todas', action='store_true',
+                           help='Detecta y registra los retiros de TODAS las cuentas (para cron; siempre aplica)')
         grupo.add_argument('--archivo', type=str, help='CSV descargado del panel de MP')
         grupo.add_argument('--reporte', type=str, help='file_name de un reporte ya generado en MP')
         grupo.add_argument('--pendientes', action='store_true',
@@ -48,9 +53,17 @@ class Command(BaseCommand):
         parser.add_argument('--apply', action='store_true')
 
     def handle(self, *args, **opts):
-        config = MercadoPagoConfig.objects.filter(pk=opts['config']).first()
+        if opts['todas']:
+            for c in conc.detectar_retiros(presupuesto_seg=600):
+                estado = c['error'] or (f'{len(c["retiros"])} retiro(s) registrados' if c['retiros'] else 'sin retiros nuevos')
+                self.stdout.write(f'{c["cuenta"]} ({c["cajas"]}): {estado}')
+                for r in c['retiros']:
+                    cajas = ', '.join(f'{x["caja"]} ${x["monto"]:,}' for x in r.get('por_caja') or []).replace(',', '.')
+                    self.stdout.write(f'  {r["estado"]} {r["fecha"]} {r["hora"]} ${r["monto"]:,} · {cajas}'.replace(',', '.'))
+            return
+        config = MercadoPagoConfig.objects.filter(pk=opts['config']).first() if opts['config'] else None
         if config is None:
-            raise CommandError(f'No existe MercadoPagoConfig id={opts["config"]}')
+            raise CommandError('Indique --config <id de una caja de la cuenta> (o use --todas)')
         try:
             if opts['activar_por_retiro']:
                 data = conc.activar_reporte_por_retiro(config)
@@ -95,6 +108,13 @@ class Command(BaseCommand):
 
     def _procesar(self, config, contenido, origen, aplicar):
         filas = conc.leer_csv(contenido)
+        res = conc.procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=origen)
+        if res['pagos_sin_local']:
+            dias = conc.dias_a_completar(res)
+            if dias:
+                comp = conc.completar_numeros_mp(config, dias, presupuesto_seg=300)
+                self.stdout.write(f'  N° de operación completados desde MP: {comp["completados"]} '
+                                  f'({comp["dias"]} día(s) consultados)')
         res = conc.procesar_reporte_liberaciones(filas, config, aplicar=aplicar, archivo=origen)
         modo = 'APLICADO' if aplicar else 'DRY-RUN (use --apply para escribir)'
         self.stdout.write(f'{modo} · {origen} · filas {len(filas)} · retiros {len(res["retiros"])} · '

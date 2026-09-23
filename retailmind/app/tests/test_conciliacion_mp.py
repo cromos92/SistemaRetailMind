@@ -412,3 +412,99 @@ class RevisionAdversarialTest(_Base):
         self.assertEqual(res['retiros'][0]['estado'], 'CONCILIADO')
         self.assertEqual(TransaccionMercadoPago.objects.get(pk=b.pk).retiro.withdrawal_id, 'P-NOCHE')
         self.assertEqual(TransaccionMercadoPago.objects.get(pk=a.pk).retiro.withdrawal_id, 'P-MAN')
+
+
+@mock.patch.dict('os.environ', ENV_TEST)
+class CruceYCajaTest(_Base):
+    """Primer reporte real (23-09): 174 pagos sin cruzar porque los cobros no
+    tenían guardado el N° de operación de MP; y la pregunta «¿de qué caja es?»."""
+
+    def test_completa_numero_de_operacion_y_cruza(self):
+        t = self._cobro(1, monto=40000, external_reference='RM-1-1-c1i01')
+        self.assertEqual(t.payment_id_mp, '')
+        reporte = _csv(
+            "2026-09-23T09:00:00.000-03:00,179000000001,,release,payment,39000.00,0.00,40000.00",
+            "2026-09-23T11:48:00.000-03:00,W9,,release,payout,0.00,39000.00,-39000.00",
+        )
+        filas = conc.leer_csv(reporte)
+        antes = conc.procesar_reporte_liberaciones(filas, self.config)
+        self.assertEqual(antes['pagos_sin_local'], 1)
+        self.assertEqual(antes['muestra_sin_local'][0]['source_id'], '179000000001')
+        dias = conc.dias_a_completar(antes)
+        self.assertIn(timezone.localdate().replace(year=2026, month=9, day=23), dias)
+        pagos = [{'id': 179000000001, 'external_reference': 'RM-1-1-c1i01',
+                  'transaction_details': {'net_received_amount': 39000.0}}]
+        with mock.patch('app.services.mercadopago_service.buscar_pagos_dia', return_value=pagos):
+            comp = conc.completar_numeros_mp(self.config, dias)
+        self.assertEqual(comp['completados'], 1)
+        t.refresh_from_db()
+        self.assertEqual((t.payment_id_mp, t.monto_neto, t.fee_mp), ('179000000001', 39000, 1000))
+        despues = conc.procesar_reporte_liberaciones(filas, self.config, aplicar=True)
+        self.assertEqual(despues['pagos_sin_local'], 0)
+        self.assertEqual(despues['retiros'][0]['pagos_pos'], 1)
+        self.assertEqual(despues['retiros'][0]['por_caja'][0]['monto'], 39000)
+        self.assertIn('Caja 1', despues['retiros'][0]['por_caja'][0]['caja'])
+        t.refresh_from_db()
+        self.assertEqual(t.retiro.withdrawal_id, 'W9')
+
+    def test_pago_mp_manual_y_caja_por_punto_de_venta(self):
+        tk = self._ticket(3)
+        TicketDetallePago.objects.create(ticket=tk, metodo_pago='MP_POINT', monto=5000,
+                                         origen_pago='MANUAL', voucher='179000000002')
+        self.config.external_pos_id = 'PAO4CAJA1'
+        self.config.save(update_fields=['external_pos_id'])
+        cab = "DATE,SOURCE_ID,EXTERNAL_REFERENCE,RECORD_TYPE,DESCRIPTION,NET_CREDIT_AMOUNT,NET_DEBIT_AMOUNT,EXTERNAL_POS_ID,POS_NAME\n"
+        reporte = cab + (
+            "2026-09-23T09:00:00.000-03:00,179000000002,,release,payment,5000.00,0.00,,\n"
+            "2026-09-23T09:10:00.000-03:00,179000000003,,release,payment,7000.00,0.00,PAO4CAJA1,Caja 1\n"
+            "2026-09-23T09:20:00.000-03:00,179000000004,,release,payment,3000.00,0.00,,\n"
+            "2026-09-23T11:48:00.000-03:00,W10,,release,payout,0.00,15000.00,,\n"
+        )
+        res = conc.procesar_reporte_liberaciones(conc.leer_csv(reporte), self.config)
+        self.assertEqual(res['pagos_manuales'], 1)
+        self.assertEqual(res['pagos_sin_local'], 2)
+        cajas = {c['caja']: c['monto'] for c in res['retiros'][0]['por_caja']}
+        self.assertEqual(cajas[f'{self.sucursal.alias} · MP manual'], 5000)
+        self.assertEqual(cajas[f'{self.sucursal.alias} · Caja 1'], 7000)
+        self.assertEqual(cajas['Sin caja (online, link de pago u otro)'], 3000)
+
+
+@mock.patch.dict('os.environ', ENV_TEST)
+class DetectarRetirosTest(_Base):
+    """Botón «Detectar retiros»: todas las cuentas, sin elegir reporte."""
+
+    def test_aplica_solo_reportes_nuevos_con_retiros(self):
+        t = self._cobro(1, payment_id_mp='611', monto=100000)
+        con_retiro = _csv(
+            "2026-09-23T09:10:00.000-03:00,611,,release,payment,100000.00,0.00,100000.00",
+            "2026-09-23T11:48:00.000-03:00,179492400641,,release,payout,0.00,100000.00,-100000.00",
+        ).encode()
+        sin_retiro = _csv(
+            "2026-09-23T09:10:00.000-03:00,999,,release,payment,5000.00,0.00,5000.00",
+        ).encode()
+        reportes = [{'file_name': 'b.csv', 'begin_date': '', 'end_date': '', 'creado': '2', 'origen': 'manual', 'estado': ''},
+                    {'file_name': 'a.csv', 'begin_date': '', 'end_date': '', 'creado': '1', 'origen': 'manual', 'estado': ''}]
+        archivos = {'a.csv': con_retiro, 'b.csv': sin_retiro}
+        with mock.patch.object(conc, 'listar_reportes_liberaciones', return_value=reportes), \
+             mock.patch.object(conc, 'descargar_reporte_liberaciones', side_effect=lambda c, f: archivos[f]), \
+             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': False}):
+            res = conc.detectar_retiros()
+            self.assertEqual(len(res), 1)
+            cuenta = res[0]
+            self.assertEqual(cuenta['reportes_revisados'], 2)
+            self.assertEqual(cuenta['reportes_aplicados'], 1)
+            self.assertEqual([r['monto'] for r in cuenta['retiros']], [100000])
+            self.assertFalse(cuenta['por_retiro_activo'])
+            t.refresh_from_db()
+            self.assertEqual(t.retiro.withdrawal_id, '179492400641')
+            # Segunda pasada: el reporte con retiro ya está aplicado.
+            res2 = conc.detectar_retiros()
+            self.assertEqual(res2[0]['reportes_aplicados'], 0)
+        self.assertEqual(RetiroMercadoPago.objects.count(), 1)
+
+    def test_endpoint_solo_admin(self):
+        vendedor = crear_usuario(username='vend_det', rol='vendedor')
+        c = Client(); c.force_login(vendedor)
+        with mock.patch('app.middleware_permisos.PermisoRol.tiene_permiso', return_value=True):
+            r = c.post(reverse('api_conciliacion_detectar_retiros_mp'))
+        self.assertEqual(r.status_code, 403)

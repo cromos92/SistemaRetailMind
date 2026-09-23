@@ -266,6 +266,9 @@ _ALIAS_COLUMNAS = {
     'NET_CREDIT_AMOUNT': ('NET_CREDIT_AMOUNT', 'NET_CREDIT', 'CREDITO NETO', 'MONTO NETO ACREDITADO'),
     'NET_DEBIT_AMOUNT': ('NET_DEBIT_AMOUNT', 'NET_DEBIT', 'DEBITO NETO', 'MONTO NETO DEBITADO'),
     'GROSS_AMOUNT': ('GROSS_AMOUNT', 'MONTO BRUTO'),
+    'EXTERNAL_POS_ID': ('EXTERNAL_POS_ID', 'ID EXTERNO DE LA CAJA', 'ID EXTERNO DEL PUNTO DE VENTA'),
+    'POS_ID': ('POS_ID', 'ID DE LA CAJA', 'ID DEL PUNTO DE VENTA'),
+    'POS_NAME': ('POS_NAME', 'NOMBRE DE LA CAJA', 'NOMBRE DEL PUNTO DE VENTA'),
 }
 # Comparación EXACTA (en minúsculas): 'tax_withholding_payout' es una
 # retención sobre el retiro, NO el retiro; con búsqueda por substring contaba
@@ -391,6 +394,7 @@ def _remanente_previo(config, antes_de, monto, excluir_ids=()):
                   money_release_date__lt=antes_de,
                   money_release_date__gte=antes_de - timedelta(days=90))
           .exclude(id__in=list(excluir_ids))
+          .select_related('config__sucursal')
           .order_by('-money_release_date', '-id'))
     elegidas, suma = [], 0
     for t in qs[:500]:
@@ -466,6 +470,7 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
             'external_reference': _col(fila, 'EXTERNAL_REFERENCE'),
             'descripcion': _sin_tildes(_col(fila, 'DESCRIPTION')).lower(),
             'credito': credito,
+            'pos': (_col(fila, 'EXTERNAL_POS_ID'), _col(fila, 'POS_ID'), _col(fila, 'POS_NAME')),
             'debito': debito,
         })
     registros.sort(key=lambda r: r['instante'])
@@ -475,12 +480,45 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
     locales = {}
     if ids or refs:
         for t in TransaccionMercadoPago.objects.filter(
-                Q(payment_id_mp__in=ids) | Q(payment_id__in=ids) | Q(external_reference__in=refs)):
+                Q(payment_id_mp__in=ids) | Q(payment_id__in=ids) | Q(external_reference__in=refs)
+        ).select_related('config__sucursal'):
             for clave in (t.payment_id_mp, t.payment_id, t.external_reference):
                 if clave:
                     locales[str(clave)] = t
 
-    resultado = {'retiros': [], 'pagos_sin_local': 0, 'pagos_amarrados': 0}
+    # Pagos «MP manual» del POS: el N° de operación quedó en el voucher.
+    manuales = {}
+    ids_num = {i for i in ids if i.isdigit()}
+    if ids_num:
+        for pago in (TicketDetallePago.objects
+                     .filter(metodo_pago__in=METODOS_MP, voucher__in=list(ids_num))
+                     .select_related('ticket__sucursal')):
+            manuales[str(pago.voucher).strip()] = pago
+
+    # Caja por el punto de venta que informa el reporte (external_pos_id / pos_id).
+    cajas_por_pos = {}
+    for c in MercadoPagoConfig.objects.filter(id__in=_configs_de_la_cuenta(config)).select_related('sucursal'):
+        etiqueta = f'{c.sucursal.alias} · {c.nombre}' if c.sucursal_id else c.nombre
+        for clave in (c.external_pos_id, c.pos_id):
+            if clave:
+                cajas_por_pos[str(clave)] = etiqueta
+
+    def _caja_de(item):
+        trx = item.get('trx')
+        if trx is not None and trx.config_id:
+            cfg = trx.config
+            return f'{cfg.sucursal.alias} · {cfg.nombre}' if cfg.sucursal_id else cfg.nombre
+        manual = item.get('manual')
+        if manual is not None:
+            return f'{manual.ticket.sucursal.alias} · MP manual'
+        ext_pos, pos_id, pos_nombre = item.get('pos') or ('', '', '')
+        return (cajas_por_pos.get(ext_pos) or cajas_por_pos.get(pos_id)
+                or (f'Caja MP «{pos_nombre}»' if pos_nombre else '')
+                or ('Saldo anterior' if item.get('id') == 'saldo inicial' else 'Sin caja (online, link de pago u otro)'))
+
+    resultado = {'retiros': [], 'pagos_sin_local': 0, 'pagos_amarrados': 0,
+                 'pagos_manuales': 0, 'muestra_sin_local': [], 'dias_sin_local': []}
+    dias_sin_local = set()
     # Cola FIFO del saldo disponible: {'trx': TransaccionMercadoPago|None, 'resto': $, 'id': str}
     cola = []
     deuda = 0
@@ -501,14 +539,18 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
             cola.append({'trx': trx, 'resto': neto, 'id': trx.payment_id_mp or trx.external_reference})
     resultado['remanente_previo'] = sum(it['resto'] for it in cola if it['trx'] is not None)
 
+    tomado = []   # (item, monto) consumidos por el último _consumir
+
     def _consumir(monto):
         """Saca `monto` del frente de la cola. Devuelve (faltante, ítems agotados)."""
         restante, agotados = monto, []
+        tomado.clear()
         while restante > 0 and cola:
             item = cola[0]
             usa = min(item['resto'], restante)
             item['resto'] -= usa
             restante -= usa
+            tomado.append((item, usa))
             if item['resto'] <= 0:
                 agotados.append(cola.pop(0))
         return restante, agotados
@@ -519,6 +561,11 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
         if desc in DESCRIPCIONES_RETIRO and r['debito']:
             monto = r['debito']
             faltante, agotados = _consumir(monto)
+            por_caja = {}
+            for item, usado in tomado:
+                por_caja[_caja_de(item)] = por_caja.get(_caja_de(item), 0) + usado
+            if faltante:
+                por_caja['No explicado por el reporte'] = faltante
             trxs = [it['trx'] for it in pendientes_asociar + agotados if it['trx'] is not None]
             pendientes_asociar = []
             quedan = sum(it['resto'] for it in cola)
@@ -541,6 +588,8 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
                 'pagos': len(agotados),
                 'pagos_pos': len(trxs),
                 'suma_pagos': monto - faltante,
+                'por_caja': sorted(({'caja': k, 'monto': v} for k, v in por_caja.items()),
+                                   key=lambda x: -x['monto']),
                 'quedan_disponibles': quedan,
                 'estado': estado,
                 'detalle': detalle,
@@ -597,17 +646,28 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
         # Crédito: primero paga la deuda (saldo negativo), después entra a la cola.
         es_pago = desc in DESCRIPCIONES_PAGO
         trx = (locales.get(r['source_id']) or locales.get(r['external_reference'])) if es_pago else None
-        if es_pago and trx is None:
+        manual = manuales.get(r['source_id']) if (es_pago and trx is None) else None
+        if manual is not None:
+            resultado['pagos_manuales'] += 1
+        elif es_pago and trx is None:
             resultado['pagos_sin_local'] += 1
+            dias_sin_local.add(timezone.localtime(r['instante']).date())
+            if len(resultado['muestra_sin_local']) < 5:
+                resultado['muestra_sin_local'].append({
+                    'fecha': timezone.localtime(r['instante']).strftime('%Y-%m-%d %H:%M'),
+                    'source_id': r['source_id'], 'external_reference': r['external_reference'],
+                    'monto': neto, 'pos': ' / '.join(x for x in r['pos'] if x),
+                })
         if deuda:
             usa = min(deuda, neto)
             deuda -= usa
             neto -= usa
             if not neto:
                 continue
-        cola.append({'trx': trx, 'resto': neto, 'id': r['source_id']})
+        cola.append({'trx': trx, 'resto': neto, 'id': r['source_id'], 'pos': r['pos'], 'manual': manual})
 
     resultado['liberado_sin_retirar'] = sum(it['resto'] for it in cola)
+    resultado['dias_sin_local'] = sorted(str(d) for d in dias_sin_local)
     resultado['deuda'] = deuda
 
     # Reproceso: lo que ningún retiro de ESTE reporte se llevó no puede quedar
@@ -620,6 +680,58 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
                                          .filter(id__in=sueltas, retiro_id__in=retiros_ids)
                                          .update(retiro=None))
     return resultado
+
+
+def completar_numeros_mp(config, dias, presupuesto_seg=35):
+    """Rellena `payment_id_mp` (y neto/comisión si faltan) de los cobros de la
+    cuenta leyendo `payments/search` de esos días, cruzado por external_reference.
+
+    El reporte de Liberaciones identifica cada pago por ese número; el aviso de
+    pagos (webhook) casi nunca lo dejó guardado, y sin él ninguna venta del POS
+    se cruzaba con su retiro. Solo escribe campos vacíos. Devuelve
+    {'dias': n, 'completados': n, 'sin_tiempo': bool}.
+    """
+    import time as _time
+    fin = _time.monotonic() + presupuesto_seg
+    completados, leidos = 0, 0
+    configs = _configs_de_la_cuenta(config)
+    for dia in sorted(set(dias)):
+        if _time.monotonic() > fin:
+            return {'dias': leidos, 'completados': completados, 'sin_tiempo': True}
+        try:
+            pagos = mp.buscar_pagos_dia(config, dia)
+        except mp.MercadoPagoError as e:
+            logger.warning("Conciliación MP: no se pudo leer payments/search %s: %s", dia, e.mensaje)
+            continue
+        leidos += 1
+        por_ref = {str(p.get('external_reference') or ''): p for p in pagos
+                   if p.get('external_reference') and str(p.get('id') or '').isdigit()}
+        if not por_ref:
+            continue
+        for trx in TransaccionMercadoPago.objects.filter(
+                config_id__in=configs, external_reference__in=list(por_ref), payment_id_mp=''):
+            pago = por_ref[trx.external_reference]
+            campos = ['payment_id_mp']
+            trx.payment_id_mp = str(pago['id'])[:40]
+            neto = (pago.get('transaction_details') or {}).get('net_received_amount')
+            if trx.monto_neto is None and neto is not None:
+                trx.monto_neto = _monto(neto)
+                trx.fee_mp = trx.monto - trx.monto_neto
+                campos += ['monto_neto', 'fee_mp']
+            trx.save(update_fields=campos + ['actualizado_en'])
+            completados += 1
+    return {'dias': leidos, 'completados': completados, 'sin_tiempo': False}
+
+
+def dias_a_completar(resultado, margen=2, maximo=15):
+    """Días de pago a consultar para los pagos del reporte que no se cruzaron
+    (fecha de liberación y hasta `margen` días antes)."""
+    dias = set()
+    for texto in resultado.get('dias_sin_local') or []:
+        base = _fecha_libre(texto)
+        if base:
+            dias.update(base - timedelta(days=k) for k in range(margen + 1))
+    return sorted(dias)[-maximo:]
 
 
 # ─────────────── API de reportes de Liberaciones (release_report) ───────────────
@@ -786,6 +898,89 @@ def activar_reporte_por_retiro(config):
     logger.info("MP release_report config actualizada config=%s execute_after_withdrawal=%s",
                 config.id, data.get('execute_after_withdrawal'))
     return data
+
+
+def cuentas_mp():
+    """[(config, cuenta, etiqueta)] una por CUENTA de Mercado Pago (empresa/RUT).
+
+    Los retiros y los reportes de Liberaciones son de la cuenta: basta una caja
+    cualquiera de cada cuenta para leerlos.
+    """
+    vistas = {}
+    for cfg in (MercadoPagoConfig.objects.select_related('sucursal__empresa', 'cuenta__empresa')
+                .order_by('-habilitado', 'id')):
+        cuenta = mp._cuenta_de(cfg)
+        clave = f'c{cuenta.id}' if cuenta else f'cfg{cfg.id}'
+        if clave in vistas:
+            vistas[clave]['cajas'].add(cfg.sucursal.alias if cfg.sucursal_id else cfg.nombre)
+            continue
+        empresa = cuenta.empresa if cuenta else (cfg.sucursal.empresa if cfg.sucursal_id else None)
+        vistas[clave] = {
+            'config': cfg,
+            'nombre': (getattr(empresa, 'nombre', '') or 'Cuenta Mercado Pago'),
+            'rut': getattr(empresa, 'rut', '') or '',
+            'cajas': {cfg.sucursal.alias if cfg.sucursal_id else cfg.nombre},
+        }
+    return list(vistas.values())
+
+
+def detectar_retiros(presupuesto_seg=45):
+    """Recorre TODAS las cuentas, aplica los reportes de Liberaciones nuevos y
+    devuelve los retiros encontrados. Es lo que hace el botón «Detectar
+    retiros» y el comando con --todas (para cron).
+
+    - Solo aplica reportes que traen retiros (uno sin retiros no tiene nada que
+      asociar) y que no estaban aplicados.
+    - Antes de aplicar completa el N° de operación de los cobros del POS para
+      que las ventas se crucen.
+    - Tiene techo de tiempo: lo que no alcance queda para la próxima pasada.
+    """
+    import time as _time
+    fin = _time.monotonic() + presupuesto_seg
+    aplicados = reportes_aplicados()
+    salida = []
+    for info in cuentas_mp():
+        cfg = info['config']
+        fila = {'cuenta': info['nombre'], 'rut': info['rut'], 'config_id': cfg.id,
+                'cajas': ', '.join(sorted(info['cajas'])), 'reportes_revisados': 0,
+                'reportes_aplicados': 0, 'retiros': [], 'por_retiro_activo': None,
+                'error': '', 'falto_tiempo': False}
+        salida.append(fila)
+        if _time.monotonic() > fin:
+            fila['falto_tiempo'] = True
+            continue
+        try:
+            cfg_reporte = leer_config_reporte(cfg)
+            fila['por_retiro_activo'] = bool(cfg_reporte and cfg_reporte.get('execute_after_withdrawal'))
+        except mp.MercadoPagoError:
+            pass
+        try:
+            reportes = listar_reportes_liberaciones(cfg, limite=10)
+        except mp.MercadoPagoError as e:
+            fila['error'] = e.mensaje
+            continue
+        # Del más antiguo al más nuevo: los retiros se reconstruyen en orden.
+        for rep in reversed([r for r in reportes if r['file_name'] not in aplicados]):
+            if _time.monotonic() > fin:
+                fila['falto_tiempo'] = True
+                break
+            try:
+                filas = leer_csv(descargar_reporte_liberaciones(cfg, rep['file_name']))
+            except mp.MercadoPagoError as e:
+                fila['error'] = e.mensaje
+                continue
+            fila['reportes_revisados'] += 1
+            previa = procesar_reporte_liberaciones(filas, cfg, aplicar=False, archivo=rep['file_name'])
+            if not previa['retiros']:
+                continue
+            if previa['pagos_sin_local']:
+                restante = max(5, int(fin - _time.monotonic()) - 5)
+                completar_numeros_mp(cfg, dias_a_completar(previa), presupuesto_seg=min(20, restante))
+            res = procesar_reporte_liberaciones(filas, cfg, aplicar=True, archivo=rep['file_name'])
+            fila['reportes_aplicados'] += 1
+            aplicados.add(rep['file_name'])
+            fila['retiros'].extend(res['retiros'])
+    return salida
 
 
 # ───────────────────────────── 3. Cartola del banco ───────────────────────────
