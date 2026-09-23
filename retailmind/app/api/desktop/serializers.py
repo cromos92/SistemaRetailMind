@@ -7,7 +7,7 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.utils import timezone
 
-from app.models import Sucursal, Vendedor, EmpresaUser
+from app.models import Sucursal, Vendedor, EmpresaUser, rol_efectivo
 from app.models_sync import DispositivoAutorizado
 
 
@@ -93,7 +93,7 @@ class DesktopLoginSerializer(serializers.Serializer):
             # sucursales del Vendedor asociado. (Antes se validaba solo contra
             # la primera EmpresaUser y el login rechazaba sucursales que el
             # propio selector acababa de ofrecer.)
-            if getattr(user, 'rol', '') != 'administrador':
+            if rol_efectivo(user) != 'administrador':
                 permitidas = set(
                     EmpresaUser.objects.filter(
                         user=user, status=True, sucursal__isnull=False

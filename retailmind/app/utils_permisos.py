@@ -14,6 +14,7 @@ from .models import (
     PermisoUsuario,
     PermisoRol,
     ConfiguracionPermisoGlobal,
+    es_rol_administrador,
 )
 
 
@@ -23,6 +24,7 @@ ARQUEO_RANGO_DEFAULTS = {
     'jefe_local': {'tipo': 'dias', 'valor': 3},
     'administracion': {'tipo': 'dias', 'valor': 30},
     'administrador': {'tipo': 'dias', 'valor': 30},
+    'maestro': {'tipo': 'meses', 'valor': 12},
 }
 
 
@@ -163,11 +165,11 @@ def obtener_sucursales_usuario(usuario):
     Retorna un queryset de sucursales a las que el usuario tiene acceso.
 
     Lógica:
-    - Administradores: todas las sucursales activas
+    - Maestro y Administradores: todas las sucursales activas
     - Usuarios con flag puede_ver_todas_sucursales: todas las sucursales activas
     - Demás usuarios: solo las sucursales asignadas via EmpresaUser
     """
-    if getattr(usuario, 'rol', '') == 'administrador':
+    if es_rol_administrador(usuario):
         return Sucursal.objects.filter(activa=True).order_by('alias')
 
     if PermisoUsuario.usuario_ve_todas_sucursales(usuario):
@@ -191,7 +193,7 @@ def obtener_empresas_usuario(usuario):
     - Usuarios con flag puede_ver_todas_sucursales: todas las empresas activas
     - Demás usuarios: solo las empresas asignadas via EmpresaUser (status=True)
     """
-    if getattr(usuario, 'rol', '') == 'administrador':
+    if es_rol_administrador(usuario):
         return Empresa.objects.filter(activo=True).order_by('nombre')
 
     if PermisoUsuario.usuario_ve_todas_sucursales(usuario):
@@ -243,7 +245,7 @@ def puede_ver_sucursal(usuario, sucursal_id):
     if not sucursal_id:
         return True
 
-    if getattr(usuario, 'rol', '') == 'administrador':
+    if es_rol_administrador(usuario):
         return True
 
     if PermisoUsuario.usuario_ve_todas_sucursales(usuario):
@@ -284,7 +286,7 @@ def usuario_puede_ver_todas_sucursales(usuario):
     """
     Verifica si un usuario puede ver datos de todas las sucursales.
     """
-    if getattr(usuario, 'rol', '') == 'administrador':
+    if es_rol_administrador(usuario):
         return True
     return PermisoUsuario.usuario_ve_todas_sucursales(usuario)
 
@@ -294,7 +296,7 @@ def puede_cambiar_sucursal(usuario):
     Verifica si un usuario puede cambiar su empresa/sucursal activa.
 
     Orden de resolución:
-    1. Si el rol es 'administrador' -> siempre True (fallback de seguridad).
+    1. Si el rol es 'maestro' o 'administrador' -> siempre True (fallback de seguridad).
     2. En caso contrario se consulta el sistema estándar de permisos
        (PermisoUsuario > PermisoRol > PermisoSucursal) sobre la opción
        'cambiar_empresa' usando el flag `puede_ver`.
@@ -306,7 +308,7 @@ def puede_cambiar_sucursal(usuario):
     if not usuario or not getattr(usuario, 'is_authenticated', False):
         return False
 
-    if getattr(usuario, 'rol', '') == 'administrador':
+    if es_rol_administrador(usuario):
         return True
 
     return PermisoRol.tiene_permiso(

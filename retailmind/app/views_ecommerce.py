@@ -27,7 +27,7 @@ from app.models import (
     HistorialPedidoEcommerce, MetricaAsignacionPedido,
     SUB_ESTADO_PEDIDO_CHOICES, TRANSICIONES_SUB_ESTADO,
     SUB_ESTADOS_BLOQUEADOS_PICKING,
-    PermisoRol,
+    PermisoRol, rol_efectivo,
 )
 from app.utils_ventas import persistir_costeo_fifo
 
@@ -1229,7 +1229,7 @@ def _scope_empresa_pedidos(qs, user):
     con ``status=False``), así que veían los pedidos de una sola de sus empresas
     y no siempre la misma.
     """
-    if getattr(user, 'rol', '') == 'administrador':
+    if rol_efectivo(user) == 'administrador':
         return qs
     try:
         from app.models import EmpresaUser, PermisoUsuario
@@ -3719,7 +3719,7 @@ def api_sugerir_sucursal(request, pedido_id):
 
     # Filtrar por empresa del usuario si no es admin
     user = request.user
-    if getattr(user, 'rol', '') != 'administrador':
+    if rol_efectivo(user) != 'administrador':
         try:
             from app.models import EmpresaUser
             eu = EmpresaUser.objects.filter(user=user).select_related('empresa').first()
@@ -3803,7 +3803,7 @@ def api_distribuir_pedidos(request):
     # Obtener sucursales activas
     sucursales = list(Sucursal.objects.filter(activa=True))
     user = request.user
-    if getattr(user, 'rol', '') != 'administrador':
+    if rol_efectivo(user) != 'administrador':
         try:
             from app.models import EmpresaUser
             eu = EmpresaUser.objects.filter(user=user).select_related('empresa').first()
@@ -3988,7 +3988,7 @@ def ecommerce_dashboard_asignacion(request):
 
     # Filtrar por empresa del usuario
     user = request.user
-    if getattr(user, 'rol', '') != 'administrador':
+    if rol_efectivo(user) != 'administrador':
         try:
             from app.models import EmpresaUser
             eu = EmpresaUser.objects.filter(user=user).select_related('empresa').first()
@@ -4082,7 +4082,7 @@ def ecommerce_dashboard_asignacion(request):
     qs_pend = PedidoEcommerce.objects.filter(estado='PENDIENTE').select_related('sucursal')
     if canal:
         qs_pend = qs_pend.filter(canal_origen=canal)
-    if getattr(user, 'rol', '') != 'administrador':
+    if rol_efectivo(user) != 'administrador':
         try:
             from app.models import EmpresaUser
             eu = EmpresaUser.objects.filter(user=user).select_related('empresa').first()

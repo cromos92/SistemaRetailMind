@@ -499,6 +499,7 @@ from .views_permisos import (
     guardar_permisos_usuario,
     eliminar_permisos_usuario,
     copiar_permisos_usuario,
+    diagnostico_permisos,
 )
 from .views_transbank_sdk import (
     # Vistas
@@ -524,6 +525,12 @@ from .views_transbank_sdk import (
     detalles,
     cerrar_dia,
 )
+from .views_mercadopago_asociacion import (
+    api_asociar_pendientes,
+    api_asociar_candidatos,
+    api_asociar_cobro,
+    api_asociar_importar,
+)
 from .views_mercadopago import (
     crear_pago_qr_mp,
     estado_pago_mp,
@@ -536,6 +543,10 @@ from .views_mercadopago import (
     api_conciliacion_cobros_mp,
     api_conciliacion_contra_mp,
     api_conciliacion_liberaciones_mp,
+    api_conciliacion_liberaciones_pedir_mp,
+    api_conciliacion_liberaciones_tarea_mp,
+    api_conciliacion_liberaciones_reportes_mp,
+    api_conciliacion_liberaciones_config_mp,
     api_conciliacion_cartola_mp,
     api_retiro_visto_cartola_mp,
     verificar_pago_mp_dte,
@@ -1203,10 +1214,20 @@ urlpatterns = [
     path('api/mercadopago/conciliacion/cobros/', api_conciliacion_cobros_mp, name='api_conciliacion_cobros_mp'),
     path('api/mercadopago/conciliacion/contra-mp/', api_conciliacion_contra_mp, name='api_conciliacion_contra_mp'),
     path('api/mercadopago/conciliacion/liberaciones/', api_conciliacion_liberaciones_mp, name='api_conciliacion_liberaciones_mp'),
+    path('api/mercadopago/conciliacion/liberaciones/pedir/', api_conciliacion_liberaciones_pedir_mp, name='api_conciliacion_liberaciones_pedir_mp'),
+    path('api/mercadopago/conciliacion/liberaciones/tarea/', api_conciliacion_liberaciones_tarea_mp, name='api_conciliacion_liberaciones_tarea_mp'),
+    path('api/mercadopago/conciliacion/liberaciones/reportes/', api_conciliacion_liberaciones_reportes_mp, name='api_conciliacion_liberaciones_reportes_mp'),
+    path('api/mercadopago/conciliacion/liberaciones/config/', api_conciliacion_liberaciones_config_mp, name='api_conciliacion_liberaciones_config_mp'),
     path('api/mercadopago/conciliacion/cartola/', api_conciliacion_cartola_mp, name='api_conciliacion_cartola_mp'),
     path('api/mercadopago/conciliacion/retiro-visto/', api_retiro_visto_cartola_mp, name='api_retiro_visto_cartola_mp'),
     # "Verificar por Mercado Pago" desde gestión-DTE (pagos MP de la venta de un DTE)
     path('api/mercadopago/dte/<int:dte_id>/pagos/', verificar_pago_mp_dte, name='mp_verificar_pago_dte'),
+    # Asociar cobros MP sin venta / pagos «MP manual» a su venta (solo quien tenga
+    # asociar_pagos_mercadopago: por defecto, el Maestro)
+    path('api/mercadopago/asociar/pendientes/', api_asociar_pendientes, name='api_asociar_pendientes_mp'),
+    path('api/mercadopago/asociar/candidatos/', api_asociar_candidatos, name='api_asociar_candidatos_mp'),
+    path('api/mercadopago/asociar/cobro/', api_asociar_cobro, name='api_asociar_cobro_mp'),
+    path('api/mercadopago/asociar/importar/', api_asociar_importar, name='api_asociar_importar_mp'),
 
     # ========== MÓDULO DE CAMBIOS Y DEVOLUCIONES ==========
     # Vista principal
@@ -1726,6 +1747,9 @@ urlpatterns = [
     path('permisos/guardar-permisos-usuario/', guardar_permisos_usuario, name='guardar_permisos_usuario'),
     path('permisos/eliminar-permisos-usuario/', eliminar_permisos_usuario, name='eliminar_permisos_usuario'),
     path('permisos/copiar-permisos-usuario/', copiar_permisos_usuario, name='copiar_permisos_usuario'),
+
+    # Diagnóstico de salud del sistema de permisos (solo lectura)
+    path('permisos/diagnostico/', diagnostico_permisos, name='diagnostico_permisos'),
 
 
     # ========== FUSIÓN Y RE-ETIQUETADO DE DUPLICADOS (EXISTENCIAS) ==========

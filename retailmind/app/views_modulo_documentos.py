@@ -21,7 +21,8 @@ from .models import (
     Dte, Dte_Productos, Dte_Detalle_Pago, Correlativo, Empresa, Sucursal, EmpresaUser,
     Producto_Talla, Movimientos_Producto, TIPO_DOCUMENTO_CHOICES,
     CreditoTrabajador, PagoCreditoTrabajador, FirmaCreditoTrabajador,
-    Vendedor, ESTADO_CREDITO_CHOICES, TIPO_CREDITO_CHOICES, METODO_PAGO_TICKET_CHOICES
+    Vendedor, ESTADO_CREDITO_CHOICES, TIPO_CREDITO_CHOICES, METODO_PAGO_TICKET_CHOICES,
+    rol_efectivo,
 )
 
 
@@ -37,7 +38,7 @@ def gestion_dte(request):
         or request.session.get('sucursalActual')
     )
 
-    es_admin = getattr(request.user, 'rol', '') in ['administrador', 'administracion']
+    es_admin = rol_efectivo(request.user) in ['administrador', 'administracion']
 
     puede_descargar_txt_dte = PermisoRol.tiene_permiso(
         request.user,
@@ -50,7 +51,7 @@ def gestion_dte(request):
     # mismo gate de `eliminar_documento_venta` (solo administrador), porque
     # ocultar la NC produce el mismo efecto que descartar un DTE: queda
     # invisible en cuadratura y en el listado.
-    rol_usuario = getattr(request.user, 'rol', '') or ''
+    rol_usuario = rol_efectivo(request.user) or ''
     puede_ocultar_nc = (rol_usuario == 'administrador')
 
     context = {
@@ -908,7 +909,7 @@ def gestion_creditos_documentos(request):
     sucursal_id = request.session.get('idSucursalActual')
     puede_ver_todas = (
         request.user.is_superuser or
-        getattr(request.user, 'rol', '') == 'administrador' or
+        rol_efectivo(request.user) == 'administrador' or
         PermisoUsuario.usuario_ve_todas_sucursales(request.user)
     )
     sucursal_actual = None

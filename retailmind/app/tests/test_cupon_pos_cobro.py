@@ -341,6 +341,11 @@ class ReversaDelCuponTest(_BaseCuponPOS):
 
     def test_anular_documento_venta_devuelve_el_cupon(self):
         ticket = self._cobrar_con_cupon()
+        # Anular exige el permiso `dte_eliminar_documento` (antes bastaba el
+        # login): se anula como Maestro, que lo pasa siempre.
+        from app.tests.factories import crear_usuario
+        maestro = crear_usuario(username='maestro_cupon', rol='maestro')
+        self.client.force_login(maestro)
         resp = self.client.post(
             reverse('anular_documento_venta'),
             data=json.dumps({'tipo_documento': 'TICKET',

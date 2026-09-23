@@ -63,10 +63,17 @@ URL_PERMISO_MAP = {
     
     # Ventas
     '/app/ticket-venta/': 'ticket_venta',
-    '/app/cambios-devoluciones/': 'cambios_devoluciones',
+    # Las claves viejas '/app/cambios-devoluciones/' y
+    # '/app/gestion-ventas-documentos/' no correspondían a ninguna ruta (las
+    # reales viven bajo '/app/ventas/...'), así que Cambios y Devoluciones y
+    # Consulta Documentos quedaban abiertas a cualquier autenticado aunque el
+    # rol tuviera el permiso apagado. Solo se mapea la PÁGINA: sus APIs cuelgan
+    # de '/app/ventas/api/...' y '/app/api/ventas/documentos/' (no contienen
+    # estas claves) y las usa también el POS.
+    '/app/ventas/cambios-devoluciones/': 'cambios_devoluciones',
     '/app/devolucion-garantia/': 'devolucion_garantia',
     '/app/pos-dashboard/': 'pos_dashboard',
-    '/app/gestion-ventas-documentos/': 'gestion_documentos_ventas',
+    '/app/ventas/documentos/': 'gestion_documentos_ventas',
     '/app/ventas/cuadratura-caja/': 'cuadratura_caja',
     # POS Transbank: la clave anterior era '/app/transbank/', que NO corresponde
     # a ninguna ruta real (urls.py monta todo bajo '/app/pos/...'), así que el
@@ -89,6 +96,8 @@ URL_PERMISO_MAP = {
     '/app/ventas/dineros-mercadopago/': 'dineros_mercadopago',
     '/app/api/mercadopago/dineros/': 'dineros_mercadopago',
     '/app/api/mercadopago/conciliacion/': 'dineros_mercadopago',
+    # Asociar cobros MP a su venta: permiso propio (por defecto solo el Maestro).
+    '/app/api/mercadopago/asociar/': 'asociar_pagos_mercadopago',
 
     # Fidelización (GiftCards + Puntos)
     # El match es por substring y gana la clave más larga (ver
@@ -208,7 +217,10 @@ URL_PERMISO_MAP = {
     # guía dentro de la creación/recepción de productos): gatearlos con
     # 'ver_guias_talla' rompería esos flujos.
     '/app/ver_guias_talla/': 'ver_guias_talla',
-    '/app/buscar-productos-sucursal/': 'buscar_productos_sucursal',
+    # La ruta real es '/app/productos-sucursal/' (la clave vieja
+    # '/app/buscar-productos-sucursal/' nunca hacía match). No tapa a
+    # '/app/api/productos-sucursal/', que no contiene esta cadena.
+    '/app/productos-sucursal/': 'buscar_productos_sucursal',
     # Igual que en Reportes: las APIs cuelgan de /app/api/... y no las cubre la
     # clave de la página. Cada una se declara con el permiso de su módulo.
     '/app/tarjeta-movimiento/': 'tarjeta_movimiento_producto',
@@ -228,6 +240,11 @@ URL_PERMISO_MAP = {
     
     # Requerimientos
     '/app/requerimientos/': 'lista_requerimientos',
+    # Crear y Gestionar tenían permiso propio en la pantalla de permisos, pero
+    # la clave genérica de arriba las cubría con 'lista_requerimientos': un
+    # cajero podía abrir Gestionar aunque su rol no lo tuviera.
+    '/app/requerimientos/crear/': 'crear_requerimiento',
+    '/app/requerimientos/gestionar/': 'gestionar_requerimientos',
     
     # Reportes
     # ⚠️ Cada reporte se declara con SU PÁGINA **y** sus endpoints JSON/export.

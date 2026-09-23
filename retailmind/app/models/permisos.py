@@ -2,6 +2,63 @@ from django.db import models
 from django.utils import timezone
 from django.conf import settings
 
+
+# Rol "Maestro": dueño del sistema. Tiene acceso a TODO sin depender de filas
+# de PermisoRol, de overrides ni de restricciones de sucursal, así que ninguna
+# opción nueva (o mal sembrada) lo deja afuera. El Administrador queda como un
+# rol normal que sí se puede restringir desde Gestión de Permisos.
+ROL_MAESTRO = 'maestro'
+
+# Roles que pasan los chequeos fijos de "solo administrador" del código.
+ROLES_NIVEL_ADMINISTRADOR = (ROL_MAESTRO, 'administrador')
+
+
+def es_maestro(usuario):
+    return getattr(usuario, 'rol', None) == ROL_MAESTRO
+
+
+def es_rol_administrador(usuario):
+    """True para Maestro y Administrador (chequeos fijos por rol)."""
+    return getattr(usuario, 'rol', None) in ROLES_NIVEL_ADMINISTRADOR
+
+
+def rol_efectivo(usuario):
+    """Rol a usar en los chequeos FIJOS del código (`rol == 'administrador'`,
+    `rol in ('administrador', 'administracion')`, tablas por rol...).
+
+    El Maestro pasa como 'administrador' para que ninguna de esas reglas lo deje
+    afuera. Para mostrar o guardar el rol real, usar `usuario.rol`.
+    """
+    rol = getattr(usuario, 'rol', None)
+    return 'administrador' if rol == ROL_MAESTRO else rol
+
+
+# Permisos finos de Nota de Crédito (se exigen ADEMÁS del permiso de la
+# pantalla; nunca amplían acceso, solo lo restringen).
+#  - A clientes: Gestión DTE, emisión por concepto, cambios/devoluciones y
+#    devolución por garantía.
+#  - De traspaso interno: recepción/regularización entre empresas del grupo
+#    (DTE con tipo_transaccion='TRASPASO').
+CODIGO_NC_CLIENTES = 'emitir_nota_credito'
+CODIGO_NC_TRASPASO = 'emitir_nota_credito_traspaso'
+
+
+# Edición / eliminación de documentos y de sus pagos. El comando
+# `configurar_rol_maestro` los deja SOLO para el Maestro.
+CODIGOS_EDICION_DOCUMENTOS = (
+    'dte_editar_fecha', 'dte_editar_numero', 'dte_editar_pago', 'dte_editar_vendedor',
+    'dte_editar_folio',
+    'dte_editar_tipo_boleta_electronica', 'dte_editar_tipo_boleta_papel',
+    'dte_editar_tipo_factura_electronica', 'dte_editar_tipo_factura_exenta',
+    'dte_eliminar_documento', 'dte_compras_pagos', 'dte_compras_eliminar',
+)
+
+
+def puede_emitir_nota_credito(usuario, sucursal_id=None, traspaso=False):
+    codigo = CODIGO_NC_TRASPASO if traspaso else CODIGO_NC_CLIENTES
+    return PermisoRol.tiene_permiso(usuario, codigo, 'puede_crear', sucursal_id=sucursal_id)
+
+
 class ModuloSistema(models.Model):
     """
     Módulos principales del sistema (Dashboard, Ventas, Documentos, etc.)
@@ -117,6 +174,7 @@ class PermisoRol(models.Model):
     # Roles del sistema - todos los usuarios usan estos roles para permisos
     # is_superuser de Django NO otorga privilegios. Solo importa el rol asignado.
     ROLES_CHOICES = [
+        (ROL_MAESTRO, 'Maestro'),
         ('administrador', 'Administrador'),
         ('administracion', 'Administración'),
         ('jefe_local', 'Jefe Local'),
@@ -191,6 +249,8 @@ class PermisoRol(models.Model):
         Returns:
             bool: True si tiene permiso, False en caso contrario
         """
+        if es_maestro(usuario):
+            return True
         try:
             opcion = OpcionMenu.objects.get(codigo=codigo_opcion, activo=True)
 
@@ -255,6 +315,8 @@ class PermisoRol(models.Model):
         """
         Retorna todas las opciones del menú disponibles para un usuario
         """
+        if es_maestro(usuario):
+            return OpcionMenu.objects.filter(activo=True)
         # Todos los usuarios respetan los permisos configurados por rol
         opciones_ids = cls.objects.filter(
             rol=usuario.rol,

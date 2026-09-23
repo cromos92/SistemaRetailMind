@@ -18,7 +18,9 @@ class Usuario(AbstractUser):
     """
     # Definición de roles
     # Nota: is_superuser es un campo separado de Django, no un rol
+    # 'maestro' = dueño del sistema, acceso total (ver app.models.permisos.ROL_MAESTRO)
     ROLES = [
+        ('maestro', 'Maestro'),
         ('administrador', 'Administrador'),
         ('administracion', 'Administración'),
         ('jefe_local', 'Jefe Local'),
@@ -159,7 +161,7 @@ class Usuario(AbstractUser):
     
     def tiene_permiso_usuarios(self, permiso):
         """Verifica si el usuario tiene un permiso específico de gestión de usuarios"""
-        if self.rol == 'administrador':
+        if self.rol in ('maestro', 'administrador'):
             return True
 
         permisos = {
@@ -220,7 +222,7 @@ class Usuario(AbstractUser):
         return password_temporal
     
     # ===== PIN de Autorización (solo admins) =====
-    ROLES_CON_PIN = ('administrador', 'administracion', 'jefe_local')
+    ROLES_CON_PIN = ('maestro', 'administrador', 'administracion', 'jefe_local')
 
     def puede_tener_pin_autorizacion(self):
         """Solo administradores/jefes pueden configurar un PIN de autorización."""

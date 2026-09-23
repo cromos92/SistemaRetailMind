@@ -42,6 +42,7 @@ from app.models import (
     Sucursal,
     EmpresaUser,
     Vendedor,
+    rol_efectivo,
 )
 from app.models_sync import (
     DesafioPinMovil,
@@ -102,7 +103,7 @@ def _puede_ajustar_stock(user, sucursal_id):
         return PermisoRol.tiene_permiso(
             user, "ajuste_stock_rapido", "puede_ver", sucursal_id=sucursal_id
         )
-    return getattr(user, "rol", None) in ("administrador", "jefe_local")
+    return rol_efectivo(user) in ("administrador", "jefe_local")
 
 
 def _resolver_sucursal_movil(request, data):
@@ -120,7 +121,7 @@ def _resolver_sucursal_movil(request, data):
     sucursal_id = data.get("sucursal_id")
     if sucursal_id:
         sucursal = get_object_or_404(Sucursal, id=sucursal_id)
-        es_admin = getattr(request.user, "rol", None) == "administrador"
+        es_admin = rol_efectivo(request.user) == "administrador"
         tiene_acceso = es_admin or EmpresaUser.objects.filter(
             user=request.user, sucursal_id=sucursal.id, status=True
         ).exists()
@@ -157,7 +158,7 @@ class CodigoAutorizacionActualView(APIView):
 
     def get(self, request):
         # Verificar rol (igual que en la vista web)
-        rol_usuario = getattr(request.user, "rol", None)
+        rol_usuario = rol_efectivo(request.user)
         if rol_usuario not in ["administrador", "jefe_local"]:
             return Response(
                 {
@@ -402,7 +403,7 @@ def _puede_editar_producto(user, sucursal_id):
         return PermisoRol.tiene_permiso(
             user, CODIGO_PERMISO_EDICION, "puede_editar", sucursal_id=sucursal_id
         )
-    return getattr(user, "rol", None) in ("administrador", "jefe_local")
+    return rol_efectivo(user) in ("administrador", "jefe_local")
 
 
 def _orden_talla(producto_talla):
@@ -1391,7 +1392,10 @@ def _sesion_movil(request, user, sucursal, dispositivo, device_created):
         refresh = RefreshToken.for_user(user)
         refresh['device_id'] = str(dispositivo.device_id)
         refresh['sucursal_id'] = sucursal.id
-        refresh['rol'] = getattr(user, 'rol', 'vendedor')
+        # Igual que el login desktop: 'rol' para los chequeos del cliente (el
+        # Maestro viaja como 'administrador'), 'rol_real' con el rol de verdad.
+        refresh['rol'] = rol_efectivo(user) or 'vendedor'
+        refresh['rol_real'] = getattr(user, 'rol', None) or 'vendedor'
         access_token = str(refresh.access_token)
 
         expires_at = timezone.now() + timedelta(days=7)

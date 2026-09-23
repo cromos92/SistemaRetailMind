@@ -1,651 +1,614 @@
 """
 Vistas para el módulo de gestión de permisos
-"""
-import logging
 
-from django.shortcuts import render, redirect, get_object_or_404
+Tres capas deciden si un usuario puede algo (ver PermisoRol.tiene_permiso):
+  1. PermisoUsuario  — override individual (SI / NO / usar rol)
+  2. PermisoRol      — permiso del rol
+  3. PermisoSucursal — restricción de la sucursal activa (solo quita, nunca da)
+El rol Maestro se salta las tres: tiene acceso a todo.
+
+Jerarquía para editar (la hace cumplir el servidor, no solo la pantalla):
+  - El rol Maestro no se configura (acceso total).
+  - El rol Administrador y los usuarios Administrador solo los ajusta el Maestro,
+    para que un administrador no pueda devolverse a sí mismo lo que el Maestro
+    le bloqueó (p. ej. Nota de Crédito o Conciliación Mercado Pago).
+  - Nadie que no sea Maestro edita sus propios overrides.
+"""
+import json
+import logging
+from collections import defaultdict
+from decimal import Decimal, InvalidOperation
+
 from django.contrib.auth.decorators import login_required
-from django.contrib import messages
+from django.db import transaction
+from django.db.models import Count, Max, Q
 from django.http import JsonResponse, HttpResponse
-from django.db.models import Count, Q, Max
+from django.shortcuts import render, redirect
+from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
-from .models import ModuloSistema, OpcionMenu, PermisoRol, ConfiguracionPermisoGlobal, PermisoSucursal, PermisoUsuario, Sucursal, EmpresaUser
+
+from .models import (
+    ModuloSistema, OpcionMenu, PermisoRol, PermisoSucursal, PermisoUsuario,
+    Sucursal, EmpresaUser, ROL_MAESTRO, es_maestro,
+)
 from users.models import Usuario
 from .decorators import solo_administrador
 from .utils_permisos import (
-    obtener_sucursales_usuario,
     obtener_configuracion_rango_arqueo,
     guardar_configuracion_rango_arqueo,
 )
-from decimal import Decimal, InvalidOperation
-from datetime import datetime
-from django.utils import timezone
 
 logger = logging.getLogger('app')
-import json
 
 
-@login_required
-@solo_administrador
-def gestion_permisos(request):
-    """
-    Vista principal de gestión de permisos
-    Muestra una interfaz para administrar permisos por rol
-    """
-    # Obtener todos los módulos con sus opciones
-    modulos = ModuloSistema.objects.filter(activo=True).prefetch_related('opciones').order_by('orden')
-    
-    # Obtener roles disponibles
-    roles = PermisoRol.ROLES_CHOICES
-    
-    # Obtener estadísticas
-    total_modulos = modulos.count()
-    total_opciones = OpcionMenu.objects.filter(activo=True).count()
-    total_permisos = PermisoRol.objects.count()
-    total_overrides = PermisoUsuario.objects.count()
+TIPOS_PERMISO = (
+    'puede_ver', 'puede_crear', 'puede_editar',
+    'puede_eliminar', 'puede_exportar', 'puede_aprobar',
+)
+# En sucursal, 'puede_ver' se llama 'habilitado'.
+TIPOS_PERMISO_SUCURSAL = ('habilitado',) + TIPOS_PERMISO[1:]
+# Sin fila de PermisoSucursal no hay restricción: todo en True. Los defaults
+# del modelo (eliminar/aprobar en False) NO sirven de valor "sin fila": cada
+# "Guardar" de la pantalla creaba filas con esos False y dejaba a la sucursal
+# sin poder eliminar ni aprobar nada, ni siquiera el administrador (caso NICK1).
+SUCURSAL_SIN_RESTRICCION = {t: True for t in TIPOS_PERMISO_SUCURSAL}
 
-    # Usuarios activos para el selector de permisos por usuario
-    usuarios_activos = Usuario.objects.filter(
-        es_activo=True
-    ).order_by('first_name', 'last_name', 'username')
+ROLES_VALIDOS = dict(PermisoRol.ROLES_CHOICES)
 
-    context = {
-        'modulos': modulos,
-        'roles': roles,
-        'total_modulos': total_modulos,
-        'total_opciones': total_opciones,
-        'total_permisos': total_permisos,
-        'total_overrides': total_overrides,
-        'usuarios_activos': usuarios_activos,
+# Opciones que merecen un aviso visual en la pantalla: mueven dinero, emiten
+# documentos al SII o reparten permisos.
+CODIGOS_SENSIBLES = {
+    'emitir_nota_credito', 'dineros_mercadopago', 'gestion_permisos',
+    'gestion_usuarios', 'emision_dte', 'gestion_dte', 'gestion_creditos',
+    'revision_arqueos', 'cuadratura_caja', 'modificacion_precios_costos',
+    'devolucion_garantia', 'giftcards_emitir', 'ajuste_stock_rapido',
+    'gestion_inventarios', 'dte_descargar_txt', 'emitir_nota_credito_traspaso',
+    'asociar_pagos_mercadopago', 'dte_eliminar_documento', 'dte_compras_pagos',
+    'dte_compras_eliminar', 'dte_editar_pago', 'dte_editar_fecha', 'dte_editar_numero',
+    'dte_editar_folio',
+}
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _json_error(mensaje, status=400, **extra):
+    return JsonResponse({'error': True, 'success': False, 'mensaje': mensaje, **extra}, status=status)
+
+
+def _leer_json(request):
+    return json.loads(request.body or '{}')
+
+
+def _bool(valor, default=False):
+    if valor is None:
+        return default
+    if isinstance(valor, str):
+        return valor.strip().lower() in ('1', 'true', 'si', 'sí', 'on')
+    return bool(valor)
+
+
+def _motivo_rol_no_editable(usuario_actual, rol):
+    """None si `usuario_actual` puede modificar los permisos de `rol`."""
+    if rol not in ROLES_VALIDOS:
+        return f'Rol no válido: {rol}'
+    if rol == ROL_MAESTRO:
+        return 'El rol Maestro tiene acceso total a todo: no se configura.'
+    if rol == 'administrador' and not es_maestro(usuario_actual):
+        return 'Solo el Maestro puede modificar los permisos del rol Administrador.'
+    return None
+
+
+def _motivo_usuario_no_editable(usuario_actual, usuario):
+    """None si `usuario_actual` puede modificar los overrides de `usuario`."""
+    if usuario.rol == ROL_MAESTRO:
+        return 'Un usuario Maestro tiene acceso total: no admite permisos individuales.'
+    if es_maestro(usuario_actual):
+        return None
+    if usuario.pk == usuario_actual.pk:
+        return 'No puedes modificar tus propios permisos. Pídeselo al Maestro.'
+    if usuario.rol == 'administrador':
+        return 'Solo el Maestro puede modificar los permisos de un Administrador.'
+    return None
+
+
+def _tipo_opcion(opcion):
+    """'pantalla' si tiene URL propia; 'accion' si es un permiso fino dentro de otra pantalla."""
+    return 'pantalla' if (opcion.url_name or opcion.url_path) else 'accion'
+
+
+def _info_opcion(opcion):
+    return {
+        'id': opcion.id,
+        'codigo': opcion.codigo,
+        'nombre': opcion.nombre,
+        'url_name': opcion.url_name,
+        'url_path': opcion.url_path,
+        'icono': opcion.icono,
+        'es_submenu': opcion.es_submenu,
+        'tipo': _tipo_opcion(opcion),
+        'sensible': opcion.codigo in CODIGOS_SENSIBLES,
     }
 
-    return render(request, 'gestion_permisos/index.html', context)
 
+def _arbol_modulos(construir_opcion):
+    """Módulos activos → opciones raíz → subopciones, en 2 consultas.
 
-@login_required
-@solo_administrador
-@require_http_methods(["GET"])
-def obtener_permisos_rol(request):
+    `construir_opcion(opcion)` devuelve el dict de cada opción (se le agrega
+    `subopciones` si corresponde). Antes cada endpoint hacía una consulta por
+    opción y por subopción (~200 por carga).
     """
-    API para obtener todos los permisos de un rol específico
-    """
-    rol = request.GET.get('rol')
-    
-    if not rol:
-        return JsonResponse({'error': 'Rol no especificado'}, status=400)
-    
-    # Obtener el límite de descuento máximo para el rol
-    # Usamos Max para obtener el valor más alto guardado (todos deberían ser iguales, pero por consistencia)
-    resultado = PermisoRol.objects.filter(rol=rol).aggregate(
-        max_limite=Max('limite_descuento_porcentaje')
-    )
-    limite_descuento = float(resultado['max_limite']) if resultado['max_limite'] is not None else 0
-    
-    # Obtener todos los módulos con sus opciones
-    modulos_data = []
-    modulos = ModuloSistema.objects.filter(activo=True).prefetch_related('opciones').order_by('orden')
-    
+    modulos = list(ModuloSistema.objects.filter(activo=True).order_by('orden', 'nombre'))
+    raiz = defaultdict(list)
+    hijos = defaultdict(list)
+    for op in OpcionMenu.objects.filter(activo=True).order_by('orden', 'nombre'):
+        if op.padre_id:
+            hijos[op.padre_id].append(op)
+        else:
+            raiz[op.modulo_id].append(op)
+
+    data = []
     for modulo in modulos:
-        opciones_data = []
-        opciones = modulo.opciones.filter(activo=True, padre__isnull=True).order_by('orden')
-        
-        for opcion in opciones:
-            # Buscar permisos existentes
-            permiso = PermisoRol.objects.filter(rol=rol, opcion_menu=opcion).first()
-            
-            opcion_info = {
-                'id': opcion.id,
-                'codigo': opcion.codigo,
-                'nombre': opcion.nombre,
-                'url_name': opcion.url_name,
-                'url_path': opcion.url_path,
-                'icono': opcion.icono,
-                'es_submenu': opcion.es_submenu,
-                'permisos': {
-                    'puede_ver': permiso.puede_ver if permiso else False,
-                    'puede_crear': permiso.puede_crear if permiso else False,
-                    'puede_editar': permiso.puede_editar if permiso else False,
-                    'puede_eliminar': permiso.puede_eliminar if permiso else False,
-                    'puede_exportar': permiso.puede_exportar if permiso else False,
-                    'puede_aprobar': permiso.puede_aprobar if permiso else False,
-                }
-            }
-            
-            # Si tiene subopciones, incluirlas
-            if opcion.es_submenu:
-                subopciones_data = []
-                subopciones = opcion.hijos.filter(activo=True).order_by('orden')
-                
-                for subopcion in subopciones:
-                    permiso_sub = PermisoRol.objects.filter(rol=rol, opcion_menu=subopcion).first()
-                    subopciones_data.append({
-                        'id': subopcion.id,
-                        'codigo': subopcion.codigo,
-                        'nombre': subopcion.nombre,
-                        'url_name': subopcion.url_name,
-                        'url_path': subopcion.url_path,
-                        'icono': subopcion.icono,
-                        'permisos': {
-                            'puede_ver': permiso_sub.puede_ver if permiso_sub else False,
-                            'puede_crear': permiso_sub.puede_crear if permiso_sub else False,
-                            'puede_editar': permiso_sub.puede_editar if permiso_sub else False,
-                            'puede_eliminar': permiso_sub.puede_eliminar if permiso_sub else False,
-                            'puede_exportar': permiso_sub.puede_exportar if permiso_sub else False,
-                            'puede_aprobar': permiso_sub.puede_aprobar if permiso_sub else False,
-                        }
-                    })
-                
-                opcion_info['subopciones'] = subopciones_data
-            
-            opciones_data.append(opcion_info)
-        
-        modulos_data.append({
+        opciones = []
+        for op in raiz.get(modulo.id, []):
+            info = construir_opcion(op)
+            if op.es_submenu:
+                info['subopciones'] = [construir_opcion(h) for h in hijos.get(op.id, [])]
+            opciones.append(info)
+        if not opciones:
+            continue
+        data.append({
             'id': modulo.id,
             'codigo': modulo.codigo,
             'nombre': modulo.nombre,
             'descripcion': modulo.descripcion,
             'icono': modulo.icono,
-            'opciones': opciones_data
+            'opciones': opciones,
         })
-    
+    return data
+
+
+def _flags(fila, tipos, default):
+    if fila is None:
+        return dict(default)
+    return {t: bool(getattr(fila, t)) for t in tipos}
+
+
+def _limite_descuento_rol(rol):
+    resultado = PermisoRol.objects.filter(rol=rol).aggregate(max_limite=Max('limite_descuento_porcentaje'))
+    return resultado['max_limite'] if resultado['max_limite'] is not None else Decimal('0')
+
+
+def _resumen_roles(usuario_actual):
+    """Tarjetas de rol: usuarios activos y opciones visibles de cada uno."""
+    total_opciones = OpcionMenu.objects.filter(activo=True).count()
+    usuarios = dict(
+        Usuario.objects.filter(es_activo=True, is_active=True)
+        .values_list('rol').annotate(n=Count('id'))
+    )
+    visibles = dict(
+        PermisoRol.objects.filter(puede_ver=True, opcion_menu__activo=True)
+        .values_list('rol').annotate(n=Count('id'))
+    )
+    roles = []
+    for codigo, nombre in PermisoRol.ROLES_CHOICES:
+        motivo = _motivo_rol_no_editable(usuario_actual, codigo)
+        roles.append({
+            'codigo': codigo,
+            'nombre': nombre,
+            'usuarios': usuarios.get(codigo, 0),
+            'opciones_visibles': total_opciones if codigo == ROL_MAESTRO else visibles.get(codigo, 0),
+            'total_opciones': total_opciones,
+            'editable': motivo is None,
+            'motivo_bloqueo': motivo or '',
+        })
+    return roles
+
+
+def _cargar_capas_usuario(usuario, sucursal_id):
+    rol = {p.opcion_menu_id: p for p in PermisoRol.objects.filter(rol=usuario.rol)}
+    overrides = {p.opcion_menu_id: p for p in PermisoUsuario.objects.filter(usuario=usuario)}
+    sucursal = {}
+    if sucursal_id:
+        sucursal = {p.opcion_menu_id: p for p in PermisoSucursal.objects.filter(sucursal_id=sucursal_id)}
+    return rol, overrides, sucursal
+
+
+def _permiso_efectivo(usuario, opcion_id, tipo, rol, overrides, sucursal):
+    """Réplica en memoria de PermisoRol.tiene_permiso, con el motivo del resultado."""
+    if es_maestro(usuario):
+        return True, 'MAESTRO'
+    override = overrides.get(opcion_id)
+    valor_override = getattr(override, tipo, None) if override else None
+    if valor_override is False:
+        return False, 'OVERRIDE_NO'
+    if valor_override is True:
+        motivo = 'OVERRIDE_SI'
+    else:
+        fila = rol.get(opcion_id)
+        if fila is None:
+            return False, 'SIN_FILA_ROL'
+        if not getattr(fila, tipo, False):
+            return False, 'ROL_NO'
+        motivo = 'ROL'
+    fila_suc = sucursal.get(opcion_id)
+    if fila_suc is not None:
+        clave = 'habilitado' if tipo == 'puede_ver' else tipo
+        if not getattr(fila_suc, clave, True):
+            return False, 'SUCURSAL_BLOQUEA'
+    return True, motivo
+
+
+# ---------------------------------------------------------------------------
+# Página
+# ---------------------------------------------------------------------------
+
+@login_required
+@solo_administrador
+def gestion_permisos(request):
+    """Pantalla de gestión de permisos (roles, sucursales, usuarios y diagnóstico)."""
+    usuarios_activos = (
+        Usuario.objects.filter(es_activo=True)
+        .order_by('first_name', 'last_name', 'username')
+    )
+    context = {
+        'roles': PermisoRol.ROLES_CHOICES,
+        'resumen_roles': _resumen_roles(request.user),
+        'total_modulos': ModuloSistema.objects.filter(activo=True).count(),
+        'total_opciones': OpcionMenu.objects.filter(activo=True).count(),
+        'total_permisos': PermisoRol.objects.count(),
+        'total_overrides': PermisoUsuario.objects.values('usuario_id').distinct().count(),
+        'total_usuarios': usuarios_activos.count(),
+        'usuarios_activos': usuarios_activos,
+        'sucursales': Sucursal.objects.all().order_by('alias'),
+        'es_maestro_actual': es_maestro(request.user),
+        'tab_inicial': request.GET.get('tab', ''),
+    }
+    return render(request, 'gestion_permisos/index.html', context)
+
+
+@login_required
+@solo_administrador
+def gestionar_modulos_opciones(request):
+    """Ruta vieja: su template nunca existió (daba error 500). Lleva al diagnóstico."""
+    return redirect(f"{reverse('gestion_permisos')}?tab=diagnostico")
+
+
+@login_required
+@solo_administrador
+def estadisticas_permisos(request):
+    """Ruta vieja: su template nunca existió (daba error 500). Lleva al diagnóstico."""
+    return redirect(f"{reverse('gestion_permisos')}?tab=diagnostico")
+
+
+# ---------------------------------------------------------------------------
+# Permisos por rol
+# ---------------------------------------------------------------------------
+
+@login_required
+@solo_administrador
+@require_http_methods(["GET"])
+def obtener_permisos_rol(request):
+    """Árbol de permisos de un rol."""
+    rol = request.GET.get('rol')
+    if rol not in ROLES_VALIDOS:
+        return _json_error('Rol no especificado o no válido')
+
+    motivo = _motivo_rol_no_editable(request.user, rol)
+    todo = {t: True for t in TIPOS_PERMISO}
+    filas = {p.opcion_menu_id: p for p in PermisoRol.objects.filter(rol=rol)}
+
+    def construir(op):
+        info = _info_opcion(op)
+        if rol == ROL_MAESTRO:
+            info['permisos'] = dict(todo)
+            info['sin_fila'] = False
+        else:
+            fila = filas.get(op.id)
+            info['permisos'] = _flags(fila, TIPOS_PERMISO, {t: False for t in TIPOS_PERMISO})
+            info['sin_fila'] = fila is None
+        return info
+
     return JsonResponse({
         'success': True,
         'rol': rol,
-        'limite_descuento': limite_descuento,
+        'rol_nombre': ROLES_VALIDOS[rol],
+        'editable': motivo is None,
+        'motivo_bloqueo': motivo or '',
+        'es_rol_maestro': rol == ROL_MAESTRO,
+        'limite_descuento': 100.0 if rol == ROL_MAESTRO else float(_limite_descuento_rol(rol)),
         'configuracion_arqueo': obtener_configuracion_rango_arqueo(rol),
-        'modulos': modulos_data
-    })
+        'modulos': _arbol_modulos(construir),
+    }, json_dumps_params={'default': str})
 
 
 @login_required
 @solo_administrador
 @require_http_methods(["POST"])
 def guardar_permiso(request):
-    """
-    API para guardar o actualizar un permiso específico
-    """
+    """Guarda UN flag de un rol (API suelta; la pantalla usa el guardado masivo)."""
     try:
-        data = json.loads(request.body)
-        
-        rol = data.get('rol')
-        opcion_id = data.get('opcion_id')
-        tipo_permiso = data.get('tipo_permiso')
-        valor = data.get('valor', False)
-        
-        if not all([rol, opcion_id, tipo_permiso]):
-            return JsonResponse({
-                'error': True,
-                'mensaje': 'Faltan parámetros requeridos'
-            }, status=400)
-        
-        # Obtener la opción del menú
-        opcion = get_object_or_404(OpcionMenu, id=opcion_id)
-        
-        # Obtener o crear el permiso
-        permiso, created = PermisoRol.objects.get_or_create(
-            rol=rol,
-            opcion_menu=opcion,
-            defaults={tipo_permiso: valor}
-        )
-        
-        # Si ya existía, actualizar
-        if not created:
-            setattr(permiso, tipo_permiso, valor)
-            permiso.save()
-        
-        return JsonResponse({
-            'success': True,
-            'mensaje': f'Permiso {"creado" if created else "actualizado"} correctamente',
-            'permiso': {
-                'rol': permiso.rol,
-                'opcion': permiso.opcion_menu.nombre,
-                tipo_permiso: valor
-            }
-        })
-    
+        data = _leer_json(request)
     except json.JSONDecodeError:
-        return JsonResponse({
-            'error': True,
-            'mensaje': 'Error en el formato de los datos'
-        }, status=400)
-    except Exception as e:
-        return JsonResponse({
-            'error': True,
-            'mensaje': f'Error al guardar permiso: {str(e)}'
-        }, status=500)
+        return _json_error('Error en el formato de los datos')
+
+    rol = data.get('rol')
+    tipo_permiso = data.get('tipo_permiso')
+    if tipo_permiso not in TIPOS_PERMISO:
+        return _json_error(f'Tipo de permiso no válido: {tipo_permiso}')
+    motivo = _motivo_rol_no_editable(request.user, rol)
+    if motivo:
+        return _json_error(motivo, status=403)
+    opcion = OpcionMenu.objects.filter(id=data.get('opcion_id')).first()
+    if opcion is None:
+        return _json_error('Opción no encontrada', status=404)
+
+    valor = _bool(data.get('valor'))
+    permiso, created = PermisoRol.objects.get_or_create(
+        rol=rol, opcion_menu=opcion,
+        defaults={t: False for t in TIPOS_PERMISO} | {'limite_descuento_porcentaje': _limite_descuento_rol(rol)},
+    )
+    setattr(permiso, tipo_permiso, valor)
+    permiso.save(update_fields=[tipo_permiso])
+    logger.info('Permisos: %s puso %s.%s=%s al rol %s', request.user.username,
+                opcion.codigo, tipo_permiso, valor, rol)
+    return JsonResponse({
+        'success': True,
+        'mensaje': f'Permiso {"creado" if created else "actualizado"} correctamente',
+        'permiso': {'rol': rol, 'opcion': opcion.nombre, tipo_permiso: valor},
+    })
 
 
 @login_required
 @solo_administrador
 @require_http_methods(["POST"])
 def guardar_permisos_masivos(request):
-    """
-    API para guardar múltiples permisos de una vez
-    """
+    """Guarda todos los flags de un rol + límite de descuento + rango de arqueo."""
     try:
-        data = json.loads(request.body)
-        
-        rol = data.get('rol')
-        permisos_data = data.get('permisos', [])
-        limite_descuento = data.get('limite_descuento')
-        configuracion_arqueo = data.get('configuracion_arqueo') or {}
-        
-        if not rol:
-            return JsonResponse({
-                'error': True,
-                'mensaje': 'Rol no especificado'
-            }, status=400)
+        data = _leer_json(request)
+    except json.JSONDecodeError:
+        return _json_error('Error en el formato de los datos')
 
-        config_arqueo_guardada = None
-        
-        # Validar límite de descuento y convertir a Decimal
-        if limite_descuento is not None:
-            try:
-                # Convertir a Decimal para consistencia con el modelo
-                limite_descuento = Decimal(str(limite_descuento))
-                if limite_descuento < 0 or limite_descuento > 100:
-                    return JsonResponse({
-                        'error': True,
-                        'mensaje': 'El límite de descuento debe estar entre 0 y 100'
-                    }, status=400)
-            except (ValueError, TypeError, InvalidOperation):
-                return JsonResponse({
-                    'error': True,
-                    'mensaje': 'El límite de descuento debe ser un número válido'
-                }, status=400)
-        
-        permisos_actualizados = 0
-        permisos_creados = 0
-        limite_efectivo = limite_descuento if limite_descuento is not None else Decimal('0')
-        
-        # PRIMERO: Si se proporcionó límite de descuento, actualizar TODOS los permisos existentes del rol
-        # Esto asegura que el límite se guarde incluso si hay permisos previos
-        permisos_existentes_count = PermisoRol.objects.filter(rol=rol).update(
-            limite_descuento_porcentaje=limite_efectivo
-        )
-        if permisos_existentes_count > 0:
-            permisos_actualizados = permisos_existentes_count
-        
-        # SEGUNDO: Procesar los permisos individuales
-        if permisos_data:
-            for permiso_item in permisos_data:
-                opcion_id = permiso_item.get('opcion_id')
-                permisos_valores = permiso_item.get('permisos', {})
-                
-                opcion = OpcionMenu.objects.filter(id=opcion_id).first()
-                if not opcion:
+    rol = data.get('rol')
+    motivo = _motivo_rol_no_editable(request.user, rol)
+    if motivo:
+        return _json_error(motivo, status=403)
+
+    limite_descuento = data.get('limite_descuento')
+    if limite_descuento is not None:
+        try:
+            limite_descuento = Decimal(str(limite_descuento))
+        except (ValueError, TypeError, InvalidOperation):
+            return _json_error('El límite de descuento debe ser un número válido')
+        if limite_descuento < 0 or limite_descuento > 100:
+            return _json_error('El límite de descuento debe estar entre 0 y 100')
+    limite_efectivo = limite_descuento if limite_descuento is not None else Decimal('0')
+
+    permisos_data = data.get('permisos') or []
+    ids = []
+    for item in permisos_data:
+        try:
+            ids.append(int(item.get('opcion_id')))
+        except (TypeError, ValueError):
+            continue
+    opciones = {o.id: o for o in OpcionMenu.objects.filter(id__in=ids)}
+
+    cambios = []
+    creados = 0
+    actualizados = 0
+    try:
+        with transaction.atomic():
+            existentes = {p.opcion_menu_id: p for p in PermisoRol.objects.select_for_update().filter(rol=rol)}
+            # El límite de descuento vive repetido en cada fila del rol.
+            PermisoRol.objects.filter(rol=rol).update(limite_descuento_porcentaje=limite_efectivo)
+
+            a_crear, a_actualizar = [], []
+            for item in permisos_data:
+                try:
+                    opcion_id = int(item.get('opcion_id'))
+                except (TypeError, ValueError):
                     continue
-                
-                permiso, created = PermisoRol.objects.get_or_create(
-                    rol=rol,
-                    opcion_menu=opcion,
-                    defaults={
-                        'limite_descuento_porcentaje': limite_efectivo
-                    }
-                )
-                
-                # Actualizar todos los permisos booleanos
-                permiso.puede_ver = permisos_valores.get('puede_ver', False)
-                permiso.puede_crear = permisos_valores.get('puede_crear', False)
-                permiso.puede_editar = permisos_valores.get('puede_editar', False)
-                permiso.puede_eliminar = permisos_valores.get('puede_eliminar', False)
-                permiso.puede_exportar = permisos_valores.get('puede_exportar', False)
-                permiso.puede_aprobar = permisos_valores.get('puede_aprobar', False)
-                
-                # Siempre actualizar límite de descuento
+                opcion = opciones.get(opcion_id)
+                if opcion is None:
+                    continue
+                valores = item.get('permisos') or {}
+                permiso = existentes.get(opcion_id)
+                nuevo = permiso is None
+                if nuevo:
+                    permiso = PermisoRol(rol=rol, opcion_menu=opcion)
+                for tipo in TIPOS_PERMISO:
+                    valor = _bool(valores.get(tipo))
+                    anterior = None if nuevo else getattr(permiso, tipo)
+                    if anterior is not None and anterior != valor:
+                        cambios.append(f'{opcion.codigo}.{tipo}: {anterior}->{valor}')
+                    setattr(permiso, tipo, valor)
                 permiso.limite_descuento_porcentaje = limite_efectivo
-                
-                permiso.save()
-                
-                if created:
-                    permisos_creados += 1
-        
-        # TERCERO: Si no hay permisos para el rol, crear al menos uno para almacenar el límite de descuento
-        permisos_rol_existentes = PermisoRol.objects.filter(rol=rol)
-        if not permisos_rol_existentes.exists():
-            # Si no hay permisos existentes, crear uno con la primera opción disponible
-            primera_opcion = OpcionMenu.objects.filter(activo=True).first()
-            if primera_opcion:
-                PermisoRol.objects.create(
-                    rol=rol,
-                    opcion_menu=primera_opcion,
-                    limite_descuento_porcentaje=limite_efectivo,
-                    puede_ver=False,
-                    puede_crear=False,
-                    puede_editar=False,
-                    puede_eliminar=False,
-                    puede_exportar=False,
-                    puede_aprobar=False
-                )
-                permisos_creados += 1
+                (a_crear if nuevo else a_actualizar).append(permiso)
 
-        if configuracion_arqueo:
-            try:
-                config_arqueo_guardada = guardar_configuracion_rango_arqueo(
+            if a_crear:
+                PermisoRol.objects.bulk_create(a_crear)
+                creados = len(a_crear)
+            if a_actualizar:
+                PermisoRol.objects.bulk_update(a_actualizar, list(TIPOS_PERMISO) + ['limite_descuento_porcentaje'])
+                actualizados = len(a_actualizar)
+
+            # Sin filas, el límite de descuento no tendría dónde guardarse.
+            if not PermisoRol.objects.filter(rol=rol).exists():
+                primera = OpcionMenu.objects.filter(activo=True).first()
+                if primera:
+                    PermisoRol.objects.create(
+                        rol=rol, opcion_menu=primera, limite_descuento_porcentaje=limite_efectivo,
+                        **{t: False for t in TIPOS_PERMISO},
+                    )
+                    creados += 1
+
+            configuracion_arqueo = data.get('configuracion_arqueo') or {}
+            if configuracion_arqueo:
+                config_arqueo = guardar_configuracion_rango_arqueo(
                     rol=rol,
                     tipo=configuracion_arqueo.get('tipo'),
                     valor=configuracion_arqueo.get('valor'),
                     usuario=request.user,
                 )
-            except ValueError as exc:
-                return JsonResponse({
-                    'error': True,
-                    'mensaje': str(exc),
-                }, status=400)
-        else:
-            config_arqueo_guardada = obtener_configuracion_rango_arqueo(rol)
-        
-        # Convertir Decimal a float para JSON
-        limite_para_json = float(limite_efectivo)
-        
-        return JsonResponse({
-            'success': True,
-            'mensaje': (
-                'Permisos guardados correctamente '
-                f'(Límite descuento: {limite_para_json}% | '
-                f'Rango arqueo: {config_arqueo_guardada["label"]})'
-            ),
-            'creados': permisos_creados,
-            'actualizados': permisos_actualizados,
-            'limite_descuento_guardado': limite_para_json,
-            'configuracion_arqueo_guardada': config_arqueo_guardada,
-        })
-    
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'error': True,
-            'mensaje': 'Error en el formato de los datos'
-        }, status=400)
-    except Exception as e:
-        return JsonResponse({
-            'error': True,
-            'mensaje': f'Error al guardar permisos: {str(e)}'
-        }, status=500)
+            else:
+                config_arqueo = obtener_configuracion_rango_arqueo(rol)
+    except ValueError as exc:
+        return _json_error(str(exc))
+
+    logger.info('Permisos: %s guardó el rol %s (%d cambios)%s', request.user.username, rol,
+                len(cambios), (': ' + '; '.join(cambios[:60])) if cambios else '')
+    return JsonResponse({
+        'success': True,
+        'mensaje': (
+            f'Permisos del rol {ROLES_VALIDOS[rol]} guardados '
+            f'({len(cambios)} cambio{"s" if len(cambios) != 1 else ""}; '
+            f'límite descuento {float(limite_efectivo)}%; rango arqueo {config_arqueo["label"]})'
+        ),
+        'creados': creados,
+        'actualizados': actualizados,
+        'cambios': len(cambios),
+        'limite_descuento_guardado': float(limite_efectivo),
+        'configuracion_arqueo_guardada': config_arqueo,
+    }, json_dumps_params={'default': str})
 
 
 @login_required
 @solo_administrador
 @require_http_methods(["POST"])
 def copiar_permisos_rol(request):
-    """
-    API para copiar todos los permisos de un rol a otro
-    """
+    """Copia los permisos de un rol a otro (antes se perdía el flag Aprobar)."""
     try:
-        data = json.loads(request.body)
-        
-        rol_origen = data.get('rol_origen')
-        rol_destino = data.get('rol_destino')
-        sobrescribir = data.get('sobrescribir', False)
-        
-        if not rol_origen or not rol_destino:
-            return JsonResponse({
-                'error': True,
-                'mensaje': 'Roles origen y destino son requeridos'
-            }, status=400)
-        
-        if rol_origen == rol_destino:
-            return JsonResponse({
-                'error': True,
-                'mensaje': 'El rol origen y destino no pueden ser el mismo'
-            }, status=400)
-        
-        # Obtener permisos del rol origen
-        permisos_origen = PermisoRol.objects.filter(rol=rol_origen)
-        
-        # Obtener el límite de descuento máximo del rol origen
-        resultado = permisos_origen.aggregate(max_limite=Max('limite_descuento_porcentaje'))
-        limite_descuento_origen = resultado['max_limite'] if resultado['max_limite'] is not None else 0
-        
-        permisos_creados = 0
-        permisos_actualizados = 0
-        permisos_omitidos = 0
-        
-        for permiso_origen in permisos_origen:
-            permiso_destino, created = PermisoRol.objects.get_or_create(
-                rol=rol_destino,
-                opcion_menu=permiso_origen.opcion_menu
-            )
-            
-            if created or sobrescribir:
-                permiso_destino.puede_ver = permiso_origen.puede_ver
-                permiso_destino.puede_crear = permiso_origen.puede_crear
-                permiso_destino.puede_editar = permiso_origen.puede_editar
-                permiso_destino.puede_eliminar = permiso_origen.puede_eliminar
-                permiso_destino.puede_exportar = permiso_origen.puede_exportar
-                permiso_destino.limite_descuento_porcentaje = limite_descuento_origen
-                permiso_destino.save()
-                
-                if created:
-                    permisos_creados += 1
-                else:
-                    permisos_actualizados += 1
+        data = _leer_json(request)
+    except json.JSONDecodeError:
+        return _json_error('Error en el formato de los datos')
+
+    rol_origen = data.get('rol_origen')
+    rol_destino = data.get('rol_destino')
+    sobrescribir = _bool(data.get('sobrescribir'))
+    if rol_origen not in ROLES_VALIDOS or not rol_destino:
+        return _json_error('Roles origen y destino son requeridos')
+    if rol_origen == rol_destino:
+        return _json_error('El rol origen y destino no pueden ser el mismo')
+    motivo = _motivo_rol_no_editable(request.user, rol_destino)
+    if motivo:
+        return _json_error(motivo, status=403)
+
+    if rol_origen == ROL_MAESTRO:
+        # El Maestro no depende de filas: copiarlo = todo en True.
+        origen = {o.id: {t: True for t in TIPOS_PERMISO} for o in OpcionMenu.objects.filter(activo=True)}
+        limite_origen = Decimal('100')
+    else:
+        origen = {
+            p.opcion_menu_id: {t: getattr(p, t) for t in TIPOS_PERMISO}
+            for p in PermisoRol.objects.filter(rol=rol_origen)
+        }
+        limite_origen = _limite_descuento_rol(rol_origen)
+
+    creados = actualizados = omitidos = 0
+    with transaction.atomic():
+        destino = {p.opcion_menu_id: p for p in PermisoRol.objects.select_for_update().filter(rol=rol_destino)}
+        a_crear, a_actualizar = [], []
+        for opcion_id, flags in origen.items():
+            permiso = destino.get(opcion_id)
+            if permiso is None:
+                a_crear.append(PermisoRol(rol=rol_destino, opcion_menu_id=opcion_id,
+                                          limite_descuento_porcentaje=limite_origen, **flags))
+            elif sobrescribir:
+                for tipo, valor in flags.items():
+                    setattr(permiso, tipo, valor)
+                permiso.limite_descuento_porcentaje = limite_origen
+                a_actualizar.append(permiso)
             else:
-                permisos_omitidos += 1
-        
+                omitidos += 1
+        PermisoRol.objects.bulk_create(a_crear)
+        if a_actualizar:
+            PermisoRol.objects.bulk_update(a_actualizar, list(TIPOS_PERMISO) + ['limite_descuento_porcentaje'])
+        creados, actualizados = len(a_crear), len(a_actualizar)
+
+        config_origen = obtener_configuracion_rango_arqueo(rol_origen)
         guardar_configuracion_rango_arqueo(
-            rol=rol_destino,
-            tipo=obtener_configuracion_rango_arqueo(rol_origen)['tipo'],
-            valor=obtener_configuracion_rango_arqueo(rol_origen)['valor'],
+            rol=rol_destino, tipo=config_origen['tipo'], valor=config_origen['valor'],
             usuario=request.user,
         )
 
-        return JsonResponse({
-            'success': True,
-            'mensaje': f'Permisos copiados de {rol_origen} a {rol_destino}',
-            'creados': permisos_creados,
-            'actualizados': permisos_actualizados,
-            'omitidos': permisos_omitidos
-        })
-    
-    except json.JSONDecodeError:
-        return JsonResponse({
-            'error': True,
-            'mensaje': 'Error en el formato de los datos'
-        }, status=400)
-    except Exception as e:
-        return JsonResponse({
-            'error': True,
-            'mensaje': f'Error al copiar permisos: {str(e)}'
-        }, status=500)
+    logger.info('Permisos: %s copió el rol %s -> %s (sobrescribir=%s, %d creados, %d actualizados)',
+                request.user.username, rol_origen, rol_destino, sobrescribir, creados, actualizados)
+    return JsonResponse({
+        'success': True,
+        'mensaje': f'Permisos copiados de {ROLES_VALIDOS[rol_origen]} a {ROLES_VALIDOS[rol_destino]}',
+        'creados': creados,
+        'actualizados': actualizados,
+        'omitidos': omitidos,
+    })
 
 
-@login_required
-@solo_administrador
-def gestionar_modulos_opciones(request):
-    """
-    Vista para gestionar módulos y opciones del sistema
-    """
-    modulos = ModuloSistema.objects.all().order_by('orden')
-    opciones = OpcionMenu.objects.all().select_related('modulo', 'padre').order_by('modulo__orden', 'orden')
-    
-    context = {
-        'modulos': modulos,
-        'opciones': opciones,
-    }
-    
-    return render(request, 'gestion_permisos/modulos_opciones.html', context)
-
-
-@login_required
-@solo_administrador
-def estadisticas_permisos(request):
-    """
-    Vista de estadísticas y análisis de permisos
-    """
-    # Obtener estadísticas por rol
-    estadisticas_roles = []
-    
-    for rol_codigo, rol_nombre in PermisoRol.ROLES_CHOICES:
-        total_opciones = OpcionMenu.objects.filter(activo=True).count()
-        permisos_rol = PermisoRol.objects.filter(rol=rol_codigo)
-        
-        estadisticas_roles.append({
-            'codigo': rol_codigo,
-            'nombre': rol_nombre,
-            'total_permisos': permisos_rol.count(),
-            'puede_ver': permisos_rol.filter(puede_ver=True).count(),
-            'puede_crear': permisos_rol.filter(puede_crear=True).count(),
-            'puede_editar': permisos_rol.filter(puede_editar=True).count(),
-            'puede_eliminar': permisos_rol.filter(puede_eliminar=True).count(),
-            'puede_exportar': permisos_rol.filter(puede_exportar=True).count(),
-            'total_opciones': total_opciones,
-            'cobertura': round((permisos_rol.count() / total_opciones * 100) if total_opciones > 0 else 0, 1)
-        })
-    
-    # Usuarios por rol
-    usuarios_por_rol = []
-    for rol_codigo, rol_nombre in PermisoRol.ROLES_CHOICES:
-        count = Usuario.objects.filter(rol=rol_codigo, es_activo=True).count()
-        usuarios_por_rol.append({
-            'codigo': rol_codigo,
-            'nombre': rol_nombre,
-            'total': count
-        })
-    
-    context = {
-        'estadisticas_roles': estadisticas_roles,
-        'usuarios_por_rol': usuarios_por_rol,
-    }
-    
-    return render(request, 'gestion_permisos/estadisticas.html', context)
-
-
-# ========== PERMISOS POR SUCURSAL ==========
+# ---------------------------------------------------------------------------
+# Permisos por sucursal
+# ---------------------------------------------------------------------------
 
 @login_required
 @solo_administrador
 @require_http_methods(["GET"])
 def obtener_sucursales_permisos(request):
-    """
-    API para obtener todas las sucursales disponibles para configurar permisos
-    """
-    try:
-        sucursales = Sucursal.objects.all().order_by('alias')
-        
-        sucursales_data = []
-        for suc in sucursales:
-            # Contar cuántas opciones tiene configuradas
-            permisos_count = PermisoSucursal.objects.filter(sucursal=suc).count()
-            deshabilitados_count = PermisoSucursal.objects.filter(sucursal=suc, habilitado=False).count()
-            
-            sucursales_data.append({
-                'id': suc.id,
-                'alias': suc.alias,
-                'direccion': suc.direccion,
-                'tipo_sucursal': suc.tipo_sucursal if hasattr(suc, 'tipo_sucursal') else 'N/A',
-                'tipo_sucursal_display': suc.get_tipo_sucursal_display() if hasattr(suc, 'tipo_sucursal') else 'N/A',
-                'permisos_configurados': permisos_count,
-                'opciones_deshabilitadas': deshabilitados_count,
-            })
-        
-        return JsonResponse({
-            'success': True,
-            'sucursales': sucursales_data
+    """Sucursales con el conteo de restricciones configuradas."""
+    conteos = {
+        r['sucursal_id']: r
+        for r in PermisoSucursal.objects.values('sucursal_id').annotate(
+            total=Count('id'),
+            deshabilitadas=Count('id', filter=Q(habilitado=False)),
+            restringidas=Count('id', filter=(
+                Q(habilitado=False) | Q(puede_crear=False) | Q(puede_editar=False)
+                | Q(puede_eliminar=False) | Q(puede_exportar=False) | Q(puede_aprobar=False)
+            )),
+        )
+    }
+    sucursales_data = []
+    for suc in Sucursal.objects.all().order_by('alias'):
+        c = conteos.get(suc.id, {})
+        sucursales_data.append({
+            'id': suc.id,
+            'alias': suc.alias,
+            'direccion': suc.direccion,
+            'tipo_sucursal': getattr(suc, 'tipo_sucursal', None) or 'N/A',
+            'tipo_sucursal_display': suc.get_tipo_sucursal_display() if hasattr(suc, 'get_tipo_sucursal_display') else 'N/A',
+            'activa': getattr(suc, 'activa', True),
+            'permisos_configurados': c.get('total', 0),
+            'opciones_deshabilitadas': c.get('deshabilitadas', 0),
+            'opciones_restringidas': c.get('restringidas', 0),
         })
-    except Exception as e:
-        return JsonResponse({
-            'error': True,
-            'mensaje': f'Error al obtener sucursales: {str(e)}'
-        }, status=500)
+    return JsonResponse({'success': True, 'sucursales': sucursales_data})
 
 
 @login_required
 @solo_administrador
 @require_http_methods(["GET"])
 def obtener_permisos_sucursal(request):
-    """
-    API para obtener todos los permisos de una sucursal específica
-    """
-    sucursal_id = request.GET.get('sucursal_id')
-    
-    if not sucursal_id:
-        return JsonResponse({'error': 'Sucursal no especificada'}, status=400)
-    
-    try:
-        sucursal = Sucursal.objects.get(id=sucursal_id)
-    except Sucursal.DoesNotExist:
-        return JsonResponse({'error': 'Sucursal no encontrada'}, status=404)
-    
-    # Obtener todos los módulos con sus opciones
-    modulos_data = []
-    modulos = ModuloSistema.objects.filter(activo=True).prefetch_related('opciones').order_by('orden')
-    
-    for modulo in modulos:
-        opciones_data = []
-        opciones = modulo.opciones.filter(activo=True, padre__isnull=True).order_by('orden')
-        
-        for opcion in opciones:
-            # Buscar permisos existentes para la sucursal
-            permiso = PermisoSucursal.objects.filter(sucursal=sucursal, opcion_menu=opcion).first()
-            
-            opcion_info = {
-                'id': opcion.id,
-                'codigo': opcion.codigo,
-                'nombre': opcion.nombre,
-                'url_name': opcion.url_name,
-                'icono': opcion.icono,
-                'es_submenu': opcion.es_submenu,
-                'permisos': {
-                    'habilitado': permiso.habilitado if permiso else True,
-                    'puede_crear': permiso.puede_crear if permiso else True,
-                    'puede_editar': permiso.puede_editar if permiso else True,
-                    'puede_eliminar': permiso.puede_eliminar if permiso else False,
-                    'puede_exportar': permiso.puede_exportar if permiso else True,
-                    # Sin fila de sucursal no hay restricción, así que el estado
-                    # real es "puede". El campo del modelo nace en False y la
-                    # pantalla nunca lo enviaba: bastaba un "Guardar" para dejar
-                    # a la sucursal sin poder aprobar nada (caso NICK1, que
-                    # quedó sin poder regularizar recepciones de DTE).
-                    'puede_aprobar': permiso.puede_aprobar if permiso else True,
-                },
-                'notas': permiso.notas if permiso else ''
-            }
-            
-            # Si tiene subopciones, incluirlas
-            if opcion.es_submenu:
-                subopciones_data = []
-                subopciones = opcion.hijos.filter(activo=True).order_by('orden')
-                
-                for subopcion in subopciones:
-                    permiso_sub = PermisoSucursal.objects.filter(sucursal=sucursal, opcion_menu=subopcion).first()
-                    subopciones_data.append({
-                        'id': subopcion.id,
-                        'codigo': subopcion.codigo,
-                        'nombre': subopcion.nombre,
-                        'url_name': subopcion.url_name,
-                        'icono': subopcion.icono,
-                        'permisos': {
-                            'habilitado': permiso_sub.habilitado if permiso_sub else True,
-                            'puede_crear': permiso_sub.puede_crear if permiso_sub else True,
-                            'puede_editar': permiso_sub.puede_editar if permiso_sub else True,
-                            'puede_eliminar': permiso_sub.puede_eliminar if permiso_sub else False,
-                            'puede_exportar': permiso_sub.puede_exportar if permiso_sub else True,
-                        },
-                        'notas': permiso_sub.notas if permiso_sub else ''
-                    })
-                
-                opcion_info['subopciones'] = subopciones_data
-            
-            opciones_data.append(opcion_info)
-        
-        modulos_data.append({
-            'id': modulo.id,
-            'codigo': modulo.codigo,
-            'nombre': modulo.nombre,
-            'descripcion': modulo.descripcion,
-            'icono': modulo.icono,
-            'opciones': opciones_data
-        })
-    
+    """Árbol de restricciones de una sucursal."""
+    sucursal = Sucursal.objects.filter(id=request.GET.get('sucursal_id') or 0).first()
+    if sucursal is None:
+        return _json_error('Sucursal no encontrada', status=404)
+
+    filas = {p.opcion_menu_id: p for p in PermisoSucursal.objects.filter(sucursal=sucursal)}
+
+    def construir(op):
+        info = _info_opcion(op)
+        fila = filas.get(op.id)
+        info['permisos'] = _flags(fila, TIPOS_PERMISO_SUCURSAL, SUCURSAL_SIN_RESTRICCION)
+        info['notas'] = (fila.notas or '') if fila else ''
+        info['configurada'] = fila is not None
+        return info
+
     return JsonResponse({
         'success': True,
         'sucursal': {
             'id': sucursal.id,
             'alias': sucursal.alias,
             'direccion': sucursal.direccion,
-            'tipo_sucursal': sucursal.tipo_sucursal if hasattr(sucursal, 'tipo_sucursal') else 'N/A',
+            'tipo_sucursal': getattr(sucursal, 'tipo_sucursal', None) or 'N/A',
         },
-        'modulos': modulos_data
+        'modulos': _arbol_modulos(construir),
     })
 
 
@@ -653,967 +616,567 @@ def obtener_permisos_sucursal(request):
 @solo_administrador
 @require_http_methods(["POST"])
 def guardar_permisos_sucursal(request):
-    """
-    API para guardar múltiples permisos de una sucursal de una vez
-    """
+    """Guarda las restricciones de una sucursal."""
     try:
-        data = json.loads(request.body)
-        
-        sucursal_id = data.get('sucursal_id')
-        permisos_data = data.get('permisos', [])
-        
-        if not sucursal_id:
-            return JsonResponse({
-                'error': True,
-                'mensaje': 'Sucursal no especificada'
-            }, status=400)
-        
-        try:
-            sucursal = Sucursal.objects.get(id=sucursal_id)
-        except Sucursal.DoesNotExist:
-            return JsonResponse({
-                'error': True,
-                'mensaje': 'Sucursal no encontrada'
-            }, status=404)
-        
-        permisos_actualizados = 0
-        permisos_creados = 0
-        
-        for permiso_item in permisos_data:
-            opcion_id = permiso_item.get('opcion_id')
-            permisos_valores = permiso_item.get('permisos', {})
-            notas = permiso_item.get('notas', '')
-            
-            opcion = OpcionMenu.objects.filter(id=opcion_id).first()
-            if not opcion:
-                continue
-            
-            permiso, created = PermisoSucursal.objects.get_or_create(
-                sucursal=sucursal,
-                opcion_menu=opcion
-            )
-            
-            # Actualizar todos los permisos
-            permiso.habilitado = permisos_valores.get('habilitado', True)
-            permiso.puede_crear = permisos_valores.get('puede_crear', True)
-            permiso.puede_editar = permisos_valores.get('puede_editar', True)
-            permiso.puede_eliminar = permisos_valores.get('puede_eliminar', False)
-            permiso.puede_exportar = permisos_valores.get('puede_exportar', True)
-            # Default True como sus hermanos: el modelo lo declara False y, al
-            # no enviarse nunca desde la pantalla, cada guardado dejaba la
-            # sucursal sin permiso de aprobar sin que nadie lo pidiera.
-            permiso.puede_aprobar = permisos_valores.get('puede_aprobar', True)
-            permiso.notas = notas
-            
-            permiso.save()
-            
-            if created:
-                permisos_creados += 1
-            else:
-                permisos_actualizados += 1
-        
-        return JsonResponse({
-            'success': True,
-            'mensaje': f'Permisos guardados correctamente para {sucursal.alias}',
-            'creados': permisos_creados,
-            'actualizados': permisos_actualizados
-        })
-    
+        data = _leer_json(request)
     except json.JSONDecodeError:
-        return JsonResponse({
-            'error': True,
-            'mensaje': 'Error en el formato de los datos'
-        }, status=400)
-    except Exception as e:
-        return JsonResponse({
-            'error': True,
-            'mensaje': f'Error al guardar permisos: {str(e)}'
-        }, status=500)
+        return _json_error('Error en el formato de los datos')
+
+    sucursal = Sucursal.objects.filter(id=data.get('sucursal_id') or 0).first()
+    if sucursal is None:
+        return _json_error('Sucursal no encontrada', status=404)
+
+    permisos_data = data.get('permisos') or []
+    ids = []
+    for item in permisos_data:
+        try:
+            ids.append(int(item.get('opcion_id')))
+        except (TypeError, ValueError):
+            continue
+    opciones = {o.id: o for o in OpcionMenu.objects.filter(id__in=ids)}
+
+    creados = actualizados = 0
+    with transaction.atomic():
+        existentes = {p.opcion_menu_id: p for p in PermisoSucursal.objects.select_for_update().filter(sucursal=sucursal)}
+        for item in permisos_data:
+            try:
+                opcion = opciones.get(int(item.get('opcion_id')))
+            except (TypeError, ValueError):
+                opcion = None
+            if opcion is None:
+                continue
+            valores = item.get('permisos') or {}
+            permiso = existentes.get(opcion.id)
+            if permiso is None:
+                permiso = PermisoSucursal(sucursal=sucursal, opcion_menu=opcion)
+                creados += 1
+            else:
+                actualizados += 1
+            for tipo in TIPOS_PERMISO_SUCURSAL:
+                # Lo que no llega queda SIN restricción (ver SUCURSAL_SIN_RESTRICCION).
+                setattr(permiso, tipo, _bool(valores.get(tipo), default=True))
+            permiso.notas = (item.get('notas') or '').strip()
+            permiso.save()
+
+    logger.info('Permisos: %s guardó restricciones de la sucursal %s (%d opciones)',
+                request.user.username, sucursal.alias, creados + actualizados)
+    return JsonResponse({
+        'success': True,
+        'mensaje': f'Permisos guardados correctamente para {sucursal.alias}',
+        'creados': creados,
+        'actualizados': actualizados,
+    })
 
 
 @login_required
 @solo_administrador
 @require_http_methods(["POST"])
 def copiar_permisos_sucursal(request):
-    """
-    API para copiar permisos de una sucursal a otra
-    """
+    """Copia las restricciones de una sucursal a otra (antes se perdía Aprobar)."""
     try:
-        data = json.loads(request.body)
-        
-        sucursal_origen_id = data.get('sucursal_origen_id')
-        sucursal_destino_id = data.get('sucursal_destino_id')
-        sobrescribir = data.get('sobrescribir', False)
-        
-        if not sucursal_origen_id or not sucursal_destino_id:
-            return JsonResponse({
-                'error': True,
-                'mensaje': 'Sucursales origen y destino son requeridas'
-            }, status=400)
-        
-        if sucursal_origen_id == sucursal_destino_id:
-            return JsonResponse({
-                'error': True,
-                'mensaje': 'La sucursal origen y destino no pueden ser la misma'
-            }, status=400)
-        
-        try:
-            sucursal_origen = Sucursal.objects.get(id=sucursal_origen_id)
-            sucursal_destino = Sucursal.objects.get(id=sucursal_destino_id)
-        except Sucursal.DoesNotExist:
-            return JsonResponse({
-                'error': True,
-                'mensaje': 'Una de las sucursales no existe'
-            }, status=404)
-        
-        # Obtener permisos de la sucursal origen
-        permisos_origen = PermisoSucursal.objects.filter(sucursal=sucursal_origen)
-        
-        permisos_creados = 0
-        permisos_actualizados = 0
-        permisos_omitidos = 0
-        
-        for permiso_origen in permisos_origen:
-            permiso_destino, created = PermisoSucursal.objects.get_or_create(
-                sucursal=sucursal_destino,
-                opcion_menu=permiso_origen.opcion_menu
-            )
-            
-            if created or sobrescribir:
-                permiso_destino.habilitado = permiso_origen.habilitado
-                permiso_destino.puede_crear = permiso_origen.puede_crear
-                permiso_destino.puede_editar = permiso_origen.puede_editar
-                permiso_destino.puede_eliminar = permiso_origen.puede_eliminar
-                permiso_destino.puede_exportar = permiso_origen.puede_exportar
-                permiso_destino.notas = f"Copiado de {sucursal_origen.alias}"
-                permiso_destino.save()
-                
-                if created:
-                    permisos_creados += 1
-                else:
-                    permisos_actualizados += 1
-            else:
-                permisos_omitidos += 1
-        
-        return JsonResponse({
-            'success': True,
-            'mensaje': f'Permisos copiados de {sucursal_origen.alias} a {sucursal_destino.alias}',
-            'creados': permisos_creados,
-            'actualizados': permisos_actualizados,
-            'omitidos': permisos_omitidos
-        })
-    
+        data = _leer_json(request)
     except json.JSONDecodeError:
-        return JsonResponse({
-            'error': True,
-            'mensaje': 'Error en el formato de los datos'
-        }, status=400)
-    except Exception as e:
-        return JsonResponse({
-            'error': True,
-            'mensaje': f'Error al copiar permisos: {str(e)}'
-        }, status=500)
+        return _json_error('Error en el formato de los datos')
+
+    origen_id = data.get('sucursal_origen_id')
+    destino_id = data.get('sucursal_destino_id')
+    sobrescribir = _bool(data.get('sobrescribir'))
+    if not origen_id or not destino_id:
+        return _json_error('Sucursales origen y destino son requeridas')
+    if str(origen_id) == str(destino_id):
+        return _json_error('La sucursal origen y destino no pueden ser la misma')
+    origen = Sucursal.objects.filter(id=origen_id).first()
+    destino = Sucursal.objects.filter(id=destino_id).first()
+    if origen is None or destino is None:
+        return _json_error('Una de las sucursales no existe', status=404)
+
+    creados = actualizados = omitidos = 0
+    with transaction.atomic():
+        existentes = {p.opcion_menu_id: p for p in PermisoSucursal.objects.select_for_update().filter(sucursal=destino)}
+        for p_origen in PermisoSucursal.objects.filter(sucursal=origen):
+            p_destino = existentes.get(p_origen.opcion_menu_id)
+            if p_destino is not None and not sobrescribir:
+                omitidos += 1
+                continue
+            if p_destino is None:
+                p_destino = PermisoSucursal(sucursal=destino, opcion_menu_id=p_origen.opcion_menu_id)
+                creados += 1
+            else:
+                actualizados += 1
+            for tipo in TIPOS_PERMISO_SUCURSAL:
+                setattr(p_destino, tipo, getattr(p_origen, tipo))
+            p_destino.notas = f"Copiado de {origen.alias}"
+            p_destino.save()
+
+    logger.info('Permisos: %s copió restricciones %s -> %s', request.user.username, origen.alias, destino.alias)
+    return JsonResponse({
+        'success': True,
+        'mensaje': f'Permisos copiados de {origen.alias} a {destino.alias}',
+        'creados': creados,
+        'actualizados': actualizados,
+        'omitidos': omitidos,
+    })
+
+
+# Plantillas de restricciones por tipo de sucursal.
+# ⚠️ Estos códigos DEBEN existir y estar activos en OpcionMenu. Un código
+# inventado no lanza error: el bucle lo saltaría y la respuesta diría
+# "plantilla aplicada". Como además se empieza habilitando TODO, una plantilla
+# con códigos malos deja a la sucursal con MÁS acceso del que tenía.
+# Pasó de verdad: 9 de 15 códigos no existían ('compras_gestion' en vez de
+# 'gestion_compras', etc.), así que la plantilla VENDEDORA nunca bloqueó compras.
+PLANTILLAS_SUCURSAL = {
+    'VENDEDORA': {
+        # Sucursal vendedora: NO puede comprar ni recepcionar mercadería.
+        # Crear/importar productos no son opciones propias: son acciones de
+        # 'gestion_producto', por eso se deja en solo lectura.
+        'deshabilitar': ['gestion_compras', 'gestion_dte_compras', 'recepcion_dte'],
+        'solo_lectura': ['gestion_producto', 'dashboard_compras_estrategico'],
+    },
+    'CENTRO_DISTRIBUCION': {
+        # Centro de distribución: NO puede hacer ventas POS
+        'deshabilitar': ['pos_dashboard', 'ticket_venta', 'cuadratura_caja',
+                         'gestion_documentos_ventas', 'cambios_devoluciones'],
+        'solo_lectura': ['dashboard_ventas'],
+    },
+    'MIXTA': {
+        # Sucursal mixta: todo habilitado
+        'deshabilitar': [],
+        'solo_lectura': [],
+    },
+}
 
 
 @login_required
 @solo_administrador
 @require_http_methods(["POST"])
 def aplicar_plantilla_tipo_sucursal(request):
-    """
-    API para aplicar una plantilla de permisos basada en el tipo de sucursal.
-    Tipos: CENTRO_DISTRIBUCION, VENDEDORA, MIXTA
-    """
+    """Aplica una plantilla de restricciones: VENDEDORA, CENTRO_DISTRIBUCION o MIXTA."""
     try:
-        data = json.loads(request.body)
-        
-        sucursal_id = data.get('sucursal_id')
-        tipo_plantilla = data.get('tipo_plantilla')  # 'CENTRO_DISTRIBUCION', 'VENDEDORA', 'MIXTA'
-        
-        if not sucursal_id or not tipo_plantilla:
-            return JsonResponse({
-                'error': True,
-                'mensaje': 'Sucursal y tipo de plantilla son requeridos'
-            }, status=400)
-        
-        try:
-            sucursal = Sucursal.objects.get(id=sucursal_id)
-        except Sucursal.DoesNotExist:
-            return JsonResponse({
-                'error': True,
-                'mensaje': 'Sucursal no encontrada'
-            }, status=404)
-        
-        # Definir plantillas de permisos por tipo de sucursal
-        # Códigos de opciones que se restringen según el tipo
-        #
-        # ⚠️ Estos códigos DEBEN existir y estar activos en OpcionMenu. Un código
-        # inventado no lanza error: el bucle de abajo lo salta y la función
-        # responde igualmente "plantilla aplicada". Como además se empieza
-        # habilitando TODO, una plantilla con códigos malos deja a la sucursal
-        # con MÁS acceso del que tenía, informando éxito.
-        # Pasó de verdad: 9 de 15 códigos no existían ('compras_gestion' en vez
-        # de 'gestion_compras', 'ventas_documentos' en vez de
-        # 'gestion_documentos_ventas', etc.), así que la plantilla VENDEDORA
-        # nunca llegó a bloquear compras ni productos. Ahora los códigos que no
-        # resuelven se devuelven en la respuesta para que no vuelva a pasar.
-        PLANTILLAS = {
-            'VENDEDORA': {
-                # Sucursal vendedora: NO puede comprar ni recepcionar mercadería.
-                # Crear/importar productos no son opciones de menú propias: son
-                # acciones dentro de 'gestion_producto', por eso se controlan
-                # dejándola en solo lectura (puede_crear=False) y no aquí.
-                'deshabilitar': [
-                    'gestion_compras',
-                    'gestion_dte_compras',
-                    'recepcion_dte',
-                ],
-                'solo_lectura': [
-                    'gestion_producto',
-                    'dashboard_compras_estrategico',
-                ],
-            },
-            'CENTRO_DISTRIBUCION': {
-                # Centro de distribución: NO puede hacer ventas POS
-                'deshabilitar': [
-                    'pos_dashboard',
-                    'ticket_venta',
-                    'cuadratura_caja',
-                    'gestion_documentos_ventas',
-                    'cambios_devoluciones',
-                ],
-                'solo_lectura': [
-                    'dashboard_ventas',
-                ],
-            },
-            'MIXTA': {
-                # Sucursal mixta: Todo habilitado
-                'deshabilitar': [],
-                'solo_lectura': [],
-            },
-        }
-        
-        plantilla = PLANTILLAS.get(tipo_plantilla)
-        if not plantilla:
-            return JsonResponse({
-                'error': True,
-                'mensaje': f'Tipo de plantilla no válido: {tipo_plantilla}'
-            }, status=400)
-        
-        permisos_actualizados = 0
-        codigos_no_resueltos = []
-
-        # Se valida ANTES de tocar nada: como el primer paso habilita todas las
-        # opciones, abortar a mitad de camino dejaría la sucursal abierta.
-        for codigo in plantilla.get('deshabilitar', []) + plantilla.get('solo_lectura', []):
-            if not OpcionMenu.objects.filter(codigo=codigo, activo=True).exists():
-                codigos_no_resueltos.append(codigo)
-
-        if codigos_no_resueltos:
-            logger.error(
-                'Plantilla de permisos "%s" con códigos inexistentes o inactivos: %s. '
-                'No se aplicó nada.', tipo_plantilla, ', '.join(codigos_no_resueltos)
-            )
-            return JsonResponse({
-                'error': True,
-                'mensaje': (
-                    f'La plantilla "{tipo_plantilla}" está mal definida y NO se aplicó: '
-                    f'{len(codigos_no_resueltos)} opción(es) no existen o están inactivas '
-                    f'({", ".join(codigos_no_resueltos)}). Aplicarla habría dejado la '
-                    f'sucursal con más acceso del que tiene ahora.'
-                ),
-                'codigos_no_resueltos': codigos_no_resueltos,
-            }, status=409)
-
-        # Primero, habilitar todas las opciones
-        PermisoSucursal.objects.filter(sucursal=sucursal).update(
-            habilitado=True,
-            puede_crear=True,
-            puede_editar=True,
-            puede_exportar=True
-        )
-        
-        # Aplicar deshabilitaciones
-        for codigo in plantilla.get('deshabilitar', []):
-            opcion = OpcionMenu.objects.filter(codigo=codigo, activo=True).first()
-            if opcion:
-                permiso, _ = PermisoSucursal.objects.get_or_create(
-                    sucursal=sucursal,
-                    opcion_menu=opcion
-                )
-                permiso.habilitado = False
-                permiso.puede_crear = False
-                permiso.puede_editar = False
-                permiso.notas = f"Deshabilitado por plantilla {tipo_plantilla}"
-                permiso.save()
-                permisos_actualizados += 1
-        
-        # Aplicar solo lectura
-        for codigo in plantilla.get('solo_lectura', []):
-            opcion = OpcionMenu.objects.filter(codigo=codigo, activo=True).first()
-            if opcion:
-                permiso, _ = PermisoSucursal.objects.get_or_create(
-                    sucursal=sucursal,
-                    opcion_menu=opcion
-                )
-                permiso.habilitado = True
-                permiso.puede_crear = False
-                permiso.puede_editar = False
-                permiso.puede_eliminar = False
-                permiso.notas = f"Solo lectura por plantilla {tipo_plantilla}"
-                permiso.save()
-                permisos_actualizados += 1
-        
-        return JsonResponse({
-            'success': True,
-            'mensaje': f'Plantilla "{tipo_plantilla}" aplicada a {sucursal.alias}',
-            'permisos_actualizados': permisos_actualizados
-        })
-    
+        data = _leer_json(request)
     except json.JSONDecodeError:
-        return JsonResponse({
-            'error': True,
-            'mensaje': 'Error en el formato de los datos'
-        }, status=400)
-    except Exception as e:
-        return JsonResponse({
-            'error': True,
-            'mensaje': f'Error al aplicar plantilla: {str(e)}'
-        }, status=500)
+        return _json_error('Error en el formato de los datos')
+
+    tipo_plantilla = data.get('tipo_plantilla')
+    sucursal = Sucursal.objects.filter(id=data.get('sucursal_id') or 0).first()
+    if sucursal is None or not tipo_plantilla:
+        return _json_error('Sucursal y tipo de plantilla son requeridos')
+    plantilla = PLANTILLAS_SUCURSAL.get(tipo_plantilla)
+    if plantilla is None:
+        return _json_error(f'Tipo de plantilla no válido: {tipo_plantilla}')
+
+    codigos = plantilla['deshabilitar'] + plantilla['solo_lectura']
+    opciones = {o.codigo: o for o in OpcionMenu.objects.filter(codigo__in=codigos, activo=True)}
+    no_resueltos = [c for c in codigos if c not in opciones]
+    if no_resueltos:
+        # Se valida ANTES de tocar nada: el primer paso habilita todo.
+        logger.error('Plantilla de permisos "%s" con códigos inexistentes o inactivos: %s. '
+                     'No se aplicó nada.', tipo_plantilla, ', '.join(no_resueltos))
+        return _json_error(
+            f'La plantilla "{tipo_plantilla}" está mal definida y NO se aplicó: '
+            f'{len(no_resueltos)} opción(es) no existen o están inactivas '
+            f'({", ".join(no_resueltos)}). Aplicarla habría dejado la sucursal '
+            f'con más acceso del que tiene ahora.',
+            status=409, codigos_no_resueltos=no_resueltos,
+        )
+
+    actualizados = 0
+    with transaction.atomic():
+        # Primero se levanta toda restricción previa (mismo estado que "sin fila").
+        PermisoSucursal.objects.filter(sucursal=sucursal).update(**SUCURSAL_SIN_RESTRICCION)
+        for codigo in plantilla['deshabilitar']:
+            permiso, _ = PermisoSucursal.objects.get_or_create(sucursal=sucursal, opcion_menu=opciones[codigo])
+            permiso.habilitado = False
+            permiso.puede_crear = False
+            permiso.puede_editar = False
+            permiso.notas = f"Deshabilitado por plantilla {tipo_plantilla}"
+            permiso.save()
+            actualizados += 1
+        for codigo in plantilla['solo_lectura']:
+            permiso, _ = PermisoSucursal.objects.get_or_create(sucursal=sucursal, opcion_menu=opciones[codigo])
+            permiso.habilitado = True
+            permiso.puede_crear = False
+            permiso.puede_editar = False
+            permiso.puede_eliminar = False
+            permiso.notas = f"Solo lectura por plantilla {tipo_plantilla}"
+            permiso.save()
+            actualizados += 1
+
+    logger.info('Permisos: %s aplicó plantilla %s a %s', request.user.username, tipo_plantilla, sucursal.alias)
+    return JsonResponse({
+        'success': True,
+        'mensaje': f'Plantilla "{tipo_plantilla}" aplicada a {sucursal.alias}',
+        'permisos_actualizados': actualizados,
+    })
 
 
 @login_required
 @solo_administrador
 @require_http_methods(["POST"])
 def restablecer_permisos_sucursal(request):
-    """
-    API para restablecer todos los permisos de una sucursal (eliminar restricciones)
-    """
+    """Elimina todas las restricciones de una sucursal."""
     try:
-        data = json.loads(request.body)
-        
-        sucursal_id = data.get('sucursal_id')
-        
-        if not sucursal_id:
-            return JsonResponse({
-                'error': True,
-                'mensaje': 'Sucursal no especificada'
-            }, status=400)
-        
-        try:
-            sucursal = Sucursal.objects.get(id=sucursal_id)
-        except Sucursal.DoesNotExist:
-            return JsonResponse({
-                'error': True,
-                'mensaje': 'Sucursal no encontrada'
-            }, status=404)
-        
-        # Eliminar todos los permisos configurados para la sucursal
-        count, _ = PermisoSucursal.objects.filter(sucursal=sucursal).delete()
-        
-        return JsonResponse({
-            'success': True,
-            'mensaje': f'Permisos restablecidos para {sucursal.alias}. Se eliminaron {count} configuraciones.',
-            'eliminados': count
-        })
-    
+        data = _leer_json(request)
     except json.JSONDecodeError:
-        return JsonResponse({
-            'error': True,
-            'mensaje': 'Error en el formato de los datos'
-        }, status=400)
-    except Exception as e:
-        return JsonResponse({
-            'error': True,
-            'mensaje': f'Error al restablecer permisos: {str(e)}'
-        }, status=500)
+        return _json_error('Error en el formato de los datos')
+    sucursal = Sucursal.objects.filter(id=data.get('sucursal_id') or 0).first()
+    if sucursal is None:
+        return _json_error('Sucursal no encontrada', status=404)
+
+    count, _ = PermisoSucursal.objects.filter(sucursal=sucursal).delete()
+    logger.info('Permisos: %s restableció la sucursal %s (%d filas)', request.user.username, sucursal.alias, count)
+    return JsonResponse({
+        'success': True,
+        'mensaje': f'Permisos restablecidos para {sucursal.alias}. Se eliminaron {count} configuraciones.',
+        'eliminados': count,
+    })
 
 
-# ========== EXPORTAR / IMPORTAR PERMISOS ==========
+# ---------------------------------------------------------------------------
+# Exportar / importar
+# ---------------------------------------------------------------------------
+
+def _descarga_json(data, filename):
+    response = HttpResponse(json.dumps(data, indent=2, ensure_ascii=False, default=str),
+                            content_type='application/json')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+def _exportar_filas_rol(rol):
+    permisos = PermisoRol.objects.filter(rol=rol).select_related('opcion_menu', 'opcion_menu__modulo')
+    return [{
+        'opcion_codigo': p.opcion_menu.codigo,
+        'opcion_nombre': p.opcion_menu.nombre,
+        'modulo_codigo': p.opcion_menu.modulo.codigo if p.opcion_menu.modulo_id else None,
+        'permisos': {t: getattr(p, t) for t in TIPOS_PERMISO},
+    } for p in permisos]
+
 
 @login_required
 @solo_administrador
 @require_http_methods(["GET"])
 def exportar_permisos_rol(request):
-    """
-    API para exportar todos los permisos de un rol en formato JSON
-    """
+    """Descarga los permisos de un rol en JSON."""
     rol = request.GET.get('rol')
-    
-    if not rol:
-        return JsonResponse({'error': 'Rol no especificado'}, status=400)
-    
-    try:
-        # Obtener todos los permisos del rol
-        permisos = PermisoRol.objects.filter(rol=rol).select_related('opcion_menu', 'opcion_menu__modulo')
-        
-        # Obtener el límite de descuento
-        resultado = permisos.aggregate(max_limite=Max('limite_descuento_porcentaje'))
-        limite_descuento = float(resultado['max_limite']) if resultado['max_limite'] is not None else 0
-        
-        # Construir la estructura de exportación
-        permisos_data = []
-        for permiso in permisos:
-            permisos_data.append({
-                'opcion_codigo': permiso.opcion_menu.codigo,
-                'opcion_nombre': permiso.opcion_menu.nombre,
-                'modulo_codigo': permiso.opcion_menu.modulo.codigo if permiso.opcion_menu.modulo else None,
-                'permisos': {
-                    'puede_ver': permiso.puede_ver,
-                    'puede_crear': permiso.puede_crear,
-                    'puede_editar': permiso.puede_editar,
-                    'puede_eliminar': permiso.puede_eliminar,
-                    'puede_exportar': permiso.puede_exportar,
-                }
-            })
-        
-        # Estructura del archivo de exportación
-        export_data = {
-            'version': '1.0',
-            'tipo': 'permisos_rol',
-            'fecha_exportacion': timezone.localtime().isoformat(),
-            'rol': rol,
-            'rol_nombre': dict(PermisoRol.ROLES_CHOICES).get(rol, rol),
-            'limite_descuento': limite_descuento,
-            'total_permisos': len(permisos_data),
-            'permisos': permisos_data
-        }
-        
-        # Crear respuesta como archivo descargable
-        response = HttpResponse(
-            json.dumps(export_data, indent=2, ensure_ascii=False),
-            content_type='application/json'
-        )
-        filename = f'permisos_{rol}_{timezone.localtime().strftime("%Y%m%d_%H%M%S")}.json'
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
-        return response
-        
-    except Exception as e:
-        return JsonResponse({
-            'error': True,
-            'mensaje': f'Error al exportar permisos: {str(e)}'
-        }, status=500)
+    if rol not in ROLES_VALIDOS:
+        return _json_error('Rol no especificado o no válido')
+    filas = _exportar_filas_rol(rol)
+    ahora = timezone.localtime()
+    return _descarga_json({
+        'version': '1.1',
+        'tipo': 'permisos_rol',
+        'fecha_exportacion': ahora.isoformat(),
+        'rol': rol,
+        'rol_nombre': ROLES_VALIDOS[rol],
+        'limite_descuento': float(_limite_descuento_rol(rol)),
+        'total_permisos': len(filas),
+        'permisos': filas,
+    }, f'permisos_{rol}_{ahora:%Y%m%d_%H%M%S}.json')
 
 
 @login_required
 @solo_administrador
 @require_http_methods(["GET"])
 def exportar_todos_permisos(request):
-    """
-    API para exportar todos los permisos de todos los roles en formato JSON
-    """
-    try:
-        roles_data = []
-        
-        for rol_codigo, rol_nombre in PermisoRol.ROLES_CHOICES:
-            permisos = PermisoRol.objects.filter(rol=rol_codigo).select_related('opcion_menu', 'opcion_menu__modulo')
-            
-            # Obtener el límite de descuento del rol
-            resultado = permisos.aggregate(max_limite=Max('limite_descuento_porcentaje'))
-            limite_descuento = float(resultado['max_limite']) if resultado['max_limite'] is not None else 0
-            
-            permisos_data = []
-            for permiso in permisos:
-                permisos_data.append({
-                    'opcion_codigo': permiso.opcion_menu.codigo,
-                    'opcion_nombre': permiso.opcion_menu.nombre,
-                    'modulo_codigo': permiso.opcion_menu.modulo.codigo if permiso.opcion_menu.modulo else None,
-                    'permisos': {
-                        'puede_ver': permiso.puede_ver,
-                        'puede_crear': permiso.puede_crear,
-                        'puede_editar': permiso.puede_editar,
-                        'puede_eliminar': permiso.puede_eliminar,
-                        'puede_exportar': permiso.puede_exportar,
-                    }
-                })
-            
-            roles_data.append({
-                'rol': rol_codigo,
-                'rol_nombre': rol_nombre,
-                'limite_descuento': limite_descuento,
-                'total_permisos': len(permisos_data),
-                'permisos': permisos_data
-            })
-        
-        # Estructura del archivo de exportación completo
-        export_data = {
-            'version': '1.0',
-            'tipo': 'permisos_completos',
-            'fecha_exportacion': timezone.localtime().isoformat(),
-            'total_roles': len(roles_data),
-            'roles': roles_data
-        }
-        
-        # Crear respuesta como archivo descargable
-        response = HttpResponse(
-            json.dumps(export_data, indent=2, ensure_ascii=False),
-            content_type='application/json'
-        )
-        filename = f'permisos_completos_{timezone.localtime().strftime("%Y%m%d_%H%M%S")}.json'
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
-        return response
-        
-    except Exception as e:
-        return JsonResponse({
-            'error': True,
-            'mensaje': f'Error al exportar permisos: {str(e)}'
-        }, status=500)
+    """Descarga los permisos de todos los roles en JSON."""
+    roles_data = []
+    for rol, nombre in PermisoRol.ROLES_CHOICES:
+        if rol == ROL_MAESTRO:
+            continue  # acceso total, no se configura ni se importa
+        filas = _exportar_filas_rol(rol)
+        roles_data.append({
+            'rol': rol,
+            'rol_nombre': nombre,
+            'limite_descuento': float(_limite_descuento_rol(rol)),
+            'total_permisos': len(filas),
+            'permisos': filas,
+        })
+    ahora = timezone.localtime()
+    return _descarga_json({
+        'version': '1.1',
+        'tipo': 'permisos_completos',
+        'fecha_exportacion': ahora.isoformat(),
+        'total_roles': len(roles_data),
+        'roles': roles_data,
+    }, f'permisos_completos_{ahora:%Y%m%d_%H%M%S}.json')
 
 
 @login_required
 @solo_administrador
 @require_http_methods(["POST"])
 def importar_permisos(request):
-    """
-    API para importar permisos desde un archivo JSON
-    Soporta importación de un solo rol o de todos los roles
-    """
+    """Importa permisos de un rol o de todos desde un JSON exportado por esta pantalla."""
     try:
-        # Verificar si hay archivo subido o datos JSON directos
         if request.FILES.get('archivo'):
-            archivo = request.FILES['archivo']
-            contenido = archivo.read().decode('utf-8')
-            data = json.loads(contenido)
+            data = json.loads(request.FILES['archivo'].read().decode('utf-8'))
         else:
-            data = json.loads(request.body)
-        
-        # Validar estructura del archivo
-        version = data.get('version')
-        tipo = data.get('tipo')
-        
-        if not version or not tipo:
-            return JsonResponse({
-                'error': True,
-                'mensaje': 'Archivo de importación inválido: falta versión o tipo'
-            }, status=400)
-        
-        sobrescribir = data.get('sobrescribir', True)
-        resultados = {
-            'roles_procesados': 0,
-            'permisos_creados': 0,
-            'permisos_actualizados': 0,
-            'permisos_omitidos': 0,
-            'errores': []
-        }
-        
-        if tipo == 'permisos_rol':
-            # Importar permisos de un solo rol
-            rol = data.get('rol')
-            rol_destino = request.POST.get('rol_destino') or data.get('rol_destino') or rol
-            
-            if not rol:
-                return JsonResponse({
-                    'error': True,
-                    'mensaje': 'No se especificó el rol en el archivo'
-                }, status=400)
-            
-            # Validar que el rol destino sea válido
-            roles_validos = [r[0] for r in PermisoRol.ROLES_CHOICES]
-            if rol_destino not in roles_validos:
-                return JsonResponse({
-                    'error': True,
-                    'mensaje': f'Rol destino inválido: {rol_destino}'
-                }, status=400)
-            
-            limite_descuento = Decimal(str(data.get('limite_descuento', 0)))
-            permisos_data = data.get('permisos', [])
-            
-            resultado_rol = _importar_permisos_rol(rol_destino, permisos_data, limite_descuento, sobrescribir)
-            resultados['roles_procesados'] = 1
-            resultados['permisos_creados'] = resultado_rol['creados']
-            resultados['permisos_actualizados'] = resultado_rol['actualizados']
-            resultados['permisos_omitidos'] = resultado_rol['omitidos']
-            resultados['errores'] = resultado_rol['errores']
-            
-        elif tipo == 'permisos_completos':
-            # Importar permisos de todos los roles
-            roles_data = data.get('roles', [])
-            
-            for rol_data in roles_data:
-                rol = rol_data.get('rol')
-                limite_descuento = Decimal(str(rol_data.get('limite_descuento', 0)))
-                permisos_data = rol_data.get('permisos', [])
-                
-                resultado_rol = _importar_permisos_rol(rol, permisos_data, limite_descuento, sobrescribir)
-                resultados['roles_procesados'] += 1
-                resultados['permisos_creados'] += resultado_rol['creados']
-                resultados['permisos_actualizados'] += resultado_rol['actualizados']
-                resultados['permisos_omitidos'] += resultado_rol['omitidos']
-                resultados['errores'].extend(resultado_rol['errores'])
-        else:
-            return JsonResponse({
-                'error': True,
-                'mensaje': f'Tipo de archivo no soportado: {tipo}'
-            }, status=400)
-        
-        return JsonResponse({
-            'success': True,
-            'mensaje': f'Importación completada: {resultados["roles_procesados"]} rol(es) procesado(s)',
-            'resultados': resultados
-        })
-        
-    except json.JSONDecodeError as e:
-        return JsonResponse({
-            'error': True,
-            'mensaje': f'Error al leer el archivo JSON: {str(e)}'
-        }, status=400)
-    except Exception as e:
-        return JsonResponse({
-            'error': True,
-            'mensaje': f'Error al importar permisos: {str(e)}'
-        }, status=500)
+            data = _leer_json(request)
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        return _json_error(f'Error al leer el archivo JSON: {e}')
+
+    if not data.get('version') or not data.get('tipo'):
+        return _json_error('Archivo de importación inválido: falta versión o tipo')
+
+    sobrescribir = _bool(data.get('sobrescribir'), default=True)
+    resultados = {'roles_procesados': 0, 'permisos_creados': 0, 'permisos_actualizados': 0,
+                  'permisos_omitidos': 0, 'errores': []}
+
+    if data['tipo'] == 'permisos_rol':
+        rol_destino = request.POST.get('rol_destino') or data.get('rol_destino') or data.get('rol')
+        motivo = _motivo_rol_no_editable(request.user, rol_destino)
+        if motivo:
+            return _json_error(motivo, status=403)
+        lotes = [(rol_destino, data.get('limite_descuento', 0), data.get('permisos') or [])]
+    elif data['tipo'] == 'permisos_completos':
+        lotes = []
+        for rol_data in data.get('roles') or []:
+            rol = rol_data.get('rol')
+            motivo = _motivo_rol_no_editable(request.user, rol)
+            if motivo:
+                resultados['errores'].append(f'{rol}: omitido — {motivo}')
+                continue
+            lotes.append((rol, rol_data.get('limite_descuento', 0), rol_data.get('permisos') or []))
+    else:
+        return _json_error(f'Tipo de archivo no soportado: {data["tipo"]}')
+
+    with transaction.atomic():
+        for rol, limite, permisos_data in lotes:
+            try:
+                limite = Decimal(str(limite or 0))
+            except InvalidOperation:
+                limite = Decimal('0')
+            r = _importar_permisos_rol(rol, permisos_data, limite, sobrescribir)
+            resultados['roles_procesados'] += 1
+            resultados['permisos_creados'] += r['creados']
+            resultados['permisos_actualizados'] += r['actualizados']
+            resultados['permisos_omitidos'] += r['omitidos']
+            resultados['errores'].extend(r['errores'])
+
+    logger.info('Permisos: %s importó %d rol(es) (sobrescribir=%s)', request.user.username,
+                resultados['roles_procesados'], sobrescribir)
+    return JsonResponse({
+        'success': True,
+        'mensaje': f'Importación completada: {resultados["roles_procesados"]} rol(es) procesado(s)',
+        'resultados': resultados,
+    })
 
 
 def _importar_permisos_rol(rol, permisos_data, limite_descuento, sobrescribir):
+    """Aplica al rol las filas de un archivo exportado.
+
+    Un flag que no viene en el archivo (p. ej. 'puede_aprobar' en exportaciones
+    viejas, versión 1.0) NO se toca en filas existentes: antes se ponía en False
+    y una importación de respaldo le quitaba en silencio las aprobaciones al rol.
     """
-    Función auxiliar para importar permisos de un rol específico
-    """
-    resultado = {
-        'creados': 0,
-        'actualizados': 0,
-        'omitidos': 0,
-        'errores': []
-    }
-    
-    # Actualizar límite de descuento en permisos existentes si sobrescribir está activo
+    resultado = {'creados': 0, 'actualizados': 0, 'omitidos': 0, 'errores': []}
     if sobrescribir:
         PermisoRol.objects.filter(rol=rol).update(limite_descuento_porcentaje=limite_descuento)
-    
-    for permiso_item in permisos_data:
-        opcion_codigo = permiso_item.get('opcion_codigo')
-        permisos_valores = permiso_item.get('permisos', {})
-        
-        # Buscar la opción por código
-        opcion = OpcionMenu.objects.filter(codigo=opcion_codigo, activo=True).first()
-        
-        if not opcion:
-            resultado['errores'].append(f'Opción no encontrada: {opcion_codigo}')
+
+    opciones = {o.codigo: o for o in OpcionMenu.objects.filter(activo=True)}
+    existentes = {p.opcion_menu_id: p for p in PermisoRol.objects.filter(rol=rol)}
+    for item in permisos_data:
+        codigo = item.get('opcion_codigo')
+        opcion = opciones.get(codigo)
+        if opcion is None:
+            resultado['errores'].append(f'Opción no encontrada: {codigo}')
             continue
-        
-        try:
-            permiso, created = PermisoRol.objects.get_or_create(
-                rol=rol,
-                opcion_menu=opcion,
-                defaults={
-                    'limite_descuento_porcentaje': limite_descuento
-                }
-            )
-            
-            if created or sobrescribir:
-                permiso.puede_ver = permisos_valores.get('puede_ver', False)
-                permiso.puede_crear = permisos_valores.get('puede_crear', False)
-                permiso.puede_editar = permisos_valores.get('puede_editar', False)
-                permiso.puede_eliminar = permisos_valores.get('puede_eliminar', False)
-                permiso.puede_exportar = permisos_valores.get('puede_exportar', False)
-                permiso.limite_descuento_porcentaje = limite_descuento
-                permiso.save()
-                
-                if created:
-                    resultado['creados'] += 1
-                else:
-                    resultado['actualizados'] += 1
-            else:
-                resultado['omitidos'] += 1
-                
-        except Exception as e:
-            resultado['errores'].append(f'Error en opción {opcion_codigo}: {str(e)}')
-    
+        valores = item.get('permisos') or {}
+        permiso = existentes.get(opcion.id)
+        if permiso is not None and not sobrescribir:
+            resultado['omitidos'] += 1
+            continue
+        nuevo = permiso is None
+        if nuevo:
+            permiso = PermisoRol(rol=rol, opcion_menu=opcion, **{t: False for t in TIPOS_PERMISO})
+        for tipo in TIPOS_PERMISO:
+            if tipo in valores:
+                setattr(permiso, tipo, _bool(valores[tipo]))
+        permiso.limite_descuento_porcentaje = limite_descuento
+        permiso.save()
+        resultado['creados' if nuevo else 'actualizados'] += 1
     return resultado
 
-
-# ========== EXPORTAR / IMPORTAR PERMISOS SUCURSAL ==========
 
 @login_required
 @solo_administrador
 @require_http_methods(["GET"])
 def exportar_permisos_sucursal(request):
-    """
-    API para exportar permisos de una sucursal en formato JSON
-    """
-    sucursal_id = request.GET.get('sucursal_id')
-    
-    if not sucursal_id:
-        return JsonResponse({'error': 'Sucursal no especificada'}, status=400)
-    
-    try:
-        sucursal = Sucursal.objects.get(id=sucursal_id)
-        permisos = PermisoSucursal.objects.filter(sucursal=sucursal).select_related('opcion_menu', 'opcion_menu__modulo')
-        
-        permisos_data = []
-        for permiso in permisos:
-            permisos_data.append({
-                'opcion_codigo': permiso.opcion_menu.codigo,
-                'opcion_nombre': permiso.opcion_menu.nombre,
-                'modulo_codigo': permiso.opcion_menu.modulo.codigo if permiso.opcion_menu.modulo else None,
-                'permisos': {
-                    'habilitado': permiso.habilitado,
-                    'puede_crear': permiso.puede_crear,
-                    'puede_editar': permiso.puede_editar,
-                    'puede_eliminar': permiso.puede_eliminar,
-                    'puede_exportar': permiso.puede_exportar,
-                },
-                'notas': permiso.notas
-            })
-        
-        export_data = {
-            'version': '1.0',
-            'tipo': 'permisos_sucursal',
-            'fecha_exportacion': timezone.localtime().isoformat(),
-            'sucursal': {
-                'id': sucursal.id,
-                'alias': sucursal.alias,
-                'direccion': sucursal.direccion,
-                'tipo_sucursal': sucursal.tipo_sucursal if hasattr(sucursal, 'tipo_sucursal') else None,
-            },
-            'total_permisos': len(permisos_data),
-            'permisos': permisos_data
-        }
-        
-        response = HttpResponse(
-            json.dumps(export_data, indent=2, ensure_ascii=False),
-            content_type='application/json'
-        )
-        filename = f'permisos_sucursal_{sucursal.alias.replace(" ", "_")}_{timezone.localtime().strftime("%Y%m%d_%H%M%S")}.json'
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
-        return response
-        
-    except Sucursal.DoesNotExist:
-        return JsonResponse({'error': 'Sucursal no encontrada'}, status=404)
-    except Exception as e:
-        return JsonResponse({
-            'error': True,
-            'mensaje': f'Error al exportar permisos de sucursal: {str(e)}'
-        }, status=500)
+    """Descarga las restricciones de una sucursal en JSON."""
+    sucursal = Sucursal.objects.filter(id=request.GET.get('sucursal_id') or 0).first()
+    if sucursal is None:
+        return _json_error('Sucursal no encontrada', status=404)
+    permisos = PermisoSucursal.objects.filter(sucursal=sucursal).select_related('opcion_menu', 'opcion_menu__modulo')
+    filas = [{
+        'opcion_codigo': p.opcion_menu.codigo,
+        'opcion_nombre': p.opcion_menu.nombre,
+        'modulo_codigo': p.opcion_menu.modulo.codigo if p.opcion_menu.modulo_id else None,
+        'permisos': {t: getattr(p, t) for t in TIPOS_PERMISO_SUCURSAL},
+        'notas': p.notas,
+    } for p in permisos]
+    ahora = timezone.localtime()
+    return _descarga_json({
+        'version': '1.1',
+        'tipo': 'permisos_sucursal',
+        'fecha_exportacion': ahora.isoformat(),
+        'sucursal': {
+            'id': sucursal.id,
+            'alias': sucursal.alias,
+            'direccion': sucursal.direccion,
+            'tipo_sucursal': getattr(sucursal, 'tipo_sucursal', None),
+        },
+        'total_permisos': len(filas),
+        'permisos': filas,
+    }, f'permisos_sucursal_{(sucursal.alias or "sucursal").replace(" ", "_")}_{ahora:%Y%m%d_%H%M%S}.json')
 
 
 @login_required
 @solo_administrador
 @require_http_methods(["POST"])
 def importar_permisos_sucursal(request):
-    """
-    API para importar permisos de sucursal desde un archivo JSON
-    """
+    """Importa restricciones de sucursal desde un JSON exportado por esta pantalla."""
+    sucursal = Sucursal.objects.filter(
+        id=request.POST.get('sucursal_id') or request.GET.get('sucursal_id') or 0
+    ).first()
+    if sucursal is None:
+        return _json_error('Debe especificar una sucursal destino válida')
     try:
-        sucursal_destino_id = request.POST.get('sucursal_id') or request.GET.get('sucursal_id')
-        
-        if not sucursal_destino_id:
-            return JsonResponse({
-                'error': True,
-                'mensaje': 'Debe especificar la sucursal destino'
-            }, status=400)
-        
-        try:
-            sucursal_destino = Sucursal.objects.get(id=sucursal_destino_id)
-        except Sucursal.DoesNotExist:
-            return JsonResponse({
-                'error': True,
-                'mensaje': 'Sucursal destino no encontrada'
-            }, status=404)
-        
-        # Leer archivo o datos JSON
         if request.FILES.get('archivo'):
-            archivo = request.FILES['archivo']
-            contenido = archivo.read().decode('utf-8')
-            data = json.loads(contenido)
+            data = json.loads(request.FILES['archivo'].read().decode('utf-8'))
         else:
-            data = json.loads(request.body)
-        
-        # Validar estructura
-        if data.get('tipo') != 'permisos_sucursal':
-            return JsonResponse({
-                'error': True,
-                'mensaje': 'Tipo de archivo no compatible con permisos de sucursal'
-            }, status=400)
-        
-        sobrescribir = data.get('sobrescribir', True)
-        permisos_data = data.get('permisos', [])
-        
-        resultados = {
-            'creados': 0,
-            'actualizados': 0,
-            'omitidos': 0,
-            'errores': []
-        }
-        
-        for permiso_item in permisos_data:
-            opcion_codigo = permiso_item.get('opcion_codigo')
-            permisos_valores = permiso_item.get('permisos', {})
-            notas = permiso_item.get('notas', '')
-            
-            opcion = OpcionMenu.objects.filter(codigo=opcion_codigo, activo=True).first()
-            
-            if not opcion:
-                resultados['errores'].append(f'Opción no encontrada: {opcion_codigo}')
+            data = _leer_json(request)
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        return _json_error(f'Error al leer el archivo JSON: {e}')
+    if data.get('tipo') != 'permisos_sucursal':
+        return _json_error('Tipo de archivo no compatible con permisos de sucursal')
+
+    sobrescribir = _bool(data.get('sobrescribir'), default=True)
+    resultados = {'creados': 0, 'actualizados': 0, 'omitidos': 0, 'errores': []}
+    opciones = {o.codigo: o for o in OpcionMenu.objects.filter(activo=True)}
+    with transaction.atomic():
+        existentes = {p.opcion_menu_id: p for p in PermisoSucursal.objects.filter(sucursal=sucursal)}
+        for item in data.get('permisos') or []:
+            codigo = item.get('opcion_codigo')
+            opcion = opciones.get(codigo)
+            if opcion is None:
+                resultados['errores'].append(f'Opción no encontrada: {codigo}')
                 continue
-            
-            try:
-                permiso, created = PermisoSucursal.objects.get_or_create(
-                    sucursal=sucursal_destino,
-                    opcion_menu=opcion
-                )
-                
-                if created or sobrescribir:
-                    permiso.habilitado = permisos_valores.get('habilitado', True)
-                    permiso.puede_crear = permisos_valores.get('puede_crear', True)
-                    permiso.puede_editar = permisos_valores.get('puede_editar', True)
-                    permiso.puede_eliminar = permisos_valores.get('puede_eliminar', False)
-                    permiso.puede_exportar = permisos_valores.get('puede_exportar', True)
-                    permiso.notas = f"Importado: {notas}" if notas else "Importado desde archivo"
-                    permiso.save()
-                    
-                    if created:
-                        resultados['creados'] += 1
-                    else:
-                        resultados['actualizados'] += 1
-                else:
-                    resultados['omitidos'] += 1
-                    
-            except Exception as e:
-                resultados['errores'].append(f'Error en opción {opcion_codigo}: {str(e)}')
-        
-        return JsonResponse({
-            'success': True,
-            'mensaje': f'Permisos importados a {sucursal_destino.alias}',
-            'resultados': resultados
+            permiso = existentes.get(opcion.id)
+            if permiso is not None and not sobrescribir:
+                resultados['omitidos'] += 1
+                continue
+            nuevo = permiso is None
+            if nuevo:
+                permiso = PermisoSucursal(sucursal=sucursal, opcion_menu=opcion, **SUCURSAL_SIN_RESTRICCION)
+            valores = item.get('permisos') or {}
+            for tipo in TIPOS_PERMISO_SUCURSAL:
+                if tipo in valores:
+                    setattr(permiso, tipo, _bool(valores[tipo], default=True))
+            notas = item.get('notas') or ''
+            permiso.notas = f"Importado: {notas}" if notas else "Importado desde archivo"
+            permiso.save()
+            resultados['creados' if nuevo else 'actualizados'] += 1
+
+    logger.info('Permisos: %s importó restricciones a %s', request.user.username, sucursal.alias)
+    return JsonResponse({
+        'success': True,
+        'mensaje': f'Permisos importados a {sucursal.alias}',
+        'resultados': resultados,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Permisos por usuario (overrides)
+# ---------------------------------------------------------------------------
+
+def _sucursales_asignadas(usuario_ids):
+    asignadas = defaultdict(list)
+    for eu in (EmpresaUser.objects.filter(user_id__in=usuario_ids, status=True, sucursal__isnull=False)
+               .values('user_id', 'sucursal_id', 'sucursal__alias', 'active')):
+        asignadas[eu['user_id']].append({
+            'id': eu['sucursal_id'], 'alias': eu['sucursal__alias'], 'activa': eu['active'],
         })
+    return asignadas
 
-    except json.JSONDecodeError as e:
-        return JsonResponse({
-            'error': True,
-            'mensaje': f'Error al leer el archivo JSON: {str(e)}'
-        }, status=400)
-    except Exception as e:
-        return JsonResponse({
-            'error': True,
-            'mensaje': f'Error al importar permisos de sucursal: {str(e)}'
-        }, status=500)
-
-
-# ========== PERMISOS POR USUARIO ==========
 
 @login_required
 @solo_administrador
 @require_http_methods(["GET"])
 def obtener_usuarios_permisos(request):
-    """API para obtener usuarios activos con info de overrides"""
-    try:
-        usuarios = Usuario.objects.filter(es_activo=True).order_by('first_name', 'last_name')
-        usuarios_data = []
-        for u in usuarios:
-            overrides_count = PermisoUsuario.objects.filter(usuario=u).count()
-            sucursales_asignadas = EmpresaUser.objects.filter(
-                user=u, status=True, sucursal__isnull=False
-            ).select_related('sucursal').values_list('sucursal__alias', flat=True)
-
-            usuarios_data.append({
-                'id': u.id,
-                'username': u.username,
-                'nombre': u.get_full_name() or u.username,
-                'rol': u.rol,
-                'rol_display': u.get_rol_display() if hasattr(u, 'get_rol_display') else u.rol,
-                'overrides': overrides_count,
-                've_todas_sucursales': PermisoUsuario.usuario_ve_todas_sucursales(u),
-                'sucursales_asignadas': list(sucursales_asignadas),
-            })
-
-        return JsonResponse({'success': True, 'usuarios': usuarios_data})
-    except Exception as e:
-        return JsonResponse({'error': True, 'mensaje': str(e)}, status=500)
+    """Usuarios activos con su cantidad de overrides y sucursales asignadas."""
+    usuarios = list(Usuario.objects.filter(es_activo=True).order_by('first_name', 'last_name'))
+    ids = [u.id for u in usuarios]
+    overrides = dict(
+        PermisoUsuario.objects.filter(usuario_id__in=ids).values_list('usuario_id').annotate(n=Count('id'))
+    )
+    ve_todas = set(
+        PermisoUsuario.objects.filter(usuario_id__in=ids, puede_ver_todas_sucursales=True)
+        .values_list('usuario_id', flat=True)
+    )
+    asignadas = _sucursales_asignadas(ids)
+    return JsonResponse({'success': True, 'usuarios': [{
+        'id': u.id,
+        'username': u.username,
+        'nombre': u.get_full_name() or u.username,
+        'rol': u.rol,
+        'rol_display': u.get_rol_display(),
+        'overrides': overrides.get(u.id, 0),
+        've_todas_sucursales': u.id in ve_todas,
+        'sucursales_asignadas': [s['alias'] for s in asignadas.get(u.id, [])],
+        'editable': _motivo_usuario_no_editable(request.user, u) is None,
+    } for u in usuarios]})
 
 
 @login_required
 @solo_administrador
 @require_http_methods(["GET"])
 def obtener_permisos_usuario(request):
-    """API para obtener overrides de un usuario específico"""
-    usuario_id = request.GET.get('usuario_id')
-    if not usuario_id:
-        return JsonResponse({'error': True, 'mensaje': 'usuario_id requerido'}, status=400)
+    """Overrides de un usuario + el permiso EFECTIVO resultante en una sucursal.
 
-    try:
-        usuario = Usuario.objects.get(id=usuario_id)
-    except Usuario.DoesNotExist:
-        return JsonResponse({'error': True, 'mensaje': 'Usuario no encontrado'}, status=404)
+    `sucursal_id` (opcional) simula la sucursal activa; por defecto se usa la
+    sucursal activa del usuario. El efectivo explica el motivo de cada
+    resultado (MAESTRO, OVERRIDE_SI/NO, ROL, ROL_NO, SIN_FILA_ROL,
+    SUCURSAL_BLOQUEA), igual que resuelve el middleware.
+    """
+    usuario = Usuario.objects.filter(id=request.GET.get('usuario_id') or 0).first()
+    if usuario is None:
+        return _json_error('Usuario no encontrado', status=404)
 
-    ve_todas = PermisoUsuario.usuario_ve_todas_sucursales(usuario)
+    asignadas = _sucursales_asignadas([usuario.id]).get(usuario.id, [])
+    sucursal_id = request.GET.get('sucursal_id')
+    if sucursal_id in (None, ''):
+        activa = next((s for s in asignadas if s['activa']), asignadas[0] if asignadas else None)
+        sucursal_id = activa['id'] if activa else None
+    else:
+        try:
+            sucursal_id = int(sucursal_id) or None
+        except (TypeError, ValueError):
+            sucursal_id = None
 
-    modulos_data = []
-    modulos = ModuloSistema.objects.filter(activo=True).prefetch_related('opciones').order_by('orden')
+    rol, overrides, sucursal = _cargar_capas_usuario(usuario, sucursal_id)
+    motivo = _motivo_usuario_no_editable(request.user, usuario)
 
-    for modulo in modulos:
-        opciones_data = []
-        opciones = modulo.opciones.filter(activo=True, padre__isnull=True).order_by('orden')
-
-        for opcion in opciones:
-            override = PermisoUsuario.objects.filter(usuario=usuario, opcion_menu=opcion).first()
-            permiso_rol = PermisoRol.objects.filter(rol=usuario.rol, opcion_menu=opcion).first()
-
-            opcion_info = {
-                'id': opcion.id,
-                'codigo': opcion.codigo,
-                'nombre': opcion.nombre,
-                'icono': opcion.icono,
-                'es_submenu': opcion.es_submenu,
-                'permisos_rol': {
-                    'puede_ver': permiso_rol.puede_ver if permiso_rol else False,
-                    'puede_crear': permiso_rol.puede_crear if permiso_rol else False,
-                    'puede_editar': permiso_rol.puede_editar if permiso_rol else False,
-                    'puede_eliminar': permiso_rol.puede_eliminar if permiso_rol else False,
-                    'puede_exportar': permiso_rol.puede_exportar if permiso_rol else False,
-                    'puede_aprobar': permiso_rol.puede_aprobar if permiso_rol else False,
-                },
-                'overrides': {
-                    'puede_ver': override.puede_ver if override else None,
-                    'puede_crear': override.puede_crear if override else None,
-                    'puede_editar': override.puede_editar if override else None,
-                    'puede_eliminar': override.puede_eliminar if override else None,
-                    'puede_exportar': override.puede_exportar if override else None,
-                    'puede_aprobar': override.puede_aprobar if override else None,
-                },
-                'notas': override.notas if override else '',
-            }
-
-            if opcion.es_submenu:
-                subopciones_data = []
-                for sub in opcion.hijos.filter(activo=True).order_by('orden'):
-                    sub_override = PermisoUsuario.objects.filter(usuario=usuario, opcion_menu=sub).first()
-                    sub_rol = PermisoRol.objects.filter(rol=usuario.rol, opcion_menu=sub).first()
-                    subopciones_data.append({
-                        'id': sub.id,
-                        'codigo': sub.codigo,
-                        'nombre': sub.nombre,
-                        'icono': sub.icono,
-                        'permisos_rol': {
-                            'puede_ver': sub_rol.puede_ver if sub_rol else False,
-                            'puede_crear': sub_rol.puede_crear if sub_rol else False,
-                            'puede_editar': sub_rol.puede_editar if sub_rol else False,
-                            'puede_eliminar': sub_rol.puede_eliminar if sub_rol else False,
-                            'puede_exportar': sub_rol.puede_exportar if sub_rol else False,
-                            'puede_aprobar': sub_rol.puede_aprobar if sub_rol else False,
-                        },
-                        'overrides': {
-                            'puede_ver': sub_override.puede_ver if sub_override else None,
-                            'puede_crear': sub_override.puede_crear if sub_override else None,
-                            'puede_editar': sub_override.puede_editar if sub_override else None,
-                            'puede_eliminar': sub_override.puede_eliminar if sub_override else None,
-                            'puede_exportar': sub_override.puede_exportar if sub_override else None,
-                            'puede_aprobar': sub_override.puede_aprobar if sub_override else None,
-                        },
-                        'notas': sub_override.notas if sub_override else '',
-                    })
-                opcion_info['subopciones'] = subopciones_data
-
-            opciones_data.append(opcion_info)
-
-        modulos_data.append({
-            'id': modulo.id,
-            'codigo': modulo.codigo,
-            'nombre': modulo.nombre,
-            'icono': modulo.icono,
-            'opciones': opciones_data,
-        })
+    def construir(op):
+        info = _info_opcion(op)
+        fila_rol = rol.get(op.id)
+        override = overrides.get(op.id)
+        info['permisos_rol'] = _flags(fila_rol, TIPOS_PERMISO, {t: False for t in TIPOS_PERMISO})
+        info['rol_sin_fila'] = fila_rol is None
+        info['overrides'] = {t: (getattr(override, t) if override else None) for t in TIPOS_PERMISO}
+        # Lo que permite la sucursal simulada (para recalcular el efectivo en
+        # la pantalla al tocar un override, sin volver a consultar).
+        fila_suc = sucursal.get(op.id)
+        info['sucursal_permite'] = {
+            t: (True if fila_suc is None else bool(getattr(fila_suc, 'habilitado' if t == 'puede_ver' else t)))
+            for t in TIPOS_PERMISO
+        }
+        info['notas'] = (override.notas or '') if override else ''
+        efectivo = {}
+        for tipo in TIPOS_PERMISO:
+            valor, razon = _permiso_efectivo(usuario, op.id, tipo, rol, overrides, sucursal)
+            efectivo[tipo] = {'valor': valor, 'motivo': razon}
+        info['efectivo'] = efectivo
+        return info
 
     return JsonResponse({
         'success': True,
@@ -1622,10 +1185,15 @@ def obtener_permisos_usuario(request):
             'username': usuario.username,
             'nombre': usuario.get_full_name() or usuario.username,
             'rol': usuario.rol,
-            'rol_display': usuario.get_rol_display() if hasattr(usuario, 'get_rol_display') else usuario.rol,
+            'rol_display': usuario.get_rol_display(),
+            'es_maestro': es_maestro(usuario),
         },
-        've_todas_sucursales': ve_todas,
-        'modulos': modulos_data,
+        'editable': motivo is None,
+        'motivo_bloqueo': motivo or '',
+        'sucursal_simulada': sucursal_id,
+        'sucursales_asignadas': asignadas,
+        've_todas_sucursales': PermisoUsuario.usuario_ve_todas_sucursales(usuario),
+        'modulos': _arbol_modulos(construir),
     })
 
 
@@ -1633,155 +1201,283 @@ def obtener_permisos_usuario(request):
 @solo_administrador
 @require_http_methods(["POST"])
 def guardar_permisos_usuario(request):
-    """API para guardar overrides de permisos de un usuario"""
+    """Guarda los overrides de un usuario (True = otorgar, False = denegar, None = usar rol)."""
     try:
-        data = json.loads(request.body)
-        usuario_id = data.get('usuario_id')
-        permisos_data = data.get('permisos', [])
-        ve_todas_sucursales = data.get('ve_todas_sucursales', False)
+        data = _leer_json(request)
+    except json.JSONDecodeError:
+        return _json_error('JSON inválido')
 
-        if not usuario_id:
-            return JsonResponse({'error': True, 'mensaje': 'usuario_id requerido'}, status=400)
+    usuario = Usuario.objects.filter(id=data.get('usuario_id') or 0).first()
+    if usuario is None:
+        return _json_error('Usuario no encontrado', status=404)
+    motivo = _motivo_usuario_no_editable(request.user, usuario)
+    if motivo:
+        return _json_error(motivo, status=403)
 
+    ve_todas = _bool(data.get('ve_todas_sucursales'))
+    permisos_data = data.get('permisos') or []
+    ids = []
+    for item in permisos_data:
         try:
-            usuario = Usuario.objects.get(id=usuario_id)
-        except Usuario.DoesNotExist:
-            return JsonResponse({'error': True, 'mensaje': 'Usuario no encontrado'}, status=404)
+            ids.append(int(item.get('opcion_id')))
+        except (TypeError, ValueError):
+            continue
+    opciones = {o.id: o for o in OpcionMenu.objects.filter(id__in=ids)}
 
-        creados = 0
-        actualizados = 0
-        eliminados = 0
-
+    creados = actualizados = eliminados = 0
+    with transaction.atomic():
+        existentes = {p.opcion_menu_id: p for p in PermisoUsuario.objects.select_for_update().filter(usuario=usuario)}
         for item in permisos_data:
-            opcion_id = item.get('opcion_id')
-            overrides = item.get('overrides', {})
-
-            opcion = OpcionMenu.objects.filter(id=opcion_id).first()
-            if not opcion:
+            try:
+                opcion = opciones.get(int(item.get('opcion_id')))
+            except (TypeError, ValueError):
+                opcion = None
+            if opcion is None:
                 continue
-
-            all_none = all(v is None for v in overrides.values())
-            if all_none:
-                deleted, _ = PermisoUsuario.objects.filter(
-                    usuario=usuario, opcion_menu=opcion
-                ).delete()
-                eliminados += deleted
+            valores = item.get('overrides') or {}
+            limpio = {t: (None if valores.get(t) is None else _bool(valores.get(t))) for t in TIPOS_PERMISO}
+            permiso = existentes.get(opcion.id)
+            if all(v is None for v in limpio.values()):
+                if permiso is not None:
+                    permiso.delete()
+                    eliminados += 1
                 continue
-
-            permiso, created = PermisoUsuario.objects.get_or_create(
-                usuario=usuario,
-                opcion_menu=opcion
-            )
-            permiso.puede_ver = overrides.get('puede_ver')
-            permiso.puede_crear = overrides.get('puede_crear')
-            permiso.puede_editar = overrides.get('puede_editar')
-            permiso.puede_eliminar = overrides.get('puede_eliminar')
-            permiso.puede_exportar = overrides.get('puede_exportar')
-            permiso.puede_aprobar = overrides.get('puede_aprobar')
-            permiso.puede_ver_todas_sucursales = ve_todas_sucursales
-            permiso.notas = item.get('notas', '')
-            permiso.save()
-
-            if created:
+            if permiso is None:
+                permiso = PermisoUsuario(usuario=usuario, opcion_menu=opcion)
                 creados += 1
             else:
                 actualizados += 1
+            for tipo, valor in limpio.items():
+                setattr(permiso, tipo, valor)
+            permiso.puede_ver_todas_sucursales = ve_todas
+            permiso.notas = (item.get('notas') or '').strip()
+            permiso.save()
 
-        PermisoUsuario.objects.filter(usuario=usuario).update(
-            puede_ver_todas_sucursales=ve_todas_sucursales
-        )
-
-        if ve_todas_sucursales and not PermisoUsuario.objects.filter(usuario=usuario).exists():
-            primera_opcion = OpcionMenu.objects.filter(activo=True).first()
-            if primera_opcion:
-                PermisoUsuario.objects.create(
-                    usuario=usuario,
-                    opcion_menu=primera_opcion,
-                    puede_ver_todas_sucursales=True
-                )
+        PermisoUsuario.objects.filter(usuario=usuario).update(puede_ver_todas_sucursales=ve_todas)
+        # El flag "ver todas las sucursales" vive en las filas de override: sin
+        # ninguna, se crea una neutra (todo None) para poder guardarlo.
+        if ve_todas and not PermisoUsuario.objects.filter(usuario=usuario).exists():
+            primera = OpcionMenu.objects.filter(activo=True).first()
+            if primera:
+                PermisoUsuario.objects.create(usuario=usuario, opcion_menu=primera,
+                                              puede_ver_todas_sucursales=True)
                 creados += 1
 
-        return JsonResponse({
-            'success': True,
-            'mensaje': 'Permisos de usuario guardados',
-            'creados': creados,
-            'actualizados': actualizados,
-            'eliminados': eliminados,
-        })
-
-    except json.JSONDecodeError:
-        return JsonResponse({'error': True, 'mensaje': 'JSON invalido'}, status=400)
-    except Exception as e:
-        return JsonResponse({'error': True, 'mensaje': str(e)}, status=500)
+    logger.info('Permisos: %s guardó overrides de %s (%d creados, %d actualizados, %d eliminados, ve_todas=%s)',
+                request.user.username, usuario.username, creados, actualizados, eliminados, ve_todas)
+    return JsonResponse({
+        'success': True,
+        'mensaje': 'Permisos de usuario guardados',
+        'creados': creados,
+        'actualizados': actualizados,
+        'eliminados': eliminados,
+    })
 
 
 @login_required
 @solo_administrador
 @require_http_methods(["POST"])
 def eliminar_permisos_usuario(request):
-    """API para eliminar todos los overrides de un usuario"""
+    """Elimina todos los overrides de un usuario (vuelve a usar su rol)."""
     try:
-        data = json.loads(request.body)
-        usuario_id = data.get('usuario_id')
+        data = _leer_json(request)
+    except json.JSONDecodeError:
+        return _json_error('JSON inválido')
+    usuario = Usuario.objects.filter(id=data.get('usuario_id') or 0).first()
+    if usuario is None:
+        return _json_error('Usuario no encontrado', status=404)
+    motivo = _motivo_usuario_no_editable(request.user, usuario)
+    if motivo:
+        return _json_error(motivo, status=403)
 
-        if not usuario_id:
-            return JsonResponse({'error': True, 'mensaje': 'usuario_id requerido'}, status=400)
-
-        deleted, _ = PermisoUsuario.objects.filter(usuario_id=usuario_id).delete()
-
-        return JsonResponse({
-            'success': True,
-            'mensaje': f'{deleted} overrides eliminados',
-            'eliminados': deleted,
-        })
-    except Exception as e:
-        return JsonResponse({'error': True, 'mensaje': str(e)}, status=500)
+    deleted, _ = PermisoUsuario.objects.filter(usuario=usuario).delete()
+    logger.info('Permisos: %s limpió %d overrides de %s', request.user.username, deleted, usuario.username)
+    return JsonResponse({'success': True, 'mensaje': f'{deleted} overrides eliminados', 'eliminados': deleted})
 
 
 @login_required
 @solo_administrador
 @require_http_methods(["POST"])
 def copiar_permisos_usuario(request):
-    """API para copiar overrides de un usuario a otro"""
+    """Copia los overrides de un usuario a otro (antes se perdía Aprobar)."""
     try:
-        data = json.loads(request.body)
-        origen_id = data.get('usuario_origen_id')
-        destino_id = data.get('usuario_destino_id')
+        data = _leer_json(request)
+    except json.JSONDecodeError:
+        return _json_error('JSON inválido')
+    origen_id = data.get('usuario_origen_id')
+    destino = Usuario.objects.filter(id=data.get('usuario_destino_id') or 0).first()
+    if not origen_id or destino is None:
+        return _json_error('IDs origen y destino requeridos')
+    if str(origen_id) == str(destino.id):
+        return _json_error('Origen y destino no pueden ser iguales')
+    motivo = _motivo_usuario_no_editable(request.user, destino)
+    if motivo:
+        return _json_error(motivo, status=403)
 
-        if not origen_id or not destino_id:
-            return JsonResponse({'error': True, 'mensaje': 'IDs origen y destino requeridos'}, status=400)
-
-        if str(origen_id) == str(destino_id):
-            return JsonResponse({'error': True, 'mensaje': 'Origen y destino no pueden ser iguales'}, status=400)
-
-        permisos_origen = PermisoUsuario.objects.filter(usuario_id=origen_id)
-        creados = 0
-        actualizados = 0
-
-        for p_orig in permisos_origen:
-            p_dest, created = PermisoUsuario.objects.get_or_create(
-                usuario_id=destino_id,
-                opcion_menu=p_orig.opcion_menu
-            )
-            p_dest.puede_ver = p_orig.puede_ver
-            p_dest.puede_crear = p_orig.puede_crear
-            p_dest.puede_editar = p_orig.puede_editar
-            p_dest.puede_eliminar = p_orig.puede_eliminar
-            p_dest.puede_exportar = p_orig.puede_exportar
+    creados = actualizados = 0
+    with transaction.atomic():
+        existentes = {p.opcion_menu_id: p for p in PermisoUsuario.objects.filter(usuario=destino)}
+        for p_orig in PermisoUsuario.objects.filter(usuario_id=origen_id):
+            p_dest = existentes.get(p_orig.opcion_menu_id)
+            if p_dest is None:
+                p_dest = PermisoUsuario(usuario=destino, opcion_menu_id=p_orig.opcion_menu_id)
+                creados += 1
+            else:
+                actualizados += 1
+            for tipo in TIPOS_PERMISO:
+                setattr(p_dest, tipo, getattr(p_orig, tipo))
             p_dest.puede_ver_todas_sucursales = p_orig.puede_ver_todas_sucursales
             p_dest.notas = f"Copiado de usuario ID {origen_id}"
             p_dest.save()
 
-            if created:
-                creados += 1
-            else:
-                actualizados += 1
+    logger.info('Permisos: %s copió overrides de usuario %s -> %s', request.user.username, origen_id, destino.username)
+    return JsonResponse({
+        'success': True,
+        'mensaje': f'Permisos copiados: {creados} creados, {actualizados} actualizados',
+        'creados': creados,
+        'actualizados': actualizados,
+    })
 
-        return JsonResponse({
-            'success': True,
-            'mensaje': f'Permisos copiados: {creados} creados, {actualizados} actualizados',
-            'creados': creados,
-            'actualizados': actualizados,
+
+# ---------------------------------------------------------------------------
+# Diagnóstico
+# ---------------------------------------------------------------------------
+
+def _parece_mal_codificado(texto):
+    """'Gesti?n', 'MÃ³dulo': acentos rotos por un archivo guardado sin UTF-8."""
+    return bool(texto) and ('?' in texto or 'Ã' in texto or '�' in texto)
+
+
+@login_required
+@solo_administrador
+@require_http_methods(["GET"])
+def diagnostico_permisos(request):
+    """Revisión de salud del sistema de permisos, para la pestaña Diagnóstico.
+
+    Solo lectura. Detecta lo que en la práctica deja a alguien sin acceso sin
+    que la pantalla de roles lo muestre: opciones sin fila para un rol, URLs
+    protegidas por códigos que no existen, sucursales que bloquean incluso al
+    administrador, nombres con acentos rotos y usuarios sin sucursal.
+    """
+    from .middleware_permisos import URL_PERMISO_MAP
+
+    opciones = list(OpcionMenu.objects.filter(activo=True).select_related('modulo').order_by('modulo__orden', 'orden'))
+    por_id = {o.id: o for o in opciones}
+    codigos_activos = {o.codigo for o in opciones}
+    codigos_inactivos = set(OpcionMenu.objects.filter(activo=False).values_list('codigo', flat=True))
+
+    # 1. Por rol: opciones sin fila (= sin acceso) y con acceso.
+    filas_rol = defaultdict(dict)
+    for p in PermisoRol.objects.filter(opcion_menu__activo=True).values('rol', 'opcion_menu_id', 'puede_ver'):
+        filas_rol[p['rol']][p['opcion_menu_id']] = p['puede_ver']
+    usuarios_por_rol = dict(
+        Usuario.objects.filter(es_activo=True, is_active=True).values_list('rol').annotate(n=Count('id'))
+    )
+    roles = []
+    for rol, nombre in PermisoRol.ROLES_CHOICES:
+        filas = filas_rol.get(rol, {})
+        sin_fila = [] if rol == ROL_MAESTRO else [
+            {'codigo': o.codigo, 'nombre': o.nombre, 'modulo': o.modulo.nombre}
+            for o in opciones if o.id not in filas
+        ]
+        roles.append({
+            'rol': rol,
+            'nombre': nombre,
+            'usuarios': usuarios_por_rol.get(rol, 0),
+            'con_acceso': len(opciones) if rol == ROL_MAESTRO else sum(1 for v in filas.values() if v),
+            'total': len(opciones),
+            'sin_fila': sin_fila,
         })
-    except Exception as e:
-        return JsonResponse({'error': True, 'mensaje': str(e)}, status=500)
+
+    # 2. URLs protegidas por códigos que no existen o están inactivos: el
+    #    middleware las cierra para todos (salvo el Maestro).
+    urls_huerfanas = []
+    for url, codigo in sorted(URL_PERMISO_MAP.items()):
+        if codigo not in codigos_activos:
+            urls_huerfanas.append({
+                'url': url, 'codigo': codigo,
+                'estado': 'INACTIVA' if codigo in codigos_inactivos else 'NO_EXISTE',
+            })
+
+    # 3. Sucursales que restringen (incluso al Administrador).
+    restricciones = defaultdict(lambda: {'deshabilitadas': [], 'sin_crear': 0, 'sin_editar': 0,
+                                         'sin_eliminar': 0, 'sin_aprobar': 0})
+    for p in PermisoSucursal.objects.filter(opcion_menu__activo=True).select_related('sucursal'):
+        r = restricciones[p.sucursal_id]
+        r['alias'] = p.sucursal.alias
+        opcion = por_id.get(p.opcion_menu_id)
+        if not p.habilitado and opcion:
+            r['deshabilitadas'].append(opcion.nombre)
+        r['sin_crear'] += 0 if p.puede_crear else 1
+        r['sin_editar'] += 0 if p.puede_editar else 1
+        r['sin_eliminar'] += 0 if p.puede_eliminar else 1
+        r['sin_aprobar'] += 0 if p.puede_aprobar else 1
+    sucursales = sorted(
+        ({'sucursal_id': sid, **r} for sid, r in restricciones.items()
+         if r['deshabilitadas'] or r['sin_crear'] or r['sin_editar'] or r['sin_eliminar'] or r['sin_aprobar']),
+        key=lambda x: x.get('alias') or '',
+    )
+
+    # 4. Nombres con acentos rotos.
+    mal_codificados = [
+        {'tipo': 'Módulo', 'codigo': m.codigo, 'nombre': m.nombre}
+        for m in ModuloSistema.objects.filter(activo=True) if _parece_mal_codificado(m.nombre)
+    ] + [
+        {'tipo': 'Opción', 'codigo': o.codigo, 'nombre': o.nombre}
+        for o in opciones if _parece_mal_codificado(o.nombre)
+    ]
+
+    # 5. Usuarios.
+    activos = Usuario.objects.filter(es_activo=True, is_active=True)
+    con_sucursal = set(
+        EmpresaUser.objects.filter(status=True, sucursal__isnull=False).values_list('user_id', flat=True)
+    )
+    sin_sucursal = [
+        {'id': u.id, 'nombre': u.get_full_name() or u.username, 'rol': u.get_rol_display()}
+        for u in activos if u.id not in con_sucursal
+    ]
+    con_overrides = [
+        {'id': r['usuario_id'], 'nombre': f"{r['usuario__first_name']} {r['usuario__last_name']}".strip()
+         or r['usuario__username'], 'rol': r['usuario__rol'], 'overrides': r['n']}
+        for r in PermisoUsuario.objects.filter(usuario__es_activo=True)
+        .values('usuario_id', 'usuario__first_name', 'usuario__last_name', 'usuario__username', 'usuario__rol')
+        .annotate(n=Count('id')).order_by('-n')
+    ]
+    roles_validos = set(ROLES_VALIDOS)
+    rol_invalido = [
+        {'id': u.id, 'nombre': u.get_full_name() or u.username, 'rol': u.rol}
+        for u in activos if u.rol not in roles_validos
+    ]
+
+    alertas = []
+    maestros = usuarios_por_rol.get(ROL_MAESTRO, 0)
+    if maestros == 0:
+        alertas.append({'nivel': 'danger', 'texto': 'Nadie tiene el rol Maestro. Asígnalo a la cuenta del dueño '
+                        '(comando configurar_rol_maestro) para poder administrar al rol Administrador.'})
+    admin = next((r for r in roles if r['rol'] == 'administrador'), None)
+    if admin and admin['sin_fila']:
+        alertas.append({'nivel': 'warning', 'texto': f'El rol Administrador no tiene fila en {len(admin["sin_fila"])} '
+                        f'opción(es): no las ve. Si no fue a propósito, corre inicializar_permisos.'})
+    if urls_huerfanas:
+        alertas.append({'nivel': 'danger', 'texto': f'{len(urls_huerfanas)} URL(s) protegidas por códigos que no existen '
+                        'o están inactivos: dan "Acceso denegado" a todos menos al Maestro.'})
+    if mal_codificados:
+        alertas.append({'nivel': 'info', 'texto': f'{len(mal_codificados)} nombre(s) de menú con acentos rotos.'})
+    if sin_sucursal:
+        alertas.append({'nivel': 'warning', 'texto': f'{len(sin_sucursal)} usuario(s) activo(s) sin sucursal asignada.'})
+    if rol_invalido:
+        alertas.append({'nivel': 'danger', 'texto': f'{len(rol_invalido)} usuario(s) con un rol que no existe: '
+                        'no pasan ningún permiso.'})
+
+    return JsonResponse({
+        'success': True,
+        'alertas': alertas,
+        'roles': roles,
+        'urls_huerfanas': urls_huerfanas,
+        'sucursales': sucursales,
+        'mal_codificados': mal_codificados,
+        'usuarios_sin_sucursal': sin_sucursal,
+        'usuarios_con_overrides': con_overrides,
+        'usuarios_rol_invalido': rol_invalido,
+        'maestros': maestros,
+    })

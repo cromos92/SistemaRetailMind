@@ -170,6 +170,15 @@ from .permisos import (  # noqa: F401
     CodigoAutorizacionDinamico,
     RegistroAutorizacion,
     PermisoTemporalCambio,
+    ROL_MAESTRO,
+    ROLES_NIVEL_ADMINISTRADOR,
+    es_maestro,
+    es_rol_administrador,
+    rol_efectivo,
+    CODIGO_NC_CLIENTES,
+    CODIGO_NC_TRASPASO,
+    CODIGOS_EDICION_DOCUMENTOS,
+    puede_emitir_nota_credito,
 )
 
 from .requerimientos import (  # noqa: F401

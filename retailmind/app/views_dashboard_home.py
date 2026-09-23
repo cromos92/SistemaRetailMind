@@ -18,7 +18,7 @@ from .models import (
     Productos_Recepcionados, Requerimiento, Movimientos_Producto, LoteProducto,
     CambioDevolucion, Solicitud_Regularizacion, Traspaso, AjusteInventario,
     PermisoRol, OpcionMenu, ModuloSistema,
-    ArqueoCaja, DepositoBancario, CambioPrecioPendiente,
+    ArqueoCaja, DepositoBancario, CambioPrecioPendiente, rol_efectivo,
 )
 
 logger = logging.getLogger('app')
@@ -35,7 +35,8 @@ def bienvenida(request):
     if sucursal_id:
         sucursal_actual = Sucursal.objects.filter(id=sucursal_id).first()
 
-    rol = request.user.rol
+    # Rol para elegir los atajos: el Maestro recibe los del administrador.
+    rol = rol_efectivo(request.user)
     modulos_con_opciones = []
     total_accesos = 0
 
@@ -105,27 +106,31 @@ def bienvenida(request):
     except Exception:
         logger.exception("Error obteniendo opciones de bienvenida usuario_id=%s", request.user.id)
 
+    # Códigos = OpcionMenu.codigo reales (ver inicializar_permisos). Antes
+    # había códigos que no existen (documentos_emitidos, existencias_resumen,
+    # requerimientos=padre, generacion_ventas, arqueo_caja) y esos atajos no
+    # aparecían nunca.
     ACCESOS_DESTACADOS_POR_ROL = {
         'administrador': [
             'dashboard_general', 'gestion_usuarios', 'gestion_permisos',
             'gestion_sucursales', 'gestion_empresas', 'pos_dashboard',
-            'documentos_emitidos', 'existencias_resumen',
+            'reporte_documentos_emitidos', 'resumen_existencias',
         ],
         'administracion': [
-            'dashboard_general', 'documentos_emitidos', 'recepcion_dte',
-            'existencias_resumen', 'requerimientos', 'gestion_dte',
+            'dashboard_general', 'reporte_documentos_emitidos', 'recepcion_dte',
+            'resumen_existencias', 'lista_requerimientos', 'gestion_dte',
         ],
         'jefe_local': [
-            'dashboard_general', 'pos_dashboard', 'existencias_resumen',
-            'requerimientos', 'cambios_devoluciones', 'revision_arqueos',
+            'dashboard_general', 'pos_dashboard', 'resumen_existencias',
+            'lista_requerimientos', 'cambios_devoluciones', 'revision_arqueos',
         ],
         'cajero': [
-            'pos_dashboard', 'generacion_ventas', 'cambios_devoluciones',
-            'arqueo_caja', 'documentos_emitidos',
+            'pos_dashboard', 'cambios_devoluciones',
+            'cuadratura_caja', 'reporte_documentos_emitidos',
         ],
         'vendedor': [
-            'pos_dashboard', 'generacion_ventas', 'existencias_resumen',
-            'requerimientos',
+            'pos_dashboard', 'resumen_existencias',
+            'lista_requerimientos',
         ],
     }
 

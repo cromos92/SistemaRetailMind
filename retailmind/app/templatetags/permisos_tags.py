@@ -6,6 +6,7 @@ from django import template
 from django.db.models import Q
 from app.models import (
     ModuloSistema, OpcionMenu, PermisoRol, PermisoSucursal, PermisoUsuario,
+    es_maestro, es_rol_administrador,
 )
 from app.utils_permisos import puede_cambiar_sucursal as _puede_cambiar_sucursal
 
@@ -27,6 +28,8 @@ class _PermisosDelRequest:
 
     def __init__(self, user, sucursal_id):
         self.sucursal_id = sucursal_id
+        # Maestro: acceso total, igual que en PermisoRol.tiene_permiso.
+        self.es_maestro = es_maestro(user)
 
         self._opciones = {
             o['codigo']: o['id']
@@ -67,6 +70,8 @@ class _PermisosDelRequest:
         return True if valor is None else bool(valor)
 
     def resolver(self, codigo, tipo='puede_ver'):
+        if self.es_maestro:
+            return True
         opcion_id = self._opciones.get(codigo)
         if opcion_id is None:
             return False  # opción inexistente o inactiva
@@ -153,6 +158,9 @@ def _opciones_ids_usuario(user, modulo=None, padre=None, sucursal_id=None, cache
         filtro_opcion &= Q(padre__isnull=True)
 
     todas_opciones = OpcionMenu.objects.filter(filtro_opcion)
+
+    if es_maestro(user):
+        return set(todas_opciones.values_list('id', flat=True))
 
     if sucursal_id:
         # Con caché se resuelve en memoria; sin ella, una consulta por opción.
@@ -445,6 +453,7 @@ def rol_display(user):
     
     if hasattr(user, 'rol'):
         roles_dict = {
+            'maestro': 'Maestro',
             'administrador': 'Administrador',
             'administracion': 'Administración',
             'jefe_local': 'Jefe Local',
@@ -459,12 +468,20 @@ def rol_display(user):
 @register.filter
 def es_administrador(user):
     """
-    Verifica si el usuario es administrador
+    Verifica si el usuario es administrador (el Maestro también cuenta)
     """
     if not user or not user.is_authenticated:
         return False
-    
-    return hasattr(user, 'rol') and user.rol == 'administrador'
+
+    return es_rol_administrador(user)
+
+
+@register.filter(name='es_maestro')
+def es_maestro_filter(user):
+    """Verifica si el usuario tiene el rol Maestro (acceso total)."""
+    if not user or not user.is_authenticated:
+        return False
+    return es_maestro(user)
 
 
 @register.filter(name='puede_cambiar_sucursal')
@@ -492,7 +509,7 @@ def es_jefe_o_admin(user):
     if not user or not user.is_authenticated:
         return False
     
-    return hasattr(user, 'rol') and user.rol in ['administrador', 'jefe_local']
+    return hasattr(user, 'rol') and user.rol in ['maestro', 'administrador', 'jefe_local']
 
 
 @register.simple_tag(takes_context=True)

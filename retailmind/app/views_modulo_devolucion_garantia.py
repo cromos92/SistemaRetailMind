@@ -26,7 +26,9 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 
 from .decorators import requiere_permiso
-from .models import Sucursal, DevolucionGarantia, PermisoRol
+from .models import (
+    Sucursal, DevolucionGarantia, PermisoRol, rol_efectivo, puede_emitir_nota_credito,
+)
 from .services import devolucion_garantia_service as service
 
 logger = logging.getLogger('app')
@@ -52,7 +54,8 @@ def _sucursal_actual(request):
 def _es_admin(request):
     # Mismo criterio que service.anular_solicitud: ambos roles administrativos
     # pueden anular pendientes de terceros. Mantener sincronizados.
-    return getattr(request.user, 'rol', '') in ('administrador', 'administracion')
+    # rol_efectivo: el Maestro pasa como administrador.
+    return rol_efectivo(request.user) in ('administrador', 'administracion')
 
 
 def _puede_aprobar(request):
@@ -128,6 +131,11 @@ def modulo_devolucion_garantia(request):
         'sucursal_actual': sucursal,
         'estado_choices': DevolucionGarantia._meta.get_field('estado').choices,
         'puede_aprobar': _puede_aprobar(request),
+        # Aprobar emite la NC: además de puede_aprobar exige el permiso fino
+        # de NC a clientes (api_aprobar_devolucion_garantia lo vuelve a validar).
+        'puede_emitir_nc': puede_emitir_nota_credito(
+            request.user, request.session.get('idSucursalActual'),
+        ),
         # Solo el administrador ve el selector de sucursal (y puede pedir
         # "todas"): el resto queda encerrado en su sucursal activa.
         'es_admin': es_admin,
@@ -611,6 +619,12 @@ def api_impacto_caja_devolucion_garantia(request, devolucion_id):
 def api_aprobar_devolucion_garantia(request, devolucion_id):
     """Aprueba una solicitud: genera la NC 61 + TXT con el impacto en caja elegido."""
     _cargar_devolucion(request, devolucion_id)
+
+    # Aprobar emite la NC: además de puede_aprobar, el permiso fino de NC a
+    # clientes. Se valida antes de tocar la solicitud o consumir folio.
+    if not puede_emitir_nota_credito(request.user, request.session.get('idSucursalActual')):
+        msg = 'No tienes permiso para emitir Notas de Crédito. Pídeselo al Maestro.'
+        return JsonResponse({'success': False, 'error': msg, 'mensaje': msg}, status=403)
 
     try:
         body = json.loads(request.body or '{}')

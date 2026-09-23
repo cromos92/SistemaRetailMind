@@ -1,0 +1,401 @@
+{# Modal + JS para asociar cobros Mercado Pago con su venta. Se incluye ANTES del footer: #}
+{# jQuery / SweetAlert / Bootstrap se usan recién al hacer clic, cuando ya cargaron.       #}
+<style>
+    #modalAsociarMP .modal-dialog { max-width: min(1100px, 96vw); }
+    #modalAsociarMP .asoc-resumen {
+        display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: center;
+        background: var(--nexo-primary-light); border-radius: var(--nexo-radius-md);
+        padding: 12px 14px; margin-bottom: 14px; font-size: .88rem;
+    }
+    #modalAsociarMP .asoc-resumen .asoc-monto { font-size: 1.35rem; font-weight: 700; color: var(--nexo-primary-dark); font-variant-numeric: tabular-nums; }
+    #modalAsociarMP .asoc-seccion { font-weight: 700; font-size: .9rem; margin: 10px 0 6px; }
+    #modalAsociarMP .conc-scroll { max-height: 34vh; }
+    #modalAsociarMP tr.asoc-fila { cursor: pointer; }
+    #modalAsociarMP tr.asoc-fila.seleccionada { background: var(--nexo-primary-light); }
+    #modalAsociarMP input[type="radio"] { width: 18px; height: 18px; cursor: pointer; }
+    #modalAsociarMP .asoc-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+    #modalAsociarMP .asoc-toolbar .form-control, #modalAsociarMP .asoc-toolbar .form-select { width: auto; min-height: 38px; }
+</style>
+
+<div class="modal fade" id="modalAsociarMP" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="ri-links-line me-2"></i><span id="asocTitulo">Asociar cobro de Mercado Pago</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="asoc-resumen" id="asocResumen"></div>
+
+                <!-- Elegir la VENTA (cobro sin venta / pago que solo está en MP) -->
+                <div id="asocBloqueVentas">
+                    <div class="asoc-seccion">¿A qué venta corresponde? <span class="text-muted fw-normal small">(pagos con tarjeta manual o «MP manual» del mismo monto)</span></div>
+                    <div class="asoc-toolbar">
+                        <input type="search" class="form-control" id="asocBuscar" placeholder="Ticket, folio o N° digitado">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="asocTodas">
+                            <label class="form-check-label" for="asocTodas">Buscar en todas las sucursales</label>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="asocBuscarVentas()"><i class="ri-search-line me-1"></i>Buscar</button>
+                    </div>
+                    <div class="conc-scroll">
+                        <table class="table conc-table">
+                            <thead><tr><th></th><th>Ticket / documento</th><th>Fecha</th><th>Sucursal</th><th>Pago registrado</th><th>N° digitado</th><th class="num">Monto</th><th>Coincidencia</th></tr></thead>
+                            <tbody id="asocTbodyVentas"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Elegir el COBRO (pago «MP manual» sin verificar) -->
+                <div id="asocBloqueCobros">
+                    <div class="asoc-seccion">Cobros de Mercado Pago sin venta del mismo monto</div>
+                    <div class="conc-scroll mb-3">
+                        <table class="table conc-table">
+                            <thead><tr><th></th><th>Fecha</th><th>Sucursal · Caja</th><th>Referencia</th><th>Medio</th><th>N° operación</th><th class="num">Monto</th><th>Coincidencia</th></tr></thead>
+                            <tbody id="asocTbodyCobrosLocales"></tbody>
+                        </table>
+                    </div>
+                    <div class="asoc-seccion">…o búscalo directo en Mercado Pago</div>
+                    <div class="asoc-toolbar">
+                        <select class="form-select" id="asocCaja"></select>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="asocBuscarEnMP()"><i class="ri-bank-line me-1"></i>Buscar pagos del día en MP</button>
+                        <span class="text-muted small">o escribe el N° de operación:</span>
+                        <input type="text" inputmode="numeric" class="form-control" id="asocNumero" placeholder="N° de operación" style="max-width: 190px;">
+                    </div>
+                    <div class="conc-scroll">
+                        <table class="table conc-table">
+                            <thead><tr><th></th><th>Fecha</th><th>N° operación</th><th>Medio</th><th>Descripción</th><th class="num">Monto</th><th>Estado</th></tr></thead>
+                            <tbody id="asocTbodyPagosMP"><tr><td colspan="7" class="conc-empty">Elige la caja y busca.</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="asocRecalcular" checked>
+                    <label class="form-check-label" for="asocRecalcular">Actualizar el teórico del arqueo de ese día (queda en la bitácora del arqueo)</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnAsocConfirmar" disabled onclick="asocConfirmar()"><i class="ri-links-line me-1"></i>Asociar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    const API = '/app/api/mercadopago/asociar/';
+    const fmt = v => '$' + (Math.round(Number(v) || 0)).toLocaleString('es-CL');
+    const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const csrf = () => { const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/); return m ? decodeURIComponent(m[1]) : ''; };
+    const estado = { modo: null, trxId: null, pagoId: null, fila: null, seleccion: null, cajas: [] };
+
+    // Llegada desde la Cuadratura: ?desde=&hasta=&sucursal_id=&tab=asociar
+    const qs = new URLSearchParams(window.location.search);
+    ['desde', 'hasta'].forEach(k => {
+        const el = document.getElementById(k === 'desde' ? 'concDesde' : 'concHasta');
+        if (el && qs.get(k)) el.value = qs.get(k);
+    });
+    const selSuc = document.getElementById('concSucursal');
+    if (selSuc && qs.get('sucursal_id')) selSuc.value = qs.get('sucursal_id');
+
+    function params() {
+        const p = new URLSearchParams();
+        const d = document.getElementById('concDesde').value, h = document.getElementById('concHasta').value;
+        if (d) p.set('desde', d);
+        if (h) p.set('hasta', h);
+        const s = document.getElementById('concSucursal');
+        if (s && s.value) p.set('sucursal_id', s.value);
+        return p;
+    }
+
+    async function api(url, cuerpo) {
+        const init = { headers: { 'X-Requested-With': 'XMLHttpRequest' } };
+        if (cuerpo) {
+            init.method = 'POST';
+            init.headers['Content-Type'] = 'application/json';
+            init.headers['X-CSRFToken'] = csrf();
+            init.body = JSON.stringify(cuerpo);
+        }
+        const r = await fetch(url, init);
+        let d = {};
+        try { d = await r.json(); } catch (e) { /* no JSON */ }
+        if (!r.ok || d.success === false || d.error === true) {
+            throw new Error(d.mensaje || (typeof d.error === 'string' ? d.error : '') || `Error del servidor (${r.status})`);
+        }
+        return d;
+    }
+
+    function coincidencia(f) {
+        const chips = [];
+        if (f.mismo_voucher) chips.push('<span class="conc-chip conc-chip--ok">mismo N°</span>');
+        if (f.mismo_correlativo) chips.push('<span class="conc-chip conc-chip--ok">mismo ticket</span>');
+        if (f.minutos != null) chips.push(`<span class="conc-chip conc-chip--mute">${f.minutos < 90 ? f.minutos + ' min' : Math.round(f.minutos / 60) + ' h'}</span>`);
+        return chips.join(' ');
+    }
+
+    // ── Pestaña: pendientes ──
+    window.asocCargarPendientes = function () {
+        const tbC = document.getElementById('asocTbodyCobros');
+        const tbM = document.getElementById('asocTbodyManuales');
+        if (!tbC) return;
+        tbC.innerHTML = tbM.innerHTML = '<tr><td colspan="7" class="conc-empty"><div class="spinner-border spinner-border-sm text-primary"></div> Cargando…</td></tr>';
+        api(API + 'pendientes/?' + params().toString()).then(d => {
+            estado.cajas = d.cajas || [];
+            const r = d.resumen;
+            document.getElementById('asocChipCobros').textContent = `${r.cobros_cantidad} cobros · ${fmt(r.cobros_monto)}`;
+            document.getElementById('asocChipManuales').textContent = `${r.manuales_cantidad} manuales · ${fmt(r.manuales_monto)}`;
+            const cnt = document.getElementById('tabCountAsociar');
+            if (cnt) cnt.textContent = r.cobros_cantidad + r.manuales_cantidad;
+            tbC.innerHTML = d.cobros.length ? d.cobros.map(c => `
+                <tr>
+                    <td>${esc(c.fecha)} <span class="conc-sub">${esc(c.hora)}</span></td>
+                    <td>${esc(c.sucursal)} <span class="conc-sub">${esc(c.caja)}</span></td>
+                    <td>${c.es_directo ? '<span class="conc-chip conc-chip--info">cobro directo</span> ' : ''}<code>${esc(c.correlativo)}</code></td>
+                    <td>${esc(c.medio)}${c.ultimos_4 ? ' ···' + esc(c.ultimos_4) : ''}</td>
+                    <td><code>${esc(c.n_operacion || '—')}</code></td>
+                    <td class="num fw-semibold">${fmt(c.monto)}</td>
+                    <td class="text-end"><button type="button" class="btn btn-sm btn-primary" onclick="asocAbrirCobro(${c.id})"><i class="ri-links-line me-1"></i>Asociar</button></td>
+                </tr>`).join('') : '<tr><td colspan="7" class="conc-empty">Sin cobros pendientes en el período. 👍</td></tr>';
+            tbM.innerHTML = d.manuales.length ? d.manuales.map(m => `
+                <tr>
+                    <td>${esc(m.fecha)} <span class="conc-sub">${esc(m.hora)}</span></td>
+                    <td>${esc(m.sucursal)}</td>
+                    <td>#${esc(m.correlativo)} ${m.folio ? '<span class="conc-sub">folio ' + esc(m.folio) + '</span>' : ''}</td>
+                    <td>${esc(m.metodo_display)}</td>
+                    <td><code>${esc(m.voucher || '—')}</code></td>
+                    <td class="num fw-semibold">${fmt(m.monto)}</td>
+                    <td class="text-end"><button type="button" class="btn btn-sm btn-outline-primary" onclick="asocAbrirPago(${m.id})"><i class="ri-search-eye-line me-1"></i>Verificar</button></td>
+                </tr>`).join('') : '<tr><td colspan="7" class="conc-empty">Sin pagos «MP manual» pendientes. 👍</td></tr>';
+        }).catch(e => {
+            tbC.innerHTML = `<tr><td colspan="7" class="conc-empty text-danger">${esc(e.message)}</td></tr>`;
+            tbM.innerHTML = '';
+        });
+    };
+
+    // ── Ganchos en las tablas de la conciliación ──
+    window.accionExtraConciliacion = function (f) {
+        if (f.origen === 'COBRO_MP' && (f.categoria === 'SIN_VENTA' || f.categoria === 'COBRO_DIRECTO')) {
+            return ` <button type="button" class="btn btn-sm btn-primary py-0" onclick="asocAbrirCobro(${Number(f.id)})"><i class="ri-links-line"></i> Asociar</button>`;
+        }
+        if (f.origen === 'PAGO_MANUAL') {
+            return ` <button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="asocAbrirPago(${Number(f.id)})"><i class="ri-search-eye-line"></i> Verificar</button>`;
+        }
+        return '';
+    };
+    window.accionExtraContraMP = function (f) {
+        if (f.tipo === 'SIN_REGISTRO') {
+            estado.filasMP = estado.filasMP || {};
+            estado.filasMP[f.payment_id] = f;
+            return `<button type="button" class="btn btn-sm btn-primary py-0" onclick="asocAbrirPagoMP('${esc(f.payment_id)}')"><i class="ri-links-line"></i> Asociar a venta</button>`;
+        }
+        if (f.tipo === 'MANUAL_SIN_PAGO' && f.pago_id) {
+            return `<button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="asocAbrirPago(${Number(f.pago_id)})"><i class="ri-search-eye-line"></i> Corregir</button>`;
+        }
+        return '';
+    };
+
+    // ── Modal ──
+    function abrirModal(modo, titulo) {
+        estado.modo = modo;
+        estado.seleccion = null;
+        document.getElementById('asocTitulo').textContent = titulo;
+        document.getElementById('asocBloqueVentas').style.display = (modo === 'cobro' || modo === 'mpapi') ? '' : 'none';
+        document.getElementById('asocBloqueCobros').style.display = modo === 'pago' ? '' : 'none';
+        document.getElementById('btnAsocConfirmar').disabled = true;
+        document.getElementById('asocBuscar').value = '';
+        document.getElementById('asocTodas').checked = false;
+        document.getElementById('asocNumero').value = '';
+        document.getElementById('asocTbodyVentas').innerHTML = '';
+        document.getElementById('asocTbodyCobrosLocales').innerHTML = '';
+        document.getElementById('asocTbodyPagosMP').innerHTML = '<tr><td colspan="7" class="conc-empty">Elige la caja y busca.</td></tr>';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAsociarMP')).show();
+    }
+
+    function seleccionar(valor, fila) {
+        estado.seleccion = valor;
+        document.querySelectorAll('#modalAsociarMP tr.asoc-fila').forEach(tr => tr.classList.toggle('seleccionada', tr === fila));
+        if (valor && !String(valor).startsWith('num:')) document.getElementById('asocNumero').value = '';
+        document.getElementById('btnAsocConfirmar').disabled = !valor;
+    }
+    document.getElementById('modalAsociarMP').addEventListener('click', e => {
+        const tr = e.target.closest('tr.asoc-fila');
+        if (!tr) return;
+        const radio = tr.querySelector('input[type="radio"]');
+        radio.checked = true;
+        seleccionar(radio.value, tr);
+    });
+    document.getElementById('asocNumero').addEventListener('input', function () {
+        const n = this.value.replace(/\D/g, '');
+        document.querySelectorAll('#modalAsociarMP input[name="asocSel"]').forEach(r => { r.checked = false; });
+        document.querySelectorAll('#modalAsociarMP tr.asoc-fila').forEach(tr => tr.classList.remove('seleccionada'));
+        estado.seleccion = n ? 'num:' + n : null;
+        document.getElementById('btnAsocConfirmar').disabled = !n;
+    });
+
+    function pintarVentas(candidatos) {
+        const tb = document.getElementById('asocTbodyVentas');
+        tb.innerHTML = candidatos.length ? candidatos.map(p => `
+            <tr class="asoc-fila">
+                <td><input type="radio" name="asocSel" value="pago:${p.id}"></td>
+                <td>#${esc(p.correlativo)} ${p.folio ? '<span class="conc-sub">' + esc(p.tipo_dte) + ' ' + esc(p.folio) + '</span>' : ''}${p.cliente ? '<div class="conc-sub">' + esc(p.cliente) + '</div>' : ''}</td>
+                <td>${esc(p.fecha)} <span class="conc-sub">${esc(p.hora)}</span></td>
+                <td>${esc(p.sucursal)}</td>
+                <td>${esc(p.metodo_display)}${p.origen === 'MANUAL' ? ' <span class="conc-chip conc-chip--mute">manual</span>' : ''}</td>
+                <td><code>${esc(p.voucher || '—')}</code></td>
+                <td class="num fw-semibold">${fmt(p.monto)}</td>
+                <td>${coincidencia(p)}</td>
+            </tr>`).join('') : '<tr><td colspan="8" class="conc-empty">No hay pagos del mismo monto en esas fechas. Prueba buscando por N° de ticket o en todas las sucursales.</td></tr>';
+    }
+
+    window.asocBuscarVentas = function () {
+        const q = encodeURIComponent(document.getElementById('asocBuscar').value.trim());
+        const todas = document.getElementById('asocTodas').checked ? '1' : '';
+        let url;
+        if (estado.modo === 'cobro') url = `${API}candidatos/?trx_id=${estado.trxId}&q=${q}&todas=${todas}`;
+        else {
+            const f = estado.fila;
+            url = `${API}candidatos/?monto=${f.monto}&fecha=${encodeURIComponent(f.fecha || '')}&sucursal_id=${f.sucursal_id || ''}&payment_id=${encodeURIComponent(f.payment_id)}&q=${q}&todas=${todas}`;
+        }
+        document.getElementById('asocTbodyVentas').innerHTML = '<tr><td colspan="8" class="conc-empty"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
+        seleccionar(null, null);
+        api(url).then(d => pintarVentas(d.candidatos || [])).catch(e => {
+            document.getElementById('asocTbodyVentas').innerHTML = `<tr><td colspan="8" class="conc-empty text-danger">${esc(e.message)}</td></tr>`;
+        });
+    };
+
+    window.asocAbrirCobro = function (trxId) {
+        estado.trxId = trxId;
+        abrirModal('cobro', 'Asociar cobro de Mercado Pago a su venta');
+        document.getElementById('asocResumen').innerHTML = '<div class="spinner-border spinner-border-sm text-primary"></div>';
+        api(`${API}candidatos/?trx_id=${trxId}`).then(d => {
+            const c = d.cobro;
+            document.getElementById('asocResumen').innerHTML = `
+                <div><div class="conc-sub">Cobro Mercado Pago</div><div class="asoc-monto">${fmt(c.monto)}</div></div>
+                <div><div class="conc-sub">Fecha</div>${esc(c.fecha)} ${esc(c.hora)}</div>
+                <div><div class="conc-sub">Sucursal · Caja</div>${esc(c.sucursal)} · ${esc(c.caja)}</div>
+                <div><div class="conc-sub">Medio</div>${esc(c.medio)}${c.ultimos_4 ? ' ···' + esc(c.ultimos_4) : ''}</div>
+                <div><div class="conc-sub">N° operación</div><code>${esc(c.n_operacion || '—')}</code></div>
+                <div><div class="conc-sub">Referencia</div><code>${esc(c.correlativo)}</code></div>`;
+            pintarVentas(d.candidatos || []);
+        }).catch(e => { document.getElementById('asocResumen').innerHTML = `<span class="text-danger">${esc(e.message)}</span>`; });
+    };
+
+    window.asocAbrirPagoMP = function (paymentId) {
+        const f = (estado.filasMP || {})[paymentId];
+        if (!f) return;
+        estado.fila = f;
+        abrirModal('mpapi', 'Registrar pago de Mercado Pago en su venta');
+        document.getElementById('asocResumen').innerHTML = `
+            <div><div class="conc-sub">Pago en Mercado Pago (no está en el sistema)</div><div class="asoc-monto">${fmt(f.monto)}</div></div>
+            <div><div class="conc-sub">Fecha</div>${esc(f.fecha)}</div>
+            <div><div class="conc-sub">N° operación</div><code>${esc(f.payment_id)}</code></div>
+            <div><div class="conc-sub">Medio</div>${esc(f.medio)}</div>
+            <div><div class="conc-sub">Cuenta / caja</div>${esc(f.caja || '')}</div>
+            ${f.descripcion ? `<div><div class="conc-sub">Descripción</div>${esc(f.descripcion)}</div>` : ''}`;
+        asocBuscarVentas();
+    };
+
+    window.asocAbrirPago = function (pagoId) {
+        estado.pagoId = pagoId;
+        abrirModal('pago', 'Verificar pago «MP manual» contra Mercado Pago');
+        document.getElementById('asocResumen').innerHTML = '<div class="spinner-border spinner-border-sm text-primary"></div>';
+        api(`${API}candidatos/?pago_id=${pagoId}`).then(d => {
+            const p = d.pago;
+            estado.cajas = d.cajas || estado.cajas;
+            document.getElementById('asocResumen').innerHTML = `
+                <div><div class="conc-sub">Venta pagada con ${esc(p.metodo_display)}</div><div class="asoc-monto">${fmt(p.monto)}</div></div>
+                <div><div class="conc-sub">Ticket</div>#${esc(p.correlativo)} ${p.folio ? esc(p.tipo_dte) + ' ' + esc(p.folio) : ''}</div>
+                <div><div class="conc-sub">Fecha</div>${esc(p.fecha)} ${esc(p.hora)}</div>
+                <div><div class="conc-sub">Sucursal</div>${esc(p.sucursal)}</div>
+                <div><div class="conc-sub">N° digitado</div><code>${esc(p.voucher || '—')}</code></div>`;
+            const tb = document.getElementById('asocTbodyCobrosLocales');
+            const c = d.candidatos || [];
+            tb.innerHTML = c.length ? c.map(t => `
+                <tr class="asoc-fila">
+                    <td><input type="radio" name="asocSel" value="trx:${t.id}"></td>
+                    <td>${esc(t.fecha)} <span class="conc-sub">${esc(t.hora)}</span></td>
+                    <td>${esc(t.sucursal)} <span class="conc-sub">${esc(t.caja)}</span></td>
+                    <td>${t.es_directo ? '<span class="conc-chip conc-chip--info">cobro directo</span> ' : ''}<code>${esc(t.correlativo)}</code></td>
+                    <td>${esc(t.medio)}</td>
+                    <td><code>${esc(t.n_operacion || '—')}</code></td>
+                    <td class="num fw-semibold">${fmt(t.monto)}</td>
+                    <td>${coincidencia(t)}</td>
+                </tr>`).join('') : '<tr><td colspan="8" class="conc-empty">No hay cobros sin venta del mismo monto cerca de esa fecha. Búscalo en Mercado Pago ↓</td></tr>';
+            const sel = document.getElementById('asocCaja');
+            const propias = estado.cajas.filter(x => String(x.sucursal_id) === String(p.sucursal_id));
+            const resto = estado.cajas.filter(x => String(x.sucursal_id) !== String(p.sucursal_id));
+            sel.innerHTML = propias.concat(resto).map(x => `<option value="${x.id}">${esc(x.sucursal)} · ${esc(x.nombre)}</option>`).join('')
+                || '<option value="">No hay cajas Mercado Pago</option>';
+        }).catch(e => { document.getElementById('asocResumen').innerHTML = `<span class="text-danger">${esc(e.message)}</span>`; });
+    };
+
+    window.asocBuscarEnMP = function () {
+        const caja = document.getElementById('asocCaja').value;
+        const tb = document.getElementById('asocTbodyPagosMP');
+        if (!caja) return;
+        tb.innerHTML = '<tr><td colspan="7" class="conc-empty"><div class="spinner-border spinner-border-sm text-primary"></div> Consultando Mercado Pago…</td></tr>';
+        api(`${API}candidatos/?pago_id=${estado.pagoId}&buscar_mp=1&config_id=${caja}`).then(d => {
+            const pagos = d.pagos_mp || [];
+            tb.innerHTML = pagos.length ? pagos.map(p => `
+                <tr class="${p.ya_registrado ? '' : 'asoc-fila'}">
+                    <td>${p.ya_registrado ? '' : `<input type="radio" name="asocSel" value="mp:${esc(p.payment_id)}">`}</td>
+                    <td>${esc(p.fecha)}</td>
+                    <td><code>${esc(p.payment_id)}</code>${p.mismo_voucher ? ' <span class="conc-chip conc-chip--ok">mismo N°</span>' : ''}</td>
+                    <td>${esc(p.medio)}${p.ultimos_4 ? ' ···' + esc(p.ultimos_4) : ''}</td>
+                    <td class="small">${esc(p.descripcion || p.external_reference || '')}</td>
+                    <td class="num fw-semibold">${fmt(p.monto)}</td>
+                    <td>${p.ya_registrado ? '<span class="conc-chip conc-chip--mute">ya en el sistema</span>' : '<span class="conc-chip conc-chip--warn">sin registrar</span>'}</td>
+                </tr>`).join('') : '<tr><td colspan="7" class="conc-empty">Mercado Pago no tiene pagos aprobados de ese monto entre el día anterior y el siguiente.</td></tr>';
+        }).catch(e => { tb.innerHTML = `<tr><td colspan="7" class="conc-empty text-danger">${esc(e.message)}</td></tr>`; });
+    };
+
+    window.asocConfirmar = async function () {
+        const sel = estado.seleccion;
+        if (!sel) return;
+        const [tipo, valor] = String(sel).split(':');
+        const recalcular = document.getElementById('asocRecalcular').checked;
+        let url, cuerpo, texto;
+        if (estado.modo === 'cobro') {
+            url = API + 'cobro/'; cuerpo = { trx_id: estado.trxId, pago_id: Number(valor), recalcular_arqueo: recalcular };
+            texto = 'El pago de esa venta pasará a Mercado Pago y el cobro quedará asociado.';
+        } else if (estado.modo === 'mpapi') {
+            url = API + 'importar/';
+            cuerpo = { payment_id: estado.fila.payment_id, pago_id: Number(valor), config_id: estado.fila.config_id, recalcular_arqueo: recalcular };
+            texto = `El pago N° ${estado.fila.payment_id} se registrará en el sistema y quedará asociado a esa venta.`;
+        } else if (tipo === 'trx') {
+            url = API + 'cobro/'; cuerpo = { trx_id: Number(valor), pago_id: estado.pagoId, recalcular_arqueo: recalcular };
+            texto = 'El pago «MP manual» quedará respaldado por ese cobro.';
+        } else {
+            url = API + 'importar/';
+            cuerpo = { payment_id: valor, pago_id: estado.pagoId, config_id: Number(document.getElementById('asocCaja').value), recalcular_arqueo: recalcular };
+            texto = `Se traerá de Mercado Pago el pago N° ${valor} y respaldará esta venta (el N° digitado se corrige si era distinto).`;
+        }
+        const ok = await Swal.fire({ icon: 'question', title: '¿Asociar?', text: texto, showCancelButton: true,
+                                     confirmButtonText: 'Sí, asociar', cancelButtonText: 'Cancelar' });
+        if (!ok.isConfirmed) return;
+        Swal.fire({ title: 'Asociando…', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        try {
+            const d = await api(url, cuerpo);
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAsociarMP')).hide();
+            await Swal.fire({ icon: 'success', title: 'Asociado', text: d.mensaje });
+            window.asocCargarPendientes();
+            if (typeof window.recargarConciliacion === 'function') window.recargarConciliacion();
+        } catch (e) {
+            Swal.fire('No se pudo asociar', e.message, 'error');
+        }
+    };
+
+    // ── Pestaña ──
+    document.addEventListener('DOMContentLoaded', () => {
+        const tab = document.querySelector('.conc-tab[data-pane="asociar"]');
+        if (!tab) return;
+        let cargado = false;
+        tab.addEventListener('click', () => { if (!cargado) { cargado = true; window.asocCargarPendientes(); } });
+        if (qs.get('tab') === 'asociar') tab.click();
+        else window.asocCargarPendientes();   // solo para el contador de la pestaña
+    });
+})();
+</script>

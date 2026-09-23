@@ -1036,6 +1036,14 @@ de incluirlo: productosProblemas (array), tabActual (string).
 // Estas funciones operan sobre las variables globales productosProblemas,
 // productoSeleccionado y tabActual definidas por el template padre.
 
+// Permiso fino de NC de traspaso (flag `puede_emitir_nc_traspaso` del contexto
+// de recepcion_dte). El backend lo vuelve a validar; esto solo evita ofrecer
+// opciones que terminarían en 403.
+function _puedeEmitirNcTraspaso() {
+    return {{ puede_emitir_nc_traspaso|yesno:"true,false" }};
+}
+const _MSG_SIN_PERMISO_NC_TRASPASO = 'No tienes permiso para emitir Notas de Crédito de traspasos internos. Pídeselo al Maestro.';
+
 // ===== Regularización masiva por DTE (1 NC con N líneas) =====
 /**
  * NC única por todo el documento.
@@ -1086,6 +1094,12 @@ function abrirModalRegularizarDTE(key) {
             icon: 'error',
             width: '640px',
         });
+        return;
+    }
+
+    // Siempre emite una NC de traspaso: sin el permiso no se abre.
+    if (!_puedeEmitirNcTraspaso()) {
+        Swal.fire('Sin permiso', _MSG_SIN_PERMISO_NC_TRASPASO, 'warning');
         return;
     }
 
@@ -1423,15 +1437,26 @@ function abrirModalRegularizar(productoId) {
             </span>
         `;
         
-        // Opciones para EJECUTAR solución (el emisor la ejecuta directamente)
+        // Opciones para EJECUTAR solución (el emisor la ejecuta directamente).
+        // Las dos emiten NC de traspaso: sin el permiso quedan deshabilitadas.
+        const _ncOk = _puedeEmitirNcTraspaso();
+        const _attrNc = _ncOk ? '' : ' disabled';
+        const _titleNc = _ncOk ? '' : ' title="Sin permiso para emitir Notas de Crédito"';
+        if (!_ncOk) {
+            descripcionTipo.innerHTML += `
+                <span class="d-block mt-2 pt-2 border-top text-danger">
+                    <i class="bi bi-lock me-2"></i>${_MSG_SIN_PERMISO_NC_TRASPASO}
+                </span>
+            `;
+        }
         botonesContainer.innerHTML = `
-            <input type="radio" class="btn-check" name="tipoRegularizacion" id="regEmitirNC" value="EMITIR_NC" checked>
-            <label class="btn btn-outline-warning" for="regEmitirNC">
+            <input type="radio" class="btn-check" name="tipoRegularizacion" id="regEmitirNC" value="EMITIR_NC"${_ncOk ? ' checked' : _attrNc}>
+            <label class="btn btn-outline-warning" for="regEmitirNC"${_titleNc}>
                 <i class="bi bi-file-earmark-text"></i> Emitir Nota de Crédito
             </label>
-            
-            <input type="radio" class="btn-check" name="tipoRegularizacion" id="regEnviarCambio" value="ENVIAR_CAMBIO">
-            <label class="btn btn-outline-primary" for="regEnviarCambio">
+
+            <input type="radio" class="btn-check" name="tipoRegularizacion" id="regEnviarCambio" value="ENVIAR_CAMBIO"${_attrNc}>
+            <label class="btn btn-outline-primary" for="regEnviarCambio"${_titleNc}>
                 <i class="bi bi-box-seam"></i> Enviar Producto de Cambio
             </label>
         `;
@@ -1544,8 +1569,8 @@ function abrirModalRegularizar(productoId) {
             });
         });
         
-        // Seleccionar el primero
-        const primerRadio = document.querySelector('input[name="tipoRegularizacion"]');
+        // Seleccionar el primero habilitado (las opciones de NC sin permiso vienen disabled)
+        const primerRadio = document.querySelector('input[name="tipoRegularizacion"]:not(:disabled)');
         if (primerRadio) {
             primerRadio.checked = true;
             mostrarPanelRegularizacion(primerRadio.value);
@@ -1669,6 +1694,22 @@ function mostrarPanelRegularizacion(tipo) {
                     document.getElementById('previewNCDecisionMonto').textContent = hacerNC ? Number(cantidadProblema * precioUnit * 1.19).toLocaleString('es-CL') : '0 (sin NC)';
                 };
             });
+        }
+        // Sin permiso de NC de traspaso solo queda "devolver stock sin NC".
+        const _ncOk = _puedeEmitirNcTraspaso();
+        const radioSiNC = document.querySelector('input[name="decisionNC"][value="true"]');
+        const radioNoNC = document.querySelector('input[name="decisionNC"][value="false"]');
+        if (radioSiNC && radioNoNC) {
+            radioSiNC.disabled = !_ncOk;
+            const labelSiNC = radioSiNC.closest('label');
+            if (labelSiNC) {
+                labelSiNC.classList.toggle('disabled', !_ncOk);
+                labelSiNC.title = _ncOk ? '' : 'Sin permiso para emitir Notas de Crédito';
+            }
+            if (!_ncOk) {
+                radioNoNC.checked = true;
+                document.getElementById('previewNCDecisionMonto').textContent = '0 (sin NC)';
+            }
         }
     } else if (tipo === 'AJUSTAR') {
         document.getElementById('panelAjustar').style.display = 'block';
@@ -2130,7 +2171,15 @@ function guardarRegularizacion() {
         return;
     }
     
-    const tipo = document.querySelector('input[name="tipoRegularizacion"]:checked').value;
+    const radioTipo = document.querySelector('input[name="tipoRegularizacion"]:checked');
+    if (!radioTipo) {
+        // Emisor sin permiso de NC: no queda ninguna opción ejecutable.
+        Swal.fire('Sin opción', _puedeEmitirNcTraspaso()
+            ? 'Selecciona un tipo de regularización.'
+            : _MSG_SIN_PERMISO_NC_TRASPASO, 'warning');
+        return;
+    }
+    const tipo = radioTipo.value;
     const observaciones = document.getElementById('regObservaciones').value;
     
     let data = {

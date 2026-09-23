@@ -1,0 +1,39 @@
+{# Pestaña «Asociar» de Conciliación Mercado Pago (solo con permiso asociar_pagos_mercadopago). #}
+<div class="conc-panel d-flex flex-wrap gap-3 align-items-start justify-content-between">
+    <div style="max-width: 760px;">
+        <h6><i class="ri-links-line me-1"></i>Asociar cobros de Mercado Pago con su venta</h6>
+        <div class="small text-muted">
+            <strong>Cobros sin venta:</strong> Mercado Pago aprobó el cobro pero ninguna venta lo usa (se cerró como tarjeta manual,
+            o se cobró desde «Tu caja»). <strong>«MP manual» sin verificar:</strong> ventas pagadas con N° de operación digitado
+            que no tienen el cobro real detrás. Al asociar, el pago de la venta pasa al medio Mercado Pago correcto, se corrige
+            el documento y se recalcula el arqueo del día. Solo se asocia con <strong>monto exacto</strong>.
+        </div>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+        <span class="conc-chip conc-chip--err" id="asocChipCobros">0 cobros · $0</span>
+        <span class="conc-chip conc-chip--warn" id="asocChipManuales">0 manuales · $0</span>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="asocCargarPendientes()"><i class="ri-refresh-line me-1"></i>Actualizar</button>
+    </div>
+</div>
+
+<h6 class="fw-bold mt-2"><i class="ri-error-warning-line text-danger me-1"></i>Cobros de Mercado Pago sin venta</h6>
+<div class="conc-scroll mb-4" style="max-height: 38vh;">
+    <table class="table conc-table">
+        <thead><tr>
+            <th>Fecha</th><th>Sucursal · Caja</th><th>Referencia</th><th>Medio</th><th>N° operación</th>
+            <th class="num">Monto</th><th class="text-end">Acción</th>
+        </tr></thead>
+        <tbody id="asocTbodyCobros"><tr><td colspan="7" class="conc-empty">Abre esta pestaña para cargar.</td></tr></tbody>
+    </table>
+</div>
+
+<h6 class="fw-bold"><i class="ri-question-line text-warning me-1"></i>Ventas pagadas con «MP manual» sin verificar</h6>
+<div class="conc-scroll" style="max-height: 38vh;">
+    <table class="table conc-table">
+        <thead><tr>
+            <th>Fecha</th><th>Sucursal</th><th>Ticket / documento</th><th>Medio registrado</th><th>N° digitado</th>
+            <th class="num">Monto</th><th class="text-end">Acción</th>
+        </tr></thead>
+        <tbody id="asocTbodyManuales"><tr><td colspan="7" class="conc-empty">Abre esta pestaña para cargar.</td></tr></tbody>
+    </table>
+</div>

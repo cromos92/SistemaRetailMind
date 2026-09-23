@@ -3141,6 +3141,29 @@ const PUEDE_REGULARIZAR_DTE = {{ puede_regularizar_dte|yesno:"true,false" }};
 const PUEDE_RECEPCIONAR_DTE = {{ puede_recepcionar_dte|yesno:"true,false" }};
 const PUEDE_VER_TODOS_DTE = {{ puede_ver_todos_dte|yesno:"true,false" }};
 const PUEDE_AJUSTAR_EMITIDOS = {{ puede_ajustar_emitidos|yesno:"true,false" }};
+// Permiso fino de Nota de Crédito. Los documentos de esta pantalla son
+// traspasos internos, así que manda el de NC de traspaso (el backend lo
+// vuelve a validar). Solo afecta a FACTURA/BOLETA: las guías no llevan NC.
+const PUEDE_EMITIR_NC_TRASPASO = {{ puede_emitir_nc_traspaso|yesno:"true,false" }};
+const TITULO_SIN_PERMISO_NC = 'Sin permiso para emitir Notas de Crédito';
+function _esDteTributario(tipoDocumento) {
+    const tipo = String(tipoDocumento || '').toUpperCase();
+    return (
+        tipo === 'FACTURA ELECTRONICA' || tipo === 'FACTURA_ELECTRONICA' ||
+        tipo === 'BOLETA ELECTRONICA'  || tipo === 'BOLETA_ELECTRONICA'
+    );
+}
+// True si la acción sobre este documento emitiría una NC y falta el permiso.
+function _ncTraspasoBloqueada(tipoDocumento) {
+    return !PUEDE_EMITIR_NC_TRASPASO && _esDteTributario(tipoDocumento);
+}
+function _avisarSinPermisoNc() {
+    Swal.fire(
+        'Sin permiso',
+        'No tienes permiso para emitir Notas de Crédito de traspasos internos. Pídeselo al Maestro.',
+        'warning'
+    );
+}
 // Con "Ver todas las sucursales" activo llegan DTE de otras sucursales: los
 // endpoints de escritura exigen ser la sucursal emisora, asi que sin esto los
 // botones aparecian solo para devolver 403.
@@ -3792,7 +3815,7 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
                         <button class="btn btn-success btn-sm" onclick="rehabilitarDTE(${dte.dte_id}, '${dte.numero_documento}')" title="Rehabilitar">
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>
-                        <button class="btn btn-danger btn-sm ms-1" onclick="anularDteRechazadoSegunTipo(${dte.dte_id}, '${dte.numero_documento}', '${tipoEsc}')" title="Anular (genera NC si es factura)">
+                        <button class="btn btn-danger btn-sm ms-1" ${_ncTraspasoBloqueada(dte.tipo_documento) ? `disabled title="${TITULO_SIN_PERMISO_NC}"` : `onclick="anularDteRechazadoSegunTipo(${dte.dte_id}, '${dte.numero_documento}', '${tipoEsc}')" title="Anular (genera NC si es factura)"`}>
                             <i class="bi bi-x-circle"></i>
                         </button>
                         <button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionado(${dte.dte_id})" title="Ver DTE">
@@ -3976,7 +3999,7 @@ function accionesGrupoRegularizar(key, g, incluirVer = true) {
     // NC por el documento completo: solo con ≥2 líneas pendientes y factura/boleta
     // (mismo gate que antes; el backend valida rol y tipo de documento).
     const btnNcMasiva = (g.pendientes.length >= 2 && g.esFacturaOBoleta)
-        ? `<button type="button" class="btn btn-outline-success btn-sm ms-1" onclick="abrirModalRegularizarDTE('${key}')" title="Generar 1 sola NC con las ${g.pendientes.length} líneas pendientes (${g.faltante + g.danada} uds)">
+        ? `<button type="button" class="btn btn-outline-success btn-sm ms-1" ${PUEDE_EMITIR_NC_TRASPASO ? `onclick="abrirModalRegularizarDTE('${key}')" title="Generar 1 sola NC con las ${g.pendientes.length} líneas pendientes (${g.faltante + g.danada} uds)"` : `disabled title="${TITULO_SIN_PERMISO_NC}"`}>
                 <i class="bi bi-receipt me-1"></i>1 NC por todo
            </button>`
         : '';
@@ -4038,7 +4061,8 @@ function accionesLineaRegularizar(prod) {
                 <i class="bi bi-plus-slash-minus me-1"></i>Resolver sobrante
            </button>`;
     } else if (prod.soy_emisor) {
-        acciones = `<button type="button" class="btn btn-outline-danger btn-sm" onclick="abrirModalRegularizar(${prod.id})" title="Emitir Nota de Crédito por lo que no se entregó">
+        // Las dos salidas del emisor (Emitir NC / Enviar cambio) emiten NC.
+        acciones = `<button type="button" class="btn btn-outline-danger btn-sm" ${PUEDE_EMITIR_NC_TRASPASO ? `onclick="abrirModalRegularizar(${prod.id})" title="Emitir Nota de Crédito por lo que no se entregó"` : `disabled title="${TITULO_SIN_PERMISO_NC}"`}>
                 <i class="bi bi-receipt me-1"></i>Emitir NC
            </button>`;
     } else {
@@ -4621,7 +4645,7 @@ function renderTablaRecepciones() {
                 const tipoSafe = String(doc.tipo_documento || '').replace(/'/g, "\\'");
                 botonesHtml = `<button class="btn btn-success btn-sm" onclick="rehabilitarDTE(${doc.id}, '${numSafe}')" title="Reactivar DTE rechazado">
                         <i class="bi bi-arrow-clockwise me-1"></i>Rehabilitar</button>
-                    <button class="btn btn-danger btn-sm ms-1" onclick="anularDteRechazadoSegunTipo(${doc.id}, '${numSafe}', '${tipoSafe}')" title="Anular (genera NC si es factura)">
+                    <button class="btn btn-danger btn-sm ms-1" ${_ncTraspasoBloqueada(doc.tipo_documento) ? `disabled title="${TITULO_SIN_PERMISO_NC}"` : `onclick="anularDteRechazadoSegunTipo(${doc.id}, '${numSafe}', '${tipoSafe}')" title="Anular (genera NC si es factura)"`}>
                         <i class="bi bi-x-circle"></i></button>
                     <button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
                         <i class="bi bi-eye"></i></button>`;
@@ -4629,7 +4653,7 @@ function renderTablaRecepciones() {
                 // "Cambiar talla" solo mientras nadie haya recepcionado: mueve
                 // unidades entre tallas del mismo folio sin mover los totales.
                 const puedeCambiarTalla = !doc.fecha_recepcion;
-                botonesHtml = `<button class="btn btn-outline-warning btn-sm" onclick="abrirModalAjusteEmisor(${doc.id})" title="Ajustar antes de recepción">
+                botonesHtml = `<button class="btn btn-outline-warning btn-sm" ${_ncTraspasoBloqueada(doc.tipo_documento) ? `disabled title="${TITULO_SIN_PERMISO_NC}"` : `onclick="abrirModalAjusteEmisor(${doc.id})" title="Ajustar antes de recepción"`}>
                         <i class="bi bi-pencil-square me-1"></i>Ajustar</button>
                     ${puedeCambiarTalla ? `<button class="btn btn-outline-primary btn-sm ms-1 btn-abrir-cambio-talla" data-dte-id="${doc.id}" title="Mover unidades de una talla a otra dentro de este mismo documento">
                         <i class="bi bi-arrow-left-right me-1"></i>Corregir talla</button>` : ''}
@@ -6396,7 +6420,7 @@ function verDTEsRechazados() {
                     ? `<button class="btn btn-secondary btn-sm" disabled title="Ya tiene NC #${nc.numero} emitida">
                            <i class="bi bi-check2 me-1"></i>NC emitida
                        </button>`
-                    : `<button class="btn btn-danger btn-sm" onclick="anularDteRechazadoSegunTipo(${item.id}, '${numDocAttr}', '${tipoEsc}')" title="Anular (genera NC si es factura)">
+                    : `<button class="btn btn-danger btn-sm" ${_ncTraspasoBloqueada(item.tipo_documento) ? `disabled title="${TITULO_SIN_PERMISO_NC}"` : `onclick="anularDteRechazadoSegunTipo(${item.id}, '${numDocAttr}', '${tipoEsc}')" title="Anular (genera NC si es factura)"`}>
                            <i class="bi bi-x-circle me-1"></i>Anular
                        </button>`;
                 return `
@@ -6559,12 +6583,14 @@ function rehabilitarDTE(dteId, numeroDocumento) {
 // - GUIA u otros (no tributarios) → anularDTERechazado: solo revierte stock
 //   y marca CANCELADO, sin NC.
 function anularDteRechazadoSegunTipo(dteId, numeroDocumento, tipoDocumento) {
-    const tipo = String(tipoDocumento || '').toUpperCase();
-    const esTributario = (
-        tipo === 'FACTURA ELECTRONICA' || tipo === 'FACTURA_ELECTRONICA' ||
-        tipo === 'BOLETA ELECTRONICA'  || tipo === 'BOLETA_ELECTRONICA'
-    );
+    const esTributario = _esDteTributario(tipoDocumento);
     if (esTributario) {
+        // La rama tributaria emite NC: sin permiso no se abre el wizard. Las
+        // guías siguen anulándose sin NC (rama de abajo).
+        if (!PUEDE_EMITIR_NC_TRASPASO) {
+            _avisarSinPermisoNc();
+            return;
+        }
         anularFacturaRechazada(dteId, numeroDocumento, tipoDocumento);
     } else {
         anularDTERechazado(dteId, numeroDocumento);
@@ -7636,7 +7662,7 @@ function renderTablaEmitidos() {
                 <button class="btn btn-sm btn-success" onclick="rehabilitarDTE(${d.id}, '${d.numero_documento}')" title="Rehabilitar para reintentar">
                     <i class="bi bi-arrow-clockwise me-1"></i>Rehabilitar
                 </button>
-                <button class="btn btn-sm btn-danger" onclick="anularDteRechazadoSegunTipo(${d.id}, '${d.numero_documento}', '${tipoEsc}')" title="Anular (genera NC si es factura)">
+                <button class="btn btn-sm btn-danger" ${_ncTraspasoBloqueada(d.tipo_documento) ? `disabled title="${TITULO_SIN_PERMISO_NC}"` : `onclick="anularDteRechazadoSegunTipo(${d.id}, '${d.numero_documento}', '${tipoEsc}')" title="Anular (genera NC si es factura)"`}>
                     <i class="bi bi-x-circle"></i>
                 </button>
                 <button class="btn btn-sm btn-outline-secondary" onclick="verDTERecepcionado(${d.id})" title="Ver detalle">
@@ -7652,7 +7678,7 @@ function renderTablaEmitidos() {
             const _sinRecepcionar = !d.fecha_recepcion;
             accionesHtml = `
                 ${_puedeTocar ? `<button class="btn btn-sm btn-warning btn-abrir-ajuste" data-dte-id="${d.id}"
-                        title="Quitar unidades del documento (baja el total y emite nota de crédito)">
+                        ${_ncTraspasoBloqueada(d.tipo_documento) ? `disabled title="${TITULO_SIN_PERMISO_NC}"` : 'title="Quitar unidades del documento (baja el total y emite nota de crédito)"'}>
                     <i class="bi bi-pencil-square me-1"></i>Ajustar
                 </button>` : ''}
                 ${_puedeTocar && _sinRecepcionar ? `<button class="btn btn-sm btn-outline-primary btn-abrir-cambio-talla" data-dte-id="${d.id}"
@@ -7726,7 +7752,7 @@ function renderTablaRecepcionados() {
                         <i class="bi bi-shield-exclamation me-1"></i>Diagnóstico
                     </button>` : '';
         const botonEmitirNc = PUEDE_REGULARIZAR_DTE ? `
-                    <button class="btn btn-sm btn-danger btn-abrir-ajuste" data-dte-id="${d.id}" data-post-recepcion="1" title="Emitir NC post-recepción">
+                    <button class="btn btn-sm btn-danger btn-abrir-ajuste" data-dte-id="${d.id}" data-post-recepcion="1" ${_ncTraspasoBloqueada(d.tipo_documento) ? `disabled title="${TITULO_SIN_PERMISO_NC}"` : 'title="Emitir NC post-recepción"'}>
                         <i class="bi bi-arrow-counterclockwise me-1"></i>Emitir NC
                     </button>` : '';
         if (!PUEDE_REGULARIZAR_DTE) {
@@ -8018,6 +8044,11 @@ function abrirModalAjusteEmisor(dteId, opciones) {
     }
     if (!dte) {
         Swal.fire('Error', 'DTE no encontrado en la lista actual.', 'error');
+        return;
+    }
+    // Sobre FACTURA/BOLETA el ajuste emite una NC real: exige el permiso.
+    if (_ncTraspasoBloqueada(dte.tipo_documento)) {
+        _avisarSinPermisoNc();
         return;
     }
 

@@ -363,6 +363,11 @@
         display: inline-block;
     }
     
+    .rol-maestro {
+        background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2D2D44 100%);
+        color: var(--nexo-warning);
+    }
+
     .rol-administrador {
         background: linear-gradient(135deg, var(--nexo-error) 0%, #E63939 100%);
         color: var(--nexo-white);
@@ -1098,6 +1103,8 @@
                             <option value="jefe_local">Jefe Local</option>
                             <option value="administracion">Administración</option>
                             <option value="administrador">Administrador</option>
+                            {# Solo un Maestro asigna el rol Maestro (el servidor también lo exige) #}
+                            <option value="maestro" {% if user.rol != 'maestro' %}disabled{% endif %}>Maestro (acceso total)</option>
                         </select>
                     </div>
                     <!-- ✅ Permisos adicionales ocultos - se configuran al EDITAR el usuario -->
@@ -1261,6 +1268,8 @@
                             <option value="jefe_local">Jefe Local</option>
                             <option value="administracion">Administración</option>
                             <option value="administrador">Administrador</option>
+                            {# Solo un Maestro asigna el rol Maestro (el servidor también lo exige) #}
+                            <option value="maestro" {% if user.rol != 'maestro' %}disabled{% endif %}>Maestro (acceso total)</option>
                         </select>
                     </div>
                     <div class="row">
@@ -1400,7 +1409,7 @@
                         <li><strong>email</strong> - Obligatorio (se usa para el login)</li>
                         <li><strong>nombre</strong> - Obligatorio</li>
                         <li><strong>apellido</strong> - Obligatorio</li>
-                        <li><strong>rol</strong> - Opcional (vendedor, cajero, jefe_local, administracion, administrador)</li>
+                        <li><strong>rol</strong> - Opcional (vendedor, cajero, jefe_local, administracion, administrador{% if user.rol == 'maestro' %}, maestro{% endif %})</li>
                         <li><strong>rut, telefono, empresa, cargo, departamento</strong> - Opcionales</li>
                     </ul>
                     <p class="mb-0">
@@ -2800,13 +2809,17 @@ function cambiarRolRapido(usuarioId, nombreCompleto, rolActual) {
         'cajero': 'Cajero',
         'jefe_local': 'Jefe Local',
         'administracion': 'Administración',
-        'administrador': 'Administrador'
+        'administrador': 'Administrador',
+        'maestro': 'Maestro'
     };
+    // Solo un Maestro asigna (o quita) el rol Maestro; el servidor también lo exige.
+    const esMaestroActual = {% if user.rol == 'maestro' %}true{% else %}false{% endif %};
 
     let opcionesHtml = '';
     for (const [value, label] of Object.entries(roles)) {
         const selected = value === rolActual ? 'selected' : '';
-        opcionesHtml += `<option value="${value}" ${selected}>${label}</option>`;
+        const disabled = (value === 'maestro' && !esMaestroActual) ? 'disabled' : '';
+        opcionesHtml += `<option value="${value}" ${selected} ${disabled}>${label}</option>`;
     }
 
     Swal.fire({

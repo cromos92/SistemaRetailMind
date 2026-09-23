@@ -2888,6 +2888,18 @@
 {% include '../../layout/footer.html' %}
 <script src="{% static 'js/trazabilidad_dte.js' %}"></script>
 <script>
+    // Permisos finos de edición (migración 0234; el dueño los deja «solo
+    // Maestro»). Los endpoints validan lo mismo y responden 403: esto solo
+    // evita ofrecer botones que no van a funcionar. "Pagar" no depende de esto.
+    const PUEDE_EDITAR_PAGOS_COMPRA = {{ puede_editar_pagos_compra|yesno:"true,false" }};
+    const PUEDE_ELIMINAR_PAGOS_COMPRA = {{ puede_eliminar_pagos_compra|yesno:"true,false" }};
+    const PUEDE_ELIMINAR_DTE_COMPRA = {{ puede_eliminar_dte_compra|yesno:"true,false" }};
+    const TITULO_SIN_PERMISO = 'Solo el Maestro / sin permiso';
+
+    function avisoSinPermiso(accion) {
+        Swal.fire('Sin permiso', `No tienes permiso para ${accion}. Pídeselo al Maestro.`, 'warning');
+    }
+
     // Delegación global para botones de trazabilidad dentro de esta vista.
     $(document).on('click', '.btn-ver-trazabilidad', function () {
         const dteId = parseInt($(this).data('dte-id'), 10);
@@ -3732,6 +3744,10 @@
     }
 
     function eliminarDTE(id, forzar = false) {
+        if (!PUEDE_ELIMINAR_DTE_COMPRA) {
+            avisoSinPermiso('eliminar documentos de compra');
+            return;
+        }
         if (!forzar) {
             Swal.fire({
                 title: '¿Eliminar DTE?',
@@ -3939,12 +3955,24 @@
                             <td>${fechaPagoTxt}</td>
                             <td>
     <div class="d-flex justify-content-center gap-2">
+        ${PUEDE_EDITAR_PAGOS_COMPRA ? `
         <button class="btn btn-sm btn-outline-primary" onclick="editarPago(${pago.id})" title="Editar">
             <i class="bi bi-pencil-fill"></i>
-        </button>
+        </button>` : `
+        <span class="d-inline-block" title="${TITULO_SIN_PERMISO}">
+            <button class="btn btn-sm btn-outline-secondary" disabled>
+                <i class="bi bi-pencil-fill"></i>
+            </button>
+        </span>`}
+        ${PUEDE_ELIMINAR_PAGOS_COMPRA ? `
         <button class="btn btn-sm btn-outline-danger" onclick="eliminarPago(${pago.id})" title="Eliminar">
             <i class="bi bi-trash-fill"></i>
-        </button>
+        </button>` : `
+        <span class="d-inline-block" title="${TITULO_SIN_PERMISO}">
+            <button class="btn btn-sm btn-outline-secondary" disabled>
+                <i class="bi bi-trash-fill"></i>
+            </button>
+        </span>`}
     </div>
 </td>
 
@@ -4032,7 +4060,11 @@
         const necesitaFactura = dte.requiere_factura && !dte.tiene_factura_anexada;
 
         if (esNC) {
-            if (!dte.nc_esta_asociada) {
+            if (!dte.nc_esta_asociada && !PUEDE_ELIMINAR_DTE_COMPRA) {
+                items.push(`<li><span class="dropdown-item action-eliminar disabled" title="${TITULO_SIN_PERMISO}">
+                                <i class="bi bi-trash"></i> Eliminar NC
+                            </span></li>`);
+            } else if (!dte.nc_esta_asociada) {
                 items.push(`<li><a class="dropdown-item action-eliminar" href="#" onclick="eliminarDTE(${id}); return false;">
                                 <i class="bi bi-trash"></i> Eliminar NC
                             </a></li>`);
@@ -4162,9 +4194,15 @@
         // Eliminar DTE (excepto NC que ya tiene el suyo)
         if (!esNC) {
             items.push(`<li><hr class="dropdown-divider my-1"></li>`);
-            items.push(`<li><a class="dropdown-item action-eliminar" href="#" onclick="eliminarDTE(${id}); return false;">
-                            <i class="bi bi-trash"></i> Eliminar DTE
-                        </a></li>`);
+            if (PUEDE_ELIMINAR_DTE_COMPRA) {
+                items.push(`<li><a class="dropdown-item action-eliminar" href="#" onclick="eliminarDTE(${id}); return false;">
+                                <i class="bi bi-trash"></i> Eliminar DTE
+                            </a></li>`);
+            } else {
+                items.push(`<li><span class="dropdown-item action-eliminar disabled" title="${TITULO_SIN_PERMISO}">
+                                <i class="bi bi-trash"></i> Eliminar DTE
+                            </span></li>`);
+            }
         }
 
         return `
@@ -5268,6 +5306,11 @@
         e.preventDefault();
 
         const pagoId = $('#pagoEditId').val();
+        // Editar un pago existente requiere permiso; registrar uno nuevo no.
+        if (pagoId && !PUEDE_EDITAR_PAGOS_COMPRA) {
+            avisoSinPermiso('editar pagos de documentos');
+            return;
+        }
         const dteId = $('#pagoDteId').val();
         const metodo_pago = $('#metodoPago').val();
         const voucher = $('#voucher').val().trim();
@@ -5397,6 +5440,10 @@
     });
 
     function eliminarPago(pagoId) {
+        if (!PUEDE_ELIMINAR_PAGOS_COMPRA) {
+            avisoSinPermiso('eliminar pagos de documentos');
+            return;
+        }
         Swal.fire({
             title: '¿Eliminar pago?',
             text: 'Esta acción no se puede deshacer.',
@@ -5427,14 +5474,18 @@
                             cargarDTEs(currentPageDTE, currentSearchDTE);
                         });
                     },
-                    error: () => {
-                        Swal.fire('Error', 'No se pudo eliminar el pago.', 'error');
+                    error: (xhr) => {
+                        Swal.fire('Error', xhr.responseJSON?.error || 'No se pudo eliminar el pago.', 'error');
                     }
                 });
             }
         });
     }
     function editarPago(pagoId) {
+        if (!PUEDE_EDITAR_PAGOS_COMPRA) {
+            avisoSinPermiso('editar pagos de documentos');
+            return;
+        }
         $.ajax({
             url: `/app/detallePago/${pagoId}/`,
             method: 'GET',
@@ -5506,9 +5557,15 @@
                         <td class="monto">$${parseFloat(nc.monto).toLocaleString()}</td>
                         <td class="text-start">${motivo}</td>
                         <td class="text-center">
+                            ${PUEDE_ELIMINAR_PAGOS_COMPRA ? `
                             <button class="btn btn-sm btn-outline-danger" onclick="eliminarNotaCredito(${nc.id})">
                                 <i class="bi bi-trash"></i>
-                            </button>
+                            </button>` : `
+                            <span class="d-inline-block" title="${TITULO_SIN_PERMISO}">
+                                <button class="btn btn-sm btn-outline-secondary" disabled>
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </span>`}
                         </td>
                     </tr>`;
                     tbody.append(fila);
@@ -5518,6 +5575,12 @@
     }
     $('#formNC').on('submit', function (e) {
         e.preventDefault();
+
+        // La NC se guarda como fila de pago: mismo permiso que editar pagos.
+        if (!PUEDE_EDITAR_PAGOS_COMPRA) {
+            avisoSinPermiso('editar pagos de documentos');
+            return;
+        }
 
         const dteId = $('#ncDteId').val();
         const numero = $('#ncNumero').val();
@@ -5586,6 +5649,10 @@
         });
     });
     function eliminarNotaCredito(id) {
+        if (!PUEDE_ELIMINAR_PAGOS_COMPRA) {
+            avisoSinPermiso('eliminar pagos de documentos');
+            return;
+        }
         Swal.fire({
             title: '¿Eliminar NC?',
             text: 'Esta acción no se puede deshacer.',
@@ -5605,8 +5672,8 @@
                         cargarDTEs(currentPageDTE, currentSearchDTE);
                         Swal.fire('Eliminado', 'La NC fue eliminada.', 'success');
                     },
-                    error: () => {
-                        Swal.fire('Error', 'No se pudo eliminar la NC.', 'error');
+                    error: (xhr) => {
+                        Swal.fire('Error', xhr.responseJSON?.error || 'No se pudo eliminar la NC.', 'error');
                     }
                 });
             }

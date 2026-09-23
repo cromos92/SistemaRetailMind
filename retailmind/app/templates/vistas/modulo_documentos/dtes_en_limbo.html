@@ -454,6 +454,15 @@
 
 <script>
 const PUEDE_APROBAR = {{ puede_aprobar|yesno:"true,false" }};
+// Permiso fino de NC de traspaso: el ajuste de una FACTURA/BOLETA emite NC
+// (las guías generan AJUSTE TRASPASO, sin NC). El backend lo vuelve a validar.
+const PUEDE_EMITIR_NC_TRASPASO = {{ puede_emitir_nc_traspaso|yesno:"true,false" }};
+function _ncBloqueadaLimbo(tipoDocumento) {
+    const tipo = String(tipoDocumento || '').toUpperCase();
+    const esTributario = ['FACTURA ELECTRONICA', 'FACTURA_ELECTRONICA',
+                          'BOLETA ELECTRONICA', 'BOLETA_ELECTRONICA'].includes(tipo);
+    return esTributario && !PUEDE_EMITIR_NC_TRASPASO;
+}
 let dteSeleccionado = null;
 let detalleActual = null;
 let accionElegida = null;
@@ -694,6 +703,9 @@ function abrirResolver(dteId) {
 function renderPasoAccion() {
     const d = detalleActual.dte;
     const acciones = detalleActual.acciones_permitidas;
+    const ncSinPermiso = _ncBloqueadaLimbo(d.tipo_documento);
+    const puedeNc = (acciones.includes('nc_con_devolucion') || acciones.includes('nc_sin_devolucion'))
+        && !ncSinPermiso;
     const html = `
         <div class="row mb-3">
             <div class="col-md-3"><small class="text-muted">Estado</small><br>${badgeEstado(d.estado_dte)}</div>
@@ -720,8 +732,9 @@ function renderPasoAccion() {
                 </div>
             </div>
             <div class="col-md-4">
-                <div class="accion-card ${(acciones.includes('nc_con_devolucion') || acciones.includes('nc_sin_devolucion')) ? '' : 'disabled'}"
-                     onclick="${(acciones.includes('nc_con_devolucion') || acciones.includes('nc_sin_devolucion')) ? "elegirAccion('nc')" : ''}">
+                <div class="accion-card ${puedeNc ? '' : 'disabled'}"
+                     ${ncSinPermiso ? 'title="Sin permiso para emitir Notas de Crédito"' : ''}
+                     onclick="${puedeNc ? "elegirAccion('nc')" : ''}">
                     <h6><i class="bi bi-file-earmark-minus me-1"></i>Emitir Nota de Crédito</h6>
                     <small>Anular líneas con problemas. Puedes elegir devolver mercadería al origen o dejarla en destino.</small>
                 </div>

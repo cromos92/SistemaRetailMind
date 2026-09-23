@@ -178,6 +178,19 @@
 .method-selector:hover i, .method-selector.active i {
     color: var(--nexo-primary);
 }
+/* Tipo sin permiso (ej. NC sin "Emitir Nota de Crédito"): visible pero inerte */
+.method-selector.sin-permiso {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: var(--nexo-gray-100);
+}
+.method-selector.sin-permiso:hover {
+    border-color: var(--nexo-gray-300);
+    box-shadow: none;
+}
+.method-selector.sin-permiso:hover i {
+    color: var(--nexo-gray-500);
+}
 .method-selector-title {
     font-size: 0.8125rem;
     font-weight: 700;
@@ -470,7 +483,12 @@
                                 </div>
                             </div>
                             <div class="col-6 col-md-4 col-xl-2">
+                                {% if puede_emitir_nc %}
                                 <div class="method-selector shadow-sm" data-tipo="NOTA DE CREDITO">
+                                {% else %}
+                                {# Sin data-tipo: el selector de tipos no la toma (el backend también la bloquea). #}
+                                <div class="method-selector sin-permiso shadow-sm" aria-disabled="true" title="Sin permiso para emitir Notas de Crédito">
+                                {% endif %}
                                     <div class="mb-1">
                                         <i class="bi bi-file-earmark-minus"></i>
                                     </div>

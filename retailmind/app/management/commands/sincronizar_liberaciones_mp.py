@@ -1,18 +1,25 @@
 """Reporte de Liberaciones de Mercado Pago → retiros al banco (RetiroMercadoPago).
 
-Amarra cada cobro del POS (TransaccionMercadoPago) al retiro que lo llevó al
+Asocia cada venta del POS (TransaccionMercadoPago) al retiro que la llevó al
 banco. Por defecto es DRY-RUN: muestra qué haría. Con --apply escribe.
 
-Fuentes:
-  --archivo reporte.csv   CSV descargado del panel de MP (Reportes → Liberaciones)
-  (sin --archivo)         lo pide a la API de MP para --desde/--hasta
+Uso (`--config` = cualquier caja de la CUENTA MP; el reporte es por cuenta):
 
-Uso:
-    python manage.py sincronizar_liberaciones_mp --config 3 --archivo liberaciones.csv
-    python manage.py sincronizar_liberaciones_mp --config 3 --desde 2026-09-01 --hasta 2026-09-21 --apply
+    # Ver los reportes que Mercado Pago ya generó
+    python manage.py sincronizar_liberaciones_mp --config 3 --listar
 
-`--config` es cualquier caja (MercadoPagoConfig) de la CUENTA del reporte: el
-reporte es por cuenta (RUT), no por caja.
+    # Procesar los reportes aún no aplicados (ideal en cron cada mañana)
+    python manage.py sincronizar_liberaciones_mp --config 3 --pendientes --apply
+
+    # Un reporte puntual (de la lista) o un CSV descargado del panel
+    python manage.py sincronizar_liberaciones_mp --config 3 --reporte release-report-123-2026-09-23-120000.csv
+    python manage.py sincronizar_liberaciones_mp --config 3 --archivo liberaciones.csv --apply
+
+    # Pedir a MP un reporte nuevo (tarda unos minutos; después usar --pendientes)
+    python manage.py sincronizar_liberaciones_mp --config 3 --pedir --desde 2026-09-22 --hasta 2026-09-23
+
+    # Que MP genere el reporte solo después de cada retiro
+    python manage.py sincronizar_liberaciones_mp --config 3 --activar-por-retiro
 """
 from django.core.management.base import BaseCommand, CommandError
 
@@ -22,12 +29,20 @@ from app.services import mercadopago_service as mp
 
 
 class Command(BaseCommand):
-    help = 'Procesa el reporte de Liberaciones de Mercado Pago y amarra cobros a retiros (dry-run por defecto)'
+    help = 'Procesa reportes de Liberaciones de Mercado Pago y asocia ventas a retiros (dry-run por defecto)'
 
     def add_arguments(self, parser):
         parser.add_argument('--config', type=int, required=True,
                             help='ID de MercadoPagoConfig (cualquier caja de la cuenta)')
-        parser.add_argument('--archivo', type=str, default='')
+        grupo = parser.add_mutually_exclusive_group(required=True)
+        grupo.add_argument('--archivo', type=str, help='CSV descargado del panel de MP')
+        grupo.add_argument('--reporte', type=str, help='file_name de un reporte ya generado en MP')
+        grupo.add_argument('--pendientes', action='store_true',
+                           help='Procesa los reportes de MP que aún no se aplicaron')
+        grupo.add_argument('--listar', action='store_true', help='Lista los reportes generados en MP')
+        grupo.add_argument('--pedir', action='store_true', help='Pide a MP un reporte nuevo (no espera)')
+        grupo.add_argument('--activar-por-retiro', action='store_true',
+                           help='Configura MP para generar el reporte después de cada retiro')
         parser.add_argument('--desde', type=str, default=None)
         parser.add_argument('--hasta', type=str, default=None)
         parser.add_argument('--apply', action='store_true')
@@ -36,27 +51,61 @@ class Command(BaseCommand):
         config = MercadoPagoConfig.objects.filter(pk=opts['config']).first()
         if config is None:
             raise CommandError(f'No existe MercadoPagoConfig id={opts["config"]}')
-        if opts['archivo']:
+        try:
+            if opts['activar_por_retiro']:
+                data = conc.activar_reporte_por_retiro(config)
+                self.stdout.write(self.style.SUCCESS(
+                    f'Listo: execute_after_withdrawal={data.get("execute_after_withdrawal")}'))
+                return
+            if opts['pedir']:
+                d, h = conc.rango_fechas(opts['desde'], opts['hasta'], dias_defecto=1, max_dias=60)
+                tarea = conc.pedir_reporte_liberaciones(config, d, h)
+                self.stdout.write(f'Pedido a MP: {tarea["begin_date"]} → {tarea["end_date"]} '
+                                  f'(tarea {tarea["task_id"] or "sin id"}). Tarda unos minutos; '
+                                  'después use --pendientes.')
+                return
+            if opts['listar'] or opts['pendientes']:
+                reportes = conc.listar_reportes_liberaciones(config, limite=30)
+                aplicados = conc.reportes_aplicados()
+                if opts['listar']:
+                    for r in reportes:
+                        marca = 'APLICADO ' if r['file_name'] in aplicados else ''
+                        self.stdout.write(f'{marca}{r["file_name"]}  {r["begin_date"]} → {r["end_date"]} '
+                                          f'({r["origen"] or "?"}, creado {r["creado"]})')
+                    if not reportes:
+                        self.stdout.write('Mercado Pago no tiene reportes generados.')
+                    return
+                pendientes = [r for r in reportes if r['file_name'] not in aplicados]
+                if not pendientes:
+                    self.stdout.write(self.style.SUCCESS('No hay reportes nuevos.'))
+                    return
+                # Del más antiguo al más nuevo: los retiros se reconstruyen en orden.
+                for r in reversed(pendientes):
+                    self._procesar(config, conc.descargar_reporte_liberaciones(config, r['file_name']),
+                                   r['file_name'], opts['apply'])
+                return
+            if opts['reporte']:
+                contenido = conc.descargar_reporte_liberaciones(config, opts['reporte'])
+                self._procesar(config, contenido, opts['reporte'], opts['apply'])
+                return
             with open(opts['archivo'], 'rb') as fh:
-                contenido = fh.read()
-        else:
-            d, h = conc.rango_fechas(opts['desde'], opts['hasta'], dias_defecto=7, max_dias=31)
-            self.stdout.write(f'Pidiendo a Mercado Pago el reporte de Liberaciones {d} → {h}…')
-            try:
-                contenido = conc.solicitar_y_descargar_liberaciones(config, d, h)
-            except mp.MercadoPagoError as e:
-                raise CommandError(e.mensaje)
+                self._procesar(config, fh.read(), opts['archivo'], opts['apply'])
+        except mp.MercadoPagoError as e:
+            raise CommandError(e.mensaje)
 
+    def _procesar(self, config, contenido, origen, aplicar):
         filas = conc.leer_csv(contenido)
-        res = conc.procesar_reporte_liberaciones(filas, config, aplicar=opts['apply'])
-        modo = 'APLICADO' if opts['apply'] else 'DRY-RUN (use --apply para escribir)'
-        self.stdout.write(f'{modo} · filas leídas {len(filas)} · retiros {len(res["retiros"])} · '
-                          f'cobros amarrados {res["pagos_amarrados"]} · pagos sin cobro del POS '
-                          f'{res["pagos_sin_local"]} · liberado sin retirar ${res["liberado_sin_retirar"]:,}'
+        res = conc.procesar_reporte_liberaciones(filas, config, aplicar=aplicar, archivo=origen)
+        modo = 'APLICADO' if aplicar else 'DRY-RUN (use --apply para escribir)'
+        self.stdout.write(f'{modo} · {origen} · filas {len(filas)} · retiros {len(res["retiros"])} · '
+                          f'ventas POS asociadas {res["pagos_amarrados"]} · pagos que no son del POS '
+                          f'{res["pagos_sin_local"]} · quedan en MP ${res["liberado_sin_retirar"]:,}'
                           .replace(',', '.'))
+        if filas and not res['retiros'] and not res['liberado_sin_retirar']:
+            self.stdout.write(self.style.WARNING(f'  Nada reconocible. Columnas: {", ".join(filas[0].keys())}'))
         for r in res['retiros']:
             marca = self.style.SUCCESS('OK ') if r['estado'] == 'CONCILIADO' else self.style.WARNING('DIF')
-            self.stdout.write(f'  {marca} {r["fecha"]} retiro {r["withdrawal_id"]} ${r["monto"]:,} · '
-                              f'{r["pagos_pos"]}/{r["pagos"]} cobros del POS'.replace(',', '.'))
+            self.stdout.write(f'  {marca} {r["fecha"]} {r["hora"]} retiro {r["withdrawal_id"]} ${r["monto"]:,} · '
+                              f'{r["pagos_pos"]}/{r["pagos"]} ventas del POS'.replace(',', '.'))
             if r['detalle']:
                 self.stdout.write(f'      {r["detalle"]}')

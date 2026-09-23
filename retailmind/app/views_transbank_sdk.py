@@ -9,7 +9,7 @@ from rest_framework import status
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from .services.transbank_simple_service import TransbankPersistenceService
-from .models import ConfiguracionPOS
+from .models import ConfiguracionPOS, rol_efectivo
 import logging
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ def gestion_transbank_pos_sdk(request):
     # de cajas queda restringido a roles administrativos (el guard duro está
     # en los endpoints de views_mercadopago, esto solo controla la UI).
     from .models import Empresa, Sucursal
-    context['es_admin_mp'] = getattr(request.user, 'rol', '') in ('administrador', 'administracion')
+    context['es_admin_mp'] = rol_efectivo(request.user) in ('administrador', 'administracion')
     # Sucursal de la sesión: preselecciona su caja en los selectores MP y es
     # la caja que usa el cierre de un usuario no-admin
     # MISMA resolución de sesión que usan los endpoints de views_mercadopago
@@ -384,7 +384,7 @@ TIPO_POS_SDK = 'SDK_SERIAL'
 
 
 def _es_admin_pos(user):
-    return getattr(user, 'rol', '') in ('administrador', 'administracion')
+    return rol_efectivo(user) in ('administrador', 'administracion')
 
 
 @login_required

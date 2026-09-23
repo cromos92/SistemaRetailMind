@@ -30,6 +30,7 @@ from .models import (
     RetiroMercadoPago,
     Sucursal,
     TransaccionMercadoPago,
+    rol_efectivo,
 )
 from .services import mercadopago_service as mp
 from .services.mercadopago_service import MercadoPagoError
@@ -172,7 +173,7 @@ def _transaccion_de_sesion(request, transaccion_id):
     Un administrador puede consultar cualquiera (necesario para la transacción
     de prueba de la pestaña de gestión, que apunta a la caja de otra sucursal)."""
     qs = TransaccionMercadoPago.objects.filter(id=transaccion_id).select_related('config')
-    if getattr(request.user, 'rol', '') in ('administrador', 'administracion'):
+    if rol_efectivo(request.user) in ('administrador', 'administracion'):
         return qs.first()
     sucursal_id = _sucursal_sesion(request)
     if not sucursal_id:
@@ -367,7 +368,7 @@ def webhook_mercadopago(request):
 # ==================== GESTIÓN (pestaña MP de /app/pos/transbank/) ====================
 
 def _es_admin(request):
-    return getattr(request.user, 'rol', '') in ('administrador', 'administracion')
+    return rol_efectivo(request.user) in ('administrador', 'administracion')
 
 
 _SUGERIR_LIBERAR_TERMINAL = (' Usa «Liberar máquina» en Máquinas POS para ver qué tiene '
@@ -1872,45 +1873,150 @@ def api_conciliacion_contra_mp(request):
     return JsonResponse(data)
 
 
+def _config_conciliacion(request):
+    """(config, error_response) para las acciones de liberaciones (solo admin)."""
+    if not _es_admin(request):
+        return None, JsonResponse({'success': False, 'error': 'Solo administradores.'}, status=403)
+    valor = request.POST.get('config_id') or request.GET.get('config_id')
+    config = MercadoPagoConfig.objects.filter(pk=_int_o_cero(valor)).first()
+    if config is None:
+        return None, JsonResponse({'success': False, 'error': 'Elija la caja/cuenta de Mercado Pago.'}, status=400)
+    return config, None
+
+
 @login_required
 @require_POST
 def api_conciliacion_liberaciones_mp(request):
     """POST /app/api/mercadopago/conciliacion/liberaciones/  (solo admin)
 
-    Procesa el reporte de Liberaciones de MP: crea los retiros al banco y
-    amarra cada cobro a su retiro. Dos fuentes:
-      - `archivo` (CSV descargado del panel de MP) + `config_id`;
-      - sin archivo: lo pide a la API de MP para `desde`/`hasta` + `config_id`.
+    Procesa un reporte de Liberaciones de MP: crea los retiros al banco y
+    amarra cada cobro a su retiro. Fuente (una de dos):
+      - `archivo`: CSV descargado del panel de MP;
+      - `file_name`: un reporte ya generado en MP (ver .../liberaciones/reportes/).
     `aplicar=1` escribe; sin él es una vista previa (dry-run).
+
+    Ya NO pide ni espera el reporte acá: generarlo tarda minutos y el request
+    moría esperando (ver .../liberaciones/pedir/).
     """
     from .services import conciliacion_mp_service as conc
-    if not _es_admin(request):
-        return JsonResponse({'success': False, 'error': 'Solo administradores.'}, status=403)
-    config = MercadoPagoConfig.objects.filter(pk=_int_o_cero(request.POST.get('config_id'))).first()
-    if config is None:
-        return JsonResponse({'success': False, 'error': 'Elija la caja/cuenta de Mercado Pago.'}, status=400)
+    config, err = _config_conciliacion(request)
+    if err:
+        return err
     aplicar = str(request.POST.get('aplicar') or '') in ('1', 'true', 'True')
     archivo = request.FILES.get('archivo')
+    file_name = (request.POST.get('file_name') or '').strip()
     try:
         if archivo is not None:
             if archivo.size > 20 * 1024 * 1024:
                 return JsonResponse({'success': False, 'error': 'Archivo demasiado grande (máx. 20 MB).'}, status=400)
-            contenido = archivo.read()
+            contenido, origen = archivo.read(), archivo.name
+        elif file_name:
+            contenido, origen = conc.descargar_reporte_liberaciones(config, file_name), file_name
         else:
-            d, h = conc.rango_fechas(request.POST.get('desde'), request.POST.get('hasta'),
-                                     dias_defecto=7, max_dias=31)
-            contenido = conc.solicitar_y_descargar_liberaciones(config, d, h)
+            return JsonResponse({
+                'success': False,
+                'error': 'Elija un reporte de la lista de Mercado Pago o suba el archivo CSV.'
+            }, status=400)
         filas = conc.leer_csv(contenido)
-        resultado = conc.procesar_reporte_liberaciones(filas, config, aplicar=aplicar)
+        resultado = conc.procesar_reporte_liberaciones(filas, config, aplicar=aplicar, archivo=origen)
     except MercadoPagoError as e:
         return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
     except Exception as e:  # noqa: BLE001 — archivo con formato inesperado
         logger.exception("Conciliación MP: error procesando liberaciones")
         return JsonResponse({'success': False, 'error': f'No se pudo leer el reporte: {e}'}, status=400)
+    if not filas or not (resultado['retiros'] or resultado['liberado_sin_retirar']):
+        # Nada reconocible: devolver los encabezados ayuda a ajustar el lector.
+        resultado['encabezados'] = list(filas[0].keys()) if filas else []
     if aplicar:
-        logger.info("Conciliación MP: liberaciones aplicadas config=%s retiros=%s por %s",
-                    config.id, len(resultado['retiros']), request.user.username)
-    return JsonResponse({'success': True, 'aplicado': aplicar, 'filas_leidas': len(filas), **resultado})
+        logger.info("Conciliación MP: liberaciones aplicadas config=%s origen=%s retiros=%s por %s",
+                    config.id, origen, len(resultado['retiros']), request.user.username)
+    return JsonResponse({'success': True, 'aplicado': aplicar, 'filas_leidas': len(filas),
+                         'origen': origen, **resultado})
+
+
+@login_required
+@require_POST
+def api_conciliacion_liberaciones_pedir_mp(request):
+    """POST .../liberaciones/pedir/ {config_id, desde, hasta} (solo admin).
+
+    Pide a MP que genere el reporte y responde al instante con el id de la
+    tarea; la página consulta su estado cada pocos segundos.
+    """
+    from .services import conciliacion_mp_service as conc
+    config, err = _config_conciliacion(request)
+    if err:
+        return err
+    d, h = conc.rango_fechas(request.POST.get('desde'), request.POST.get('hasta'),
+                             dias_defecto=1, max_dias=60)
+    try:
+        tarea = conc.pedir_reporte_liberaciones(config, d, h)
+    except MercadoPagoError as e:
+        return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
+    return JsonResponse({'success': True, **tarea})
+
+
+@login_required
+def api_conciliacion_liberaciones_tarea_mp(request):
+    """GET .../liberaciones/tarea/?config_id=&task_id= (solo admin): ¿ya está el reporte?"""
+    from .services import conciliacion_mp_service as conc
+    config, err = _config_conciliacion(request)
+    if err:
+        return err
+    task_id = _int_o_cero(request.GET.get('task_id'))
+    if not task_id:
+        return JsonResponse({'success': False, 'error': 'Falta task_id'}, status=400)
+    try:
+        return JsonResponse({'success': True, **conc.estado_tarea_liberaciones(config, task_id)})
+    except MercadoPagoError as e:
+        return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
+
+
+@login_required
+def api_conciliacion_liberaciones_reportes_mp(request):
+    """GET .../liberaciones/reportes/?config_id= (solo admin): reportes descargables en MP."""
+    from .services import conciliacion_mp_service as conc
+    config, err = _config_conciliacion(request)
+    if err:
+        return err
+    try:
+        reportes = conc.listar_reportes_liberaciones(config)
+    except MercadoPagoError as e:
+        return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
+    # La configuración es informativa: si falla, igual se muestran los reportes.
+    try:
+        cfg = conc.leer_config_reporte(config)
+        por_retiro = bool(cfg and cfg.get('execute_after_withdrawal'))
+    except MercadoPagoError:
+        por_retiro = None
+    procesados = conc.reportes_aplicados() if reportes else set()
+    for r in reportes:
+        r['procesado'] = r['file_name'] in procesados
+    return JsonResponse({
+        'success': True,
+        'reportes': reportes,
+        'por_retiro_activo': por_retiro,
+    })
+
+
+@login_required
+@require_POST
+def api_conciliacion_liberaciones_config_mp(request):
+    """POST .../liberaciones/config/ {config_id} (solo admin).
+
+    Activa en MP la generación automática del reporte después de cada retiro.
+    """
+    from .services import conciliacion_mp_service as conc
+    config, err = _config_conciliacion(request)
+    if err:
+        return err
+    try:
+        data = conc.activar_reporte_por_retiro(config)
+    except MercadoPagoError as e:
+        return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
+    logger.info("Conciliación MP: reporte por retiro activado config=%s por %s",
+                config.id, request.user.username)
+    return JsonResponse({'success': True,
+                         'por_retiro_activo': bool(data.get('execute_after_withdrawal', True))})
 
 
 @login_required

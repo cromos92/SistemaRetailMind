@@ -384,7 +384,8 @@ def api_stats(request):
     
     GET /api/assistant/stats/
     """
-    if not request.user.is_superuser and getattr(request.user, 'rol', '') != 'administrador':
+    from app.models import rol_efectivo
+    if not request.user.is_superuser and rol_efectivo(request.user) != 'administrador':
         return JsonResponse({
             'success': False,
             'error': 'No tienes permisos para ver estadísticas'

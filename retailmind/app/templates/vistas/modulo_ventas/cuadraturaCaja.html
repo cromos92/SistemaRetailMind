@@ -322,33 +322,194 @@
        Escala, alineada con pos-kiosk.css: etiqueta 15px, monto 19px, monto de
        cierre 21px, VENTA TOTAL 40px. En 1366x768 (seccion 13 de pos-kiosk) baja
        a 13/16/18/30px, que sigue siendo el doble de lo que habia.
+
+       Estructura (sep-2026):
+         - Franja superior: VENTA TOTAL + 4 KPI (Tarjetas, Efectivo y Otros,
+           Venta Internet, Total Mercado Pago). Reemplaza la columna
+           "Resumen por Modulo", que obligaba a leer de derecha a izquierda.
+         - Filas agrupadas (cabecera de grupo con subtotal) y columna de monto
+           de ancho fijo con cifras tabulares: los montos quedan alineados
+           entre tarjetas.
+         - Filas en $0 ocultas por defecto, igual que el ticket impreso. El
+           switch "Mostrar medios en $0" las vuelve a mostrar atenuadas
+           (`aplicarVisibilidadResumen`).
+
+       TODO va con prefijo #modalResumenCaja: pos-kiosk.css pisa las tablas con
+       `body.pos-kiosk .table > :not(caption) > * > *` (especificidad 0,2,2) y
+       un `.rc-label` suelto (0,1,0) perdia el tamano de letra en modo kiosco.
+       Por lo mismo las tablas del resumen ya no llevan la clase `.table`.
        ========================================================================== */
     .modal-resumen-pos .modal-dialog { max-width: min(1600px, 96vw); }
 
-    #modalResumenCaja .resumen-table { margin-bottom: 0; }
-    #modalResumenCaja .resumen-table td {
-        padding: .3rem .45rem !important;
-        vertical-align: middle;
-        border: none !important;
-        line-height: 1.25;
+    /* `modal-dialog-scrollable`: cabecera y "Cerrar" siempre a la vista, solo
+       el cuerpo hace scroll (con max-height:82vh + cabecera + pie el modal se
+       salía por abajo en 1366x768). `min-width:0`: en `.modal-dialog-centered`
+       el contenido es un item flex y sin esto no se achicaba bajo su ancho
+       minimo (en el celular el modal quedaba mas ancho que la pantalla). */
+    #modalResumenCaja .modal-content { min-width: 0; }
+    #modalResumenCaja .rc-modal-header { padding: .75rem 1.25rem; }
+    #modalResumenCaja .rc-modal-header .modal-title { font-weight: 600; font-size: 1.0625rem; }
+    #modalResumenCaja .rc-body {
+        overflow-y: auto;
+        padding: .75rem 1rem;
+        font-size: .9375rem;
+        background: var(--nexo-gray-100);
     }
-    #modalResumenCaja .resumen-table tr:not(:last-child) td { border-bottom: 1px solid var(--nexo-gray-200) !important; }
+    #modalResumenCaja .modal-footer { padding: .4rem .75rem; }
 
-    /* Etiqueta / monto de una fila normal */
-    .rc-label { font-size: .9375rem; font-weight: 500; color: var(--nexo-gray-700); }
-    .rc-monto { font-size: 1.1875rem; font-weight: 700; font-family: 'Courier New', monospace;
-                text-align: right; color: var(--nexo-gray-900); white-space: nowrap; }
+    /* Barra de acciones: targets tactiles de 44px (piso WCAG 2.5.5) */
+    #modalResumenCaja .rc-acciones { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin-bottom: .75rem; }
+    #modalResumenCaja .rc-acciones .btn { min-height: 2.75rem; font-size: .9375rem; padding: .45rem 1rem; }
+    #modalResumenCaja .rc-acciones-fecha { display: flex; align-items: center; gap: .5rem; }
+    #modalResumenCaja .rc-acciones .form-control { min-height: 2.75rem; font-size: 1rem; width: 180px; }
+    #modalResumenCaja .rc-acciones .form-label { font-size: .875rem; font-weight: 500; margin: 0; }
+    #modalResumenCaja .rc-toggle-ceros {
+        display: flex; align-items: center; gap: .5rem;
+        min-height: 2.75rem; margin: 0 0 0 auto; padding-left: 0;
+    }
+    #modalResumenCaja .rc-toggle-ceros .form-check-input { float: none; margin: 0; width: 2.5rem; height: 1.375rem; cursor: pointer; }
+    #modalResumenCaja .rc-toggle-ceros .form-check-input:checked { background-color: var(--nexo-primary); border-color: var(--nexo-primary); }
+    #modalResumenCaja .rc-toggle-ceros .form-check-label {
+        font-size: .875rem; font-weight: 500; color: var(--nexo-gray-700);
+        padding-left: 0; min-height: 0; margin: 0; cursor: pointer;
+    }
 
-    /* Sub-fila (desglose de un bucket: MP debito/credito, NC, ecommerce) */
-    .rc-sub-label { font-size: .8125rem; font-weight: 500; color: var(--nexo-gray-500); padding-left: 1.1rem !important; }
-    .rc-sub-monto { font-size: 1rem; font-weight: 600; font-family: 'Courier New', monospace;
-                    text-align: right; white-space: nowrap; }
+    /* Franja superior: VENTA TOTAL + KPI por grupo de medios */
+    #modalResumenCaja .rc-hero {
+        display: grid;
+        grid-template-columns: minmax(15rem, 1.25fr) repeat(4, minmax(0, 1fr));
+        gap: .5rem;
+        margin-bottom: .75rem;
+    }
+    #modalResumenCaja .rc-hero-total {
+        display: flex; flex-direction: column; justify-content: center;
+        padding: .75rem 1rem;
+        background: var(--nexo-primary); color: var(--nexo-white);
+        border-radius: var(--nexo-radius-lg); box-shadow: var(--nexo-shadow-md);
+    }
+    #modalResumenCaja .rc-hero-total-label { font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; opacity: .85; }
+    #modalResumenCaja .rc-venta-total { font-size: 2.5rem; line-height: 1.1; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    #modalResumenCaja .rc-hero-total-formula { font-size: .75rem; opacity: .8; }
+    #modalResumenCaja .rc-kpi {
+        --rc-kpi-color: var(--nexo-primary);
+        display: flex; flex-direction: column; justify-content: center; min-width: 0;
+        padding: .6rem .75rem;
+        background: var(--nexo-white);
+        border: 1px solid var(--nexo-gray-200); border-left: 4px solid var(--rc-kpi-color);
+        border-radius: var(--nexo-radius-md);
+    }
+    #modalResumenCaja .rc-kpi-success { --rc-kpi-color: var(--nexo-success); }
+    #modalResumenCaja .rc-kpi-warning { --rc-kpi-color: var(--nexo-warning); }
+    #modalResumenCaja .rc-kpi-mp { background: var(--nexo-primary-light); }
+    #modalResumenCaja .rc-kpi-label {
+        display: flex; align-items: center; gap: .3rem;
+        font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+        color: var(--nexo-gray-700);
+    }
+    #modalResumenCaja .rc-kpi-label i { color: var(--rc-kpi-color); font-size: 1.1em; }
+    #modalResumenCaja .rc-kpi-monto {
+        font-size: 1.5rem; font-weight: 800; line-height: 1.2; white-space: nowrap;
+        font-variant-numeric: tabular-nums; color: var(--nexo-gray-900);
+    }
+    #modalResumenCaja .rc-kpi-mp .rc-kpi-monto { color: var(--nexo-primary-dark); }
+    #modalResumenCaja .rc-kpi-formula { font-size: .75rem; line-height: 1.25; color: var(--nexo-gray-500); margin-top: .1rem; }
+    #modalResumenCaja .rc-kpi-nota { font-size: .6875rem; font-style: italic; color: var(--nexo-gray-500); }
+    #modalResumenCaja .rc-kpi.rc-kpi-vacio { opacity: .55; }
 
-    /* Fila de cierre de un bloque (el neto que el cajero tiene que cuadrar) */
-    .rc-neto-label { font-size: .9375rem; font-weight: 700; color: var(--nexo-gray-900); text-transform: uppercase; letter-spacing: .02em; }
-    .rc-neto-monto { font-size: 1.3125rem; font-weight: 800; font-family: 'Courier New', monospace;
-                     text-align: right; white-space: nowrap; }
-    #modalResumenCaja .resumen-table tr.rc-neto td { border-top: 2px solid var(--nexo-gray-300) !important; }
+    /* Control de consistencia documentos vs medios (bajo la franja) */
+    #modalResumenCaja .rc-descuadre { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem 1.25rem; padding: .5rem .75rem; margin-bottom: .75rem; font-size: .8125rem; }
+    #modalResumenCaja .rc-descuadre-cifras { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; }
+    #modalResumenCaja .rc-descuadre-cifras strong { font-variant-numeric: tabular-nums; }
+    #modalResumenCaja .rc-descuadre-ayuda { flex-basis: 100%; font-size: .75rem; color: var(--nexo-gray-700); }
+
+    /* Tarjetas de detalle: cabecera blanca con acento de color arriba */
+    #modalResumenCaja .rc-card {
+        --rc-card-color: var(--nexo-primary);
+        margin-bottom: .5rem;
+        border: 1px solid var(--nexo-gray-200); border-top: 3px solid var(--rc-card-color);
+        border-radius: var(--nexo-radius-md); box-shadow: var(--nexo-shadow-sm);
+    }
+    #modalResumenCaja .rc-card:hover { box-shadow: var(--nexo-shadow-sm); }
+    #modalResumenCaja .rc-card-success   { --rc-card-color: var(--nexo-success); }
+    #modalResumenCaja .rc-card-warning   { --rc-card-color: var(--nexo-warning); }
+    #modalResumenCaja .rc-card-secondary { --rc-card-color: var(--nexo-gray-700); }
+    #modalResumenCaja .rc-card-head {
+        display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+        padding: .35rem .5rem .35rem .75rem;
+        background: var(--nexo-white); border-bottom: 1px solid var(--nexo-gray-200);
+        border-radius: 0 !important;
+    }
+    #modalResumenCaja .rc-card-title {
+        display: flex; align-items: center; gap: .35rem; margin: 0;
+        font-size: .9375rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+        color: var(--nexo-gray-900);
+    }
+    #modalResumenCaja .rc-card-title i { color: var(--rc-card-color); font-size: 1.1em; }
+    #modalResumenCaja .rc-card-nota { font-size: .75rem; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--nexo-gray-500); }
+    #modalResumenCaja .rc-btn-detalle {
+        min-height: 2.25rem; padding: .25rem .65rem; line-height: 1.2;
+        font-size: .8125rem; font-weight: 600;
+        color: var(--nexo-primary); background: var(--nexo-white);
+        border: 1px solid var(--nexo-gray-300); border-radius: var(--nexo-radius-md);
+    }
+    #modalResumenCaja .rc-btn-detalle:hover { background: var(--nexo-primary-light); border-color: var(--nexo-primary); color: var(--nexo-primary); transform: none; }
+    #modalResumenCaja .rc-card .card-body { padding: .25rem .35rem .35rem; }
+
+    /* Tablas: columna de monto fija + cifras tabulares (alineadas entre tarjetas) */
+    #modalResumenCaja .resumen-table { width: 100%; table-layout: fixed; border-collapse: collapse; margin: 0; color: var(--nexo-gray-900); }
+    #modalResumenCaja .resumen-table .rc-col-monto { width: 9rem; }
+    #modalResumenCaja .resumen-table td {
+        padding: .3rem .5rem;
+        vertical-align: middle; line-height: 1.25;
+        border: 0; border-bottom: 1px solid var(--nexo-gray-200);
+        background: transparent;
+    }
+    #modalResumenCaja .resumen-table td:last-child { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    #modalResumenCaja .resumen-table tr.rc-ultima td { border-bottom: 0; }
+
+    /* Fila de medio: dentro de un grupo va con una sangria */
+    #modalResumenCaja .resumen-table td.rc-label { font-size: .9375rem; font-weight: 500; color: var(--nexo-gray-700); padding-left: 1rem; }
+    #modalResumenCaja .resumen-table td.rc-monto { font-size: 1.1875rem; font-weight: 700; color: var(--nexo-gray-900); }
+    /* Sub-fila (bruto − NC): una sangria mas. Antes el padding-left perdia
+       contra el `padding: ... !important` general de las celdas. */
+    #modalResumenCaja .resumen-table td.rc-sub-label { font-size: .8125rem; font-weight: 500; color: var(--nexo-gray-500); padding-left: 1.75rem; }
+    #modalResumenCaja .resumen-table td.rc-sub-monto { font-size: 1rem; font-weight: 600; }
+    #modalResumenCaja .rc-label-nota { font-size: .8em; font-weight: 500; color: var(--nexo-gray-500); }
+    /* Tabla sin cabeceras de grupo (Documentos): sin la sangria de grupo */
+    #modalResumenCaja .resumen-table.rc-sin-grupos td.rc-label { padding-left: .5rem; }
+    #modalResumenCaja .resumen-table.rc-sin-grupos td.rc-sub-label { padding-left: 1.25rem; }
+
+    /* "Efectivo en caja": lo que el cajero cuenta. Siempre visible, con fondo
+       suave para que el ojo caiga ahi (el verde NEXO sobre blanco no se lee
+       como texto: el color va en el fondo y el monto en tono oscuro). */
+    #modalResumenCaja .resumen-table tr.rc-efectivo-caja td { background: rgba(0,212,170,.1); color: #00A080; }
+    #modalResumenCaja .resumen-table tr.rc-efectivo-caja td.rc-neto-monto { color: var(--nexo-gray-900); }
+
+    #modalResumenCaja .rc-aviso { font-size: .8125rem; padding: .4rem .6rem; margin: .35rem .15rem .1rem; }
+    #modalResumenCaja .modal-footer .btn { min-height: 2.75rem; }
+
+    /* Cabecera de grupo con subtotal (Transbank, Mercado Pago POS, ...) */
+    #modalResumenCaja .resumen-table tr.rc-grupo td { background: var(--nexo-gray-100); border-bottom: 1px solid var(--nexo-gray-300); padding-top: .35rem; padding-bottom: .35rem; }
+    #modalResumenCaja .resumen-table tr.rc-grupo:not(.rc-primera) td { border-top: 6px solid var(--nexo-white); }
+    #modalResumenCaja .resumen-table td.rc-grupo-label { font-size: .8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--nexo-gray-700); }
+    #modalResumenCaja .resumen-table td.rc-grupo-monto { font-size: 1rem; font-weight: 800; color: var(--nexo-gray-900); }
+
+    /* Cierre de bloque: el neto que el cajero cuadra y el total ecommerce.
+       La raya gruesa solo va cuando hay algo arriba que sumar/restar (bruto −
+       NC) y nunca en la primera fila visible de la tabla. */
+    #modalResumenCaja .resumen-table td.rc-neto-label { font-size: .9375rem; font-weight: 700; color: var(--nexo-gray-900); text-transform: uppercase; letter-spacing: .02em; }
+    #modalResumenCaja .resumen-table td.rc-neto-monto { font-size: 1.3125rem; font-weight: 800; }
+    #modalResumenCaja .resumen-table tr.rc-con-nc td,
+    #modalResumenCaja .resumen-table tr.rc-total td { border-top: 2px solid var(--nexo-gray-300); }
+    #modalResumenCaja .resumen-table tr.rc-primera td { border-top: 0; }
+
+    /* Filas en $0: ocultas salvo que el switch pida verlas (atenuadas) */
+    #modalResumenCaja:not(.rc-mostrar-ceros) .resumen-table tr.rc-cero { display: none; }
+    #modalResumenCaja.rc-mostrar-ceros .resumen-table tr.rc-cero td { opacity: .5; }
+    #modalResumenCaja .resumen-table tr.rc-vacio td {
+        padding: .75rem .5rem; border: 0;
+        text-align: center; font-size: .8125rem; font-style: italic; color: var(--nexo-gray-500);
+    }
 
     /* Colores semanticos (reemplazan los style="color:..." inline) */
     .rc-c-primary { color: var(--nexo-primary) !important; }
@@ -359,57 +520,82 @@
     .rc-c-accent  { color: var(--nexo-accent) !important; }
     .rc-c-muted   { color: var(--nexo-gray-500) !important; }
 
-    /* Cabeceras de tarjeta del resumen */
-    #modalResumenCaja .card-header { padding: .5rem .75rem !important; }
-    #modalResumenCaja .card-header .rc-card-title {
-        font-size: .9375rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
-    }
-    #modalResumenCaja .card-body { padding: .5rem .6rem !important; }
-
-    /* Bloque "Resumen por Modulo" */
-    .resumen-total-item { padding: .6rem .75rem; background: #fff; border-radius: var(--nexo-radius-md); }
-    .rc-grupo-label { font-size: .875rem; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--nexo-gray-700); }
-    .rc-grupo-monto { font-size: 1.375rem; font-weight: 800; font-family: 'Courier New', monospace; white-space: nowrap; }
-    .rc-grupo-detalle { font-size: .75rem; color: var(--nexo-gray-500); margin-top: .15rem; }
-    .rc-venta-total { font-size: 2.5rem; line-height: 1.1; font-weight: 800; font-family: 'Courier New', monospace; }
-
-    /* Barra de acciones: targets tactiles de 44px (piso WCAG 2.5.5) */
-    #modalResumenCaja .rc-acciones .btn { min-height: 2.75rem; font-size: .9375rem; padding: .45rem 1rem; }
-    #modalResumenCaja .rc-acciones .form-control { min-height: 2.75rem; font-size: 1rem; }
-    #modalResumenCaja .rc-acciones .form-label { font-size: .875rem; }
-
-    /* Filas clicables del Resumen de Caja (abren detalle por método) */
-    #modalResumenCaja .resumen-table tr.row-detalle {
-        cursor: pointer;
-        transition: background-color .15s ease;
-    }
-    #modalResumenCaja .resumen-table tr.row-detalle:hover {
-        background-color: var(--nexo-primary-light);
-    }
-    #modalResumenCaja .resumen-table tr.row-detalle td:first-child::after {
-        content: '\f0a9';
+    /* Filas clicables (abren el detalle por metodo): misma senal en todas,
+       incluidas las cabeceras de grupo, y alcanzables con teclado. */
+    #modalResumenCaja .resumen-table tr.row-detalle { cursor: pointer; }
+    #modalResumenCaja .resumen-table tr.row-detalle td { transition: background-color var(--nexo-transition-fast); }
+    #modalResumenCaja .resumen-table tr.row-detalle:hover td,
+    #modalResumenCaja .resumen-table tr.row-detalle:focus-visible td { background-color: var(--nexo-primary-light); }
+    #modalResumenCaja .resumen-table tr.row-detalle:focus-visible { outline: 2px solid var(--nexo-primary); outline-offset: -2px; }
+    #modalResumenCaja .resumen-table tr.row-detalle > td:first-child::after {
+        content: '\ea6e'; /* ri-arrow-right-s-line (el '\f0a9' anterior no existe en remixicon) */
         font-family: 'remixicon';
-        font-size: .75rem;
-        margin-left: .3rem;
-        color: var(--nexo-primary);
-        opacity: .5;
+        font-size: .95em; font-weight: 400; font-style: normal; text-transform: none;
+        margin-left: .2rem; vertical-align: -.12em;
+        color: var(--nexo-primary); opacity: .45;
     }
+    #modalResumenCaja .resumen-table tr.row-detalle:hover > td:first-child::after,
+    #modalResumenCaja .resumen-table tr.row-detalle:focus-visible > td:first-child::after { opacity: 1; }
+
+    /* Alerta Mercado Pago (pagina y Resumen de Caja) */
+    .rc-alerta-mp { display: flex; align-items: flex-start; gap: .6rem; }
+    .rc-alerta-mp > i { font-size: 1.3rem; line-height: 1; margin-top: .1rem; }
+    .rc-alerta-mp.alert-warning > i { color: var(--nexo-warning); }
+    .rc-alerta-mp.alert-info > i { color: var(--nexo-primary); }
+    .rc-alerta-mp-cuerpo { flex: 1 1 auto; min-width: 0; }
+    .rc-alerta-mp-titulo { font-size: .875rem; font-weight: 700; color: var(--nexo-gray-900); }
+    .rc-alerta-mp-linea { font-size: .84rem; color: var(--nexo-gray-700); }
+    .rc-alerta-mp-linea strong { font-variant-numeric: tabular-nums; }
+    .rc-alerta-mp-ayuda { font-size: .75rem; color: var(--nexo-gray-500); margin-top: .15rem; }
+    .rc-alerta-mp-btn { flex: 0 0 auto; align-self: center; white-space: nowrap; }
 
     /* Escala corta: POS de 15" a 1366x768 y notebooks de tienda. Mismo
        breakpoint que la seccion 13 de pos-kiosk.css para que ambas bajen juntas. */
     @media (max-height: 800px), (max-width: 1400px) {
-        .rc-label       { font-size: .8125rem; }
-        .rc-monto       { font-size: 1rem; }
-        .rc-sub-label   { font-size: .75rem; }
-        .rc-sub-monto   { font-size: .875rem; }
-        .rc-neto-label  { font-size: .8125rem; }
-        .rc-neto-monto  { font-size: 1.125rem; }
-        .rc-grupo-label { font-size: .78rem; }
-        .rc-grupo-monto { font-size: 1.1875rem; }
-        .rc-venta-total { font-size: 1.875rem; }
-        #modalResumenCaja .resumen-table td { padding: .22rem .4rem !important; }
-        #modalResumenCaja .card-header .rc-card-title { font-size: .8125rem; }
-        .resumen-total-item { padding: .45rem .6rem; }
+        #modalResumenCaja { --bs-modal-margin: .5rem; }
+        #modalResumenCaja .rc-body { padding: .6rem .75rem; }
+        #modalResumenCaja .rc-acciones,
+        #modalResumenCaja .rc-hero,
+        #modalResumenCaja .rc-descuadre { margin-bottom: .5rem; }
+        #modalResumenCaja .rc-hero-total { padding: .5rem .75rem; }
+        #modalResumenCaja .rc-venta-total { font-size: 1.875rem; }
+        #modalResumenCaja .rc-hero-total-label { font-size: .75rem; }
+        #modalResumenCaja .rc-kpi { padding: .4rem .6rem; }
+        #modalResumenCaja .rc-kpi-label { font-size: .72rem; }
+        #modalResumenCaja .rc-kpi-monto { font-size: 1.1875rem; }
+        #modalResumenCaja .rc-kpi-formula { font-size: .6875rem; }
+        #modalResumenCaja .rc-card-title { font-size: .8125rem; }
+        #modalResumenCaja .resumen-table .rc-col-monto { width: 7.5rem; }
+        #modalResumenCaja .resumen-table td { padding: .22rem .4rem; }
+        #modalResumenCaja .resumen-table tr.rc-grupo td { padding-top: .25rem; padding-bottom: .25rem; }
+        #modalResumenCaja .resumen-table td.rc-label { font-size: .8125rem; padding-left: .8rem; }
+        #modalResumenCaja .resumen-table td.rc-monto { font-size: 1rem; }
+        #modalResumenCaja .resumen-table td.rc-sub-label { font-size: .75rem; padding-left: 1.4rem; }
+        #modalResumenCaja .resumen-table td.rc-sub-monto { font-size: .875rem; }
+        #modalResumenCaja .resumen-table td.rc-grupo-label { font-size: .72rem; }
+        #modalResumenCaja .resumen-table td.rc-grupo-monto { font-size: .875rem; }
+        #modalResumenCaja .resumen-table td.rc-neto-label { font-size: .8125rem; }
+        #modalResumenCaja .resumen-table td.rc-neto-monto { font-size: 1.125rem; }
+    }
+    /* Bajo 1200px la VENTA TOTAL pasa a ocupar su propia fila */
+    @media (max-width: 1199.98px) {
+        #modalResumenCaja .rc-hero { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        #modalResumenCaja .rc-hero-total {
+            grid-column: 1 / -1;
+            flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
+            gap: .1rem 1rem;
+        }
+    }
+    /* Movil: KPI de a dos; las tarjetas ya se apilan bajo 992px (col-lg-4) */
+    @media (max-width: 767.98px) {
+        #modalResumenCaja .rc-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        #modalResumenCaja .rc-toggle-ceros { margin-left: 0; }
+        #modalResumenCaja .rc-acciones-fecha { flex: 1 1 100%; }
+        #modalResumenCaja .rc-acciones .form-control { width: auto; flex: 1 1 auto; }
+        /* Icono + texto en la primera línea, el botón debajo del texto */
+        .rc-alerta-mp { flex-wrap: wrap; }
+        .rc-alerta-mp-cuerpo { flex: 1 1 0; min-width: calc(100% - 2rem); }
+        .rc-alerta-mp-btn { margin-left: 1.9rem; }
     }
 
     /* ========== MODAL DETALLE MÉTODOS DE PAGO ========== */
@@ -584,6 +770,11 @@
 
                         <!-- Alerta de arqueos pendientes (poblado por JS) -->
                         <div id="zonaAlertasPendientes"></div>
+
+                        <!-- Alerta Mercado Pago de HOY: cobros MP sin venta / pagos «MP
+                             manual» sin verificar. Poblado por `mostrarAlertaMpHoy` con lo
+                             que calcula la vista; el Resumen de Caja la refresca. -->
+                        <div id="alertaMpCaja" style="display:none;"></div>
 
                         <!-- Workflow Visual -->
                         <div class="mt-3 pt-3" style="border-top:1px solid var(--nexo-gray-200);">
@@ -1356,22 +1547,29 @@
 
 <!-- =====================================================================
      MODAL: RESUMEN DE CAJA
+     ---------------------------------------------------------------------
+     Los ids de los montos (#visa, #efectivo, #sum_tarjetas, #ventatotal...)
+     los leen la impresión térmica (HTML y ESC/POS de QZ), el Excel y el
+     click por fila: se pueden MOVER dentro del modal, nunca renombrar.
+     Filas: .rc-grupo = cabecera de grupo con subtotal; .rc-item = medio de
+     pago (se oculta en $0, ver `aplicarVisibilidadResumen`); .rc-nc-row =
+     bruto / NC, solo cuando hubo NC en ese medio.
      ===================================================================== -->
 <div class="modal fade modal-resumen-pos" id="modalResumenCaja" tabindex="-1" aria-labelledby="modalResumenCajaLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header bg-primary" style="padding:.75rem 1.25rem;">
-                <h6 class="modal-title text-white mb-0" id="modalResumenCajaLabel" style="font-weight:600;font-size:1.0625rem;">
+            <div class="modal-header bg-primary rc-modal-header">
+                <h6 class="modal-title text-white mb-0" id="modalResumenCajaLabel">
                     <i class="ri-calculator-2-line me-2"></i>Resumen de Caja — <span id="fechaResumenCaja"></span>
                 </h6>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
-            <div class="modal-body p-3" style="overflow-y:auto;max-height:82vh;">
+            <div class="modal-body rc-body">
                 <!-- Selector Fecha + Acciones -->
-                <div class="d-flex align-items-end gap-2 mb-3 flex-wrap rc-acciones">
-                    <div>
-                        <label for="fechaCuadratura" class="form-label mb-1">Fecha:</label>
-                        <input type="date" class="form-control" id="fechaCuadratura" style="width:180px;">
+                <div class="rc-acciones">
+                    <div class="rc-acciones-fecha">
+                        <label for="fechaCuadratura" class="form-label">Fecha</label>
+                        <input type="date" class="form-control" id="fechaCuadratura">
                     </div>
                     <button type="button" class="btn btn-success" onclick="buscarCuadratura()">
                         <span id="spinnerBuscar" style="display:none" class="spinner-border spinner-border-sm me-1" role="status"></span>
@@ -1379,247 +1577,232 @@
                     </button>
                     <button type="button" class="btn btn-outline-primary" onclick="exportarCuadraturaExcel()"><i class="ri-file-excel-line me-1"></i>Excel</button>
                     <button type="button" class="btn btn-outline-secondary" onclick="imprimirResumenTermica()"><i class="ri-printer-line me-1"></i>Térmica</button>
-                    <button type="button" class="btn btn-outline-success ms-auto" onclick="generarCuadratura()"><i class="ri-refresh-line me-1"></i>Actualizar</button>
+                    <!-- Por defecto se esconden los medios sin movimiento, igual que en
+                         el ticket impreso. La preferencia queda en este navegador. -->
+                    <div class="form-check form-switch rc-toggle-ceros" title="Mostrar también los medios de pago sin movimiento en el día">
+                        <input class="form-check-input" type="checkbox" role="switch" id="toggleMostrarCeros" onchange="toggleMostrarCerosResumen(this.checked)">
+                        <label class="form-check-label" for="toggleMostrarCeros">Mostrar medios en $0</label>
+                    </div>
+                    <button type="button" class="btn btn-outline-success" onclick="generarCuadratura()"><i class="ri-refresh-line me-1"></i>Actualizar</button>
                 </div>
 
-                <!-- Contenido: 3 columnas -->
+                <!-- Alerta Mercado Pago del día (poblado por `renderAlertaMp`) -->
+                <div id="alertaMpResumen" style="display:none;"></div>
+
+                <div id="estadoCarga" style="display:none;" class="text-center py-2">
+                    <div class="spinner-border text-primary mb-1" role="status"></div>
+                    <p class="text-muted mb-0">Generando cuadratura...</p>
+                </div>
+
+                <!-- Franja principal: VENTA TOTAL + un KPI por grupo de medios -->
+                <div class="rc-hero">
+                    <div class="rc-hero-total">
+                        <span class="rc-hero-total-label">Venta total</span>
+                        <div class="rc-venta-total" id="ventatotal">$0</div>
+                        <span class="rc-hero-total-formula">Tarjetas + Efectivo y Otros + Venta Internet</span>
+                    </div>
+                    <div class="rc-kpi">
+                        <span class="rc-kpi-label"><i class="ri-bank-card-line"></i>Tarjetas</span>
+                        <div class="rc-kpi-monto" id="sum_tarjetas">$0</div>
+                        <div class="rc-kpi-formula">Transbank + Mercado Pago POS</div>
+                    </div>
+                    <div class="rc-kpi rc-kpi-success">
+                        <span class="rc-kpi-label"><i class="ri-money-dollar-circle-line"></i>Efectivo y Otros</span>
+                        <div class="rc-kpi-monto" id="sum_efectivo">$0</div>
+                        <div class="rc-kpi-formula">EFE + TRANS + CONV + CRÉD + GIFT + CHEQUE + OC · neto de NC</div>
+                    </div>
+                    <div class="rc-kpi rc-kpi-warning">
+                        <span class="rc-kpi-label"><i class="ri-global-line"></i>Venta Internet</span>
+                        <div class="rc-kpi-monto" id="sum_internet">$0</div>
+                        <div class="rc-kpi-formula">Marketplaces + ecommerce propio</div>
+                    </div>
+                    <!-- TOTAL MERCADO PAGO consolidado. NO entra al VENTA TOTAL (esa
+                         plata ya está contada en Tarjetas y en Venta Internet): es una
+                         lectura de gestión — cuánto liquida MP el día, sumando la
+                         máquina Point/QR del mesón, el marketplace y el ecommerce
+                         propio, que hasta ahora vivían en tres filas sin relación. -->
+                    <div class="rc-kpi rc-kpi-mp" id="bloqueMpConsolidado" title="Lectura de gestión: ya está contado en Tarjetas y Venta Internet, no se suma aparte.">
+                        <span class="rc-kpi-label"><i class="ri-smartphone-line"></i>Total Mercado Pago</span>
+                        <div class="rc-kpi-monto" id="mp_consolidado">$0</div>
+                        <div class="rc-kpi-formula" id="mp_consolidado_detalle">POS + marketplace + ecommerce</div>
+                        <div class="rc-kpi-nota">Ya incluido arriba · no se suma aparte</div>
+                    </div>
+                </div>
+
+                <!-- Control de consistencia: el VENTA TOTAL de arriba se arma sumando
+                     MEDIOS DE PAGO; el que se guarda en el arqueo se arma sumando
+                     DOCUMENTOS (tickets + boletas + facturas - NC). Si un ticket queda
+                     PAGADO sin detalle de pago, el documento suma y ningún medio lo
+                     recibe: esa plata desaparecía en silencio. Aquí se hace visible. -->
+                <div id="alertaDescuadreMedios" class="alert alert-warning rc-descuadre" style="display:none;">
+                    <div class="fw-bold"><i class="ri-error-warning-line me-1"></i>Venta sin medio de pago asignado</div>
+                    <div class="rc-descuadre-cifras">
+                        <span>Total por documentos <strong id="vt_documentos">$0</strong></span>
+                        <span>Total por medios de pago <strong id="vt_medios">$0</strong></span>
+                        <span>Sin asignar <strong id="vt_gap">$0</strong></span>
+                    </div>
+                    <div class="rc-descuadre-ayuda">Revise en "Ver transacciones del día" los tickets pagados sin forma de pago registrada.</div>
+                </div>
+
+                <!-- Contenido: Tarjetas · Efectivo y Otros · Internet + Documentos -->
                 <div class="row g-2" id="contenidoCuadratura">
 
-                    <!-- COL 1: Tarjetas + Efectivo/Otros -->
+                    <!-- COL 1: Tarjetas -->
                     <div class="col-lg-4">
-                        <!-- Tarjetas -->
-                        <div class="card mb-2">
-                            <div class="card-header py-1 px-2 bg-primary d-flex align-items-center justify-content-between">
-                                <span class="text-white rc-card-title"><i class="ri-bank-card-line me-1"></i>Tarjetas</span>
-                                <button type="button" class="btn btn-sm btn-light py-0 px-2" style="font-size:.8rem;min-height:2rem;" title="Ver detalle de todos los pagos con tarjeta" onclick="abrirDetalleMetodosPago('tarjetas')"><i class="ri-search-eye-line"></i> Detalle</button>
+                        <div class="card rc-card">
+                            <div class="card-header rc-card-head">
+                                <h6 class="rc-card-title"><i class="ri-bank-card-line"></i>Tarjetas</h6>
+                                <button type="button" class="btn rc-btn-detalle" title="Ver detalle de todos los pagos con tarjeta" onclick="abrirDetalleMetodosPago('tarjetas')"><i class="ri-search-eye-line me-1"></i>Detalle</button>
                             </div>
-                            <div class="card-body p-2">
-                                <table class="table table-sm table-borderless mb-0 resumen-table">
+                            <div class="card-body">
+                                <table class="resumen-table">
+                                    <colgroup><col><col class="rc-col-monto"></colgroup>
                                     <tbody>
-                                        <tr class="row-detalle" data-categoria="tarjetas" data-metodos="TARJETA_CREDITO,TBK_CREDITO_POS,TBK_POS_INTEGRADO,TBK_MANUAL" title="Ver detalle"><td class="rc-label">VISA-MC-AMEX</td><td class="rc-monto"><span id="visa">$0</span></td></tr>
-                                        <tr class="row-detalle" data-categoria="tarjetas" data-metodos="TARJETA_DEBITO,TBK_DEBITO_POS,TBK_PREPAGO_POS" title="Ver detalle"><td class="rc-label">REDCOMPRA DÉB.</td><td class="rc-monto"><span id="debito">$0</span></td></tr>
-                                        <tr class="row-detalle" data-categoria="tarjetas" data-metodos="TARJETA_COMERCIAL" data-tipo-tarjeta="PRESTO" title="Ver detalle"><td class="rc-label">PRESTO</td><td class="rc-monto"><span id="presto">$0</span></td></tr>
-                                        <tr class="row-detalle" data-categoria="tarjetas" data-metodos="TARJETA_COMERCIAL" data-tipo-tarjeta="HITES" title="Ver detalle"><td class="rc-label">HITES</td><td class="rc-monto"><span id="hites">$0</span></td></tr>
-                                        <tr class="row-detalle" data-categoria="tarjetas" data-metodos="MP_QR,MP_POINT,MP_POINT_DEBITO,MP_POINT_CREDITO" title="Ver detalle — Mercado Pago presencial (QR/Point), distinto del MP de Venta Internet"><td class="rc-label rc-c-primary">MERCADO PAGO POS</td><td class="rc-monto rc-c-primary"><span id="mercadopago_pos">$0</span></td></tr>
-                                        <!-- Desglose MP presencial por medio real (payment_type_id de MP). El filtro
-                                             data-tipo-tarjeta usa los IDs exactos de MP para no pescar Transbank. -->
-                                        <tr class="row-detalle mp-sub" data-categoria="tarjetas" data-metodos="MP_POINT_DEBITO,MP_QR,MP_POINT" data-tipo-tarjeta="DEBIT_CARD,PREPAID_CARD" title="Ver detalle — Mercado Pago débito / prepago"><td class="rc-sub-label">└ MP DÉBITO</td><td class="rc-sub-monto rc-c-primary"><span id="mercadopago_pos_debito">$0</span></td></tr>
-                                        <tr class="row-detalle mp-sub" data-categoria="tarjetas" data-metodos="MP_POINT_CREDITO,MP_QR,MP_POINT" data-tipo-tarjeta="CREDIT_CARD" title="Ver detalle — Mercado Pago crédito"><td class="rc-sub-label">└ MP CRÉDITO</td><td class="rc-sub-monto rc-c-primary"><span id="mercadopago_pos_credito">$0</span></td></tr>
-                                        <tr class="row-detalle mp-sub" data-categoria="tarjetas" data-metodos="MP_QR,MP_POINT" data-tipo-tarjeta="ACCOUNT_MONEY,BANK_TRANSFER,MERCADO PAGO" title="Ver detalle — QR sin dato de medio, dinero en cuenta MP, transferencia MP"><td class="rc-sub-label">└ MP QR / OTROS</td><td class="rc-sub-monto rc-c-primary"><span id="mercadopago_pos_otros">$0</span></td></tr>
+                                        <!-- Transbank + tarjetas comerciales (PRESTO / HITES) -->
+                                        <tr class="rc-grupo row-detalle" tabindex="0" data-grupo="transbank" data-categoria="tarjetas" data-metodos="TARJETA_CREDITO,TBK_CREDITO_POS,TBK_POS_INTEGRADO,TBK_MANUAL,TARJETA_DEBITO,TBK_DEBITO_POS,TBK_PREPAGO_POS,TARJETA_COMERCIAL" title="Ver detalle — todos los cobros Transbank y tarjetas comerciales"><td class="rc-grupo-label">Transbank</td><td class="rc-grupo-monto"><span id="sub_transbank">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="transbank" data-categoria="tarjetas" data-metodos="TARJETA_CREDITO,TBK_CREDITO_POS,TBK_POS_INTEGRADO,TBK_MANUAL" title="Ver detalle"><td class="rc-label">VISA-MC-AMEX</td><td class="rc-monto"><span id="visa">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="transbank" data-categoria="tarjetas" data-metodos="TARJETA_DEBITO,TBK_DEBITO_POS,TBK_PREPAGO_POS" title="Ver detalle"><td class="rc-label">REDCOMPRA DÉB.</td><td class="rc-monto"><span id="debito">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="transbank" data-categoria="tarjetas" data-metodos="TARJETA_COMERCIAL" data-tipo-tarjeta="PRESTO" title="Ver detalle"><td class="rc-label">PRESTO</td><td class="rc-monto"><span id="presto">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="transbank" data-categoria="tarjetas" data-metodos="TARJETA_COMERCIAL" data-tipo-tarjeta="HITES" title="Ver detalle"><td class="rc-label">HITES</td><td class="rc-monto"><span id="hites">$0</span></td></tr>
+                                        <!-- Mercado Pago presencial (QR/Point). La cabecera trae el total
+                                             (#mercadopago_pos) y debajo el desglose por medio real
+                                             (payment_type_id de MP). El filtro data-tipo-tarjeta usa los IDs
+                                             exactos de MP para no pescar Transbank. -->
+                                        <tr class="rc-grupo row-detalle" tabindex="0" data-grupo="mp_pos" data-categoria="tarjetas" data-metodos="MP_QR,MP_POINT,MP_POINT_DEBITO,MP_POINT_CREDITO" title="Ver detalle — Mercado Pago presencial (QR/Point), distinto del MP de Venta Internet"><td class="rc-grupo-label">Mercado Pago POS</td><td class="rc-grupo-monto"><span id="mercadopago_pos">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle mp-sub" tabindex="0" data-grupo="mp_pos" data-categoria="tarjetas" data-metodos="MP_POINT_DEBITO,MP_QR,MP_POINT" data-tipo-tarjeta="DEBIT_CARD,PREPAID_CARD" title="Ver detalle — Mercado Pago débito / prepago"><td class="rc-label">MP DÉBITO</td><td class="rc-monto"><span id="mercadopago_pos_debito">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle mp-sub" tabindex="0" data-grupo="mp_pos" data-categoria="tarjetas" data-metodos="MP_POINT_CREDITO,MP_QR,MP_POINT" data-tipo-tarjeta="CREDIT_CARD" title="Ver detalle — Mercado Pago crédito"><td class="rc-label">MP CRÉDITO</td><td class="rc-monto"><span id="mercadopago_pos_credito">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle mp-sub" tabindex="0" data-grupo="mp_pos" data-categoria="tarjetas" data-metodos="MP_QR,MP_POINT" data-tipo-tarjeta="ACCOUNT_MONEY,BANK_TRANSFER,MERCADO PAGO" title="Ver detalle — QR sin dato de medio, dinero en cuenta MP, transferencia MP"><td class="rc-label">MP QR / OTROS</td><td class="rc-monto"><span id="mercadopago_pos_otros">$0</span></td></tr>
+                                        <tr class="rc-vacio" style="display:none;"><td colspan="2">Sin cobros con tarjeta en el día</td></tr>
                                     </tbody>
                                 </table>
                             </div>
                         </div>
-                        <!-- Efectivo y Otros -->
-                        <div class="card">
-                            <div class="card-header py-1 px-2 bg-success d-flex align-items-center justify-content-between">
-                                <span class="text-white rc-card-title"><i class="ri-money-dollar-circle-line me-1"></i>Efectivo y Otros</span>
-                                <button type="button" class="btn btn-sm btn-light py-0 px-2" style="font-size:.8rem;min-height:2rem;" title="Ver detalle de efectivo y equivalentes" onclick="abrirDetalleMetodosPago('efectivo')"><i class="ri-search-eye-line"></i> Detalle</button>
+                    </div>
+
+                    <!-- COL 2: Efectivo y Otros -->
+                    <div class="col-lg-4">
+                        <div class="card rc-card rc-card-success">
+                            <div class="card-header rc-card-head">
+                                <h6 class="rc-card-title"><i class="ri-money-dollar-circle-line"></i>Efectivo y Otros</h6>
+                                <button type="button" class="btn rc-btn-detalle" title="Ver detalle de efectivo y equivalentes" onclick="abrirDetalleMetodosPago('efectivo')"><i class="ri-search-eye-line me-1"></i>Detalle</button>
                             </div>
-                            <div class="card-body p-2">
-                                <table class="table table-sm table-borderless mb-0 resumen-table">
+                            <div class="card-body">
+                                <table class="resumen-table">
+                                    <colgroup><col><col class="rc-col-monto"></colgroup>
                                     <tbody>
                                         <!-- EFECTIVO: bruto − NC = neto en caja.
                                              La fila EFECTIVO siempre mostró el NETO (el backend hace
                                              `total_efectivo -= total_nc_efectivo`), pero al lado se listaba
                                              "NC Efectivo" sin decir que ya estaba restada: el cajero la
                                              volvía a restar al contar y le cuadraba de menos. Las dos filas
-                                             de arriba sólo aparecen cuando hay NC en efectivo del día. -->
+                                             de arriba sólo aparecen cuando hay NC en efectivo del día.
+                                             "Efectivo en caja" no se oculta en $0: es lo que se cuenta. -->
                                         <tr class="rc-nc-row" data-nc-for="efectivo" style="display:none;"><td class="rc-label rc-c-muted">Efectivo bruto</td><td class="rc-monto rc-c-muted"><span id="efectivo_bruto">$0</span></td></tr>
                                         <tr class="rc-nc-row" data-nc-for="efectivo" style="display:none;"><td class="rc-sub-label rc-c-danger">− NC devuelta en efectivo</td><td class="rc-sub-monto rc-c-danger"><span id="nc_efectivo">$0</span></td></tr>
-                                        <tr class="row-detalle rc-neto" data-categoria="efectivo" data-metodos="EFECTIVO" title="Ver detalle — efectivo neto que debe estar en la caja (ya descontada la NC)"><td class="rc-neto-label rc-c-success">Efectivo en caja</td><td class="rc-neto-monto rc-c-success"><span id="efectivo">$0</span></td></tr>
+                                        <tr class="row-detalle rc-efectivo-caja" tabindex="0" data-nc-neto="efectivo" data-categoria="efectivo" data-metodos="EFECTIVO" title="Ver detalle — efectivo neto que debe estar en la caja (ya descontada la NC)"><td class="rc-neto-label">Efectivo en caja</td><td class="rc-neto-monto"><span id="efectivo">$0</span></td></tr>
 
-                                        <tr class="rc-nc-row" data-nc-for="transferencia" style="display:none;"><td class="rc-label rc-c-muted">Transferencia bruta</td><td class="rc-monto rc-c-muted"><span id="transferencia_bruta">$0</span></td></tr>
-                                        <tr class="rc-nc-row" data-nc-for="transferencia" style="display:none;"><td class="rc-sub-label rc-c-info">− NC devuelta por transferencia</td><td class="rc-sub-monto rc-c-info"><span id="nc_transferencia">$0</span></td></tr>
-                                        <tr class="row-detalle" data-categoria="efectivo" data-metodos="TRANSFERENCIA" title="Ver detalle — neto de las NC devueltas por transferencia"><td class="rc-label">TRANSFERENCIA</td><td class="rc-monto"><span id="transferencia">$0</span></td></tr>
-
-                                        <tr class="row-detalle" data-categoria="efectivo" data-metodos="CONVENIO" title="Ver detalle"><td class="rc-label">CONVENIO</td><td class="rc-monto"><span id="convenio">$0</span></td></tr>
-                                        <tr class="row-detalle" data-categoria="efectivo" data-metodos="CREDITO_TRABAJADOR" title="Ver detalle"><td class="rc-label rc-c-primary">CRÉD. TRABAJADOR</td><td class="rc-monto rc-c-primary"><span id="credito_trabajador">$0</span></td></tr>
-                                        <tr class="rc-nc-row" data-nc-for="credito" style="display:none;"><td class="rc-label rc-c-muted">Créd. externo bruto</td><td class="rc-monto rc-c-muted"><span id="credito_externo_bruto">$0</span></td></tr>
-                                        <tr class="rc-nc-row" data-nc-for="credito" style="display:none;"><td class="rc-sub-label rc-c-warning">− NC a cuenta por cobrar</td><td class="rc-sub-monto rc-c-warning"><span id="nc_credito">$0</span></td></tr>
-                                        <tr class="row-detalle" data-categoria="efectivo" data-metodos="CREDITO_EXTERNO" title="Ver detalle — neto de las NC que rebajan la cuenta por cobrar"><td class="rc-label rc-c-warning">CRÉD. EXTERNO</td><td class="rc-monto rc-c-warning"><span id="credito_externo">$0</span></td></tr>
-                                        <tr class="row-detalle" data-categoria="efectivo" data-metodos="GIFTCARD" title="Ver detalle — no es efectivo: el pasivo nació al emitir la tarjeta"><td class="rc-label rc-c-accent">GIFT CARD</td><td class="rc-monto rc-c-accent"><span id="giftcard">$0</span></td></tr>
-                                        <tr class="row-detalle" data-categoria="efectivo" data-metodos="CHEQUE" title="Ver detalle"><td class="rc-label">CHEQUE</td><td class="rc-monto"><span id="cheque">$0</span></td></tr>
-                                        <tr class="row-detalle" data-categoria="efectivo" data-metodos="ORDEN_COMPRA" title="Ver detalle"><td class="rc-label">ORDEN COMPRA</td><td class="rc-monto"><span id="orden_compra">$0</span></td></tr>
-                                        <tr title="Monto total de las notas de crédito del día. Es un DOCUMENTO: su efecto sobre la caja ya está aplicado en las filas de arriba."><td class="rc-sub-label">NC TOTAL (documentos)</td><td class="rc-sub-monto rc-c-muted"><span id="nota_credito">$0</span></td></tr>
+                                        <tr class="rc-grupo row-detalle" tabindex="0" data-grupo="otros" data-categoria="efectivo" data-metodos="TRANSFERENCIA,CONVENIO,CREDITO_TRABAJADOR,CREDITO_EXTERNO,GIFTCARD,CHEQUE,ORDEN_COMPRA" title="Ver detalle — medios distintos del efectivo"><td class="rc-grupo-label">Otros medios</td><td class="rc-grupo-monto"><span id="sub_otros_medios">$0</span></td></tr>
+                                        <tr class="rc-nc-row" data-nc-for="transferencia" data-grupo="otros" style="display:none;"><td class="rc-label rc-c-muted">Transferencia bruta</td><td class="rc-monto rc-c-muted"><span id="transferencia_bruta">$0</span></td></tr>
+                                        <tr class="rc-nc-row" data-nc-for="transferencia" data-grupo="otros" style="display:none;"><td class="rc-sub-label rc-c-info">− NC devuelta por transferencia</td><td class="rc-sub-monto rc-c-info"><span id="nc_transferencia">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="otros" data-nc-neto="transferencia" data-categoria="efectivo" data-metodos="TRANSFERENCIA" title="Ver detalle — neto de las NC devueltas por transferencia"><td class="rc-label">TRANSFERENCIA</td><td class="rc-monto"><span id="transferencia">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="otros" data-categoria="efectivo" data-metodos="CONVENIO" title="Ver detalle"><td class="rc-label">CONVENIO</td><td class="rc-monto"><span id="convenio">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="otros" data-categoria="efectivo" data-metodos="CREDITO_TRABAJADOR" title="Ver detalle"><td class="rc-label rc-c-primary">CRÉD. TRABAJADOR</td><td class="rc-monto"><span id="credito_trabajador">$0</span></td></tr>
+                                        <tr class="rc-nc-row" data-nc-for="credito" data-grupo="otros" style="display:none;"><td class="rc-label rc-c-muted">Créd. externo bruto</td><td class="rc-monto rc-c-muted"><span id="credito_externo_bruto">$0</span></td></tr>
+                                        <tr class="rc-nc-row" data-nc-for="credito" data-grupo="otros" style="display:none;"><td class="rc-sub-label rc-c-warning">− NC a cuenta por cobrar</td><td class="rc-sub-monto rc-c-warning"><span id="nc_credito">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="otros" data-nc-neto="credito" data-categoria="efectivo" data-metodos="CREDITO_EXTERNO" title="Ver detalle — neto de las NC que rebajan la cuenta por cobrar"><td class="rc-label rc-c-warning">CRÉD. EXTERNO</td><td class="rc-monto"><span id="credito_externo">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="otros" data-categoria="efectivo" data-metodos="GIFTCARD" title="Ver detalle — no es efectivo: el pasivo nació al emitir la tarjeta"><td class="rc-label rc-c-accent">GIFT CARD</td><td class="rc-monto"><span id="giftcard">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="otros" data-categoria="efectivo" data-metodos="CHEQUE" title="Ver detalle"><td class="rc-label">CHEQUE</td><td class="rc-monto"><span id="cheque">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="otros" data-categoria="efectivo" data-metodos="ORDEN_COMPRA" title="Ver detalle"><td class="rc-label">ORDEN COMPRA</td><td class="rc-monto"><span id="orden_compra">$0</span></td></tr>
                                     </tbody>
                                 </table>
                             </div>
                         </div>
                     </div>
 
-                    <!-- COL 2: Venta Internet + Documentos -->
+                    <!-- COL 3: Venta Internet + Documentos -->
                     <div class="col-lg-4">
                         <!-- Venta Internet -->
-                        <div class="card mb-2">
-                            <div class="card-header py-1 px-2 bg-warning d-flex align-items-center justify-content-between">
-                                <span class="rc-card-title" style="color:var(--nexo-gray-900);"><i class="ri-global-line me-1"></i>Venta Internet</span>
-                                <button type="button" class="btn btn-sm btn-light py-0 px-2" style="font-size:.8rem;min-height:2rem;" title="Ver detalle de venta internet" onclick="abrirDetalleMetodosPago('internet')"><i class="ri-search-eye-line"></i> Detalle</button>
+                        <div class="card rc-card rc-card-warning">
+                            <div class="card-header rc-card-head">
+                                <h6 class="rc-card-title"><i class="ri-global-line"></i>Venta Internet</h6>
+                                <button type="button" class="btn rc-btn-detalle" title="Ver detalle de venta internet" onclick="abrirDetalleMetodosPago('internet')"><i class="ri-search-eye-line me-1"></i>Detalle</button>
                             </div>
-                            <div class="card-body p-2">
-                                <table class="table table-sm table-borderless mb-0 resumen-table">
+                            <div class="card-body">
+                                <table class="resumen-table">
+                                    <colgroup><col><col class="rc-col-monto"></colgroup>
                                     <tbody>
-                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="WALMART,FALABELLA" title="Ver detalle"><td class="rc-label">WALMART</td><td class="rc-monto"><span id="falabella">$0</span></td></tr>
-                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="PARIS" title="Ver detalle"><td class="rc-label">PARIS</td><td class="rc-monto"><span id="paris">$0</span></td></tr>
-                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="RIPLEY" title="Ver detalle"><td class="rc-label">RIPLEY</td><td class="rc-monto"><span id="ripley">$0</span></td></tr>
+                                        <tr class="rc-grupo row-detalle" tabindex="0" data-grupo="marketplaces" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="WALMART,FALABELLA,PARIS,RIPLEY,MERCADO,SHOPIFY,KLAP" data-tipo-tarjeta-excluir="ECOMMERCE" title="Ver detalle — ventas de todos los marketplaces"><td class="rc-grupo-label">Marketplaces</td><td class="rc-grupo-monto"><span id="sub_marketplaces">$0</span></td></tr>
+                                        <!-- WALMART escribe en #falabella (id histórico: lo leen la térmica y QZ). -->
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="marketplaces" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="WALMART,FALABELLA" title="Ver detalle"><td class="rc-label">WALMART</td><td class="rc-monto"><span id="falabella">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="marketplaces" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="PARIS" title="Ver detalle"><td class="rc-label">PARIS</td><td class="rc-monto"><span id="paris">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="marketplaces" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="RIPLEY" title="Ver detalle"><td class="rc-label">RIPLEY</td><td class="rc-monto"><span id="ripley">$0</span></td></tr>
                                         <!-- MercadoLibre: marketplace propio, va ANTES que MP para que se lea
                                              como una plataforma más (Paris/Ripley/Walmart/ML). -->
-                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="MERCADO LIBRE,MERCADOLIBRE" title="Ver detalle — ventas de MercadoLibre"><td class="rc-label">MERCADO LIBRE</td><td class="rc-monto"><span id="mercadolibre">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="marketplaces" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="MERCADO LIBRE,MERCADOLIBRE" title="Ver detalle — ventas de MercadoLibre"><td class="rc-label">MERCADO LIBRE</td><td class="rc-monto"><span id="mercadolibre">$0</span></td></tr>
                                         <!-- MP marketplace. `data-tipo-tarjeta-excluir` es obligatorio: el filtro
                                              del drill-down es por substring, y sin él "MERCADO" pescaría también
                                              los pagos "Ecommerce Mercado Pago" de la fila de más abajo y los
                                              "Mercado Libre" de la fila de más arriba. -->
-                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="MERCADO,SHOPIFY" data-tipo-tarjeta-excluir="ECOMMERCE,MERCADO LIBRE,MERCADOLIBRE" title="Ver detalle — Mercado Pago de marketplace, no MercadoLibre ni el del ecommerce propio"><td class="rc-label">MERCADO PAGO <span class="rc-c-muted" style="font-size:.75rem;">(marketplace)</span></td><td class="rc-monto"><span id="mercadopago">$0</span></td></tr>
-                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="KLAP" title="Ver detalle"><td class="rc-label">KLAP</td><td class="rc-monto"><span id="klap">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="marketplaces" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="MERCADO,SHOPIFY" data-tipo-tarjeta-excluir="ECOMMERCE,MERCADO LIBRE,MERCADOLIBRE" title="Ver detalle — Mercado Pago de marketplace, no MercadoLibre ni el del ecommerce propio"><td class="rc-label">MERCADO PAGO <span class="rc-label-nota">(marketplace)</span></td><td class="rc-monto"><span id="mercadopago">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="marketplaces" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="KLAP" title="Ver detalle"><td class="rc-label">KLAP</td><td class="rc-monto"><span id="klap">$0</span></td></tr>
                                         <!-- Ecommerce propio (realsport.cl / calzadospaola.cl), desglosado por la
                                              pasarela con que pagó el cliente. Antes TODO esto se contaba como
-                                             "Mercado Pago" aunque el pedido se hubiera pagado con Webpay. -->
-                                        <tr class="rc-neto"><td class="rc-neto-label" colspan="2" style="padding-top:.5rem !important;"><i class="ri-store-2-line me-1"></i>Ecommerce propio</td></tr>
-                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="ECOMMERCE WEBPAY" title="Ver detalle — pedidos del ecommerce propio pagados con Webpay / Transbank"><td class="rc-sub-label">└ WEBPAY</td><td class="rc-sub-monto rc-c-primary"><span id="ecommerce_webpay">$0</span></td></tr>
-                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="ECOMMERCE MERCADO PAGO" title="Ver detalle — pedidos del ecommerce propio pagados con Mercado Pago"><td class="rc-sub-label">└ MERCADO PAGO</td><td class="rc-sub-monto rc-c-primary"><span id="ecommerce_mercadopago">$0</span></td></tr>
-                                        <tr class="row-detalle" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta-excluir="ECOMMERCE WEBPAY,ECOMMERCE MERCADO PAGO,PARIS,RIPLEY,WALMART,FALABELLA,KLAP,MERCADO,SHOPIFY" title="Ver detalle — venta internet que no cae en ninguna plataforma conocida: pedidos sin medio de pago informado y el histórico anterior al campo. Revísalos en Ecommerce → Pedidos (filtro “Sin definir”): si hay pedidos nuevos acá, la tienda no está mandando su medio de pago en la ingesta."><td class="rc-sub-label rc-c-warning">└ OTROS / S/DEF.</td><td class="rc-sub-monto rc-c-warning"><span id="ecommerce_otros">$0</span></td></tr>
-                                        <tr class="rc-neto"><td class="rc-neto-label">Total ecommerce</td><td class="rc-neto-monto"><span id="ecommerce_propio">$0</span></td></tr>
+                                             "Mercado Pago" aunque el pedido se hubiera pagado con Webpay. La
+                                             cabecera no lleva monto: el total va en la fila de cierre. -->
+                                        <tr class="rc-grupo" data-grupo="ecommerce"><td class="rc-grupo-label"><i class="ri-store-2-line me-1"></i>Ecommerce propio</td><td class="rc-grupo-monto"></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="ecommerce" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="ECOMMERCE WEBPAY" title="Ver detalle — pedidos del ecommerce propio pagados con Webpay / Transbank"><td class="rc-label">WEBPAY</td><td class="rc-monto"><span id="ecommerce_webpay">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="ecommerce" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta="ECOMMERCE MERCADO PAGO" title="Ver detalle — pedidos del ecommerce propio pagados con Mercado Pago"><td class="rc-label">MERCADO PAGO</td><td class="rc-monto"><span id="ecommerce_mercadopago">$0</span></td></tr>
+                                        <tr class="rc-item row-detalle" tabindex="0" data-grupo="ecommerce" data-categoria="internet" data-metodos="VENTA_INTERNET" data-tipo-tarjeta-excluir="ECOMMERCE WEBPAY,ECOMMERCE MERCADO PAGO,PARIS,RIPLEY,WALMART,FALABELLA,KLAP,MERCADO,SHOPIFY" title="Ver detalle — venta internet que no cae en ninguna plataforma conocida: pedidos sin medio de pago informado y el histórico anterior al campo. Revísalos en Ecommerce → Pedidos (filtro “Sin definir”): si hay pedidos nuevos acá, la tienda no está mandando su medio de pago en la ingesta."><td class="rc-label"><i class="ri-error-warning-line rc-c-warning me-1"></i>OTROS / S/DEF.</td><td class="rc-monto"><span id="ecommerce_otros">$0</span></td></tr>
+                                        <tr class="rc-item rc-total" data-grupo="ecommerce"><td class="rc-neto-label">Total ecommerce</td><td class="rc-neto-monto"><span id="ecommerce_propio">$0</span></td></tr>
+                                        <tr class="rc-vacio" style="display:none;"><td colspan="2">Sin venta internet en el día</td></tr>
                                     </tbody>
                                 </table>
                                 <!-- Aviso: hay plata de ecommerce sin medio de pago informado. Se
                                      esconde solo cuando el bucket "otros" queda en 0. -->
-                                <div id="avisoEcommerceSinMedio" class="alert alert-warning py-2 px-2 mb-0 mt-2" style="display:none;font-size:.8125rem;">
+                                <div id="avisoEcommerceSinMedio" class="alert alert-warning rc-aviso mb-0" style="display:none;">
                                     <i class="ri-error-warning-line me-1"></i><span id="avisoEcommerceSinMedioTexto"></span>
                                     <a href="/app/ecommerce/pedidos/?estado=&medio_pago=SIN_DEFINIR" target="_blank" class="alert-link ms-1">Ver pedidos sin medio →</a>
                                 </div>
                             </div>
                         </div>
-                        <!-- Documentos -->
-                        <div class="card">
-                            <div class="card-header py-1 px-2 bg-secondary">
-                                <span class="text-white rc-card-title"><i class="ri-file-text-line me-1"></i>Documentos <span class="opacity-75" style="font-size:.75rem;text-transform:none;">(referencia)</span></span>
+
+                        <!-- Documentos (referencia: el efecto de caja ya está en los medios) -->
+                        <div class="card rc-card rc-card-secondary">
+                            <div class="card-header rc-card-head">
+                                <h6 class="rc-card-title"><i class="ri-file-text-line"></i>Documentos <span class="rc-card-nota">(referencia)</span></h6>
                             </div>
-                            <div class="card-body p-2">
-                                <table class="table table-sm table-borderless mb-0 resumen-table">
+                            <div class="card-body">
+                                <table class="resumen-table rc-sin-grupos">
+                                    <colgroup><col><col class="rc-col-monto"></colgroup>
                                     <tbody>
-                                        <tr>
-                                            <td class="rc-label">BOLETA ELECT. <span class="rc-c-muted" style="font-size:.8rem;">(<span id="cantBoletaElectronica">0</span>)</span></td>
-                                            <td class="rc-monto"><span id="totalboletaelectronica">$0</span></td>
-                                        </tr>
-                                        <tr>
-                                            <td class="rc-label">BOLETA PAPEL <span class="rc-c-muted" style="font-size:.8rem;">(<span id="cantBoletaPapel">0</span>)</span></td>
-                                            <td class="rc-monto"><span id="totalboletapapel">$0</span></td>
-                                        </tr>
-                                        <tr>
-                                            <td class="rc-label">FACTURA <span class="rc-c-muted" style="font-size:.8rem;">(<span id="cantFactura">0</span>)</span></td>
-                                            <td class="rc-monto"><span id="totalfactura">$0</span></td>
-                                        </tr>
-                                        <tr>
-                                            <td class="rc-label">FACT. EXENTA <span class="rc-c-muted" style="font-size:.8rem;">(<span id="cantFacturaExenta">0</span>)</span></td>
-                                            <td class="rc-monto"><span id="totalfacturaexenta">$0</span></td>
-                                        </tr>
-                                        <tr><td class="rc-label">NOTAS CRÉDITO <span class="rc-c-muted" style="font-size:.8rem;">(<span id="cantNotasCredito">0</span>)</span></td><td class="rc-monto"><span id="totalnotascredito">$0</span></td></tr>
-                                        <tr><td class="rc-sub-label">└ NC Efect.</td><td class="rc-sub-monto rc-c-danger"><span id="totalncefectivo">$0</span></td></tr>
-                                        <tr><td class="rc-sub-label">└ NC Transf.</td><td class="rc-sub-monto rc-c-info"><span id="totalnctransferencia">$0</span></td></tr>
+                                        <tr class="rc-item" data-grupo="documentos"><td class="rc-label">BOLETA ELECT. <span class="rc-label-nota">(<span id="cantBoletaElectronica">0</span>)</span></td><td class="rc-monto"><span id="totalboletaelectronica">$0</span></td></tr>
+                                        <tr class="rc-item" data-grupo="documentos"><td class="rc-label">BOLETA PAPEL <span class="rc-label-nota">(<span id="cantBoletaPapel">0</span>)</span></td><td class="rc-monto"><span id="totalboletapapel">$0</span></td></tr>
+                                        <tr class="rc-item" data-grupo="documentos"><td class="rc-label">FACTURA <span class="rc-label-nota">(<span id="cantFactura">0</span>)</span></td><td class="rc-monto"><span id="totalfactura">$0</span></td></tr>
+                                        <tr class="rc-item" data-grupo="documentos"><td class="rc-label">FACT. EXENTA <span class="rc-label-nota">(<span id="cantFacturaExenta">0</span>)</span></td><td class="rc-monto"><span id="totalfacturaexenta">$0</span></td></tr>
+                                        <!-- NC: monto del DOCUMENTO; su efecto sobre la caja ya está aplicado
+                                             en los medios (bruto − NC). La antigua fila "NC TOTAL (documentos)"
+                                             de Efectivo y Otros repetía este mismo número (`#nota_credito` =
+                                             `total_notas_credito`): su span vive aquí, oculto, por compatibilidad. -->
+                                        <tr class="rc-item" data-grupo="documentos" title="Monto total de las notas de crédito del día. Es un DOCUMENTO: su efecto sobre la caja ya está aplicado en los medios de pago."><td class="rc-label">NOTAS CRÉDITO <span class="rc-label-nota">(<span id="cantNotasCredito">0</span>)</span><span id="nota_credito" hidden>$0</span></td><td class="rc-monto"><span id="totalnotascredito">$0</span></td></tr>
+                                        <tr class="rc-item" data-grupo="documentos"><td class="rc-sub-label">NC en efectivo</td><td class="rc-sub-monto rc-c-danger"><span id="totalncefectivo">$0</span></td></tr>
+                                        <tr class="rc-item" data-grupo="documentos"><td class="rc-sub-label">NC por transferencia</td><td class="rc-sub-monto rc-c-info"><span id="totalnctransferencia">$0</span></td></tr>
+                                        <tr class="rc-vacio" style="display:none;"><td colspan="2">Sin documentos en el día</td></tr>
                                     </tbody>
                                 </table>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- COL 3: Totales por módulo → Venta Total -->
-                    <div class="col-lg-4">
-                        <div class="card h-100" style="background:var(--nexo-gray-100);border:2px solid var(--nexo-primary);">
-                            <div class="card-header py-1 px-2 bg-primary">
-                                <span class="text-white rc-card-title"><i class="ri-pie-chart-line me-1"></i>Resumen por Módulo</span>
-                            </div>
-                            <div class="card-body p-3 d-flex flex-column gap-2">
-
-                                <!-- Suma Tarjetas -->
-                                <div class="resumen-total-item" style="border-left:3px solid var(--nexo-primary);">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <span class="rc-grupo-label">
-                                            <i class="ri-bank-card-line me-1" style="color:var(--nexo-primary);"></i>Tarjetas
-                                        </span>
-                                        <div class="rc-grupo-monto text-primary" id="sum_tarjetas">$0</div>
-                                    </div>
-                                    <div class="rc-grupo-detalle">VISA + DÉB + PRESTO + HITES + MP POS</div>
-                                </div>
-
-                                <!-- Suma Efectivo y Otros -->
-                                <div class="resumen-total-item" style="border-left:3px solid var(--nexo-success);">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <span class="rc-grupo-label">
-                                            <i class="ri-money-dollar-circle-line me-1" style="color:var(--nexo-success);"></i>Efectivo y Otros
-                                        </span>
-                                        <div class="rc-grupo-monto text-success" id="sum_efectivo">$0</div>
-                                    </div>
-                                    <div class="rc-grupo-detalle">EFE + TRANS + CONV + CRED + GIFT + CHEQUE + OC · neto de NC</div>
-                                </div>
-
-                                <!-- Suma Venta Internet -->
-                                <div class="resumen-total-item" style="border-left:3px solid var(--nexo-warning);">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <span class="rc-grupo-label">
-                                            <i class="ri-global-line me-1" style="color:var(--nexo-warning);"></i>Venta Internet
-                                        </span>
-                                        <div class="rc-grupo-monto" style="color:var(--nexo-warning);" id="sum_internet">$0</div>
-                                    </div>
-                                    <div class="rc-grupo-detalle">MARKETPLACES + ECOMMERCE PROPIO</div>
-                                </div>
-
-                                <hr class="my-1">
-
-                                <!-- VENTA TOTAL = suma de los 3 grupos de pago -->
-                                <div class="resumen-total-item" style="background:var(--nexo-primary);border-radius:var(--nexo-radius-md);padding:.9rem;text-align:center;">
-                                    <span class="text-white d-block rc-grupo-label" style="color:#fff !important;opacity:.85;">VENTA TOTAL</span>
-                                    <div class="mb-0 text-white rc-venta-total" id="ventatotal">$0</div>
-                                    <span class="text-white d-block" style="font-size:.75rem;opacity:.75;">Tarjetas + Efectivo/Otros + Internet</span>
-                                </div>
-
-                                <!-- TOTAL MERCADO PAGO consolidado. NO entra al VENTA TOTAL (esa
-                                     plata ya está contada en Tarjetas y en Venta Internet): es una
-                                     lectura de gestión — cuánto liquida MP el día, sumando la
-                                     máquina Point/QR del mesón, el marketplace y el ecommerce
-                                     propio, que hasta ahora vivían en tres filas sin relación. -->
-                                <div class="resumen-total-item" id="bloqueMpConsolidado" style="border-left:3px solid var(--nexo-primary);background:var(--nexo-primary-light);">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <span class="rc-grupo-label rc-c-primary">
-                                            <i class="ri-smartphone-line me-1"></i>Total Mercado Pago
-                                        </span>
-                                        <div class="rc-grupo-monto rc-c-primary" id="mp_consolidado">$0</div>
-                                    </div>
-                                    <div class="rc-grupo-detalle" id="mp_consolidado_detalle">POS + marketplace + ecommerce</div>
-                                    <div class="rc-grupo-detalle" style="font-style:italic;">Lectura de gestión — ya incluido arriba, no se suma aparte.</div>
-                                </div>
-
-                                <!-- Control de consistencia: el VENTA TOTAL de arriba se arma sumando
-                                     MEDIOS DE PAGO; el que se guarda en el arqueo se arma sumando
-                                     DOCUMENTOS (tickets + boletas + facturas - NC). Si un ticket queda
-                                     PAGADO sin detalle de pago, el documento suma y ningún medio lo
-                                     recibe: esa plata desaparecía en silencio. Aquí se hace visible. -->
-                                <div id="alertaDescuadreMedios" class="alert alert-warning py-2 px-2 mb-0" style="display:none;font-size:.8125rem;">
-                                    <div class="fw-bold mb-1"><i class="ri-error-warning-line me-1"></i>Venta sin medio de pago asignado</div>
-                                    <div class="d-flex justify-content-between"><span>Total por documentos</span><span class="font-monospace" id="vt_documentos">$0</span></div>
-                                    <div class="d-flex justify-content-between"><span>Total por medios de pago</span><span class="font-monospace" id="vt_medios">$0</span></div>
-                                    <div class="d-flex justify-content-between fw-bold border-top mt-1 pt-1"><span>Sin asignar</span><span class="font-monospace" id="vt_gap">$0</span></div>
-                                    <div class="rc-grupo-detalle mt-1">Revise en "Ver transacciones del día" los tickets pagados sin forma de pago registrada.</div>
-                                </div>
-
-                                <!-- IDs legacy ocultos para compatibilidad JS existente -->
-                                <span id="totalefectivo" style="display:none;">$0</span>
-                                <span id="totaltbk" style="display:none;">$0</span>
-                                <span id="totalcomercial" style="display:none;">$0</span>
-                                <span id="totalinternet" style="display:none;">$0</span>
-
                             </div>
                         </div>
                     </div>
 
                 </div><!-- /contenidoCuadratura -->
 
-                <div id="estadoCarga" style="display:none;" class="text-center py-3">
-                    <div class="spinner-border text-primary mb-2" role="status"></div>
-                    <p class="text-muted" style="font-size:1rem;">Generando cuadratura...</p>
-                </div>
+                <!-- IDs legacy ocultos para compatibilidad JS existente -->
+                <span id="totalefectivo" style="display:none;">$0</span>
+                <span id="totaltbk" style="display:none;">$0</span>
+                <span id="totalcomercial" style="display:none;">$0</span>
+                <span id="totalinternet" style="display:none;">$0</span>
             </div>
             <div class="modal-footer py-2">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="min-height:2.75rem;"><i class="ri-close-line me-1"></i>Cerrar</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="ri-close-line me-1"></i>Cerrar</button>
             </div>
         </div>
     </div>
@@ -2151,6 +2334,9 @@
 {% endif %}
 
 
+{# Alerta Mercado Pago de hoy (cuadratura_caja → resumen_alerta_caja). null si falló. #}
+{{ alertas_mp_hoy|json_script:"alertasMpHoyData" }}
+
 <!-- =====================================================================
      JAVASCRIPT
      ===================================================================== -->
@@ -2199,6 +2385,7 @@ function initArqueoApp() {
         cargarArqueos();
         verificarVentasPostCierre();
         verificarArqueosPendientesAnteriores();
+        mostrarAlertaMpHoy();
         // El panel "Depósitos declarados pendientes de confirmar" nace oculto y
         // sólo se mostraba desde dentro de `cargarDepositosPendientes()`, cuyo
         // único disparador era un botón de refresco que vive DENTRO del propio
@@ -3828,11 +4015,179 @@ function limpiarCamposCuadratura() {
      'ecommerce_webpay','ecommerce_mercadopago','ecommerce_otros','ecommerce_propio','mp_consolidado',
      'totalboletaelectronica','totalboletapapel','totalfactura','totalfacturaexenta','totalnotascredito','totalncefectivo','totalnctransferencia',
      'ventatotal','totalefectivo','totaltbk','totalcomercial','totalinternet',
-     'sum_tarjetas','sum_efectivo','sum_internet'].forEach(c => $(`#${c}`).text('$0'));
+     'sum_tarjetas','sum_efectivo','sum_internet',
+     'sub_transbank','sub_otros_medios','sub_marketplaces'].forEach(c => $(`#${c}`).text('$0'));
     ['cantBoletaElectronica','cantBoletaPapel','cantFactura','cantFacturaExenta','cantNotasCredito'].forEach(c => $(`#${c}`).text('0'));
     $('#alertaDescuadreMedios').hide();
     $('#avisoEcommerceSinMedio').hide();
+    $('#alertaMpResumen').empty().hide();
+    $('#bloqueMpConsolidado').addClass('rc-kpi-vacio');
     $('.rc-nc-row').hide();
+    $('#modalResumenCaja tr[data-nc-neto]').removeClass('rc-con-nc');
+    aplicarVisibilidadResumen({ cargando: true });
+}
+
+// ---------- Filas en $0 (Resumen de Caja) ----------
+// Por defecto se esconden los medios sin movimiento, igual que el ticket
+// impreso (que descarta las filas en '$0'). El switch "Mostrar medios en $0"
+// las vuelve a mostrar atenuadas; la preferencia queda en este navegador.
+const RC_CEROS_STORAGE_KEY = 'nexo.resumenCaja.mostrarCeros';
+let _rcMostrarCeros = (function () {
+    try { return window.localStorage.getItem(RC_CEROS_STORAGE_KEY) === '1'; }
+    catch (e) { return false; }
+})();
+
+function toggleMostrarCerosResumen(mostrar) {
+    _rcMostrarCeros = !!mostrar;
+    try { window.localStorage.setItem(RC_CEROS_STORAGE_KEY, _rcMostrarCeros ? '1' : '0'); } catch (e) {}
+    aplicarVisibilidadResumen();
+}
+
+/** '$0', '-$0', '' → true. Lee el texto ya formateado por fmCLP. */
+function _rcEsCero(texto) {
+    const n = parseInt(String(texto || '').replace(/[^\d-]/g, ''), 10);
+    return !n;
+}
+
+/** Fila visible por estilo inline (las .rc-nc-row se prenden con .toggle()). */
+function _rcVisibleInline(el) {
+    return el.style.display !== 'none';
+}
+
+/**
+ * Oculta (clase .rc-cero) las filas de medio en $0 y las cabeceras de grupo
+ * cuyo grupo quedó entero en $0; marca la primera/última fila visible de cada
+ * tabla (bordes) y muestra "Sin movimientos" en una tabla que quedó vacía.
+ * Se llama UNA vez al final de `cargarDatosCuadratura` y desde el switch.
+ * Con `cargando` no muestra el texto de tabla vacía (aún no llegan datos).
+ */
+function aplicarVisibilidadResumen(opciones) {
+    const cargando = !!(opciones && opciones.cargando);
+    const $modal = $('#modalResumenCaja');
+    if (!$modal.length) return;
+    $modal.toggleClass('rc-mostrar-ceros', _rcMostrarCeros);
+    $('#toggleMostrarCeros').prop('checked', _rcMostrarCeros);
+
+    const ncVisible = (grupoNc) => $modal
+        .find(`tr.rc-nc-row[data-nc-for="${grupoNc}"]`)
+        .filter(function () { return _rcVisibleInline(this); }).length > 0;
+
+    // 1) Medios en $0. Un neto con su bruto/NC a la vista no se esconde:
+    //    "bruto − NC = $0" tiene que leerse completo.
+    $modal.find('tr.rc-item').each(function () {
+        const cero = _rcEsCero($(this).children('td').last().text());
+        const grupoNc = this.getAttribute('data-nc-neto');
+        $(this).toggleClass('rc-cero', cero && !(grupoNc && ncVisible(grupoNc)));
+    });
+
+    // 2) Cabecera de grupo: se esconde si su subtotal y todas sus filas están en $0.
+    $modal.find('tr.rc-grupo').each(function () {
+        const grupo = this.getAttribute('data-grupo');
+        const $filas = $modal.find(`tr.rc-item[data-grupo="${grupo}"]`);
+        const ncDelGrupo = $modal.find(`tr.rc-nc-row[data-grupo="${grupo}"]`)
+            .filter(function () { return _rcVisibleInline(this); }).length;
+        const vacio = !ncDelGrupo
+            && _rcEsCero($(this).children('td').last().text())
+            && $filas.not('.rc-cero').length === 0;
+        $(this).toggleClass('rc-cero', vacio);
+    });
+
+    // 3) Primera / última fila visible (bordes) y estado vacío por tabla.
+    $modal.find('table.resumen-table > tbody').each(function () {
+        const $trs = $(this).children('tr').not('.rc-vacio');
+        $trs.removeClass('rc-primera rc-ultima');
+        const $visibles = $trs.filter(function () {
+            if (!_rcVisibleInline(this)) return false;
+            return _rcMostrarCeros || !$(this).hasClass('rc-cero');
+        });
+        $visibles.first().addClass('rc-primera');
+        $visibles.last().addClass('rc-ultima');
+        $(this).children('tr.rc-vacio').toggle(!cargando && $visibles.length === 0);
+    });
+}
+
+// ---------- Alerta Mercado Pago (cobros sin venta / «MP manual») ----------
+// Viene de `asociacion_mp_service.resumen_alerta_caja`: en la página (hoy,
+// calculado por la vista) y en el Resumen de Caja (fecha consultada, desde
+// `generar_cuadratura_caja`). Cobros MP sin venta = plata que entró y no está
+// en ninguna venta → aviso fuerte. Pagos «MP manual» sin transacción local =
+// pueden existir en MP (cobro de contingencia) pero nadie lo verificó → aviso
+// suave.
+const ALERTA_MP_CFG = {
+    sucursalId: {{ sucursal_actual.id|default:0 }},
+    fechaHoy: '{{ fecha_hoy_iso|default:""|escapejs }}',
+    puedeVerConciliacion: {{ puede_ver_conciliacion_mp|yesno:"true,false" }},
+    puedeAsociar: {{ puede_asociar_mp|yesno:"true,false" }},
+};
+
+function _pluralAlertaMp(n, singular, plural) { return n === 1 ? singular : plural; }
+
+/**
+ * Pinta la alerta MP en `selector`. Sin alerta (o sin datos) la esconde.
+ * `opciones.pagina`: versión de la tarjeta de estado del día (dice "hoy").
+ */
+function renderAlertaMp(selector, alertas, fecha, opciones) {
+    const $c = $(selector);
+    if (!$c.length) return;
+    if (!alertas || !alertas.hay_alerta) { $c.empty().hide(); return; }
+    const pagina = !!(opciones && opciones.pagina);
+
+    const nCobros = Number(alertas.cobros_sin_venta) || 0;
+    const nDirectos = Number(alertas.cobros_directos) || 0;
+    const nManual = Number(alertas.manuales_sin_respaldo) || 0;
+    const partes = [];
+    if (nCobros) {
+        let txt = `<strong>${nCobros} ${_pluralAlertaMp(nCobros, 'cobro', 'cobros')} MP</strong> por `
+            + `<strong>${fmCLP(alertas.cobros_sin_venta_monto)}</strong> sin venta asociada`;
+        if (nDirectos) txt += ` (${nDirectos} desde «Tu caja»)`;
+        partes.push(txt);
+    }
+    if (nManual) {
+        partes.push(`<strong>${nManual} ${_pluralAlertaMp(nManual, 'pago', 'pagos')} «MP manual»</strong> por `
+            + `<strong>${fmCLP(alertas.manuales_sin_respaldo_monto)}</strong> sin verificar contra Mercado Pago`);
+    }
+    // Cobro sin venta = plata sin venta: warning. Solo manuales: info.
+    const fuerte = nCobros > 0;
+    const claseAlerta = fuerte ? 'alert-warning' : 'alert-info';
+    const icono = fuerte ? 'ri-alarm-warning-line' : 'ri-information-line';
+    const titulo = pagina ? 'Mercado Pago · hoy' : 'Mercado Pago';
+
+    const fechaOk = /^\d{4}-\d{2}-\d{2}$/.test(fecha || '');
+    let accion = '';
+    if (ALERTA_MP_CFG.puedeVerConciliacion && fechaOk) {
+        const qs = new URLSearchParams({
+            desde: fecha, hasta: fecha,
+            sucursal_id: String(ALERTA_MP_CFG.sucursalId || ''),
+            tab: 'asociar',
+        });
+        accion = `<a class="btn btn-sm ${fuerte ? 'btn-warning' : 'btn-outline-primary'} rc-alerta-mp-btn"
+                     href="/app/ventas/dineros-mercadopago/?${qs.toString()}" target="_blank" rel="noopener">
+                     <i class="ri-links-line me-1"></i>Revisar en Conciliación MP</a>`;
+    }
+    const ayuda = ALERTA_MP_CFG.puedeVerConciliacion
+        ? (ALERTA_MP_CFG.puedeAsociar ? '' : 'La asociación la hace quien tenga el permiso «Asociar pagos Mercado Pago».')
+        : 'Avise a un supervisor para revisarlo en Conciliación Mercado Pago.';
+
+    $c.html(`
+        <div class="alert ${claseAlerta} rc-alerta-mp ${pagina ? 'mt-3 mb-0' : 'mb-2'}" role="status">
+            <i class="${icono}"></i>
+            <div class="rc-alerta-mp-cuerpo">
+                <div class="rc-alerta-mp-titulo">${titulo}</div>
+                <div class="rc-alerta-mp-linea">${partes.join(' · ')}</div>
+                ${ayuda ? `<div class="rc-alerta-mp-ayuda">${ayuda}</div>` : ''}
+            </div>
+            ${accion}
+        </div>`).show();
+}
+
+/** Alerta de la página: lo que la vista calculó para hoy (json_script). */
+function mostrarAlertaMpHoy() {
+    let datos = null;
+    try {
+        const el = document.getElementById('alertasMpHoyData');
+        datos = el ? JSON.parse(el.textContent) : null;
+    } catch (e) { datos = null; }
+    renderAlertaMp('#alertaMpCaja', datos, ALERTA_MP_CFG.fechaHoy, { pagina: true });
 }
 
 function buscarCuadratura() {
@@ -3848,12 +4203,12 @@ function generarCuadratura() {
     $('#estadoCarga').show(); $('#spinnerBuscar').show();
     const fd = new FormData(); fd.append('fecha', f);
     $.ajax({ url:'/app/api/cuadratura/generar/', method:'POST', headers:{'X-CSRFToken':getCookie('csrftoken')}, data:fd, processData:false, contentType:false,
-        success:function(r){ $('#estadoCarga').hide(); $('#spinnerBuscar').hide(); if(r.success){cargarDatosCuadratura(r.cuadratura);}else mostrarError('Error: '+r.error); },
+        success:function(r){ $('#estadoCarga').hide(); $('#spinnerBuscar').hide(); if(r.success){cargarDatosCuadratura(r.cuadratura, f);}else mostrarError('Error: '+r.error); },
         error:function(xhr){ $('#estadoCarga').hide(); $('#spinnerBuscar').hide(); mostrarError('Error: '+xhr.responseText); }
     });
 }
 
-function cargarDatosCuadratura(c) {
+function cargarDatosCuadratura(c, fechaConsultada) {
     // --- Campos individuales ---
     $('#visa').text(fmCLP(c.total_visa_mc_amex||0)); $('#debito').text(fmCLP(c.total_tarjeta_debito||0));
     $('#presto').text(fmCLP(c.total_presto||0)); $('#hites').text(fmCLP(c.total_hites||0));
@@ -3885,31 +4240,30 @@ function cargarDatosCuadratura(c) {
             $('#' + idNc).text(nc ? '-' + fmCLP(nc) : '$0');
             if (idBruto) $('#' + idBruto).text(fmCLP(claveBruto ? (Number(c[claveBruto]) || 0) : 0));
             $(`.rc-nc-row[data-nc-for="${grupo}"]`).toggle(nc !== 0);
+            // La raya de "= neto" solo cuando arriba hay bruto − NC que leer.
+            $(`#modalResumenCaja tr[data-nc-neto="${grupo}"]`).toggleClass('rc-con-nc', nc !== 0);
         });
     $('#convenio').text(fmCLP(c.total_convenio||0));
     $('#credito_trabajador').text(fmCLP(c.total_credito_trabajador||0)); $('#credito_externo').text(fmCLP(c.total_credito_externo||0));
     $('#giftcard').text(fmCLP(c.total_giftcard||0));
     $('#mercadopago_pos').text(fmCLP(c.total_mercadopago_pos||0));
-    // Desglose MP presencial (débito / crédito / QR-otros). Las filas se
-    // atenúan cuando el bucket está en 0 para no ensuciar el resumen.
+    // Desglose MP presencial (débito / crédito / QR-otros). Las filas en 0 las
+    // esconde `aplicarVisibilidadResumen` al final (o las atenúa con el switch).
     [['debito','mercadopago_pos_debito'],['credito','mercadopago_pos_credito'],['otros','mercadopago_pos_otros']]
         .forEach(([k, id]) => {
-            const v = Number(c['total_mercadopago_pos_' + k]) || 0;
-            $('#' + id).text(fmCLP(v)).closest('tr').css('opacity', v ? '' : '.55');
+            $('#' + id).text(fmCLP(Number(c['total_mercadopago_pos_' + k]) || 0));
         });
     $('#cheque').text(fmCLP(c.total_cheque||0)); $('#orden_compra').text(fmCLP(c.total_orden_compra||0));
     $('#falabella').text(fmCLP(c.total_falabella||0)); $('#paris').text(fmCLP(c.total_paris||0));
     $('#ripley').text(fmCLP(c.total_ripley||0)); $('#mercadopago').text(fmCLP(c.total_mercadopago||0));
     $('#mercadolibre').text(fmCLP(c.total_mercadolibre||0));
     $('#klap').text(fmCLP(c.total_klap||0));
-    // Ecommerce propio desglosado por pasarela. Las filas en 0 se atenúan (mismo
-    // criterio que el desglose MP presencial) para que el ojo caiga en la que
-    // tiene plata.
+    // Ecommerce propio desglosado por pasarela (mismo criterio de filas en 0
+    // que el desglose MP presencial: las resuelve `aplicarVisibilidadResumen`).
     [['ecommerce_webpay','total_ecommerce_webpay'],
      ['ecommerce_mercadopago','total_ecommerce_mercadopago'],
      ['ecommerce_otros','total_ecommerce_otros']].forEach(([id, clave]) => {
-        const v = Number(c[clave]) || 0;
-        $('#' + id).text(fmCLP(v)).closest('tr').css('opacity', v ? '' : '.55');
+        $('#' + id).text(fmCLP(Number(c[clave]) || 0));
     });
     const ecommercePropio = Number(c.total_ecommerce_propio) || 0;
     $('#ecommerce_propio').text(fmCLP(ecommercePropio));
@@ -3974,6 +4328,14 @@ function cargarDatosCuadratura(c) {
     $('#sum_internet').text(fmCLP(sumInternet));
     $('#ventatotal').text(fmCLP(sumTotal));
 
+    // Subtotales de las cabeceras de grupo (solo pantalla; la térmica no los usa).
+    $('#sub_transbank').text(fmCLP(
+        _n(c.total_visa_mc_amex) + _n(c.total_tarjeta_debito) + _n(c.total_presto) + _n(c.total_hites)));
+    $('#sub_otros_medios').text(fmCLP(sumEfectivo - _n(c.total_efectivo)));
+    $('#sub_marketplaces').text(fmCLP(
+        _n(c.total_falabella) + _n(c.total_paris) + _n(c.total_ripley)
+        + _n(c.total_mercadolibre) + _n(c.total_mercadopago) + _n(c.total_klap)));
+
     // TOTAL MERCADO PAGO consolidado: la máquina del mesón + el marketplace +
     // el ecommerce propio. Es lectura de gestión (no suma al VENTA TOTAL); el
     // subtítulo muestra de qué está hecho para que nadie lo confunda con un
@@ -3984,9 +4346,14 @@ function cargarDatosCuadratura(c) {
     const mpEcom   = _n(c.total_ecommerce_mercadopago);
     const mpTotal  = _n(c.total_mercadopago_consolidado) || (mpPos + mpMkt + mpMeli + mpEcom);
     $('#mp_consolidado').text(fmCLP(mpTotal));
-    $('#mp_consolidado_detalle').text(
-        `POS ${fmCLP(mpPos)} + marketplace ${fmCLP(mpMkt)} + Mercado Libre ${fmCLP(mpMeli)} + ecommerce ${fmCLP(mpEcom)}`);
-    $('#bloqueMpConsolidado').toggle(mpTotal !== 0);
+    // Solo las partes con plata: en el KPI compacto (y en el papel, que imprime
+    // este mismo texto) "+ marketplace $0 + Mercado Libre $0" era ruido.
+    const partesMp = [['POS', mpPos], ['marketplace', mpMkt], ['Mercado Libre', mpMeli], ['ecommerce', mpEcom]]
+        .filter(([, v]) => v !== 0)
+        .map(([etq, v]) => `${etq} ${fmCLP(v)}`);
+    $('#mp_consolidado_detalle').text(partesMp.length ? partesMp.join(' + ') : 'Sin cobros Mercado Pago');
+    // En la franja superior el KPI no se esconde (descuadraría la grilla): se atenúa.
+    $('#bloqueMpConsolidado').toggleClass('rc-kpi-vacio', mpTotal === 0);
 
     // Control de consistencia documentos vs medios de pago.
     // `c.venta_total` = tickets + boletas + facturas + facturas exentas - NC
@@ -4010,6 +4377,18 @@ function cargarDatosCuadratura(c) {
     $('#totaltbk').text(fmCLP(sumTarjetas));
     $('#totalcomercial').text(fmCLP(sumEfectivo));
     $('#totalinternet').text(fmCLP(sumInternet));
+
+    // Alerta Mercado Pago de la fecha consultada. Si el backend no la mandó
+    // (falló el cálculo) se esconde en el modal y la de la página no se toca.
+    const fechaAlerta = fechaConsultada || $('#fechaCuadratura').val();
+    renderAlertaMp('#alertaMpResumen', c.alertas_mp, fechaAlerta);
+    if (c.alertas_mp && fechaAlerta && fechaAlerta === ALERTA_MP_CFG.fechaHoy) {
+        // Mismo día que la tarjeta "Estado de Hoy": se refresca (p. ej. tras asociar).
+        renderAlertaMp('#alertaMpCaja', c.alertas_mp, fechaAlerta, { pagina: true });
+    }
+
+    // Filas en $0, cabeceras de grupo vacías y bordes: siempre al final.
+    aplicarVisibilidadResumen();
 }
 
 function exportarCuadraturaExcel() {
@@ -4233,11 +4612,10 @@ const PERMISOS_RESUMEN = {
     puede_editar_numero: {% if puede_editar_numero_dte %}true{% else %}false{% endif %},
     puede_editar_pago: {% if puede_editar_pago_dte %}true{% else %}false{% endif %},
     puede_editar_algun_dte: {% if puede_editar_algun_dte %}true{% else %}false{% endif %},
-    // Eliminar un ítem (boleta/factura/NC) desde este modal está
-    // restringido a administrador, igual que en Gestión de Documentos
-    // (`eliminar_documento_venta`) — no hay permiso granular por tipo
-    // para NOTA DE CREDITO.
-    puede_eliminar: {% if es_administrador %}true{% else %}false{% endif %},
+    // Eliminar un ítem (boleta/factura/NC) desde este modal usa el mismo
+    // permiso fino que Gestión de Documentos (`dte_eliminar_documento`,
+    // puede_eliminar), no el rol. El backend lo vuelve a validar.
+    puede_eliminar: {{ puede_eliminar_documento|yesno:"true,false" }},
 };
 
 // Cache del último batch de items cargados. Se usa para filtrar en
@@ -4533,7 +4911,7 @@ function _filaDetalleHTML(it, idx) {
         acciones.push(`
             <button type="button" class="btn btn-outline-danger btn-editar-fecha"
                     onclick="eliminarItemCuadratura(${it.dte.id}, '${it.dte.tipo}', ${it.dte.folio}, this)"
-                    title="Eliminar este documento (solo administrador)">
+                    title="Eliminar este documento">
                 <i class="ri-delete-bin-line"></i> Eliminar
             </button>
         `);
@@ -4544,7 +4922,7 @@ function _filaDetalleHTML(it, idx) {
     } else if (!it.dte) {
         accionesCell = '<span class="text-muted" style="font-size:.68rem;" title="Sin DTE asociado: no hay fecha de emisión que editar">Sin DTE</span>';
     } else if (it.es_nota_credito) {
-        accionesCell = '<span class="text-muted" style="font-size:.68rem;" title="Editar fecha de cuadratura y eliminar NC están restringidos a administrador">Sin permiso</span>';
+        accionesCell = '<span class="text-muted" style="font-size:.68rem;" title="Editar la fecha de cuadratura o eliminar una NC requiere permiso (Editar pagos / Eliminar documento)">Sin permiso</span>';
     } else if (!PERMISOS_RESUMEN.puede_editar_algun_dte) {
         accionesCell = '<span class="text-muted" style="font-size:.68rem;" title="Sin permiso de edición de DTEs">Sin permiso</span>';
     } else {
@@ -4864,13 +5242,13 @@ async function confirmarEdicionFechaPagoNc(dteId, fechaAnterior, btnEl) {
 /**
  * Elimina (soft delete) un documento desde el modal de detalle de la
  * cuadratura. Reusa el mismo endpoint que Gestión de Documentos
- * (`eliminar_documento_venta`), restringido a administrador. Para una
+ * (`eliminar_documento_venta`), con permiso `dte_eliminar_documento`. Para una
  * NC, el backend NO devuelve/toca stock (ya lo movió al emitirse) — solo
  * la marca como descartada y la saca de la cuadratura.
  */
 async function eliminarItemCuadratura(dteId, tipoDte, folio, btnEl) {
     if (!PERMISOS_RESUMEN.puede_eliminar) {
-        mostrarError('Solo administradores pueden eliminar documentos');
+        mostrarError('No tiene permiso para eliminar documentos');
         return;
     }
     const esNC = (tipoDte || '').toUpperCase().trim() === 'NOTA DE CREDITO';
@@ -4981,6 +5359,13 @@ async function sincronizarFechaTicketDte(dteId, ticketId, fechaDte, fechaTicket,
 waitForJQuery(function() {
     $(document).on('click', '#modalResumenCaja .row-detalle', function() {
         abrirDetalleDesdeFila(this);
+    });
+    // Las filas clicables llevan tabindex="0": Enter / Espacio abren el detalle.
+    $(document).on('keydown', '#modalResumenCaja .row-detalle', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            abrirDetalleDesdeFila(this);
+        }
     });
 });
 

@@ -21,7 +21,7 @@ import logging
 from datetime import datetime, timedelta
 
 from .models import Usuario, LogAcceso, SesionActiva, TokenResetPassword
-from app.models import Sucursal, EmpresaUser, Empresa
+from app.models import Sucursal, EmpresaUser, Empresa, ROL_MAESTRO, es_maestro, es_rol_administrador
 import io
 
 logger = logging.getLogger('users')
@@ -32,6 +32,49 @@ try:
     PILLOW_AVAILABLE = True
 except ImportError:
     PILLOW_AVAILABLE = False
+
+# ========== JERARQUÍA DE ROLES ==========
+# El Maestro (dueño del sistema) está por encima del Administrador. Un
+# Administrador sigue gestionando usuarios, pero NO puede crear Maestros ni
+# modificar a uno (editar, resetear clave, desactivar, cambiar rol o
+# sucursales): si pudiera, se saltaría cualquier bloqueo que el Maestro le
+# ponga (p. ej. Nota de Crédito o Conciliación Mercado Pago).
+
+ROLES_VALIDOS = dict(Usuario.ROLES)
+
+
+def _motivo_rol_no_asignable(actor, rol):
+    """None si `actor` puede asignar `rol` a un usuario."""
+    if rol not in ROLES_VALIDOS:
+        return f'Rol inválido: {rol}. Roles permitidos: {", ".join(ROLES_VALIDOS)}'
+    if rol == ROL_MAESTRO and not es_maestro(actor):
+        return 'Solo un Maestro puede asignar el rol Maestro.'
+    return None
+
+
+def _motivo_usuario_protegido(actor, usuario):
+    """None si `actor` puede modificar a `usuario`."""
+    if usuario.rol == ROL_MAESTRO and not es_maestro(actor):
+        return 'Solo un Maestro puede modificar a un usuario Maestro.'
+    return None
+
+
+def _deja_sin_maestro(usuario, nuevo_rol=None, nuevo_activo=None):
+    """True si el cambio deja al sistema sin ningún Maestro activo."""
+    if usuario.rol != ROL_MAESTRO:
+        return False
+    sigue_maestro = (nuevo_rol or usuario.rol) == ROL_MAESTRO
+    sigue_activo = usuario.es_activo if nuevo_activo is None else nuevo_activo
+    if sigue_maestro and sigue_activo:
+        return False
+    return not Usuario.objects.filter(
+        rol=ROL_MAESTRO, es_activo=True, is_active=True
+    ).exclude(id=usuario.id).exists()
+
+
+def _respuesta_prohibida(motivo):
+    return JsonResponse({'success': False, 'error': motivo}, status=403)
+
 
 # ========== FUNCIONES DE VALIDACIÓN ==========
 
@@ -185,7 +228,7 @@ def gestion_usuarios(request):
     RESTRINGIDO: Solo usuarios con rol 'administrador' o superusuarios pueden acceder
     """
     # Verificar si es administrador o superusuario
-    es_admin = getattr(request.user, 'rol', None) == 'administrador'
+    es_admin = es_rol_administrador(request.user)
     
     if not es_admin:
         messages.error(request, "Acceso restringido. Solo los administradores pueden gestionar usuarios.")
@@ -201,7 +244,7 @@ def listar_usuarios(request):
     RESTRINGIDO: Solo administradores
     """
     # Verificar si es administrador
-    es_admin = getattr(request.user, 'rol', None) == 'administrador'
+    es_admin = es_rol_administrador(request.user)
     if not es_admin:
         return JsonResponse({'error': 'No tienes permisos para acceder a esta información'}, status=403)
     
@@ -380,7 +423,7 @@ def crear_usuario(request):
     """
     try:
         # Verificar si es administrador
-        es_admin = getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = es_rol_administrador(request.user)
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -388,7 +431,11 @@ def crear_usuario(request):
             }, status=403)
         
         data = json.loads(request.body)
-        
+
+        motivo = _motivo_rol_no_asignable(request.user, data.get('rol') or 'vendedor')
+        if motivo:
+            return _respuesta_prohibida(motivo)
+
         # ✅ GENERAR USERNAME AUTOMÁTICAMENTE DESDE EL EMAIL
         email = data.get('email', '').strip()
         if email and not data.get('username'):
@@ -430,7 +477,7 @@ def crear_usuario(request):
             empresa=data.get('empresa', '').strip() or None,
             cargo=data.get('cargo', '').strip() or None,
             departamento=data.get('departamento', '').strip() or None,
-            rol=data.get('rol', 'vendedor'),
+            rol=data.get('rol') or 'vendedor',
             fecha_nacimiento=data.get('fecha_nacimiento') or None,
             es_activo=activo_inicial,
             is_active=activo_inicial,
@@ -546,7 +593,7 @@ def editar_usuario(request, usuario_id):
     """
     try:
         # Verificar si es administrador
-        es_admin = getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = es_rol_administrador(request.user)
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -555,7 +602,16 @@ def editar_usuario(request, usuario_id):
         
         usuario = get_object_or_404(Usuario, id=usuario_id)
         data = json.loads(request.body)
-        
+
+        motivo = _motivo_usuario_protegido(request.user, usuario)
+        nuevo_rol = data.get('rol') or usuario.rol
+        if not motivo and nuevo_rol != usuario.rol:
+            motivo = _motivo_rol_no_asignable(request.user, nuevo_rol)
+            if not motivo and _deja_sin_maestro(usuario, nuevo_rol=nuevo_rol):
+                motivo = 'Es el único Maestro activo: asigna el rol Maestro a otra cuenta antes de cambiarle el rol.'
+        if motivo:
+            return _respuesta_prohibida(motivo)
+
         # Validar campos (excluyendo username y email si no cambiaron)
         data_validacion = data.copy()
         if data.get('username') == usuario.username:
@@ -600,11 +656,14 @@ def editar_usuario(request, usuario_id):
         usuario.empresa = data.get('empresa', usuario.empresa).strip() if data.get('empresa') else usuario.empresa
         usuario.cargo = data.get('cargo', usuario.cargo).strip() if data.get('cargo') else usuario.cargo
         usuario.departamento = data.get('departamento', usuario.departamento).strip() if data.get('departamento') else usuario.departamento
-        usuario.rol = data.get('rol', usuario.rol)
+        if nuevo_rol != usuario.rol:
+            logger.info("Rol de usuario %s (id=%s): %s -> %s por %s",
+                        usuario.username, usuario.id, usuario.rol, nuevo_rol, request.user.username)
+        usuario.rol = nuevo_rol
         usuario.requiere_2fa = data.get('requiere_2fa', usuario.requiere_2fa)
         
         # Actualizar permisos solo si el usuario actual es administrador
-        if getattr(request.user, 'rol', None) == 'administrador':
+        if es_rol_administrador(request.user):
             usuario.puede_crear_usuarios = data.get('puede_crear_usuarios', usuario.puede_crear_usuarios)
             usuario.puede_editar_usuarios = data.get('puede_editar_usuarios', usuario.puede_editar_usuarios)
             usuario.puede_eliminar_usuarios = data.get('puede_eliminar_usuarios', usuario.puede_eliminar_usuarios)
@@ -643,7 +702,7 @@ def toggle_estado_usuario(request, usuario_id):
     """
     try:
         # Verificar si es administrador
-        es_admin = getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = es_rol_administrador(request.user)
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -659,13 +718,24 @@ def toggle_estado_usuario(request, usuario_id):
                 'error': 'No puedes cambiar tu propio estado'
             }, status=400)
 
+        motivo = _motivo_usuario_protegido(request.user, usuario)
+        if motivo:
+            return _respuesta_prohibida(motivo)
+
         nuevo_estado = not usuario.es_activo
+
+        if _deja_sin_maestro(usuario, nuevo_activo=nuevo_estado):
+            return JsonResponse({
+                'success': False,
+                'error': 'No puedes desactivar al único Maestro activo del sistema.'
+            }, status=400)
 
         # Red de seguridad: no dejar el sistema sin ningún administrador que
         # pueda entrar (se comprueba sobre los dos flags, ver más abajo).
-        if not nuevo_estado and usuario.rol == 'administrador':
+        # El Maestro cuenta como administrador.
+        if not nuevo_estado and usuario.rol in ('maestro', 'administrador'):
             otros_admin = Usuario.objects.filter(
-                rol='administrador', es_activo=True, is_active=True
+                rol__in=('maestro', 'administrador'), es_activo=True, is_active=True
             ).exclude(id=usuario.id).count()
             if otros_admin == 0:
                 return JsonResponse({
@@ -722,7 +792,7 @@ def obtener_usuario(request, usuario_id):
     """
     try:
         # Verificar si es administrador
-        es_admin = getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = es_rol_administrador(request.user)
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -827,14 +897,17 @@ def resetear_password(request, usuario_id):
     """
     try:
         # Verificar si es administrador
-        es_admin = getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = es_rol_administrador(request.user)
         if not es_admin:
             return JsonResponse({
                 'success': False,
                 'error': 'Acceso restringido. Solo los administradores pueden resetear contraseñas.'
             }, status=403)
-        
+
         usuario = get_object_or_404(Usuario, id=usuario_id)
+        motivo = _motivo_usuario_protegido(request.user, usuario)
+        if motivo:
+            return _respuesta_prohibida(motivo)
         
         # Verificar si se envió una contraseña personalizada
         password_personalizada = None
@@ -908,7 +981,7 @@ def reenviar_credenciales(request, usuario_id):
     RESTRINGIDO: Solo administradores
     """
     try:
-        es_admin = getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = es_rol_administrador(request.user)
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -916,6 +989,9 @@ def reenviar_credenciales(request, usuario_id):
             }, status=403)
 
         usuario = get_object_or_404(Usuario, id=usuario_id)
+        motivo = _motivo_usuario_protegido(request.user, usuario)
+        if motivo:
+            return _respuesta_prohibida(motivo)
 
         if not usuario.email:
             return JsonResponse({
@@ -970,7 +1046,7 @@ def exportar_usuarios(request):
     """
     try:
         # Verificar si es administrador
-        es_admin = getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = es_rol_administrador(request.user)
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -1046,7 +1122,7 @@ def descargar_plantilla_importacion(request):
     RESTRINGIDO: Solo administradores
     """
     try:
-        es_admin = getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = es_rol_administrador(request.user)
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -1107,7 +1183,7 @@ def importar_usuarios(request):
     """
     try:
         # Verificar si es administrador
-        es_admin = getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = es_rol_administrador(request.user)
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -1191,6 +1267,7 @@ def importar_usuarios(request):
             'administración': 'administracion',
             'admin': 'administrador',
             'administrador': 'administrador',
+            'maestro': 'maestro',
             'bodeguero': 'bodeguero',
             'contador': 'contador'
         }
@@ -1237,6 +1314,11 @@ def importar_usuarios(request):
                 
                 # Determinar rol
                 rol = roles_map.get(rol_input, 'vendedor')
+                if rol not in ROLES_VALIDOS:
+                    rol = 'vendedor'
+                if _motivo_rol_no_asignable(request.user, rol):
+                    errores.append(f"Fila {fila_num}: solo un Maestro puede asignar el rol Maestro")
+                    continue
                 
                 # Validar RUT si se proporciona
                 if rut:
@@ -1247,7 +1329,13 @@ def importar_usuarios(request):
                 
                 # Verificar si el usuario ya existe (por email)
                 usuario_existente = Usuario.objects.filter(email=email).first()
-                
+
+                if usuario_existente and (
+                        _motivo_usuario_protegido(request.user, usuario_existente)
+                        or _deja_sin_maestro(usuario_existente, nuevo_rol=rol)):
+                    errores.append(f"Fila {fila_num}: {email} es Maestro; la importación no puede modificarlo")
+                    continue
+
                 if usuario_existente:
                     # Actualizar usuario existente
                     usuario_existente.first_name = nombre
@@ -1332,8 +1420,18 @@ def importar_usuarios(request):
 def asignar_sucursal_sesion(request, usuario_id):
     """
     Asignar sucursal a la sesión del usuario
+    RESTRINGIDO: Solo administradores (su único consumidor es gestion_usuarios.html).
+    Antes no verificaba rol: cualquier usuario logueado podía darse acceso a
+    cualquier sucursal con un POST directo.
     """
     try:
+        if not es_rol_administrador(request.user):
+            return _respuesta_prohibida('Acceso restringido. Solo los administradores pueden asignar sucursales.')
+        usuario_destino = get_object_or_404(Usuario, id=usuario_id)
+        motivo = _motivo_usuario_protegido(request.user, usuario_destino)
+        if motivo:
+            return _respuesta_prohibida(motivo)
+
         data = json.loads(request.body)
         sucursal_id = data.get('sucursal_id')
         
@@ -2240,7 +2338,7 @@ def usuarios_por_rol(request):
     """
     try:
         # Verificar si es administrador
-        es_admin = getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = es_rol_administrador(request.user)
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -2295,7 +2393,7 @@ def cambiar_rol_usuario(request):
     """
     try:
         # Verificar si es administrador
-        es_admin = getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = es_rol_administrador(request.user)
         if not es_admin:
             return JsonResponse({
                 'success': False,
@@ -2322,20 +2420,24 @@ def cambiar_rol_usuario(request):
                 'error': 'No puedes cambiar tu propio rol'
             }, status=400)
         
-        # Validar que el rol sea válido
-        roles_validos = ['administrador', 'administracion', 'jefe_local', 'cajero', 'vendedor', 'bodeguero', 'contador']
-        if nuevo_rol not in roles_validos:
-            return JsonResponse({
-                'success': False,
-                'error': f'Rol inválido. Roles permitidos: {", ".join(roles_validos)}'
-            }, status=400)
-        
+        # Validar que el rol sea válido y que quien lo asigna tenga jerarquía
+        # (antes aceptaba 'bodeguero' y 'contador', que no existen: el usuario
+        # quedaba sin ningún permiso).
+        motivo = (_motivo_usuario_protegido(request.user, usuario)
+                  or _motivo_rol_no_asignable(request.user, nuevo_rol))
+        if not motivo and _deja_sin_maestro(usuario, nuevo_rol=nuevo_rol):
+            motivo = 'Es el único Maestro activo: asigna el rol Maestro a otra cuenta antes de cambiarle el rol.'
+        if motivo:
+            return JsonResponse({'success': False, 'error': motivo, 'mensaje': motivo}, status=403)
+
         rol_anterior = usuario.get_rol_display()
-        
+
         # Actualizar rol
         usuario.rol = nuevo_rol
-        usuario.save()
-        
+        usuario.save(update_fields=['rol'])
+        logger.info("Rol de usuario %s (id=%s): %s -> %s por %s",
+                    usuario.username, usuario.id, rol_anterior, nuevo_rol, request.user.username)
+
         return JsonResponse({
             'success': True,
             'mensaje': f'Rol de {usuario.get_full_name()} cambiado de "{rol_anterior}" a "{usuario.get_rol_display()}"',
@@ -2373,7 +2475,7 @@ def obtener_empresas_sucursales(request):
     Obtener todas las empresas con sus sucursales para el selector
     """
     try:
-        es_admin = getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = es_rol_administrador(request.user)
         if not es_admin:
             return JsonResponse({'success': False, 'error': 'Acceso restringido'}, status=403)
         
@@ -2405,7 +2507,7 @@ def obtener_asignaciones_usuario(request, usuario_id):
     Obtener todas las asignaciones (EmpresaUser) de un usuario específico
     """
     try:
-        es_admin = getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = es_rol_administrador(request.user)
         if not es_admin:
             return JsonResponse({'success': False, 'error': 'Acceso restringido'}, status=403)
         
@@ -2464,7 +2566,7 @@ def agregar_asignacion_usuario(request, usuario_id):
     - sucursales_ids: Array de IDs (múltiple selección)
     """
     try:
-        es_admin = getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = es_rol_administrador(request.user)
         if not es_admin:
             return JsonResponse({'success': False, 'error': 'Acceso restringido'}, status=403)
         
@@ -2482,6 +2584,9 @@ def agregar_asignacion_usuario(request, usuario_id):
             return JsonResponse({'success': False, 'error': 'Debe seleccionar al menos una sucursal'}, status=400)
         
         usuario = get_object_or_404(Usuario, id=usuario_id)
+        motivo = _motivo_usuario_protegido(request.user, usuario)
+        if motivo:
+            return _respuesta_prohibida(motivo)
         
         asignaciones_creadas = []
         asignaciones_reactivadas = []
@@ -2571,11 +2676,14 @@ def eliminar_asignacion_usuario(request, usuario_id, empresa_user_id):
     Eliminar (desactivar) una asignación empresa/sucursal de un usuario
     """
     try:
-        es_admin = getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = es_rol_administrador(request.user)
         if not es_admin:
             return JsonResponse({'success': False, 'error': 'Acceso restringido'}, status=403)
         
         usuario = get_object_or_404(Usuario, id=usuario_id)
+        motivo = _motivo_usuario_protegido(request.user, usuario)
+        if motivo:
+            return _respuesta_prohibida(motivo)
         asignacion = get_object_or_404(EmpresaUser.objects.select_related('empresa', 'sucursal'), 
                                         id=empresa_user_id, user=usuario)
         
@@ -2615,7 +2723,7 @@ def cambiar_sucursal_activa_usuario(request, usuario_id):
     Cambiar la sucursal activa de un usuario (sin crear nueva asignación)
     """
     try:
-        es_admin = getattr(request.user, 'rol', None) == 'administrador'
+        es_admin = es_rol_administrador(request.user)
         if not es_admin:
             return JsonResponse({'success': False, 'error': 'Acceso restringido'}, status=403)
         
@@ -2626,6 +2734,9 @@ def cambiar_sucursal_activa_usuario(request, usuario_id):
             return JsonResponse({'success': False, 'error': 'Debe seleccionar una asignación'}, status=400)
         
         usuario = get_object_or_404(Usuario, id=usuario_id)
+        motivo = _motivo_usuario_protegido(request.user, usuario)
+        if motivo:
+            return _respuesta_prohibida(motivo)
         asignacion = get_object_or_404(EmpresaUser.objects.select_related('empresa', 'sucursal'),
                                         id=empresa_user_id, user=usuario, status=True)
         
@@ -2660,7 +2771,7 @@ def corregir_usuarios_sin_sucursal(request):
     Asigna la sucursal del admin a todos los EmpresaUser que no tienen sucursal.
     Solo accesible por administradores.
     """
-    es_admin = getattr(request.user, 'rol', None) == 'administrador'
+    es_admin = es_rol_administrador(request.user)
     if not es_admin:
         return JsonResponse({'success': False, 'error': 'Solo administradores.'}, status=403)
 

@@ -26,7 +26,7 @@ from app.models import (
     Cotizacion, Cotizacion_Detalle,
     Requerimiento,
 )
-from app.models import Cliente, Proveedor
+from app.models import Cliente, Proveedor, rol_efectivo
 
 
 class AssistantTools:
@@ -50,7 +50,7 @@ class AssistantTools:
         self.user = user
         self.empresa = self._get_empresa_usuario()
         self.sucursal = self._get_sucursal_usuario()
-        self.es_admin = user.is_superuser or getattr(user, 'rol', '') == 'administrador'
+        self.es_admin = user.is_superuser or rol_efectivo(user) == 'administrador'
     
     def _get_empresa_usuario(self):
         """Obtiene la empresa del usuario actual"""

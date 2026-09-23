@@ -1567,6 +1567,13 @@
 <script src="{% static 'js/trazabilidad_dte.js' %}"></script>
 
 <script>
+    // Permisos finos de Nota de Crédito (el backend los vuelve a validar):
+    // la NC de un traspaso interno usa su propio permiso.
+    const PUEDE_EMITIR_NC = {{ puede_emitir_nc|yesno:"true,false" }};
+    const PUEDE_EMITIR_NC_TRASPASO = {{ puede_emitir_nc_traspaso|yesno:"true,false" }};
+    // Eliminar documento de venta (boleta de papel): permiso dte_eliminar_documento.
+    const PUEDE_ELIMINAR_DOCUMENTO = {{ puede_eliminar_documento|yesno:"true,false" }};
+
     // Delega botones de trazabilidad en cualquier parte de la tabla
     $(document).on('click', '.btn-ver-trazabilidad', function () {
         const dteId = parseInt($(this).data('dte-id'), 10);
@@ -2438,10 +2445,13 @@
             </button>` : ''}
             {% endif %}
             {% if es_admin %}
-            ${['FACTURA ELECTRONICA','FACTURA_ELECTRONICA','BOLETA ELECTRONICA','BOLETA_ELECTRONICA'].includes(dte.tipo_documento) && dte.estado_dte !== 'ANULADO' && (dte.monto_con_iva - (dte.total_nc_acumulado || 0)) > 0 ? `
+            ${['FACTURA ELECTRONICA','FACTURA_ELECTRONICA','BOLETA ELECTRONICA','BOLETA_ELECTRONICA'].includes(dte.tipo_documento) && dte.estado_dte !== 'ANULADO' && (dte.monto_con_iva - (dte.total_nc_acumulado || 0)) > 0 ? ((dte.es_traspaso ? PUEDE_EMITIR_NC_TRASPASO : PUEDE_EMITIR_NC) ? `
             <button class="nexo-action-btn danger" title="Generar Nota de Crédito" onclick='anularDocumento(${dte.id || 0}, ${JSON.stringify(String(dte.numero_documento || ""))}, ${JSON.stringify(String(dte.tipo_documento || ""))}, ${dte.monto_con_iva || 0}, ${dte.total_nc_acumulado || 0})'>
                 <i class="bi bi-file-earmark-minus"></i><span class="action-label">NC</span>
-            </button>` : ''}
+            </button>` : `
+            <button class="nexo-action-btn danger" disabled title="Sin permiso para emitir Notas de Crédito">
+                <i class="bi bi-file-earmark-minus"></i><span class="action-label">NC</span>
+            </button>`) : ''}
             ${['NOTA DE CREDITO','NOTA_CREDITO'].includes(dte.tipo_documento) ? `
             <button class="nexo-action-btn warning" title="Editar folio / cliente NC" onclick='editarFolioNC(${dte.id || 0}, ${JSON.stringify(String(dte.numero_documento || ""))}, ${JSON.stringify(dte.tipo_documento || "")}, ${dte.receptor_id ? "true" : "false"}, ${JSON.stringify(dte.receptor_nombre || "")}, ${JSON.stringify(dte.receptor_rut || "")})'>
                 <i class="bi bi-pencil-square"></i><span class="action-label">Folio</span>
@@ -2450,6 +2460,9 @@
             <button class="nexo-action-btn" style="background:#0dcaf0;color:white;" title="Asignar receptor a esta NC (necesario para descargar el TXT Acepta)" onclick='asignarReceptorNC(${dte.id || 0}, ${JSON.stringify(String(dte.numero_documento || ""))})'>
                 <i class="bi bi-person-plus"></i><span class="action-label">Receptor</span>
             </button>` : ''}
+            {% endif %}
+            {% if puede_eliminar_documento %}
+            {# Permiso fino dte_eliminar_documento (antes colgaba de es_admin y administracion recibía 403) #}
             ${(dte.es_boleta_papel && !dte.descartado) ? `
             <button class="nexo-action-btn danger" title="Eliminar la boleta de papel: devuelve el stock, anula el ticket y la saca de la cuadratura. Es la unica forma de dejarla sin efecto (no admite Nota de Credito)." onclick='eliminarBoletaPapel(${dte.id || 0}, ${JSON.stringify(String(dte.numero_documento || ""))})'>
                 <i class="bi bi-trash3"></i><span class="action-label">Eliminar</span>
@@ -3850,6 +3863,10 @@
     // Antes esa accion solo existia en /app/ventas/documentos/ y aca la fila
     // quedaba muda, sin explicar por que no habia ninguna accion disponible.
     async function eliminarBoletaPapel(dteId, numeroDoc) {
+        if (!PUEDE_ELIMINAR_DOCUMENTO) {
+            Swal.fire('Sin permiso', 'No tienes permiso para eliminar documentos. Pídeselo al Maestro.', 'warning');
+            return;
+        }
         const { value: motivo, isConfirmed } = await Swal.fire({
             icon: 'warning',
             title: `Eliminar boleta de papel #${numeroDoc}`,

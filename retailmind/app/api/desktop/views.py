@@ -17,7 +17,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from app.models import Sucursal, Vendedor
+from app.models import Sucursal, Vendedor, rol_efectivo
 from app.models_sync import DispositivoAutorizado, RefreshTokenDesktop, SyncLog
 
 from .serializers import (
@@ -118,7 +118,10 @@ class DesktopLoginView(APIView):
             # Agregar claims personalizados
             refresh['device_id'] = str(device_id)
             refresh['sucursal_id'] = sucursal.id
-            refresh['rol'] = getattr(user, 'rol', 'vendedor')
+            # 'rol' es el que usa el cliente para sus chequeos: el Maestro viaja
+            # como 'administrador'. El rol real va aparte en 'rol_real'.
+            refresh['rol'] = rol_efectivo(user) or 'vendedor'
+            refresh['rol_real'] = getattr(user, 'rol', None) or 'vendedor'
             
             access_token = str(refresh.access_token)
             
@@ -243,7 +246,8 @@ class DesktopRefreshView(APIView):
         refresh = RefreshToken.for_user(nuevo_token.usuario)
         refresh['device_id'] = str(nuevo_token.dispositivo.device_id)
         refresh['sucursal_id'] = nuevo_token.dispositivo.sucursal_id
-        refresh['rol'] = getattr(nuevo_token.usuario, 'rol', 'vendedor')
+        refresh['rol'] = rol_efectivo(nuevo_token.usuario) or 'vendedor'
+        refresh['rol_real'] = getattr(nuevo_token.usuario, 'rol', None) or 'vendedor'
         
         access_token = str(refresh.access_token)
         expires_at = timezone.now() + timedelta(days=7)
@@ -471,7 +475,7 @@ class SucursalesDisponiblesView(APIView):
                     })
         
         # 3. Si es superuser/admin, mostrar todas las sucursales
-        if getattr(user, 'rol', '') == 'administrador':
+        if rol_efectivo(user) == 'administrador':
             from app.models import Sucursal
             todas = Sucursal.objects.all().select_related('empresa')
             for suc in todas:

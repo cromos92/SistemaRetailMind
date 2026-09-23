@@ -1214,6 +1214,9 @@ input[type=number] { -moz-appearance: textfield; }
 
 {% include '../../layout/footer.html' %}
 
+{# Mapa {campo: bool} / {tipo_documento: bool} de edición de DTE (servidor). #}
+{{ permisos_edicion_dte|json_script:"permisosEdicionDteData" }}
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Variables globales
@@ -1225,24 +1228,24 @@ document.addEventListener('DOMContentLoaded', function() {
     let documentoActualModal = null; // Documento que se muestra actualmente en el modal
     let timeoutBusqueda = null;
 
-    // Flag: ¿usuario es administrador? (controla si puede editar Boletas Papel)
-    const esAdmin = {% if es_admin %}true{% else %}false{% endif %};
+    // Permisos granulares de edición de DTE (por campo y por tipo de DTE),
+    // calculados en el servidor con `PermisoRol.tiene_permiso` (ver
+    // `gestion_ventas_documentos`). La lógica es AND: para editar un campo X
+    // en un DTE de tipo T se requieren ambos (permisoCampoDte[X] &&
+    // permisoTipoDte[T]), igual que `puede_editar_campo_dte` en el backend.
+    // Sin bypass por rol: el Maestro llega con todo en true desde el servidor.
+    const _permisosEdicionDte = (function () {
+        try {
+            const el = document.getElementById('permisosEdicionDteData');
+            return (el && JSON.parse(el.textContent)) || {};
+        } catch (e) { return {}; }
+    })();
+    const permisoCampoDte = _permisosEdicionDte.campo || {};
+    const permisoTipoDte = _permisosEdicionDte.tipo || {};
 
-    // Permisos granulares de edición de DTE (por campo y por tipo de DTE).
-    // La lógica es AND: para editar un campo X en un DTE de tipo T se
-    // requieren ambos (permisoCampoDte[X] && permisoTipoDte[T]).
-    const permisoCampoDte = {
-        numero_documento: {% if puede_editar_numero_dte %}true{% else %}false{% endif %},
-        fecha:            {% if puede_editar_fecha_dte %}true{% else %}false{% endif %},
-        pago:             {% if puede_editar_pago_dte %}true{% else %}false{% endif %},
-        vendedor:         {% if puede_editar_vendedor_dte %}true{% else %}false{% endif %},
-    };
-    const permisoTipoDte = {
-        'BOLETA ELECTRONICA':  {% if puede_editar_tipo_boleta_electronica %}true{% else %}false{% endif %},
-        'BOLETA PAPEL':        {% if puede_editar_tipo_boleta_papel %}true{% else %}false{% endif %},
-        'FACTURA ELECTRONICA': {% if puede_editar_tipo_factura_electronica %}true{% else %}false{% endif %},
-        'FACTURA EXENTA':      {% if puede_editar_tipo_factura_exenta %}true{% else %}false{% endif %},
-    };
+    // Botón "Eliminar" (soft delete + devolución de stock): permiso fino
+    // `dte_eliminar_documento`, no el rol.
+    const puedeEliminarDocumento = {{ puede_eliminar_documento|yesno:"true,false" }};
 
     // Mapa {tipo_origen: [tipos_destino]} sólo con los pares sobre los que el
     // usuario tiene permiso en ambos extremos. Permite cambiar tipo DTE
@@ -1274,18 +1277,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function puedeEditarCampoEnTipo(campo, tipoDte) {
         if (!campo) return false;
-        // El administrador siempre puede editar (mismo bypass que el
-        // backend en `editar_dte_boleta_papel` y `crear_dte_manual`).
-        // Mantiene la consistencia con el resto del módulo: la matriz
-        // granular sólo se aplica a roles no-admin.
-        if (esAdmin) return true;
+        // Misma regla que `editar_dte_boleta_papel`: permiso del campo Y
+        // del tipo de DTE, para todos los roles.
         if (!permisoCampoDte[campo]) return false;
         if (!tipoDte) return false;
         return !!permisoTipoDte[tipoDte];
     }
 
     function dteTieneAlgunCampoEditable(tipoDte) {
-        if (esAdmin) return true;
         if (!permisoTipoDte[tipoDte]) return false;
         const algunCampo = !!(permisoCampoDte.numero_documento
                            || permisoCampoDte.fecha
@@ -1587,7 +1586,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             title="Editar campos permitidos del DTE">
                         <i class="ri-edit-2-line"></i> Editar
                     </button>` : ''}
-                    ${esAdmin ? `
+                    ${puedeEliminarDocumento ? `
                     <button class="btn btn-sm btn-danger btn-action ms-1"
                             onclick="eliminarDocumento(${doc.id}, '${(doc.tipo || '').replace(/'/g, "\\'")}', ${doc.numero || 0})"
                             title="Eliminar documento, devolver stock y sacar de cuadratura">
@@ -2703,7 +2702,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // === ELIMINACIÓN DE DOCUMENTO (soft delete + devolución de stock) ===
     //
-    // Solo administradores. Pide motivo, confirma y llama al backend
+    // Requiere el permiso `dte_eliminar_documento` (el backend lo vuelve a
+    // validar). Pide motivo, confirma y llama al backend
     // (`eliminar_documento_venta`) que:
     //   1. Marca el DTE como `descartado=True` y `estado_dte='ANULADO'`
     //      → desaparece del listado y de la cuadratura.
@@ -2711,8 +2711,8 @@ document.addEventListener('DOMContentLoaded', function() {
     //      `DEVOLUCION_CLIENTE` por línea.
     //   3. Si hay ticket vinculado, lo marca como ANULADO.
     window.eliminarDocumento = function(documentoId, tipo, numero) {
-        if (!esAdmin) {
-            mostrarError('Solo administradores pueden eliminar documentos');
+        if (!puedeEliminarDocumento) {
+            mostrarError('No tiene permiso para eliminar documentos');
             return;
         }
         if (typeof Swal === 'undefined') {

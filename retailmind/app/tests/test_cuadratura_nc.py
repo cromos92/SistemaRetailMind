@@ -301,6 +301,11 @@ class AnularFacturaDteTest(TestCase):
 
     def setUp(self):
         self.env = setup_entorno_completo()
+        # Emitir NC exige el permiso `emitir_nota_credito` (mig. 0233 lo siembra
+        # para administrador/administración/jefe local). El usuario de la
+        # factory es vendedor: antes el endpoint no pedía permiso alguno.
+        self.env['user'].rol = 'administrador'
+        self.env['user'].save(update_fields=['rol'])
         crear_correlativo(
             self.env['sucursal'], tipo_dte='NOTA DE CREDITO', inicio=5000,
         )
@@ -416,6 +421,18 @@ class AnularFacturaDteTest(TestCase):
 
         boleta.refresh_from_db()
         self.assertEqual(boleta.estado_dte, 'ANULADO')
+
+    def test_sin_permiso_nc_no_emite_ni_consume_folio(self):
+        """Antes cualquier usuario logueado (incluso un vendedor) emitía una NC
+        con un POST directo a documentos/anular-factura/."""
+        from app.models import Dte
+        self.env['user'].rol = 'vendedor'
+        self.env['user'].save(update_fields=['rol'])
+        boleta = _crear_boleta(self.env, numero=2099, monto_con_iva=30000)
+        antes = Dte.objects.filter(tipo_documento='NOTA DE CREDITO').count()
+        resp = self._post_anular(dte_id=boleta.id, modalidad_nc='INFORMATIVA')
+        self.assertEqual(resp.status_code, 403, resp.content)
+        self.assertEqual(Dte.objects.filter(tipo_documento='NOTA DE CREDITO').count(), antes)
 
     def test_nc_parcial_aparece_en_cuadratura(self):
         """

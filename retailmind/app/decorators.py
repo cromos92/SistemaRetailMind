@@ -6,7 +6,7 @@ from django.shortcuts import redirect
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponseForbidden
-from .models import PermisoRol
+from .models import PermisoRol, ROL_MAESTRO
 
 
 def requiere_permiso(codigo_opcion, tipo_permiso='puede_ver', redirigir_a='bienvenida'):
@@ -139,7 +139,9 @@ def requiere_rol(*roles_permitidos):
     
     Args:
         *roles_permitidos: Lista de roles permitidos ('administrador', 'jefe_local', 'cajero', 'vendedor')
-    
+
+    El rol 'maestro' pasa siempre: tiene acceso a todo.
+
     Uso:
         @requiere_rol('administrador')
         def vista_solo_admin(request):
@@ -154,7 +156,8 @@ def requiere_rol(*roles_permitidos):
         @login_required
         def _wrapped_view(request, *args, **kwargs):
             # Verificar rol
-            if hasattr(request.user, 'rol') and request.user.rol in roles_permitidos:
+            rol = getattr(request.user, 'rol', None)
+            if rol == ROL_MAESTRO or rol in roles_permitidos:
                 return view_func(request, *args, **kwargs)
             
             # Sin permiso
@@ -184,6 +187,11 @@ def solo_administrador(view_func):
             ...
     """
     return requiere_rol('administrador')(view_func)
+
+
+def solo_maestro(view_func):
+    """Vistas reservadas al rol Maestro (dueño del sistema)."""
+    return requiere_rol(ROL_MAESTRO)(view_func)
 
 
 def solo_administrador_o_jefe(view_func):

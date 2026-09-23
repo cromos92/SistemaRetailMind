@@ -1,4 +1,4 @@
-{% load static %}
+{% load static permisos_tags %}
 
 {% include '../../layout/header.html' %}
 {% include '../../layout/menu.html' %}
@@ -200,6 +200,9 @@
                     <button type="button" class="conc-tab" data-pane="banco" role="tab">Liberaciones y banco <span class="qf-count" id="tabCountRetiros">0</span></button>
                     <button type="button" class="conc-tab" data-pane="contra" role="tab">Contra Mercado Pago</button>
                     <button type="button" class="conc-tab" data-pane="sucursal" role="tab">Por sucursal</button>
+                    {% tiene_permiso 'asociar_pagos_mercadopago' 'puede_ver' as puede_ver_asociar_mp %}
+                    {% tiene_permiso 'asociar_pagos_mercadopago' 'puede_editar' as puede_asociar_mp %}
+                    {% if puede_ver_asociar_mp %}<button type="button" class="conc-tab" data-pane="asociar" role="tab"><i class="ri-links-line me-1"></i>Asociar <span class="qf-count" id="tabCountAsociar">0</span></button>{% endif %}
                 </div>
 
                 <!-- ===== 1. Cobros y documentos ===== -->
@@ -235,19 +238,27 @@
                         <div class="col-lg-6">
                             <div class="conc-panel">
                                 <h6><i class="ri-file-list-3-line me-1"></i>1. Reporte de Liberaciones de Mercado Pago</h6>
-                                <p class="conc-help">Dice qué cobros componen cada retiro al banco. Súbalo descargado del panel de MP
-                                   (Reportes → Liberaciones, CSV) o pídalo a la API para las fechas de arriba (máx. 31 días).
-                                   Primero «Vista previa»; «Aplicar» amarra los cobros a sus retiros.</p>
-                                <div class="d-flex flex-wrap gap-2 align-items-center">
-                                    <select id="libConfig" class="form-select form-select-sm" style="max-width:240px;" aria-label="Cuenta Mercado Pago">
+                                <p class="conc-help">Dice qué ventas componen cada retiro al banco. Elija un reporte de la lista y
+                                   use «Vista previa»; si se ve bien, «Aplicar».</p>
+                                <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                                    <select id="libConfig" class="form-select form-select-sm" style="max-width:240px;" aria-label="Cuenta Mercado Pago" onchange="cargarReportesMP()">
                                         {% for c in configs %}<option value="{{ c.id }}">{{ c.sucursal__alias }} · {{ c.nombre }}</option>{% endfor %}
                                     </select>
-                                    <input type="file" id="libArchivo" accept=".csv,text/csv" class="form-control form-control-sm" style="max-width:260px;">
+                                    <button class="btn btn-outline-secondary btn-accion-sm" onclick="cargarReportesMP()"><i class="ri-refresh-line me-1"></i>Actualizar lista</button>
+                                    <button class="btn btn-outline-primary btn-accion-sm" onclick="pedirReporteMP()" title="Mercado Pago lo genera en unos minutos; la página avisa cuando esté listo">
+                                        <i class="ri-add-line me-1"></i>Pedir reporte de las fechas de arriba</button>
                                 </div>
-                                <div class="d-flex flex-wrap gap-2 mt-2">
-                                    <button class="btn btn-outline-primary btn-accion-sm" onclick="procesarLiberaciones(false)"><i class="ri-eye-line me-1"></i>Vista previa</button>
-                                    <button class="btn btn-primary btn-accion-sm" onclick="procesarLiberaciones(true)"><i class="ri-check-line me-1"></i>Aplicar</button>
-                                </div>
+                                <div id="libTarea" class="mb-2"></div>
+                                <div id="libPorRetiro" class="conc-help mb-2"></div>
+                                <div id="libReportes" class="mb-2"><div class="conc-sub">Cargando reportes de Mercado Pago…</div></div>
+                                <details class="mb-1">
+                                    <summary class="conc-sub" style="cursor:pointer;">O subir el CSV descargado del panel de Mercado Pago</summary>
+                                    <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                                        <input type="file" id="libArchivo" accept=".csv,text/csv" class="form-control form-control-sm" style="max-width:260px;">
+                                        <button class="btn btn-outline-primary btn-accion-sm" onclick="procesarLiberaciones(false)"><i class="ri-eye-line me-1"></i>Vista previa</button>
+                                        <button class="btn btn-primary btn-accion-sm" onclick="procesarLiberaciones(true)"><i class="ri-check-line me-1"></i>Aplicar</button>
+                                    </div>
+                                </details>
                                 <div id="libResultado" class="mt-2"></div>
                             </div>
                         </div>
@@ -301,11 +312,19 @@
                         </table>
                     </div>
                 </div>
+
+                <!-- ===== 5. Asociar cobros MP con su venta (solo con permiso) ===== -->
+                {% if puede_ver_asociar_mp %}
+                <div class="conc-pane" id="pane-asociar">
+                    {% include 'vistas/modulo_ventas/_asociar_mp_pane.html' %}
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
 
+{% if puede_asociar_mp %}{% include 'vistas/modulo_ventas/_asociar_mp.html' %}{% endif %}
 {% include '../../layout/footer.html' %}
 
 <script>
@@ -338,9 +357,11 @@
     }
 
     // ── Pestañas ──
+    let reportesCargados = false;
     document.querySelectorAll('.conc-tab').forEach(t => t.addEventListener('click', () => {
         document.querySelectorAll('.conc-tab').forEach(x => x.classList.toggle('active', x === t));
         document.querySelectorAll('.conc-pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + t.dataset.pane));
+        if (t.dataset.pane === 'banco' && ES_ADMIN && !reportesCargados) { reportesCargados = true; cargarReportesMP(); }
     }));
 
     // ── Filtro por categoría (chips y KPIs) ──
@@ -380,6 +401,11 @@
                 accion = `<span class="conc-sub">${txt}</span>`;
             } else if (f.categoria === 'COBRO_DIRECTO') {
                 accion = '<span class="conc-sub">Registrar en POS como MP manual</span>';
+            }
+            // Gancho para otros módulos (p.ej. asociar pagos): recibe la fila tal
+            // cual la entrega el API de cobros y devuelve HTML extra para Acción.
+            if (typeof window.accionExtraConciliacion === 'function') {
+                try { accion += window.accionExtraConciliacion(f) || ''; } catch (e) { console.warn('accionExtraConciliacion', e); }
             }
             const estadoMP = (f.estado_mp && !['APROBADA', 'MANUAL'].includes(f.estado_mp))
                 ? ` <span class="conc-chip conc-chip--mute">${esc(f.estado_mp)}</span>` : '';
@@ -497,31 +523,149 @@
             <tbody>${filas.map(f => `<tr>${cols.map(c => `<td class="${c[2] || ''}">${c[1](f)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
     }
 
-    window.procesarLiberaciones = function (aplicar) {
-        const fd = new FormData();
-        fd.append('config_id', document.getElementById('libConfig').value);
-        const a = document.getElementById('libArchivo').files[0];
-        if (a) fd.append('archivo', a);
-        const p = params();
-        fd.append('desde', p.get('desde') || ''); fd.append('hasta', p.get('hasta') || '');
-        if (aplicar) fd.append('aplicar', '1');
+    const libConfig = () => (document.getElementById('libConfig') || {}).value || '';
+    let libTareaTimer = null;
+    let ultimosReportes = [];
+
+    function pintarResultadoLiberaciones(d) {
         const cont = document.getElementById('libResultado');
-        cont.innerHTML = `<div class="conc-sub">${a ? 'Procesando archivo…' : 'Pidiendo el reporte a Mercado Pago (puede tardar ~1 minuto)…'}</div>`;
+        if (!d.success) { cont.innerHTML = `<div class="text-danger small">${esc(d.error)}</div>`; return; }
+        let html = `<div class="small mb-2">${d.aplicado ? '<strong>Aplicado.</strong>' : '<strong>Vista previa</strong> (no se guardó nada).'}
+            ${esc(d.origen || '')} · ${d.filas_leidas} filas · ${d.retiros.length} retiro(s) · ${d.pagos_amarrados} ventas del POS asociadas ·
+            ${d.pagos_sin_local} pagos que no son del POS · quedan disponibles en MP ${fmt(d.liberado_sin_retirar)}</div>`;
+        if (!d.retiros.length && (d.encabezados || []).length) {
+            html += `<div class="small text-danger mb-2">No se reconoció ningún retiro. Columnas del archivo: <code>${esc(d.encabezados.join(', '))}</code>. Envíelas a soporte para ajustar el lector.</div>`;
+        }
+        html += tablaSimple([
+            ['Fecha', f => `${esc(f.fecha)} ${esc(f.hora || '')}`], ['Retiro', f => esc(f.withdrawal_id)],
+            ['Monto', f => fmt(f.monto), 'num'], ['Ventas POS', f => `${f.pagos_pos}/${f.pagos}`, 'num'],
+            ['Estado', f => `<span class="conc-chip conc-chip--${f.estado === 'CONCILIADO' ? 'ok' : 'err'}">${esc(f.estado)}</span>`],
+            ['Detalle', f => `<span class="conc-sub">${esc(f.detalle)}</span>`],
+        ], d.retiros);
+        cont.innerHTML = html;
+        if (d.aplicado) { cargarDineros(); cargarCobros(); cargarReportesMP(); }
+    }
+
+    function enviarLiberaciones(fd) {
+        const cont = document.getElementById('libResultado');
+        cont.innerHTML = '<div class="conc-sub"><div class="spinner-border spinner-border-sm text-primary"></div> Procesando reporte…</div>';
         fetch('/app/api/mercadopago/conciliacion/liberaciones/', {method: 'POST', headers: {'X-CSRFToken': csrf()}, body: fd})
+            .then(r => r.json()).then(pintarResultadoLiberaciones)
+            .catch(() => { cont.innerHTML = '<div class="text-danger small">Error de conexión.</div>'; });
+    }
+
+    // Subir el CSV a mano.
+    window.procesarLiberaciones = function (aplicar) {
+        const a = document.getElementById('libArchivo').files[0];
+        if (!a) { document.getElementById('libResultado').innerHTML = '<div class="text-danger small">Elija el archivo CSV.</div>'; return; }
+        const fd = new FormData();
+        fd.append('config_id', libConfig()); fd.append('archivo', a);
+        if (aplicar) fd.append('aplicar', '1');
+        enviarLiberaciones(fd);
+    };
+
+    // Procesar un reporte ya generado en Mercado Pago.
+    window.procesarReporteMP = function (fileName, aplicar) {
+        const fd = new FormData();
+        fd.append('config_id', libConfig()); fd.append('file_name', fileName);
+        if (aplicar) fd.append('aplicar', '1');
+        enviarLiberaciones(fd);
+    };
+
+    window.cargarReportesMP = function () {
+        const cont = document.getElementById('libReportes');
+        if (!cont || !libConfig()) return;
+        cont.innerHTML = '<div class="conc-sub">Cargando reportes de Mercado Pago…</div>';
+        fetch('/app/api/mercadopago/conciliacion/liberaciones/reportes/?config_id=' + encodeURIComponent(libConfig()))
             .then(r => r.json())
             .then(d => {
                 if (!d.success) { cont.innerHTML = `<div class="text-danger small">${esc(d.error)}</div>`; return; }
-                cont.innerHTML = `<div class="small mb-2">${d.aplicado ? '<strong>Aplicado.</strong>' : '<strong>Vista previa</strong> (no se guardó nada).'}
-                    ${d.filas_leidas} filas · ${d.retiros.length} retiro(s) · ${d.pagos_amarrados} cobros del POS amarrados ·
-                    ${d.pagos_sin_local} pagos sin cobro del POS · liberado sin retirar ${fmt(d.liberado_sin_retirar)}</div>` +
-                    tablaSimple([
-                        ['Fecha', f => esc(f.fecha)], ['Retiro', f => esc(f.withdrawal_id)],
-                        ['Monto', f => fmt(f.monto), 'num'], ['Cobros POS', f => `${f.pagos_pos}/${f.pagos}`, 'num'],
-                        ['Estado', f => `<span class="conc-chip conc-chip--${f.estado === 'CONCILIADO' ? 'ok' : 'err'}">${esc(f.estado)}</span>`],
-                    ], d.retiros);
-                if (d.aplicado) cargarDineros(), cargarCobros();
+                const pr = document.getElementById('libPorRetiro');
+                pr.innerHTML = d.por_retiro_activo === null
+                    ? '<span class="conc-chip conc-chip--mute">Desconocido</span> No se pudo leer la configuración del reporte en Mercado Pago.'
+                    : (d.por_retiro_activo
+                        ? '<span class="conc-chip conc-chip--ok">Activo</span> Mercado Pago genera un reporte después de cada retiro: solo hay que elegirlo y aplicarlo.'
+                        : `<span class="conc-chip conc-chip--warn">Inactivo</span> Mercado Pago no genera el reporte solo.
+                           <button class="btn btn-link btn-sm p-0 align-baseline" onclick="activarReportePorRetiro()">Activar reporte automático después de cada retiro</button>`);
+                ultimosReportes = (d.reportes || []).map(r => r.file_name);
+                const fmtF = t => esc(String(t || '').replace('T', ' ').slice(0, 16));
+                cont.innerHTML = tablaSimple([
+                    ['Creado', r => fmtF(r.creado)],
+                    ['Período', r => `${fmtF(r.begin_date)} a ${fmtF(r.end_date)} <span class="conc-sub">UTC</span>`],
+                    ['Origen', r => r.origen === 'schedule' ? 'Automático' : 'Manual'],
+                    ['', r => `${r.procesado ? '<span class="conc-chip conc-chip--ok me-1">Aplicado</span>' : ''}
+                        <button class="btn btn-outline-primary btn-accion-sm" onclick="procesarReporteMP('${esc(r.file_name)}', false)">Vista previa</button>
+                        <button class="btn btn-primary btn-accion-sm" onclick="procesarReporteMP('${esc(r.file_name)}', true)">Aplicar</button>`, 'text-end'],
+                ], d.reportes || []);
+                if (!(d.reportes || []).length) cont.innerHTML = '<div class="conc-sub">Mercado Pago todavía no tiene reportes generados. Use «Pedir reporte».</div>';
+            })
+            .catch(() => { cont.innerHTML = '<div class="text-danger small">Error de conexión con Mercado Pago.</div>'; });
+    };
+
+    window.pedirReporteMP = function () {
+        const p = params();
+        const fd = new FormData();
+        fd.append('config_id', libConfig()); fd.append('desde', p.get('desde') || ''); fd.append('hasta', p.get('hasta') || '');
+        const cont = document.getElementById('libTarea');
+        const configPedida = libConfig();
+        const antes = ultimosReportes.slice();
+        cont.innerHTML = '<div class="conc-sub">Pidiendo el reporte a Mercado Pago…</div>';
+        fetch('/app/api/mercadopago/conciliacion/liberaciones/pedir/', {method: 'POST', headers: {'X-CSRFToken': csrf()}, body: fd})
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success) { cont.innerHTML = `<div class="text-danger small">${esc(d.error)}</div>`; return; }
+                cont.innerHTML = `<div class="small"><div class="spinner-border spinner-border-sm text-primary"></div>
+                    Mercado Pago está generando el reporte (${esc(d.begin_date)} a ${esc(d.end_date)} UTC). Tarda unos minutos:
+                    esta página revisa cada 20 segundos y avisa cuando esté listo. Puede seguir trabajando.</div>`;
+                vigilarTarea(d.task_id, configPedida, antes, 0);
             })
             .catch(() => { cont.innerHTML = '<div class="text-danger small">Error de conexión.</div>'; });
+    };
+
+    // Vigila la tarea con la cuenta con la que se PIDIÓ (no la seleccionada
+    // ahora). Sin id de tarea, detecta el reporte nuevo comparando la lista.
+    function vigilarTarea(taskId, configId, antes, intento) {
+        clearTimeout(libTareaTimer);
+        const cont = document.getElementById('libTarea');
+        const listo = () => {
+            cont.innerHTML = '<div class="small text-success"><strong>Reporte listo.</strong> Está primero en la lista: use «Vista previa».</div>';
+            if (libConfig() === configId) cargarReportesMP();
+        };
+        if (intento >= 30) { cont.innerHTML = '<div class="small">Mercado Pago aún no termina. Use «Actualizar lista» más tarde.</div>'; return; }
+        libTareaTimer = setTimeout(() => {
+            const url = taskId
+                ? `/app/api/mercadopago/conciliacion/liberaciones/tarea/?config_id=${encodeURIComponent(configId)}&task_id=${taskId}`
+                : `/app/api/mercadopago/conciliacion/liberaciones/reportes/?config_id=${encodeURIComponent(configId)}`;
+            fetch(url)
+                .then(r => r.json())
+                .then(d => {
+                    if (!d.success) { cont.innerHTML = `<div class="small text-danger">${esc(d.error || 'Error al consultar el reporte')}</div>`; return; }
+                    if (taskId ? d.listo : (d.reportes || []).some(r => !antes.includes(r.file_name))) return listo();
+                    if (taskId && d.fallido) { cont.innerHTML = '<div class="small text-danger">Mercado Pago no pudo generar el reporte. Pídalo de nuevo.</div>'; return; }
+                    vigilarTarea(taskId, configId, antes, intento + 1);
+                })
+                .catch(() => vigilarTarea(taskId, configId, antes, intento + 1));
+        }, 20000);
+    }
+
+    window.activarReportePorRetiro = function () {
+        Swal.fire({
+            icon: 'question', title: 'Reporte automático después de cada retiro',
+            html: `<div class="text-start small">
+                <p class="mb-2">Se configura la cuenta de Mercado Pago para que genere el reporte de Liberaciones
+                   cada vez que se retira dinero al banco (incluido el retiro automático de la noche).</p>
+                <p class="mb-0">Los encabezados del reporte quedan en inglés, que es lo que lee el sistema.</p></div>`,
+            showCancelButton: true, confirmButtonText: 'Activar', cancelButtonText: 'Cancelar', confirmButtonColor: '#0066FF',
+        }).then(r => {
+            if (!r.isConfirmed) return;
+            const fd = new FormData(); fd.append('config_id', libConfig());
+            fetch('/app/api/mercadopago/conciliacion/liberaciones/config/', {method: 'POST', headers: {'X-CSRFToken': csrf()}, body: fd})
+                .then(res => res.json())
+                .then(d => {
+                    if (d.success) { Swal.fire({icon: 'success', title: 'Activado', timer: 1800, showConfirmButton: false}); cargarReportesMP(); }
+                    else Swal.fire({icon: 'error', title: 'No se pudo activar', text: d.error || ''});
+                });
+        });
     };
 
     window.procesarCartola = function (aplicar) {
@@ -548,6 +692,14 @@
             .catch(() => { cont.innerHTML = '<div class="text-danger small">Error de conexión.</div>'; });
     };
 
+    // Gancho para otros módulos en las tablas del cruce contra MP. Cada fila
+    // trae `tipo` = SIN_REGISTRO (pago en MP sin registro local) o
+    // MANUAL_SIN_PAGO (pago "MP manual" cuyo N° no existe en MP).
+    function accionExtraContra(f) {
+        if (typeof window.accionExtraContraMP !== 'function') return '';
+        try { return window.accionExtraContraMP(f) || ''; } catch (e) { console.warn('accionExtraContraMP', e); return ''; }
+    }
+
     window.consultarContraMP = function () {
         const btn = document.getElementById('btnContraMP');
         const cont = document.getElementById('contraResultado');
@@ -571,12 +723,15 @@
                     '<div class="conc-help">Plata que entró a la cuenta y no está en ninguna venta ni pago del POS: puede ser una venta sin documento.</div>' +
                     tablaSimple([
                         ['Fecha', f => esc(f.fecha)], ['N° MP', f => esc(f.payment_id)], ['Monto', f => fmt(f.monto), 'num'],
-                        ['Medio', f => esc(f.medio)], ['Referencia', f => esc(f.external_reference || '-')], ['Descripción', f => esc(f.descripcion)],
+                        ['Medio', f => esc(f.medio)], ['Cuenta', f => esc(f.caja || '-')],
+                        ['Referencia', f => esc(f.external_reference || '-')], ['Descripción', f => esc(f.descripcion)],
+                        ['', f => accionExtraContra(f), 'text-end'],
                     ], d.sin_registro) +
                     `<h6 class="fw-bold">Pagos «MP manual» del POS que Mercado Pago no reconoce <span class="conc-chip conc-chip--warn">${d.manuales_sin_pago.length}</span></h6>` +
                     tablaSimple([
                         ['Fecha', f => esc(f.fecha)], ['Sucursal', f => esc(f.sucursal)], ['Ticket', f => '#' + f.ticket],
                         ['Monto', f => fmt(f.monto), 'num'], ['N° registrado', f => esc(f.voucher || '—')], ['Motivo', f => esc(f.motivo)],
+                        ['', f => accionExtraContra(f), 'text-end'],
                     ], d.manuales_sin_pago);
             })
             .catch(() => { cont.innerHTML = '<div class="text-danger">Error de conexión con el servidor.</div>'; })

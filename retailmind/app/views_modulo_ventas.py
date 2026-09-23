@@ -28,6 +28,7 @@ from datetime import datetime, timedelta
 
 # Importar funciones necesarias desde views.py
 from .views import obtener_siguiente_correlativo, obtener_correlativo_existente, consumir_stock_fifo
+from .views import respuesta_sin_permiso_nc
 
 # Helpers compartidos del módulo ventas (métodos de pago, agrupación, only() estándar)
 from .utils_ventas import (
@@ -78,6 +79,7 @@ from .models import (
     METODO_DEVOLUCION_NC_CHOICES,
     CodigoAutorizacionDinamico, RegistroAutorizacion, PermisoTemporalCambio,
     PermisoRol,
+    rol_efectivo, es_rol_administrador, puede_emitir_nota_credito,
 )
 
 
@@ -216,7 +218,7 @@ def _usuario_es_administrador_activo(usuario):
         and usuario.is_authenticated
         and usuario.is_active
         and getattr(usuario, 'es_activo', True)
-        and getattr(usuario, 'rol', '') == 'administrador'
+        and es_rol_administrador(usuario)  # Maestro o Administrador
     )
 
 
@@ -1305,7 +1307,7 @@ def crear_ticket(request):
             from django.db.models import Max
             limite_descuento_rol = 0
             if request.user.is_authenticated:
-                rol_usuario = getattr(request.user, 'rol', None)
+                rol_usuario = rol_efectivo(request.user)
                 if rol_usuario:
                     resultado = PermisoRol.objects.filter(rol=rol_usuario).aggregate(
                         max_limite=Max('limite_descuento_porcentaje')
@@ -1736,7 +1738,7 @@ def pos_dashboard(request):
     if request.user.is_authenticated:
         from .models import PermisoRol
         from django.db.models import Max
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         if rol_usuario:
             resultado = PermisoRol.objects.filter(rol=rol_usuario).aggregate(
                 max_limite=Max('limite_descuento_porcentaje')
@@ -1745,7 +1747,7 @@ def pos_dashboard(request):
                 limite_descuento_rol = float(resultado['max_limite'])
     
     # Verificar si el usuario es administrador
-    es_admin = getattr(request.user, 'rol', '') in ['administrador', 'administracion']
+    es_admin = rol_efectivo(request.user) in ['administrador', 'administracion']
 
     # Mercado Pago presencial: el botón "MP QR" del paso 3 solo se muestra si
     # la sucursal tiene config habilitada (a diferencia del botón TBK, que se
@@ -2189,7 +2191,7 @@ def anular_ticket_pendiente(request):
         # ===== ELIMINACIÓN DE DIFERENCIA DE CAMBIO (Solo Admin) =====
         if eliminar_diferencia:
             # Verificar que sea administrador
-            if getattr(request.user, 'rol', '') not in ['administrador', 'administracion']:
+            if rol_efectivo(request.user) not in ['administrador', 'administracion']:
                 return JsonResponse({
                     'success': False,
                     'error': '⛔ Solo los administradores pueden eliminar diferencias de cambio'
@@ -4574,7 +4576,7 @@ def registrar_pagos_ticket(request, correlativo):
         from django.db.models import Max as _Max
 
         limite_rol_cajero = 0
-        rol_cajero = getattr(request.user, 'rol', None)
+        rol_cajero = rol_efectivo(request.user)
         if rol_cajero:
             _res_cajero = PermisoRol.objects.filter(rol=rol_cajero).aggregate(max_limite=_Max('limite_descuento_porcentaje'))
             if _res_cajero['max_limite'] is not None:
@@ -4603,7 +4605,7 @@ def registrar_pagos_ticket(request, correlativo):
                         exitoso=True,
                     ).select_related('codigo_usado__generado_por').order_by('-fecha_hora').first()
                     if _registro and _registro.codigo_usado and _registro.codigo_usado.generado_por:
-                        _rol_sup = getattr(_registro.codigo_usado.generado_por, 'rol', None)
+                        _rol_sup = rol_efectivo(_registro.codigo_usado.generado_por)
                         if _rol_sup:
                             _res_sup = PermisoRol.objects.filter(rol=_rol_sup).aggregate(max_limite=_Max('limite_descuento_porcentaje'))
                             if _res_sup['max_limite'] is not None:
@@ -6115,7 +6117,7 @@ def gestion_ventas_documentos(request):
         except Sucursal.DoesNotExist:
             sucursal_actual = None
 
-    user_rol = getattr(request.user, 'rol', '') or ''
+    user_rol = rol_efectivo(request.user) or ''
     es_admin = user_rol == 'administrador'
 
     # Permisos granulares de edición de DTE (3 campos x 4 tipos).
@@ -6127,6 +6129,19 @@ def gestion_ventas_documentos(request):
     # Sólo se incluyen entradas donde el usuario tiene permiso para ambos
     # extremos del grupo, para que el frontend pueda ofrecer el cambio.
     compatibles_por_tipo = permisos_dte.get('compatibles_por_tipo', {})
+
+    # Editar y eliminar documentos se rigen SOLO por permisos (sin bypass por
+    # rol): el dueño los deja en el Maestro, que pasa por `tiene_permiso`. El
+    # JS arma "¿puede editar campo X en tipo T?" como campo[X] && tipo[T],
+    # la misma regla AND de `puede_editar_campo_dte` en el backend.
+    permisos_edicion_dte = {
+        'campo': {c: bool(v) for c, v in permisos_dte['campo'].items()},
+        'tipo': {t: bool(v) for t, v in permisos_dte['tipo'].items()},
+    }
+    puede_eliminar_documento = PermisoRol.tiene_permiso(
+        request.user, 'dte_eliminar_documento', 'puede_eliminar',
+        sucursal_id=sucursal_actual_id,
+    )
 
     # Vendedores para el selector del modal "DTE manual".
     # Se devuelven TODOS los vendedores activos sin filtrar por sucursal,
@@ -6180,28 +6195,25 @@ def gestion_ventas_documentos(request):
         'puede_editar_fecha_dte': permisos_dte['campo']['fecha'],
         'puede_editar_numero_dte': permisos_dte['campo']['numero_documento'],
         'puede_editar_pago_dte': permisos_dte['campo']['pago'],
-        # Permiso para cambiar el vendedor asignado al DTE.
-        # Bypass: el rol `administrador` siempre puede editar vendedor,
-        # consistente con el resto de operaciones admin-only del módulo
-        # (`crear_dte_manual`, `eliminar_documento_venta`). Esto evita
-        # que el usuario quede bloqueado cuando la migración
-        # `0151_permiso_dte_editar_vendedor` aún no se ha aplicado en
-        # el servidor; otros roles siguen necesitando el permiso
-        # granular `dte_editar_vendedor.puede_editar`.
-        'puede_editar_vendedor_dte': (
-            es_admin or permisos_dte['campo'].get('vendedor', False)
-        ),
+        # Permiso para cambiar el vendedor asignado al DTE
+        # (`dte_editar_vendedor.puede_editar`). Ya no hay bypass por rol
+        # administrador: el endpoint tampoco lo tiene.
+        'puede_editar_vendedor_dte': permisos_dte['campo'].get('vendedor', False),
         # Flags por tipo de DTE (nombre amigable: sin espacios para usar en template)
         'puede_editar_tipo_boleta_electronica': permisos_dte['tipo']['BOLETA ELECTRONICA'],
         'puede_editar_tipo_boleta_papel': permisos_dte['tipo']['BOLETA PAPEL'],
         'puede_editar_tipo_factura_electronica': permisos_dte['tipo']['FACTURA ELECTRONICA'],
         'puede_editar_tipo_factura_exenta': permisos_dte['tipo']['FACTURA EXENTA'],
-        # ¿Puede editar algo en algún tipo? → controla visibilidad del modal.
-        # Admin siempre lo ve (consistente con el bypass aplicado al
-        # resto de los flags por campo y por tipo). Los demás roles
-        # se rigen por `permisos_dte['cualquiera']` (al menos un par
-        # campo+tipo habilitado).
-        'puede_editar_algun_dte': es_admin or permisos_dte['cualquiera'],
+        # ¿Puede editar algo en algún tipo? → controla si se renderiza el
+        # modal. Al menos un par campo+tipo habilitado, o un cambio de tipo
+        # permitido (BOLETA ELECTRONICA ↔ BOLETA PAPEL).
+        'puede_editar_algun_dte': (
+            permisos_dte['cualquiera'] or bool(compatibles_por_tipo)
+        ),
+        # Mapa {campo: bool} + {tipo_documento: bool} para el JS (json_script).
+        'permisos_edicion_dte': permisos_edicion_dte,
+        # Botón "Eliminar" (soft delete + devolución de stock).
+        'puede_eliminar_documento': puede_eliminar_documento,
         # Mapa serializado {tipo_origen: [tipos_destino]} para el JS del modal
         # (usado para mostrar el selector "Tipo de Documento" en cambios
         # compatibles, p. ej. BOLETA ELECTRONICA ↔ BOLETA PAPEL).
@@ -6985,6 +6997,16 @@ def exportar_documentos_ventas_excel(request):
 @require_POST
 def convertir_ticket_a_factura(request):
     """Convertir un ticket a factura electrónica"""
+    # Emitir la factura de un ticket ya cobrado es editar el documento de la
+    # venta: se exige el permiso del tipo destino (hasta ahora bastaba el login).
+    if not PermisoRol.tiene_permiso(
+        request.user, 'dte_editar_tipo_factura_electronica', 'puede_editar',
+        sucursal_id=get_sucursal_id(request),
+    ):
+        return JsonResponse({
+            'success': False,
+            'error': 'No tiene permiso para convertir documentos a factura electrónica'
+        }, status=403)
     try:
         data = json.loads(request.body)
         documento_id = data.get('documento_id')
@@ -7342,6 +7364,16 @@ def detalle_documento_venta(request, documento_id):
 @require_POST
 def anular_documento_venta(request):
     """Anular un documento de venta"""
+    # Mismo permiso que eliminar (`dte_eliminar_documento`): anular saca el
+    # documento de la cuadratura igual que eliminarlo. Antes bastaba el login.
+    if not PermisoRol.tiene_permiso(
+        request.user, 'dte_eliminar_documento', 'puede_eliminar',
+        sucursal_id=get_sucursal_id(request),
+    ):
+        return JsonResponse({
+            'success': False,
+            'error': 'No tiene permiso para anular documentos'
+        }, status=403)
     try:
         data = json.loads(request.body)
         documento_id = data.get('documento_id')
@@ -7486,7 +7518,8 @@ def eliminar_documento_venta(request):
     3. Si hay ticket vinculado, lo marca como ``estado='ANULADO'`` (queda
        fuera de tickets pagados de la cuadratura).
 
-    Restricción: solo administradores (`request.user.rol == 'administrador'`).
+    Restricción: permiso `dte_eliminar_documento.puede_eliminar` (sin bypass
+    por rol; el Maestro pasa por `tiene_permiso`).
     El soft delete deja el DTE en BD para auditoría / reversión manual con
     `restaurar_dte`.
 
@@ -7505,12 +7538,14 @@ def eliminar_documento_venta(request):
                 'error': 'ID de documento requerido'
             })
 
-        # Solo administradores pueden eliminar.
-        rol_usuario = getattr(request.user, 'rol', '') or ''
-        if rol_usuario != 'administrador':
+        # Eliminar se rige por el permiso fino, no por el rol.
+        if not PermisoRol.tiene_permiso(
+            request.user, 'dte_eliminar_documento', 'puede_eliminar',
+            sucursal_id=get_sucursal_id(request),
+        ):
             return JsonResponse({
                 'success': False,
-                'error': 'Solo los administradores pueden eliminar documentos'
+                'error': 'No tiene permiso para eliminar documentos'
             }, status=403)
 
         # Trazabilidad de quién y cuándo descartó.
@@ -8209,30 +8244,14 @@ def editar_dte_boleta_papel(request):
 
             # Validar permisos campo + tipo para cada cambio solicitado.
             #
-            # El rol `administrador` salta la matriz de permisos granulares
-            # SÓLO en los campos sin efecto tributario (`pago` y `vendedor`),
-            # que es donde el bypass hacía falta cuando las migraciones de
-            # permisos (0140 / 0151) no estaban aplicadas.
-            #
-            # Para `numero_documento` y `fecha` se exige el permiso real: son
-            # los campos que alteran la identidad del documento ante el SII y
-            # el frontend ya los habilita/deshabilita con ese mismo permiso
-            # (`puede_editar_numero_dte` / `puede_editar_fecha_dte` en el
-            # contexto de `gestion_ventas_documentos`), de modo que el bypass
-            # sólo servía para saltarse la matriz por POST directo.
-            # Verificado en producción: los 8 administradores activos tienen
-            # `puede_editar=True` en `dte_editar_numero`, `dte_editar_fecha` y
-            # los 4 `dte_editar_tipo_*`, sin PermisoSucursal ni PermisoUsuario
-            # que los recorte, así que el cambio es transparente hoy.
-            CAMPOS_CON_BYPASS_ADMIN = {'pago', 'vendedor'}
+            # TODOS los campos exigen su permiso real (campo + tipo), sin
+            # bypass por rol: antes el administrador se saltaba la matriz en
+            # `pago` y `vendedor` (herencia de cuando las migraciones 0140 /
+            # 0151 podían no estar aplicadas). El dueño deja la edición solo
+            # al Maestro, que pasa por `PermisoRol.tiene_permiso`.
             errores_permiso = []
-            es_admin_request = (
-                getattr(request.user, 'rol', '') == 'administrador'
-            )
 
             def _check(campo):
-                if es_admin_request and campo in CAMPOS_CON_BYPASS_ADMIN:
-                    return
                 if not puede_editar_campo_dte(
                     request.user, campo, dte.tipo_documento,
                     sucursal_id=sucursal_id_sesion,
@@ -8899,7 +8918,7 @@ def crear_dte_manual(request):
 
     # Restricción de rol: solo administradores. La pantalla ya esconde el
     # botón cuando no corresponde, pero validamos también del lado servidor.
-    if getattr(request.user, 'rol', '') != 'administrador':
+    if rol_efectivo(request.user) != 'administrador':
         return JsonResponse({
             'success': False,
             'error': 'Solo los administradores pueden crear DTEs manuales'
@@ -9135,7 +9154,7 @@ def revision_arqueos(request):
     if not sucursal_actual:
         return redirect('dashboard')
 
-    rol_usuario = getattr(request.user, 'rol', None)
+    rol_usuario = rol_efectivo(request.user)
     es_supervisor = rol_usuario in ['administrador', 'administracion']
     if not es_supervisor:
         return redirect('cuadratura_caja')
@@ -9166,7 +9185,7 @@ def cuadratura_caja(request):
         return redirect('dashboard')
     
     # Obtener rol del usuario
-    rol_usuario = getattr(request.user, 'rol', None)
+    rol_usuario = rol_efectivo(request.user)
     
     # Verificar si el usuario es administrador (para permisos de reabrir arqueos)
     es_administrador = rol_usuario == 'administrador'
@@ -9190,6 +9209,19 @@ def cuadratura_caja(request):
     # u oculte los controles de edición de fecha por cada DTE asociado.
     permisos_dte = permisos_edicion_dte_context(request.user, sucursal_actual_id)
 
+    # Alerta Mercado Pago de la caja de HOY (cobros MP sin venta y pagos
+    # «MP manual» sin transacción). Se calcula aquí para que se vea en la
+    # página sin abrir el Resumen de Caja; el Resumen la trae por fecha desde
+    # `generar_cuadratura_caja`. Nunca debe romper la pantalla.
+    alertas_mp_hoy = None
+    try:
+        from .services import asociacion_mp_service
+        alertas_mp_hoy = asociacion_mp_service.resumen_alerta_caja(
+            sucursal_actual.id, timezone.localdate())
+    except Exception:
+        logger.exception('cuadratura_caja: no se pudo calcular la alerta MP (sucursal %s)',
+                         sucursal_actual.id)
+
     context = {
         'sucursal_actual': sucursal_actual,
         'es_administrador': es_administrador,
@@ -9211,6 +9243,20 @@ def cuadratura_caja(request):
         # si se muestran los botones de "Ver detalle" / "Editar fecha" en
         # el modal de Resumen de Caja.
         'puede_editar_algun_dte': permisos_dte['cualquiera'],
+        # Eliminar documentos desde el detalle del Resumen (mismo permiso que
+        # Gestión de Documentos; ya no es un chequeo de rol).
+        'puede_eliminar_documento': PermisoRol.tiene_permiso(
+            request.user, 'dte_eliminar_documento', 'puede_eliminar',
+            sucursal_id=sucursal_actual_id),
+        # Alerta Mercado Pago: link a Conciliación solo si puede verla.
+        'alertas_mp_hoy': alertas_mp_hoy,
+        'fecha_hoy_iso': timezone.localdate().strftime('%Y-%m-%d'),
+        'puede_ver_conciliacion_mp': PermisoRol.tiene_permiso(
+            request.user, 'dineros_mercadopago', 'puede_ver',
+            sucursal_id=sucursal_actual_id),
+        'puede_asociar_mp': PermisoRol.tiene_permiso(
+            request.user, 'asociar_pagos_mercadopago', 'puede_editar',
+            sucursal_id=sucursal_actual_id),
     }
     return render(request, 'vistas/modulo_ventas/cuadraturaCaja.html', context)
 
@@ -10206,8 +10252,21 @@ def generar_cuadratura_caja(request):
         # teóricos dentro del modal de Arqueo (cajeros/vendedores), pero dejar
         # visible el efectivo en el Resumen de Caja para evitar el mensaje
         # "Pendiente de conteo" que resulta confuso en ese contexto.
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         cuadratura_data['modo_conteo_ciego'] = rol_usuario in ('cajero', 'vendedor')
+
+        # Alerta Mercado Pago del día (cobros MP sin venta / pagos «MP manual»
+        # sin transacción). Va AQUÍ y no en `_calcular_cuadratura_data`, que
+        # también usan el recálculo del arqueo y el Excel. Si falla, se omite:
+        # la cuadratura no puede caerse por un aviso.
+        try:
+            from .services import asociacion_mp_service
+            fecha_date = datetime.strptime(fecha_cuadratura, '%Y-%m-%d').date()
+            cuadratura_data['alertas_mp'] = asociacion_mp_service.resumen_alerta_caja(
+                sucursal.id, fecha_date)
+        except Exception:
+            logger.exception('generar_cuadratura_caja: no se pudo calcular la alerta MP '
+                             '(sucursal %s, fecha %s)', sucursal_id, fecha_cuadratura)
 
         return JsonResponse({
             'success': True,
@@ -10333,12 +10392,19 @@ def obtener_detalle_cuadratura_metodos_pago(request):
     flags_campo = permisos_dte.get('campo', {})
     flags_tipo = permisos_dte.get('tipo', {})
 
-    # Eliminar un ítem (boleta/factura/NC) desde este modal, y editar la
-    # fecha de cuadratura de una NC, no tienen permiso granular por tipo
-    # (`CODIGO_PERMISO_TIPO_DTE` no incluye 'NOTA DE CREDITO'), así que se
-    # restringen al mismo gate de rol que usa `eliminar_documento_venta`.
-    rol_usuario = getattr(request.user, 'rol', '') or ''
-    es_admin = rol_usuario == 'administrador'
+    # Eliminar un ítem (boleta/factura/NC) desde este modal y editar la fecha
+    # de cuadratura de una NC no tienen permiso por tipo
+    # (`CODIGO_PERMISO_TIPO_DTE` no incluye 'NOTA DE CREDITO'): usan los mismos
+    # permisos finos que sus endpoints (`eliminar_documento_venta` y
+    # `editar_fecha_pago_nc`), sin chequeo de rol.
+    puede_eliminar_doc = PermisoRol.tiene_permiso(
+        request.user, 'dte_eliminar_documento', 'puede_eliminar',
+        sucursal_id=sucursal_id,
+    )
+    puede_editar_fecha_pago_nc = PermisoRol.tiene_permiso(
+        request.user, 'dte_editar_pago', 'puede_editar',
+        sucursal_id=sucursal_id,
+    )
 
     # ---------------------------------------------------------------
     # 1) Pagos desde TICKETS PAGADOS del día (con o sin DTE asociado).
@@ -10426,7 +10492,7 @@ def obtener_detalle_cuadratura_metodos_pago(request):
             ),
             'editar_pago': bool(flags_campo.get('pago') and tipo_ok),
             'editar_fecha_ticket': False,
-            'eliminar': es_admin,
+            'eliminar': puede_eliminar_doc,
         }
 
     for ticket in tickets_qs:
@@ -10639,8 +10705,8 @@ def obtener_detalle_cuadratura_metodos_pago(request):
                     'editar_fecha_ticket': False,
                     # Edita `fecha_pago` (fecha de cuadratura), no
                     # `fecha_emision` — botón distinto en el frontend.
-                    'editar_fecha_pago_nc': es_admin,
-                    'eliminar': es_admin,
+                    'editar_fecha_pago_nc': puede_editar_fecha_pago_nc,
+                    'eliminar': puede_eliminar_doc,
                 },
             })
 
@@ -10688,7 +10754,8 @@ def obtener_detalle_cuadratura_metodos_pago(request):
             'cualquier_edicion': bool(permisos_dte.get('cualquiera')),
             'campo': flags_campo,
             'tipo': flags_tipo,
-            'puede_eliminar': es_admin,
+            'puede_eliminar': puede_eliminar_doc,
+            'puede_editar_fecha_pago_nc': puede_editar_fecha_pago_nc,
         },
     })
 
@@ -10704,17 +10771,19 @@ def editar_fecha_pago_nc(request):
     A diferencia de `editar_dte_boleta_papel` (que edita `fecha_emision`
     y requiere el permiso granular `dte_editar_fecha` + `dte_editar_tipo_*`),
     aquí no existe permiso granular por tipo para NOTA DE CREDITO
-    (`CODIGO_PERMISO_TIPO_DTE` no la incluye), así que se restringe al
-    mismo gate de rol que usa `eliminar_documento_venta`: solo
-    administrador.
+    (`CODIGO_PERMISO_TIPO_DTE` no la incluye). Como lo que se mueve es la
+    imputación de un PAGO a otro día de caja, se exige `dte_editar_pago`
+    (puede_editar), sin chequeo de rol.
 
     Body JSON: { "dte_id": 123, "fecha_pago": "YYYY-MM-DD" }
     """
-    rol_usuario = getattr(request.user, 'rol', '') or ''
-    if rol_usuario != 'administrador':
+    if not PermisoRol.tiene_permiso(
+        request.user, 'dte_editar_pago', 'puede_editar',
+        sucursal_id=get_sucursal_id(request),
+    ):
         return JsonResponse({
             'success': False,
-            'error': 'Solo los administradores pueden editar la fecha de cuadratura de una NC',
+            'error': 'No tiene permiso para editar la fecha de cuadratura de una NC',
         }, status=403)
 
     try:
@@ -11213,7 +11282,7 @@ def guardar_cuadratura_completa(request):
         )
         
         # === CREAR DEPÓSITOS BANCARIOS ===
-        deposito_confirmado_por_supervisor = getattr(request.user, 'rol', None) in [
+        deposito_confirmado_por_supervisor = rol_efectivo(request.user) in [
             'administrador',
             'administracion',
         ]
@@ -11328,7 +11397,7 @@ def eliminar_cuadratura(request, arqueo_id):
     """Eliminar una cuadratura existente"""
     try:
         # Verificar permisos
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         if rol_usuario not in ('administrador', 'administracion'):
             return JsonResponse({
                 'success': False,
@@ -11637,7 +11706,7 @@ def obtener_detalle_arqueo(request, arqueo_id):
     try:
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
         
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         es_supervisor = rol_usuario in ['administrador', 'administracion']
         
         qs = ArqueoCaja.objects.select_related('usuario_responsable', 'sucursal').prefetch_related('depositos')
@@ -11809,7 +11878,7 @@ def obtener_detalle_arqueo(request, arqueo_id):
 def agregar_deposito_arqueo(request):
     """Agregar un depósito bancario a un arqueo existente (solo supervisores)"""
     try:
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         es_supervisor = rol_usuario in ['administrador', 'administracion']
         if not es_supervisor:
             return JsonResponse({'success': False, 'error': 'No tiene permisos para registrar depósitos directamente. Solo supervisores.'}, status=403)
@@ -12108,7 +12177,7 @@ def declarar_deposito(request):
     Permite múltiples depósitos por arqueo (ej: efectivo + cheque).
     """
     try:
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         if rol_usuario not in ('cajero', 'vendedor', 'jefe_local', 'administracion', 'administrador'):
             return JsonResponse({'success': False, 'error': 'No tiene permisos para declarar depósitos.'}, status=403)
 
@@ -12204,7 +12273,7 @@ def finalizar_declaracion(request):
     Transiciona el arqueo de CERRADO/CON_DIFERENCIAS → DEPOSITO_DECLARADO.
     """
     try:
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         if rol_usuario not in ('cajero', 'vendedor', 'jefe_local', 'administracion', 'administrador'):
             return JsonResponse({'success': False, 'error': 'No tiene permisos para finalizar declaración de depósitos.'}, status=403)
 
@@ -12272,7 +12341,7 @@ def confirmar_deposito(request, deposito_id):
             return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
 
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         es_supervisor = rol_usuario in ['administrador', 'administracion']
 
         if not es_supervisor:
@@ -12375,7 +12444,7 @@ def confirmar_deposito(request, deposito_id):
 def obtener_depositos_pendientes(request):
     """Retorna depósitos declarados pero sin verificar para el panel del supervisor."""
     try:
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         es_supervisor = rol_usuario in ['administrador', 'administracion']
         if not es_supervisor:
             return JsonResponse({'success': True, 'depositos': [], 'total': 0})
@@ -12457,7 +12526,7 @@ def listar_arqueos_para_deposito(request):
     Solo supervisores.
     """
     try:
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         es_supervisor = rol_usuario in ['administrador', 'administracion']
         if not es_supervisor:
             return JsonResponse({'success': False, 'error': 'Solo supervisores pueden acceder a depósitos multi-día.'}, status=403)
@@ -12523,7 +12592,7 @@ def crear_deposito_multidia(request):
         import json
         from datetime import datetime
 
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         es_supervisor = rol_usuario in ['administrador', 'administracion']
         if not es_supervisor:
             return JsonResponse({'success': False, 'error': 'Solo supervisores pueden crear depósitos multi-día.'}, status=403)
@@ -12741,7 +12810,7 @@ def editar_cuadratura(request, arqueo_id):
             arqueo.depositos.all().delete()
             
             # Crear nuevos depósitos
-            deposito_confirmado_por_supervisor = getattr(request.user, 'rol', None) in [
+            deposito_confirmado_por_supervisor = rol_efectivo(request.user) in [
                 'administrador',
                 'administracion',
             ]
@@ -13152,7 +13221,7 @@ def _sucursales_permitidas(request):
     universo permitido para poder soportar `sucursal_id=all` y listas separadas
     por coma sin abrir el acceso a sucursales ajenas.
     """
-    rol_usuario = getattr(request.user, 'rol', None)
+    rol_usuario = rol_efectivo(request.user)
     es_supervisor = rol_usuario in ['administrador', 'administracion']
     try:
         # `obtener_sucursales_usuario` (utils_permisos) devuelve instancias de
@@ -13229,7 +13298,7 @@ def listar_arqueos(request):
         from calendar import monthrange
 
         sucursal_ids, es_supervisor = _resolver_sucursales_filtro(request)
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
 
         if not sucursal_ids:
             return JsonResponse({
@@ -13932,7 +14001,7 @@ def corregir_arqueos_express(request):
       se corrijan uno por uno.
     """
     try:
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         if rol_usuario != 'administrador':
             return JsonResponse({
                 'success': False,
@@ -14113,7 +14182,7 @@ def crear_arqueo(request):
                 'error': 'No puede crear arqueos para fechas futuras'
             })
 
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         config_rango_arqueo = obtener_configuracion_rango_arqueo(
             rol_usuario,
             fecha_referencia=hoy,
@@ -14600,7 +14669,7 @@ def revisar_arqueo(request):
     Soporta resultado_revision: OK, OK_CON_OBS, REQUIERE_ACCION
     """
     try:
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         es_supervisor = rol_usuario in ['administrador', 'administracion']
         
         if not es_supervisor:
@@ -14825,7 +14894,7 @@ def revisar_arqueos_lote(request):
     `LogAccionCaja`, igual que la individual.
     """
     try:
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         if rol_usuario not in ['administrador', 'administracion']:
             return JsonResponse({
                 'success': False,
@@ -14923,7 +14992,7 @@ def crear_observacion_arqueo(request):
 
         arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id)
 
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         es_supervisor = rol_usuario in ['administrador', 'administracion']
         tipo = 'SUPERVISOR' if es_supervisor else 'CAJERA'
         visible = data.get('visible_para_cajera', True)
@@ -14961,7 +15030,7 @@ def obtener_bitacora_arqueo(request, arqueo_id):
     try:
         arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id)
 
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         es_supervisor = rol_usuario in ['administrador', 'administracion']
 
         qs = arqueo.bitacora.select_related('usuario').all()
@@ -15118,7 +15187,7 @@ def registrar_comprobante_supervisor(request):
     """
     try:
         # Verificar permisos de supervisor
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         es_supervisor = rol_usuario in ['administrador', 'administracion']
         
         if not es_supervisor:
@@ -15278,7 +15347,7 @@ def verificar_deposito(request):
     """
     try:
         # Verificar permisos de supervisor
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         es_supervisor = rol_usuario in ['administrador', 'administracion']
         
         if not es_supervisor:
@@ -15500,7 +15569,7 @@ def reabrir_arqueo(request):
         from app.models.caja import HistorialReaperturaArqueo
         from app.models.precios import ParametroGlobal
 
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
 
         data = json.loads(request.body)
         fecha_str = data.get('fecha')
@@ -15680,7 +15749,7 @@ def analisis_fraude_caja(request):
     Solo accesible para administrador/administración.
     """
     try:
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         if rol_usuario not in ('administrador', 'administracion'):
             return JsonResponse({
                 'success': False,
@@ -15757,7 +15826,7 @@ def obtener_arqueo_detalle(request, arqueo_id):
             # aviso "Teóricos actualizados desde DTE" cuando corresponda.
             'recalculo_auto_aplicado': recalculo_auto_aplicado,
             'puede_recalcular_manual': (
-                getattr(request.user, 'rol', None) in ('administrador', 'administracion')
+                rol_efectivo(request.user) in ('administrador', 'administracion')
             ),
             
             # Totales teóricos
@@ -15911,7 +15980,7 @@ def recalcular_teoricos_arqueo(request, arqueo_id):
         arqueo = get_object_or_404(ArqueoCaja, id=arqueo_id)
 
         sucursal_id = request.session.get('idSucursalActual') or request.session.get('sucursalActual')
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         es_supervisor = rol_usuario in ('administrador', 'administracion')
 
         if not es_supervisor and arqueo.sucursal_id != int(sucursal_id or 0):
@@ -17149,8 +17218,15 @@ def gestion_cambios_devoluciones(request):
         'tickets_cambio_pendientes': tickets_cambio_data,
         'total_tickets_pendientes': len(tickets_cambio_data),
         'qz_config': _get_qz_config(sucursal_actual_id),
-        'user_rol': getattr(request.user, 'rol', ''),
+        # Rol EFECTIVO: el template compara user_rol con 'administrador' y el
+        # Maestro debe pasar igual.
+        'user_rol': rol_efectivo(request.user) or '',
         'revision_pendiente_count': revision_pendiente_count,
+        # Permiso fino de NC a clientes (botones "NC"/"Generar NC"); el
+        # endpoint generar_nc_devolucion lo vuelve a validar.
+        'puede_emitir_nc': puede_emitir_nota_credito(
+            request.user, request.session.get('idSucursalActual'),
+        ),
     }
     return render(request, 'vistas/modulo_ventas/gestion_cambios_devoluciones.html', context)
 
@@ -20069,7 +20145,7 @@ def obtener_codigo_autorizacion_actual(request):
         from .models import CodigoAutorizacionDinamico
         
         # Verificar que el usuario tenga el rol apropiado
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         
         if rol_usuario not in ['administrador', 'jefe_local']:
             return JsonResponse({
@@ -20195,7 +20271,7 @@ def validar_codigo_autorizacion(request):
         if codigo_obj.generado_por:
             from .models import PermisoRol
             from django.db.models import Max
-            rol_supervisor = getattr(codigo_obj.generado_por, 'rol', None)
+            rol_supervisor = rol_efectivo(codigo_obj.generado_por)
             if rol_supervisor:
                 resultado_sup = PermisoRol.objects.filter(rol=rol_supervisor).aggregate(
                     max_limite=Max('limite_descuento_porcentaje')
@@ -21720,7 +21796,7 @@ def obtener_analisis_fraude_cambios(request):
     Solo accesible para administradores, jefes locales y administración.
     """
     try:
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         if rol_usuario not in ['administrador', 'jefe_local', 'administracion']:
             return JsonResponse({'success': False, 'error': 'No tiene permisos para acceder a esta información'}, status=403)
 
@@ -21780,7 +21856,7 @@ def obtener_analisis_cambios_avanzado(request):
     Solo accesible para administradores, jefes locales y administración.
     """
     try:
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         if rol_usuario not in ['administrador', 'jefe_local', 'administracion']:
             return JsonResponse({'success': False, 'error': 'No tiene permisos para acceder a esta información'}, status=403)
 
@@ -21815,7 +21891,7 @@ def listar_autorizaciones_cross_branch(request):
     try:
         from .models import RegistroAutorizacion
 
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         if rol_usuario not in ['administrador', 'jefe_local', 'administracion']:
             return JsonResponse({'success': False, 'error': 'No tiene permisos'}, status=403)
 
@@ -21884,7 +21960,7 @@ def revisar_autorizacion(request, registro_id):
     try:
         from .models import RegistroAutorizacion
 
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         if rol_usuario not in ['administrador', 'jefe_local', 'administracion']:
             return JsonResponse({'success': False, 'error': 'No tiene permisos'}, status=403)
 
@@ -21908,7 +21984,7 @@ def revisar_autorizacion(request, registro_id):
 def obtener_cola_revision_gerencial(request):
     """Obtiene la cola de cambios que requieren revisión gerencial."""
     try:
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         if rol_usuario not in ['administrador', 'jefe_local', 'administracion']:
             return JsonResponse({'success': False, 'error': 'No tiene permisos'}, status=403)
 
@@ -21957,7 +22033,7 @@ def obtener_cola_revision_gerencial(request):
 def revisar_cambio_gerencial(request):
     """Marca un cambio como revisado por gerencia."""
     try:
-        rol_usuario = getattr(request.user, 'rol', None)
+        rol_usuario = rol_efectivo(request.user)
         if rol_usuario not in ['administrador', 'jefe_local', 'administracion']:
             return JsonResponse({'success': False, 'error': 'No tiene permisos'}, status=403)
 
@@ -23401,9 +23477,13 @@ def generar_nc_devolucion(request):
     except EmpresaUser.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Usuario no tiene empresa asignada'}, status=403)
 
-    rol = getattr(empresa_user, 'rol', None) or getattr(request.user, 'rol', '')
+    rol = getattr(empresa_user, 'rol', None) or rol_efectivo(request.user) or ''
     if rol not in ('administrador', 'administracion', 'jefe_local'):
         return JsonResponse({'success': False, 'error': 'No tiene permisos para generar Notas de Crédito'}, status=403)
+
+    # Además del rol, el permiso fino de NC a clientes (antes de consumir folio).
+    if not puede_emitir_nota_credito(request.user, request.session.get('idSucursalActual')):
+        return respuesta_sin_permiso_nc()
 
     # Obtener CambioDevolucion
     try:

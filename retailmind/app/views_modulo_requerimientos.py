@@ -35,7 +35,7 @@ from .models import (
     ESTADO_REQUERIMIENTO_CHOICES, TIPO_REQUERIMIENTO_CHOICES,
     ORIGEN_REQUERIMIENTO_CHOICES, ETAPA_POR_ESTADO, ESTADOS_CERRADOS,
     Ticket, Dte, Dte_Productos, Movimientos_Producto, LoteProducto,
-    DocumentoCompraLegacy,
+    DocumentoCompraLegacy, rol_efectivo,
 )
 from .services.pdf_requerimiento_proveedor import (
     generar_pdf_requerimiento, nombre_archivo_pdf,
@@ -67,9 +67,10 @@ EMAIL_TIMEOUT_SEGUNDOS = int(os.environ.get('REQUERIMIENTOS_EMAIL_TIMEOUT', '30'
 # ========== SISTEMA DE PERMISOS ==========
 
 def obtener_rol_usuario(user):
-    """Obtiene el rol del usuario"""
+    """Obtiene el rol del usuario PARA CHEQUEOS de permiso: el Maestro pasa
+    como 'administrador' (no usar para mostrar el rol real)."""
     if hasattr(user, 'rol'):
-        return user.rol
+        return rol_efectivo(user)
 
     return 'vendedor'  # Por defecto
 

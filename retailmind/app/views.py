@@ -35,9 +35,12 @@ from .models import (
     TIPO_DOCUMENTO_CHOICES,
     ESTADO_TICKET_CHOICES,
     METODO_PAGO_TICKET_CHOICES,
+    rol_efectivo,
+    es_rol_administrador,
+    puede_emitir_nota_credito,
 )
 from django.contrib.auth.decorators import login_required
-from app.decorators import requiere_permiso
+from app.decorators import requiere_permiso, solo_administrador
 from app.models.permisos import PermisoRol, PermisoUsuario
 from app.utils_permisos import puede_cambiar_sucursal
 from django.contrib.sessions.models import Session
@@ -56,6 +59,22 @@ import json
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+# Permiso fino de Nota de Crédito: se exige ADEMÁS del permiso de cada
+# pantalla, antes de cualquier escritura o consumo de folio.
+MSG_SIN_PERMISO_NC = 'No tienes permiso para emitir Notas de Crédito. Pídeselo al Maestro.'
+MSG_SIN_PERMISO_NC_TRASPASO = (
+    'No tienes permiso para emitir Notas de Crédito de traspasos internos. '
+    'Pídeselo al Maestro.'
+)
+
+
+def respuesta_sin_permiso_nc(traspaso=False):
+    """403 estándar cuando falta el permiso de emitir NC (trae 'error' y
+    'mensaje' porque los endpoints usan una u otra clave)."""
+    msg = MSG_SIN_PERMISO_NC_TRASPASO if traspaso else MSG_SIN_PERMISO_NC
+    return JsonResponse({'success': False, 'error': msg, 'mensaje': msg}, status=403)
 
 
 def rollback_en_error(view_func):
@@ -320,6 +339,12 @@ def recepcion_dte(request):
         # no se renderiza y el endpoint /exportar_productos_regularizar_pdf/
         # devuelve 403.
         'puede_exportar_regularizar': _permiso_recepcion_dte(request.user, 'puede_exportar', sucursal_id),
+        # Permisos finos de NC (también los usa _modal_regularizar.html). Los
+        # documentos de esta pantalla son traspasos internos → el de traspaso.
+        'puede_emitir_nc': puede_emitir_nota_credito(request.user, sucursal_id),
+        'puede_emitir_nc_traspaso': puede_emitir_nota_credito(
+            request.user, sucursal_id, traspaso=True,
+        ),
     })
 
 
@@ -2708,7 +2733,7 @@ def cancelar_dte_traspaso_api(request):
     except EmpresaUser.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Usuario no tiene empresa asignada.'}, status=403)
 
-    rol = getattr(empresa_user, 'rol', None) or getattr(request.user, 'rol', '')
+    rol = getattr(empresa_user, 'rol', None) or rol_efectivo(request.user) or ''
     if rol not in ('administrador', 'jefe_local', 'administracion'):
         return JsonResponse({
             'success': False,
@@ -3574,6 +3599,16 @@ def ajustar_dte_emisor_api(request):
                     'success': False,
                     'error': f'El DTE está {dte.estado_dte}. No se puede ajustar.',
                 }, status=409)
+
+            # Si el original es FACTURA/BOLETA el ajuste emite una NC real (SII):
+            # exige además el permiso de NC de traspaso, ANTES de mover stock
+            # (el atomic hace COMMIT en los return). Los AJUSTE TRASPASO de
+            # guías no son NC y siguen igual.
+            if (dte.tipo_documento or '').upper() in (
+                'FACTURA ELECTRONICA', 'FACTURA_ELECTRONICA',
+                'BOLETA ELECTRONICA', 'BOLETA_ELECTRONICA',
+            ) and not puede_emitir_nota_credito(request.user, sucursal_actual_id, traspaso=True):
+                return respuesta_sin_permiso_nc(traspaso=True)
 
             # Un DTE rechazado DESPUÉS del fix de jul-2026 ya devolvió su stock
             # al origen (ver `rechazar_recepcion_api`), y sus TRASPASO_SALIDA
@@ -6887,6 +6922,11 @@ def regularizar_producto_api(request):
                     ]
                 )
                 if _emite_nc:
+                    # Emite una NC real: exige además el permiso de NC de traspaso.
+                    if not puede_emitir_nota_credito(
+                        request.user, request.session.get('idSucursalActual'), traspaso=True,
+                    ):
+                        return respuesta_sin_permiso_nc(traspaso=True)
                     err_disp = _validar_disponible_nc_linea(
                         recepcion.dte, recepcion.dte_producto, cantidad_nc
                     )
@@ -7108,9 +7148,15 @@ def regularizar_producto_api(request):
             
             # NUEVO: Emitir NC directamente (emisor ejecuta)
             if tipo_regularizacion == 'EMITIR_NC' or data.get('ejecutar_nc'):
+                # Emite una NC real de traspaso: permiso fino además del de la pantalla.
+                if not puede_emitir_nota_credito(
+                    request.user, request.session.get('idSucursalActual'), traspaso=True,
+                ):
+                    return respuesta_sin_permiso_nc(traspaso=True)
+
                 motivo_nc = data.get('motivo_nc', '')
                 cantidad_nc = int(data.get('cantidad_nc', 0))
-                
+
                 if not motivo_nc:
                     return JsonResponse({
                         'success': False,
@@ -7390,6 +7436,12 @@ def regularizar_producto_api(request):
             
             # NUEVO: Enviar producto de cambio (emisor ejecuta)
             if tipo_regularizacion == 'ENVIAR_CAMBIO' or data.get('ejecutar_envio'):
+                # Emite una NC por el producto original: permiso de NC de traspaso.
+                if not puede_emitir_nota_credito(
+                    request.user, request.session.get('idSucursalActual'), traspaso=True,
+                ):
+                    return respuesta_sin_permiso_nc(traspaso=True)
+
                 producto_envio_id = int(data.get('producto_envio_id', 0))
                 cantidad_envio = int(data.get('cantidad_envio', 0))
                 motivo_envio = data.get('motivo_envio', '')
@@ -7883,7 +7935,13 @@ def regularizar_dte_masivo(request):
                 'success': False,
                 'error': 'Faltan datos requeridos (DTE, productos o motivo)'
             }, status=400)
-        
+
+        # Siempre emite una NC de traspaso: permiso fino además del de la pantalla.
+        if not puede_emitir_nota_credito(
+            request.user, request.session.get('idSucursalActual'), traspaso=True,
+        ):
+            return respuesta_sin_permiso_nc(traspaso=True)
+
         usuario = request.user.username
         hoy = timezone.now()
         
@@ -9460,6 +9518,7 @@ def obtener_correlativo_existente(sucursal, tipo):
         tipo_dte=tipo
     ).first()
 # ========== VISTAS PARA VENTAS AL PÚBLICO ==========
+@login_required
 @require_POST
 @transaction.atomic
 def crear_ticket_venta(request):
@@ -9709,6 +9768,7 @@ def obtener_tickets_venta(request):
 
 # ========== VISTAS PARA AJUSTES DE INVENTARIO ==========
 
+@login_required
 @require_POST
 @transaction.atomic
 def crear_ajuste_inventario(request):
@@ -10956,9 +11016,19 @@ def verGestionProducto(request):
     return render(request, 'vistas/modulo_existencias/verGestionProductos.html', context)
 @login_required
 def verGestionDteCompras(request):
-     
-     
-    return render(request, 'vistas/modulo_compras/gestionDteCompras.html' )
+    # Permisos finos (migración 0234): editar / eliminar pagos y eliminar el
+    # documento. Los endpoints validan lo mismo; aquí solo se ocultan los
+    # botones que responderían 403. "Pagar" (registrar pago) no depende de esto.
+    sucursal_id = request.session.get('idSucursalActual')
+    context = {
+        'puede_editar_pagos_compra': PermisoRol.tiene_permiso(
+            request.user, 'dte_compras_pagos', 'puede_editar', sucursal_id=sucursal_id),
+        'puede_eliminar_pagos_compra': PermisoRol.tiene_permiso(
+            request.user, 'dte_compras_pagos', 'puede_eliminar', sucursal_id=sucursal_id),
+        'puede_eliminar_dte_compra': PermisoRol.tiene_permiso(
+            request.user, 'dte_compras_eliminar', 'puede_eliminar', sucursal_id=sucursal_id),
+    }
+    return render(request, 'vistas/modulo_compras/gestionDteCompras.html', context)
 
 
 def ver_resetPassword(request):
@@ -11167,6 +11237,7 @@ def cambiar_password_obligatorio(request):
 def obtenerDetalleComprasPorParametros(request):
    
     return True
+@login_required
 def crear_compra(request):
     try:
         from datetime import date as _date
@@ -12014,6 +12085,7 @@ def importar_csv_compra(request):
     return JsonResponse({"success": False, "error": "Método no permitido"})
 
  
+@login_required
 def recepcionar_compra(request):
     if request.method == 'POST':
         body = json.loads(request.body)
@@ -12500,6 +12572,7 @@ def obtener_dte_compras(request):
  
   
   
+@login_required
 def crearDteCompras(request):
     if request.method == 'POST':
         try:
@@ -12689,6 +12762,7 @@ def crearDteCompras(request):
     return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
 
 
+@login_required
 def actualizarDteCompras(request, dte_id):
     """Actualizar un DTE de compras existente"""
     if request.method == 'PUT':
@@ -13198,6 +13272,7 @@ def cargarDteCompra(request):
 
     return JsonResponse({'error': 'Método no permitido'}, status=405)
 
+@login_required
 def facturasPendientesPorMes(request):
     """
     Devuelve facturas (DTE) pendientes de pago para el mes seleccionado (YYYY-MM),
@@ -13981,6 +14056,7 @@ def _construir_pdf_comprobante_pago(empresa_id, dte_ids):
     return buffer.getvalue(), proveedor_nombre, safe_prov
 
 
+@login_required
 def comprobantePagoDTE(request):
     """
     Genera/descarga el PDF "Comprobante de Pago Programado" para un conjunto de
@@ -14176,6 +14252,7 @@ def datos_envio_comprobante(request, dte_id):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
+@login_required
 def enviar_comprobante_pago(request):
     """
     Envía por correo al proveedor el PDF "Comprobante de Pago" de una factura
@@ -14293,6 +14370,7 @@ def enviar_comprobante_pago(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
+@login_required
 def registrarPagoDTE(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Método no permitido'}, status=405)
@@ -14379,6 +14457,7 @@ def registrarPagoDTE(request):
         return JsonResponse({'error': str(e)}, status=500)
  
  
+@login_required
 def obtenerDetallePago(request, dte_id):
     if request.method != 'GET':
         return JsonResponse({'error': 'Método no permitido'}, status=405)
@@ -14396,6 +14475,7 @@ def obtenerDetallePago(request, dte_id):
     except Dte.DoesNotExist:
         return JsonResponse({'error': 'DTE no encontrado'}, status=404)
 
+@login_required
 def pagosDTE(request, dte_id):
     if request.method == 'GET':
         pagos_qs = Dte_Detalle_Pago.objects.filter(
@@ -14419,9 +14499,39 @@ def pagosDTE(request, dte_id):
             })
         return JsonResponse(pagos, safe=False)
 
- 
+
+# Permisos finos de edición de documentos de compra (migración 0234). Se
+# sembraron para los roles que ya veían Gestión Documentos Compras; el comando
+# `configurar_rol_maestro` los deja SOLO para el Maestro. Registrar un pago
+# nuevo ("Pagar", registrarPagoDTE) NO pasa por aquí: solo editar / eliminar.
+MSG_SIN_PERMISO_EDITAR_PAGOS = 'No tienes permiso para editar pagos de documentos. Pídeselo al Maestro.'
+MSG_SIN_PERMISO_ELIMINAR_PAGOS = 'No tienes permiso para eliminar pagos de documentos. Pídeselo al Maestro.'
+MSG_SIN_PERMISO_ELIMINAR_DTE_COMPRA = 'No tienes permiso para eliminar documentos de compra. Pídeselo al Maestro.'
+MSG_SIN_PERMISO_ELIMINAR_DOCUMENTO = 'No tienes permiso para eliminar documentos. Pídeselo al Maestro.'
+
+
+def _denegar_sin_permiso_documento(request, codigo, tipo_permiso, mensaje):
+    """403 JSON si el usuario NO tiene `codigo`/`tipo_permiso` en su sucursal
+    activa; None si puede seguir. Llamar ANTES de cualquier escritura."""
+    sucursal_id = request.session.get('idSucursalActual')
+    if PermisoRol.tiene_permiso(request.user, codigo, tipo_permiso, sucursal_id=sucursal_id):
+        return None
+    logger.warning(
+        'Permiso denegado: usuario=%s rol=%s codigo=%s tipo=%s path=%s',
+        request.user.username, getattr(request.user, 'rol', None),
+        codigo, tipo_permiso, request.path,
+    )
+    return JsonResponse({'success': False, 'error': mensaje, 'mensaje': mensaje}, status=403)
+
+
+@login_required
 def eliminarPago(request, pago_id):
     if request.method == 'DELETE':
+        denegado = _denegar_sin_permiso_documento(
+            request, 'dte_compras_pagos', 'puede_eliminar', MSG_SIN_PERMISO_ELIMINAR_PAGOS,
+        )
+        if denegado:
+            return denegado
         try:
             pago = Dte_Detalle_Pago.objects.get(id=pago_id)
             dte = pago.dte
@@ -14457,6 +14567,7 @@ def eliminarPago(request, pago_id):
     
     return JsonResponse({'error': 'Método no permitido'}, status=405)
  
+@login_required
 def detallePago(request, pago_id):
     if request.method == 'GET':
         try:
@@ -14477,8 +14588,14 @@ def detallePago(request, pago_id):
     return JsonResponse({'error': 'Método no permitido'}, status=405)
 
  
+@login_required
 def editarPago(request, pago_id):
     if request.method == 'PUT':
+        denegado = _denegar_sin_permiso_documento(
+            request, 'dte_compras_pagos', 'puede_editar', MSG_SIN_PERMISO_EDITAR_PAGOS,
+        )
+        if denegado:
+            return denegado
         try:
             data = json.loads(request.body)
 
@@ -14549,13 +14666,22 @@ def editarPago(request, pago_id):
             return JsonResponse({'error': str(e)}, status=500)
 
     return JsonResponse({'error': 'Método no permitido'}, status=405)
+@login_required
 def notasCredito(request, dte_id):
     ncs = Dte_Detalle_Pago.objects.filter(dte_id=dte_id, metodo_pago='Nota de Crédito') \
         .values('id', 'voucher', 'monto', 'notas')
     return JsonResponse(list(ncs), safe=False)
  
+@login_required
 def agregarNotaCredito(request):
     if request.method == 'POST':
+        # La NC se guarda como una fila de pago del documento: mismo permiso
+        # que editar pagos.
+        denegado = _denegar_sin_permiso_documento(
+            request, 'dte_compras_pagos', 'puede_editar', MSG_SIN_PERMISO_EDITAR_PAGOS,
+        )
+        if denegado:
+            return denegado
         try:
             data = json.loads(request.body)
             dte = Dte.objects.get(id=data['dte_id'])
@@ -14591,8 +14717,14 @@ def agregarNotaCredito(request):
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
     return JsonResponse({'error': 'Método no permitido'}, status=405)
  
+@login_required
 def eliminarNotaCredito(request, nc_id):
     if request.method == 'DELETE':
+        denegado = _denegar_sin_permiso_documento(
+            request, 'dte_compras_pagos', 'puede_eliminar', MSG_SIN_PERMISO_ELIMINAR_PAGOS,
+        )
+        if denegado:
+            return denegado
         try:
             nc = Dte_Detalle_Pago.objects.get(id=nc_id, metodo_pago='Nota de Crédito')
             nc.delete()
@@ -14602,6 +14734,7 @@ def eliminarNotaCredito(request, nc_id):
     return JsonResponse({'error': 'Método no permitido'}, status=405)
  
  
+@login_required
 def eliminar_dte(request, dte_id):
     """
     Soft delete de DTE - marca como descartado en lugar de eliminar.
@@ -14616,7 +14749,24 @@ def eliminar_dte(request, dte_id):
             motivo = data.get('motivo', 'Eliminado por usuario')
             
             dte = Dte.objects.get(id=dte_id)
-            
+
+            # Permiso fino según el tipo de documento. La única pantalla que
+            # llama este endpoint (gestionDteCompras) lista solo COMPRA; si
+            # llega otro tipo (venta / traspaso) se exige el permiso de
+            # eliminar documentos de venta, para que no sirva de atajo.
+            if dte.tipo_transaccion == 'COMPRA':
+                denegado = _denegar_sin_permiso_documento(
+                    request, 'dte_compras_eliminar', 'puede_eliminar',
+                    MSG_SIN_PERMISO_ELIMINAR_DTE_COMPRA,
+                )
+            else:
+                denegado = _denegar_sin_permiso_documento(
+                    request, 'dte_eliminar_documento', 'puede_eliminar',
+                    MSG_SIN_PERMISO_ELIMINAR_DOCUMENTO,
+                )
+            if denegado:
+                return denegado
+
             if forzar:
                 # Hard delete solo si se fuerza
                 dte.delete()
@@ -14890,6 +15040,7 @@ def obtener_documentos_base(request):
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
     return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
 
+@login_required
 def obtener_ncs_disponibles(request):
     """
     Obtiene notas de crédito que no están asociadas a ninguna factura.
@@ -14951,6 +15102,7 @@ def obtener_ncs_disponibles(request):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
+@login_required
 def obtener_facturas_para_nc(request):
     """
     Obtiene facturas disponibles para asociar a una NC específica
@@ -15003,6 +15155,7 @@ def obtener_facturas_para_nc(request):
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
     return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
 
+@login_required
 def obtener_info_asociacion_nc(request, nc_id):
     """
     Obtiene información sobre la asociación de una NC específica
@@ -15038,6 +15191,7 @@ def obtener_info_asociacion_nc(request, nc_id):
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
     return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
 
+@login_required
 def desasociar_nc(request, nc_id):
     """
     Desasocia una NC de su factura eliminando el registro de pago
@@ -15079,6 +15233,7 @@ def desasociar_nc(request, nc_id):
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
     return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
 
+@login_required
 def procesar_pago_masivo(request):
     """
     Procesa pagos masivos para múltiples facturas
@@ -15176,6 +15331,7 @@ def procesar_pago_masivo(request):
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
     return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
 
+@login_required
 def asociar_nc_existente(request):
     """
     Asocia una nota de crédito existente a una factura específica
@@ -15397,6 +15553,7 @@ def obtener_asociaciones_dte(request, dte_id):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
+@login_required
 @transaction.atomic
 def guardar_recepcion(request):
     try:
@@ -16197,6 +16354,7 @@ def _detectar_bloqueos_eliminacion_producto(tallas_ids, producto_ids):
     return bloqueos
 
 
+@login_required
 def eliminar_producto_todas_sucursales(request):
     """
     Elimina un producto del catálogo en TODAS las sucursales.
@@ -16494,6 +16652,7 @@ def pendientes_despacho(request):
     })
 
 
+@login_required
 @require_POST
 @transaction.atomic
 def consumir_pendientes_despacho(request):
@@ -28259,6 +28418,9 @@ def emision_dte_concepto(request):
         sucursal_id=sucursal_id,
     )
     context['puede_descargar_txt_dte'] = puede_por_txt or puede_por_emision
+    # La NC por concepto exige el permiso fino de NC a clientes (el endpoint
+    # emitir_dte_concepto lo vuelve a validar).
+    context['puede_emitir_nc'] = puede_emitir_nota_credito(request.user, sucursal_id)
 
     return render(request, 'vistas/modulo_documentos/emisionDTEConcepto.html', context)
 
@@ -28304,6 +28466,13 @@ def emitir_dte_concepto(request):
                 'success': False,
                 'error': f'Tipo de documento inválido: {tipo_documento}. Válidos: {tipos_validos}'
             }, status=400)
+
+        # La NC por concepto exige además el permiso fino de NC a clientes
+        # (antes de consumir folio). El resto de los tipos sigue igual.
+        if tipo_documento == 'NOTA DE CREDITO' and not puede_emitir_nota_credito(
+            request.user, request.session.get('idSucursalActual'),
+        ):
+            return respuesta_sin_permiso_nc()
 
         if not detalle_conceptos:
             return JsonResponse({
@@ -28506,6 +28675,10 @@ def debug_session(request):
         'all_session_keys': list(request.session.keys())
     }
     return JsonResponse(session_data)
+
+
+@login_required
+@solo_administrador
 def debug_user_empresas(request):
     """Vista temporal para debug de empresas del usuario"""
     try:
@@ -29489,7 +29662,14 @@ def emitir_dte(request):
                 'success': False,
                 'error': f'Tipo de documento inválido: {tipo_doc}. Valores válidos: {tipos_validos}'
             }, status=400)
-        
+
+        # NC: permiso fino además del de la pantalla, antes de tocar folio o
+        # stock. El despacho interno queda como TRASPASO → permiso de traspaso.
+        if tipo_doc == 'NOTA DE CREDITO':
+            es_nc_traspaso = metodo_despacho == 'interno'
+            if not puede_emitir_nota_credito(request.user, sucursal_id, traspaso=es_nc_traspaso):
+                return respuesta_sin_permiso_nc(traspaso=es_nc_traspaso)
+
         logger.debug("Tipo de documento validado en emitir_dte: tipo=%s", tipo_doc)
 
         # Facturas y guías generan TXT Acepta. No permitir que se emita un
@@ -29918,9 +30098,9 @@ def gestion_usuarios_redirect(request):
 # ========== GESTIÓN DE CAMBIO DE EMPRESA/SUCURSAL ==========
 def es_administrador(user):
     """
-    Verifica si el usuario tiene rol de administrador.
+    Verifica si el usuario tiene rol de administrador (el Maestro también pasa).
     """
-    return getattr(user, 'rol', None) == 'administrador'
+    return es_rol_administrador(user)
 
 @login_required
 def cambiar_empresa(request):
@@ -31798,7 +31978,7 @@ def generar_ticket_html(ticket_data):
 @login_required
 def gestion_dte(request):
     """Vista para mostrar la página de gestión de DTEs de venta"""
-    es_admin = getattr(request.user, 'rol', '') in ['administrador', 'administracion']
+    es_admin = rol_efectivo(request.user) in ['administrador', 'administracion']
 
     # Permiso granular para ver/usar el botón "Descargar TXT Acepta".
     # Se controla desde la pantalla de permisos; por defecto sólo lo
@@ -31817,10 +31997,29 @@ def gestion_dte(request):
     # del emisor (recepcion_dte / puede_aprobar sobre la sucursal activa).
     puede_reasignar_destino = _puede_ajustar_dte_emisor(request.user, sucursal_actual_id)
 
+    # Permisos finos de NC (anular_factura_dte decide el código por el DTE:
+    # traspaso interno vs. venta a clientes).
+    sucursal_nc_id = request.session.get('idSucursalActual')
+    puede_emitir_nc = puede_emitir_nota_credito(request.user, sucursal_nc_id)
+    puede_emitir_nc_traspaso = puede_emitir_nota_credito(
+        request.user, sucursal_nc_id, traspaso=True,
+    )
+
+    # Eliminar un documento de venta (hoy: boleta de papel, vía
+    # /app/api/ventas/eliminar-documento/). Antes el botón colgaba de
+    # es_admin, que incluye a 'administracion' y el endpoint le daba 403.
+    puede_eliminar_documento = PermisoRol.tiene_permiso(
+        request.user, 'dte_eliminar_documento', 'puede_eliminar',
+        sucursal_id=sucursal_nc_id,
+    )
+
     return render(request, 'vistas/modulo_administracion/gestion_dte.html', {
         'es_admin': es_admin,
         'puede_descargar_txt_dte': puede_descargar_txt_dte,
         'puede_reasignar_destino': puede_reasignar_destino,
+        'puede_emitir_nc': puede_emitir_nc,
+        'puede_emitir_nc_traspaso': puede_emitir_nc_traspaso,
+        'puede_eliminar_documento': puede_eliminar_documento,
     })
 
 
@@ -31921,7 +32120,7 @@ def anular_factura_dte(request):
     # Devolver a la tarjeta vía API de Mercado Pago: mueve plata real de la
     # cuenta MP de la empresa — SOLO ADMINISTRADOR.
     if metodo_devolucion == 'MERCADOPAGO_API' and \
-            getattr(request.user, 'rol', '') not in ('administrador', 'administracion'):
+            rol_efectivo(request.user) not in ('administrador', 'administracion'):
         return JsonResponse({
             'error': 'La devolución a la tarjeta (Mercado Pago) requiere rol Administrador.'
         }, status=403)
@@ -31974,6 +32173,14 @@ def anular_factura_dte(request):
         )
     except Dte.DoesNotExist:
         return JsonResponse({'error': 'Documento no encontrado o tipo no anulable'}, status=404)
+
+    # Permiso fino de NC (además del login): la de un traspaso interno usa su
+    # propio código; el resto (ventas a clientes) el de NC a clientes.
+    es_nc_traspaso = dte.tipo_transaccion == 'TRASPASO'
+    if not puede_emitir_nota_credito(
+        request.user, request.session.get('idSucursalActual'), traspaso=es_nc_traspaso,
+    ):
+        return respuesta_sin_permiso_nc(traspaso=es_nc_traspaso)
 
     # --------------------------------------------------------------
     # Validación: modalidad DEVOLUCION solo está permitida para DTEs
@@ -33569,7 +33776,7 @@ def asignar_receptor_dte(request):
     cliente_nombre = (body.get('cliente_nombre') or '').strip()
     forzar = bool(body.get('forzar', False))
 
-    es_admin = getattr(request.user, 'rol', '') in ['administrador', 'administracion']
+    es_admin = rol_efectivo(request.user) in ['administrador', 'administracion']
     if not es_admin:
         return JsonResponse({
             'success': False,
@@ -37378,6 +37585,11 @@ def dtes_en_limbo(request):
     puede_aprobar = _permiso_recepcion_dte(request.user, 'puede_aprobar', sucursal_id)
     return render(request, 'vistas/modulo_documentos/dtes_en_limbo.html', {
         'puede_aprobar': puede_aprobar,
+        # Todo lo de acá son traspasos: el ajuste de FACTURA/BOLETA emite NC
+        # de traspaso (ajustar_dte_emisor_api lo vuelve a validar).
+        'puede_emitir_nc_traspaso': puede_emitir_nota_credito(
+            request.user, sucursal_id, traspaso=True,
+        ),
     })
 
 

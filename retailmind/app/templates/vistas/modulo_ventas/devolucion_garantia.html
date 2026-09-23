@@ -448,7 +448,12 @@
             <div class="modal-footer py-2 px-3" style="background:#161b27; border-top:1px solid #2a3045;">
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal"><i class="ri-close-line"></i> Cerrar</button>
                 <button type="button" class="btn btn-sm btn-danger" onclick="aprRechazar()"><i class="ri-close-circle-line me-1"></i> Rechazar</button>
+                {% if puede_emitir_nc %}
                 <button type="button" class="btn btn-sm btn-success" id="apr-btn-aprobar" onclick="aprAprobar()"><i class="ri-check-double-line me-1"></i> Aprobar y generar NC</button>
+                {% else %}
+                {# Aprobar emite la NC: sin el permiso fino queda inerte (sin id, el JS no lo re-habilita). Rechazar sigue disponible. #}
+                <button type="button" class="btn btn-sm btn-success" disabled title="Sin permiso para emitir Notas de Crédito"><i class="ri-check-double-line me-1"></i> Aprobar y generar NC</button>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -462,6 +467,8 @@
 <script src="{% static 'libs/sweetalert2/sweetalert2.min.js' %}"></script>
 <script>
     const PUEDE_APROBAR = {{ puede_aprobar|yesno:"true,false" }};
+    // Permiso fino de NC a clientes: aprobar genera la NC (el backend lo vuelve a validar).
+    const PUEDE_EMITIR_NC = {{ puede_emitir_nc|yesno:"true,false" }};
     const PUEDE_CREAR = {{ puede_crear|yesno:"true,false" }};
     const URLS_DG = {
         buscarDte: '{% url "api_buscar_dte_devolucion_garantia" %}',
@@ -1254,7 +1261,7 @@
     }
 
     function aprAprobar() {
-        if (!aprActual) { return; }
+        if (!aprActual || !PUEDE_EMITIR_NC) { return; }
         const metodo = $('#apr-metodo').val();
         const fecha = metodo !== 'NO_AFECTA_CAJA' ? $('#apr-fecha').val() : null;
         Swal.fire({

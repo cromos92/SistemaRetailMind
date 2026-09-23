@@ -51,6 +51,8 @@
 {% puede_ver_opcion_tag 'reporte_documentos_emitidos' as permiso_reporte_documentos_emitidos %}
 {% puede_ver_opcion_tag 'reporte_existencias' as permiso_reporte_existencias %}
 {% puede_ver_opcion_tag 'reporte_existencias_marca' as permiso_reporte_existencias_marca %}
+{% puede_ver_opcion_tag 'inteligencia_compra' as permiso_inteligencia_compra %}
+{% puede_ver_opcion_tag 'reporte_productos_origen' as permiso_reporte_productos_origen %}
 {% puede_ver_opcion_tag 'plan_liquidacion' as permiso_plan_liquidacion %}
 {% puede_ver_opcion_tag 'campanas_liquidacion' as permiso_campanas_liquidacion %}
 {% puede_ver_opcion_tag 'reporte_existencias_sucursal' as permiso_reporte_existencias_sucursal %}
@@ -65,6 +67,8 @@
 {% puede_ver_opcion_tag 'revision_arqueos' as permiso_revision_arqueos %}
 {% puede_ver_opcion_tag 'tarjeta_movimiento_producto' as permiso_tarjeta_movimiento_producto %}
 {% puede_ver_opcion_tag 'ticket_venta' as permiso_ticket_venta %}
+{% puede_ver_opcion_tag 'ajuste_stock_rapido' as permiso_ajuste_stock_rapido %}
+{% puede_ver_opcion_tag 'cambiar_empresa' as permiso_cambiar_empresa %}
 {% puede_ver_opcion_tag 'trazabilidad_producto' as permiso_trazabilidad_producto %}
 {% puede_ver_opcion_tag 'ver_guias_talla' as permiso_ver_guias_talla %}
 {% puede_ver_opcion_tag 'giftcards_listado' as permiso_giftcards_listado %}
@@ -639,8 +643,8 @@
                             </button>
                         </div>
 
-                        <!-- Widget de Código de Autorización Dinámico (Solo para Administradores y Jefes de Local) -->
-                        {% if user.rol == 'administrador' or user.rol == 'jefe_local' %}
+                        <!-- Widget de Código de Autorización Dinámico (Solo para Maestro, Administradores y Jefes de Local) -->
+                        {% if user|es_jefe_o_admin %}
                         <div class="ms-2 ms-lg-3 header-item d-flex align-items-center" id="codigo-autorizacion-widget">
                             <!-- Botón trigger: solo móvil/tablet (<992px), abre el panel flotante -->
                             <button type="button" id="btn-codigo-trigger" onclick="toggleCodigoPanel()"
@@ -2150,7 +2154,11 @@
                                             <!-- Badge del Rol -->
                                             <div style="margin-top: 8px; display: flex; align-items: center; gap: 6px;">
                                                     <span style="font-size: 0.7rem; color: #64748b; font-weight: 500;">Rol:</span>
-                                                    {% if user.rol == 'administrador' %}
+                                                    {% if user.rol == 'maestro' %}
+                                                    <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #1A1A2E 0%, #0066FF 100%); color: white; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; box-shadow: 0 2px 6px rgba(26, 26, 46, 0.35);">
+                                                        <i class="ri-vip-crown-fill" style="font-size: 0.75rem;"></i> Maestro
+                                                    </span>
+                                                    {% elif user.rol == 'administrador' %}
                                                     <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); color: white; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; box-shadow: 0 2px 6px rgba(0, 102, 255, 0.35);">
                                                         <i class="ri-shield-star-fill" style="font-size: 0.75rem;"></i> Administrador
                                                     </span>
@@ -2183,10 +2191,12 @@
                                 </a>
 
                                 <!-- Ajuste de Stock -->
+                                {% if permiso_ajuste_stock_rapido %}
                                 <a class="dropdown-item" href="{% url 'ajuste_stock_rapido' %}">
                                     <i class="ri-inbox-line fs-16 align-middle me-2" style="color: #FFB020;"></i>
                                     <span class="align-middle">Ajuste de Stock</span>
                                 </a>
+                                {% endif %}
                                 
                                 <!-- Cambiar Sucursal / Ver Centro de Trabajo -->
                                 {% if user|puede_cambiar_sucursal %}
@@ -2194,7 +2204,7 @@
                                     <i class="ri-building-line fs-16 align-middle me-2" style="color: #00D4AA;"></i>
                                     <span class="align-middle">Cambiar Empresa/Sucursal</span>
                                 </a>
-                                {% else %}
+                                {% elif permiso_cambiar_empresa %}
                                 <a class="dropdown-item" href="{% url 'cambiar_empresa' %}">
                                     <i class="ri-store-3-line fs-16 align-middle me-2" style="color: #8A8A9A;"></i>
                                     <span class="align-middle">Mi Centro de Trabajo</span>
@@ -2765,7 +2775,7 @@
                             <a href="{% url 'modulo_requerimientos' %}" class="nav-link menu-link" data-key="t-requerimientos">
                                 <i class="ri-customer-service-2-line"></i> <span>Requerimientos</span>
                             </a>
-                            {% else %}
+                            {% elif permiso_crear_requerimiento %}
                             <a href="{% url 'crear_requerimiento_vista' %}" class="nav-link menu-link" data-key="t-crear-requerimiento">
                                 <i class="ri-add-circle-line"></i> <span>Crear Requerimiento</span>
                             </a>
@@ -2858,7 +2868,7 @@
                             <div class="menu-dropdown collapse" id="moduloReportes">
                                 <ul class="nav nav-sm flex-column">
                                     <!-- Sección: Reportes Compras -->
-                                    {% if permiso_reporte_despachos_proveedor or permiso_reporte_compras or permiso_reporte_rendimiento_proveedor %}
+                                    {% if permiso_reporte_despachos_proveedor or permiso_reporte_compras or permiso_reporte_productos_origen or permiso_reporte_rendimiento_proveedor %}
                                     <li class="nav-item">
                                         <a class="nav-link menu-link collapsed" href="#reportesCompras" data-bs-toggle="collapse"
                                             role="button" aria-expanded="false" aria-controls="reportesCompras">
@@ -2879,6 +2889,8 @@
                                                         <i class="bi bi-bag"></i> Reporte de Compras
                                                     </a>
                                                 </li>
+                                                {% endif %}
+                                                {% if permiso_reporte_productos_origen %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_reporte_productos_origen' %}" class="nav-link" data-key="t-productos-origen">
                                                         <i class="bi bi-diagram-3"></i> Productos por Origen
@@ -2926,7 +2938,7 @@
                                                     </a>
                                                 </li>
                                                 {% endif %}
-                                                {% if permiso_reporte_ventas_internet or permiso_reporte_productos_vendidos %}
+                                                {% if permiso_reporte_ventas_internet %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_reporte_ventas_internet' %}" class="nav-link" data-key="t-ventas-internet">
                                                         <i class="bi bi-globe2"></i> Ventas Internet
@@ -2945,7 +2957,7 @@
                                     </li>
                                     {% endif %}
                                     <!-- Sección: Reportes Existencias -->
-                                    {% if permiso_reporte_existencias or permiso_reporte_existencias_marca or permiso_reporte_existencias_sucursal or permiso_plan_liquidacion or permiso_campanas_liquidacion %}
+                                    {% if permiso_reporte_existencias or permiso_reporte_existencias_marca or permiso_inteligencia_compra or permiso_reporte_existencias_sucursal or permiso_resumen_existencias or permiso_reporte_movimientos_sucursal or permiso_plan_liquidacion or permiso_campanas_liquidacion %}
                                     <li class="nav-item">
                                         <a class="nav-link menu-link collapsed" href="#reportesExistencias" data-bs-toggle="collapse"
                                             role="button" aria-expanded="false" aria-controls="reportesExistencias">
@@ -2960,7 +2972,7 @@
                                                     </a>
                                                 </li>
                                                 {% endif %}
-                                                {% if permiso_reporte_existencias_marca %}
+                                                {% if permiso_inteligencia_compra %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'ver_inteligencia_compra' %}" class="nav-link" data-key="t-inteligencia-compra">
                                                         <i class="ri-brain-line"></i> Inteligencia de Compra <span class="badge bg-success-subtle text-success ms-1">IA</span>

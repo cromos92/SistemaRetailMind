@@ -3905,6 +3905,8 @@
 <script>
 // Rol del usuario (para acciones restringidas a administrador, ej. condonar diferencia)
 window.USER_ROL = "{{ user_rol|default:'' }}";
+// Permiso fino "Emitir Nota de Crédito" (a clientes). El backend lo vuelve a validar.
+const PUEDE_EMITIR_NC = {{ puede_emitir_nc|yesno:"true,false" }};
 
 // Variables globales
 let cambiosData = [];
@@ -4904,8 +4906,12 @@ function generarBotonesAccion(cambio) {
                 </span>
             `);
         } else {
-            botones.push(`
+            botones.push(PUEDE_EMITIR_NC ? `
                 <button class="btn btn-outline-primary btn-sm px-2" onclick='abrirModalNC(${cambio.id})' title='Generar Nota de Crédito'>
+                    <i class="ri-file-text-line me-1"></i>NC
+                </button>
+            ` : `
+                <button class="btn btn-outline-primary btn-sm px-2" disabled title='Sin permiso para emitir Notas de Crédito'>
                     <i class="ri-file-text-line me-1"></i>NC
                 </button>
             `);
@@ -7809,8 +7815,12 @@ function mostrarDetalleCambio(data) {
                 </div>
             `);
         } else {
-            accionesEl.append(`
+            accionesEl.append(PUEDE_EMITIR_NC ? `
                 <button class="btn btn-sm btn-primary ms-2" onclick='abrirModalNC(${cambio.id})'>
+                    <i class="ri-file-text-line me-1"></i> Generar NC
+                </button>
+            ` : `
+                <button class="btn btn-sm btn-primary ms-2" disabled title="Sin permiso para emitir Notas de Crédito">
                     <i class="ri-file-text-line me-1"></i> Generar NC
                 </button>
             `);

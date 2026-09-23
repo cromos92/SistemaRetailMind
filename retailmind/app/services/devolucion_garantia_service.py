@@ -30,6 +30,7 @@ from app.models import (
     Dte, Dte_Productos, Dte_Detalle_Pago, Empresa,
     DevolucionGarantia, DevolucionGarantiaDetalle,
     METODO_DEVOLUCION_DG_CHOICES, TIPO_CUENTA_DG_CHOICES,
+    rol_efectivo,
 )
 
 logger = logging.getLogger('app')
@@ -1056,7 +1057,7 @@ def anular_solicitud(*, devolucion_id, usuario):
             f'Solo se pueden anular solicitudes pendientes '
             f'(estado actual {devolucion.get_estado_display()}).'
         )
-    es_admin = getattr(usuario, 'rol', '') in ('administrador', 'administracion')
+    es_admin = rol_efectivo(usuario) in ('administrador', 'administracion')  # Maestro incluido
     if devolucion.solicitado_por_id != usuario.id and not es_admin:
         raise DevolucionGarantiaError(
             'Solo el solicitante o un administrador pueden anular esta solicitud.'

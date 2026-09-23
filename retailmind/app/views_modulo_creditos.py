@@ -26,7 +26,7 @@ from .models import (
     CreditoTrabajador, PagoCreditoTrabajador, FirmaCreditoTrabajador,
     Cliente, Empresa, Sucursal, EmpresaUser,
     ESTADO_CREDITO_CHOICES, TIPO_CREDITO_CHOICES, TIPO_BENEFICIARIO_CHOICES,
-    METODO_PAGO_TICKET_CHOICES, validar_rut_chileno,
+    METODO_PAGO_TICKET_CHOICES, validar_rut_chileno, rol_efectivo,
 )
 from .models.permisos import PermisoUsuario
 from .models import PermisoRol
@@ -128,7 +128,7 @@ def _serializar_beneficiario(credito):
 def _usuario_puede_ver_creditos_todas_sucursales(user):
     return (
         user.is_superuser or
-        getattr(user, 'rol', '') == 'administrador' or
+        rol_efectivo(user) == 'administrador' or
         PermisoUsuario.usuario_ve_todas_sucursales(user)
     )
 
@@ -142,7 +142,7 @@ def _alcance_creditos_usuario(request, alcance='actual'):
     if puede_todas and alcance == 'todas':
         # Administrador ve todo el universo de créditos. Usuarios con override
         # ven todas las empresas/sucursales que tengan asignadas por EmpresaUser.
-        if request.user.is_superuser or getattr(request.user, 'rol', '') == 'administrador':
+        if request.user.is_superuser or rol_efectivo(request.user) == 'administrador':
             empresa_ids = list(Empresa.objects.values_list('id', flat=True))
             # Lista VACIA = "sin filtro de sucursal", que es lo que significa
             # "todas" para un administrador. Antes se enumeraban las sucursales
@@ -713,7 +713,7 @@ def gestion_creditos(request):
     sucursal_id = request.session.get('idSucursalActual')
     puede_ver_todas = (
         request.user.is_superuser or
-        getattr(request.user, 'rol', '') == 'administrador' or
+        rol_efectivo(request.user) == 'administrador' or
         PermisoUsuario.usuario_ve_todas_sucursales(request.user)
     )
     sucursal_actual = None
@@ -1236,7 +1236,7 @@ def detalle_credito_trabajador(request, credito_id):
             }, status=403)
         puede_ver_todas = (
             request.user.is_superuser or
-            getattr(request.user, 'rol', '') == 'administrador' or
+            rol_efectivo(request.user) == 'administrador' or
             PermisoUsuario.usuario_ve_todas_sucursales(request.user)
         )
         sucursal_actual_id = request.session.get('idSucursalActual')

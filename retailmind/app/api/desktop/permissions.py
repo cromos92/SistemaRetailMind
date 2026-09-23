@@ -131,7 +131,7 @@ class CanSyncTickets(BasePermission):
     
     message = 'No tiene permisos para sincronizar tickets'
     
-    ROLES_PERMITIDOS = ['administrador', 'jefe_local', 'cajero', 'vendedor']
+    ROLES_PERMITIDOS = ['maestro', 'administrador', 'jefe_local', 'cajero', 'vendedor']
     
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
@@ -154,7 +154,7 @@ class CanManageDevices(BasePermission):
     
     message = 'No tiene permisos para gestionar dispositivos'
     
-    ROLES_PERMITIDOS = ['administrador', 'jefe_local']
+    ROLES_PERMITIDOS = ['maestro', 'administrador', 'jefe_local']
     
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:

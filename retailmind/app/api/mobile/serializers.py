@@ -607,14 +607,14 @@ def resolver_sucursal_login_movil(user, sucursal_id):
 
     Devuelve (sucursal, error) — `error` es None si todo bien.
     """
-    from app.models import EmpresaUser, Sucursal, Vendedor
+    from app.models import EmpresaUser, Sucursal, Vendedor, rol_efectivo
 
     if sucursal_id:
         sucursal = Sucursal.objects.filter(id=sucursal_id).first()
         if not sucursal:
             return None, 'Sucursal no encontrada.'
 
-        if getattr(user, 'rol', '') != 'administrador':
+        if rol_efectivo(user) != 'administrador':
             permitidas = set(
                 EmpresaUser.objects.filter(
                     user=user, status=True, sucursal__isnull=False
