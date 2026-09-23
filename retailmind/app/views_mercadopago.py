@@ -1960,7 +1960,7 @@ def api_conciliacion_liberaciones_mp(request):
         # no tiene guardado el N° de operación de MP. Se completa desde la API
         # (solo campos vacíos) y se vuelve a cruzar.
         completado = None
-        dias = conc.dias_cobros_sin_numero(config, resultado)
+        dias = conc.dias_para_completar(config, resultado)
         if dias:
             completado = conc.completar_numeros_mp(config, dias)
         if aplicar or (completado and completado['completados']):
@@ -1988,12 +1988,14 @@ def api_conciliacion_detectar_retiros_mp(request):
 
     Revisa TODAS las cuentas de Mercado Pago, aplica los reportes de
     Liberaciones nuevos que traen retiros y devuelve lo encontrado. No hay que
-    elegir cuenta ni reporte.
+    elegir cuenta ni reporte. `pedir=0` (las vueltas automáticas de la página)
+    no le pide reportes nuevos a MP: solo aplica los que ya terminaron.
     """
     from .services import conciliacion_mp_service as conc
     if not _es_admin(request):
         return JsonResponse({'success': False, 'error': 'Solo administradores.'}, status=403)
-    cuentas = conc.detectar_retiros(presupuesto_seg=45)
+    pedir = str(request.POST.get('pedir', '1')) != '0'
+    cuentas = conc.detectar_retiros(presupuesto_seg=45, pedir=pedir)
     logger.info("Conciliación MP: detectar retiros por %s → %s",
                 request.user.username,
                 [(c['cuenta'], c['reportes_aplicados'], len(c['retiros'])) for c in cuentas])

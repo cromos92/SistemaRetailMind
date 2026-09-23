@@ -399,20 +399,27 @@ def _configs_de_la_cuenta(config):
     return ids
 
 
-def _remanente_previo(config, antes_de, monto, excluir_ids=()):
+def _remanente_previo(config, antes_de, monto, excluir_ids=(), retiros_del_reporte=()):
     """Ventas liberadas ANTES del reporte y todavía sin retiro que explican el
     saldo inicial: las más recientes hacia atrás hasta cubrir `monto`.
 
     Sin esto, lo que quedó en MP después de un retiro parcial era un saldo
     anónimo en el reporte siguiente y esas ventas nunca se asociaban al retiro
     que finalmente se las llevó.
+
+    Cuentan también las ventas que ya están amarradas a un retiro que viene en
+    este mismo reporte: al reprocesar (el reporte pedido parte el día del
+    último retiro) ese saldo ES lo que ese retiro se llevó. Si solo se miraban
+    las sin retiro, el saldo se rellenaba con ventas viejas ajenas que quedaban
+    amarradas a ese retiro, y el error crecía en cada pasada.
     Devuelve [(trx, neto)] en orden de liberación (más antigua primero).
     """
     if monto <= 0 or antes_de is None:
         return []
     qs = (TransaccionMercadoPago.objects
-          .filter(config_id__in=_configs_de_la_cuenta(config), tipo='VENTA', estado='APROBADA',
-                  retiro__isnull=True, money_release_date__isnull=False,
+          .filter(Q(retiro__isnull=True) | Q(retiro__withdrawal_id__in=list(retiros_del_reporte)),
+                  config_id__in=_configs_de_la_cuenta(config), tipo='VENTA', estado='APROBADA',
+                  money_release_date__isnull=False,
                   money_release_date__lt=antes_de,
                   money_release_date__gte=antes_de - timedelta(days=90))
           .exclude(id__in=list(excluir_ids))
@@ -442,6 +449,15 @@ def reportes_aplicados():
         if raw.get('archivo'):
             aplicados.add(raw['archivo'])  # formato anterior
     return aplicados
+
+
+CAJA_SALDO_ANTERIOR = 'Saldo anterior'
+
+
+def _saldo_anterior(por_caja):
+    """Parte de un retiro que el reporte no alcanzó a explicar con ventas."""
+    return sum(int(x.get('monto') or 0) for x in (por_caja or [])
+               if isinstance(x, dict) and x.get('caja') == CAJA_SALDO_ANTERIOR)
 
 
 def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
@@ -536,7 +552,7 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
         ext_pos, pos_id, pos_nombre = item.get('pos') or ('', '', '')
         return (cajas_por_pos.get(ext_pos) or cajas_por_pos.get(pos_id)
                 or (f'Caja MP «{pos_nombre}»' if pos_nombre else '')
-                or ('Saldo anterior' if item.get('id') == 'saldo inicial' else 'Sin caja (online, link de pago u otro)'))
+                or (CAJA_SALDO_ANTERIOR if item.get('id') == 'saldo inicial' else 'Sin caja (online, link de pago u otro)'))
 
     resultado = {'retiros': [], 'pagos_sin_local': 0, 'pagos_amarrados': 0,
                  'pagos_manuales': 0, 'muestra_sin_local': [], 'dias_sin_local': []}
@@ -547,12 +563,18 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
     pendientes_asociar = []   # ventas agotadas por débitos que no son retiros
     sin_banco = []            # ventas devueltas: su plata no llegó al banco
 
+    # Retiros que trae este reporte (mismo id que se les guarda más abajo).
+    ids_retiros = [r['source_id'] or f'RET-{r["instante"]:%Y%m%d%H%M}-{r["debito"]}'
+                   for r in registros if r['descripcion'] in DESCRIPCIONES_RETIRO and r['debito']]
+    ya_registrados = (set(RetiroMercadoPago.objects.filter(withdrawal_id__in=ids_retiros)
+                          .values_list('withdrawal_id', flat=True)) if ids_retiros else set())
+
     if saldo_inicial < 0:
         deuda = -saldo_inicial
     elif saldo_inicial > 0:
         previas = _remanente_previo(
             config, registros[0]['instante'] if registros else None, saldo_inicial,
-            excluir_ids={t.id for t in locales.values()},
+            excluir_ids={t.id for t in locales.values()}, retiros_del_reporte=ids_retiros,
         )
         anonimo = saldo_inicial - sum(n for _t, n in previas)
         if anonimo > 0:
@@ -616,6 +638,7 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
                 'quedan_disponibles': quedan,
                 'estado': estado,
                 'detalle': detalle,
+                'nuevo': withdrawal_id not in ya_registrados,
             })
             if aplicar:
                 with transaction.atomic():
@@ -632,6 +655,14 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
                                  'instante': r['instante'].isoformat(),
                                  'por_caja': resultado['retiros'][-1]['por_caja'],
                                  'pagos_pos': len(trxs)}
+                    guardado = raw.get('por_caja')
+                    if guardado and _saldo_anterior(guardado) < _saldo_anterior(raw_nuevo['por_caja']):
+                        # Este reporte parte más tarde y explica peor el saldo con que
+                        # empezó: se conserva el desglose que el retiro ya tenía.
+                        for clave in ('por_caja', 'pagos', 'pagos_pos'):
+                            if clave in raw:
+                                raw_nuevo[clave] = raw[clave]
+                        resultado['retiros'][-1]['por_caja'] = guardado
                     datos = {'config': config, 'fecha': timezone.localtime(r['instante']).date(),
                              'monto': monto, 'estado': estado, 'detalle_diferencia': detalle,
                              'raw_reporte': raw_nuevo}
@@ -703,6 +734,8 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
     # La fila «release» ES la liberación: se guarda en la venta si no la tenía.
     # Sin esa fecha `_remanente_previo` no veía lo que dejó un retiro parcial y
     # esas ventas quedaban para siempre como «liberado sin retirar».
+    for t in sin_banco:
+        liberadas.pop(t.id, None)
     if aplicar and liberadas:
         sin_fecha = []
         for trx, instante in liberadas.values():
@@ -731,20 +764,28 @@ def completar_numeros_mp(config, dias, presupuesto_seg=35):
     El reporte de Liberaciones identifica cada pago por ese número; el aviso de
     pagos (webhook) casi nunca lo dejó guardado, y sin él ninguna venta del POS
     se cruzaba con su retiro. Solo escribe campos vacíos. Devuelve
-    {'dias': n, 'completados': n, 'sin_tiempo': bool}.
+    {'dias': n, 'completados': n, 'sin_tiempo': bool, 'fallidos': n}.
+    `fallidos` son los días que no se pudieron leer por un error de red o de
+    MP saturado (429/5xx): quien llama debe tratarlo como «no terminó».
     """
     import time as _time
     fin = _time.monotonic() + presupuesto_seg
-    completados, leidos = 0, 0
+    completados, leidos, fallidos, seguidos = 0, 0, 0, 0
     configs = _configs_de_la_cuenta(config)
     for dia in sorted(set(dias)):
         if _time.monotonic() > fin:
-            return {'dias': leidos, 'completados': completados, 'sin_tiempo': True}
+            return {'dias': leidos, 'completados': completados, 'sin_tiempo': True, 'fallidos': fallidos}
         try:
             pagos = mp.buscar_pagos_dia(config, dia)
         except mp.MercadoPagoError as e:
             logger.warning("Conciliación MP: no se pudo leer payments/search %s: %s", dia, e.mensaje)
+            if getattr(e, 'red', False):
+                fallidos += 1
+                seguidos += 1
+                if seguidos >= 2:   # breaker abierto o MP caído: no insistir día por día
+                    break
             continue
+        seguidos = 0
         leidos += 1
         por_ref = {str(p.get('external_reference') or ''): p for p in pagos
                    if p.get('external_reference') and str(p.get('id') or '').isdigit()}
@@ -761,12 +802,13 @@ def completar_numeros_mp(config, dias, presupuesto_seg=35):
                 trx.fee_mp = trx.monto - trx.monto_neto
                 campos += ['monto_neto', 'fee_mp']
             liberacion = _instante(pago.get('money_release_date'))
-            if trx.money_release_date is None and liberacion is not None:
+            if (trx.money_release_date is None and liberacion is not None
+                    and pago.get('status') == 'approved'):
                 trx.money_release_date = liberacion
                 campos.append('money_release_date')
             trx.save(update_fields=campos + ['actualizado_en'])
             completados += 1
-    return {'dias': leidos, 'completados': completados, 'sin_tiempo': False}
+    return {'dias': leidos, 'completados': completados, 'sin_tiempo': False, 'fallidos': fallidos}
 
 
 def dias_cobros_sin_numero(config, resultado, dias_antes=35):
@@ -795,6 +837,14 @@ def dias_cobros_sin_numero(config, resultado, dias_antes=35):
         dias.add(local.date())
         if (local.hour, local.minute) >= (23, 30):   # el pago puede quedar con fecha del día siguiente
             dias.add(local.date() + timedelta(days=1))
+    return sorted(dias)
+
+
+def dias_para_completar(config, resultado):
+    """Días a leer en payments/search antes de aplicar un reporte."""
+    dias = set(dias_cobros_sin_numero(config, resultado))
+    if resultado.get('pagos_sin_local'):
+        dias.update(dias_a_completar(resultado))
     return sorted(dias)
 
 
@@ -836,6 +886,9 @@ def rango_utc_reporte(desde, hasta):
         fin = ahora
     if fin - inicio < timedelta(days=1):
         inicio = fin - timedelta(days=1)
+    maximo = timedelta(days=60) - timedelta(minutes=1)
+    if fin - inicio > maximo:
+        inicio = fin - maximo
     return _utc(inicio), _utc(fin)
 
 
@@ -1025,31 +1078,56 @@ def _fin_de_reporte(reporte):
     return _instante(reporte.get('end_date')) or _instante(reporte.get('creado'))
 
 
+def _pedido_en_curso(cfg, reportes):
+    """Qué pasó con el reporte que se le pidió antes a MP para esta cuenta.
+
+    Devuelve (pendiente, extra, resuelto):
+    - pendiente: el pedido, si MP todavía lo está generando (la página lo espera).
+    - extra: el reporte que MP ya terminó pero /search todavía no lista; se
+      procesa igual.
+    - resuelto: el pedido llegó en esta pasada. Aunque haya quedado viejo porque
+      MP tardó, no se pide otro ahora: eso encadenaba pedidos sin fin.
+    El pedido vive en la caché del proceso; si otro worker no lo ve, la lista de
+    MP (un reporte con ese fin) igual lo da por llegado.
+    """
+    clave = _CLAVE_PEDIDO.format(cfg.id)
+    pedido = cache.get(clave)
+    if not pedido:
+        return None, None, False
+    fin_pedido = _instante(pedido.get('end_date'))
+    if fin_pedido is not None and any(
+            f is not None and f >= fin_pedido - timedelta(minutes=1)
+            for f in (_fin_de_reporte(r) for r in reportes)):
+        cache.delete(clave)
+        return None, None, True
+    if not pedido.get('task_id'):
+        return pedido, None, False
+    try:
+        estado = estado_tarea_liberaciones(cfg, pedido['task_id'])
+    except mp.MercadoPagoError:
+        return pedido, None, False
+    if estado['listo']:
+        cache.delete(clave)
+        extra = {'file_name': estado['file_name'], 'begin_date': pedido.get('begin_date') or '',
+                 'end_date': pedido.get('end_date') or '', 'creado': '', 'origen': 'manual',
+                 'estado': 'processed'}
+        return None, extra, True
+    if estado['fallido']:
+        cache.delete(clave)
+        return None, None, False
+    return pedido, None, False
+
+
 def _pedir_si_hace_falta(cfg, reportes, fila, ahora=None):
     """Si el reporte más nuevo de la cuenta quedó viejo, pide uno hasta ahora.
 
     Sin esto «Detectar retiros» solo miraba reportes ya generados: con el
     reporte automático apagado en MP, un retiro recién hecho no aparecía nunca.
-    Deja en `fila` el pedido en curso (para que la página lo espere) y hasta
-    cuándo se revisó.
+    Deja en `fila['pedido']` el pedido (para que la página lo espere).
     """
     ahora = ahora or timezone.now()
     ultimo_fin = max((f for f in (_fin_de_reporte(r) for r in reportes) if f), default=None)
-    if ultimo_fin is not None:
-        fila['revisado_hasta'] = timezone.localtime(ultimo_fin).strftime('%d/%m %H:%M')
     if ultimo_fin is not None and ultimo_fin >= ahora - timedelta(minutes=FRESCURA_REPORTE_MIN):
-        return
-    clave = _CLAVE_PEDIDO.format(cfg.id)
-    pedido = cache.get(clave)
-    if pedido and pedido.get('task_id'):
-        try:
-            if estado_tarea_liberaciones(cfg, pedido['task_id'])['fallido']:
-                cache.delete(clave)
-                pedido = None
-        except mp.MercadoPagoError:
-            pass
-    if pedido:
-        fila['pedido'] = pedido
         return
     try:
         pedido = pedir_reporte_liberaciones(cfg, inicio_reporte_cuenta(cfg, ahora),
@@ -1061,7 +1139,7 @@ def _pedir_si_hace_falta(cfg, reportes, fila, ahora=None):
     pedido['hasta'] = timezone.localtime(fin).strftime('%d/%m %H:%M') if fin else ''
     desde = _instante(pedido.get('begin_date'))
     pedido['desde'] = timezone.localtime(desde).strftime('%d/%m/%Y') if desde else ''
-    cache.set(clave, pedido, 60 * 20)
+    cache.set(_CLAVE_PEDIDO.format(cfg.id), pedido, 60 * 20)
     fila['pedido'] = pedido
 
 
@@ -1073,12 +1151,14 @@ def detectar_retiros(presupuesto_seg=45, pedir=True):
     - Solo aplica reportes que traen retiros (uno sin retiros no tiene nada que
       asociar) y que no estaban aplicados.
     - Antes de aplicar completa el N° de operación de los cobros del POS para
-      que las ventas se crucen. Si no alcanzó el tiempo, el reporte se aplica
-      igual (el retiro aparece) pero NO se marca aplicado: la próxima pasada lo
-      rehace con más ventas cruzadas.
-    - Si el reporte más nuevo de la cuenta quedó viejo (`pedir=True`), le pide
-      a MP uno hasta ahora y devuelve el pedido en `fila['pedido']`: MP tarda
-      unos minutos y la página vuelve a detectar cuando esté listo.
+      que las ventas se crucen. Si no alcanzó el tiempo (o MP falló), el reporte
+      se aplica igual (el retiro aparece) pero NO se marca aplicado: la próxima
+      pasada lo rehace con más ventas cruzadas. Reprocesar es idempotente.
+    - Si el reporte más nuevo de la cuenta quedó viejo y `pedir=True`, le pide a
+      MP uno hasta ahora y lo devuelve en `fila['pedido']`: MP tarda unos
+      minutos y la página vuelve a detectar (con `pedir=False`) cuando termina.
+    - Cada retiro trae `nuevo`: False si ya estaba registrado (el reporte pedido
+      parte el día del último retiro, así que lo vuelve a traer).
     - Tiene techo de tiempo: lo que no alcance queda para la próxima pasada.
     """
     import time as _time
@@ -1106,6 +1186,9 @@ def detectar_retiros(presupuesto_seg=45, pedir=True):
         except mp.MercadoPagoError as e:
             fila['error'] = e.mensaje
             continue
+        pendiente, extra, resuelto = _pedido_en_curso(cfg, reportes)
+        if extra and extra['file_name'] and extra['file_name'] not in {r['file_name'] for r in reportes}:
+            reportes = [extra] + reportes
         # Del más antiguo al más nuevo: los retiros se reconstruyen en orden.
         nuevos = [r for r in reportes if r['file_name'] not in aplicados
                   and not cache.get(_CLAVE_SIN_RETIROS.format(r['file_name']))]
@@ -1125,10 +1208,11 @@ def detectar_retiros(presupuesto_seg=45, pedir=True):
                 cache.set(_CLAVE_SIN_RETIROS.format(rep['file_name']), 1, 60 * 60 * 24)
                 continue
             completo = True
-            dias = dias_cobros_sin_numero(cfg, previa)
+            dias = dias_para_completar(cfg, previa)
             if dias:
                 restante = max(5, int(fin - _time.monotonic()) - 5)
-                completo = not completar_numeros_mp(cfg, dias, presupuesto_seg=restante)['sin_tiempo']
+                comp = completar_numeros_mp(cfg, dias, presupuesto_seg=restante)
+                completo = not comp['sin_tiempo'] and not comp.get('fallidos')
             res = procesar_reporte_liberaciones(filas, cfg, aplicar=True,
                                                 archivo=rep['file_name'] if completo else '')
             fila['reportes_aplicados'] += 1
@@ -1138,12 +1222,13 @@ def detectar_retiros(presupuesto_seg=45, pedir=True):
             else:
                 fila['falto_tiempo'] = fila['incompleto'] = True
                 break
-        if pedir and _time.monotonic() <= fin:
+        ultimo_fin = max((f for f in (_fin_de_reporte(r) for r in reportes) if f), default=None)
+        if ultimo_fin is not None:
+            fila['revisado_hasta'] = timezone.localtime(ultimo_fin).strftime('%d/%m %H:%M')
+        if pendiente:
+            fila['pedido'] = pendiente
+        elif pedir and not resuelto and not fila['incompleto'] and _time.monotonic() <= fin:
             _pedir_si_hace_falta(cfg, reportes, fila)
-        else:
-            ultimo_fin = max((f for f in (_fin_de_reporte(r) for r in reportes) if f), default=None)
-            if ultimo_fin is not None:
-                fila['revisado_hasta'] = timezone.localtime(ultimo_fin).strftime('%d/%m %H:%M')
     return salida
 
 
