@@ -8,7 +8,7 @@ los servidores de MP, sin sesión).
 import json
 import logging
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -1811,15 +1811,43 @@ def api_dineros_mercadopago(request):
         'consumida': t.consumida,
     } for t in base.order_by('-creado_en')[:200]]
 
-    retiros = [{
-        'withdrawal_id': r.withdrawal_id,
-        'fecha': r.fecha.strftime('%d/%m/%Y'),
-        'monto': r.monto,
-        'estado': r.estado,
-        'visto_en_cartola': r.visto_en_cartola,
-        'detalle': r.detalle_diferencia or '',
-        'transacciones': r.transacciones.count(),
-    } for r in RetiroMercadoPago.objects.all().order_by('-fecha')[:100]]
+    # Cuenta (empresa) de cada retiro y su desglose por caja, guardado al aplicar
+    # el reporte de Liberaciones.
+    nombre_cuenta = {}
+
+    def _cuenta_de_retiro(r):
+        if r.config_id not in nombre_cuenta:
+            try:
+                cuenta = mp._cuenta_de(r.config)
+            except AttributeError:
+                cuenta = None
+            empresa = cuenta.empresa if cuenta else (r.config.sucursal.empresa if r.config.sucursal_id else None)
+            nombre_cuenta[r.config_id] = getattr(empresa, 'nombre', '') or ''
+        return nombre_cuenta[r.config_id]
+
+    def _raw(r, clave, defecto):
+        return (r.raw_reporte or {}).get(clave, defecto) if isinstance(r.raw_reporte, dict) else defecto
+
+    retiros = []
+    for r in (RetiroMercadoPago.objects.select_related('config__sucursal__empresa', 'config__cuenta__empresa')
+              .annotate(n_trx=Count('transacciones')).order_by('-fecha', '-id')[:100]):
+        instante = _raw(r, 'instante', '')
+        try:
+            hora = timezone.localtime(datetime.fromisoformat(instante)).strftime('%H:%M') if instante else ''
+        except ValueError:
+            hora = ''
+        retiros.append({
+            'withdrawal_id': r.withdrawal_id,
+            'fecha': r.fecha.strftime('%d/%m/%Y'),
+            'hora': hora,
+            'cuenta': _cuenta_de_retiro(r),
+            'monto': r.monto,
+            'estado': r.estado,
+            'visto_en_cartola': r.visto_en_cartola,
+            'detalle': r.detalle_diferencia or '',
+            'transacciones': r.n_trx,
+            'por_caja': _raw(r, 'por_caja', []) or [],
+        })
 
     return JsonResponse({
         'success': True,
@@ -1932,10 +1960,9 @@ def api_conciliacion_liberaciones_mp(request):
         # no tiene guardado el N° de operación de MP. Se completa desde la API
         # (solo campos vacíos) y se vuelve a cruzar.
         completado = None
-        if resultado['pagos_sin_local']:
-            dias = conc.dias_a_completar(resultado)
-            if dias:
-                completado = conc.completar_numeros_mp(config, dias)
+        dias = conc.dias_cobros_sin_numero(config, resultado)
+        if dias:
+            completado = conc.completar_numeros_mp(config, dias)
         if aplicar or (completado and completado['completados']):
             resultado = conc.procesar_reporte_liberaciones(filas, config, aplicar=aplicar, archivo=origen)
         resultado['numeros_completados'] = completado

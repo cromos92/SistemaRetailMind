@@ -5,8 +5,10 @@ banco. Por defecto es DRY-RUN: muestra qué haría. Con --apply escribe.
 
 Uso (`--config` = cualquier caja de la CUENTA MP; el reporte es por cuenta):
 
-    # Detectar y registrar los retiros de TODAS las cuentas (cron cada mañana)
+    # Detectar y registrar los retiros de TODAS las cuentas (cron cada mañana).
+    # Si MP no tiene un reporte reciente lo pide y espera hasta 15 min a que esté.
     python manage.py sincronizar_liberaciones_mp --todas
+    python manage.py sincronizar_liberaciones_mp --todas --esperar 0   # no esperar
 
     # Ver los reportes que Mercado Pago ya generó
     python manage.py sincronizar_liberaciones_mp --config 3 --listar
@@ -24,6 +26,8 @@ Uso (`--config` = cualquier caja de la CUENTA MP; el reporte es por cuenta):
     # Que MP genere el reporte solo después de cada retiro
     python manage.py sincronizar_liberaciones_mp --config 3 --activar-por-retiro
 """
+import time
+
 from django.core.management.base import BaseCommand, CommandError
 
 from app.models import MercadoPagoConfig
@@ -48,18 +52,34 @@ class Command(BaseCommand):
         grupo.add_argument('--pedir', action='store_true', help='Pide a MP un reporte nuevo (no espera)')
         grupo.add_argument('--activar-por-retiro', action='store_true',
                            help='Configura MP para generar el reporte después de cada retiro')
+        parser.add_argument('--esperar', type=int, default=15,
+                            help='Con --todas: minutos a esperar el reporte que se pidió a MP (0 = no esperar)')
         parser.add_argument('--desde', type=str, default=None)
         parser.add_argument('--hasta', type=str, default=None)
         parser.add_argument('--apply', action='store_true')
 
     def handle(self, *args, **opts):
         if opts['todas']:
-            for c in conc.detectar_retiros(presupuesto_seg=600):
-                estado = c['error'] or (f'{len(c["retiros"])} retiro(s) registrados' if c['retiros'] else 'sin retiros nuevos')
-                self.stdout.write(f'{c["cuenta"]} ({c["cajas"]}): {estado}')
-                for r in c['retiros']:
-                    cajas = ', '.join(f'{x["caja"]} ${x["monto"]:,}' for x in r.get('por_caja') or []).replace(',', '.')
-                    self.stdout.write(f'  {r["estado"]} {r["fecha"]} {r["hora"]} ${r["monto"]:,} · {cajas}'.replace(',', '.'))
+            cuentas = conc.detectar_retiros(presupuesto_seg=600)
+            self._mostrar(cuentas)
+            pedidos = [c for c in cuentas if c['pedido']]
+            if pedidos and opts['esperar'] > 0:
+                self.stdout.write(f'Esperando los reportes pedidos a Mercado Pago (hasta {opts["esperar"]} min)…')
+                limite = time.monotonic() + opts['esperar'] * 60
+                while pedidos and time.monotonic() < limite:
+                    time.sleep(30)
+                    pendientes = []
+                    for c in pedidos:
+                        cfg = MercadoPagoConfig.objects.get(pk=c['config_id'])
+                        tarea = c['pedido'].get('task_id')
+                        try:
+                            listo = (conc.estado_tarea_liberaciones(cfg, tarea) if tarea else {'listo': False, 'fallido': False})
+                        except mp.MercadoPagoError:
+                            listo = {'listo': False, 'fallido': False}
+                        if not (listo['listo'] or listo['fallido']):
+                            pendientes.append(c)
+                    pedidos = pendientes
+                self._mostrar(conc.detectar_retiros(presupuesto_seg=600, pedir=False))
             return
         config = MercadoPagoConfig.objects.filter(pk=opts['config']).first() if opts['config'] else None
         if config is None:
@@ -106,15 +126,30 @@ class Command(BaseCommand):
         except mp.MercadoPagoError as e:
             raise CommandError(e.mensaje)
 
+    def _mostrar(self, cuentas):
+        for c in cuentas:
+            estado = c['error'] or (f'{len(c["retiros"])} retiro(s) registrados' if c['retiros'] else 'sin retiros nuevos')
+            if c['revisado_hasta']:
+                estado += f' (revisado hasta {c["revisado_hasta"]})'
+            if c['pedido']:
+                estado += f' · pedido a MP un reporte hasta {c["pedido"].get("hasta") or "ahora"}'
+            if c['error_pedido']:
+                estado += f' · no se pudo pedir el reporte: {c["error_pedido"]}'
+            if c['incompleto']:
+                estado += ' · faltó tiempo para cruzar todas las ventas: se completa en la próxima pasada'
+            self.stdout.write(f'{c["cuenta"]} ({c["cajas"]}): {estado}')
+            for r in c['retiros']:
+                cajas = ', '.join(f'{x["caja"]} ${x["monto"]:,}' for x in r.get('por_caja') or []).replace(',', '.')
+                self.stdout.write(f'  {r["estado"]} {r["fecha"]} {r["hora"]} ${r["monto"]:,} · {cajas}'.replace(',', '.'))
+
     def _procesar(self, config, contenido, origen, aplicar):
         filas = conc.leer_csv(contenido)
         res = conc.procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=origen)
-        if res['pagos_sin_local']:
-            dias = conc.dias_a_completar(res)
-            if dias:
-                comp = conc.completar_numeros_mp(config, dias, presupuesto_seg=300)
-                self.stdout.write(f'  N° de operación completados desde MP: {comp["completados"]} '
-                                  f'({comp["dias"]} día(s) consultados)')
+        dias = conc.dias_cobros_sin_numero(config, res)
+        if dias:
+            comp = conc.completar_numeros_mp(config, dias, presupuesto_seg=300)
+            self.stdout.write(f'  N° de operación completados desde MP: {comp["completados"]} '
+                              f'({comp["dias"]} día(s) consultados)')
         res = conc.procesar_reporte_liberaciones(filas, config, aplicar=aplicar, archivo=origen)
         modo = 'APLICADO' if aplicar else 'DRY-RUN (use --apply para escribir)'
         self.stdout.write(f'{modo} · {origen} · filas {len(filas)} · retiros {len(res["retiros"])} · '

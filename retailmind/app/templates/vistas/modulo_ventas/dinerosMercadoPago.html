@@ -237,8 +237,9 @@
                     <div class="conc-panel d-flex flex-wrap align-items-center justify-content-between gap-2">
                         <div>
                             <h6 class="mb-1"><i class="ri-radar-line me-1"></i>Detectar retiros</h6>
-                            <div class="conc-help mb-0">Revisa todas las cuentas de Mercado Pago, toma los reportes nuevos y registra
-                                cada retiro con las ventas que se llevó. No hay que elegir nada.</div>
+                            <div class="conc-help mb-0">Revisa todas las cuentas de Mercado Pago y registra cada retiro al banco con las
+                                ventas que se llevó. Si Mercado Pago no tiene un reporte reciente, lo pide y lo aplica apenas esté
+                                (tarda unos minutos). No hay que elegir nada.</div>
                         </div>
                         <button class="btn btn-primary" id="btnDetectarRetiros" onclick="detectarRetiros()" style="min-height:44px;">
                             <i class="ri-radar-line me-1"></i>Detectar retiros</button>
@@ -295,11 +296,12 @@
                     <div class="conc-scroll">
                         <table class="table conc-table">
                             <thead><tr>
-                                <th>Retiro MP</th><th>Fecha</th><th class="num">Monto</th>
+                                <th>Retiro MP</th><th>Fecha</th><th>Cuenta</th><th class="num">Monto</th>
+                                <th>De qué caja salió</th>
                                 <th class="text-center">Cobros del POS</th><th>Estado</th><th>Detalle</th>
                                 <th class="text-center">Visto en cartola</th>
                             </tr></thead>
-                            <tbody id="tbodyRetiros"><tr><td colspan="7" class="conc-empty">Cargando…</td></tr></tbody>
+                            <tbody id="tbodyRetiros"><tr><td colspan="9" class="conc-empty">Cargando…</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -489,15 +491,19 @@
                     const visto = ES_ADMIN
                         ? `<input type="checkbox" class="form-check-input" ${r.visto_en_cartola ? 'checked' : ''} onchange="marcarVisto('${esc(r.withdrawal_id)}', this.checked)" aria-label="Visto en cartola">`
                         : (r.visto_en_cartola ? '✅' : '—');
+                    const cajas = (r.por_caja || []).map(x => `<div class="conc-sub">${esc(x.caja)}: <strong>${fmt(x.monto)}</strong></div>`).join('')
+                        || '<span class="conc-sub">—</span>';
                     return `<tr>
-                        <td>${esc(r.withdrawal_id)}</td><td>${esc(r.fecha)}</td>
+                        <td>${esc(r.withdrawal_id)}</td><td>${esc(r.fecha)}${r.hora ? ` <span class="conc-sub">${esc(r.hora)}</span>` : ''}</td>
+                        <td>${esc(r.cuenta || '—')}</td>
                         <td class="num fw-semibold">${fmt(r.monto)}</td>
+                        <td style="min-width:200px;">${cajas}</td>
                         <td class="text-center">${r.transacciones}</td>
                         <td><span class="conc-chip conc-chip--${tono}">${esc(r.estado)}</span></td>
                         <td class="conc-sub" style="max-width:340px;white-space:normal;">${esc(r.detalle || '')}</td>
                         <td class="text-center">${visto}</td>
                     </tr>`;
-                }).join('') : '<tr><td colspan="7" class="conc-empty">Sin retiros registrados. Procese el reporte de Liberaciones (arriba) para cargarlos.</td></tr>';
+                }).join('') : '<tr><td colspan="9" class="conc-empty">Sin retiros registrados. Use «Detectar retiros» (arriba).</td></tr>';
                 const suc = data.por_sucursal || [];
                 document.getElementById('tbodySucursales').innerHTML = suc.length ? suc.map(s =>
                     `<tr><td>${esc(s.sucursal__alias || s.sucursal_id)}</td><td class="num">${fmt(s.total)}</td><td class="num">${s.cantidad}</td></tr>`
@@ -596,36 +602,110 @@
         enviarLiberaciones(fd);
     };
 
-    window.detectarRetiros = function () {
+    // «Detectar retiros»: si MP no tiene un reporte reciente, el servidor lo
+    // pide (c.pedido); la página vigila esa tarea y vuelve a detectar sola
+    // cuando está lista. Lo encontrado en cada vuelta se acumula en pantalla.
+    let detectarTimer = null;
+    let detectarRondas = 0;
+    let detectarCuentas = {};
+
+    function pintarDeteccion() {
+        const cont = document.getElementById('detectarResultado');
+        const cuentas = Object.values(detectarCuentas);
+        cont.innerHTML = cuentas.map(c => {
+            let estado;
+            if (c.error) estado = `<span class="text-danger">${esc(c.error)}</span>`;
+            else if (c.retiros.length) estado = `<strong>${c.retiros.length} retiro(s) registrados</strong>`;
+            else if (c.pedido) estado = 'Buscando retiros recientes…';
+            else estado = 'Sin retiros nuevos';
+            const revisado = c.revisado_hasta && !c.pedido ? ` <span class="conc-sub">(revisado hasta ${esc(c.revisado_hasta)})</span>` : '';
+            const aviso = c.por_retiro_activo === false
+                ? ` · <span class="conc-chip conc-chip--warn">Mercado Pago no genera el reporte tras cada retiro</span>
+                   <button class="btn btn-link btn-sm p-0 align-baseline" onclick="activarReportePorRetiro(${Number(c.config_id)})">Activar</button>` : '';
+            const tiempo = c.incompleto ? ' · <span class="conc-chip conc-chip--mute">cruzando más ventas…</span>'
+                : (c.falto_tiempo ? ' · <span class="conc-chip conc-chip--mute">faltó tiempo</span>' : '');
+            const pedido = c.pedido
+                ? `<div class="conc-sub mt-1"><div class="spinner-border spinner-border-sm text-primary"></div>
+                     Se le pidió a Mercado Pago el reporte${c.pedido.desde ? ' desde el ' + esc(c.pedido.desde) : ''} hasta las ${esc(c.pedido.hasta || 'ahora')}.
+                     Tarda unos minutos: esta página lo aplica sola cuando esté listo (puede seguir trabajando).</div>` : '';
+            const errPedido = c.error_pedido ? `<div class="small text-danger mt-1">No se pudo pedir el reporte: ${esc(c.error_pedido)}</div>` : '';
+            const tabla = c.retiros.length ? tablaSimple([
+                ['Fecha', f => `${esc(f.fecha)} ${esc(f.hora || '')}`], ['Monto', f => fmt(f.monto), 'num'],
+                ['Estado', f => `<span class="conc-chip conc-chip--${f.estado === 'CONCILIADO' ? 'ok' : 'err'}">${esc(f.estado)}</span>`],
+                ['De qué caja salió', f => (f.por_caja || []).map(x => `<div class="conc-sub">${esc(x.caja)}: <strong>${fmt(x.monto)}</strong></div>`).join('')],
+                ['Detalle', f => `<span class="conc-sub">${esc(f.detalle || '')}</span>`],
+            ], c.retiros) : '';
+            return `<div class="mb-2"><div class="small"><strong>${esc(c.cuenta)}</strong>${c.rut ? ' (' + esc(c.rut) + ')' : ''}
+                <span class="conc-sub">· cajas ${esc(c.cajas)}</span> — ${estado}${revisado}${aviso}${tiempo}</div>${pedido}${errPedido}${tabla}</div>`;
+        }).join('') || '<div class="conc-sub">No hay cuentas de Mercado Pago configuradas.</div>';
+    }
+
+    function acumularDeteccion(cuentas) {
+        cuentas.forEach(c => {
+            const previa = detectarCuentas[c.config_id];
+            const porId = {};
+            (previa ? previa.retiros : []).concat(c.retiros || []).forEach(r => { porId[r.withdrawal_id] = r; });
+            detectarCuentas[c.config_id] = Object.assign({}, c, {retiros: Object.values(porId)});
+        });
+    }
+
+    window.detectarRetiros = function (auto) {
+        clearTimeout(detectarTimer);
         const btn = document.getElementById('btnDetectarRetiros');
         const cont = document.getElementById('detectarResultado');
+        if (!auto) { detectarRondas = 0; detectarCuentas = {}; }
+        detectarRondas++;
         btn.disabled = true;
-        cont.innerHTML = '<div class="conc-sub"><div class="spinner-border spinner-border-sm text-primary"></div> Revisando las cuentas de Mercado Pago… (hasta un minuto)</div>';
+        if (auto) {
+            Object.values(detectarCuentas).forEach(c => { c.pedido = null; });
+            pintarDeteccion();
+            cont.insertAdjacentHTML('afterbegin', '<div class="conc-sub mb-1" id="detectarAplicando"><div class="spinner-border spinner-border-sm text-primary"></div> Aplicando el reporte de Mercado Pago…</div>');
+        } else {
+            cont.innerHTML = '<div class="conc-sub"><div class="spinner-border spinner-border-sm text-primary"></div> Revisando las cuentas de Mercado Pago… (hasta un minuto)</div>';
+        }
         fetch('/app/api/mercadopago/conciliacion/liberaciones/detectar/', {method: 'POST', headers: {'X-CSRFToken': csrf()}})
             .then(r => r.json())
             .then(d => {
                 if (!d.success) { cont.innerHTML = `<div class="text-danger small">${esc(d.error)}</div>`; return; }
-                cont.innerHTML = (d.cuentas || []).map(c => {
-                    let estado;
-                    if (c.error) estado = `<span class="text-danger">${esc(c.error)}</span>`;
-                    else if (c.retiros.length) estado = `<strong>${c.retiros.length} retiro(s) registrados</strong>`;
-                    else estado = 'Sin retiros nuevos';
-                    const aviso = c.por_retiro_activo === false
-                        ? ' · <span class="conc-chip conc-chip--warn">Mercado Pago no genera el reporte tras cada retiro</span>' : '';
-                    const tiempo = c.falto_tiempo ? ' · <span class="conc-chip conc-chip--mute">faltó tiempo: vuelva a apretar</span>' : '';
-                    const tabla = c.retiros.length ? tablaSimple([
-                        ['Fecha', f => `${esc(f.fecha)} ${esc(f.hora || '')}`], ['Monto', f => fmt(f.monto), 'num'],
-                        ['Estado', f => `<span class="conc-chip conc-chip--${f.estado === 'CONCILIADO' ? 'ok' : 'err'}">${esc(f.estado)}</span>`],
-                        ['De qué caja salió', f => (f.por_caja || []).map(x => `<div class="conc-sub">${esc(x.caja)}: <strong>${fmt(x.monto)}</strong></div>`).join('')],
-                    ], c.retiros) : '';
-                    return `<div class="mb-2"><div class="small"><strong>${esc(c.cuenta)}</strong>${c.rut ? ' (' + esc(c.rut) + ')' : ''}
-                        <span class="conc-sub">· cajas ${esc(c.cajas)}</span> — ${estado}${aviso}${tiempo}</div>${tabla}</div>`;
-                }).join('') || '<div class="conc-sub">No hay cuentas de Mercado Pago configuradas.</div>';
+                acumularDeteccion(d.cuentas || []);
+                pintarDeteccion();
                 cargarDineros(); cargarCobros();
+                siguienteDeteccion(d.cuentas || []);
             })
-            .catch(() => { cont.innerHTML = '<div class="text-danger small">Error de conexión.</div>'; })
+            .catch(() => { cont.insertAdjacentHTML('afterbegin', '<div class="text-danger small">Error de conexión.</div>'); })
             .finally(() => { btn.disabled = false; });
     };
+
+    // Tope de vueltas automáticas: evita un bucle si MP dice «listo» pero el
+    // reporte todavía no aparece en su lista.
+    function siguienteDeteccion(cuentas) {
+        if (detectarRondas >= 12) return;
+        if (cuentas.some(c => c.incompleto)) {
+            detectarTimer = setTimeout(() => detectarRetiros(true), 2000);
+            return;
+        }
+        const pedidos = cuentas.filter(c => c.pedido);
+        if (pedidos.length) esperarPedidos(pedidos, 0);
+    }
+
+    function esperarPedidos(pedidos, intento) {
+        clearTimeout(detectarTimer);
+        if (intento >= 30) {
+            document.getElementById('detectarResultado').insertAdjacentHTML('afterbegin',
+                '<div class="small mb-1">Mercado Pago todavía no termina el reporte. Vuelva a apretar «Detectar retiros» en unos minutos.</div>');
+            return;
+        }
+        detectarTimer = setTimeout(() => {
+            Promise.all(pedidos.map(c => c.pedido.task_id
+                ? fetch(`/app/api/mercadopago/conciliacion/liberaciones/tarea/?config_id=${encodeURIComponent(c.config_id)}&task_id=${encodeURIComponent(c.pedido.task_id)}`)
+                    .then(r => r.json()).catch(() => ({}))
+                : Promise.resolve({listo: intento >= 5})))   // sin id de tarea: se vuelve a detectar a los ~2 minutos
+                .then(estados => {
+                    if (estados.every(e => e.listo || e.fallido)) detectarRetiros(true);
+                    else esperarPedidos(pedidos, intento + 1);
+                });
+        }, 20000);
+    }
 
     window.cargarReportesMP = function () {
         const cont = document.getElementById('libReportes');
@@ -703,7 +783,7 @@
         }, 20000);
     }
 
-    window.activarReportePorRetiro = function () {
+    window.activarReportePorRetiro = function (configId) {
         Swal.fire({
             icon: 'question', title: 'Reporte automático después de cada retiro',
             html: `<div class="text-start small">
@@ -713,11 +793,15 @@
             showCancelButton: true, confirmButtonText: 'Activar', cancelButtonText: 'Cancelar', confirmButtonColor: '#0066FF',
         }).then(r => {
             if (!r.isConfirmed) return;
-            const fd = new FormData(); fd.append('config_id', libConfig());
+            const fd = new FormData(); fd.append('config_id', configId || libConfig());
             fetch('/app/api/mercadopago/conciliacion/liberaciones/config/', {method: 'POST', headers: {'X-CSRFToken': csrf()}, body: fd})
                 .then(res => res.json())
                 .then(d => {
-                    if (d.success) { Swal.fire({icon: 'success', title: 'Activado', timer: 1800, showConfirmButton: false}); cargarReportesMP(); }
+                    if (d.success) {
+                        Swal.fire({icon: 'success', title: 'Activado', timer: 1800, showConfirmButton: false});
+                        if (configId && detectarCuentas[configId]) { detectarCuentas[configId].por_retiro_activo = true; pintarDeteccion(); }
+                        cargarReportesMP();
+                    }
                     else Swal.fire({icon: 'error', title: 'No se pudo activar', text: d.error || ''});
                 });
         });

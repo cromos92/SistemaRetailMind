@@ -5,9 +5,10 @@ cartola del banco y cruce contra la API (mockeada).
 Correr en BD local desechable:
     $env:DATABASE_URL='sqlite://:memory:'; python manage.py test app.tests.test_conciliacion_mp
 """
-from datetime import timedelta
+from datetime import timedelta, timezone as dt_timezone
 from unittest import mock
 
+from django.core.cache import cache
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
@@ -24,6 +25,7 @@ from .test_mercadopago_pos import ENV_TEST, _config, _transaccion
 class _Base(TestCase):
 
     def setUp(self):
+        cache.clear()   # pedidos de reporte y reportes sin retiros quedan en caché
         self.empresa = crear_empresa()
         self.sucursal = crear_sucursal(empresa=self.empresa)
         self.vendedor = crear_vendedor(empresa=self.empresa)
@@ -487,7 +489,8 @@ class DetectarRetirosTest(_Base):
         archivos = {'a.csv': con_retiro, 'b.csv': sin_retiro}
         with mock.patch.object(conc, 'listar_reportes_liberaciones', return_value=reportes), \
              mock.patch.object(conc, 'descargar_reporte_liberaciones', side_effect=lambda c, f: archivos[f]), \
-             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': False}):
+             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': False}), \
+             mock.patch.object(conc, 'pedir_reporte_liberaciones', return_value={'task_id': None, 'begin_date': '', 'end_date': ''}):
             res = conc.detectar_retiros()
             self.assertEqual(len(res), 1)
             cuenta = res[0]
@@ -508,3 +511,157 @@ class DetectarRetirosTest(_Base):
         with mock.patch('app.middleware_permisos.PermisoRol.tiene_permiso', return_value=True):
             r = c.post(reverse('api_conciliacion_detectar_retiros_mp'))
         self.assertEqual(r.status_code, 403)
+
+
+def _reporte(file_name, fin, creado=''):
+    return {'file_name': file_name, 'begin_date': '', 'end_date': fin, 'creado': creado,
+            'origen': 'manual', 'estado': ''}
+
+
+def _utc_hace(**kw):
+    return (timezone.now() - timedelta(**kw)).astimezone(dt_timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def _local_hace(**kw):
+    return timezone.localtime(timezone.now() - timedelta(**kw)).isoformat()
+
+
+@mock.patch.dict('os.environ', ENV_TEST)
+class DetectarPidiendoReporteTest(_Base):
+    """23-09: retiro de $10.000.000 a las 15:33 y «Detectar retiros» decía «Sin
+    retiros nuevos»: solo leía reportes ya generados y MP no genera uno tras el
+    retiro si la cuenta no lo tiene activado. Ahora lo pide, la página lo
+    espera y lo aplica."""
+
+    PEDIDO = {'task_id': 77, 'begin_date': '2026-07-26T04:00:00Z', 'end_date': '2026-09-23T18:50:00Z',
+              'estado': 'pending'}
+
+    def _detectar(self, reportes, archivos=None, completar=None, **kw):
+        archivos = archivos or {}
+        with mock.patch.object(conc, 'listar_reportes_liberaciones', return_value=reportes), \
+             mock.patch.object(conc, 'descargar_reporte_liberaciones', side_effect=lambda c, f: archivos[f]), \
+             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': False}), \
+             mock.patch.object(conc, 'estado_tarea_liberaciones', return_value={'fallido': False, 'listo': False}), \
+             mock.patch.object(conc, 'completar_numeros_mp',
+                               return_value=completar or {'dias': 0, 'completados': 0, 'sin_tiempo': False}) as comp, \
+             mock.patch.object(conc, 'pedir_reporte_liberaciones', return_value=dict(self.PEDIDO)) as pedir:
+            return conc.detectar_retiros(**kw), pedir, comp
+
+    def test_pide_reporte_si_el_ultimo_quedo_viejo_y_no_lo_repite(self):
+        res, pedir, _c = self._detectar([_reporte('viejo.csv', _utc_hace(hours=3))], {'viejo.csv': _csv().encode()})
+        self.assertEqual(pedir.call_count, 1)
+        _cfg, desde, hasta = pedir.call_args[0]
+        self.assertEqual(hasta, timezone.localdate())
+        self.assertEqual(desde, timezone.localdate() - timedelta(days=conc.DIAS_MAX_REPORTE))
+        self.assertEqual(res[0]['pedido']['task_id'], 77)
+        self.assertTrue(res[0]['pedido']['hasta'])
+        self.assertTrue(res[0]['revisado_hasta'])
+        # Otra pasada mientras MP lo genera: no se pide otro.
+        res2, pedir2, _c = self._detectar([_reporte('viejo.csv', _utc_hace(hours=3))])
+        self.assertEqual(pedir2.call_count, 0)
+        self.assertEqual(res2[0]['pedido']['task_id'], 77)
+
+    def test_no_pide_si_el_ultimo_reporte_esta_al_dia(self):
+        res, pedir, _c = self._detectar([_reporte('nuevo.csv', _utc_hace(minutes=6))],
+                                        archivos={'nuevo.csv': _csv().encode()})
+        self.assertEqual(pedir.call_count, 0)
+        self.assertIsNone(res[0]['pedido'])
+        self.assertTrue(res[0]['revisado_hasta'])
+
+    def test_sin_reportes_pide_y_con_pedir_false_no(self):
+        _r, pedir, _c = self._detectar([])
+        self.assertEqual(pedir.call_count, 1)
+        cache.clear()
+        _r, pedir, _c = self._detectar([], pedir=False)
+        self.assertEqual(pedir.call_count, 0)
+
+    def test_inicio_del_reporte_es_el_dia_del_ultimo_retiro_de_la_cuenta(self):
+        hoy = timezone.localdate()
+        tope = hoy - timedelta(days=conc.DIAS_MAX_REPORTE)
+        self.assertEqual(conc.inicio_reporte_cuenta(self.config), tope)
+        RetiroMercadoPago.objects.create(config=self.config, withdrawal_id='W-VIEJO', fecha=hoy - timedelta(days=90), monto=1)
+        self.assertEqual(conc.inicio_reporte_cuenta(self.config), tope)
+        RetiroMercadoPago.objects.create(config=self.config, withdrawal_id='W-1', fecha=hoy - timedelta(days=3), monto=1)
+        self.assertEqual(conc.inicio_reporte_cuenta(self.config), hoy - timedelta(days=3))
+        # Un retiro de OTRA cuenta no cuenta.
+        ajena = _config(crear_sucursal(empresa=crear_empresa(nombre='Ajena', rut='77.111.111-1'), alias='AJ1'),
+                        nombre='Ajena', external_pos_id='POSAJ')
+        RetiroMercadoPago.objects.create(config=ajena, withdrawal_id='W-AJENA', fecha=hoy, monto=1)
+        self.assertEqual(conc.inicio_reporte_cuenta(self.config), hoy - timedelta(days=3))
+
+    def test_si_falto_tiempo_aplica_pero_no_marca_aplicado(self):
+        t = self._cobro(1, monto=40000, external_reference='RM-1-1-c1i01')   # sin N° de operación de MP
+        TransaccionMercadoPago.objects.filter(pk=t.pk).update(creado_en=timezone.now() - timedelta(hours=3))
+        otro = self._cobro(2, monto=5000, external_reference='RM-1-2-c1i01')  # sigue sin cruzar
+        TransaccionMercadoPago.objects.filter(pk=otro.pk).update(creado_en=timezone.now() - timedelta(hours=3))
+        archivo = _csv(
+            f"{_local_hace(hours=2)},179000000001,RM-1-1-c1i01,release,payment,39000.00,0.00,40000.00",
+            f"{_local_hace(hours=1)},W10M,,release,payout,0.00,39000.00,-39000.00",
+        ).encode()
+        reportes = [_reporte('r.csv', _utc_hace(minutes=2))]
+        res, _p, comp = self._detectar(reportes, {'r.csv': archivo},
+                                       completar={'dias': 1, 'completados': 0, 'sin_tiempo': True})
+        self.assertEqual(comp.call_count, 1)
+        self.assertTrue(res[0]['incompleto'])
+        self.assertEqual([r['monto'] for r in res[0]['retiros']], [39000])
+        self.assertNotIn('r.csv', conc.reportes_aplicados())     # la próxima pasada lo rehace
+        t.refresh_from_db()
+        self.assertEqual(t.retiro.withdrawal_id, 'W10M')          # pero el retiro ya se ve
+        res2, _p, _c = self._detectar(reportes, {'r.csv': archivo})
+        self.assertFalse(res2[0]['incompleto'])
+        self.assertIn('r.csv', conc.reportes_aplicados())
+        self.assertEqual(RetiroMercadoPago.objects.count(), 1)
+
+    def test_cajas_con_cuenta_automatica_son_de_la_misma_cuenta(self):
+        from app.models import MercadoPagoCuenta
+        MercadoPagoCuenta.objects.create(empresa=self.empresa, activo=True)
+        c2 = _config(crear_sucursal(empresa=self.empresa, alias='SUC-2'), nombre='Caja 2', external_pos_id='POS002')
+        ajena = _config(crear_sucursal(empresa=crear_empresa(nombre='Ajena', rut='77.111.111-1'), alias='AJ1'),
+                        nombre='Ajena', external_pos_id='POSAJ')
+        self.assertEqual(sorted(conc._configs_de_la_cuenta(self.config)), sorted([self.config.id, c2.id]))
+        self.assertEqual(sorted(conc._configs_de_la_cuenta(c2)), sorted([self.config.id, c2.id]))
+        self.assertEqual(conc._configs_de_la_cuenta(ajena), [ajena.id])
+
+    def test_dias_de_cobros_sin_numero(self):
+        sin_num = self._cobro(1, monto=5000)
+        con_num = self._cobro(2, monto=5000, payment_id_mp='123')
+        creado = timezone.now() - timedelta(days=2)
+        TransaccionMercadoPago.objects.filter(pk__in=[sin_num.pk, con_num.pk]).update(creado_en=creado)
+        resultado = {'rango': [_local_hace(days=1), _local_hace(minutes=1)]}
+        dias = conc.dias_cobros_sin_numero(self.config, resultado)
+        self.assertIn(timezone.localtime(creado).date(), dias)
+        self.assertLessEqual(len(dias), 2)
+        self.assertEqual(conc.dias_cobros_sin_numero(self.config, {'rango': []}), [])
+
+    def test_aplicar_guarda_liberacion_y_desglose_y_la_tabla_los_muestra(self):
+        t = self._cobro(1, payment_id_mp='611', monto=100000)
+        filas = conc.leer_csv(_csv(
+            "2026-09-23T09:10:00.000-03:00,611,,release,payment,100000.00,0.00,100000.00",
+            "2026-09-23T15:33:00.000-03:00,W1,,release,payout,0.00,100000.00,-100000.00",
+        ).encode())
+        conc.procesar_reporte_liberaciones(filas, self.config, aplicar=True, archivo='r.csv')
+        t.refresh_from_db()
+        self.assertEqual(t.money_release_date, conc._instante('2026-09-23T09:10:00.000-03:00'))
+        retiro = RetiroMercadoPago.objects.get(withdrawal_id='W1')
+        self.assertEqual(retiro.raw_reporte['por_caja'][0]['monto'], 100000)
+        admin = crear_usuario(username='adm_ret', rol='administrador')
+        c = Client(); c.force_login(admin)
+        s = c.session; s['idSucursalActual'] = self.sucursal.id; s.save()
+        with mock.patch('app.middleware_permisos.PermisoRol.tiene_permiso', return_value=True):
+            r = c.get(reverse('api_dineros_mercadopago'))
+        fila = r.json()['retiros'][0]
+        self.assertEqual(fila['hora'], '15:33')
+        self.assertEqual(fila['transacciones'], 1)
+        self.assertEqual(fila['por_caja'][0]['monto'], 100000)
+        self.assertEqual(fila['cuenta'], self.empresa.nombre)
+
+    def test_completar_guarda_fecha_de_liberacion(self):
+        t = self._cobro(1, monto=40000, external_reference='RM-1-1-c1i01')
+        pagos = [{'id': 179000000001, 'external_reference': 'RM-1-1-c1i01',
+                  'money_release_date': '2026-09-24T10:00:00.000-03:00',
+                  'transaction_details': {'net_received_amount': 39000.0}}]
+        with mock.patch('app.services.mercadopago_service.buscar_pagos_dia', return_value=pagos):
+            conc.completar_numeros_mp(self.config, [self.hoy])
+        t.refresh_from_db()
+        self.assertEqual(t.payment_id_mp, '179000000001')
+        self.assertEqual(t.money_release_date, conc._instante('2026-09-24T10:00:00.000-03:00'))
