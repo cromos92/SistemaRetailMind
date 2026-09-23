@@ -183,14 +183,14 @@
                         <div class="kpi-card kpi-card--info card h-100" title="Cobrado que Mercado Pago todavía no libera"><div class="card-body d-flex align-items-center gap-2">
                             <div class="kpi-icon text-white"><i class="ri-time-line"></i></div>
                             <div class="overflow-hidden"><div class="kpi-value" id="kpiPendiente">$0</div>
-                            <p class="kpi-label">Pendiente liberación</p><p class="kpi-amount" id="kpiLiberado">Liberado sin retirar $0</p></div>
+                            <p class="kpi-label" title="Neto: lo que deja Mercado Pago después de su comisión">Pendiente liberación (neto)</p><p class="kpi-amount" id="kpiLiberado">Liberado sin retirar $0</p></div>
                         </div></div>
                     </div>
                     <div class="col-xl-2 col-md-4 col-6">
                         <div class="kpi-card kpi-card--ok card h-100" title="Cobros amarrados a un retiro al banco"><div class="card-body d-flex align-items-center gap-2">
                             <div class="kpi-icon text-white"><i class="ri-bank-line"></i></div>
                             <div class="overflow-hidden"><div class="kpi-value" id="kpiDepositado">$0</div>
-                            <p class="kpi-label">Depositado en banco</p><p class="kpi-amount" id="kpiComisiones">Comisiones $0</p></div>
+                            <p class="kpi-label" title="Neto de las ventas que un retiro ya se llevó al banco">Depositado en banco (neto)</p><p class="kpi-amount" id="kpiComisiones">Comisiones $0</p></div>
                         </div></div>
                     </div>
                 </div>
@@ -321,10 +321,16 @@
 
                 <!-- ===== 4. Por sucursal ===== -->
                 <div class="conc-pane" id="pane-sucursal">
-                    <div class="conc-scroll" style="max-width:640px;">
+                    <p class="conc-help">Cuadre por tienda de los cobros con Mercado Pago del período de arriba.
+                        <strong>Neto</strong> = vendido − devuelto − comisión de Mercado Pago: es lo que llega al banco.
+                        Después se reparte en <strong>ya en el banco</strong> (un retiro se lo llevó), <strong>por liberar</strong>
+                        (Mercado Pago todavía no lo suelta) y <strong>en Mercado Pago</strong> (disponible, espera el próximo retiro).</p>
+                    <div class="conc-scroll">
                         <table class="table conc-table">
-                            <thead><tr><th>Sucursal</th><th class="num">Cobrado</th><th class="num">Cobros</th></tr></thead>
-                            <tbody id="tbodySucursales"><tr><td colspan="3" class="conc-empty">Cargando…</td></tr></tbody>
+                            <thead><tr><th>Sucursal</th><th class="num">Cobros</th><th class="num">Vendido</th><th class="num">Devuelto</th>
+                                <th class="num">Comisión MP</th><th class="num">Neto</th><th class="num">Ya en el banco</th>
+                                <th class="num">Por liberar</th><th class="num">En Mercado Pago</th></tr></thead>
+                            <tbody id="tbodySucursales"><tr><td colspan="9" class="conc-empty">Cargando…</td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -472,7 +478,8 @@
 
     function cargarDineros() {
         const p = params();
-        const q = new URLSearchParams({fecha_desde: p.get('desde') || '', fecha_hasta: p.get('hasta') || ''});
+        const q = new URLSearchParams({fecha_desde: p.get('desde') || '', fecha_hasta: p.get('hasta') || '',
+                                       sucursal_id: p.get('sucursal_id') || ''});
         fetch('/app/api/mercadopago/dineros/?' + q.toString())
             .then(r => r.json())
             .then(data => {
@@ -480,9 +487,9 @@
                 const k = data.kpis || {};
                 document.getElementById('kpiCobrado').textContent = fmt(k.cobrado);
                 document.getElementById('kpiCobradoCant').textContent = `${k.cantidad_cobros || 0} cobros`;
-                document.getElementById('kpiPendiente').textContent = fmt(k.pendiente_liberacion);
-                document.getElementById('kpiLiberado').textContent = `Liberado sin retirar ${fmt(k.liberado_sin_retirar)}`;
-                document.getElementById('kpiDepositado').textContent = fmt(k.depositado);
+                document.getElementById('kpiPendiente').textContent = fmt(k.pendiente_liberacion_neto);
+                document.getElementById('kpiLiberado').textContent = `Liberado sin retirar ${fmt(k.liberado_sin_retirar_neto)}`;
+                document.getElementById('kpiDepositado').textContent = fmt(k.depositado_neto);
                 document.getElementById('kpiComisiones').textContent = `Comisiones ${fmt(k.comisiones)}`;
                 const retiros = data.retiros || [];
                 document.getElementById('tabCountRetiros').textContent = retiros.length;
@@ -498,16 +505,21 @@
                         <td>${esc(r.cuenta || '—')}</td>
                         <td class="num fw-semibold">${fmt(r.monto)}</td>
                         <td style="min-width:200px;">${cajas}</td>
-                        <td class="text-center">${r.transacciones}</td>
+                        <td class="text-center">${r.transacciones}${ES_ADMIN
+                            ? `<div><button class="btn btn-outline-primary btn-accion-sm mt-1" data-id="${esc(r.withdrawal_id)}" onclick="verVentasRetiro(this.dataset.id)"><i class="ri-list-check-2 me-1"></i>Ver ventas</button></div>` : ''}</td>
                         <td><span class="conc-chip conc-chip--${tono}">${esc(r.estado)}</span></td>
                         <td class="conc-sub" style="max-width:340px;white-space:normal;">${esc(r.detalle || '')}</td>
                         <td class="text-center">${visto}</td>
                     </tr>`;
                 }).join('') : '<tr><td colspan="9" class="conc-empty">Sin retiros registrados. Use «Detectar retiros» (arriba).</td></tr>';
-                const suc = data.por_sucursal || [];
-                document.getElementById('tbodySucursales').innerHTML = suc.length ? suc.map(s =>
-                    `<tr><td>${esc(s.sucursal__alias || s.sucursal_id)}</td><td class="num">${fmt(s.total)}</td><td class="num">${s.cantidad}</td></tr>`
-                ).join('') : '<tr><td colspan="3" class="conc-empty">Sin datos.</td></tr>';
+                const cuadre = data.cuadre || {filas: []};
+                const filaCuadre = (f, total) => `<tr${total ? ' class="fw-bold"' : ''}><td>${esc(f.sucursal)}</td><td class="num">${f.cobros}</td>
+                    <td class="num">${fmt(f.vendido)}</td><td class="num">${fmt(f.devuelto)}</td><td class="num">${fmt(f.comision)}</td>
+                    <td class="num fw-semibold">${fmt(f.neto)}</td><td class="num">${fmt(f.en_banco)}</td>
+                    <td class="num">${fmt(f.por_liberar)}</td><td class="num">${fmt(f.en_mp)}</td></tr>`;
+                document.getElementById('tbodySucursales').innerHTML = cuadre.filas.length
+                    ? cuadre.filas.map(f => filaCuadre(f, false)).join('') + filaCuadre(cuadre.total, true)
+                    : '<tr><td colspan="9" class="conc-empty">Sin cobros con Mercado Pago en el período.</td></tr>';
             });
     }
 
@@ -528,6 +540,46 @@
                 })
                 .catch(() => Swal.fire({icon: 'error', title: 'Error de conexión'}));
         });
+    };
+
+    // Qué se llevó un retiro: ventas del POS con su ticket y documento, pagos
+    // «MP manual» y lo que no se pudo explicar con ventas.
+    window.verVentasRetiro = function (withdrawalId) {
+        Swal.fire({title: 'Cargando…', didOpen: () => Swal.showLoading(), allowOutsideClick: false});
+        fetch(`/app/api/mercadopago/conciliacion/retiro/${encodeURIComponent(withdrawalId)}/`)
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success) { Swal.fire({icon: 'error', title: d.error || 'Error'}); return; }
+                const cajas = (d.por_caja || []).map(x => `<div>${esc(x.caja)}: <strong>${fmt(x.monto)}</strong></div>`).join('') || '—';
+                const sinVentas = (d.no_ventas || []).reduce((a, x) => a + (x.monto || 0), 0);
+                const tabla = tablaSimple([
+                    ['Cobro', f => `${esc(f.fecha)}${f.origen !== 'POS' ? ` <span class="conc-chip conc-chip--info">${esc(f.origen)}</span>` : ''}`],
+                    ['Liberado', f => esc(f.liberacion || '—')],
+                    ['Tienda / caja', f => `${esc(f.sucursal)} <span class="conc-sub">${esc(f.caja)}</span>`],
+                    ['Ticket', f => f.ticket ? '#' + esc(f.ticket) : '—'],
+                    ['Documento', f => esc(f.documento || 'Sin documento')],
+                    ['Bruto', f => fmt(f.bruto), 'num'],
+                    ['Comisión', f => f.comision == null ? '—' : fmt(f.comision), 'num'],
+                    ['Neto', f => fmt(f.neto), 'num'],
+                    ['N° operación', f => esc(f.payment_id_mp || '—')],
+                ], d.filas || []);
+                Swal.fire({
+                    width: '95%', title: `Retiro ${esc(d.withdrawal_id)} · ${fmt(d.monto)}`,
+                    html: `<div class="text-start small">
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-4"><div class="conc-sub">Fecha</div><strong>${esc(d.fecha)}</strong> · <span class="conc-chip conc-chip--${d.estado === 'CONCILIADO' ? 'ok' : 'err'}">${esc(d.estado)}</span></div>
+                            <div class="col-md-4"><div class="conc-sub">De qué caja salió</div>${cajas}</div>
+                            <div class="col-md-4"><div class="conc-sub">Ventas identificadas (${(d.filas || []).length})</div>
+                                <strong>${fmt(d.suma_neto)}</strong> neto · bruto ${fmt(d.bruto)} · comisión ${fmt(d.comision)}
+                                ${sinVentas ? `<div class="conc-sub mt-1">${fmt(sinVentas)} no se pudo explicar con ventas del POS (saldo que ya estaba en Mercado Pago, pagos online o sin N° de operación).</div>` : ''}</div>
+                        </div>
+                        ${d.detalle ? `<div class="conc-sub mb-2">${esc(d.detalle)}</div>` : ''}
+                        <div class="conc-sub mb-1">Una venta partida entre dos retiros aparece en el que se llevó su último peso.</div>
+                        ${tabla}</div>`,
+                    confirmButtonText: 'Cerrar', confirmButtonColor: '#0066FF',
+                });
+            })
+            .catch(() => Swal.fire({icon: 'error', title: 'Error de conexión'}));
     };
 
     window.marcarVisto = function (withdrawalId, visto) {
@@ -555,6 +607,7 @@
             ${d.pagos_manuales ? d.pagos_manuales + ' pagos «MP manual» del POS · ' : ''}${d.pagos_sin_local} pagos sin venta en el sistema ·
             quedan disponibles en MP ${fmt(d.liberado_sin_retirar)}
             ${d.numeros_completados && d.numeros_completados.completados ? `<br><span class="conc-chip conc-chip--info">Se completaron ${d.numeros_completados.completados} N° de operación desde Mercado Pago</span>` : ''}</div>`;
+        if (d.aviso) html += `<div class="small text-warning mb-2">${esc(d.aviso)}</div>`;
         if (!d.retiros.length && (d.encabezados || []).length) {
             html += `<div class="small text-danger mb-2">No se reconoció ningún retiro. Columnas del archivo: <code>${esc(d.encabezados.join(', '))}</code>. Envíelas a soporte para ajustar el lector.</div>`;
         }
@@ -623,7 +676,7 @@
             let estado;
             if (c.error) estado = `<span class="text-danger">${esc(c.error)}</span>`;
             else if (nuevos.length) estado = `<strong>${nuevos.length} retiro(s) nuevo(s) registrado(s)</strong>`;
-            else if (c.pedido) estado = 'Buscando retiros recientes…';
+            else if (c.pedido || c.pedir_pendiente) estado = 'Buscando retiros recientes…';
             else if (c.detenido) estado = `<span class="text-warning">${esc(MSG_VOLVER)}</span>`;
             else if (c.falto_tiempo && !c.reportes_revisados) estado = 'No alcanzó a revisarse';
             else estado = 'Sin retiros nuevos';
@@ -668,7 +721,9 @@
     function detenerDeteccion(msg) {
         clearTimeout(detectarTimer);
         Object.values(detectarCuentas).forEach(c => {
-            if (c.pedido || c.incompleto || c.falto_tiempo) { c.pedido = null; c.incompleto = false; c.detenido = true; }
+            if (c.pedido || c.incompleto || c.falto_tiempo || c.pedir_pendiente) {
+                c.pedido = null; c.incompleto = false; c.pedir_pendiente = false; c.detenido = true;
+            }
         });
         pintarDeteccion();
         document.getElementById('detectarResultado').insertAdjacentHTML('afterbegin', `<div class="small mb-1">${esc(msg)}</div>`);
@@ -683,9 +738,13 @@
         detectarRondas++;
         btn.disabled = true;
         const esperando = [];
+        const pedidosPagina = {};   // la caché del servidor es de cada worker: se le devuelven
+        const pedirIds = [];
         if (auto) {
             Object.values(detectarCuentas).forEach(c => {
-                if (c.pedido || c.incompleto) esperando.push(c.config_id);
+                if (c.pedido) pedidosPagina[c.config_id] = c.pedido;
+                if (c.pedir_pendiente) pedirIds.push(c.config_id);
+                if (c.pedido || c.incompleto || c.falto_tiempo || c.pedir_pendiente) esperando.push(c.config_id);
                 c.pedido = null; c.detenido = false;
             });
             pintarDeteccion();
@@ -695,6 +754,10 @@
         }
         const fd = new FormData();
         fd.append('pedir', auto ? '0' : '1');
+        if (auto) {
+            fd.append('pedir_ids', pedirIds.join(','));
+            fd.append('pedidos', JSON.stringify(pedidosPagina));
+        }
         fetch('/app/api/mercadopago/conciliacion/liberaciones/detectar/', {method: 'POST', headers: {'X-CSRFToken': csrf()}, body: fd})
             .then(r => r.json())
             .then(d => {
@@ -723,7 +786,7 @@
     // Siguiente vuelta: rehacer si faltó tiempo, o esperar los reportes pedidos.
     // Tope de vueltas: evita un bucle si MP dice «listo» y el reporte no aparece.
     function siguienteDeteccion(cuentas, gen) {
-        const faltaTiempo = cuentas.some(c => c.incompleto || c.falto_tiempo);
+        const faltaTiempo = cuentas.some(c => c.incompleto || c.falto_tiempo || c.pedir_pendiente);
         const pedidos = cuentas.filter(c => c.pedido);
         if (!faltaTiempo && !pedidos.length) return;
         if (detectarRondas >= DETECTAR_MAX_RONDAS) { detenerDeteccion(MSG_VOLVER); return; }
@@ -754,6 +817,8 @@
                     estados.forEach((e, i) => {
                         const id = pedidos[i].config_id;
                         errores[id] = e && e.success ? 0 : (errores[id] || 0) + 1;
+                        // El archivo listo viaja con el pedido: otro worker lo puede aplicar.
+                        if (e && e.listo && e.file_name) pedidos[i].pedido.file_name = e.file_name;
                         if ((e && (e.listo || e.fallido)) || errores[id] >= 3) alguno = true;
                     });
                     if (alguno) detectarRetiros(true);

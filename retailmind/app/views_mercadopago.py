@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Count, Sum
+from django.db.models.functions import Coalesce
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
@@ -1747,24 +1748,30 @@ def api_dineros_mercadopago(request):
     KPIs y tablas del ciclo del dinero MP: cobrado → pendiente de liberación →
     liberado → depositado. Todo con datos locales (sin llamar a MP al pintar).
     """
-    hoy = timezone.localdate()
-    try:
-        fecha_desde = request.GET.get('fecha_desde') or str(hoy - timedelta(days=30))
-        fecha_hasta = request.GET.get('fecha_hasta') or str(hoy)
-    except Exception:
-        fecha_desde, fecha_hasta = str(hoy), str(hoy)
+    from .services import conciliacion_mp_service as conc
+    # Mismo rango y sucursal que «Cobros y documentos»: antes estos KPIs usaban
+    # 30 días y todas las sucursales, y no se podían comparar con los de al lado.
+    d, h = conc.rango_fechas(request.GET.get('fecha_desde'), request.GET.get('fecha_hasta'))
+    fecha_desde, fecha_hasta = str(d), str(h)
+    sucursal_id = _sucursal_filtro_conciliacion(request)
 
     ahora = timezone.now()
     base = TransaccionMercadoPago.objects.filter(
         tipo='VENTA',
         creado_en__date__gte=fecha_desde,
         creado_en__date__lte=fecha_hasta,
-    ).select_related('sucursal', 'retiro')
+    ).exclude(correlativo_ticket__startswith='PRUEBA-').select_related('sucursal', 'retiro')
+    if sucursal_id:
+        base = base.filter(sucursal_id=sucursal_id)
 
     aprobadas = base.filter(estado='APROBADA')
 
     def _suma(qs, campo='monto'):
         return int(qs.aggregate(total=Sum(campo))['total'] or 0)
+
+    def _neto(qs):
+        # Neto = lo que MP deja tras su comisión (es lo que llega al banco).
+        return int(qs.aggregate(total=Sum(Coalesce('monto_neto', 'monto')))['total'] or 0)
 
     pendiente_liberacion = aprobadas.filter(retiro__isnull=True).filter(
         money_release_date__gt=ahora
@@ -1781,6 +1788,9 @@ def api_dineros_mercadopago(request):
         'pendiente_liberacion': _suma(pendiente_liberacion),
         'liberado_sin_retirar': _suma(liberado_sin_retirar),
         'depositado': _suma(depositado),
+        'pendiente_liberacion_neto': _neto(pendiente_liberacion),
+        'liberado_sin_retirar_neto': _neto(liberado_sin_retirar),
+        'depositado_neto': _neto(depositado),
         'devuelto': _suma(base.filter(estado='DEVUELTA')),
         'contracargos': _suma(base.filter(estado='CONTRACARGO')),
         'huerfanas': _suma(aprobadas.filter(consumida=False)
@@ -1855,6 +1865,7 @@ def api_dineros_mercadopago(request):
         'fecha_hasta': str(fecha_hasta),
         'kpis': kpis,
         'por_sucursal': por_sucursal,
+        'cuadre': conc.cuadre_por_sucursal(fecha_desde, fecha_hasta, sucursal_id=sucursal_id),
         'transacciones': transacciones,
         'retiros': retiros,
         'configs': list(MercadoPagoConfig.objects.values(
@@ -1963,9 +1974,16 @@ def api_conciliacion_liberaciones_mp(request):
         dias = conc.dias_para_completar(config, resultado)
         if dias:
             completado = conc.completar_numeros_mp(config, dias)
-        if aplicar or (completado and completado['completados']):
-            resultado = conc.procesar_reporte_liberaciones(filas, config, aplicar=aplicar, archivo=origen)
+        # Si MP no dejó terminar de completar N°/fechas, se aplica igual pero sin
+        # marcar el reporte: «Detectar retiros» o un nuevo «Aplicar» lo rehace.
+        completo = completado is None or (not completado['sin_tiempo'] and not completado.get('fallidos'))
+        if aplicar or (completado and completado.get('actualizados')):
+            resultado = conc.procesar_reporte_liberaciones(filas, config, aplicar=aplicar,
+                                                           archivo=origen if completo else '')
         resultado['numeros_completados'] = completado
+        if aplicar and not completo:
+            resultado['aviso'] = ('Mercado Pago no respondió a tiempo al completar los N° de operación: '
+                                  'el reporte se aplicó pero no quedó marcado. Vuelva a aplicarlo en unos minutos.')
     except MercadoPagoError as e:
         return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
     except Exception as e:  # noqa: BLE001 — archivo con formato inesperado
@@ -1995,11 +2013,33 @@ def api_conciliacion_detectar_retiros_mp(request):
     if not _es_admin(request):
         return JsonResponse({'success': False, 'error': 'Solo administradores.'}, status=403)
     pedir = str(request.POST.get('pedir', '1')) != '0'
-    cuentas = conc.detectar_retiros(presupuesto_seg=45, pedir=pedir)
+    # Vueltas automáticas: cuentas a las que no se alcanzó a pedir el reporte, y
+    # los pedidos que la página está esperando (la caché es de cada worker).
+    pedir_ids = {int(x) for x in str(request.POST.get('pedir_ids') or '').split(',') if x.strip().isdigit()}
+    try:
+        crudo = json.loads(request.POST.get('pedidos') or '{}')
+    except ValueError:
+        crudo = {}
+    pedidos = ({int(k): v for k, v in crudo.items() if str(k).isdigit() and isinstance(v, dict)}
+               if isinstance(crudo, dict) else {})
+    cuentas = conc.detectar_retiros(presupuesto_seg=45, pedir=pedir, pedir_ids=pedir_ids, pedidos=pedidos)
     logger.info("Conciliación MP: detectar retiros por %s → %s",
                 request.user.username,
                 [(c['cuenta'], c['reportes_aplicados'], len(c['retiros'])) for c in cuentas])
     return JsonResponse({'success': True, 'cuentas': cuentas})
+
+
+@login_required
+def api_conciliacion_retiro_detalle_mp(request, withdrawal_id):
+    """GET .../conciliacion/retiro/<withdrawal_id>/ (solo admin): las ventas y
+    documentos que se llevó un retiro, y lo que no se pudo explicar con ventas."""
+    from .services import conciliacion_mp_service as conc
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo administradores.'}, status=403)
+    retiro = RetiroMercadoPago.objects.filter(withdrawal_id=withdrawal_id).first()
+    if retiro is None:
+        return JsonResponse({'success': False, 'error': 'No existe ese retiro.'}, status=404)
+    return JsonResponse({'success': True, **conc.detalle_retiro(retiro)})
 
 
 @login_required

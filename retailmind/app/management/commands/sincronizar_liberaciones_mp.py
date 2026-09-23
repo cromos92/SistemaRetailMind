@@ -147,11 +147,17 @@ class Command(BaseCommand):
         filas = conc.leer_csv(contenido)
         res = conc.procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=origen)
         dias = conc.dias_para_completar(config, res)
+        completo = True
         if dias:
             comp = conc.completar_numeros_mp(config, dias, presupuesto_seg=300)
+            completo = not comp['sin_tiempo'] and not comp.get('fallidos')
             self.stdout.write(f'  N° de operación completados desde MP: {comp["completados"]} '
                               f'({comp["dias"]} día(s) consultados)')
-        res = conc.procesar_reporte_liberaciones(filas, config, aplicar=aplicar, archivo=origen)
+            if not completo:
+                self.stdout.write(self.style.WARNING(
+                    '  Mercado Pago no respondió a tiempo: se aplica sin marcar el reporte (vuelva a correrlo).'))
+        res = conc.procesar_reporte_liberaciones(filas, config, aplicar=aplicar,
+                                                 archivo=origen if completo else '')
         modo = 'APLICADO' if aplicar else 'DRY-RUN (use --apply para escribir)'
         self.stdout.write(f'{modo} · {origen} · filas {len(filas)} · retiros {len(res["retiros"])} · '
                           f'ventas POS asociadas {res["pagos_amarrados"]} · pagos que no son del POS '
