@@ -5,186 +5,598 @@
 {% csrf_token %}
 
 <style>
-    .nexo-page-header { background: linear-gradient(135deg, var(--nexo-secondary), #2a2a4a); color: #fff; border-radius: var(--nexo-radius-lg); padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }
-    .nexo-page-header h4 { margin: 0; font-weight: 700; font-size: 1.15rem; }
-    .nexo-page-header p { margin: 0; font-size: .85rem; opacity: .75; }
-    .kpi-card { border-radius: var(--nexo-radius-md); padding: 1rem; text-align: center; border: 1px solid var(--nexo-gray-300); background: #fff; height: 100%; }
-    .kpi-card .kpi-value { font-size: 1.35rem; font-weight: 800; font-family: monospace; }
-    .kpi-card .kpi-label { font-size: .72rem; color: var(--nexo-gray-700); text-transform: uppercase; letter-spacing: .04em; }
-    .kpi-card.kpi-pendiente { border-left: 4px solid var(--nexo-warning); }
-    .kpi-card.kpi-liberado { border-left: 4px solid var(--nexo-primary); }
-    .kpi-card.kpi-depositado { border-left: 4px solid var(--nexo-success); }
-    .kpi-card.kpi-alerta { border-left: 4px solid var(--nexo-error, #FF4D4D); }
-    .filtro-tab { cursor: pointer; padding: .35rem .9rem; border-radius: 2rem; font-size: .8rem; font-weight: 600; border: 1px solid var(--nexo-gray-300); background: #fff; color: var(--nexo-gray-700); transition: all .15s; }
-    .filtro-tab.active { background: var(--nexo-primary); color: #fff; border-color: var(--nexo-primary); }
-    .estado-badge { display:inline-block; padding:.15rem .5rem; border-radius:999px; font-size:.7rem; font-weight:700; }
-    .estado-APROBADA { background: rgba(0,212,170,.14); color: var(--nexo-success); }
-    .estado-PENDIENTE, .estado-CREADA { background: rgba(255,176,32,.16); color: #996B00; }
-    .estado-DEVUELTA, .estado-CONTRACARGO { background: rgba(255,77,77,.12); color: var(--nexo-error, #FF4D4D); }
-    .estado-RECHAZADA, .estado-EXPIRADA, .estado-CANCELADA, .estado-ERROR { background: var(--nexo-gray-100); color: var(--nexo-gray-700); }
-    .tabla-mp td, .tabla-mp th { font-size: .8rem; vertical-align: middle; }
-    .monto-mono { font-family: monospace; font-weight: 700; }
+/* ==================== ESTÁNDAR DE MÓDULO (ESTILOS_MODULOS.md) ==================== */
+:root {
+    --rm-primary: #405189;
+    --rm-accent: #0ab39c;
+    --rm-accent-dark: #099885;
+    --rm-danger: #f06548;
+    --rm-warning: #ffbe0b;
+    --rm-warning-dark: #f0a500;
+    --rm-info: #299cdb;
+    --rm-info-dark: #1976d2;
+    --conc-success-dark: #007A62;
+    --conc-warning-dark: #996B00;
+    --conc-error-dark: #CC2200;
+}
+.page-content { background: #ffffff !important; min-height: calc(100vh - 70px); }
+.card.shadow { border: none; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(64, 81, 137, 0.1); }
+.module-header {
+    background: linear-gradient(135deg, var(--rm-primary) 0%, var(--rm-accent) 100%);
+    color: white; padding: 16px 24px; display: flex; justify-content: space-between;
+    align-items: center; flex-wrap: wrap; gap: 12px;
+}
+.module-header-left { display: flex; align-items: center; gap: 14px; }
+.module-header-icon {
+    width: 48px; height: 48px; background: rgba(255,255,255,0.2); border-radius: 12px;
+    display: flex; align-items: center; justify-content: center; font-size: 24px;
+}
+.module-header-info h5 { margin: 0; font-size: 18px; font-weight: 600; color: white; }
+.module-header-status { display: flex; align-items: center; gap: 6px; font-size: 13px; opacity: 0.9; margin-top: 4px; }
+.status-dot { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; }
+.module-header-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.module-header-actions .form-control, .module-header-actions .form-select { width: auto; min-height: 36px; font-size: 13px; }
+.module-header-actions .btn { border-radius: 10px; font-weight: 500; padding: 8px 14px; font-size: 13px; border: none; }
+.card.shadow > .card-body { padding: 20px 24px; background: white; }
+
+/* KPIs */
+.kpi-card { border-radius: 10px; border: none; transition: all 0.2s ease; overflow: hidden; }
+.kpi-card--clickable { cursor: pointer; }
+.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.12); }
+.kpi-card .card-body { padding: 10px 14px; }
+.kpi-card .kpi-icon {
+    width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center;
+    justify-content: center; font-size: 18px; flex-shrink: 0;
+}
+.kpi-card .kpi-value { font-size: 1.15rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.kpi-card .kpi-label { font-size: 11px; color: #6c757d; margin: 0; text-transform: uppercase; letter-spacing: .03em; }
+.kpi-card .kpi-amount { font-size: 11px; color: #6c757d; margin: 0; }
+.kpi-card--total { background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 3px solid var(--rm-warning); }
+.kpi-card--total .kpi-icon { background: linear-gradient(135deg, var(--rm-warning), var(--rm-warning-dark)); }
+.kpi-card--ok { background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 3px solid var(--rm-accent); }
+.kpi-card--ok .kpi-icon { background: linear-gradient(135deg, var(--rm-accent), var(--rm-accent-dark)); }
+.kpi-card--ok .kpi-value { color: var(--rm-accent-dark); }
+.kpi-card--vencido { background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); border-left: 3px solid var(--rm-danger); }
+.kpi-card--vencido .kpi-icon { background: linear-gradient(135deg, var(--rm-danger), #d9534f); }
+.kpi-card--vencido .kpi-value { color: var(--rm-danger); }
+.kpi-card--info { background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 3px solid var(--rm-info); }
+.kpi-card--info .kpi-icon { background: linear-gradient(135deg, var(--rm-info), var(--rm-info-dark)); }
+.kpi-card--info .kpi-value { color: var(--rm-info-dark); }
+.kpi-card--active { outline: 2px solid var(--nexo-primary); outline-offset: 1px; }
+
+/* Filtros rápidos (mismo componente que gestion_creditos / cotizaciones) */
+.conc-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
+.conc-chips .qf-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--nexo-text-muted); margin-right: 4px; }
+.quick-filter-btn {
+    background: var(--nexo-white); border: 1px solid var(--nexo-border-light); border-radius: var(--nexo-radius-full);
+    padding: 5px 13px; min-height: 32px; font-size: .75rem; font-weight: 600; color: var(--nexo-text-secondary);
+    transition: var(--nexo-transition-fast); cursor: pointer; white-space: nowrap;
+}
+.quick-filter-btn:hover { border-color: var(--nexo-primary); color: var(--nexo-primary); }
+.quick-filter-btn.active { background: var(--nexo-primary); border-color: var(--nexo-primary); color: var(--nexo-text-inverse); }
+.quick-filter-btn.is-riesgo.active { background: var(--nexo-error); border-color: var(--nexo-error); }
+.quick-filter-btn .qf-count { font-weight: 700; opacity: .75; margin-left: .25rem; }
+
+/* Pestañas */
+.conc-tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--nexo-gray-100); margin-bottom: 16px; flex-wrap: wrap; }
+.conc-tab {
+    background: none; border: none; padding: 10px 16px; min-height: 44px; font-weight: 600; font-size: 14px;
+    color: var(--nexo-text-secondary); border-bottom: 3px solid transparent; margin-bottom: -2px; cursor: pointer;
+}
+.conc-tab.active { color: var(--nexo-primary); border-bottom-color: var(--nexo-primary); }
+.conc-tab .qf-count { font-size: 11px; background: var(--nexo-gray-100); border-radius: 999px; padding: 1px 7px; margin-left: 4px; }
+.conc-pane { display: none; }
+.conc-pane.active { display: block; }
+
+/* Tablas */
+.conc-scroll { max-height: 62vh; overflow: auto; border-radius: var(--nexo-radius-md); border: 1px solid var(--nexo-gray-100); }
+.conc-table { width: 100%; font-size: .8rem; margin-bottom: 0; }
+.conc-table thead th {
+    position: sticky; top: 0; z-index: 2; background: var(--nexo-gray-100); color: var(--nexo-text-secondary);
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .03em; font-weight: 700; white-space: nowrap;
+    padding: .5rem .55rem; border-bottom: 2px solid var(--nexo-border-light);
+}
+.conc-table tbody td { padding: .45rem .55rem; vertical-align: middle; border-bottom: 1px solid var(--nexo-gray-100); }
+.conc-table tbody tr:hover { background: var(--nexo-primary-light); }
+.conc-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.conc-sub { font-size: 11px; color: var(--nexo-text-secondary); }
+.conc-chip { display: inline-block; padding: .15rem .55rem; border-radius: 999px; font-size: .7rem; font-weight: 700; white-space: nowrap; }
+.conc-chip--ok { background: rgba(0, 212, 170, .15); color: var(--conc-success-dark); }
+.conc-chip--warn { background: rgba(255, 176, 32, .18); color: var(--conc-warning-dark); }
+.conc-chip--err { background: rgba(255, 77, 77, .14); color: var(--conc-error-dark); }
+.conc-chip--info { background: var(--nexo-primary-light); color: var(--nexo-primary); }
+.conc-chip--mute { background: var(--nexo-gray-100); color: var(--nexo-text-secondary); }
+.conc-panel { background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 12px; padding: 14px 16px; border: 1px solid rgba(64, 81, 137, 0.1); margin-bottom: 14px; }
+.conc-panel h6 { font-weight: 700; margin-bottom: 4px; }
+.conc-help { font-size: 12px; color: var(--nexo-text-secondary); margin-bottom: 10px; }
+.conc-empty { text-align: center; color: var(--nexo-text-muted); padding: 28px 12px; }
+.btn-accion-sm { min-height: 32px; font-size: 12px; padding: 4px 10px; border-radius: 8px; }
+
+@media (max-width: 767.98px) {
+    .module-header { padding: 12px 16px; }
+    .module-header-actions { width: 100%; }
+    .module-header-actions .form-control, .module-header-actions .form-select { flex: 1 1 45%; }
+    .card.shadow > .card-body { padding: 14px; }
+    .conc-tab { padding: 8px 10px; font-size: 13px; }
+}
 </style>
 
 <div class="page-content">
     <div class="container-fluid">
-
-        <div class="nexo-page-header d-flex flex-wrap align-items-center justify-content-between gap-2">
-            <div>
-                <h4><i class="ri-money-dollar-circle-line me-1"></i> Dineros Mercado Pago</h4>
-                <p>Ciclo del dinero presencial: cobrado → pendiente de liberación → liberado → depositado en banco</p>
+        <div class="card shadow">
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon"><i class="ri-bank-line"></i></div>
+                    <div class="module-header-info">
+                        <h5>Conciliación Mercado Pago</h5>
+                        <div class="module-header-status">
+                            <span class="status-dot"></span>
+                            Cobros → documentos → liberaciones → banco
+                        </div>
+                    </div>
+                </div>
+                <div class="module-header-actions">
+                    <input type="date" id="concDesde" class="form-control" aria-label="Desde">
+                    <input type="date" id="concHasta" class="form-control" aria-label="Hasta">
+                    {% if es_admin %}
+                    <select id="concSucursal" class="form-select" aria-label="Sucursal">
+                        <option value="">Todas las sucursales</option>
+                        {% for s in sucursales %}<option value="{{ s.sucursal_id }}">{{ s.sucursal__alias }}</option>{% endfor %}
+                    </select>
+                    {% endif %}
+                    <button class="btn btn-light fw-semibold" onclick="recargarConciliacion()"><i class="ri-refresh-line me-1"></i>Actualizar</button>
+                </div>
             </div>
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-                <input type="date" id="mpFechaDesde" class="form-control form-control-sm" style="width:auto;">
-                <input type="date" id="mpFechaHasta" class="form-control form-control-sm" style="width:auto;">
-                <button class="btn btn-sm btn-light" onclick="cargarDinerosMP()"><i class="ri-refresh-line"></i> Actualizar</button>
-            </div>
-        </div>
 
-        <!-- KPIs -->
-        <div class="row g-2 mb-3">
-            <div class="col-6 col-md-2"><div class="kpi-card"><div class="kpi-value" id="kpiCobrado">$0</div><div class="kpi-label">Cobrado (<span id="kpiCantidad">0</span>)</div></div></div>
-            <div class="col-6 col-md-2"><div class="kpi-card kpi-pendiente"><div class="kpi-value" id="kpiPendiente">$0</div><div class="kpi-label">Pendiente liberación</div></div></div>
-            <div class="col-6 col-md-2"><div class="kpi-card kpi-liberado"><div class="kpi-value" id="kpiLiberado">$0</div><div class="kpi-label">Liberado sin retirar</div></div></div>
-            <div class="col-6 col-md-2"><div class="kpi-card kpi-depositado"><div class="kpi-value" id="kpiDepositado">$0</div><div class="kpi-label">Depositado en banco</div></div></div>
-            <div class="col-6 col-md-2"><div class="kpi-card"><div class="kpi-value" id="kpiComisiones">$0</div><div class="kpi-label">Comisiones MP</div></div></div>
-            <div class="col-6 col-md-2"><div class="kpi-card kpi-alerta"><div class="kpi-value" id="kpiHuerfanas">$0</div><div class="kpi-label">Aprobadas sin venta (<span id="kpiCantHuerfanas">0</span>)</div></div></div>
-        </div>
+            <div class="card-body">
+                <!-- KPIs: los de cobros filtran la tabla de la pestaña 1 -->
+                <div class="row g-2 mb-3">
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <div class="kpi-card kpi-card--total card h-100"><div class="card-body d-flex align-items-center gap-2">
+                            <div class="kpi-icon text-white"><i class="ri-money-dollar-circle-line"></i></div>
+                            <div class="overflow-hidden"><div class="kpi-value" id="kpiCobrado">$0</div>
+                            <p class="kpi-label">Cobrado MP</p><p class="kpi-amount" id="kpiCobradoCant">0 cobros</p></div>
+                        </div></div>
+                    </div>
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <div class="kpi-card kpi-card--ok kpi-card--clickable card h-100" data-cat="CON_DOCUMENTO" title="Cobros que terminaron en boleta o factura"><div class="card-body d-flex align-items-center gap-2">
+                            <div class="kpi-icon text-white"><i class="ri-file-text-line"></i></div>
+                            <div class="overflow-hidden"><div class="kpi-value" id="kpiConDoc">$0</div>
+                            <p class="kpi-label">Con documento</p><p class="kpi-amount" id="kpiConDocCant">0</p></div>
+                        </div></div>
+                    </div>
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <div class="kpi-card kpi-card--vencido kpi-card--clickable card h-100" data-cat="SIN_DOCUMENTO" title="Ventas pagadas sin boleta ni factura"><div class="card-body d-flex align-items-center gap-2">
+                            <div class="kpi-icon text-white"><i class="ri-file-warning-line"></i></div>
+                            <div class="overflow-hidden"><div class="kpi-value" id="kpiSinDoc">$0</div>
+                            <p class="kpi-label">Sin boleta/factura</p><p class="kpi-amount" id="kpiSinDocCant">0</p></div>
+                        </div></div>
+                    </div>
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <div class="kpi-card kpi-card--vencido kpi-card--clickable card h-100" data-cat="SIN_VENTA" title="Cobros aprobados que no quedaron en ninguna venta"><div class="card-body d-flex align-items-center gap-2">
+                            <div class="kpi-icon text-white"><i class="ri-error-warning-line"></i></div>
+                            <div class="overflow-hidden"><div class="kpi-value" id="kpiSinVenta">$0</div>
+                            <p class="kpi-label">Sin venta</p><p class="kpi-amount" id="kpiSinVentaCant">0</p></div>
+                        </div></div>
+                    </div>
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <div class="kpi-card kpi-card--info card h-100" title="Cobrado que Mercado Pago todavía no libera"><div class="card-body d-flex align-items-center gap-2">
+                            <div class="kpi-icon text-white"><i class="ri-time-line"></i></div>
+                            <div class="overflow-hidden"><div class="kpi-value" id="kpiPendiente">$0</div>
+                            <p class="kpi-label">Pendiente liberación</p><p class="kpi-amount" id="kpiLiberado">Liberado sin retirar $0</p></div>
+                        </div></div>
+                    </div>
+                    <div class="col-xl-2 col-md-4 col-6">
+                        <div class="kpi-card kpi-card--ok card h-100" title="Cobros amarrados a un retiro al banco"><div class="card-body d-flex align-items-center gap-2">
+                            <div class="kpi-icon text-white"><i class="ri-bank-line"></i></div>
+                            <div class="overflow-hidden"><div class="kpi-value" id="kpiDepositado">$0</div>
+                            <p class="kpi-label">Depositado en banco</p><p class="kpi-amount" id="kpiComisiones">Comisiones $0</p></div>
+                        </div></div>
+                    </div>
+                </div>
 
-        <!-- Tabs -->
-        <div class="d-flex gap-2 mb-2">
-            <span class="filtro-tab active" data-tab="transacciones" onclick="cambiarTabMP(this)">Transacciones</span>
-            <span class="filtro-tab" data-tab="retiros" onclick="cambiarTabMP(this)">Depósitos al banco</span>
-            <span class="filtro-tab" data-tab="sucursales" onclick="cambiarTabMP(this)">Por sucursal</span>
-        </div>
+                <div class="conc-tabs" role="tablist">
+                    <button type="button" class="conc-tab active" data-pane="cobros" role="tab">Cobros y documentos <span class="qf-count" id="tabCountCobros">0</span></button>
+                    <button type="button" class="conc-tab" data-pane="banco" role="tab">Liberaciones y banco <span class="qf-count" id="tabCountRetiros">0</span></button>
+                    <button type="button" class="conc-tab" data-pane="contra" role="tab">Contra Mercado Pago</button>
+                    <button type="button" class="conc-tab" data-pane="sucursal" role="tab">Por sucursal</button>
+                </div>
 
-        <!-- Tab: Transacciones -->
-        <div class="card tab-mp" id="tab-transacciones">
-            <div class="card-body p-2">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover tabla-mp mb-0">
-                        <thead>
-                            <tr>
-                                <th>Fecha</th><th>Sucursal</th><th>Ticket</th>
-                                <th class="text-end">Monto</th><th class="text-end">Neto</th>
-                                <th>Estado</th><th>Medio</th><th>Liberación</th><th>Retiro</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbodyTransaccionesMP">
-                            <tr><td colspan="9" class="text-center text-muted py-3">Cargando…</td></tr>
-                        </tbody>
-                    </table>
+                <!-- ===== 1. Cobros y documentos ===== -->
+                <div class="conc-pane active" id="pane-cobros">
+                    <div class="conc-chips" id="chipsCategoria" role="group" aria-label="Filtrar por estado">
+                        <span class="qf-label">Ver:</span>
+                        <button type="button" class="quick-filter-btn active" data-cat="">Todos <span class="qf-count" id="cnt-todos"></span></button>
+                        <button type="button" class="quick-filter-btn is-riesgo" data-cat="SIN_VENTA" title="La plata entró a MP pero no hay venta: registrar la venta o devolver">Sin venta <span class="qf-count" data-cnt="SIN_VENTA"></span></button>
+                        <button type="button" class="quick-filter-btn is-riesgo" data-cat="TICKET_ANULADO" title="La venta se anuló pero el cobro sigue aprobado: devolver en Mercado Pago">Venta anulada <span class="qf-count" data-cnt="TICKET_ANULADO"></span></button>
+                        <button type="button" class="quick-filter-btn is-riesgo" data-cat="SIN_DOCUMENTO" title="Venta pagada que no tiene boleta ni factura">Sin boleta/factura <span class="qf-count" data-cnt="SIN_DOCUMENTO"></span></button>
+                        <button type="button" class="quick-filter-btn" data-cat="COBRO_DIRECTO" title="Cobro hecho desde la pestaña Mercado Pago sin N° de ticket: registrarlo en el POS como MP manual">Cobro directo <span class="qf-count" data-cnt="COBRO_DIRECTO"></span></button>
+                        <button type="button" class="quick-filter-btn" data-cat="MANUAL" title="Pagos MP registrados a mano en el POS: verificarlos en la pestaña Contra Mercado Pago">Registrado a mano <span class="qf-count" data-cnt="MANUAL"></span></button>
+                        <button type="button" class="quick-filter-btn" data-cat="CON_DOCUMENTO">Con documento <span class="qf-count" data-cnt="CON_DOCUMENTO"></span></button>
+                        <input type="search" id="concBuscar" class="form-control form-control-sm ms-auto" style="max-width:240px;min-height:32px;" placeholder="Buscar ticket, N° MP, documento…" aria-label="Buscar">
+                        <button type="button" class="btn btn-outline-secondary btn-accion-sm" onclick="exportarCobrosCSV()"><i class="ri-file-excel-line me-1"></i>CSV</button>
+                    </div>
+                    <div class="conc-scroll">
+                        <table class="table conc-table">
+                            <thead><tr>
+                                <th>Fecha</th><th>Sucursal / caja</th><th>Ticket</th>
+                                <th class="num">Monto</th><th>Medio · N° MP</th><th>Documento</th>
+                                <th>Estado</th><th>Liberación · retiro</th><th class="text-end">Acción</th>
+                            </tr></thead>
+                            <tbody id="tbodyCobros"><tr><td colspan="9" class="conc-empty">Cargando…</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ===== 2. Liberaciones y banco ===== -->
+                <div class="conc-pane" id="pane-banco">
+                    {% if es_admin %}
+                    <div class="row g-3">
+                        <div class="col-lg-6">
+                            <div class="conc-panel">
+                                <h6><i class="ri-file-list-3-line me-1"></i>1. Reporte de Liberaciones de Mercado Pago</h6>
+                                <p class="conc-help">Dice qué cobros componen cada retiro al banco. Súbalo descargado del panel de MP
+                                   (Reportes → Liberaciones, CSV) o pídalo a la API para las fechas de arriba (máx. 31 días).
+                                   Primero «Vista previa»; «Aplicar» amarra los cobros a sus retiros.</p>
+                                <div class="d-flex flex-wrap gap-2 align-items-center">
+                                    <select id="libConfig" class="form-select form-select-sm" style="max-width:240px;" aria-label="Cuenta Mercado Pago">
+                                        {% for c in configs %}<option value="{{ c.id }}">{{ c.sucursal__alias }} · {{ c.nombre }}</option>{% endfor %}
+                                    </select>
+                                    <input type="file" id="libArchivo" accept=".csv,text/csv" class="form-control form-control-sm" style="max-width:260px;">
+                                </div>
+                                <div class="d-flex flex-wrap gap-2 mt-2">
+                                    <button class="btn btn-outline-primary btn-accion-sm" onclick="procesarLiberaciones(false)"><i class="ri-eye-line me-1"></i>Vista previa</button>
+                                    <button class="btn btn-primary btn-accion-sm" onclick="procesarLiberaciones(true)"><i class="ri-check-line me-1"></i>Aplicar</button>
+                                </div>
+                                <div id="libResultado" class="mt-2"></div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="conc-panel">
+                                <h6><i class="ri-bank-card-line me-1"></i>2. Cartola del banco</h6>
+                                <p class="conc-help">CSV del banco con columnas Fecha y Abonos (o Monto). Marca «visto en cartola» cada retiro
+                                   de Mercado Pago cuyo abono aparece (mismo monto, hasta 3 días después).</p>
+                                <input type="file" id="cartolaArchivo" accept=".csv,text/csv" class="form-control form-control-sm" style="max-width:320px;">
+                                <div class="d-flex flex-wrap gap-2 mt-2">
+                                    <button class="btn btn-outline-primary btn-accion-sm" onclick="procesarCartola(false)"><i class="ri-eye-line me-1"></i>Vista previa</button>
+                                    <button class="btn btn-primary btn-accion-sm" onclick="procesarCartola(true)"><i class="ri-check-line me-1"></i>Aplicar</button>
+                                </div>
+                                <div id="cartolaResultado" class="mt-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    <h6 class="fw-bold mb-2">Retiros de Mercado Pago al banco</h6>
+                    <div class="conc-scroll">
+                        <table class="table conc-table">
+                            <thead><tr>
+                                <th>Retiro MP</th><th>Fecha</th><th class="num">Monto</th>
+                                <th class="text-center">Cobros del POS</th><th>Estado</th><th>Detalle</th>
+                                <th class="text-center">Visto en cartola</th>
+                            </tr></thead>
+                            <tbody id="tbodyRetiros"><tr><td colspan="7" class="conc-empty">Cargando…</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ===== 3. Contra Mercado Pago (API) ===== -->
+                <div class="conc-pane" id="pane-contra">
+                    <div class="conc-panel d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <div>
+                            <h6 class="mb-1">Cruce contra la API de Mercado Pago</h6>
+                            <div class="conc-help mb-0">Consulta a MP los pagos de cada cuenta (máx. 7 días del rango de arriba) y los compara
+                                con el sistema y con el arqueo. Tarda unos segundos por día.</div>
+                        </div>
+                        <button class="btn btn-primary btn-accion-sm" id="btnContraMP" onclick="consultarContraMP()"><i class="ri-search-eye-line me-1"></i>Consultar Mercado Pago</button>
+                    </div>
+                    <div id="contraResultado"><div class="conc-empty">Presione «Consultar Mercado Pago».</div></div>
+                </div>
+
+                <!-- ===== 4. Por sucursal ===== -->
+                <div class="conc-pane" id="pane-sucursal">
+                    <div class="conc-scroll" style="max-width:640px;">
+                        <table class="table conc-table">
+                            <thead><tr><th>Sucursal</th><th class="num">Cobrado</th><th class="num">Cobros</th></tr></thead>
+                            <tbody id="tbodySucursales"><tr><td colspan="3" class="conc-empty">Cargando…</td></tr></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
-
-        <!-- Tab: Retiros -->
-        <div class="card tab-mp" id="tab-retiros" style="display:none;">
-            <div class="card-body p-2">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover tabla-mp mb-0">
-                        <thead>
-                            <tr>
-                                <th>Retiro MP</th><th>Fecha</th>
-                                <th class="text-end">Monto</th>
-                                <th class="text-center">Pagos incluidos</th>
-                                <th>Estado</th><th class="text-center">Visto en cartola</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tbodyRetirosMP">
-                            <tr><td colspan="6" class="text-center text-muted py-3">Sin retiros registrados — se cargan con el comando <code>conciliar_mercadopago</code></td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tab: Por sucursal -->
-        <div class="card tab-mp" id="tab-sucursales" style="display:none;">
-            <div class="card-body p-2">
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover tabla-mp mb-0" style="max-width:520px;">
-                        <thead><tr><th>Sucursal</th><th class="text-end">Cobrado</th><th class="text-center">Cobros</th></tr></thead>
-                        <tbody id="tbodySucursalesMP"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
     </div>
 </div>
 
 {% include '../../layout/footer.html' %}
 
 <script>
-// El footer carga jQuery: este bloque debe ir DESPUÉS del include (gotcha
-// conocido de las plantillas de este proyecto).
-function fmtCLP(v) { return '$' + (Number(v) || 0).toLocaleString('es-CL'); }
+// El footer carga jQuery y SweetAlert: este bloque va DESPUÉS del include.
+(function () {
+    const ES_ADMIN = {{ es_admin|yesno:"true,false" }};
+    const CAT = {
+        SIN_VENTA: ['Sin venta', 'err'],
+        TICKET_ANULADO: ['Venta anulada', 'err'],
+        SIN_DOCUMENTO: ['Sin boleta/factura', 'err'],
+        COBRO_DIRECTO: ['Cobro directo', 'warn'],
+        MANUAL: ['Registrado a mano', 'info'],
+        CON_DOCUMENTO: ['Con documento', 'ok'],
+    };
+    let cobros = [];
+    let filtroCat = '';
 
-function cambiarTabMP(el) {
-    document.querySelectorAll('.filtro-tab').forEach(t => t.classList.remove('active'));
-    el.classList.add('active');
-    document.querySelectorAll('.tab-mp').forEach(c => c.style.display = 'none');
-    document.getElementById('tab-' + el.dataset.tab).style.display = '';
-}
+    const fmt = v => '$' + (Math.round(Number(v) || 0)).toLocaleString('es-CL');
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const csrf = () => document.querySelector('[name=csrfmiddlewaretoken]').value;
 
-function cargarDinerosMP() {
-    const desde = $('#mpFechaDesde').val();
-    const hasta = $('#mpFechaHasta').val();
-    const params = new URLSearchParams();
-    if (desde) params.set('fecha_desde', desde);
-    if (hasta) params.set('fecha_hasta', hasta);
-    fetch('/app/api/mercadopago/dineros/?' + params.toString())
-        .then(r => r.json())
-        .then(data => {
-            if (!data.success) return;
-            $('#mpFechaDesde').val(data.fecha_desde);
-            $('#mpFechaHasta').val(data.fecha_hasta);
-            const k = data.kpis || {};
-            $('#kpiCobrado').text(fmtCLP(k.cobrado));
-            $('#kpiCantidad').text(k.cantidad_cobros || 0);
-            $('#kpiPendiente').text(fmtCLP(k.pendiente_liberacion));
-            $('#kpiLiberado').text(fmtCLP(k.liberado_sin_retirar));
-            $('#kpiDepositado').text(fmtCLP(k.depositado));
-            $('#kpiComisiones').text(fmtCLP(k.comisiones));
-            $('#kpiHuerfanas').text(fmtCLP(k.huerfanas));
-            $('#kpiCantHuerfanas').text(k.cantidad_huerfanas || 0);
+    function params() {
+        const p = new URLSearchParams();
+        const d = document.getElementById('concDesde').value, h = document.getElementById('concHasta').value;
+        if (d) p.set('desde', d);
+        if (h) p.set('hasta', h);
+        const s = document.getElementById('concSucursal');
+        if (s && s.value) p.set('sucursal_id', s.value);
+        return p;
+    }
 
-            const filasT = (data.transacciones || []).map(t => `
-                <tr${t.consumida ? '' : ' class="table-warning" title="Cobro aprobado que no quedó amarrado a una venta finalizada"'}>
-                    <td>${t.fecha}</td>
-                    <td>${t.sucursal || '-'}</td>
-                    <td class="monto-mono">${t.correlativo || '-'}</td>
-                    <td class="text-end monto-mono">${fmtCLP(t.monto)}</td>
-                    <td class="text-end monto-mono text-muted">${t.monto_neto != null ? fmtCLP(t.monto_neto) : '-'}</td>
-                    <td><span class="estado-badge estado-${t.estado}">${t.estado}</span></td>
-                    <td>${t.metodo_pago_mp || '-'}</td>
-                    <td>${t.liberacion ? (t.liberado ? '✅ ' : '⏳ ') + t.liberacion : '-'}</td>
-                    <td class="monto-mono">${t.retiro || '-'}</td>
-                </tr>`).join('');
-            $('#tbodyTransaccionesMP').html(filasT || '<tr><td colspan="9" class="text-center text-muted py-3">Sin transacciones en el período</td></tr>');
+    // ── Pestañas ──
+    document.querySelectorAll('.conc-tab').forEach(t => t.addEventListener('click', () => {
+        document.querySelectorAll('.conc-tab').forEach(x => x.classList.toggle('active', x === t));
+        document.querySelectorAll('.conc-pane').forEach(p => p.classList.toggle('active', p.id === 'pane-' + t.dataset.pane));
+    }));
 
-            const filasR = (data.retiros || []).map(r => `
-                <tr>
-                    <td class="monto-mono">${r.withdrawal_id}</td>
-                    <td>${r.fecha}</td>
-                    <td class="text-end monto-mono">${fmtCLP(r.monto)}</td>
-                    <td class="text-center">${r.transacciones}</td>
-                    <td><span class="estado-badge ${r.estado === 'CONCILIADO' ? 'estado-APROBADA' : (r.estado === 'CON_DIFERENCIA' ? 'estado-CONTRACARGO' : 'estado-PENDIENTE')}">${r.estado}</span></td>
-                    <td class="text-center">${r.visto_en_cartola ? '✅' : '—'}</td>
-                </tr>`).join('');
-            if (filasR) $('#tbodyRetirosMP').html(filasR);
+    // ── Filtro por categoría (chips y KPIs) ──
+    function aplicarFiltroCat(cat) {
+        filtroCat = (cat && cat === filtroCat) ? '' : (cat || '');
+        document.querySelectorAll('#chipsCategoria .quick-filter-btn').forEach(b => b.classList.toggle('active', (b.dataset.cat || '') === filtroCat));
+        document.querySelectorAll('.kpi-card[data-cat]').forEach(k => k.classList.toggle('kpi-card--active', k.dataset.cat === filtroCat && filtroCat !== ''));
+        pintarCobros();
+    }
+    document.querySelectorAll('#chipsCategoria .quick-filter-btn, .kpi-card[data-cat]').forEach(el =>
+        el.addEventListener('click', () => {
+            document.querySelector('.conc-tab[data-pane="cobros"]').click();
+            aplicarFiltroCat(el.dataset.cat || '');
+        }));
+    let tBuscar;
+    document.getElementById('concBuscar').addEventListener('input', () => { clearTimeout(tBuscar); tBuscar = setTimeout(pintarCobros, 200); });
 
-            const filasS = (data.por_sucursal || []).map(s => `
-                <tr><td>${s.sucursal__alias || s.sucursal_id}</td>
-                <td class="text-end monto-mono">${fmtCLP(s.total)}</td>
-                <td class="text-center">${s.cantidad}</td></tr>`).join('');
-            $('#tbodySucursalesMP').html(filasS || '<tr><td colspan="3" class="text-center text-muted py-3">Sin datos</td></tr>');
-        })
-        .catch(() => {
-            $('#tbodyTransaccionesMP').html('<tr><td colspan="9" class="text-center text-danger py-3">Error al cargar los datos</td></tr>');
+    function filasVisibles() {
+        const q = (document.getElementById('concBuscar').value || '').trim().toLowerCase();
+        return cobros.filter(f => (!filtroCat || f.categoria === filtroCat) &&
+            (!q || [f.correlativo, f.payment_id_mp, f.documento, f.sucursal, f.caja, f.medio].join(' ').toLowerCase().includes(q)));
+    }
+
+    function pintarCobros() {
+        const filas = filasVisibles();
+        const tb = document.getElementById('tbodyCobros');
+        if (!filas.length) { tb.innerHTML = '<tr><td colspan="9" class="conc-empty">Sin cobros para este filtro.</td></tr>'; return; }
+        tb.innerHTML = filas.map(f => {
+            const [etq, tono] = CAT[f.categoria] || [f.categoria, 'mute'];
+            let accion = '';
+            if (f.puede_reintentar_dte) {
+                accion = `<button class="btn btn-outline-primary btn-accion-sm" onclick="reintentarDTE(${f.ticket_id}, ${f.ticket_correlativo})" title="Genera la boleta/factura que falló al cerrar la venta">Generar documento</button>`;
+            } else if (f.categoria === 'SIN_VENTA' || f.categoria === 'TICKET_ANULADO') {
+                const txt = f.categoria === 'TICKET_ANULADO' ? 'Devolver en MP'
+                    : (f.ticket_estado === 'PAGADO' ? 'La venta se cobró con otro medio: corregir el pago o devolver'
+                    : 'Registrar la venta o devolver');
+                accion = `<span class="conc-sub">${txt}</span>`;
+            } else if (f.categoria === 'COBRO_DIRECTO') {
+                accion = '<span class="conc-sub">Registrar en POS como MP manual</span>';
+            }
+            const estadoMP = (f.estado_mp && !['APROBADA', 'MANUAL'].includes(f.estado_mp))
+                ? ` <span class="conc-chip conc-chip--mute">${esc(f.estado_mp)}</span>` : '';
+            return `<tr>
+                <td>${esc(f.fecha)}</td>
+                <td>${esc(f.sucursal)}${f.caja ? `<div class="conc-sub">${esc(f.caja)}</div>` : ''}</td>
+                <td>${f.ticket_correlativo ? '#' + f.ticket_correlativo : esc(f.correlativo || '-')}${f.ticket_estado ? `<div class="conc-sub">${esc(f.ticket_estado)}</div>` : ''}</td>
+                <td class="num fw-semibold">${fmt(f.monto)}</td>
+                <td>${esc(f.medio || '-')}<div class="conc-sub">${esc(f.payment_id_mp || 'sin N°')}</div></td>
+                <td>${f.documento ? esc(f.documento) : '<span class="conc-sub">—</span>'}${f.dte_fallido ? `<div class="conc-sub text-danger" title="${esc(f.dte_error)}">falló al emitir</div>` : ''}</td>
+                <td><span class="conc-chip conc-chip--${tono}">${etq}</span>${estadoMP}</td>
+                <td>${f.liberacion ? esc(f.liberacion) : '<span class="conc-sub">—</span>'}${f.retiro ? `<div class="conc-sub">retiro ${esc(f.retiro)}</div>` : ''}</td>
+                <td class="text-end">${accion}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function cargarCobros() {
+        fetch('/app/api/mercadopago/conciliacion/cobros/?' + params().toString())
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) throw new Error(data.error || 'Error');
+                document.getElementById('concDesde').value = data.desde;
+                document.getElementById('concHasta').value = data.hasta;
+                cobros = data.filas || [];
+                const res = data.resumen || {};
+                let total = 0;
+                Object.keys(res).forEach(k => {
+                    total += res[k].cantidad;
+                    const el = document.querySelector(`[data-cnt="${k}"]`);
+                    if (el) el.textContent = res[k].cantidad || '';
+                });
+                document.getElementById('cnt-todos').textContent = total;
+                document.getElementById('tabCountCobros').textContent = total;
+                const k = (c) => res[c] || {monto: 0, cantidad: 0};
+                document.getElementById('kpiConDoc').textContent = fmt(k('CON_DOCUMENTO').monto);
+                document.getElementById('kpiConDocCant').textContent = `${k('CON_DOCUMENTO').cantidad} cobros`;
+                document.getElementById('kpiSinDoc').textContent = fmt(k('SIN_DOCUMENTO').monto);
+                document.getElementById('kpiSinDocCant').textContent = `${k('SIN_DOCUMENTO').cantidad} ventas`;
+                const sinVenta = k('SIN_VENTA').monto + k('TICKET_ANULADO').monto + k('COBRO_DIRECTO').monto;
+                document.getElementById('kpiSinVenta').textContent = fmt(sinVenta);
+                document.getElementById('kpiSinVentaCant').textContent =
+                    `${k('SIN_VENTA').cantidad + k('TICKET_ANULADO').cantidad + k('COBRO_DIRECTO').cantidad} cobros`;
+                pintarCobros();
+            })
+            .catch(() => { document.getElementById('tbodyCobros').innerHTML = '<tr><td colspan="9" class="conc-empty text-danger">Error al cargar los cobros.</td></tr>'; });
+    }
+
+    function cargarDineros() {
+        const p = params();
+        const q = new URLSearchParams({fecha_desde: p.get('desde') || '', fecha_hasta: p.get('hasta') || ''});
+        fetch('/app/api/mercadopago/dineros/?' + q.toString())
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) return;
+                const k = data.kpis || {};
+                document.getElementById('kpiCobrado').textContent = fmt(k.cobrado);
+                document.getElementById('kpiCobradoCant').textContent = `${k.cantidad_cobros || 0} cobros`;
+                document.getElementById('kpiPendiente').textContent = fmt(k.pendiente_liberacion);
+                document.getElementById('kpiLiberado').textContent = `Liberado sin retirar ${fmt(k.liberado_sin_retirar)}`;
+                document.getElementById('kpiDepositado').textContent = fmt(k.depositado);
+                document.getElementById('kpiComisiones').textContent = `Comisiones ${fmt(k.comisiones)}`;
+                const retiros = data.retiros || [];
+                document.getElementById('tabCountRetiros').textContent = retiros.length;
+                document.getElementById('tbodyRetiros').innerHTML = retiros.length ? retiros.map(r => {
+                    const tono = r.estado === 'CONCILIADO' ? 'ok' : (r.estado === 'CON_DIFERENCIA' ? 'err' : 'warn');
+                    const visto = ES_ADMIN
+                        ? `<input type="checkbox" class="form-check-input" ${r.visto_en_cartola ? 'checked' : ''} onchange="marcarVisto('${esc(r.withdrawal_id)}', this.checked)" aria-label="Visto en cartola">`
+                        : (r.visto_en_cartola ? '✅' : '—');
+                    return `<tr>
+                        <td>${esc(r.withdrawal_id)}</td><td>${esc(r.fecha)}</td>
+                        <td class="num fw-semibold">${fmt(r.monto)}</td>
+                        <td class="text-center">${r.transacciones}</td>
+                        <td><span class="conc-chip conc-chip--${tono}">${esc(r.estado)}</span></td>
+                        <td class="conc-sub" style="max-width:340px;white-space:normal;">${esc(r.detalle || '')}</td>
+                        <td class="text-center">${visto}</td>
+                    </tr>`;
+                }).join('') : '<tr><td colspan="7" class="conc-empty">Sin retiros registrados. Procese el reporte de Liberaciones (arriba) para cargarlos.</td></tr>';
+                const suc = data.por_sucursal || [];
+                document.getElementById('tbodySucursales').innerHTML = suc.length ? suc.map(s =>
+                    `<tr><td>${esc(s.sucursal__alias || s.sucursal_id)}</td><td class="num">${fmt(s.total)}</td><td class="num">${s.cantidad}</td></tr>`
+                ).join('') : '<tr><td colspan="3" class="conc-empty">Sin datos.</td></tr>';
+            });
+    }
+
+    window.recargarConciliacion = function () { cargarCobros(); cargarDineros(); };
+
+    window.reintentarDTE = function (ticketId, correlativo) {
+        Swal.fire({
+            icon: 'question', title: `Generar documento del ticket #${correlativo}`,
+            text: 'Se emite la boleta/factura que falló al cerrar la venta (debe estar en la sucursal del ticket).',
+            showCancelButton: true, confirmButtonText: 'Generar', cancelButtonText: 'Cancelar', confirmButtonColor: '#0066FF',
+        }).then(r => {
+            if (!r.isConfirmed) return;
+            fetch(`/app/api/tickets/${ticketId}/reintentar-dte/`, {method: 'POST', headers: {'X-CSRFToken': csrf()}})
+                .then(res => res.json())
+                .then(d => {
+                    if (d.success) { Swal.fire({icon: 'success', title: `${d.dte_generado.tipo} N° ${d.dte_generado.numero}`, text: 'Documento generado.'}); cargarCobros(); }
+                    else Swal.fire({icon: 'error', title: 'No se pudo generar', text: d.error || ''});
+                })
+                .catch(() => Swal.fire({icon: 'error', title: 'Error de conexión'}));
         });
-}
+    };
 
-document.addEventListener('DOMContentLoaded', cargarDinerosMP);
+    window.marcarVisto = function (withdrawalId, visto) {
+        fetch('/app/api/mercadopago/conciliacion/retiro-visto/', {
+            method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
+            body: JSON.stringify({withdrawal_id: withdrawalId, visto}),
+        }).then(r => r.json()).then(d => { if (!d.success) Swal.fire({icon: 'error', title: d.error || 'Error'}); });
+    };
+
+    function tablaSimple(cols, filas) {
+        if (!filas.length) return '<div class="conc-empty">Nada que mostrar.</div>';
+        return `<div class="conc-scroll mb-3"><table class="table conc-table"><thead><tr>${cols.map(c => `<th class="${c[2] || ''}">${c[0]}</th>`).join('')}</tr></thead>
+            <tbody>${filas.map(f => `<tr>${cols.map(c => `<td class="${c[2] || ''}">${c[1](f)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    }
+
+    window.procesarLiberaciones = function (aplicar) {
+        const fd = new FormData();
+        fd.append('config_id', document.getElementById('libConfig').value);
+        const a = document.getElementById('libArchivo').files[0];
+        if (a) fd.append('archivo', a);
+        const p = params();
+        fd.append('desde', p.get('desde') || ''); fd.append('hasta', p.get('hasta') || '');
+        if (aplicar) fd.append('aplicar', '1');
+        const cont = document.getElementById('libResultado');
+        cont.innerHTML = `<div class="conc-sub">${a ? 'Procesando archivo…' : 'Pidiendo el reporte a Mercado Pago (puede tardar ~1 minuto)…'}</div>`;
+        fetch('/app/api/mercadopago/conciliacion/liberaciones/', {method: 'POST', headers: {'X-CSRFToken': csrf()}, body: fd})
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success) { cont.innerHTML = `<div class="text-danger small">${esc(d.error)}</div>`; return; }
+                cont.innerHTML = `<div class="small mb-2">${d.aplicado ? '<strong>Aplicado.</strong>' : '<strong>Vista previa</strong> (no se guardó nada).'}
+                    ${d.filas_leidas} filas · ${d.retiros.length} retiro(s) · ${d.pagos_amarrados} cobros del POS amarrados ·
+                    ${d.pagos_sin_local} pagos sin cobro del POS · liberado sin retirar ${fmt(d.liberado_sin_retirar)}</div>` +
+                    tablaSimple([
+                        ['Fecha', f => esc(f.fecha)], ['Retiro', f => esc(f.withdrawal_id)],
+                        ['Monto', f => fmt(f.monto), 'num'], ['Cobros POS', f => `${f.pagos_pos}/${f.pagos}`, 'num'],
+                        ['Estado', f => `<span class="conc-chip conc-chip--${f.estado === 'CONCILIADO' ? 'ok' : 'err'}">${esc(f.estado)}</span>`],
+                    ], d.retiros);
+                if (d.aplicado) cargarDineros(), cargarCobros();
+            })
+            .catch(() => { cont.innerHTML = '<div class="text-danger small">Error de conexión.</div>'; });
+    };
+
+    window.procesarCartola = function (aplicar) {
+        const a = document.getElementById('cartolaArchivo').files[0];
+        const cont = document.getElementById('cartolaResultado');
+        if (!a) { cont.innerHTML = '<div class="text-danger small">Elija el CSV de la cartola.</div>'; return; }
+        const fd = new FormData(); fd.append('archivo', a); if (aplicar) fd.append('aplicar', '1');
+        cont.innerHTML = '<div class="conc-sub">Procesando…</div>';
+        fetch('/app/api/mercadopago/conciliacion/cartola/', {method: 'POST', headers: {'X-CSRFToken': csrf()}, body: fd})
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success) { cont.innerHTML = `<div class="text-danger small">${esc(d.error)}</div>`; return; }
+                cont.innerHTML = `<div class="small mb-2">${d.aplicado ? '<strong>Aplicado.</strong>' : '<strong>Vista previa.</strong>'}
+                    ${d.abonos_leidos} abonos leídos · ${d.calzados.length} retiro(s) encontrados en la cartola ·
+                    ${d.retiros_sin_abono.length} retiro(s) sin abono · ${d.sin_calce_banco.length} abono(s) de Mercado Pago sin retiro.</div>` +
+                    tablaSimple([
+                        ['Retiro', f => esc(f.withdrawal_id)], ['Fecha retiro', f => esc(f.fecha_retiro)],
+                        ['Fecha banco', f => esc(f.fecha_banco)], ['Monto', f => fmt(f.monto), 'num'], ['Glosa', f => esc(f.glosa)],
+                    ], d.calzados) +
+                    (d.retiros_sin_abono.length ? '<h6 class="small fw-bold text-danger">Retiros que no aparecen en la cartola</h6>' +
+                        tablaSimple([['Retiro', f => esc(f.withdrawal_id)], ['Fecha', f => esc(f.fecha)], ['Monto', f => fmt(f.monto), 'num']], d.retiros_sin_abono) : '');
+                if (d.aplicado) cargarDineros();
+            })
+            .catch(() => { cont.innerHTML = '<div class="text-danger small">Error de conexión.</div>'; });
+    };
+
+    window.consultarContraMP = function () {
+        const btn = document.getElementById('btnContraMP');
+        const cont = document.getElementById('contraResultado');
+        btn.disabled = true;
+        cont.innerHTML = '<div class="conc-empty"><div class="spinner-border spinner-border-sm text-primary"></div> Consultando Mercado Pago…</div>';
+        fetch('/app/api/mercadopago/conciliacion/contra-mp/?' + params().toString())
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success) { cont.innerHTML = `<div class="text-danger">${esc(d.error || 'Error')}</div>`; return; }
+                const errores = (d.errores || []).map(e => `<div class="small text-danger">${esc(e.sucursal)} · ${esc(e.caja)}${e.dia ? ' · ' + esc(e.dia) : ''}: ${esc(e.error)}</div>`).join('');
+                cont.innerHTML =
+                    `<div class="small mb-2">Período ${esc(d.desde)} → ${esc(d.hasta)} · ${d.pagos_mp_consultados} pagos leídos en Mercado Pago.</div>${errores}` +
+                    '<h6 class="fw-bold mt-2">Cierre por caja y día</h6>' +
+                    tablaSimple([
+                        ['Día', f => esc(f.dia)], ['Sucursal', f => esc(f.sucursal)], ['Caja', f => esc(f.caja)],
+                        ['Sistema', f => fmt(f.sistema), 'num'], ['Mercado Pago', f => fmt(f.mp), 'num'],
+                        ['Diferencia', f => f.ok ? `<span class="conc-chip conc-chip--${f.cuadra ? 'ok' : 'err'}">${fmt(f.diferencia)}</span>` : `<span class="conc-sub text-danger">${esc(f.error)}</span>`, 'num'],
+                        ['Arqueo teórico MP', f => fmt(f.arqueo_teorico_mp), 'num'], ['Cierre físico', f => f.arqueo_cierre_fisico ? fmt(f.arqueo_cierre_fisico) : '—', 'num'],
+                    ], d.cajas) +
+                    `<h6 class="fw-bold">Cobrado en Mercado Pago sin registro en el sistema <span class="conc-chip conc-chip--err">${d.sin_registro.length}</span></h6>` +
+                    '<div class="conc-help">Plata que entró a la cuenta y no está en ninguna venta ni pago del POS: puede ser una venta sin documento.</div>' +
+                    tablaSimple([
+                        ['Fecha', f => esc(f.fecha)], ['N° MP', f => esc(f.payment_id)], ['Monto', f => fmt(f.monto), 'num'],
+                        ['Medio', f => esc(f.medio)], ['Referencia', f => esc(f.external_reference || '-')], ['Descripción', f => esc(f.descripcion)],
+                    ], d.sin_registro) +
+                    `<h6 class="fw-bold">Pagos «MP manual» del POS que Mercado Pago no reconoce <span class="conc-chip conc-chip--warn">${d.manuales_sin_pago.length}</span></h6>` +
+                    tablaSimple([
+                        ['Fecha', f => esc(f.fecha)], ['Sucursal', f => esc(f.sucursal)], ['Ticket', f => '#' + f.ticket],
+                        ['Monto', f => fmt(f.monto), 'num'], ['N° registrado', f => esc(f.voucher || '—')], ['Motivo', f => esc(f.motivo)],
+                    ], d.manuales_sin_pago);
+            })
+            .catch(() => { cont.innerHTML = '<div class="text-danger">Error de conexión con el servidor.</div>'; })
+            .finally(() => { btn.disabled = false; });
+    };
+
+    window.exportarCobrosCSV = function () {
+        const filas = filasVisibles();
+        const cab = ['Fecha', 'Sucursal', 'Caja', 'Ticket', 'Monto', 'Medio', 'N° MP', 'Documento', 'Estado', 'Liberación', 'Retiro'];
+        const lineas = [cab.join(';')].concat(filas.map(f => [
+            f.fecha, f.sucursal, f.caja, f.ticket_correlativo || f.correlativo, f.monto, f.medio, f.payment_id_mp,
+            f.documento, (CAT[f.categoria] || [f.categoria])[0], f.liberacion, f.retiro,
+        ].map(v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`).join(';')));
+        const blob = new Blob(['﻿' + lineas.join('\n')], {type: 'text/csv;charset=utf-8'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `conciliacion_mp_${document.getElementById('concDesde').value}_${document.getElementById('concHasta').value}.csv`;
+        document.body.appendChild(a); a.click(); a.remove();
+    };
+
+    document.addEventListener('DOMContentLoaded', window.recargarConciliacion);
+})();
 </script>

@@ -307,6 +307,9 @@ from .views_modulo_cotizaciones import (
     asignar_sku_pendiente,
     revertir_sku_despachado,
     validar_despacho_cotizacion,
+    cerrar_pendiente_despacho,
+    emitir_guia_cotizacion,
+    anular_guia_cotizacion,
 )
 from .views_modulo_existencias_nuevo import (
     # Tarjeta de Movimiento por Producto
@@ -530,6 +533,11 @@ from .views_mercadopago import (
     webhook_mercadopago,
     dineros_mercadopago,
     api_dineros_mercadopago,
+    api_conciliacion_cobros_mp,
+    api_conciliacion_contra_mp,
+    api_conciliacion_liberaciones_mp,
+    api_conciliacion_cartola_mp,
+    api_retiro_visto_cartola_mp,
     verificar_pago_mp_dte,
     gestion_datos_mp,
     gestion_guardar_cuenta_mp,
@@ -1192,6 +1200,11 @@ urlpatterns = [
     # Pantalla Dineros MP (pendiente de liberación / liberado / depositado)
     path('ventas/dineros-mercadopago/', dineros_mercadopago, name='dineros_mercadopago'),
     path('api/mercadopago/dineros/', api_dineros_mercadopago, name='api_dineros_mercadopago'),
+    path('api/mercadopago/conciliacion/cobros/', api_conciliacion_cobros_mp, name='api_conciliacion_cobros_mp'),
+    path('api/mercadopago/conciliacion/contra-mp/', api_conciliacion_contra_mp, name='api_conciliacion_contra_mp'),
+    path('api/mercadopago/conciliacion/liberaciones/', api_conciliacion_liberaciones_mp, name='api_conciliacion_liberaciones_mp'),
+    path('api/mercadopago/conciliacion/cartola/', api_conciliacion_cartola_mp, name='api_conciliacion_cartola_mp'),
+    path('api/mercadopago/conciliacion/retiro-visto/', api_retiro_visto_cartola_mp, name='api_retiro_visto_cartola_mp'),
     # "Verificar por Mercado Pago" desde gestión-DTE (pagos MP de la venta de un DTE)
     path('api/mercadopago/dte/<int:dte_id>/pagos/', verificar_pago_mp_dte, name='mp_verificar_pago_dte'),
 
@@ -1261,6 +1274,9 @@ urlpatterns = [
     path('api/cotizaciones/asignar-sku-pendiente/', asignar_sku_pendiente, name='asignar_sku_pendiente'),
     path('api/cotizaciones/revertir-sku-despachado/', revertir_sku_despachado, name='revertir_sku_despachado'),
     path('api/cotizaciones/validar-despacho/', validar_despacho_cotizacion, name='validar_despacho_cotizacion'),
+    path('api/cotizaciones/cerrar-pendiente/', cerrar_pendiente_despacho, name='cerrar_pendiente_despacho'),
+    path('api/cotizaciones/emitir-guia/', emitir_guia_cotizacion, name='emitir_guia_cotizacion'),
+    path('api/cotizaciones/anular-guia/', anular_guia_cotizacion, name='anular_guia_cotizacion'),
     
     # APIs de integración POS
     path('api/cotizaciones/cargar-como-ticket/<int:cotizacion_id>/', cargar_cotizacion_como_ticket, name='cargar_cotizacion_como_ticket'),

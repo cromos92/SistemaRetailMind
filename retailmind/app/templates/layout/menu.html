@@ -24,6 +24,7 @@
 {% puede_ver_opcion_tag 'gestion_correlativos' as permiso_gestion_correlativos %}
 {% puede_ver_opcion_tag 'gestion_cotizaciones' as permiso_gestion_cotizaciones %}
 {% puede_ver_opcion_tag 'gestion_creditos' as permiso_gestion_creditos %}
+{% puede_ver_opcion_tag 'dineros_mercadopago' as permiso_conciliacion_mercadopago %}
 {% puede_ver_opcion_tag 'gestion_documentos_ventas' as permiso_gestion_documentos_ventas %}
 {% puede_ver_opcion_tag 'gestion_dte' as permiso_gestion_dte %}
 {% puede_ver_opcion_tag 'gestion_dte_compras' as permiso_gestion_dte_compras %}
@@ -2499,7 +2500,7 @@
                         <!-- ========== MÓDULO DOCUMENTOS ========== -->
                         {% contar_opciones_disponibles user 'documentos' as total_documentos %}
                         {% if total_documentos > 0 %}
-                        {% if permiso_emision_dte or permiso_gestion_dte or permiso_recepcion_dte or permiso_gestion_cotizaciones or permiso_gestion_correlativos or permiso_gestion_creditos %}
+                        {% if permiso_emision_dte or permiso_gestion_dte or permiso_recepcion_dte or permiso_gestion_cotizaciones or permiso_gestion_correlativos or permiso_gestion_creditos or permiso_conciliacion_mercadopago %}
                         <li class="nav-item">
                             <a class="nav-link menu-link collapsed" href="#moduloDocumentos" data-bs-toggle="collapse"
                                 role="button" aria-expanded="false" aria-controls="moduloDocumentos">
@@ -2573,11 +2574,20 @@
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if permiso_gestion_creditos %}
+                                    {% if permiso_gestion_creditos or permiso_conciliacion_mercadopago %}
                                     <li class="menu-title"><span>Cobranza</span></li>
+                                    {% endif %}
+                                    {% if permiso_gestion_creditos %}
                                     <li class="nav-item">
                                         <a href="{% url 'gestion_creditos_documentos' %}" class="nav-link" data-key="t-gestion-creditos">
                                             <i class="ri-bank-card-line"></i> Gestión Créditos
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if permiso_conciliacion_mercadopago %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'dineros_mercadopago' %}" class="nav-link" data-key="t-conciliacion-mp">
+                                            <i class="ri-bank-line"></i> Conciliación Mercado Pago
                                         </a>
                                     </li>
                                     {% endif %}

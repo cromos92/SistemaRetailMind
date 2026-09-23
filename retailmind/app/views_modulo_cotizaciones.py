@@ -5,13 +5,14 @@ Vistas para el módulo de cotizaciones a empresas
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_http_methods
+from django.db import transaction
 from django.db.models import Q, Sum, Count
 from django.utils import timezone
 from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail, EmailMultiAlternatives
 from django.conf import settings
 from datetime import datetime, timedelta, date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import json
 import logging
 from io import BytesIO
@@ -31,6 +32,10 @@ from .models import (
 )
 
 logger = logging.getLogger('app')
+
+# Días desde la factura tras los cuales un despacho pendiente se marca como
+# atrasado (alerta en el listado y en el comando alertar_despachos_pendientes).
+DIAS_ALERTA_DESPACHO = 7
 
 
 def _esta_vencida(cotizacion, hoy=None):
@@ -98,7 +103,8 @@ def _cuadratura_item(item):
             # reabriría despachos ya cerrados.
             cubiertas = cantidad if item.producto_existente_id else 0
 
-    return max(0, cantidad - cubiertas - post_factura), post_factura
+    cerradas = item.unidades_cerradas_sin_despacho or 0
+    return max(0, cantidad - cubiertas - post_factura - cerradas), post_factura
 
 
 def _cuadratura_despacho(cotizacion):
@@ -316,6 +322,9 @@ def evaluar_items_cotizacion(cotizacion, sucursal_id):
     items_sin_stock = 0
     items_cobertura_parcial = 0
     problemas_stock = []
+    # Con guía de despacho vigente las unidades con SKU YA salieron del
+    # inventario: validar stock contra lo que queda las haría ver faltantes.
+    con_guia = cotizacion.guia_vigente is not None
 
     for item in cotizacion.items.all():
         total_items += 1
@@ -344,7 +353,7 @@ def evaluar_items_cotizacion(cotizacion, sucursal_id):
                 items_cobertura_parcial += 1
 
             for sku_rel in skus_asociados:
-                if not sku_rel.producto_talla:
+                if not sku_rel.producto_talla or con_guia:
                     continue
                 requerido = sku_rel.cantidad or 0
                 if requerido <= 0:
@@ -358,7 +367,7 @@ def evaluar_items_cotizacion(cotizacion, sucursal_id):
                         'stock': stock_actual,
                         'requerido': requerido,
                     })
-        elif item.producto_existente:
+        elif item.producto_existente and not con_guia:
             # Compatibilidad con el modelo anterior (sin Detalle_SKU)
             stock_actual = item.producto_existente.stock_sucursal(sucursal_id)
             if stock_actual < item.cantidad:
@@ -444,7 +453,7 @@ def listar_cotizaciones(request):
         cotizaciones = (
             Cotizacion_Empresa.objects
             .filter(sucursal_id=sucursal_id)
-            .select_related('cliente', 'vendedor', 'dte', 'despacho_validado_por')
+            .select_related('cliente', 'vendedor', 'dte', 'despacho_validado_por', 'guia_despacho')
             # `producto` incluido a propósito: Producto_Talla.stock_sucursal()
             # lo consulta para saber si el SKU es de esta sucursal, y sin el
             # prefetch eso es una query por cada SKU de cada fila del listado.
@@ -485,6 +494,11 @@ def listar_cotizaciones(request):
             estado_despacho__in=(Cotizacion_Empresa.DESPACHO_PENDIENTE,
                                  Cotizacion_Empresa.DESPACHO_PARCIAL),
         )
+        # Despacho pendiente con más de DIAS_ALERTA_DESPACHO desde la factura:
+        # el cliente pagó y todavía no recibe. Es la alerta que hay que mirar.
+        _q_despacho_atrasado = _q_despacho_pendiente & Q(
+            fecha_facturacion__lt=timezone.now() - timedelta(days=DIAS_ALERTA_DESPACHO),
+        )
         # Facturada cuyo documento ya no respalda nada (NC total / eliminado):
         # hay que reabrirla para poder volver a facturar. Una facturada legacy
         # SIN dte enlazado no entra acá (tiene su propio aviso en el listado).
@@ -515,6 +529,8 @@ def listar_cotizaciones(request):
                 cotizaciones = cotizaciones.filter(_q_por_vencer)
             elif estado == 'DESPACHO_PENDIENTE':
                 cotizaciones = cotizaciones.filter(_q_despacho_pendiente)
+            elif estado == 'DESPACHO_ATRASADO':
+                cotizaciones = cotizaciones.filter(_q_despacho_atrasado)
             elif estado == 'DOC_ANULADO':
                 cotizaciones = cotizaciones.filter(_q_doc_anulado)
             else:
@@ -552,6 +568,7 @@ def listar_cotizaciones(request):
             m_vencido=Sum('total', filter=_q_vencida),
             n_por_vencer=Count('id', filter=_q_por_vencer),
             n_despacho_pendiente=Count('id', filter=_q_despacho_pendiente),
+            n_despacho_atrasado=Count('id', filter=_q_despacho_atrasado),
             n_doc_anulado=Count('id', filter=_q_doc_anulado),
         )
         estadisticas = {
@@ -568,6 +585,8 @@ def listar_cotizaciones(request):
             # Colas de trabajo (filtros rápidos del listado).
             'por_vencer': _agg['n_por_vencer'] or 0,
             'despacho_pendiente': _agg['n_despacho_pendiente'] or 0,
+            'despacho_atrasado': _agg['n_despacho_atrasado'] or 0,
+            'dias_alerta_despacho': DIAS_ALERTA_DESPACHO,
             'doc_anulado': _agg['n_doc_anulado'] or 0,
         }
 
@@ -668,7 +687,21 @@ def listar_cotizaciones(request):
                 ),
                 'documento_estado_dte': (cot.dte.estado_dte or '') if cot.dte_id else '',
                 'documento_descartado': bool(cot.dte_id and cot.dte.descartado),
-                'items_cobertura_parcial': _eval['items_cobertura_parcial'],
+                # Guía de despacho previa a la factura (DTE 52 de venta).
+                'guia': (
+                    {'id': cot.guia_despacho_id, 'folio': cot.guia_despacho.numero_documento,
+                     'fecha': cot.guia_despacho.fecha_emision.strftime('%Y-%m-%d')}
+                    if cot.guia_vigente else None
+                ),
+                'puede_emitir_guia': bool(
+                    not esta_facturada and esta_vigente and cot.guia_vigente is None
+                    and items_con_sku > 0 and items_sin_stock == 0
+                    and not _eval['items_cobertura_parcial']
+                ),
+                'puede_anular_guia': bool(
+                    es_administrador and not esta_facturada and cot.guia_vigente is not None
+                ),
+'items_cobertura_parcial': _eval['items_cobertura_parcial'],
                 'monto_total': float(cot.total),
                 'total_items': total_items,
                 'items_con_sku': items_con_sku,
@@ -711,7 +744,20 @@ def listar_cotizaciones(request):
                 # revertir; sirve para dejar accesible la corrección de un SKU
                 # mal despachado aunque ya no queden unidades pendientes.
                 uds_facturadas, uds_pendientes, uds_post_factura = _cuadratura_despacho(cot)
+                dias_desde_factura = (
+                    (timezone.localdate() - timezone.localtime(cot.fecha_facturacion).date()).days
+                    if cot.fecha_facturacion else None
+                )
                 cotizaciones_data[-1].update({
+                    'dias_desde_factura': dias_desde_factura,
+                    'despacho_atrasado': bool(
+                        uds_pendientes > 0 and dias_desde_factura is not None
+                        and dias_desde_factura > DIAS_ALERTA_DESPACHO
+                    ),
+                    'unidades_cerradas': sum(
+                        (it.unidades_cerradas_sin_despacho or 0) for it in cot.items.all()
+                    ),
+                    'puede_cerrar_pendiente': es_administrador and uds_pendientes > 0,
                     'unidades_despachadas_post_factura': uds_post_factura,
                     'tiene_despachos_post_factura': uds_post_factura > 0,
                     'unidades_facturadas': uds_facturadas,
@@ -742,6 +788,10 @@ def listar_cotizaciones(request):
                 })
             else:
                 cotizaciones_data[-1].update({
+                    'dias_desde_factura': None,
+                    'despacho_atrasado': False,
+                    'unidades_cerradas': 0,
+                    'puede_cerrar_pendiente': False,
                     'unidades_facturadas': 0,
                     'unidades_despachadas': 0,
                     'unidades_pendientes': 0,
@@ -903,6 +953,9 @@ def detalle_cotizacion(request, cotizacion_id):
                 # Cuadratura por unidades (despacho diferido parcial)
                 'unidades_despachadas': uds_despachadas_item,
                 'unidades_pendientes': uds_pendientes_item,
+                'unidades_cerradas': item.unidades_cerradas_sin_despacho or 0,
+                'motivo_cierre_despacho': item.get_motivo_cierre_despacho_display() if item.motivo_cierre_despacho else '',
+                'detalle_cierre_despacho': item.detalle_cierre_despacho or '',
                 # Unidades del ítem realmente cubiertas por SKUs. Si no llegan
                 # a `cantidad`, la diferencia se factura como despacho diferido
                 # (el POS ya NO le carga el excedente al primer SKU).
@@ -1149,6 +1202,14 @@ def editar_cotizacion(request, cotizacion_id):
                     f'{cotizacion.get_estado_display().lower()}'
                 )
             })
+        if cotizacion.guia_vigente is not None:
+            return JsonResponse({
+                'success': False,
+                'error': (
+                    f'La cotización tiene la guía de despacho #{cotizacion.guia_despacho.numero_documento} '
+                    'emitida: sus productos ya salieron. Anule la guía para poder editarla.'
+                )
+            })
 
         logger.debug("Editando cotizacion %s", cotizacion.numero_cotizacion)
 
@@ -1351,7 +1412,15 @@ def anular_cotizacion(request):
                 'success': False,
                 'error': 'No se puede anular una cotización que ya fue facturada'
             })
-        
+        if cotizacion.guia_vigente is not None:
+            return JsonResponse({
+                'success': False,
+                'error': (
+                    f'La cotización tiene la guía de despacho #{cotizacion.guia_despacho.numero_documento} '
+                    'emitida (el stock ya salió). Anule primero la guía.'
+                )
+            })
+
         # Anular cotización
         cotizacion.anular(request.user, motivo)
         
@@ -1617,6 +1686,306 @@ def convertir_cotizacion_factura(request):
         }, status=500)
 
 
+# ==================== GUÍA DE DESPACHO (DTE 52 de venta) ====================
+
+def _lineas_guia(cotizacion):
+    """[(item, producto_talla, cantidad, precio_bruto_linea)] con SKU de la cotización.
+
+    Mismo criterio que cargar_cotizacion_como_ticket: una fila por SKU con SU
+    cantidad; el enlace legacy (producto_existente sin filas) cubre el ítem
+    completo. Los ítems sin SKU (despacho diferido) no van en la guía: no hay
+    nada que despachar todavía.
+    """
+    lineas = []
+    for item in sorted(cotizacion.items.all(), key=lambda i: i.numero_linea or 0):
+        filas = [f for f in item.skus_asociados.all()
+                 if f.producto_talla_id and not f.asignado_post_factura and (f.cantidad or 0) > 0]
+        cantidad_item = item.cantidad or 0
+        subtotal_item = Decimal(str(item.subtotal or 0))
+        if filas:
+            for fila in filas:
+                bruto = (subtotal_item * fila.cantidad / cantidad_item) if cantidad_item else Decimal('0')
+                lineas.append((item, fila.producto_talla, int(fila.cantidad), bruto))
+        elif item.producto_existente_id and cantidad_item > 0:
+            lineas.append((item, item.producto_existente, cantidad_item, subtotal_item))
+    return lineas
+
+
+@login_required
+@require_http_methods(["POST"])
+def emitir_guia_cotizacion(request):
+    """
+    Emite la guía de despacho (DTE 52, IndTraslado=1 venta) de una cotización
+    VIGENTE antes de facturarla, y saca del inventario sus líneas con SKU.
+
+    Body JSON: { cotizacion_id }
+
+    La guía cubre TODAS las líneas con SKU. Al facturar después en el POS esas
+    líneas llegan marcadas `despachado_por_guia` (no se descuenta stock de
+    nuevo) y la factura referencia la guía (tipo 52). Los ítems sin SKU siguen
+    el flujo normal de despacho diferido.
+    """
+    from .models import Dte, Dte_Productos
+    from .services import inventario_service
+    from .views import obtener_siguiente_correlativo
+
+    try:
+        data = json.loads(request.body or '{}')
+        cotizacion = get_object_or_404(
+            Cotizacion_Empresa.objects.select_related('sucursal', 'sucursal__empresa', 'cliente'),
+            pk=data.get('cotizacion_id'),
+        )
+        sucursal_id = _sucursal_activa_id(request)
+        if sucursal_id and cotizacion.sucursal_id != int(sucursal_id):
+            return JsonResponse({'success': False, 'error': 'La cotización es de otra sucursal'}, status=403)
+        if cotizacion.facturada:
+            return JsonResponse({'success': False, 'error': 'La cotización ya fue facturada'}, status=400)
+        if not cotizacion.esta_vigente:
+            return JsonResponse({
+                'success': False, 'error': 'Solo se emite guía de cotizaciones vigentes'
+            }, status=400)
+        if cotizacion.guia_vigente is not None:
+            return JsonResponse({
+                'success': False,
+                'error': f'Ya tiene la guía #{cotizacion.guia_despacho.numero_documento} emitida'
+            }, status=400)
+
+        evaluacion = evaluar_items_cotizacion(cotizacion, cotizacion.sucursal_id)
+        if evaluacion['items_cobertura_parcial']:
+            return JsonResponse({
+                'success': False,
+                'error': 'Hay ítems cuyos SKUs no cubren la cantidad cotizada: corríjalos antes de emitir la guía.'
+            }, status=400)
+        lineas = _lineas_guia(cotizacion)
+        if not lineas:
+            return JsonResponse({
+                'success': False,
+                'error': 'La cotización no tiene productos con SKU: no hay nada que despachar.'
+            }, status=400)
+
+        sucursal = cotizacion.sucursal
+        emisor = sucursal.empresa
+        receptor = cotizacion.cliente
+        faltan = []
+        if not (sucursal.direccion or emisor.direccion or '').strip():
+            faltan.append('dirección del emisor')
+        if not (getattr(sucursal, 'comuna', '') or emisor.comuna or '').strip():
+            faltan.append('comuna del emisor')
+        if not (getattr(sucursal, 'ciudad', '') or emisor.ciudad or '').strip():
+            faltan.append('ciudad del emisor')
+        for campo, nombre in (('giro', 'giro'), ('direccion', 'dirección'),
+                              ('comuna', 'comuna'), ('ciudad', 'ciudad')):
+            if not (getattr(receptor, campo, '') or '').strip():
+                faltan.append(f'{nombre} del cliente')
+        if faltan:
+            return JsonResponse({
+                'success': False,
+                'error': 'Faltan datos para el TXT de Acepta: ' + ', '.join(faltan) + '. Complete la ficha y reintente.'
+            }, status=400)
+
+        with transaction.atomic():
+            # Stock: todas las líneas o ninguna (lock por fila, dentro del atomic).
+            faltantes = []
+            requerido_por_pt = {}
+            for _item, pt, cant, _b in lineas:
+                requerido_por_pt[pt.id] = requerido_por_pt.get(pt.id, 0) + cant
+            for pt_id, requerido in requerido_por_pt.items():
+                pt = Producto_Talla.objects.select_for_update().select_related('producto').get(id=pt_id)
+                if pt.producto and pt.producto.sucursal_id != sucursal.id:
+                    faltantes.append(f'SKU {pt.sku} no es de {sucursal.alias}')
+                elif pt.stock_sucursal(sucursal.id) < requerido:
+                    faltantes.append(f'SKU {pt.sku}: {pt.stock_sucursal(sucursal.id)}/{requerido}')
+            if faltantes:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Stock insuficiente para la guía: ' + ', '.join(faltantes),
+                    'error_tipo': 'STOCK_INSUFICIENTE',
+                }, status=400)
+
+            netos = []
+            for _item, _pt, cant, bruto in lineas:
+                neto_linea = int((bruto / Decimal('1.19')).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+                netos.append(neto_linea)
+            monto_neto = Decimal(sum(netos))
+            iva = (monto_neto * Decimal('0.19')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+            hoy = timezone.localdate()
+            folio = obtener_siguiente_correlativo(sucursal, 'GUIA')
+
+            guia = Dte.objects.create(
+                emisor=emisor,
+                receptor=receptor,
+                numero_documento=folio,
+                tipo_documento='GUIA',
+                monto_neto=monto_neto,
+                monto_con_iva=monto_neto + iva,
+                estado_pago='PENDIENTE',
+                estado_dte='EMITIDO',
+                responsable=request.user.username,
+                fecha_emision=hoy,
+                fecha_vencimiento=hoy,
+                diasCredito=0,
+                bultos=1,
+                unidades_productos=sum(c for _i, _p, c, _b in lineas),
+                tipo_transaccion='VENTA',
+                referencias=f'Guía de despacho de la cotización {cotizacion.numero_cotizacion}',
+                vendedor=cotizacion.vendedor,
+                sucursal=sucursal,
+                hora=timezone.localtime().time(),
+            )
+
+            for (item, pt, cant, _bruto), neto_linea in zip(lineas, netos):
+                producto = pt.producto
+                precio_neto_unit = int(round(neto_linea / cant)) if cant else 0
+                Dte_Productos.objects.create(
+                    dte=guia,
+                    productoTalla=pt,
+                    descripcion=(item.descripcion or (producto.articulo if producto else ''))[:255],
+                    costo=int((producto.costo if producto else 0) or 0),
+                    sobreprecio=int((producto.sobreprecio if producto else 0) or 0),
+                    precio=precio_neto_unit,
+                    precio_unitario=precio_neto_unit,
+                    monto_item=neto_linea,
+                    stock=cant,
+                    activo=True,
+                    cotizacion_detalle_id=item.id,
+                )
+                mov = inventario_service.egresar(
+                    pt, cant, 'DESPACHO_COTIZACION', request.user.username,
+                    sucursal_origen=sucursal, dte=guia,
+                    precio_unitario=precio_neto_unit,
+                    observaciones=(f'Guía #{folio} de la cotización {cotizacion.numero_cotizacion} '
+                                   f'— Cliente: {receptor.nombre}'),
+                    referencia_externa=cotizacion.numero_cotizacion,
+                )
+                if mov.tipo_movimiento != 'EGRESO':
+                    mov.tipo_movimiento = 'EGRESO'
+                    mov.save(update_fields=['tipo_movimiento'])
+
+            cotizacion.guia_despacho = guia
+            cotizacion.save(update_fields=['guia_despacho'])
+            Historial_Cotizacion.objects.create(
+                cotizacion=cotizacion,
+                usuario=request.user,
+                accion='GUIA_EMITIDA',
+                descripcion=(
+                    f'Guía de despacho #{folio} emitida: {len(lineas)} línea(s), '
+                    f'{guia.unidades_productos} unidad(es) salieron del inventario. '
+                    'La factura posterior no vuelve a descontarlas.'
+                ),
+                datos_nuevos={'guia_id': guia.id, 'folio': folio},
+                ip_address=get_client_ip(request),
+            )
+
+        logger.info(
+            "Guia de despacho emitida cotizacion=%s guia=%s folio=%s usuario=%s",
+            cotizacion.numero_cotizacion, guia.id, folio, request.user.username,
+        )
+        return JsonResponse({
+            'success': True,
+            'message': f'Guía de despacho #{folio} emitida',
+            'dte_id': guia.id,
+            'folio': folio,
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+    except Exception as e:
+        logger.exception("Error al emitir guía de cotización")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def anular_guia_cotizacion(request):
+    """
+    Anula la guía de despacho de una cotización NO facturada y reingresa el
+    stock que salió con ella. Solo administradores.
+
+    Body JSON: { cotizacion_id, motivo }
+
+    Una vez facturada, la guía queda amarrada a la factura: corregir exige
+    nota de crédito sobre la factura, no esta vía.
+    """
+    from .models import Dte
+    from .services import inventario_service
+
+    try:
+        from .views_modulo_ventas import _usuario_es_administrador_activo
+        if not _usuario_es_administrador_activo(request.user):
+            return JsonResponse({
+                'success': False, 'error': 'Solo un administrador puede anular una guía'
+            }, status=403)
+
+        data = json.loads(request.body or '{}')
+        motivo = (data.get('motivo') or '').strip()
+        if len(motivo) < 5:
+            return JsonResponse({'success': False, 'error': 'Indique el motivo (mínimo 5 caracteres)'}, status=400)
+
+        with transaction.atomic():
+            cotizacion = (Cotizacion_Empresa.objects.select_for_update()
+                          .filter(pk=data.get('cotizacion_id')).first())
+            if not cotizacion:
+                return JsonResponse({'success': False, 'error': 'Cotización no encontrada'}, status=404)
+            sucursal_id = _sucursal_activa_id(request)
+            if sucursal_id and cotizacion.sucursal_id != int(sucursal_id):
+                return JsonResponse({'success': False, 'error': 'La cotización es de otra sucursal'}, status=403)
+            if cotizacion.facturada:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'La cotización ya se facturó con esta guía: corrija con nota de crédito sobre la factura.'
+                }, status=400)
+            guia = cotizacion.guia_vigente
+            if guia is None:
+                return JsonResponse({'success': False, 'error': 'La cotización no tiene guía vigente'}, status=400)
+            guia = Dte.objects.select_for_update().get(pk=guia.pk)
+
+            reingresadas = 0
+            egresos = Movimientos_Producto.objects.filter(
+                dte=guia, concepto='DESPACHO_COTIZACION', cantidad__lt=0,
+            ).select_related('ProductoTalla')
+            for mov in egresos:
+                cant = -mov.cantidad
+                inventario_service.ingresar(
+                    mov.ProductoTalla, cant, 'ANULACION', request.user.username,
+                    sucursal_destino=cotizacion.sucursal, dte=guia,
+                    costo_unitario=mov.costo, sobreprecio_unitario=mov.sobreprecio,
+                    precio_unitario=mov.precio,
+                    observaciones=f'Anulación guía #{guia.numero_documento}: {motivo}',
+                    referencia_externa=cotizacion.numero_cotizacion,
+                )
+                reingresadas += cant
+
+            guia.estado_dte = 'ANULADO'
+            guia.save(update_fields=['estado_dte'])
+            cotizacion.guia_despacho = None
+            cotizacion.save(update_fields=['guia_despacho'])
+            Historial_Cotizacion.objects.create(
+                cotizacion=cotizacion,
+                usuario=request.user,
+                accion='GUIA_ANULADA',
+                descripcion=(
+                    f'Guía #{guia.numero_documento} anulada; {reingresadas} unidad(es) '
+                    f'reingresadas al inventario. Motivo: {motivo}'
+                ),
+                datos_anteriores={'guia_id': guia.id, 'folio': guia.numero_documento},
+                ip_address=get_client_ip(request),
+            )
+
+        logger.info(
+            "Guia anulada cotizacion=%s guia=%s unidades=%s usuario=%s",
+            cotizacion.numero_cotizacion, guia.id, reingresadas, request.user.username,
+        )
+        return JsonResponse({
+            'success': True,
+            'message': (f'Guía #{guia.numero_documento} anulada y {reingresadas} unidad(es) reingresadas. '
+                        'Recuerde anularla también en Acepta/SII si ya fue enviada.'),
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+    except Exception as e:
+        logger.exception("Error al anular guía de cotización")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
 # ==================== API PARA INTEGRACIÓN CON POS ====================
 
 @login_required
@@ -1662,6 +2031,9 @@ def cargar_cotizacion_como_ticket(request, cotizacion_id):
             'telefono_secundario': cliente.contacto2 or '',
         }
         
+        # Guía de despacho previa: sus líneas ya salieron del inventario.
+        guia_cot = cotizacion.guia_vigente
+
         # Construir lista de productos en formato POS
         productos = []
         items_pendientes = []   # ítems sin SKU — despacho diferido
@@ -1705,7 +2077,7 @@ def cargar_cotizacion_como_ticket(request, cotizacion_id):
                         continue
 
                     stock_actual = pt.stock_sucursal(sucursal_id)
-                    if stock_actual < cantidad_linea:
+                    if stock_actual < cantidad_linea and not guia_cot:
                         items_sin_stock.append({
                             'descripcion': item.descripcion,
                             'sku': str(pt.sku),
@@ -1732,6 +2104,8 @@ def cargar_cotizacion_como_ticket(request, cotizacion_id):
                         'costo': float(producto.costo) if producto and producto.costo else 0,
                         # Información adicional de cotización
                         'cotizacion_item_id': item.id,
+                        # Ya salió con la guía: el POS no debe mostrarla sin stock.
+                        'despachado_por_guia': bool(guia_cot),
                     })
 
                 # Datos antiguos: SKUs que no cubren toda la cantidad del ítem.
@@ -1774,7 +2148,7 @@ def cargar_cotizacion_como_ticket(request, cotizacion_id):
                 producto = pt.producto
                 stock_actual = pt.stock_sucursal(sucursal_id)
                 
-                if stock_actual < item.cantidad:
+                if stock_actual < item.cantidad and not guia_cot:
                     items_sin_stock.append({
                         'descripcion': item.descripcion,
                         'sku': str(pt.sku),
@@ -1864,9 +2238,11 @@ def cargar_cotizacion_como_ticket(request, cotizacion_id):
             'fecha_emision': cotizacion.fecha_emision.strftime('%Y-%m-%d'),
             'fecha_validez': cotizacion.fecha_validez.strftime('%Y-%m-%d'),
             'dias_restantes': cotizacion.dias_restantes,
+            'guia': ({'folio': guia_cot.numero_documento,
+                      'fecha': guia_cot.fecha_emision.strftime('%Y-%m-%d')} if guia_cot else None),
         }
-        
-        # Advertencias de stock insuficiente (ya no incluye pendientes como error)
+
+        # Advertencias de stock insuficiente(ya no incluye pendientes como error)
         advertencias = []
         if items_sin_stock:
             for item in items_sin_stock:
@@ -2212,6 +2588,161 @@ def asignar_sku_pendiente(request):
 
     except Exception as e:
         logger.exception("Error al asignar SKU a detalle de cotizacion")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def _notas_credito_vivas(dte):
+    """NC no eliminadas emitidas sobre `dte` (vacío si no hay documento)."""
+    from .models import Dte
+    if dte is None:
+        return Dte.objects.none()
+    return Dte.objects.filter(
+        documento_afectado=dte, es_nota_credito=True,
+    ).exclude(descartado=True)
+
+
+@login_required
+@require_http_methods(["POST"])
+def cerrar_pendiente_despacho(request):
+    """
+    Cierra unidades pendientes de despacho SIN sacar stock, con motivo.
+
+    Body JSON:
+        detalle_id – ID de Cotizacion_Empresa_Detalle
+        cantidad   – unidades a cerrar (<= pendientes; default: todas)
+        motivo     – uno de Cotizacion_Empresa_Detalle.MOTIVOS_CIERRE_DESPACHO
+        detalle    – texto obligatorio (mín. 10 caracteres), queda en el historial
+
+    Es la salida para una cotización facturada cuyo despacho diferido nunca
+    se va a completar: sin esto la única forma de sacarla de "despacho
+    pendiente" era asignarle un SKU (sacando stock que no salió) o reabrirla.
+
+    Reglas:
+      - Solo administradores (es una corrección documental).
+      - NOTA_CREDITO y CLIENTE_DESISTIO exigen una NC viva sobre el documento de
+        la cotización: esas unidades ya se cobraron, cerrarlas sin devolver la
+        plata dejaría una venta cobrada y nunca entregada.
+      - NO mueve stock ni toca el DTE: la línea sigue en el documento tal cual.
+    """
+    try:
+        from .views_modulo_ventas import _usuario_es_administrador_activo
+
+        if not _usuario_es_administrador_activo(request.user):
+            return JsonResponse({
+                'success': False,
+                'error': 'Solo un administrador puede cerrar un despacho pendiente'
+            }, status=403)
+
+        data = json.loads(request.body or '{}')
+        detalle_id = data.get('detalle_id')
+        motivo = (data.get('motivo') or '').strip().upper()
+        texto = (data.get('detalle') or '').strip()
+
+        motivos_validos = dict(Cotizacion_Empresa_Detalle.MOTIVOS_CIERRE_DESPACHO)
+        if motivo not in motivos_validos:
+            return JsonResponse({'success': False, 'error': 'Motivo de cierre inválido'}, status=400)
+        if len(texto) < 10:
+            return JsonResponse({
+                'success': False,
+                'error': 'Explique el cierre (mínimo 10 caracteres): queda en el historial de la cotización'
+            }, status=400)
+
+        with transaction.atomic():
+            detalle = (
+                Cotizacion_Empresa_Detalle.objects
+                .select_for_update()
+                .filter(id=detalle_id).first()
+            )
+            if not detalle:
+                return JsonResponse({'success': False, 'error': 'Ítem no encontrado'}, status=404)
+            cotizacion = Cotizacion_Empresa.objects.select_related('dte').get(pk=detalle.cotizacion_id)
+
+            sucursal_id = _sucursal_activa_id(request)
+            if sucursal_id and cotizacion.sucursal_id != int(sucursal_id):
+                return JsonResponse({
+                    'success': False, 'error': 'La cotización es de otra sucursal'
+                }, status=403)
+            if not cotizacion.facturada:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Solo se cierran despachos de cotizaciones facturadas'
+                }, status=400)
+
+            pendientes = detalle.unidades_pendientes_despacho
+            if pendientes <= 0:
+                return JsonResponse({
+                    'success': False, 'error': 'Este ítem no tiene unidades pendientes de despacho'
+                }, status=400)
+            try:
+                cantidad = int(data.get('cantidad') or pendientes)
+            except (TypeError, ValueError):
+                cantidad = 0
+            if cantidad <= 0 or cantidad > pendientes:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Cantidad inválida: el ítem tiene {pendientes} unidad(es) pendiente(s)'
+                }, status=400)
+
+            nc_texto = ''
+            if motivo in Cotizacion_Empresa_Detalle.MOTIVOS_CIERRE_EXIGEN_NC:
+                ncs = list(_notas_credito_vivas(cotizacion.dte).values_list('numero_documento', flat=True))
+                if not ncs:
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            'Para cerrar con este motivo debe existir una nota de crédito '
+                            'sobre el documento de la cotización: esas unidades ya se '
+                            'cobraron. Emita la NC primero o use otro motivo.'
+                        ),
+                        'error_tipo': 'FALTA_NC',
+                    }, status=400)
+                nc_texto = ' NC: ' + ', '.join(f'#{n}' for n in ncs) + '.'
+
+            linea = f'{timezone.localtime():%d-%m-%Y %H:%M} {request.user.username}: {texto}'
+            detalle.unidades_cerradas_sin_despacho = (detalle.unidades_cerradas_sin_despacho or 0) + cantidad
+            detalle.motivo_cierre_despacho = motivo
+            detalle.detalle_cierre_despacho = (
+                (detalle.detalle_cierre_despacho + chr(10) + linea)
+                if detalle.detalle_cierre_despacho else linea
+            )
+            detalle.cierre_despacho_por = request.user
+            detalle.fecha_cierre_despacho = timezone.now()
+            detalle.save(recalcular_cotizacion=False, update_fields=[
+                'unidades_cerradas_sin_despacho', 'motivo_cierre_despacho',
+                'detalle_cierre_despacho', 'cierre_despacho_por', 'fecha_cierre_despacho',
+                'updated_at',
+            ])
+
+            cotizacion.actualizar_estado_despacho()
+            Historial_Cotizacion.objects.create(
+                cotizacion=cotizacion,
+                usuario=request.user,
+                accion='DESPACHO_CERRADO',
+                descripcion=(
+                    f'Se cerraron {cantidad} unidad(es) de «{(detalle.descripcion or "")[:80]}» '
+                    f'sin salida de stock. Motivo: {motivos_validos[motivo]}.{nc_texto} '
+                    f'Detalle: {texto}'
+                ),
+                datos_nuevos={
+                    'detalle_id': detalle.id, 'cantidad': cantidad, 'motivo': motivo,
+                },
+                ip_address=get_client_ip(request),
+            )
+
+        logger.info(
+            "Despacho cerrado sin salida cotizacion=%s detalle=%s cantidad=%s motivo=%s usuario=%s",
+            cotizacion.numero_cotizacion, detalle.id, cantidad, motivo, request.user.username,
+        )
+        return JsonResponse({
+            'success': True,
+            'message': f'{cantidad} unidad(es) cerradas sin despacho.',
+            'unidades_pendientes': cotizacion.unidades_pendientes_despacho,
+            'estado_despacho': cotizacion.estado_despacho,
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+    except Exception as e:
+        logger.exception("Error al cerrar despacho pendiente")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 

@@ -1714,8 +1714,20 @@ def verificar_pago_mp_dte(request, dte_id):
 
 @login_required
 def dineros_mercadopago(request):
-    """GET /app/ventas/dineros-mercadopago/ — página."""
-    return render(request, 'vistas/modulo_ventas/dinerosMercadoPago.html', {})
+    """GET /app/ventas/dineros-mercadopago/ — página de Conciliación Mercado Pago."""
+    es_admin = _es_admin(request)
+    configs = list(MercadoPagoConfig.objects.select_related('sucursal')
+                   .order_by('sucursal__alias', 'nombre')
+                   .values('id', 'nombre', 'sucursal_id', 'sucursal__alias'))
+    sucursales = []
+    for c in configs:
+        if c['sucursal_id'] not in [s['sucursal_id'] for s in sucursales]:
+            sucursales.append({'sucursal_id': c['sucursal_id'], 'sucursal__alias': c['sucursal__alias']})
+    return render(request, 'vistas/modulo_ventas/dinerosMercadoPago.html', {
+        'es_admin': es_admin,
+        'configs': configs if es_admin else [],
+        'sucursales': sucursales if es_admin else [],
+    })
 
 
 @login_required
@@ -1795,6 +1807,7 @@ def api_dineros_mercadopago(request):
         'monto': r.monto,
         'estado': r.estado,
         'visto_en_cartola': r.visto_en_cartola,
+        'detalle': r.detalle_diferencia or '',
         'transacciones': r.transacciones.count(),
     } for r in RetiroMercadoPago.objects.all().order_by('-fecha')[:100]]
 
@@ -1809,3 +1822,139 @@ def api_dineros_mercadopago(request):
         'configs': list(MercadoPagoConfig.objects.values(
             'id', 'sucursal__alias', 'nombre', 'modo', 'habilitado')),
     })
+
+
+# ==================== CONCILIACIÓN MERCADO PAGO ====================
+# Cobros ↔ documentos ↔ liberaciones ↔ banco. La lógica vive en
+# services/conciliacion_mp_service.py; acá solo permisos y E/S.
+
+def _sucursal_filtro_conciliacion(request):
+    """Admin elige sucursal (o todas); el resto ve solo la de su sesión."""
+    if _es_admin(request):
+        valor = request.GET.get('sucursal_id') or request.POST.get('sucursal_id') or ''
+        return int(valor) if str(valor).isdigit() else None
+    return _sucursal_sesion(request)
+
+
+@login_required
+def api_conciliacion_cobros_mp(request):
+    """GET /app/api/mercadopago/conciliacion/cobros/?desde=&hasta=&sucursal_id=
+
+    Cada cobro MP del período con su venta y su documento (boleta/factura).
+    Solo datos locales: rápido, sirve para el arqueo.
+    """
+    from .services import conciliacion_mp_service as conc
+    data = conc.cobros_vs_documentos(
+        request.GET.get('desde'), request.GET.get('hasta'),
+        sucursal_id=_sucursal_filtro_conciliacion(request),
+    )
+    data['success'] = True
+    data['es_admin'] = _es_admin(request)
+    data['sucursales'] = list(
+        MercadoPagoConfig.objects.values('sucursal_id', 'sucursal__alias').distinct()
+    ) if _es_admin(request) else []
+    return JsonResponse(data)
+
+
+@login_required
+def api_conciliacion_contra_mp(request):
+    """GET /app/api/mercadopago/conciliacion/contra-mp/?desde=&hasta=&sucursal_id=
+
+    Cruce contra la API de MP (máx. 7 días): cierre por caja y día, pagos que
+    MP tiene y el sistema no, pagos "MP manual" cuyo N° no existe en MP.
+    """
+    from .services import conciliacion_mp_service as conc
+    data = conc.diferencias_contra_mp(
+        request.GET.get('desde'), request.GET.get('hasta'),
+        sucursal_id=_sucursal_filtro_conciliacion(request),
+    )
+    data['success'] = True
+    return JsonResponse(data)
+
+
+@login_required
+@require_POST
+def api_conciliacion_liberaciones_mp(request):
+    """POST /app/api/mercadopago/conciliacion/liberaciones/  (solo admin)
+
+    Procesa el reporte de Liberaciones de MP: crea los retiros al banco y
+    amarra cada cobro a su retiro. Dos fuentes:
+      - `archivo` (CSV descargado del panel de MP) + `config_id`;
+      - sin archivo: lo pide a la API de MP para `desde`/`hasta` + `config_id`.
+    `aplicar=1` escribe; sin él es una vista previa (dry-run).
+    """
+    from .services import conciliacion_mp_service as conc
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo administradores.'}, status=403)
+    config = MercadoPagoConfig.objects.filter(pk=_int_o_cero(request.POST.get('config_id'))).first()
+    if config is None:
+        return JsonResponse({'success': False, 'error': 'Elija la caja/cuenta de Mercado Pago.'}, status=400)
+    aplicar = str(request.POST.get('aplicar') or '') in ('1', 'true', 'True')
+    archivo = request.FILES.get('archivo')
+    try:
+        if archivo is not None:
+            if archivo.size > 20 * 1024 * 1024:
+                return JsonResponse({'success': False, 'error': 'Archivo demasiado grande (máx. 20 MB).'}, status=400)
+            contenido = archivo.read()
+        else:
+            d, h = conc.rango_fechas(request.POST.get('desde'), request.POST.get('hasta'),
+                                     dias_defecto=7, max_dias=31)
+            contenido = conc.solicitar_y_descargar_liberaciones(config, d, h)
+        filas = conc.leer_csv(contenido)
+        resultado = conc.procesar_reporte_liberaciones(filas, config, aplicar=aplicar)
+    except MercadoPagoError as e:
+        return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
+    except Exception as e:  # noqa: BLE001 — archivo con formato inesperado
+        logger.exception("Conciliación MP: error procesando liberaciones")
+        return JsonResponse({'success': False, 'error': f'No se pudo leer el reporte: {e}'}, status=400)
+    if aplicar:
+        logger.info("Conciliación MP: liberaciones aplicadas config=%s retiros=%s por %s",
+                    config.id, len(resultado['retiros']), request.user.username)
+    return JsonResponse({'success': True, 'aplicado': aplicar, 'filas_leidas': len(filas), **resultado})
+
+
+@login_required
+@require_POST
+def api_conciliacion_cartola_mp(request):
+    """POST /app/api/mercadopago/conciliacion/cartola/  (solo admin)
+
+    `archivo`: CSV de la cartola del banco. Marca «visto en cartola» los retiros
+    de MP cuyo abono aparece (mismo monto, fecha ±3 días). `aplicar=1` escribe.
+    """
+    from .services import conciliacion_mp_service as conc
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo administradores.'}, status=403)
+    archivo = request.FILES.get('archivo')
+    if archivo is None:
+        return JsonResponse({'success': False, 'error': 'Adjunte la cartola en CSV.'}, status=400)
+    aplicar = str(request.POST.get('aplicar') or '') in ('1', 'true', 'True')
+    try:
+        movimientos = conc.leer_cartola(archivo.read())
+    except Exception as e:  # noqa: BLE001
+        return JsonResponse({'success': False, 'error': f'No se pudo leer la cartola: {e}'}, status=400)
+    if not movimientos:
+        return JsonResponse({
+            'success': False,
+            'error': 'La cartola no tiene abonos reconocibles (se esperan columnas Fecha y Abonos/Monto).'
+        }, status=400)
+    resultado = conc.conciliar_cartola(movimientos, aplicar=aplicar)
+    return JsonResponse({'success': True, 'aplicado': aplicar,
+                         'abonos_leidos': len(movimientos), **resultado})
+
+
+@login_required
+@require_POST
+def api_retiro_visto_cartola_mp(request):
+    """POST /app/api/mercadopago/conciliacion/retiro-visto/ {withdrawal_id, visto} (solo admin)."""
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo administradores.'}, status=403)
+    try:
+        data = json.loads(request.body or '{}')
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+    retiro = RetiroMercadoPago.objects.filter(withdrawal_id=str(data.get('withdrawal_id') or '')).first()
+    if retiro is None:
+        return JsonResponse({'success': False, 'error': 'Retiro no encontrado'}, status=404)
+    retiro.visto_en_cartola = bool(data.get('visto'))
+    retiro.save(update_fields=['visto_en_cartola', 'actualizado_en'])
+    return JsonResponse({'success': True, 'visto_en_cartola': retiro.visto_en_cartola})

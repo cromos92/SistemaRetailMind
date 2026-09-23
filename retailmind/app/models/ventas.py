@@ -404,6 +404,9 @@ class Ticket_Productos(models.Model):
         'app.CampanaLiquidacion', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='lineas_ticket',
     )
+    # La unidad ya salió del inventario con una guía de despacho previa (venta
+    # de cotización con guía): al cobrar NO se descuenta stock de nuevo.
+    despachado_por_guia = models.BooleanField(default=False)
 
     class Meta:
         # unique_together removido: ProductoTalla puede ser null (varios ítems manuales por ticket)

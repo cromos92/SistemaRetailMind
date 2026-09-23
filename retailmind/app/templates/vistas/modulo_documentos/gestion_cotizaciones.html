@@ -1970,6 +1970,7 @@
                                 <option value="VENCIDA">Vencida</option>
                                 <option value="FACTURADA">Facturada</option>
                                 <option value="DESPACHO_PENDIENTE">Facturada · despacho pendiente</option>
+                                <option value="DESPACHO_ATRASADO">Facturada · despacho atrasado (+7 días)</option>
                                 <option value="DOC_ANULADO">Facturada · documento anulado / eliminado</option>
                                 <option value="ANULADA">Anulada</option>
                             </select>
@@ -2016,6 +2017,7 @@
                     <button type="button" class="quick-filter-btn is-riesgo" data-filtro="VENCIDA" title="Pasaron su validez: renovar para poder facturar">Vencidas <span class="qf-count" data-count="vencidas"></span></button>
                     <button type="button" class="quick-filter-btn" data-filtro="FACTURADA">Facturadas <span class="qf-count" data-count="facturadas"></span></button>
                     <button type="button" class="quick-filter-btn is-despacho" data-filtro="DESPACHO_PENDIENTE" title="Facturadas a las que falta sacar stock (ítems sin SKU al facturar: despacho diferido)">Despacho pendiente <span class="qf-count" data-count="despacho_pendiente"></span></button>
+                    <button type="button" class="quick-filter-btn is-riesgo" data-filtro="DESPACHO_ATRASADO" title="Facturadas hace más de 7 días que todavía no se despachan completas: el cliente pagó y no ha recibido">Despacho atrasado <span class="qf-count" data-count="despacho_atrasado"></span></button>
                     <button type="button" class="quick-filter-btn is-riesgo" data-filtro="DOC_ANULADO" title="Facturadas cuyo documento fue anulado por nota de crédito o eliminado: reabrir para volver a facturar">Doc. anulado <span class="qf-count" data-count="doc_anulado"></span></button>
                     <button type="button" class="quick-filter-btn" data-filtro="ANULADA">Anuladas <span class="qf-count" data-count="anuladas"></span></button>
                 </div>
@@ -3141,7 +3143,15 @@ document.addEventListener('DOMContentLoaded', function() {
                             </span>
                         </div>
                         <div class="cot-doc text-nexo-error">Reabrir para volver a facturar</div>` : ''}
-                    ${badgeCuadraturaDespacho(cot)}`;
+                    ${badgeCuadraturaDespacho(cot)}
+                    ${cot.despacho_atrasado ? `
+                        <div style="margin-top:3px;">
+                            <span class="nexo-badge nexo-badge-soft-error"
+                                  title="Facturada hace ${cot.dias_desde_factura} días y aún faltan ${cot.unidades_pendientes} unidad(es) por despachar">
+                                <i class="ri-alarm-warning-line"></i> Atrasado · ${cot.dias_desde_factura} d
+                            </span>
+                        </div>` : ((cot.unidades_pendientes > 0 && cot.dias_desde_factura != null)
+                            ? `<div class="cot-doc">Pendiente hace ${cot.dias_desde_factura} d</div>` : '')}`;
             } else if (esAnulada) {
                 estadoHtml = `<span class="${obtenerClaseEstado('ANULADA')}"><i class="ri-close-circle-line"></i> ANULADA</span>`;
             } else if (cot.esta_vencida) {
@@ -3161,6 +3171,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     queFalta = `<div class="cot-doc cot-text-success">Sin facturar · lista para facturar</div>`;
                 }
                 estadoHtml = `<span class="${obtenerClaseEstado('VIGENTE')}"><i class="ri-checkbox-circle-line"></i> VIGENTE</span>${queFalta}`;
+                if (cot.guia) {
+                    estadoHtml += `<div style="margin-top:3px;">
+                        <span class="nexo-badge nexo-badge-soft-primary" title="Guía de despacho emitida el ${formatearFecha(cot.guia.fecha)}: los productos con SKU ya salieron del inventario. La factura la referenciará y no volverá a descontar stock.">
+                            <i class="ri-truck-line"></i> Guía #${cot.guia.folio}
+                        </span></div>`;
+                }
             }
 
             // Facturar desde la fila (antes solo desde el modal de detalle).
@@ -3173,6 +3189,23 @@ document.addEventListener('DOMContentLoaded', function() {
                             : 'Abrir en el POS para emitir el documento'}">
                     <i class="ri-file-text-line"></i> Facturar${cot.items_sin_sku > 0 ? ' (dif.)' : ''}
                 </button>` : '';
+
+            const guiaBtns = `
+                ${cot.puede_emitir_guia ? `
+                    <button class="btn btn-action btn-despacho" onclick="emitirGuiaCotizacion(${cot.id})"
+                            title="Emitir guía de despacho (DTE 52) antes de facturar: los productos con SKU salen del inventario ahora">
+                        <i class="ri-file-paper-2-line"></i>
+                    </button>` : ''}
+                ${cot.guia ? `
+                    <button class="btn btn-action btn-primary" onclick="descargarTxtGuia(${cot.guia.id}, ${cot.guia.folio})"
+                            title="Descargar TXT Acepta de la guía #${cot.guia.folio}">
+                        <i class="ri-download-2-line"></i>
+                    </button>` : ''}
+                ${cot.puede_anular_guia ? `
+                    <button class="btn btn-action btn-danger" onclick="anularGuiaCotizacion(${cot.id}, ${cot.guia.folio})"
+                            title="Anular la guía #${cot.guia.folio} y reingresar el stock (solo administrador, antes de facturar)">
+                        <i class="ri-file-forbid-line"></i>
+                    </button>` : ''}`;
 
             return `
                 <tr>
@@ -3204,8 +3237,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             <button class="btn btn-action btn-primary" onclick="verDetalle(${cot.id})" title="Ver Detalle">
                                 <i class="ri-eye-line"></i>
                             </button>
-                            ${(cot.estado === 'VIGENTE' || cot.estado === 'VENCIDA') && !cot.facturada ? `
-                                <button class="btn btn-action btn-success" onclick="editarCotizacion(${cot.id})" title="${cot.esta_vencida ? 'Editar / renovar vigencia' : 'Editar'}">
+                            ${guiaBtns}
+                            ${(cot.estado === 'VIGENTE' || cot.estado === 'VENCIDA') && !cot.facturada && !cot.guia ? `
+                                <button class="btn btn-action btn-success" onclick="editarCotizacion(${cot.id})"title="${cot.esta_vencida ? 'Editar / renovar vigencia' : 'Editar'}">
                                     <i class="ri-edit-line"></i>
                                 </button>
                                 ${cot.esta_vencida ? `
@@ -3247,10 +3281,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!fact) return '';
         const desp = cot.unidades_despachadas || 0;
         const pend = cot.unidades_pendientes || 0;
+        const cerradas = cot.unidades_cerradas || 0;
         if (pend > 0) {
             return `
                 <div style="margin-top:3px;">
-                    <span class="nexo-badge nexo-badge-soft-despacho" title="Facturadas ${fact} uds, despachadas ${desp}: faltan ${pend} por asociar/dar salida">
+                    <span class="nexo-badge nexo-badge-soft-despacho" title="Facturadas ${fact} uds, despachadas ${desp}${cerradas ? ` (${cerradas} cerradas sin despacho con motivo)` : ''}: faltan ${pend} por asociar/dar salida">
                         <i class="ri-truck-line"></i> Despacho ${desp}/${fact} uds
                     </span>
                 </div>`;
@@ -5484,6 +5519,26 @@ document.addEventListener('DOMContentLoaded', function() {
     window.facturarDesdeListado = function(cotizacionId) {
         const cot = (cotizacionesData || []).find(c => c.id === cotizacionId);
         if (!cot) return;
+        if (cot.guia && !cot._guiaConfirmada) {
+            Swal.fire({
+                icon: 'info',
+                title: `Facturar con la guía #${cot.guia.folio}`,
+                html: `<div class="text-start">
+                    <p class="mb-1">Los productos ya salieron del inventario con la guía de despacho.</p>
+                    <p class="mb-0">La factura <strong>referenciará la guía (tipo 52)</strong> y <strong>no volverá a descontar stock</strong>.</p>
+                </div>`,
+                showCancelButton: true,
+                confirmButtonText: 'Continuar al POS',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#0066FF',
+            }).then(r => {
+                if (!r.isConfirmed) return;
+                cot._guiaConfirmada = true;
+                window.facturarDesdeListado(cotizacionId);
+                cot._guiaConfirmada = false;
+            });
+            return;
+        }
         if (cot.items_sin_sku > 0) {
             Swal.fire({
                 icon: 'question',
@@ -6291,6 +6346,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderAsignarSkuItems(items, cotizacionId, despachados = []) {
         const container = document.getElementById('asignarSkuItemsContainer');
+        const cotFila = (cotizacionesData || []).find(c => c.id === cotizacionId) || {};
+        const puedeCerrar = !!cotFila.puede_cerrar_pendiente;
         let html = items.length
             ? `<p class="text-muted small mb-3"><i class="ri-information-line"></i> Busca el SKU correspondiente a cada ítem y confirma para descontar stock.</p>`
             : `<div class="nexo-alert nexo-alert-success mb-3"><i class="ri-checkbox-circle-line me-1"></i> No quedan unidades pendientes de despacho.</div>`;
@@ -6351,6 +6408,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     </button>
                     <small class="text-muted">Puedes despachar menos y completar el resto cuando llegue.</small>
                 </div>
+                ${puedeCerrar ? `
+                <div class="d-flex justify-content-end mt-2">
+                    <button type="button" class="nexo-btn-outline nexo-btn-sm"
+                            onclick="cerrarPendienteItem(${item.id}, ${cotizacionId}, ${pendientes})"
+                            title="Cierra estas unidades SIN sacar stock (nota de crédito, cliente desistió, entregado por fuera). Queda en el historial.">
+                        <i class="ri-archive-line me-1"></i> Cerrar sin despacho
+                    </button>
+                </div>` : ''}
+                ${item.unidades_cerradas > 0 ? `
+                <div class="cot-doc mt-1"><i class="ri-archive-line"></i> ${item.unidades_cerradas} ud(s) ya cerradas sin despacho · ${item.motivo_cierre_despacho || ''}</div>` : ''}
             </div>`;
         });
 
@@ -6435,6 +6502,182 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Error revirtiendo despacho:', err);
                 mostrarError('Error de conexión al revertir el despacho');
             });
+        });
+    };
+
+    // ===== Guía de despacho (DTE 52 de venta) previa a la factura =====
+    window.emitirGuiaCotizacion = function(cotizacionId) {
+        const cot = (cotizacionesData || []).find(c => c.id === cotizacionId) || {};
+        Swal.fire({
+            icon: 'question',
+            title: 'Emitir guía de despacho',
+            html: `<div class="text-start">
+                <p class="mb-2">Cotización <strong>${cot.numero_cotizacion || ''}</strong> — ${cot.cliente_nombre || ''}</p>
+                <ul class="mb-2 ps-3">
+                    <li>Se emite la <strong>guía de despacho electrónica (52)</strong> con los productos que tienen SKU.</li>
+                    <li>Esos productos <strong>salen del inventario ahora</strong>.</li>
+                    <li>Al facturar después, la factura referencia la guía y <strong>no descuenta stock de nuevo</strong>.</li>
+                    ${cot.items_sin_sku > 0 ? `<li>${cot.items_sin_sku} ítem(s) sin SKU no van en la guía: seguirán como despacho diferido.</li>` : ''}
+                </ul>
+                <p class="small text-muted mb-0">Mientras la guía esté vigente la cotización no se puede editar ni anular.</p>
+            </div>`,
+            showCancelButton: true,
+            confirmButtonText: 'Emitir guía',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#0066FF',
+        }).then(r => {
+            if (!r.isConfirmed) return;
+            fetch('/app/api/cotizaciones/emitir-guia/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                },
+                body: JSON.stringify({ cotizacion_id: cotizacionId }),
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success) { mostrarError(data.error || 'No se pudo emitir la guía'); return; }
+                cargarCotizaciones();
+                Swal.fire({
+                    icon: 'success',
+                    title: `Guía #${data.folio} emitida`,
+                    text: 'Descargue el TXT para enviarlo a Acepta.',
+                    showCancelButton: true,
+                    confirmButtonText: 'Descargar TXT',
+                    cancelButtonText: 'Después',
+                    confirmButtonColor: '#0066FF',
+                }).then(rr => { if (rr.isConfirmed) descargarTxtGuia(data.dte_id, data.folio); });
+            })
+            .catch(() => mostrarError('Error de conexión al emitir la guía'));
+        });
+    };
+
+    window.descargarTxtGuia = async function(dteId, folio) {
+        try {
+            const resp = await fetch('/app/documentos/generar-txt-desde-dte/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                },
+                body: JSON.stringify({ dte_id: dteId }),
+            });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                mostrarError(err.error || 'No se pudo generar el TXT de la guía');
+                return;
+            }
+            const blob = await resp.blob();
+            const cd = resp.headers.get('Content-Disposition') || '';
+            const nombre = (cd.split('filename=')[1] || '').replace(/"/g, '') || `guia_52_${folio}.txt`;
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = nombre;
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a); window.URL.revokeObjectURL(url);
+        } catch (e) {
+            mostrarError('Error de conexión al descargar el TXT');
+        }
+    };
+
+    window.anularGuiaCotizacion = function(cotizacionId, folio) {
+        Swal.fire({
+            icon: 'warning',
+            title: `Anular guía #${folio}`,
+            html: `<div class="text-start">
+                <p class="mb-2">Se reingresa al inventario todo lo que salió con la guía y la cotización vuelve a quedar editable.</p>
+                <p class="small text-muted mb-2">Si la guía ya se envió al SII por Acepta, anúlela también allá.</p>
+                <label class="form-label mb-1" style="font-size:13px;">Motivo <span class="text-nexo-error">*</span></label>
+                <input type="text" id="swalMotivoGuia" class="form-control" placeholder="Ej: el cliente cambió el pedido">
+            </div>`,
+            showCancelButton: true,
+            confirmButtonText: 'Anular guía',
+            cancelButtonText: 'Volver',
+            confirmButtonColor: '#dc3545',
+            focusCancel: true,
+            preConfirm: () => {
+                const m = (document.getElementById('swalMotivoGuia').value || '').trim();
+                if (m.length < 5) { Swal.showValidationMessage('Indique el motivo (mínimo 5 caracteres)'); return false; }
+                return m;
+            },
+        }).then(r => {
+            if (!r.isConfirmed) return;
+            fetch('/app/api/cotizaciones/anular-guia/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                },
+                body: JSON.stringify({ cotizacion_id: cotizacionId, motivo: r.value }),
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) { mostrarExito(data.message || 'Guía anulada'); cargarCotizaciones(); }
+                else mostrarError(data.error || 'No se pudo anular la guía');
+            })
+            .catch(() => mostrarError('Error de conexión al anular la guía'));
+        });
+    };
+
+    // Cierre de unidades pendientes SIN salida de stock, con motivo (solo
+    // admin; el backend lo valida). NC y "cliente desistió" exigen que exista
+    // una nota de crédito sobre el documento.
+    window.cerrarPendienteItem = function(detalleId, cotizacionId, pendientes) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Cerrar sin despacho',
+            html: `
+                <div class="text-start">
+                    <p class="mb-2">Estas unidades quedan resueltas <strong>sin sacar stock</strong>.
+                       El documento no cambia y todo queda en el historial.</p>
+                    <label class="form-label mb-1" style="font-size:13px;">Motivo <span class="text-nexo-error">*</span></label>
+                    <select id="swalMotivoCierre" class="form-select mb-2">
+                        <option value="NOTA_CREDITO">Anulado con nota de crédito</option>
+                        <option value="CLIENTE_DESISTIO">Cliente desistió (con nota de crédito)</option>
+                        <option value="ENTREGADO_FUERA_SISTEMA">Entregado sin salida en el sistema (inventario ajustado aparte)</option>
+                        <option value="OTRO">Otro motivo</option>
+                    </select>
+                    <label class="form-label mb-1" style="font-size:13px;">Unidades a cerrar</label>
+                    <input type="number" id="swalCantCierre" class="form-control mb-2" value="${pendientes}" min="1" max="${pendientes}">
+                    <label class="form-label mb-1" style="font-size:13px;">Detalle <span class="text-nexo-error">*</span></label>
+                    <textarea id="swalDetalleCierre" class="form-control" rows="2"
+                              placeholder="Ej: NC #1234 por devolución total; el cliente no quiso esperar"></textarea>
+                    <small class="text-muted">Nota de crédito y "cliente desistió" exigen que la NC ya esté emitida sobre el documento.</small>
+                </div>`,
+            showCancelButton: true,
+            confirmButtonText: 'Cerrar unidades',
+            cancelButtonText: 'Volver',
+            confirmButtonColor: '#dc3545',
+            focusCancel: true,
+            preConfirm: () => {
+                const detalle = (document.getElementById('swalDetalleCierre').value || '').trim();
+                const cantidad = parseInt(document.getElementById('swalCantCierre').value, 10);
+                if (detalle.length < 10) { Swal.showValidationMessage('Explique el cierre (mínimo 10 caracteres)'); return false; }
+                if (!cantidad || cantidad < 1 || cantidad > pendientes) { Swal.showValidationMessage(`Entre 1 y ${pendientes} unidades`); return false; }
+                return { motivo: document.getElementById('swalMotivoCierre').value, detalle, cantidad };
+            },
+        }).then(result => {
+            if (!result.isConfirmed) return;
+            fetch('/app/api/cotizaciones/cerrar-pendiente/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                },
+                body: JSON.stringify({ detalle_id: detalleId, ...result.value }),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarExito(data.message || 'Unidades cerradas');
+                    abrirModalAsignarSku(cotizacionId);
+                    cargarCotizaciones();
+                } else {
+                    mostrarError(data.error || 'No se pudo cerrar el pendiente');
+                }
+            })
+            .catch(() => mostrarError('Error de conexión al cerrar el pendiente'));
         });
     };
 

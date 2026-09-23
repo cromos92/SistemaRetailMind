@@ -1880,7 +1880,7 @@ def _check_stock_ticket(ticket, sucursal_id):
     problemas = []
     for tp in ticket.ticket_productos.all():
         pt = tp.ProductoTalla
-        if not pt or not pt.producto:
+        if not pt or not pt.producto or getattr(tp, 'despachado_por_guia', False):
             continue
         # Solo comparar stock si el producto pertenece a la sucursal actual
         if sucursal_id_int is None or pt.producto.sucursal_id != sucursal_id_int:
@@ -2893,6 +2893,9 @@ def construir_ticket_data(ticket):
             'foto_portada_url': foto_url,
             # Flags de oferta NxM: la caja los usa para reabsorber la línea
             # gratis (idempotencia) en vez de duplicarla al cargar el ticket.
+            # Ya salió con la guía de despacho de la cotización: el POS no la
+            # controla por stock (ya se descontó al emitir la guía).
+            'despachado_por_guia': tp.despachado_por_guia,
             'es_promo_nxm': tp.promo_campana_id is not None,
             'promo_campana_id': tp.promo_campana_id,
             'promo_label': (
@@ -4018,13 +4021,17 @@ def registrar_pagos_ticket(request, correlativo):
             # en múltiples sucursales y .first() retornaría el incorrecto
             productos_sin_stock = []
             
+            # Guía de despacho previa (DTE 52): las líneas con SKU ya salieron
+            # del inventario con la guía. No se valida ni descuenta stock otra vez.
+            guia_cotizacion = cotizacion_obj.guia_vigente
+
             for prod_data in productos_cotizacion:
                 producto_talla = None
-                
+
                 # Skip pending items — they have no SKU and don't need stock validation
-                if prod_data.get('es_pendiente_despacho'):
+                if prod_data.get('es_pendiente_despacho') or guia_cotizacion is not None:
                     continue
-                
+
                 # ✅ PRIMERO: Intentar obtener por producto_talla_id (más preciso)
                 producto_talla_id = prod_data.get('producto_talla_id')
                 if producto_talla_id:
@@ -4227,7 +4234,8 @@ def registrar_pagos_ticket(request, correlativo):
                     precio_original=precio,
                     descuento_unitario=descuento,
                     subtotal=subtotal_prod,
-                    porcentaje_descuento=0
+                    porcentaje_descuento=0,
+                    despachado_por_guia=guia_cotizacion is not None,
                 )
                 logger.debug(
                     "Producto agregado a ticket=%s sku=%s producto_talla_id=%s cantidad=%s",
@@ -4424,6 +4432,20 @@ def registrar_pagos_ticket(request, correlativo):
                     ref_data,
                 )
                 continue
+
+    # Cotización con guía de despacho previa: la factura referencia la guía
+    # (tipo 52). Va DESPUÉS de las referencias del payload, que reemplazan las
+    # del ticket.
+    _guia_ref = cotizacion_obj.guia_vigente if cotizacion_obj is not None else None
+    if _guia_ref is not None and not ticket.referencias.filter(
+            tipo_documento='52', folio=str(_guia_ref.numero_documento)).exists():
+        TicketReferencia.objects.create(
+            ticket=ticket,
+            tipo_documento='52',
+            folio=str(_guia_ref.numero_documento),
+            fecha=_guia_ref.fecha_emision,
+            observaciones='Guía de despacho de la cotización',
+        )
 
     nuevo_estado = payload.get('estado')
     if nuevo_estado and nuevo_estado in dict(ESTADO_TICKET_CHOICES):
@@ -5023,7 +5045,7 @@ def registrar_pagos_ticket(request, correlativo):
         _tallas_ticket = {}
         faltantes = []
         for tp in Ticket_Productos.objects.filter(idTicket=ticket).select_related('ProductoTalla'):
-            if tp.ProductoTalla_id is None:
+            if tp.ProductoTalla_id is None or tp.despachado_por_guia:
                 continue
             _requerido_por_talla[tp.ProductoTalla_id] = (
                 _requerido_por_talla.get(tp.ProductoTalla_id, 0) + tp.stock
@@ -5456,6 +5478,15 @@ def registrar_pagos_ticket(request, correlativo):
         hubo_consumo = False
 
         for tp in ticket.ticket_productos.all():
+            # Ya salió del inventario con la guía de despacho de la cotización.
+            if tp.despachado_por_guia:
+                logger.debug(
+                    "Linea despachada por guia, sin descuento ticket=%s sku=%s cantidad=%s",
+                    ticket.correlativo,
+                    tp.ProductoTalla.sku if tp.ProductoTalla else '-',
+                    tp.stock,
+                )
+                continue
             # Saltar ítems sin ProductoTalla (pendientes de despacho)
             if tp.ProductoTalla is None:
                 logger.debug(
@@ -5800,6 +5831,13 @@ def registrar_pagos_ticket(request, correlativo):
                         tiene_pendientes=tiene_pendientes_cot,
                         dte=dte_generado,
                     )
+                    _guia_fact = cotizacion_obj.guia_vigente
+                    if _guia_fact is not None and not dte_generado.referencia_tipo:
+                        dte_generado.referencia_tipo = '52'
+                        dte_generado.referencia_folio = str(_guia_fact.numero_documento)
+                        dte_generado.referencia_fecha = _guia_fact.fecha_emision
+                        dte_generado.save(update_fields=[
+                            'referencia_tipo', 'referencia_folio', 'referencia_fecha'])
 
                     # Registrar en historial
                     Historial_Cotizacion.objects.create(

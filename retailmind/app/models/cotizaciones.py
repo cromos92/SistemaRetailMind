@@ -151,6 +151,17 @@ class Cotizacion_Empresa(models.Model):
         blank=True, null=True,
         help_text="Fecha en que se facturó"
     )
+    # Guía de despacho (DTE 52, venta) emitida ANTES de facturar. Cubre todas
+    # las líneas con SKU: esas unidades ya salieron del inventario con la guía,
+    # así que la factura posterior NO vuelve a descontarlas (ver
+    # Ticket_Productos.despachado_por_guia) y referencia la guía (52).
+    guia_despacho = models.ForeignKey(
+        'Dte',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='cotizaciones_guia',
+        help_text="Guía de despacho de venta emitida antes de facturar",
+    )
 
     # === DESPACHO DIFERIDO ===
     DESPACHO_PENDIENTE   = 'PENDIENTE'
@@ -302,6 +313,18 @@ class Cotizacion_Empresa(models.Model):
         self.motivo_anulacion = motivo
         self.save()
     
+    @property
+    def guia_vigente(self):
+        """Guía de despacho enlazada y no anulada/eliminada (o None)."""
+        guia = self.guia_despacho if self.guia_despacho_id else None
+        if guia is None:
+            return None
+        if getattr(guia, 'descartado', False):
+            return None
+        if (guia.estado_dte or '').upper().strip() == 'ANULADO':
+            return None
+        return guia
+
     def marcar_como_facturada(self, numero_factura, tiene_pendientes=False, dte=None):
         """
         Marca la cotización como facturada, opcionalmente con despacho pendiente.
@@ -493,6 +516,40 @@ class Cotizacion_Empresa_Detalle(models.Model):
         help_text="Usuario que realizó la asignación de SKU post-factura"
     )
 
+    # === CIERRE DE DESPACHO SIN SALIDA DE STOCK ===
+    # Unidades facturadas que NUNCA van a salir del inventario por este flujo
+    # (NC emitida, cliente desistió, se entregó por fuera y se ajustó aparte).
+    # Cuentan como "resueltas" en la cuadratura: sin esto la cotización quedaba
+    # en despacho pendiente para siempre.
+    MOTIVO_CIERRE_NOTA_CREDITO = 'NOTA_CREDITO'
+    MOTIVO_CIERRE_CLIENTE_DESISTIO = 'CLIENTE_DESISTIO'
+    MOTIVO_CIERRE_ENTREGADO_FUERA = 'ENTREGADO_FUERA_SISTEMA'
+    MOTIVO_CIERRE_OTRO = 'OTRO'
+    MOTIVOS_CIERRE_DESPACHO = [
+        (MOTIVO_CIERRE_NOTA_CREDITO, 'Anulado con nota de crédito'),
+        (MOTIVO_CIERRE_CLIENTE_DESISTIO, 'Cliente desistió (con nota de crédito)'),
+        (MOTIVO_CIERRE_ENTREGADO_FUERA, 'Entregado sin salida en el sistema (inventario ajustado aparte)'),
+        (MOTIVO_CIERRE_OTRO, 'Otro motivo'),
+    ]
+    # Motivos que exigen una NC sobre el documento: la plata ya se cobró.
+    MOTIVOS_CIERRE_EXIGEN_NC = (MOTIVO_CIERRE_NOTA_CREDITO, MOTIVO_CIERRE_CLIENTE_DESISTIO)
+
+    unidades_cerradas_sin_despacho = models.IntegerField(
+        default=0,
+        help_text="Unidades facturadas cerradas sin salida de stock (con motivo)"
+    )
+    motivo_cierre_despacho = models.CharField(
+        max_length=30, blank=True, default='', choices=MOTIVOS_CIERRE_DESPACHO,
+    )
+    detalle_cierre_despacho = models.TextField(blank=True, default='')
+    cierre_despacho_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='items_despacho_cerrados',
+    )
+    fecha_cierre_despacho = models.DateTimeField(null=True, blank=True)
+
     # === METADATA ===
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -629,13 +686,15 @@ class Cotizacion_Empresa_Detalle(models.Model):
         invisibles para el despacho diferido y para la cuadratura (caso real en
         producción: COT-202607-0001, línea de 5 uds con 1 sola respaldada).
 
-        Ahora: facturado − cubierto al facturar − despachado post-factura.
+        Ahora: facturado − cubierto al facturar − despachado post-factura
+        − cerrado sin despacho (con motivo).
         """
         return max(
             0,
             self.cantidad
             - self.unidades_cubiertas_al_facturar
             - self.unidades_despachadas_post_factura
+            - (self.unidades_cerradas_sin_despacho or 0)
         )
 
 
@@ -747,6 +806,9 @@ class Historial_Cotizacion(models.Model):
             ('SKU_ASIGNADO', 'SKU Asignado Post-Factura'),
             ('DESPACHO_COMPLETADO', 'Despacho Completado'),
             ('DESPACHO_VALIDADO', 'Despacho Validado (OK Admin)'),
+            ('DESPACHO_CERRADO', 'Pendiente cerrado sin despacho (con motivo)'),
+            ('GUIA_EMITIDA', 'Guía de despacho emitida'),
+            ('GUIA_ANULADA', 'Guía de despacho anulada'),
         ]
     )
     descripcion = models.TextField(

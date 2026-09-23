@@ -3346,6 +3346,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 codigo_autorizacion_descuento: p.codigo_autorizacion_descuento || null,
                 fecha_descuento: p.fecha_descuento || null,
                 es_pendiente_despacho: p.es_pendiente_despacho || false,
+                despachado_por_guia: p.despachado_por_guia || false,
                 cotizacion_item_id: p.cotizacion_item_id || null,
                 es_promo_nxm: p.es_promo_nxm || false,
                 promo_campana_id: p.promo_campana_id || null,
@@ -5412,7 +5413,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let htmlStockAlert = '';
         if (!esCambioDevolucion) {
             const conProblemas = productos.filter(p => {
-                if (p.es_pendiente_despacho) return false;  // Pendientes no tienen stock
+                if (p.es_pendiente_despacho || p.despachado_por_guia) return false;  // Pendientes / ya despachados por guía
                 const s = parseInt(p.stock) || 0;
                 const c = parseInt(p.cantidad) || 1;
                 return s < c;
@@ -5520,6 +5521,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // ✅ Ítem pendiente de despacho (sin SKU asignado)
             const esPendienteDespacho = producto.es_pendiente_despacho === true;
+            // Ya salió del inventario con la guía de despacho de la cotización:
+            // no se controla stock (ya se descontó al emitir la guía).
+            const esSinControlStock = esPendienteDespacho || producto.despachado_por_guia === true;
 
             // ✅ Para tickets de cambio: detectar si es producto devuelto o nuevo.
             //    La rebaja de administrador (descuento a la diferencia / ajuste)
@@ -5531,10 +5535,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const esLineaNegativa = esProductoDevuelto || esRebajaAdminLinea;
 
             // ─── Stock check (solo tickets normales, no pendientes) ──────────────
-            const stockDisp    = (!esCambioDevolucion && !esPendienteDespacho) ? (parseInt(producto.stock) || 0) : Infinity;
+            const stockDisp    = (!esCambioDevolucion && !esSinControlStock) ? (parseInt(producto.stock) || 0) : Infinity;
             const cantPedida   = parseInt(producto.cantidad) || 1;
-            const sinStock     = !esCambioDevolucion && !esPendienteDespacho && stockDisp <= 0;
-            const stockInsuf   = !esCambioDevolucion && !esPendienteDespacho && stockDisp < cantPedida;
+            const sinStock     = !esCambioDevolucion && !esSinControlStock && stockDisp <= 0;
+            const stockInsuf   = !esCambioDevolucion && !esSinControlStock && stockDisp < cantPedida;
 
             // Badge de estado de stock (clase stock-badge conservada; tinte/oscuro AA por .pv-stock-*)
             let stockStatusBadge = '';
@@ -5668,7 +5672,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // INSUFICIENTE" aunque cada línea real tuviera stock de sobra.
                 // El badge por fila y el banner de arriba ya los excluyen; acá
                 // faltaba.
-                if (p.es_pendiente_despacho === true) return;
+                if (p.es_pendiente_despacho === true || p.despachado_por_guia === true) return;
                 const s = p.sku || '';
                 if (!s) return;
                 if (!cantTotalPorSku[s]) cantTotalPorSku[s] = { total: 0, stock: parseInt(p.stock) || 0 };

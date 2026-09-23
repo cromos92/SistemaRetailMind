@@ -88,6 +88,7 @@ URL_PERMISO_MAP = {
     # La pantalla Dineros y su API sí se gatean (información financiera).
     '/app/ventas/dineros-mercadopago/': 'dineros_mercadopago',
     '/app/api/mercadopago/dineros/': 'dineros_mercadopago',
+    '/app/api/mercadopago/conciliacion/': 'dineros_mercadopago',
 
     # Fidelización (GiftCards + Puntos)
     # El match es por substring y gana la clave más larga (ver
