@@ -1741,6 +1741,36 @@ def dineros_mercadopago(request):
     })
 
 
+def _nombre_cuenta_de_sucursal(sucursal_id):
+    """Nombre de la cuenta MP (empresa) de la sucursal elegida: los retiros son de
+    la cuenta, no de la tienda."""
+    if not sucursal_id:
+        return ''
+    cfg = MercadoPagoConfig.objects.filter(sucursal_id=sucursal_id).select_related('sucursal__empresa', 'cuenta__empresa').first()
+    if cfg is None:
+        return ''
+    try:
+        cuenta = mp._cuenta_de(cfg)
+    except AttributeError:
+        cuenta = None
+    empresa = cuenta.empresa if cuenta else (cfg.sucursal.empresa if cfg.sucursal_id else None)
+    return getattr(empresa, 'nombre', '') or ''
+
+
+def _retirado_en_periodo(desde, hasta, sucursal_id=None):
+    """Suma de los retiros al banco con fecha en el período (de la cuenta MP de
+    la sucursal elegida). No depende de cuándo se cobraron las ventas: un
+    retiro de hoy puede llevarse ventas de hace semanas."""
+    from .services import conciliacion_mp_service as conc
+    qs = RetiroMercadoPago.objects.filter(fecha__gte=desde, fecha__lte=hasta)
+    if sucursal_id:
+        cfg = MercadoPagoConfig.objects.filter(sucursal_id=sucursal_id).select_related('sucursal', 'cuenta').first()
+        if cfg is None:
+            return 0
+        qs = qs.filter(config_id__in=conc._configs_de_la_cuenta(cfg))
+    return int(qs.aggregate(total=Sum('monto'))['total'] or 0)
+
+
 @login_required
 def api_dineros_mercadopago(request):
     """GET /app/api/mercadopago/dineros/?fecha_desde=&fecha_hasta=
@@ -1788,6 +1818,8 @@ def api_dineros_mercadopago(request):
         'pendiente_liberacion': _suma(pendiente_liberacion),
         'liberado_sin_retirar': _suma(liberado_sin_retirar),
         'depositado': _suma(depositado),
+        'retirado_periodo': _retirado_en_periodo(fecha_desde, fecha_hasta, sucursal_id),
+        'retirado_cuenta': _nombre_cuenta_de_sucursal(sucursal_id),
         'pendiente_liberacion_neto': _neto(pendiente_liberacion),
         'liberado_sin_retirar_neto': _neto(liberado_sin_retirar),
         'depositado_neto': _neto(depositado),
@@ -1971,9 +2003,10 @@ def api_conciliacion_liberaciones_mp(request):
         # no tiene guardado el N° de operación de MP. Se completa desde la API
         # (solo campos vacíos) y se vuelve a cruzar.
         completado = None
-        dias = conc.dias_para_completar(config, resultado)
+        dias = conc.dias_para_completar(config, resultado, importar=aplicar)
         if dias:
-            completado = conc.completar_numeros_mp(config, dias)
+            # Registrar pagos «MP manual» como cobro solo al aplicar (nunca en la vista previa).
+            completado = conc.completar_numeros_mp(config, dias, importar=aplicar)
         # Si MP no dejó terminar de completar N°/fechas, se aplica igual pero sin
         # marcar el reporte: «Detectar retiros» o un nuevo «Aplicar» lo rehace.
         completo = completado is None or (not completado['sin_tiempo'] and not completado.get('fallidos'))

@@ -891,8 +891,9 @@ class DistinguirRetiroTest(_Base):
         )
         retiro = RetiroMercadoPago.objects.create(
             config=self.config, withdrawal_id='W1', fecha=self.hoy, monto=20000, estado='CONCILIADO',
-            raw_reporte={'pagos': ['111', '999'], 'por_caja': [{'caja': 'SUC-TEST · Caja 1', 'monto': 9700},
-                                                              {'caja': 'Saldo anterior', 'monto': 5300}]})
+            raw_reporte={'pagos': ['111', '999'], 'netos': {'999': 4850},
+                         'por_caja': [{'caja': 'SUC-TEST · Caja 1', 'monto': 9700},
+                                      {'caja': 'Saldo anterior', 'monto': 5300}]})
         self._cobro(1, ticket=tk, payment_id_mp='111', monto_neto=9700, retiro=retiro)
         tk_man = self._ticket(2)
         TicketDetallePago.objects.create(ticket=tk_man, metodo_pago='MP_POINT', monto=5000,
@@ -902,14 +903,16 @@ class DistinguirRetiroTest(_Base):
         pos = next(f for f in d['filas'] if f['origen'] == 'POS')
         self.assertIn('555', pos['documento'])
         self.assertEqual((pos['bruto'], pos['comision'], pos['neto'], pos['ticket']), (10000, 300, 9700, 1))
-        self.assertEqual(next(f for f in d['filas'] if f['origen'] == 'MP manual')['neto'], 5000)
-        self.assertEqual(d['suma_neto'], 14700)
+        manual = next(f for f in d['filas'] if f['origen'] == 'MP manual')
+        self.assertEqual((manual['bruto'], manual['neto'], manual['comision']), (5000, 4850, 150))
+        self.assertEqual(d['suma_neto'], 14550)
+        self.assertEqual(d['sin_venta'], 5300)
         self.assertEqual(d['no_ventas'], [{'caja': 'Saldo anterior', 'monto': 5300}])
         admin = crear_usuario(username='adm_det3', rol='administrador')
         vend = crear_usuario(username='vend_det3', rol='vendedor')
         with mock.patch('app.middleware_permisos.PermisoRol.tiene_permiso', return_value=True):
             c = Client(); c.force_login(admin)
-            self.assertEqual(c.get(reverse('api_conciliacion_retiro_detalle_mp', args=['W1'])).json()['suma_neto'], 14700)
+            self.assertEqual(c.get(reverse('api_conciliacion_retiro_detalle_mp', args=['W1'])).json()['suma_neto'], 14550)
             self.assertEqual(c.get(reverse('api_conciliacion_retiro_detalle_mp', args=['NO'])).status_code, 404)
             c2 = Client(); c2.force_login(vend)
             self.assertEqual(c2.get(reverse('api_conciliacion_retiro_detalle_mp', args=['W1'])).status_code, 403)
@@ -1123,6 +1126,352 @@ class RevisionFixDetectarTest(_Base):
         dias = conc.dias_cobros_sin_numero(self.config, {'rango': [_local_hace(days=1), _local_hace(minutes=1)]})
         self.assertIn(timezone.localtime(dia).date(), dias)
         with mock.patch('app.services.mercadopago_service.buscar_pagos_dia', return_value=[]) as buscar:
-            conc.completar_numeros_mp(self.config, [timezone.localtime(dia).date()])
-            conc.completar_numeros_mp(self.config, [timezone.localtime(dia).date()])
-        self.assertEqual(buscar.call_count, 1)   # un día pasado ya leído no se relee
+            conc.completar_numeros_mp(self.config, [timezone.localtime(dia).date()], importar=True)
+            conc.completar_numeros_mp(self.config, [timezone.localtime(dia).date()], importar=True)
+            conc.completar_numeros_mp(self.config, [timezone.localtime(dia).date()])   # vista previa: lee igual
+        self.assertEqual(buscar.call_count, 2)   # al aplicar, un día pasado ya leído no se relee
+
+
+@mock.patch.dict('os.environ', ENV_TEST)
+class RevisionVerVentasTest(_Base):
+    """23-09 noche: revisión de «Ver ventas» + lo visto en producción (PAO3 cobra
+    casi todo «MP manual»; el reporte decía «revisado hasta 23:59» y no se pedía otro)."""
+
+    def _pago_manual(self, correlativo, voucher, monto=17980, creado=None):
+        tk = self._ticket(correlativo)
+        pago = TicketDetallePago.objects.create(ticket=tk, metodo_pago='MP_POINT', monto=monto,
+                                                origen_pago='MANUAL', voucher=voucher)
+        if creado is not None:
+            TicketDetallePago.objects.filter(pk=pago.pk).update(creado_en=creado)
+            pago.refresh_from_db()
+        return pago
+
+    def test_ver_ventas_no_cuenta_dos_veces_ni_repite_voucher(self):
+        retiro = RetiroMercadoPago.objects.create(
+            config=self.config, withdrawal_id='W1', fecha=self.hoy, monto=14550, estado='CONCILIADO',
+            raw_reporte={'pagos': ['111', '999'], 'netos': {'999': 4850}, 'por_caja': []})
+        tk = self._ticket(1)
+        pago_pos = TicketDetallePago.objects.create(ticket=tk, metodo_pago='MP_POINT', monto=10000,
+                                                    origen_pago='POS_INTEGRADO', voucher='111')
+        self._cobro(1, ticket=tk, payment_id_mp='111', monto_neto=9700, retiro=retiro, detalle_pago=pago_pos)
+        self._pago_manual(2, '999', monto=5000)
+        self._pago_manual(3, '999', monto=5000)          # mismo N° digitado dos veces
+        d = conc.detalle_retiro(retiro)
+        self.assertEqual(sorted(f['origen'] for f in d['filas']), ['MP manual', 'POS'])
+        self.assertEqual(d['suma_neto'], 9700 + 4850)
+
+    def test_reporte_con_fin_23_59_generado_antes_se_considera_viejo(self):
+        fin_del_dia = timezone.localtime().replace(hour=23, minute=59, second=59).isoformat()
+        rep = {'file_name': 'x.csv', 'begin_date': '', 'end_date': fin_del_dia,
+               'creado': _utc_hace(hours=3), 'origen': 'manual', 'estado': ''}
+        fin = conc._fin_de_reporte(rep)
+        self.assertLess(fin, timezone.now() - timedelta(hours=2))
+        with mock.patch.object(conc, 'listar_reportes_liberaciones', return_value=[rep]), \
+             mock.patch.object(conc, 'descargar_reporte_liberaciones', return_value=_csv().encode()), \
+             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': True}), \
+             mock.patch.object(conc, 'pedir_reporte_liberaciones',
+                               return_value={'task_id': 5, 'begin_date': '', 'end_date': _utc_hace(minutes=5)}) as pedir:
+            conc.detectar_retiros()
+        self.assertEqual(pedir.call_count, 1)
+
+    def test_pago_mp_manual_se_registra_como_cobro_y_entra_al_retiro(self):
+        ayer = timezone.now() - timedelta(days=1)
+        pago = self._pago_manual(5, '179473941930', monto=17980, creado=ayer)
+        otro = self._pago_manual(6, '179000000077', monto=9990, creado=ayer)    # el monto no calza en MP
+        # Los días de pagos manuales los aporta el reporte que los trae (solo al aplicar).
+        res_rep = {'rango': [], 'dias_manuales': [str(timezone.localtime(ayer).date())]}
+        dias = conc.dias_para_completar(self.config, res_rep, importar=True)
+        self.assertEqual(dias, [timezone.localtime(ayer).date()])
+        self.assertEqual(conc.dias_para_completar(self.config, res_rep), [])
+        pagos_mp = [
+            {'id': 179473941930, 'status': 'approved', 'transaction_amount': 17980.0,
+             'date_created': ayer.isoformat(),
+             'money_release_date': (ayer + timedelta(hours=1)).isoformat(), 'payment_type_id': 'debit_card',
+             'transaction_details': {'net_received_amount': 17710.0}, 'card': {'last_four_digits': '1234'}},
+            {'id': 179000000077, 'status': 'approved', 'transaction_amount': 5000.0},
+        ]
+        with mock.patch('app.services.mercadopago_service.buscar_pagos_dia', return_value=pagos_mp):
+            previa = conc.completar_numeros_mp(self.config, dias)           # vista previa: no crea nada
+            self.assertEqual(previa['importados'], 0)
+            self.assertFalse(TransaccionMercadoPago.objects.filter(payment_id_mp='179473941930').exists())
+            comp = conc.completar_numeros_mp(self.config, dias, importar=True)
+            cache.clear()
+            conc.completar_numeros_mp(self.config, dias, importar=True)     # idempotente
+        self.assertEqual(comp['importados'], 1)
+        trx = TransaccionMercadoPago.objects.get(payment_id_mp='179473941930')
+        self.assertEqual((trx.monto, trx.monto_neto, trx.fee_mp, trx.detalle_pago_id, trx.consumida),
+                         (17980, 17710, 270, pago.id, True))
+        self.assertEqual(timezone.localtime(trx.creado_en).date(), timezone.localtime(ayer).date())
+        self.assertIsNotNone(trx.money_release_date)
+        self.assertEqual(TransaccionMercadoPago.objects.filter(payment_id_mp='179473941930').count(), 1)
+        self.assertFalse(TransaccionMercadoPago.objects.filter(payment_id_mp='179000000077').exists())
+        # En «Cobros y documentos» ya no sale como «Registrado a mano», sino como cobro.
+        data = conc.cobros_vs_documentos(timezone.localtime(ayer).date(), self.hoy)
+        manuales = [f for f in data['filas'] if f['categoria'] == conc.CAT_MANUAL]
+        self.assertEqual([f['monto'] for f in manuales], [9990])
+        # Y el reporte lo cruza como venta y lo amarra al retiro.
+        filas = conc.leer_csv(_csv(
+            f"{_local_hace(hours=2)},179473941930,,release,payment,17710.00,0.00,17980.00",
+            f"{_local_hace(hours=1)},W5,,release,payout,0.00,17710.00,-17710.00",
+        ).encode())
+        res = conc.procesar_reporte_liberaciones(filas, self.config, aplicar=True, archivo='r.csv')
+        trx.refresh_from_db()
+        self.assertEqual(trx.retiro.withdrawal_id, 'W5')
+        self.assertEqual(res['pagos_manuales'], 0)
+
+    def test_retiro_antiguo_sin_desglose_con_ventas_que_lo_cubren_no_se_desarma(self):
+        a = self._cobro(1, monto=10000, payment_id_mp='501')
+        conc.procesar_reporte_liberaciones(conc.leer_csv(_csv(
+            "2026-09-18T10:00:00.000-03:00,501,,release,payment,10000.00,0.00,10000.00",
+            "2026-09-21T10:00:00.000-03:00,999,,release,payment,10000.00,0.00,10000.00",
+            "2026-09-22T10:00:00.000-03:00,W1,,release,payout,0.00,10000.00,-10000.00",
+        ).encode()), self.config, aplicar=True, archivo='a.csv')
+        w1 = RetiroMercadoPago.objects.get(withdrawal_id='W1')
+        w1.raw_reporte = {'archivos': ['a.csv'], 'pagos': ['501']}      # como se guardaba antes
+        w1.save(update_fields=['raw_reporte'])
+        conc.procesar_reporte_liberaciones(conc.leer_csv(_csv(
+            "2026-09-22T00:00:00.000-03:00,,,initial_available_balance,,20000.00,0.00,20000.00",
+            "2026-09-22T10:00:00.000-03:00,W1,,release,payout,0.00,10000.00,-10000.00",
+        ).encode()), self.config, aplicar=True, archivo='b.csv')
+        a.refresh_from_db()
+        self.assertEqual(a.retiro_id, w1.id)
+        self.assertIn('Caja 1', RetiroMercadoPago.objects.get(pk=w1.pk).raw_reporte['por_caja'][0]['caja'])
+
+    def test_cuadre_resta_devolucion_parcial_y_kpi_retirado_en_el_periodo(self):
+        venta = self._cobro(1, monto=10000, monto_neto=9700, payment_id_mp='1',
+                            money_release_date=timezone.now() - timedelta(hours=1))
+        TransaccionMercadoPago.objects.create(
+            config=self.config, sucursal=self.sucursal, correlativo_ticket='1', tipo='DEVOLUCION',
+            transaccion_origen=venta, external_reference='DEV-1', monto=3000, estado='DEVUELTA')
+        tot = conc.cuadre_por_sucursal(None, None)['total']
+        self.assertEqual((tot['devuelto'], tot['neto'], tot['en_mp']), (3000, 6700, 6700))
+        RetiroMercadoPago.objects.create(config=self.config, withdrawal_id='W1', fecha=self.hoy, monto=10000000)
+        RetiroMercadoPago.objects.create(config=self.config, withdrawal_id='W0', fecha=self.hoy - timedelta(days=30),
+                                         monto=5)
+        admin = crear_usuario(username='adm_ret2', rol='administrador')
+        c = Client(); c.force_login(admin)
+        with mock.patch('app.middleware_permisos.PermisoRol.tiene_permiso', return_value=True):
+            k = c.get(reverse('api_dineros_mercadopago')).json()['kpis']
+        self.assertEqual(k['retirado_periodo'], 10000000)
+
+
+@mock.patch.dict('os.environ', ENV_TEST)
+class RevisionImportarManualTest(_Base):
+    """Revisión de la importación de pagos «MP manual» (23-09 noche)."""
+
+    def _pago_manual(self, correlativo, voucher, monto=17980, estado='PAGADO', creado=None):
+        tk = self._ticket(correlativo, estado=estado)
+        pago = TicketDetallePago.objects.create(ticket=tk, metodo_pago='MP_POINT', monto=monto,
+                                                origen_pago='MANUAL', voucher=voucher)
+        TicketDetallePago.objects.filter(pk=pago.pk).update(creado_en=creado or timezone.now() - timedelta(days=1))
+        pago.refresh_from_db()
+        return pago
+
+    def _mp(self, pid, monto=17980, **extra):
+        return dict({'id': int(pid), 'status': 'approved', 'transaction_amount': float(monto),
+                     'date_created': (timezone.now() - timedelta(days=1)).isoformat(),
+                     'money_release_date': timezone.now().isoformat(), 'payment_type_id': 'debit_card',
+                     'transaction_details': {'net_received_amount': float(monto) - 270}}, **extra)
+
+    def _completar(self, pagos_mp):
+        dia = timezone.localtime(timezone.now() - timedelta(days=1)).date()
+        with mock.patch('app.services.mercadopago_service.buscar_pagos_dia', return_value=pagos_mp):
+            return conc.completar_numeros_mp(self.config, [dia], importar=True)
+
+    def test_no_duplica_el_cobro_del_pos_que_aun_no_tiene_numero(self):
+        directo = self._cobro('DIRECTO-2209-101010', monto=17980, consumida=False,
+                              payment_id='PAY01ABC', external_reference='RM-1-DIRECTO-2209-101010-c1i01')
+        self._pago_manual(5, '179473941930')
+        comp = self._completar([self._mp('179473941930', external_reference='RM-1-DIRECTO-2209-101010-c1i01')])
+        self.assertEqual(comp['importados'], 0)
+        self.assertEqual(TransaccionMercadoPago.objects.filter(payment_id_mp='179473941930').count(), 1)
+        directo.refresh_from_db()
+        self.assertEqual(directo.payment_id_mp, '179473941930')   # se completó su N°: queda para «Asociar»
+
+    def test_no_importa_ticket_pendiente_voucher_repetido_ni_devuelto(self):
+        self._pago_manual(5, '179000000001', estado='PENDIENTE')
+        self._pago_manual(6, '179000000002')
+        self._pago_manual(7, '179000000002')                      # mismo N° en dos ventas
+        self._pago_manual(8, '179000000003')
+        comp = self._completar([self._mp('179000000001'), self._mp('179000000002'),
+                                self._mp('179000000003', transaction_amount_refunded=5000.0)])
+        self.assertEqual(comp['importados'], 0)
+        self.assertFalse(TransaccionMercadoPago.objects.filter(external_reference__startswith='MANUAL-').exists())
+
+    def test_importado_despues_de_cerrado_el_retiro_se_amarra_al_reprocesar(self):
+        self._pago_manual(5, '179473941930')
+        filas = conc.leer_csv(_csv(
+            f"{_local_hace(hours=5)},179473941930,,release,payment,17710.00,0.00,17980.00",
+            f"{_local_hace(hours=4)},W5,,release,payout,0.00,17710.00,-17710.00",
+        ).encode())
+        conc.procesar_reporte_liberaciones(filas, self.config, aplicar=True, archivo='a.csv')
+        w5 = RetiroMercadoPago.objects.get(withdrawal_id='W5')
+        self.assertEqual(conc._no_explicado(w5.raw_reporte['por_caja']), 0)   # cerrado (MP manual)
+        self.assertEqual(w5.raw_reporte['netos'], {'179473941930': 17710})
+        d = conc.detalle_retiro(w5)
+        self.assertEqual((d['filas'][0]['origen'], d['filas'][0]['comision']), ('MP manual', 270))
+        self._completar([self._mp('179473941930')])
+        trx = TransaccionMercadoPago.objects.get(payment_id_mp='179473941930')
+        self.assertEqual(len(conc.detalle_retiro(w5)['filas']), 1)      # antes de reprocesar ya se ve
+        conc.procesar_reporte_liberaciones(filas, self.config, aplicar=True, archivo='a.csv')
+        trx.refresh_from_db()
+        self.assertEqual(trx.retiro_id, w5.id)
+
+    def test_cierre_mp_reconoce_el_pago_manual_importado(self):
+        from app.services import mercadopago_service as mp
+        self._pago_manual(5, '179473941930')
+        self._completar([self._mp('179473941930')])
+        trx = TransaccionMercadoPago.objects.get(payment_id_mp='179473941930')
+        dia = timezone.localtime(trx.creado_en).date()
+        res = mp.conciliar_cierre_mp(self.config, dia, pagos=[self._mp('179473941930')])
+        self.assertEqual(res['sin_registro'], [])
+        self.assertEqual(res['sin_confirmar'], [])
+
+    def test_aviso_de_mp_encuentra_el_pago_manual_y_anular_no_lo_devuelve(self):
+        from app.services import mercadopago_service as mp
+        pago = self._pago_manual(5, '179473941930')
+        self._completar([self._mp('179473941930')])
+        trx = TransaccionMercadoPago.objects.get(payment_id_mp='179473941930')
+        with mock.patch('app.services.mercadopago_service._request',
+                        return_value=_resp(200, self._mp('179473941930', status='refunded'))):
+            encontrada, _payment = mp._resolver_transaccion_por_payment('179473941930')
+        self.assertEqual(encontrada.id, trx.id)
+        with mock.patch('app.services.mercadopago_service.reembolsar') as reembolsar:
+            mp.reembolsar_pagos_de_ticket(pago.ticket)
+        reembolsar.assert_not_called()
+
+    def test_devuelto_entero_en_el_reporte_queda_devuelta(self):
+        self._pago_manual(5, '179473941930')
+        self._completar([self._mp('179473941930')])
+        trx = TransaccionMercadoPago.objects.get(payment_id_mp='179473941930')
+        conc.procesar_reporte_liberaciones(conc.leer_csv(_csv(
+            f"{_local_hace(hours=5)},179473941930,,release,payment,17710.00,0.00,17980.00",
+            f"{_local_hace(hours=4)},179473941930,,release,refund,0.00,17710.00,-17710.00",
+        ).encode()), self.config, aplicar=True, archivo='d.csv')
+        trx.refresh_from_db()
+        self.assertEqual(trx.estado, 'DEVUELTA')
+
+    def test_ver_ventas_mismo_numero_en_dos_lineas_no_da_comision_negativa(self):
+        retiro = RetiroMercadoPago.objects.create(
+            config=self.config, withdrawal_id='W1', fecha=self.hoy, monto=49500, estado='CONCILIADO',
+            raw_reporte={'pagos': ['179000000009'], 'netos': {'179000000009': 49500}, 'por_caja': []})
+        tk = self._ticket(9)
+        for monto in (30000, 20980):
+            TicketDetallePago.objects.create(ticket=tk, metodo_pago='MP_POINT', monto=monto,
+                                             origen_pago='MANUAL', voucher='179000000009')
+        fila = conc.detalle_retiro(retiro)['filas'][0]
+        self.assertEqual((fila['bruto'], fila['neto'], fila['comision']), (50980, 49500, 1480))
+
+    def test_cuadre_devolucion_antes_del_retiro_sale_del_banco(self):
+        retiro = RetiroMercadoPago.objects.create(
+            config=self.config, withdrawal_id='W9', fecha=self.hoy, monto=6700,
+            raw_reporte={'instante': timezone.now().isoformat()})
+        venta = self._cobro(1, monto=10000, monto_neto=9700, payment_id_mp='1', retiro=retiro)
+        dv = TransaccionMercadoPago.objects.create(
+            config=self.config, sucursal=self.sucursal, correlativo_ticket='1', tipo='DEVOLUCION',
+            transaccion_origen=venta, external_reference='DEV-9', monto=3000, estado='DEVUELTA')
+        TransaccionMercadoPago.objects.filter(pk=dv.pk).update(creado_en=timezone.now() - timedelta(hours=1))
+        tot = conc.cuadre_por_sucursal(None, None)['total']
+        self.assertEqual((tot['neto'], tot['en_banco'], tot['en_mp']), (6700, 6700, 0))
+
+    def test_kpi_retirado_dice_de_que_cuenta_es(self):
+        RetiroMercadoPago.objects.create(config=self.config, withdrawal_id='W1', fecha=self.hoy, monto=100)
+        admin = crear_usuario(username='adm_cta', rol='administrador')
+        c = Client(); c.force_login(admin)
+        with mock.patch('app.middleware_permisos.PermisoRol.tiene_permiso', return_value=True):
+            k = c.get(reverse('api_dineros_mercadopago'), {'sucursal_id': self.sucursal.id}).json()['kpis']
+        self.assertEqual(k['retirado_periodo'], 100)
+        self.assertEqual(k['retirado_cuenta'], self.empresa.nombre)
+
+
+@mock.patch.dict('os.environ', ENV_TEST)
+class RevisionV7Test(_Base):
+    """4ª revisión: caja del pago, retiro que ya lo contó, revalidar bajo lock,
+    devolución parcial, neto total, líneas repartidas, «sin venta» ya explicado."""
+
+    def _pago_manual(self, correlativo, voucher, monto=17980):
+        tk = self._ticket(correlativo)
+        pago = TicketDetallePago.objects.create(ticket=tk, metodo_pago='MP_POINT', monto=monto,
+                                                origen_pago='MANUAL', voucher=voucher)
+        TicketDetallePago.objects.filter(pk=pago.pk).update(creado_en=timezone.now() - timedelta(days=1))
+        pago.refresh_from_db()
+        return pago
+
+    def _mp(self, pid, monto=17980, **extra):
+        return dict({'id': int(pid), 'status': 'approved', 'transaction_amount': float(monto),
+                     'date_created': (timezone.now() - timedelta(days=1)).isoformat(),
+                     'money_release_date': timezone.now().isoformat(),
+                     'transaction_details': {'net_received_amount': float(monto) - 270}}, **extra)
+
+    def _completar(self, pagos_mp):
+        dia = timezone.localtime(timezone.now() - timedelta(days=1)).date()
+        with mock.patch('app.services.mercadopago_service.buscar_pagos_dia', return_value=pagos_mp):
+            return conc.completar_numeros_mp(self.config, [dia], importar=True)
+
+    def test_caja_del_pago_por_punto_de_venta(self):
+        caja2 = _config(self.sucursal, nombre='Caja 2', external_pos_id='POS222', pos_id='222')
+        self._pago_manual(5, '179473941930')
+        self._completar([self._mp('179473941930', pos_id='222')])
+        self.assertEqual(TransaccionMercadoPago.objects.get(payment_id_mp='179473941930').config_id, caja2.id)
+
+    def test_se_amarra_al_retiro_que_ya_lo_conto(self):
+        retiro = RetiroMercadoPago.objects.create(
+            config=self.config, withdrawal_id='WOLD', fecha=self.hoy - timedelta(days=1), monto=17710,
+            raw_reporte={'pagos': ['179473941930'], 'netos': {'179473941930': 17710}, 'por_caja': []})
+        self._pago_manual(5, '179473941930')
+        self._completar([self._mp('179473941930')])
+        self.assertEqual(TransaccionMercadoPago.objects.get(payment_id_mp='179473941930').retiro_id, retiro.id)
+
+    def test_no_importa_si_el_pago_cambio_mientras_corria(self):
+        pago = self._pago_manual(5, '179473941930')
+        TicketDetallePago.objects.filter(pk=pago.pk).update(voucher='179000000555')
+        self.assertIsNone(conc._importar_pago_manual(pago, self._mp('179473941930'), self.config.id))
+
+    def test_devolucion_parcial_no_marca_devuelta(self):
+        self._pago_manual(5, '179473941930')
+        self._completar([self._mp('179473941930')])
+        trx = TransaccionMercadoPago.objects.get(payment_id_mp='179473941930')
+        conc.procesar_reporte_liberaciones(conc.leer_csv(_csv(
+            f"{_local_hace(hours=6)},179473941930,,release,payment,17710.00,0.00,17980.00",
+            f"{_local_hace(hours=5)},WP,,release,payout,0.00,15000.00,-15000.00",
+            f"{_local_hace(hours=4)},179473941930,,release,refund,0.00,5000.00,-5000.00",
+        ).encode()), self.config, aplicar=True, archivo='p.csv')
+        trx.refresh_from_db()
+        self.assertEqual(trx.estado, 'APROBADA')
+
+    def test_neto_total_no_descuenta_la_deuda(self):
+        self._pago_manual(5, '179473941930')
+        conc.procesar_reporte_liberaciones(conc.leer_csv(_csv(
+            "2026-09-22T00:00:00.000-03:00,,,initial_available_balance,,0.00,1000.00,-1000.00",
+            "2026-09-22T09:00:00.000-03:00,179473941930,,release,payment,17710.00,0.00,17980.00",
+            "2026-09-22T10:00:00.000-03:00,WE,,release,payout,0.00,16710.00,-16710.00",
+        ).encode()), self.config, aplicar=True, archivo='e.csv')
+        raw = RetiroMercadoPago.objects.get(withdrawal_id='WE').raw_reporte
+        self.assertEqual(raw['netos'], {'179473941930': 17710})
+
+    def test_detalle_lineas_iguales_repartidas_y_sin_venta_ya_explicada(self):
+        retiro = RetiroMercadoPago.objects.create(
+            config=self.config, withdrawal_id='W1', fecha=self.hoy, monto=29400, estado='CONCILIADO',
+            raw_reporte={'pagos': ['179000000010', '5551'], 'netos': {'179000000010': 19400},
+                         'sin_venta': 10000, 'sin_local': {'5551': 10000}, 'por_caja': []})
+        tk = self._ticket(9)
+        for _ in range(2):
+            TicketDetallePago.objects.create(ticket=tk, metodo_pago='MP_POINT', monto=10000,
+                                             origen_pago='MANUAL', voucher='179000000010')
+        self._cobro(1, payment_id_mp='5551', monto=10000)       # su cobro apareció después
+        d = conc.detalle_retiro(retiro)
+        manual = next(f for f in d['filas'] if f['origen'] == 'MP manual')
+        self.assertEqual((manual['bruto'], manual['neto'], manual['comision']), (20000, 19400, 600))
+        self.assertEqual(d['bruto_sin_neto'], 0)
+        self.assertEqual(d['sin_venta'], 0)
+
+    def test_cierre_no_aprende_caja_de_una_fila_manual(self):
+        from app.services import mercadopago_service as mp
+        caja2 = _config(self.sucursal, nombre='Caja 2', external_pos_id='POS222', pos_id='222')
+        self._pago_manual(5, '179473941930')
+        self._completar([self._mp('179473941930')])                 # sin pos: queda en la caja principal
+        trx = TransaccionMercadoPago.objects.get(payment_id_mp='179473941930')
+        dia = timezone.localtime(trx.creado_en).date()
+        otro = self._mp('179999999999', pos_id='222')
+        res = mp.conciliar_cierre_mp(caja2, dia, pagos=[self._mp('179473941930', pos_id='222'), otro])
+        self.assertIn('179999999999', [x['payment_id'] for x in res['sin_registro']])

@@ -146,10 +146,10 @@ class Command(BaseCommand):
     def _procesar(self, config, contenido, origen, aplicar):
         filas = conc.leer_csv(contenido)
         res = conc.procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=origen)
-        dias = conc.dias_para_completar(config, res)
+        dias = conc.dias_para_completar(config, res, importar=aplicar)
         completo = True
         if dias:
-            comp = conc.completar_numeros_mp(config, dias, presupuesto_seg=300)
+            comp = conc.completar_numeros_mp(config, dias, presupuesto_seg=300, importar=aplicar)
             completo = not comp['sin_tiempo'] and not comp.get('fallidos')
             self.stdout.write(f'  N° de operación completados desde MP: {comp["completados"]} '
                               f'({comp["dias"]} día(s) consultados)')

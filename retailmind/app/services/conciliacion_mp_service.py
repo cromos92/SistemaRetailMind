@@ -23,8 +23,9 @@ from datetime import date, datetime, timedelta, timezone as dt_timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.core.cache import cache
-from django.db import transaction
-from django.db.models import Min, Q
+from django.db import IntegrityError, transaction
+from django.db.models import Count, Min, Q, Sum
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from app.models import (
@@ -187,7 +188,7 @@ def cobros_vs_documentos(desde, hasta, sucursal_id=None):
     manuales = list(
         TicketDetallePago.objects
         .filter(metodo_pago__in=METODOS_MP, origen_pago='MANUAL',
-                ticket__estado='PAGADO',
+                ticket__estado='PAGADO', transacciones_mercadopago__isnull=True,
                 creado_en__date__gte=d, creado_en__date__lte=h)
         .select_related('ticket', 'ticket__sucursal')
         .order_by('-creado_en')
@@ -598,6 +599,8 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
     resultado = {'retiros': [], 'pagos_sin_local': 0, 'pagos_amarrados': 0,
                  'pagos_manuales': 0, 'muestra_sin_local': [], 'dias_sin_local': []}
     dias_sin_local = set()
+    dias_manuales = set()
+    reembolsos = {}     # source_id -> total devuelto en este reporte
     # Cola FIFO del saldo disponible: {'trx': TransaccionMercadoPago|None, 'resto': $, 'id': str}
     cola = []
     deuda = 0
@@ -616,6 +619,16 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
     cerrados = {wid for wid, x in registrados.items()
                 if isinstance(x.raw_reporte, dict) and x.raw_reporte.get('por_caja')
                 and _no_explicado(x.raw_reporte['por_caja']) == 0}
+    # Retiros guardados antes de existir el desglose: cerrados si las ventas que
+    # ya tienen amarradas cubren su monto (si no, al reprocesar se desamarraban).
+    legado = [wid for wid, x in registrados.items()
+              if not (isinstance(x.raw_reporte, dict) and x.raw_reporte.get('por_caja'))]
+    if legado:
+        sumas = dict(TransaccionMercadoPago.objects.filter(retiro__withdrawal_id__in=legado)
+                     .values('retiro__withdrawal_id')
+                     .annotate(s=Sum(Coalesce('monto_neto', 'monto')))
+                     .values_list('retiro__withdrawal_id', 's'))
+        cerrados |= {wid for wid in legado if (sumas.get(wid) or 0) >= registrados[wid].monto > 0}
     propias_de = {}
     if cerrados:
         for trx_id, wid in (TransaccionMercadoPago.objects.filter(retiro__withdrawal_id__in=list(cerrados))
@@ -750,12 +763,35 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
                         raw.pop('archivo', None)
                         retiro.raw_reporte = raw
                         retiro.save(update_fields=['raw_reporte', 'actualizado_en'])
-                        continue   # sus vínculos quedan como estaban
+                        # Sus vínculos quedan como estaban; solo se amarran los cobros
+                        # que ya había contado (por su N°) y que se registraron después,
+                        # p. ej. un pago «MP manual» importado.
+                        prev_ids = ({str(x) for x in raw.get('pagos') or []}
+                                    | {str(x) for x in (raw.get('netos') or {})})
+                        nuevas = [it['trx'].id for it, _u in tomado
+                                  if it['trx'] is not None and it['trx'].retiro_id is None
+                                  and str(it['id']) in prev_ids]
+                        if nuevas:
+                            TransaccionMercadoPago.objects.filter(
+                                id__in=nuevas, retiro__isnull=True).update(retiro=retiro)
+                        continue
                     raw_nuevo = {'archivos': sorted(archivos),
                                  'pagos': [it['id'] for it in agotados][:500],
                                  'instante': r['instante'].isoformat(),
                                  'por_caja': por_caja_lista,
-                                 'pagos_pos': len(trxs)}
+                                 'pagos_pos': len(trxs),
+                                 # neto liberado de cada pago «MP manual» que este retiro terminó
+                                 # de llevarse (el pago entero, no solo el trozo de este retiro)
+                                 'netos': {str(it['id']): it.get('total', usado) for it, usado in tomado[:2000]
+                                           if it['trx'] is None and it.get('manual') is not None
+                                           and it['resto'] <= 0},
+                                 # lo que no se pudo explicar con una venta del sistema
+                                 'sin_venta': faltante + sum(usado for it, usado in tomado
+                                                             if it['trx'] is None and it.get('manual') is None),
+                                 # y por operación, para descontarlo si después aparece su cobro
+                                 'sin_local': {str(it['id']): usado for it, usado in tomado[:2000]
+                                               if it['trx'] is None and it.get('manual') is None
+                                               and it['id'] and it['id'] != 'saldo inicial'}}
                     datos = {'config': config, 'fecha': timezone.localtime(r['instante']).date(),
                              'monto': monto, 'estado': estado, 'detalle_diferencia': detalle,
                              'raw_reporte': raw_nuevo}
@@ -777,6 +813,8 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
             continue
         if neto < 0:
             debito = -neto
+            if r['source_id']:
+                reembolsos[r['source_id']] = reembolsos.get(r['source_id'], 0) + debito
             # 1) La misma operación (devolución de esa venta): no llega al banco.
             en_cola = False
             for it in list(cola):
@@ -810,6 +848,12 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
         manual = manuales.get(r['source_id']) if (es_pago and trx is None) else None
         if manual is not None:
             resultado['pagos_manuales'] += 1
+            # Días a leer para registrar este pago como cobro (el cobro en la
+            # máquina fue minutos antes de registrarlo: si fue tras la medianoche, el anterior).
+            local = timezone.localtime(manual.creado_en)
+            dias_manuales.add(local.date())
+            if (local.hour, local.minute) < (0, 30):
+                dias_manuales.add(local.date() - timedelta(days=1))
         elif es_pago and trx is None:
             resultado['pagos_sin_local'] += 1
             dias_sin_local.add(timezone.localtime(r['instante']).date())
@@ -819,16 +863,19 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
                     'source_id': r['source_id'], 'external_reference': r['external_reference'],
                     'monto': neto, 'pos': ' / '.join(x for x in r['pos'] if x),
                 })
+        total = neto   # neto del pago entero (antes de pagar una deuda de saldo)
         if deuda:
             usa = min(deuda, neto)
             deuda -= usa
             neto -= usa
             if not neto:
                 continue
-        cola.append({'trx': trx, 'resto': neto, 'id': r['source_id'], 'pos': r['pos'], 'manual': manual})
+        cola.append({'trx': trx, 'resto': neto, 'total': total, 'id': r['source_id'], 'pos': r['pos'],
+                     'manual': manual})
 
     resultado['liberado_sin_retirar'] = sum(it['resto'] for it in cola)
     resultado['dias_sin_local'] = sorted(str(d) for d in dias_sin_local)
+    resultado['dias_manuales'] = sorted(str(d) for d in dias_manuales)
     resultado['deuda'] = deuda
     resultado['rango'] = ([registros[0]['instante'].isoformat(), registros[-1]['instante'].isoformat()]
                           if registros else [])
@@ -839,9 +886,17 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
     for t in sin_banco + devueltas_fuera:
         liberadas.pop(t.id, None)
     if aplicar and (sin_banco or devueltas_fuera):
+        ids_dev = [t.id for t in sin_banco + devueltas_fuera]
+        TransaccionMercadoPago.objects.filter(id__in=ids_dev, retiro__isnull=True).update(money_release_date=None)
+        # Un pago «MP manual» importado no recibe avisos de MP por referencia: si el
+        # reporte muestra devuelto su neto entero, se marca DEVUELTA acá. Una
+        # devolución parcial no: la venta sigue vigente por el resto.
+        enteras = [t.id for t in sin_banco + devueltas_fuera
+                   if reembolsos.get(t.payment_id_mp or t.payment_id or '', 0)
+                   >= int(t.monto_neto if t.monto_neto is not None else t.monto)]
         TransaccionMercadoPago.objects.filter(
-            id__in=[t.id for t in sin_banco + devueltas_fuera], retiro__isnull=True,
-        ).update(money_release_date=None)
+            id__in=enteras, external_reference__startswith='MANUAL-', estado='APROBADA',
+        ).update(estado='DEVUELTA', estado_detalle='Devuelta en Mercado Pago (reporte de Liberaciones)')
     if aplicar and liberadas:
         sin_fecha = []
         for trx, instante in liberadas.values():
@@ -863,7 +918,124 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
     return resultado
 
 
-def completar_numeros_mp(config, dias, presupuesto_seg=35):
+def _vouchers_mp_manual(configs, desde, hasta):
+    """{N° de operación: TicketDetallePago} de los pagos «MP manual» de ventas
+    cerradas (ticket PAGADO) de las tiendas de la cuenta, sin transacción
+    todavía y con un N° con forma válida."""
+    sucursales = set(MercadoPagoConfig.objects.filter(id__in=configs).values_list('sucursal_id', flat=True))
+    salida = {}
+    for pago in (TicketDetallePago.objects
+                 .filter(Q(origen_pago='MANUAL') | Q(origen_pago__isnull=True),
+                         metodo_pago__in=METODOS_MP, ticket__sucursal_id__in=sucursales,
+                         ticket__estado='PAGADO', transacciones_mercadopago__isnull=True,
+                         creado_en__date__gte=desde, creado_en__date__lte=hasta)
+                 .select_related('ticket').order_by('creado_en')):
+        voucher = str(pago.voucher or '').strip()
+        if voucher.isdigit() and len(voucher) >= 9:
+            salida[voucher] = pago
+    # Un N° digitado en más de un pago (sin transacción, en cualquier fecha) es
+    # ambiguo: no se elige uno, queda para «Asociar».
+    if salida:
+        repetidos = set(TicketDetallePago.objects
+                        .filter(metodo_pago__in=METODOS_MP, voucher__in=list(salida),
+                                transacciones_mercadopago__isnull=True)
+                        .exclude(ticket__estado='ANULADO')
+                        .values('voucher').annotate(n=Count('id')).filter(n__gt=1)
+                        .values_list('voucher', flat=True))
+        for voucher in repetidos:
+            salida.pop(str(voucher).strip(), None)
+    return salida
+
+
+def _caja_del_pago(payment, cajas):
+    """Caja (id de MercadoPagoConfig) de la tienda donde se cobró el pago: la única
+    si hay una; si no, la que tiene el punto de venta que informa MP; si no, la
+    habilitada y principal. Nunca «la de menor id» a ciegas: el cierre de cada
+    caja aprende de estos cobros qué pos_id/store_id le pertenecen."""
+    if len(cajas) == 1:
+        return cajas[0].id
+    claves = {str(payment.get(k) or '') for k in ('pos_id', 'store_id')} - {''}
+    for c in cajas:
+        if claves & ({c.pos_id, c.external_pos_id} - {''}):
+            return c.id
+    return cajas[0].id if cajas else None
+
+
+def _retiros_por_operacion(configs, dias=180):
+    """{N° de operación: RetiroMercadoPago} de los retiros recientes de la cuenta
+    que ya contaron ese pago (raw_reporte 'pagos'/'netos'), para amarrar al
+    registrarlo un pago «MP manual» que un retiro ya se llevó."""
+    salida = {}
+    desde = timezone.localdate() - timedelta(days=dias)
+    for retiro in RetiroMercadoPago.objects.filter(config_id__in=configs, fecha__gte=desde).order_by('fecha', 'id'):
+        raw = retiro.raw_reporte if isinstance(retiro.raw_reporte, dict) else {}
+        for clave in list(raw.get('pagos') or []) + list((raw.get('netos') or {}).keys()):
+            salida[str(clave)] = retiro
+    return salida
+
+
+def _importar_pago_manual(pago, payment, config_id, retiro=None):
+    """Transacción (consumida) para un pago «MP manual» con los datos de MP.
+
+    No se importa (queda para «Asociar») si: el pago no está aprobado, el monto
+    no calza, ya tuvo devoluciones, o MP lo trae con la referencia de un cobro
+    que el sistema ya tiene (cobro del POS o «Tu caja» que todavía no tiene su
+    N°: importarlo lo duplicaría).
+    """
+    pid = str(payment.get('id') or '')
+    monto = _monto(payment.get('transaction_amount'))
+    if payment.get('status') != 'approved' or monto != int(pago.monto or 0):
+        return None
+    if _monto(payment.get('transaction_amount_refunded') or 0) > 0 or payment.get('refunds'):
+        return None
+    ya_existe = Q(payment_id_mp=pid) | Q(payment_id=pid) | Q(external_reference=f'MANUAL-{pid}')
+    referencia = str(payment.get('external_reference') or '').strip()
+    if referencia:
+        ya_existe |= Q(external_reference=referencia)
+    if TransaccionMercadoPago.objects.filter(ya_existe).exists():
+        return None
+    neto = (payment.get('transaction_details') or {}).get('net_received_amount')
+    neto = _monto(neto) if neto is not None else None
+    tipo_pago = str(payment.get('payment_type_id') or '')
+    try:
+        with transaction.atomic():
+            # Lock del pago (lo toman también «Asociar» e importar_y_asociar) y
+            # revisión de nuevo: otra pasada o un Maestro pudo haberlo resuelto.
+            bloqueado = (TicketDetallePago.objects.select_for_update()
+                         .filter(pk=pago.pk, ticket__estado='PAGADO').first())
+            # Revalidar con el pago bloqueado (un Maestro pudo corregirlo mientras
+            # corría la pasada): mismo N°, mismo monto y sigue siendo MP manual.
+            if (bloqueado is None or bloqueado.metodo_pago not in METODOS_MP
+                    or bloqueado.origen_pago not in ('MANUAL', None)
+                    or str(bloqueado.voucher or '').strip() != pid or int(bloqueado.monto or 0) != monto
+                    or TransaccionMercadoPago.objects.filter(ya_existe | Q(detalle_pago_id=pago.pk)).exists()):
+                return None
+            pago = bloqueado
+            trx = TransaccionMercadoPago.objects.create(
+                config_id=config_id, sucursal_id=pago.ticket.sucursal_id, ticket=pago.ticket,
+                detalle_pago=pago, correlativo_ticket=str(pago.ticket.correlativo), tipo='VENTA',
+                canal='POINT' if tipo_pago in ('debit_card', 'credit_card', 'prepaid_card') else 'QR',
+                external_reference=f'MANUAL-{pid}', payment_id=pid, payment_id_mp=pid,
+                monto=monto, monto_neto=neto, fee_mp=(monto - neto) if neto is not None else None,
+                installments=int(payment.get('installments') or 1), estado='APROBADA',
+                estado_detalle=f'Pago MP manual del POS, datos traídos de MP ({payment.get("status_detail") or ""})'[:120],
+                metodo_pago_mp=tipo_pago[:40],
+                ultimos_4_digitos=str((payment.get('card') or {}).get('last_four_digits') or '')[:4],
+                codigo_autorizacion=str(payment.get('authorization_code') or '')[:30],
+                money_release_date=_instante(payment.get('money_release_date')),
+                consumida=True, raw_response=payment, retiro=retiro,
+            )
+            # Fecha del cobro real (creado_en es auto_now_add: quedaría con la de hoy).
+            TransaccionMercadoPago.objects.filter(pk=trx.pk).update(
+                creado_en=_instante(payment.get('date_created')) or pago.creado_en)
+    except IntegrityError:
+        return None   # otra pasada lo registró al mismo tiempo
+    logger.info("Conciliación MP: pago MP manual N° %s ($%s) del ticket #%s registrado como cobro",
+                pid, monto, pago.ticket.correlativo)
+    return trx
+
+
+def completar_numeros_mp(config, dias, presupuesto_seg=35, importar=False):
     """Rellena `payment_id_mp` (y neto/comisión si faltan) de los cobros de la
     cuenta leyendo `payments/search` de esos días, cruzado por external_reference.
 
@@ -874,24 +1046,40 @@ def completar_numeros_mp(config, dias, presupuesto_seg=35):
     parte un reporte no se puede explicar con ventas y un retiro quedaba como
     «Saldo anterior». Solo escribe campos vacíos. Devuelve
     {'dias': n, 'completados': n (N° nuevos), 'actualizados': n (filas tocadas),
-    'sin_tiempo': bool, 'fallidos': n}.
+    'importados': n (pagos «MP manual» registrados como cobro), 'sin_tiempo': bool,
+    'fallidos': n}. Con `importar=True` (solo al APLICAR; nunca en una vista
+    previa), los pagos «MP manual» cuyo N° aparece ese día en MP se registran
+    como cobro (`_importar_pago_manual`).
     `fallidos` son los días que no se pudieron leer por un error de red o de
     MP saturado (429/5xx): quien llama debe tratarlo como «no terminó».
     """
     import time as _time
     fin = _time.monotonic() + presupuesto_seg
-    completados, leidos, fallidos, seguidos, actualizados = 0, 0, 0, 0, 0
+    completados, leidos, fallidos, seguidos, actualizados, importados = 0, 0, 0, 0, 0, 0
     configs = _configs_de_la_cuenta(config)
     hoy = timezone.localdate()
-    for dia in sorted(set(dias)):
+    dias = sorted(set(dias))
+    manuales = (_vouchers_mp_manual(configs, dias[0] - timedelta(days=1), dias[-1] + timedelta(days=1))
+                if dias and importar else {})
+    cajas_de_tienda, retiro_de = {}, {}
+    if manuales:
+        # Todas las cajas de esas tiendas (el pago trae su punto de venta).
+        tiendas = MercadoPagoConfig.objects.filter(id__in=configs).values_list('sucursal_id', flat=True)
+        for c in (MercadoPagoConfig.objects.filter(sucursal_id__in=list(tiendas))
+                  .order_by('-habilitado', '-es_principal', 'id')):
+            cajas_de_tienda.setdefault(c.sucursal_id, []).append(c)
+        retiro_de = _retiros_por_operacion(configs)
+    for dia in dias:
         # Un día pasado ya leído hace poco no se vuelve a pedir: lo que no cruzó
         # entonces (pagos online, devueltos) tampoco va a cruzar ahora.
+        # La marca es de una pasada que aplica (con importación): una vista previa
+        # no la usa ni la deja, para que el «Aplicar» siguiente sí importe.
         clave_dia = f'conc_mp:dia_leido:{min(configs)}:{dia}'
-        if dia < hoy and cache.get(clave_dia):
+        if importar and dia < hoy and cache.get(clave_dia):
             continue
         if _time.monotonic() > fin:
             return {'dias': leidos, 'completados': completados, 'sin_tiempo': True, 'fallidos': fallidos,
-                    'actualizados': actualizados}
+                    'actualizados': actualizados, 'importados': importados}
         try:
             pagos = mp.buscar_pagos_dia(config, dia)
         except mp.MercadoPagoError as e:
@@ -904,12 +1092,10 @@ def completar_numeros_mp(config, dias, presupuesto_seg=35):
             continue
         seguidos = 0
         leidos += 1
-        if dia < hoy:
+        if importar and dia < hoy:
             cache.set(clave_dia, 1, 60 * 30)
         por_ref = {str(p.get('external_reference') or ''): p for p in pagos
                    if p.get('external_reference') and str(p.get('id') or '').isdigit()}
-        if not por_ref:
-            continue
         for trx in TransaccionMercadoPago.objects.filter(
                 Q(payment_id_mp='') | Q(money_release_date__isnull=True),
                 config_id__in=configs, external_reference__in=list(por_ref)):
@@ -936,8 +1122,18 @@ def completar_numeros_mp(config, dias, presupuesto_seg=35):
             actualizados += 1
             if 'payment_id_mp' in campos:
                 completados += 1
+        # Después de completar los N° por referencia: así un cobro del POS que
+        # recién recibe su N° no se vuelve a crear como pago manual.
+        for p in pagos:
+            pid = str(p.get('id') or '')
+            pago = manuales.pop(pid, None)
+            if pago is None:
+                continue
+            caja = _caja_del_pago(p, cajas_de_tienda.get(pago.ticket.sucursal_id) or []) or config.id
+            if _importar_pago_manual(pago, p, caja, retiro=retiro_de.get(pid)) is not None:
+                importados += 1
     return {'dias': leidos, 'completados': completados, 'sin_tiempo': False, 'fallidos': fallidos,
-            'actualizados': actualizados}
+            'actualizados': actualizados, 'importados': importados}
 
 
 def dias_cobros_sin_numero(config, resultado, dias_antes=35):
@@ -973,11 +1169,15 @@ def dias_cobros_sin_numero(config, resultado, dias_antes=35):
     return sorted(dias)
 
 
-def dias_para_completar(config, resultado):
-    """Días a leer en payments/search antes de aplicar un reporte: solo los que
+def dias_para_completar(config, resultado, importar=False):
+    """Días a leer en payments/search antes de aplicar un reporte: los que
     tienen cobros propios por completar (los pagos online del reporte nunca
-    cruzan y releerlos gastaba el tiempo de cada pasada)."""
-    return dias_cobros_sin_numero(config, resultado)
+    cruzan y releerlos gastaba el tiempo de cada pasada) y, solo al aplicar,
+    los de los pagos «MP manual» que trae el reporte (para registrarlos)."""
+    dias = set(dias_cobros_sin_numero(config, resultado))
+    if importar:
+        dias.update(f for f in (_fecha_libre(x) for x in resultado.get('dias_manuales') or []) if f)
+    return sorted(dias)
 
 
 def dias_a_completar(resultado, margen=2, maximo=15):
@@ -1209,7 +1409,19 @@ def inicio_reporte_cuenta(config, ahora=None):
 
 
 def _fin_de_reporte(reporte):
-    return _instante(reporte.get('end_date')) or _instante(reporte.get('creado'))
+    """Hasta cuándo trae datos un reporte: su fin, pero nunca después de cuando
+    se generó (MP pone de fin las 23:59 del día aunque se genere a mediodía; con
+    eso el reporte parecía al día y no se pedía otro tras un retiro de la tarde).
+    Sin fecha de creación y con fin en el futuro, no se sabe: None."""
+    fin = _instante(reporte.get('end_date'))
+    creado = _instante(reporte.get('creado'))
+    if fin is None:
+        return creado
+    if creado is not None and creado < fin:
+        return creado
+    if creado is None and fin > timezone.now():
+        return None
+    return fin
 
 
 def _pedido_valido(pedido):
@@ -1369,10 +1581,10 @@ def detectar_retiros(presupuesto_seg=45, pedir=True, pedir_ids=(), pedidos=None)
                 cache.set(_CLAVE_SIN_RETIROS.format(rep['file_name']), 1, 60 * 60 * 24)
                 continue
             completo = True
-            dias = dias_para_completar(cfg, previa)
+            dias = dias_para_completar(cfg, previa, importar=True)
             if dias:
                 restante = max(5, int(fin - _time.monotonic()) - 5)
-                comp = completar_numeros_mp(cfg, dias, presupuesto_seg=restante)
+                comp = completar_numeros_mp(cfg, dias, presupuesto_seg=restante, importar=True)
                 completo = not comp['sin_tiempo'] and not comp.get('fallidos')
             res = procesar_reporte_liberaciones(filas, cfg, aplicar=True,
                                                 archivo=rep['file_name'] if completo else '')
@@ -1408,22 +1620,43 @@ def detalle_retiro(retiro):
     manual» y lo que el reporte no pudo explicar con ventas (saldo anterior,
     online). Una venta partida entre dos retiros aparece en el que se llevó su
     último peso."""
-    trxs = list(retiro.transacciones.select_related('sucursal', 'config', 'ticket', 'detalle_pago__ticket')
-                .order_by('money_release_date', 'creado_en'))
-    tickets = _ticket_de_cobros(trxs)
     raw = retiro.raw_reporte if isinstance(retiro.raw_reporte, dict) else {}
+    netos = raw.get('netos') or {}
     ids = [str(i) for i in (raw.get('pagos') or []) if str(i).isdigit()]
-    manuales = list(TicketDetallePago.objects.filter(metodo_pago__in=METODOS_MP, voucher__in=ids)
-                    .select_related('ticket__sucursal')) if ids else []
-    dtes = _dtes_por_ref(list(tickets.values()) + [p.ticket for p in manuales])
-    filas, suma_neto = [], 0
+    # Amarradas + las que este retiro ya contó por su N° y se registraron después
+    # (p. ej. un pago «MP manual» importado): todavía sin retiro.
+    trxs = list(TransaccionMercadoPago.objects
+                .filter(Q(retiro=retiro) | Q(retiro__isnull=True, tipo='VENTA', payment_id_mp__in=ids))
+                .select_related('sucursal', 'config', 'ticket', 'detalle_pago__ticket')
+                .order_by('money_release_date', 'creado_en')) if ids else list(
+        retiro.transacciones.select_related('sucursal', 'config', 'ticket', 'detalle_pago__ticket')
+        .order_by('money_release_date', 'creado_en'))
+    tickets = _ticket_de_cobros(trxs)
+    # «MP manual» con la misma regla que al procesar: solo si ninguna transacción
+    # tiene ese N° (si no, la venta del POS salía dos veces).
+    if ids:
+        con_trx = {str(x) for par in (TransaccionMercadoPago.objects
+                                      .filter(Q(payment_id_mp__in=ids) | Q(payment_id__in=ids))
+                                      .values_list('payment_id_mp', 'payment_id')) for x in par if x}
+        ids = [i for i in ids if i not in con_trx]
+    lineas = {}
+    if ids:
+        for pago in (TicketDetallePago.objects
+                     .filter(Q(origen_pago='MANUAL') | Q(origen_pago__isnull=True),
+                             metodo_pago__in=METODOS_MP, voucher__in=ids, transacciones_mercadopago__isnull=True)
+                     .exclude(ticket__estado='ANULADO')
+                     .select_related('ticket__sucursal').order_by('creado_en')):
+            lineas.setdefault(str(pago.voucher).strip(), []).append(pago)
+    dtes = _dtes_por_ref(list(tickets.values()) + [p.ticket for ps in lineas.values() for p in ps])
+    filas, suma_neto, bruto_sin_neto = [], 0, 0
     for t in trxs:
         neto = int(t.monto_neto if t.monto_neto is not None else t.monto)
         suma_neto += neto
         tk = tickets.get(t.id)
         documento, dte_id = _documento_de_ticket(tk, dtes)
         filas.append({
-            'origen': 'POS', 'fecha': timezone.localtime(t.creado_en).strftime('%d/%m/%Y %H:%M'),
+            'origen': 'MP manual' if str(t.external_reference).startswith('MANUAL-') else 'POS',
+            'fecha': timezone.localtime(t.creado_en).strftime('%d/%m/%Y %H:%M'),
             'liberacion': (timezone.localtime(t.money_release_date).strftime('%d/%m/%Y')
                            if t.money_release_date else ''),
             'sucursal': t.sucursal.alias if t.sucursal_id else '',
@@ -1433,25 +1666,48 @@ def detalle_retiro(retiro):
             'bruto': int(t.monto), 'comision': int(t.monto) - neto, 'neto': neto,
             'payment_id_mp': t.payment_id_mp, 'estado': t.estado,
         })
-    for pago in manuales:
-        monto = int(pago.monto or 0)
-        suma_neto += monto
+    for voucher, pagos in lineas.items():
+        # Mismo N° en varias líneas: si son copias (mismo monto) es un solo pago;
+        # si no, es un pago repartido y el bruto es la suma.
+        montos = [int(p.monto or 0) for p in pagos]
+        bruto = montos[0] if len(set(montos)) == 1 else sum(montos)
+        neto = netos.get(voucher)
+        neto = int(neto) if neto is not None else None
+        if neto is not None and len(montos) > 1 and bruto < neto <= sum(montos):
+            bruto = sum(montos)          # un pago repartido en líneas del mismo monto
+        if neto is None:
+            bruto_sin_neto += bruto
+            comision = None
+        else:
+            suma_neto += neto
+            comision = bruto - neto if neto <= bruto else None   # N° mal digitado: sin comisión
+        pago = pagos[-1]
         documento, dte_id = _documento_de_ticket(pago.ticket, dtes)
         filas.append({
-            'origen': 'MP manual', 'fecha': timezone.localtime(pago.ticket.created_at).strftime('%d/%m/%Y %H:%M')
-            if getattr(pago.ticket, 'created_at', None) else '',
+            'origen': 'MP manual', 'fecha': timezone.localtime(pago.creado_en).strftime('%d/%m/%Y %H:%M'),
             'liberacion': '', 'sucursal': pago.ticket.sucursal.alias if pago.ticket.sucursal_id else '',
-            'caja': 'MP manual', 'ticket': pago.ticket.correlativo, 'documento': documento, 'dte_id': dte_id,
-            'bruto': monto, 'comision': None, 'neto': monto, 'payment_id_mp': pago.voucher, 'estado': '',
+            'caja': 'MP manual', 'ticket': ', '.join(sorted({str(p.ticket.correlativo) for p in pagos})),
+            'documento': documento, 'dte_id': dte_id,
+            'bruto': bruto, 'comision': comision, 'neto': neto, 'payment_id_mp': voucher, 'estado': '',
         })
-    no_ventas = [c for c in (raw.get('por_caja') or [])
-                 if isinstance(c, dict) and (c.get('caja') == CAJA_SALDO_ANTERIOR or str(c.get('caja', '')).startswith(('Sin caja', 'No explicado')))]
+    por_caja = raw.get('por_caja') or []
+    no_ventas = [c for c in por_caja if isinstance(c, dict) and (
+        c.get('caja') in (CAJA_SALDO_ANTERIOR, CAJA_NO_EXPLICADA)
+        or str(c.get('caja', '')).startswith(('Sin caja', 'Caja MP «')))]
+    sin_venta = raw.get('sin_venta')
+    if sin_venta is None:   # retiros guardados antes de este dato
+        sin_venta = sum(int(c.get('monto') or 0) for c in no_ventas)
+    else:
+        # Lo que se contó «sin venta» y ya tiene su cobro (listado arriba) no se repite.
+        sin_local = raw.get('sin_local') or {}
+        listados = {str(t.payment_id_mp) for t in trxs if t.payment_id_mp}
+        sin_venta = max(0, int(sin_venta) - sum(int(v) for k, v in sin_local.items() if k in listados))
     return {
         'withdrawal_id': retiro.withdrawal_id, 'fecha': retiro.fecha.strftime('%d/%m/%Y'),
         'monto': retiro.monto, 'estado': retiro.estado, 'detalle': retiro.detalle_diferencia or '',
-        'por_caja': raw.get('por_caja') or [], 'filas': filas, 'suma_neto': suma_neto,
+        'por_caja': por_caja, 'filas': filas, 'suma_neto': suma_neto,
         'bruto': sum(f['bruto'] for f in filas), 'comision': sum(f['comision'] or 0 for f in filas),
-        'no_ventas': no_ventas,
+        'bruto_sin_neto': bruto_sin_neto, 'no_ventas': no_ventas, 'sin_venta': int(sin_venta or 0),
     }
 
 
@@ -1490,6 +1746,35 @@ def cuadre_por_sucursal(desde, hasta, sucursal_id=None):
             f['por_liberar'] += neto
         else:
             f['en_mp'] += neto
+    # Devoluciones parciales: la venta sigue APROBADA y la devolución es otra fila.
+    devoluciones = (TransaccionMercadoPago.objects
+                    .filter(tipo='DEVOLUCION', estado='DEVUELTA', transaccion_origen__tipo='VENTA',
+                            transaccion_origen__estado='APROBADA',
+                            transaccion_origen__creado_en__date__gte=d, transaccion_origen__creado_en__date__lte=h)
+                    .exclude(transaccion_origen__correlativo_ticket__startswith='PRUEBA-')
+                    .select_related('transaccion_origen__retiro'))
+    if sucursal_id:
+        devoluciones = devoluciones.filter(transaccion_origen__sucursal_id=int(sucursal_id))
+    for dv in devoluciones:
+        origen = dv.transaccion_origen
+        f = filas.get(origen.sucursal_id)
+        if f is None:
+            continue
+        f['devuelto'] += int(dv.monto)
+        f['neto'] -= int(dv.monto)
+        # De dónde sale: si se devolvió antes del retiro que se llevó la venta, ese
+        # retiro llevó menos (sale de «en el banco»); si fue después, sale del saldo
+        # de MP; si la venta aún no se libera, de lo por liberar.
+        if origen.retiro_id:
+            raw_r = origen.retiro.raw_reporte if isinstance(origen.retiro.raw_reporte, dict) else {}
+            corte = _instante(raw_r.get('instante')) or timezone.make_aware(
+                datetime.combine(origen.retiro.fecha, datetime.max.time()))
+            clave = 'en_banco' if dv.creado_en <= corte else 'en_mp'
+        elif origen.money_release_date and origen.money_release_date > ahora:
+            clave = 'por_liberar'
+        else:
+            clave = 'en_mp'
+        f[clave] -= int(dv.monto)
     filas = sorted(filas.values(), key=lambda f: -f['vendido'])
     total = {c: sum(f[c] for f in filas) for c in campos}
     total['sucursal'] = 'Total'

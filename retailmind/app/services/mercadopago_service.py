@@ -799,12 +799,26 @@ def conciliar_cierre_mp(config, fecha, pagos=None):
         if t.estado != 'CREADA'
     }
 
+    # Y por N° de operación: un pago «MP manual» registrado como cobro
+    # (external_reference 'MANUAL-<N°>') no trae nuestra referencia en MP.
+    ids_mp = [str(p.get('id')) for p in pagos if p.get('id')]
+    por_id = {}
+    for t in (TransaccionMercadoPago.objects.filter(tipo='VENTA', external_reference__startswith='MANUAL-',
+                                                    payment_id_mp__in=ids_mp)
+              .exclude(estado='CREADA').select_related('config')):
+        por_id[t.payment_id_mp] = t
+
+    def _local(pago):
+        return locales.get(str(pago.get('external_reference') or '')) or por_id.get(str(pago.get('id') or ''))
+
     # PASADA 1: de los pagos que calzan por external_reference se aprenden los
     # ids que MP le pone a ESTA caja y a las otras de la misma cuenta.
     ids_propios, ids_ajenos = set(), set()
     for pago in pagos:
-        trx = locales.get(str(pago.get('external_reference') or ''))
-        if trx is None:
+        trx = _local(pago)
+        # Una fila MANUAL- (pago «MP manual» registrado por la conciliación) tiene
+        # la caja deducida, no la real: no se aprende de ella a qué caja es un pos_id.
+        if trx is None or str(trx.external_reference).startswith('MANUAL-'):
             continue
         destino = ids_propios if trx.config_id == config.id else ids_ajenos
         for campo in ('pos_id', 'store_id'):
@@ -827,18 +841,18 @@ def conciliar_cierre_mp(config, fecha, pagos=None):
         if estado == 'refunded':
             # Devuelto entero: el sistema tampoco lo cuenta como cobro, así
             # que queda fuera de la comparación y se informa aparte.
-            trx = locales.get(ext)
+            trx = _local(pago)
             if trx is None or trx.config_id == config.id:
                 devoluciones_mp += monto
             continue
         if estado != 'approved':
             continue
 
-        trx = locales.get(ext)
+        trx = _local(pago)
         if trx is not None:
             if trx.config_id != config.id:
                 continue                      # cobro de otra caja de la cuenta
-            vistos.add(ext)
+            vistos.add(trx.external_reference)
             if (trx.metodo_pago_mp or '') != medio and medio:
                 medio_distinto.append({
                     'payment_id': str(pago.get('id') or ''),
@@ -2512,7 +2526,7 @@ def reembolsar_pagos_de_ticket(ticket, usuario=None):
     si alguna falla (el caller decide si bloquear la anulación)."""
     ventas = TransaccionMercadoPago.objects.filter(
         ticket=ticket, tipo='VENTA', estado='APROBADA'
-    )
+    ).exclude(external_reference__startswith='MANUAL-')   # pago «MP manual»: nunca se devolvía solo
     devoluciones = []
     for venta in ventas:
         devoluciones.append(reembolsar(venta, usuario=usuario))
@@ -3007,6 +3021,14 @@ def _resolver_transaccion_por_payment(data_id):
                 external_reference__startswith=ext_ref + '-REF-').first()
             if base:
                 return base, payment
+        # Pago «MP manual» registrado como cobro por la conciliación: MP no trae
+        # nuestra referencia; se reconoce por su N° de operación.
+        pid = str(payment.get('id') or data_id or '')
+        if pid.isdigit():
+            manual = TransaccionMercadoPago.objects.filter(
+                tipo='VENTA', external_reference=f'MANUAL-{pid}').first()
+            if manual:
+                return manual, payment
     return None, None
 
 

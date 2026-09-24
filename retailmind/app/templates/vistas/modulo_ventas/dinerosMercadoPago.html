@@ -190,7 +190,7 @@
                         <div class="kpi-card kpi-card--ok card h-100" title="Cobros amarrados a un retiro al banco"><div class="card-body d-flex align-items-center gap-2">
                             <div class="kpi-icon text-white"><i class="ri-bank-line"></i></div>
                             <div class="overflow-hidden"><div class="kpi-value" id="kpiDepositado">$0</div>
-                            <p class="kpi-label" title="Neto de las ventas que un retiro ya se llevó al banco">Depositado en banco (neto)</p><p class="kpi-amount" id="kpiComisiones">Comisiones $0</p></div>
+                            <p class="kpi-label" id="kpiRetiradoLabel" title="Suma de los retiros de Mercado Pago al banco con fecha en el período">Retirado al banco en el período</p><p class="kpi-amount" id="kpiComisiones">Comisiones $0</p></div>
                         </div></div>
                     </div>
                 </div>
@@ -489,8 +489,12 @@
                 document.getElementById('kpiCobradoCant').textContent = `${k.cantidad_cobros || 0} cobros`;
                 document.getElementById('kpiPendiente').textContent = fmt(k.pendiente_liberacion_neto);
                 document.getElementById('kpiLiberado').textContent = `Liberado sin retirar ${fmt(k.liberado_sin_retirar_neto)}`;
-                document.getElementById('kpiDepositado').textContent = fmt(k.depositado_neto);
-                document.getElementById('kpiComisiones').textContent = `Comisiones ${fmt(k.comisiones)}`;
+                document.getElementById('kpiDepositado').textContent = fmt(k.retirado_periodo);
+                // Los retiros son de la cuenta MP (empresa), no de una tienda.
+                document.getElementById('kpiRetiradoLabel').textContent = k.retirado_cuenta
+                    ? `Retirado al banco (cuenta ${k.retirado_cuenta})` : 'Retirado al banco en el período';
+                document.getElementById('kpiComisiones').textContent =
+                    `De lo cobrado en el período ya en el banco ${fmt(k.depositado_neto)} · Comisiones ${fmt(k.comisiones)}`;
                 const retiros = data.retiros || [];
                 document.getElementById('tabCountRetiros').textContent = retiros.length;
                 document.getElementById('tbodyRetiros').innerHTML = retiros.length ? retiros.map(r => {
@@ -551,7 +555,7 @@
             .then(d => {
                 if (!d.success) { Swal.fire({icon: 'error', title: d.error || 'Error'}); return; }
                 const cajas = (d.por_caja || []).map(x => `<div>${esc(x.caja)}: <strong>${fmt(x.monto)}</strong></div>`).join('') || '—';
-                const sinVentas = (d.no_ventas || []).reduce((a, x) => a + (x.monto || 0), 0);
+                const sinVentas = d.sin_venta || 0;
                 const tabla = tablaSimple([
                     ['Cobro', f => `${esc(f.fecha)}${f.origen !== 'POS' ? ` <span class="conc-chip conc-chip--info">${esc(f.origen)}</span>` : ''}`],
                     ['Liberado', f => esc(f.liberacion || '—')],
@@ -560,7 +564,7 @@
                     ['Documento', f => esc(f.documento || 'Sin documento')],
                     ['Bruto', f => fmt(f.bruto), 'num'],
                     ['Comisión', f => f.comision == null ? '—' : fmt(f.comision), 'num'],
-                    ['Neto', f => fmt(f.neto), 'num'],
+                    ['Neto', f => f.neto == null ? '—' : fmt(f.neto), 'num'],
                     ['N° operación', f => esc(f.payment_id_mp || '—')],
                 ], d.filas || []);
                 Swal.fire({
@@ -571,6 +575,7 @@
                             <div class="col-md-4"><div class="conc-sub">De qué caja salió</div>${cajas}</div>
                             <div class="col-md-4"><div class="conc-sub">Ventas identificadas (${(d.filas || []).length})</div>
                                 <strong>${fmt(d.suma_neto)}</strong> neto · bruto ${fmt(d.bruto)} · comisión ${fmt(d.comision)}
+                                ${d.bruto_sin_neto ? `<div class="conc-sub">+ ${fmt(d.bruto_sin_neto)} bruto de pagos «MP manual» sin neto informado</div>` : ''}
                                 ${sinVentas ? `<div class="conc-sub mt-1">${fmt(sinVentas)} no se pudo explicar con ventas del POS (saldo que ya estaba en Mercado Pago, pagos online o sin N° de operación).</div>` : ''}</div>
                         </div>
                         ${d.detalle ? `<div class="conc-sub mb-2">${esc(d.detalle)}</div>` : ''}
