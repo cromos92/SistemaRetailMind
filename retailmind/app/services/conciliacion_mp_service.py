@@ -1254,13 +1254,29 @@ def estado_tarea_liberaciones(config, task_id):
                        cuenta_breaker=False)
     data = mp._json_o_error(resp, 'release_report task') or {}
     estado = str(data.get('status') or '')
-    return {'estado': estado, 'file_name': data.get('file_name') or '',
-            'listo': estado == 'processed' and bool(data.get('file_name')),
-            'fallido': estado == 'failed'}
+    archivo = data.get('file_name') or ''
+    # MP usa estados que no documenta ('data-ready' = juntó los datos y falta el
+    # archivo; 'enabled' = listo): lo que manda es que ya exista el archivo.
+    return {'estado': estado, 'estado_texto': texto_estado_reporte(estado, archivo), 'file_name': archivo,
+            'listo': bool(archivo),
+            'fallido': not archivo and estado in ESTADOS_REPORTE_FALLIDO}
+
+
+ESTADOS_REPORTE_FALLIDO = ('failed', 'error', 'rejected', 'cancelled', 'canceled')
+
+
+def texto_estado_reporte(estado, archivo=''):
+    """Estado de un pedido de reporte en palabras."""
+    if archivo:
+        return 'listo'
+    return {'pending': 'en cola en Mercado Pago', 'processing': 'Mercado Pago lo está procesando',
+            'data-ready': 'datos listos, Mercado Pago está armando el archivo'}.get(
+        estado, 'no se pudo generar' if estado in ESTADOS_REPORTE_FALLIDO else (estado or 'en proceso'))
 
 
 def _normalizar_reporte(item):
     return {
+        'id': item.get('id'),
         'file_name': item.get('file_name') or '',
         'begin_date': str(item.get('begin_date') or ''),
         'end_date': str(item.get('end_date') or ''),
@@ -1271,7 +1287,7 @@ def _normalizar_reporte(item):
     }
 
 
-def listar_reportes_liberaciones(config, limite=20):
+def listar_reportes_liberaciones(config, limite=20, incluir_pendientes=False):
     """Reportes ya generados en MP, más recientes primero (solo los descargables).
 
     Usa /search (documentado: ordenado por creación descendente y con
@@ -1291,6 +1307,8 @@ def listar_reportes_liberaciones(config, limite=20):
             data = data.get('results') or []
         reportes = [_normalizar_reporte(i) for i in data]
         reportes.sort(key=lambda r: r['creado'], reverse=True)
+    if incluir_pendientes:
+        return reportes[:limite]
     return [r for r in reportes if r['file_name']][:limite]
 
 
@@ -1434,14 +1452,32 @@ def _pedido_valido(pedido):
         tarea = int(pedido.get('task_id') or 0)
     except (TypeError, ValueError):
         tarea = 0
-    limpio = {k: str(pedido.get(k) or '')[:40] for k in ('begin_date', 'end_date', 'hasta', 'desde')}
+    limpio = {k: str(pedido.get(k) or '')[:40] for k in ('begin_date', 'end_date', 'hasta', 'desde', 'pedido_a')}
     limpio['task_id'] = tarea or None
     archivo = str(pedido.get('file_name') or '')
     limpio['file_name'] = archivo if _RE_ARCHIVO.match(archivo) else ''
     return limpio if (limpio['task_id'] or limpio['file_name']) else None
 
 
-def _pedido_en_curso(cfg, reportes, pedido_pagina=None):
+def _pedido_en_cola_mp(pendientes, horas=6):
+    """El pedido más reciente que MP todavía está generando (de las últimas
+    `horas`), con la forma de un pedido propio. Así no se pide otro encima."""
+    limite = timezone.now() - timedelta(hours=horas)
+    for r in pendientes:
+        creado = _instante(r.get('creado'))
+        if (r.get('file_name') or not r.get('id') or r.get('estado') in ESTADOS_REPORTE_FALLIDO
+                or creado is None or creado < limite):
+            continue
+        desde = _instante(r.get('begin_date'))
+        return {'task_id': int(r['id']), 'begin_date': r.get('begin_date') or '', 'end_date': '',
+                'desde': timezone.localtime(desde).strftime('%d/%m/%Y') if desde else '',
+                'hasta': timezone.localtime(creado).strftime('%d/%m %H:%M'),
+                'pedido_a': timezone.localtime(creado).strftime('%H:%M'),
+                'estado_texto': texto_estado_reporte(r.get('estado'))}
+    return None
+
+
+def _pedido_en_curso(cfg, reportes, pedido_pagina=None, pedido_mp=None):
     """Qué pasó con el reporte que se le pidió antes a MP para esta cuenta.
 
     El pedido se busca en la caché del proceso y, si no está (otro worker de
@@ -1454,7 +1490,7 @@ def _pedido_en_curso(cfg, reportes, pedido_pagina=None):
     - fallido: MP no pudo generarlo.
     """
     clave = _CLAVE_PEDIDO.format(cfg.id)
-    pedido = cache.get(clave) or _pedido_valido(pedido_pagina)
+    pedido = cache.get(clave) or _pedido_valido(pedido_pagina) or pedido_mp
     if not pedido:
         return None, None, False, False
     fin_pedido = _instante(pedido.get('end_date'))
@@ -1474,6 +1510,7 @@ def _pedido_en_curso(cfg, reportes, pedido_pagina=None):
             return None, None, False, True
         if estado['listo']:
             archivo = estado['file_name']
+        pedido = dict(pedido, estado_texto=estado.get('estado_texto') or '')
     if not archivo:
         return pedido, None, False, False
     pedido = dict(pedido, file_name=archivo)
@@ -1503,6 +1540,8 @@ def _pedir_si_hace_falta(cfg, reportes, fila, ahora=None):
         return
     fin = _instante(pedido.get('end_date'))
     pedido['hasta'] = timezone.localtime(fin).strftime('%d/%m %H:%M') if fin else ''
+    pedido['pedido_a'] = timezone.localtime(ahora).strftime('%H:%M')
+    pedido['estado_texto'] = 'en cola en Mercado Pago'
     desde = _instante(pedido.get('begin_date'))
     pedido['desde'] = timezone.localtime(desde).strftime('%d/%m/%Y') if desde else ''
     cache.set(_CLAVE_PEDIDO.format(cfg.id), pedido, 60 * 20)
@@ -1555,11 +1594,13 @@ def detectar_retiros(presupuesto_seg=45, pedir=True, pedir_ids=(), pedidos=None)
         except mp.MercadoPagoError:
             pass
         try:
-            reportes = listar_reportes_liberaciones(cfg, limite=10)
+            todos = listar_reportes_liberaciones(cfg, limite=10, incluir_pendientes=True)
         except mp.MercadoPagoError as e:
             fila['error'] = e.mensaje
             continue
-        pendiente, extra, resuelto, fallido = _pedido_en_curso(cfg, reportes, pedido_pagina)
+        reportes = [r for r in todos if r['file_name']]
+        pedido_mp = _pedido_en_cola_mp([r for r in todos if not r['file_name']])
+        pendiente, extra, resuelto, fallido = _pedido_en_curso(cfg, reportes, pedido_pagina, pedido_mp)
         if extra and extra['file_name'] not in {r['file_name'] for r in reportes}:
             reportes = [extra] + reportes
         # Del más antiguo al más nuevo: los retiros se reconstruyen en orden.
@@ -1711,7 +1752,7 @@ def detalle_retiro(retiro):
     }
 
 
-def cuadre_por_sucursal(desde, hasta, sucursal_id=None):
+def cuadre_por_sucursal(desde, hasta, sucursal_id=None, configs=None):
     """Por tienda, los cobros MP del período: vendido (bruto), devuelto,
     comisión, neto y dónde está ese neto: ya en el banco (un retiro se lo
     llevó), por liberar (MP aún no lo suelta) o disponible en MP."""
@@ -1724,6 +1765,8 @@ def cuadre_por_sucursal(desde, hasta, sucursal_id=None):
           .select_related('sucursal'))
     if sucursal_id:
         qs = qs.filter(sucursal_id=int(sucursal_id))
+    if configs is not None:
+        qs = qs.filter(config_id__in=list(configs))
     filas = {}
     campos = ('cobros', 'vendido', 'devuelto', 'comision', 'neto', 'en_banco', 'por_liberar', 'en_mp',
               'sin_comision')
@@ -1755,6 +1798,8 @@ def cuadre_por_sucursal(desde, hasta, sucursal_id=None):
                     .select_related('transaccion_origen__retiro'))
     if sucursal_id:
         devoluciones = devoluciones.filter(transaccion_origen__sucursal_id=int(sucursal_id))
+    if configs is not None:
+        devoluciones = devoluciones.filter(transaccion_origen__config_id__in=list(configs))
     for dv in devoluciones:
         origen = dv.transaccion_origen
         f = filas.get(origen.sucursal_id)
@@ -1779,6 +1824,198 @@ def cuadre_por_sucursal(desde, hasta, sucursal_id=None):
     total = {c: sum(f[c] for f in filas) for c in campos}
     total['sucursal'] = 'Total'
     return {'filas': filas, 'total': total, 'desde': str(d), 'hasta': str(h)}
+
+
+# ─────────────── Asignación de retiros: cobros del mes ↔ retiros ───────────────
+
+ESTADOS_ASIGNACION = {
+    'EN_BANCO': 'En el banco',
+    'POR_LIBERAR': 'Por liberar',
+    'EN_MP': 'En Mercado Pago',
+    'DEVUELTA': 'Devuelto',
+    'SIN_REGISTRAR': 'MP manual sin registrar',
+}
+
+
+def _primer_dia_mes(valor):
+    """'2026-09' → date(2026, 9, 1); None si no calza."""
+    m = re.match(r'^(\d{4})-(\d{2})$', str(valor or '').strip())
+    if not m or not 1 <= int(m.group(2)) <= 12:
+        return None
+    return date(int(m.group(1)), int(m.group(2)), 1)
+
+
+def _fin_de_mes(primero):
+    return (primero + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+
+
+def _pagos_manuales_sin_registrar(desde, hasta, sucursales=None):
+    """Pagos «MP manual» de ventas cerradas que todavía no tienen su cobro: su
+    plata no se puede asignar a un retiro hasta registrarlos («Detectar
+    retiros» los registra por su N°; si no calzan, «Asociar»)."""
+    qs = (TicketDetallePago.objects
+          .filter(Q(origen_pago='MANUAL') | Q(origen_pago__isnull=True),
+                  metodo_pago__in=METODOS_MP, ticket__estado='PAGADO',
+                  transacciones_mercadopago__isnull=True,
+                  creado_en__date__gte=desde, creado_en__date__lte=hasta)
+          .select_related('ticket__sucursal'))
+    if sucursales is not None:
+        qs = qs.filter(ticket__sucursal_id__in=list(sucursales))
+    return qs
+
+
+def asignaciones_mp(mes=None, configs=None, sucursal_id=None, meses=6, max_cobros=5000):
+    """Cuánto de lo cobrado con Mercado Pago ya se llevó un retiro al banco.
+
+    - `serie`: los `meses` meses hasta el elegido, con neto cobrado, ya en el
+      banco, por liberar, en MP, devuelto, pagos MP manual sin registrar y % completado.
+    - `retiros`: los retiros con fecha en el mes y cuánto de cada uno está
+      explicado con ventas.
+    - `cobros`: cada cobro del mes y dónde está su plata (con su retiro).
+    `configs`: cajas de UNA cuenta MP (None = todas). `sucursal_id` filtra la tienda.
+    """
+    hoy = timezone.localdate()
+    primero = _primer_dia_mes(mes) or hoy.replace(day=1)
+    ultimo = _fin_de_mes(primero)
+    ahora = timezone.now()
+    sucursales = None
+    if configs is not None:
+        sucursales = set(MercadoPagoConfig.objects.filter(id__in=list(configs)).values_list('sucursal_id', flat=True))
+    if sucursal_id:
+        sucursales = {int(sucursal_id)} if sucursales is None else (sucursales & {int(sucursal_id)})
+
+    # ── Avance por mes ──
+    serie = []
+    m = primero
+    for _ in range(max(1, int(meses))):
+        fin = _fin_de_mes(m)
+        tot = cuadre_por_sucursal(str(m), str(fin), sucursal_id=sucursal_id, configs=configs)['total']
+        manuales = _pagos_manuales_sin_registrar(m, fin, sucursales)
+        agg = manuales.aggregate(n=Count('id'), s=Sum('monto'))
+        tot = {k: v for k, v in tot.items() if k != 'sucursal'}
+        tot.update({
+            'mes': m.strftime('%Y-%m'),
+            'manual_sin_registrar': int(agg['s'] or 0), 'manual_sin_registrar_n': agg['n'] or 0,
+            # % de lo cobrado (neto) que un retiro ya se llevó al banco
+            'pct': round(100 * tot['en_banco'] / tot['neto']) if tot['neto'] > 0 else None,
+        })
+        serie.append(tot)
+        m = (m - timedelta(days=1)).replace(day=1)
+    serie.reverse()
+
+    # ── Retiros del mes ──
+    retiros_qs = RetiroMercadoPago.objects.filter(fecha__gte=primero, fecha__lte=ultimo)
+    if configs is not None:
+        retiros_qs = retiros_qs.filter(config_id__in=list(configs))
+    elif sucursales is not None:
+        cuentas = set()
+        for cfg in MercadoPagoConfig.objects.filter(sucursal_id__in=list(sucursales)).select_related('sucursal', 'cuenta'):
+            cuentas.update(_configs_de_la_cuenta(cfg))
+        retiros_qs = retiros_qs.filter(config_id__in=list(cuentas))
+    alias = {}
+    if sucursal_id:
+        from app.models import Sucursal
+        alias_tienda = Sucursal.objects.filter(pk=int(sucursal_id)).values_list('alias', flat=True).first() or ''
+    else:
+        alias_tienda = ''
+    retiros = []
+    for r in (retiros_qs.select_related('config__sucursal__empresa', 'config__cuenta__empresa')
+              .annotate(n_trx=Count('transacciones'),
+                        neto_trx=Sum(Coalesce('transacciones__monto_neto', 'transacciones__monto')))
+              .order_by('-fecha', '-id')):
+        raw = r.raw_reporte if isinstance(r.raw_reporte, dict) else {}
+        por_caja = raw.get('por_caja') or []
+        if 'sin_venta' in raw:
+            sin_venta = int(raw.get('sin_venta') or 0)
+        else:
+            sin_venta = sum(int(c.get('monto') or 0) for c in por_caja if isinstance(c, dict) and (
+                c.get('caja') in (CAJA_SALDO_ANTERIOR, CAJA_NO_EXPLICADA)
+                or str(c.get('caja', '')).startswith(('Sin caja', 'Caja MP «'))))
+        if not por_caja:
+            sin_venta = r.monto   # guardado antes del desglose: no se sabe qué se llevó
+        explicado = max(0, r.monto - sin_venta)
+        if r.config_id not in alias:
+            cuenta = _cuenta_efectiva(r.config)
+            empresa = cuenta.empresa if cuenta else (r.config.sucursal.empresa if r.config.sucursal_id else None)
+            alias[r.config_id] = getattr(empresa, 'nombre', '') or ''
+        instante = _instante(raw.get('instante'))
+        retiros.append({
+            'withdrawal_id': r.withdrawal_id, 'fecha': r.fecha.strftime('%d/%m/%Y'),
+            'hora': timezone.localtime(instante).strftime('%H:%M') if instante else '',
+            'cuenta': alias[r.config_id], 'monto': r.monto, 'estado': r.estado,
+            'visto_en_cartola': r.visto_en_cartola,
+            'ventas': r.n_trx, 'neto_ventas': int(r.neto_trx or 0),
+            'explicado': explicado, 'sin_venta': sin_venta,
+            'pct_explicado': round(100 * explicado / r.monto) if r.monto else None,
+            # con una tienda elegida: cuánto de este retiro salió de ella
+            'de_la_tienda': (sum(int(c.get('monto') or 0) for c in por_caja if isinstance(c, dict)
+                                 and str(c.get('caja', '')).startswith(f'{alias_tienda} · '))
+                             if alias_tienda else None),
+            'por_caja': por_caja,
+        })
+
+    # ── Cobros del mes ──
+    qs = (TransaccionMercadoPago.objects
+          .filter(tipo='VENTA', estado__in=('APROBADA', 'DEVUELTA', 'CONTRACARGO'),
+                  creado_en__date__gte=primero, creado_en__date__lte=ultimo)
+          .exclude(correlativo_ticket__startswith='PRUEBA-')
+          .select_related('sucursal', 'config', 'retiro', 'ticket', 'detalle_pago__ticket')
+          .order_by('creado_en'))
+    if sucursal_id:
+        qs = qs.filter(sucursal_id=int(sucursal_id))
+    if configs is not None:
+        qs = qs.filter(config_id__in=list(configs))
+    total_cobros = qs.count()
+    trxs = list(qs[:max_cobros])
+    manuales = list(_pagos_manuales_sin_registrar(primero, ultimo, sucursales).order_by('creado_en')[:max_cobros])
+    tickets = _ticket_de_cobros(trxs)
+    dtes = _dtes_por_ref(list(tickets.values()) + [p.ticket for p in manuales])
+    cobros, conteo = [], {k: 0 for k in ESTADOS_ASIGNACION}
+    for t in trxs:
+        neto = int(t.monto_neto if t.monto_neto is not None else t.monto)
+        if t.estado != 'APROBADA':
+            estado = 'DEVUELTA'
+        elif t.retiro_id:
+            estado = 'EN_BANCO'
+        elif t.money_release_date and t.money_release_date > ahora:
+            estado = 'POR_LIBERAR'
+        else:
+            estado = 'EN_MP'
+        conteo[estado] += 1
+        tk = tickets.get(t.id)
+        documento, _dte_id = _documento_de_ticket(tk, dtes)
+        ref = str(t.external_reference or '')
+        cobros.append({
+            'fecha': timezone.localtime(t.creado_en).strftime('%d/%m/%Y %H:%M'),
+            'sucursal': t.sucursal.alias if t.sucursal_id else '',
+            'caja': t.config.nombre if t.config_id else '',
+            'ticket': tk.correlativo if tk else (t.correlativo_ticket or ''),
+            'documento': documento,
+            'origen': 'MP manual' if ref.startswith('MANUAL-') else ('Tu caja' if 'DIRECTO-' in ref else 'POS'),
+            'bruto': int(t.monto), 'neto': neto, 'payment_id_mp': t.payment_id_mp,
+            'liberacion': (timezone.localtime(t.money_release_date).strftime('%d/%m/%Y')
+                           if t.money_release_date else ''),
+            'estado': estado,
+            'retiro': t.retiro.withdrawal_id if t.retiro_id else '',
+            'retiro_fecha': t.retiro.fecha.strftime('%d/%m/%Y') if t.retiro_id else '',
+        })
+    for pago in manuales:
+        conteo['SIN_REGISTRAR'] += 1
+        documento, _dte_id = _documento_de_ticket(pago.ticket, dtes)
+        cobros.append({
+            'fecha': timezone.localtime(pago.creado_en).strftime('%d/%m/%Y %H:%M'),
+            'sucursal': pago.ticket.sucursal.alias if pago.ticket.sucursal_id else '',
+            'caja': 'MP manual', 'ticket': pago.ticket.correlativo, 'documento': documento,
+            'origen': 'MP manual', 'bruto': int(pago.monto or 0), 'neto': None,
+            'payment_id_mp': str(pago.voucher or '').strip(), 'liberacion': '',
+            'estado': 'SIN_REGISTRAR', 'retiro': '', 'retiro_fecha': '',
+        })
+    return {
+        'mes': primero.strftime('%Y-%m'), 'desde': str(primero), 'hasta': str(ultimo),
+        'serie': serie, 'resumen': serie[-1] if serie else {}, 'retiros': retiros,
+        'cobros': cobros, 'conteo': conteo, 'total_cobros': total_cobros,
+        'recortado': total_cobros > len(trxs), 'estados': ESTADOS_ASIGNACION,
+    }
 
 
 # ───────────────────────────── 3. Cartola del banco ───────────────────────────

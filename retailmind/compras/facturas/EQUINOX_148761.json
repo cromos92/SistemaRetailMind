@@ -1,0 +1,72 @@
+{
+  "_fuente": "Factura electrónica N° 148761 de Equinox Los Andes SPA (Nike), 'Equinox Los Andes SPA2.pdf' pág. 3, orden ATP DSCTO 0109. Transcrita y cuadrada: 14 líneas, 245 pares, neto $6.736.032.",
+  "_reglas": "genero: 'M ...' = HOMBRE, 'W'/'WMNS' = MUJER, resto UNISEX. TF = baby fútbol, IC = fútsal. Tallas US tal cual la factura (el comando las pasa al formato de la casa). precioventa = precio de venta escrito a mano en la factura (Documentos escaneados.pdf, leído por 4 lectores).",
+  "proveedor_rut": "77402098-5",
+  "folio": 148761,
+  "fecha_emision": "2026-09-15",
+  "sucursal": "EDEL",
+  "fuente_precioventa": "precio escrito a mano en la factura (Documentos escaneados.pdf)",
+  "marca": "NIKE",
+  "color": "MULTI",
+  "tipo_talla": "US",
+  "guias_talla": {"HOMBRE": "NIKE HOMBRE", "UNISEX": "NIKE HOMBRE", "MUJER": "NIKE MUJER", "INFANTIL": "NIKE INFANTIL"},
+  "total_unidades": 245,
+  "total_neto": 6736032,
+  "lineas": [
+    {"articulo": "FQ8310-700", "descripcion": "JR ZOOM SUPERFLY 10 ACADEMY TF", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 32532, "cantidad": 15, "importe": 487980, "precioventa": 82990,
+     "tallas": {"1Y": 2, "2Y": 2, "3Y": 1, "3.5Y": 2, "4Y": 1, "4.5Y": 2, "5Y": 2, "5.5Y": 1, "6Y": 2}},
+
+    {"articulo": "FQ8317-001", "descripcion": "SUPERFLY 10 CLUB TF", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 27720, "cantidad": 12, "importe": 332640, "precioventa": 79990,
+     "tallas": {"7.5": 1, "8.5": 2, "9": 2, "9.5": 2, "10": 2, "10.5": 1, "11": 1, "12": 1}},
+
+    {"articulo": "FQ8313-446", "descripcion": "JR SUPERFLY 10 CLUB TF", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 21666, "cantidad": 20, "importe": 433320, "precioventa": 64990,
+     "tallas": {"1Y": 2, "1.5Y": 2, "2Y": 2, "2.5Y": 2, "3Y": 2, "3.5Y": 2, "4Y": 2, "4.5Y": 2, "5Y": 2, "5.5Y": 2}},
+
+    {"articulo": "FQ8317-446", "descripcion": "SUPERFLY 10 CLUB TF", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 26570, "cantidad": 12, "importe": 318840, "precioventa": 79990,
+     "tallas": {"7.5": 1, "8": 2, "8.5": 2, "9": 2, "9.5": 2, "10": 2, "11": 1}},
+
+    {"articulo": "HJ9198-403", "descripcion": "NIKE REVOLUTION 8", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["running"],
+     "costo": 23915, "cantidad": 26, "importe": 621790, "precioventa": 69990,
+     "tallas": {"7.5": 2, "9": 4, "9.5": 4, "10": 4, "10.5": 4, "11": 4, "12": 2, "14": 2}},
+
+    {"articulo": "HQ2038-446", "descripcion": "JR PHANTOM 6 LOW ACAD TF", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 24835, "cantidad": 13, "importe": 322855, "precioventa": 69990,
+     "tallas": {"1Y": 1, "2Y": 2, "3Y": 1, "4Y": 2, "4.5Y": 1, "5Y": 2, "5.5Y": 2, "6Y": 2}},
+
+    {"articulo": "HQ2324-446", "descripcion": "PHANTOM 6 LOW CLUB TF", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 23605, "cantidad": 10, "importe": 236050, "precioventa": 69990,
+     "tallas": {"6": 1, "7": 1, "9": 2, "9.5": 2, "10.5": 2, "11": 2}},
+
+    {"articulo": "HQ2326-603", "descripcion": "PHANTOM 6 LOW ACAD TF EH", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 37508, "cantidad": 20, "importe": 750160, "precioventa": 99990,
+     "tallas": {"7": 1, "7.5": 1, "8": 2, "8.5": 2, "9": 1, "9.5": 2, "10": 2, "10.5": 2, "11": 2, "11.5": 2, "12": 1, "12.5": 1, "13": 1}},
+
+    {"articulo": "IO8449-661", "descripcion": "PHANTOM 6 LOW ACAD TF NU3", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 37508, "cantidad": 12, "importe": 450096, "precioventa": 99990,
+     "tallas": {"8.5": 2, "9": 2, "9.5": 2, "10": 2, "10.5": 2, "11": 1, "13": 1}},
+
+    {"articulo": "HQ2040-603", "descripcion": "JR PHANTOM 6 LOW ACAD TF EH", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 27577, "cantidad": 25, "importe": 689425, "precioventa": 76990,
+     "tallas": {"1Y": 2, "2Y": 4, "3Y": 1, "4Y": 4, "4.5Y": 2, "5Y": 4, "5.5Y": 4, "6Y": 4}},
+
+    {"articulo": "IO9551-603", "descripcion": "JR PHANTOM 6 LOW ACAD IC EH", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["sala"],
+     "costo": 27441, "cantidad": 15, "importe": 411615, "precioventa": 76990,
+     "tallas": {"1Y": 2, "2.5Y": 2, "3Y": 1, "3.5Y": 2, "4Y": 2, "5Y": 2, "5.5Y": 2, "6Y": 2}},
+
+    {"articulo": "IH1797-901", "descripcion": "JR PHANTOM 6 LOW ACAD TF T", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 26901, "cantidad": 33, "importe": 887733, "precioventa": 69990,
+     "tallas": {"1Y": 3, "1.5Y": 3, "2Y": 3, "2.5Y": 3, "3Y": 3, "3.5Y": 3, "4Y": 3, "4.5Y": 3, "5Y": 3, "5.5Y": 3, "6Y": 3}},
+
+    {"articulo": "IH1805-901", "descripcion": "JR TIEMPO MAESTRO ACADEMY TF T", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 24779, "cantidad": 22, "importe": 545138, "precioventa": 64990,
+     "tallas": {"1Y": 2, "1.5Y": 2, "2Y": 2, "2.5Y": 2, "3Y": 2, "3.5Y": 2, "4Y": 2, "4.5Y": 2, "5Y": 2, "5.5Y": 2, "6Y": 2}},
+
+    {"articulo": "IH7378-001", "descripcion": "NIKE PACIFIC GS", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 24839, "cantidad": 10, "importe": 248390, "precioventa": 69990,
+     "tallas": {"3.5Y": 2, "5Y": 4, "6Y": 4}}
+  ]
+}

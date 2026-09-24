@@ -1,0 +1,48 @@
+{
+  "_fuente": "Factura electrónica N° 148765 de Equinox Los Andes SPA (Nike), 'Equinox Los Andes SPA2.pdf' pág. 2. Transcrita y cuadrada: 8 líneas, 92 pares, neto $3.626.727.",
+  "_reglas": "genero: 'M ...' = HOMBRE, 'W'/'WMNS' = MUJER, resto UNISEX. TF = baby fútbol. Tallas US tal cual la factura (el comando las pasa al formato de la casa). precioventa = precio de venta escrito a mano en la factura (Documentos escaneados.pdf, leído por 4 lectores).",
+  "proveedor_rut": "77402098-5",
+  "folio": 148765,
+  "fecha_emision": "2026-09-15",
+  "sucursal": "EDEL",
+  "fuente_precioventa": "precio escrito a mano en la factura (Documentos escaneados.pdf)",
+  "marca": "NIKE",
+  "color": "MULTI",
+  "tipo_talla": "US",
+  "guias_talla": {"HOMBRE": "NIKE HOMBRE", "UNISEX": "NIKE HOMBRE", "MUJER": "NIKE MUJER", "INFANTIL": "NIKE INFANTIL"},
+  "total_unidades": 92,
+  "total_neto": 3626727,
+  "lineas": [
+    {"articulo": "DZ2795-606", "descripcion": "W NIKE CORTEZ TXT", "genero": "MUJER", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 57217, "cantidad": 9, "importe": 514953, "precioventa": 102990,
+     "tallas": {"7": 2, "7.5": 2, "8": 2, "8.5": 2, "9": 1}},
+
+    {"articulo": "FD6476-013", "descripcion": "W NIKE DOWNSHIFTER 13", "genero": "MUJER", "categoria": "Calzado > Zapatillas", "especialidades": ["running"],
+     "costo": 36106, "cantidad": 18, "importe": 649908, "precioventa": 69990,
+     "tallas": {"6": 1, "6.5": 2, "7": 2, "7.5": 2, "8": 3, "8.5": 1, "9": 3, "9.5": 2, "10": 1, "10.5": 1}},
+
+    {"articulo": "FD6476-110", "descripcion": "W NIKE DOWNSHIFTER 13", "genero": "MUJER", "categoria": "Calzado > Zapatillas", "especialidades": ["running"],
+     "costo": 36106, "cantidad": 13, "importe": 469378, "precioventa": 69990,
+     "tallas": {"5.5": 2, "6": 2, "6.5": 2, "7": 2, "7.5": 2, "8": 2, "9": 1}},
+
+    {"articulo": "FQ8291-300", "descripcion": "JR VAPOR 16 CLUB TF PS V", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 27772, "cantidad": 8, "importe": 222176, "precioventa": 54990,
+     "tallas": {"11C": 2, "11.5C": 2, "12C": 1, "12.5C": 1, "13C": 2}},
+
+    {"articulo": "HJ5226-105", "descripcion": "NIKE V5 RNR", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 57217, "cantidad": 8, "importe": 457736, "precioventa": 102990, "_precio_duda": "102.990 (otra lectura: 106.990)",
+     "tallas": {"8": 2, "9": 2, "9.5": 2, "10.5": 1, "11": 1}},
+
+    {"articulo": "HQ2038-800", "descripcion": "JR PHANTOM 6 LOW ACAD TF", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 38883, "cantidad": 10, "importe": 388830, "precioventa": 76990,
+     "tallas": {"1Y": 1, "3.5Y": 2, "4Y": 1, "4.5Y": 2, "5Y": 2, "5.5Y": 2}},
+
+    {"articulo": "HQ2049-800", "descripcion": "JR PHANTOM 6 HIGH ACAD TF", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 46106, "cantidad": 11, "importe": 507166, "precioventa": 89990,
+     "tallas": {"1Y": 2, "1.5Y": 1, "2.5Y": 2, "3Y": 1, "4Y": 2, "5Y": 2, "6Y": 1}},
+
+    {"articulo": "FQ8291-446", "descripcion": "JR VAPOR 16 CLUB TF PS-V", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 27772, "cantidad": 15, "importe": 416580, "precioventa": 54990,
+     "tallas": {"10.5C": 1, "11C": 2, "11.5C": 3, "12C": 3, "12.5C": 3, "13C": 3}}
+  ]
+}

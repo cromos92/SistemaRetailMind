@@ -1,0 +1,119 @@
+{
+  "_fuente": "Factura electrónica N° 148764 de Equinox Los Andes SPA (Nike), 'Equinox Los Andes SPA2.pdf' pág. 1. Transcrita y cuadrada: 26 líneas, 350 pares, neto $13.885.274.",
+  "_reglas": "genero: 'M ...' = HOMBRE, 'W'/'WMNS' = MUJER, resto UNISEX. SLIDE = Sandalias y Chalas. TF = baby fútbol. Tallas US tal cual la factura (el comando las pasa al formato de la casa). precioventa null = costo x 1,85 si costo < 40.000, costo x 1,8 desde 40.000, redondeado a ...990.",
+  "proveedor_rut": "77402098-5",
+  "folio": 148764,
+  "fecha_emision": "2026-09-15",
+  "sucursal": "EDEL",
+  "marca": "NIKE",
+  "color": "MULTI",
+  "tipo_talla": "US",
+  "guias_talla": {"HOMBRE": "NIKE HOMBRE", "UNISEX": "NIKE HOMBRE", "MUJER": "NIKE MUJER", "INFANTIL": "NIKE INFANTIL"},
+  "total_unidades": 350,
+  "total_neto": 13885274,
+  "lineas": [
+    {"articulo": "415445-101", "descripcion": "AIR MONARCH IV", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["training"],
+     "costo": 57217, "cantidad": 8, "importe": 457736, "precioventa": null,
+     "tallas": {"7.5": 1, "8": 1, "8.5": 1, "9": 2, "9.5": 2, "10": 1}},
+
+    {"articulo": "BQ4639-001", "descripcion": "NIKE OFFCOURT SLIDE", "genero": "UNISEX", "categoria": "Calzado > Sandalias y Chalas", "especialidades": ["urbano"],
+     "costo": 24994, "cantidad": 8, "importe": 199952, "precioventa": null,
+     "tallas": {"7": 1, "8": 1, "9": 4, "10": 2}},
+
+    {"articulo": "CI0603-102", "descripcion": "WMNS NIKE AIR HEIGHTS", "genero": "MUJER", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 53883, "cantidad": 14, "importe": 754362, "precioventa": null,
+     "tallas": {"5": 1, "5.5": 1, "6": 2, "7": 2, "9": 2, "9.5": 2, "10": 2, "10.5": 1, "11": 1}},
+
+    {"articulo": "CD5432-003", "descripcion": "WMNS NIKE AIR MAX EXCEE", "genero": "MUJER", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 64994, "cantidad": 12, "importe": 779928, "precioventa": null,
+     "tallas": {"6.5": 1, "7": 1, "7.5": 2, "8": 2, "9": 2, "9.5": 2, "10": 2}},
+
+    {"articulo": "CU3517-004", "descripcion": "NIKE RUN SWIFT 2", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["running"],
+     "costo": 44439, "cantidad": 9, "importe": 399951, "precioventa": null,
+     "tallas": {"6.5": 1, "7.5": 1, "8.5": 2, "9": 2, "9.5": 1, "10": 2}},
+
+    {"articulo": "BQ4639-012", "ficha_id": 82031, "_ficha": "EDEL tiene #82031 SANDALIA OFFCOURT (la correcta) y #82028 ZAPATILLA SUPERFLY con este mismo código", "descripcion": "NIKE OFFCOURT SLIDE", "genero": "UNISEX", "categoria": "Calzado > Sandalias y Chalas", "especialidades": ["urbano"],
+     "costo": 24994, "cantidad": 23, "importe": 574862, "precioventa": null,
+     "tallas": {"7": 4, "8": 4, "9": 4, "10": 4, "11": 4, "12": 3}},
+
+    {"articulo": "DH2987-001", "ficha_id": 90132, "_ficha": "EDEL tiene #90132 NIKE/BLACK/HOMBRE y #90135 NIKE TODODEPORTE/BLACK/NIÑO; se elige la NIKE/HOMBRE", "descripcion": "NIKE COURT VISION LO BE", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 40550, "cantidad": 11, "importe": 446050, "precioventa": null,
+     "tallas": {"7": 1, "8": 1, "8.5": 1, "9.5": 2, "10": 2, "10.5": 2, "11": 1, "11.5": 1}},
+
+    {"articulo": "621716-008", "descripcion": "NIKE REAX 8 TR MES", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["training"],
+     "costo": 51661, "cantidad": 1, "importe": 51661, "precioventa": null,
+     "tallas": {"10.5": 1}},
+
+    {"articulo": "CN9675-600", "descripcion": "NIKE VICTORI ONE SLIDE", "genero": "UNISEX", "categoria": "Calzado > Sandalias y Chalas", "especialidades": ["urbano"],
+     "costo": 22217, "cantidad": 16, "importe": 355472, "precioventa": null,
+     "tallas": {"7": 2, "8": 2, "9": 4, "10": 2, "11": 4, "12": 2}},
+
+    {"articulo": "DX4816-001", "descripcion": "W NIKE CALM SLIDE", "genero": "MUJER", "categoria": "Calzado > Sandalias y Chalas", "especialidades": ["urbano"],
+     "costo": 31661, "cantidad": 12, "importe": 379932, "precioventa": null,
+     "tallas": {"5": 2, "6": 2, "7": 2, "8": 2, "10": 2, "11": 2}},
+
+    {"articulo": "FB7689-003", "descripcion": "NIKE REVOLUTION 7 GS", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["running"],
+     "costo": 33328, "cantidad": 21, "importe": 699888, "precioventa": null,
+     "tallas": {"3.5Y": 2, "4Y": 4, "4.5Y": 4, "5Y": 3, "5.5Y": 4, "6Y": 4}},
+
+    {"articulo": "FD6454-001", "descripcion": "NIKE DOWNSHIFTER 13", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["running"],
+     "costo": 36106, "cantidad": 22, "importe": 794332, "precioventa": null,
+     "tallas": {"7": 1, "7.5": 2, "8": 4, "8.5": 3, "9": 4, "9.5": 2, "10": 3, "10.5": 2, "12": 1}},
+
+    {"articulo": "FD6476-001", "descripcion": "W NIKE DOWNSHIFTER 13", "genero": "MUJER", "categoria": "Calzado > Zapatillas", "especialidades": ["running"],
+     "costo": 36106, "cantidad": 25, "importe": 902650, "precioventa": null,
+     "tallas": {"6.5": 2, "7": 2, "7.5": 4, "8": 4, "8.5": 4, "9": 4, "9.5": 4, "10": 1}},
+
+    {"articulo": "DV4342-002", "descripcion": "LEGEND 10 ACADEMY TF", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 49994, "cantidad": 2, "importe": 99988, "precioventa": null,
+     "tallas": {"9.5": 2}},
+
+    {"articulo": "CN9675-403", "descripcion": "NIKE VICTORI ONE SLIDE", "genero": "UNISEX", "categoria": "Calzado > Sandalias y Chalas", "especialidades": ["urbano"],
+     "costo": 22217, "cantidad": 17, "importe": 377689, "precioventa": null,
+     "tallas": {"7": 2, "8": 4, "9": 4, "10": 1, "11": 4, "12": 2}},
+
+    {"articulo": "FV6040-001", "descripcion": "NIKE AIR ZOOM RIVAL FLY 4", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["running"],
+     "costo": 62772, "cantidad": 8, "importe": 502176, "precioventa": null,
+     "tallas": {"7": 1, "9": 1, "10.5": 2, "11": 2, "11.5": 1, "12": 1}},
+
+    {"articulo": "DM4044-108", "descripcion": "NIKE CORTEZ LTR", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 57217, "cantidad": 10, "importe": 572170, "precioventa": null,
+     "tallas": {"8": 2, "8.5": 2, "9": 2, "9.5": 2, "10": 2}},
+
+    {"articulo": "FD6033-006", "descripcion": "NIKE QUEST 6", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["running"],
+     "costo": 49994, "cantidad": 8, "importe": 399952, "precioventa": null,
+     "tallas": {"8": 1, "8.5": 1, "9": 2, "9.5": 1, "10": 2, "11.5": 1}},
+
+    {"articulo": "FJ3794-004", "descripcion": "W NIKE AL8", "genero": "MUJER", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 57217, "cantidad": 14, "importe": 801038, "precioventa": null,
+     "tallas": {"6.5": 1, "7.5": 2, "8": 2, "8.5": 3, "9": 3, "9.5": 3}},
+
+    {"articulo": "HF0400-600", "descripcion": "AIR ZOOM PEGASUS 41 BTC", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["running"],
+     "costo": 79439, "cantidad": 8, "importe": 635512, "precioventa": null,
+     "tallas": {"7.5": 1, "9.5": 2, "10": 2, "10.5": 2, "11": 1}},
+
+    {"articulo": "HJ8485-001", "descripcion": "W NIKE REVOLUTION 8", "genero": "MUJER", "categoria": "Calzado > Zapatillas", "especialidades": ["running"],
+     "costo": 34994, "cantidad": 34, "importe": 1189796, "precioventa": null,
+     "tallas": {"5.5": 2, "6": 2, "6.5": 4, "7": 4, "7.5": 4, "8": 4, "9": 4, "9.5": 4, "10": 4, "10.5": 2}},
+
+    {"articulo": "HM9593-002", "descripcion": "W NIKE RUN DEFY", "genero": "MUJER", "categoria": "Calzado > Zapatillas", "especialidades": ["running"],
+     "costo": 31661, "cantidad": 32, "importe": 1013152, "precioventa": null,
+     "tallas": {"5.5": 2, "6": 2, "6.5": 4, "7": 4, "7.5": 4, "8": 4, "8.5": 4, "9": 4, "9.5": 4}},
+
+    {"articulo": "FQ8317-600", "descripcion": "SUPERFLY 10 CLUB TF", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 44439, "cantidad": 6, "importe": 266634, "precioventa": null,
+     "tallas": {"8": 2, "9.5": 2, "11": 1, "12": 1}},
+
+    {"articulo": "HQ2276-400", "descripcion": "PHANTOM 360 DF CLUB TF", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 40550, "cantidad": 11, "importe": 446050, "precioventa": null,
+     "tallas": {"7.5": 2, "8": 2, "8.5": 2, "9": 1, "9.5": 2, "10": 1, "12": 1}},
+
+    {"articulo": "IH7653-105", "descripcion": "NIKE CORTEZ BG N", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 42772, "cantidad": 17, "importe": 727124, "precioventa": null,
+     "tallas": {"3.5Y": 2, "4.5Y": 3, "5Y": 4, "5.5Y": 4, "6Y": 4}},
+
+    {"articulo": "DZ2795-606", "descripcion": "W NIKE CORTEZ TXT", "genero": "MUJER", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 57217, "cantidad": 1, "importe": 57217, "precioventa": null,
+     "tallas": {"6.5": 1}}
+  ]
+}

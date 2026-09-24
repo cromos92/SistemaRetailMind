@@ -24039,6 +24039,11 @@ def crear_producto_manual(request):
         actualizar_precios = request.POST.get('actualizar_precios') == 'true'
         # Propagar la descripción a todas las bodegas del mismo código.
         aplicar_todas_bodegas = request.POST.get('aplicar_todas_bodegas') == 'true'
+        # Alinear los precios de las fichas gemelas de otras bodegas (y avisar
+        # a esas tiendas). El modal no lo manda → sigue sincronizando siempre;
+        # el command cargar_productos_factura lo apaga cuando el usuario eligió
+        # cargar stock sin tocar precios.
+        sincronizar_otras_bodegas = request.POST.get('sincronizar_otras_bodegas') != 'false'
         # NOTA: `omitir_tallas_sin_stock` ya no se lee. Omitir las tallas nuevas
         # que vienen en 0 es ahora el comportamiento ÚNICO (ver el loop de
         # variantes más abajo), no una opción del formulario: el modal puede
@@ -24600,6 +24605,8 @@ def crear_producto_manual(request):
             ).annotate(
                 stock_total=Sum('producto_talla__stock')
             ).select_related('sucursal')
+            if not sincronizar_otras_bodegas:
+                productos_similares = productos_similares.none()
 
             # Mismo código+marca+color pero otro género/categoría → otro producto:
             # no se sincroniza y se avisa (código reutilizado o mala categorización).

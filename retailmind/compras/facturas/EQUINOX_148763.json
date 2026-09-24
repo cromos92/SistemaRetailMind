@@ -1,0 +1,76 @@
+{
+  "_fuente": "Factura electrónica N° 148763 de Equinox Los Andes SPA (Nike), escaneo 'Equinox Los Andes SPA.pdf', recibida 24/09. Transcrita y cuadrada: 15 líneas, 201 pares, neto $9.929.433.",
+  "_reglas": "genero: 'M ...' = HOMBRE, 'W ...' = MUJER, resto UNISEX (así se cargan hoy los Nike, incluidos JR/TD). Tallas tal como vienen en la factura; el comando las pasa al formato de la casa (7 -> 7,0 | 7.5 -> 7,5 | 10 -> 10 | 11C -> 11 | 2Y -> 2,0). precioventa = precio de venta escrito a mano en la factura (Documentos escaneados.pdf, leído por 4 lectores).",
+  "proveedor_rut": "77402098-5",
+  "folio": 148763,
+  "fecha_emision": "2026-09-15",
+  "sucursal": "EDEL",
+  "fuente_precioventa": "precio escrito a mano en la factura (Documentos escaneados.pdf)",
+  "marca": "NIKE",
+  "color": "MULTI",
+  "tipo_talla": "US",
+  "guias_talla": {"HOMBRE": "NIKE HOMBRE", "UNISEX": "NIKE HOMBRE", "MUJER": "NIKE MUJER", "INFANTIL": "NIKE INFANTIL"},
+  "total_unidades": 201,
+  "total_neto": 9929433,
+  "lineas": [
+    {"articulo": "HQ6034-001", "descripcion": "M ZOOM VAPOR PRO 3 CLY", "genero": "HOMBRE", "categoria": "Calzado > Zapatillas", "especialidades": ["tenis"],
+     "costo": 73883, "cantidad": 14, "importe": 1034362, "precioventa": 139990,
+     "tallas": {"7.5": 1, "8": 2, "8.5": 2, "9": 2, "9.5": 2, "10": 2, "10.5": 2, "11": 1}},
+
+    {"articulo": "IB2765-009", "descripcion": "NIKE UPLIFT SC", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 38883, "cantidad": 23, "importe": 894309, "precioventa": 77990,
+     "tallas": {"7": 2, "7.5": 4, "8": 2, "8.5": 4, "9": 4, "9.5": 1, "10": 4, "10.5": 1, "11.5": 1}},
+
+    {"articulo": "IB4484-146", "descripcion": "TIEMPO MAESTRO ACADEMY TF", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 51661, "cantidad": 13, "importe": 671593, "precioventa": 99990,
+     "tallas": {"7.5": 1, "8.5": 2, "9": 2, "9.5": 2, "10": 2, "10.5": 2, "11": 2}},
+
+    {"articulo": "IM4006-003", "descripcion": "NIKE PACIFIC LTR", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 48328, "cantidad": 14, "importe": 676592, "precioventa": 89990, "_precio_duda": "89.990 (otra lectura: 99.990)",
+     "tallas": {"7": 2, "7.5": 2, "8": 2, "8.5": 2, "9": 2, "9.5": 2, "10": 1, "10.5": 1}},
+
+    {"articulo": "IQ7636-101", "descripcion": "NIKE CORTEZ VELCRO BPV", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 36106, "cantidad": 20, "importe": 722120, "precioventa": 69990,
+     "tallas": {"11C": 4, "12C": 4, "13C": 4, "2Y": 4, "3Y": 4}},
+
+    {"articulo": "749680-402", "descripcion": "NIKE AIR MAX INVIGOR", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 55550, "cantidad": 10, "importe": 555500, "precioventa": 109990,
+     "tallas": {"7.5": 1, "8": 2, "8.5": 2, "9": 2, "9.5": 2, "11": 1}},
+
+    {"articulo": "DB5945-161", "descripcion": "NIKE COURT VISION LO", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 41661, "cantidad": 17, "importe": 708237, "precioventa": 79990,
+     "tallas": {"7": 1, "7.5": 2, "8.5": 2, "9": 2, "9.5": 2, "10": 2, "10.5": 2, "11": 2, "11.5": 1, "12": 1}},
+
+    {"articulo": "HJ9198-122", "descripcion": "NIKE REVOLUTION 8", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["running"],
+     "costo": 34994, "cantidad": 15, "importe": 524910, "precioventa": 69990,
+     "tallas": {"7": 1, "7.5": 1, "8": 2, "8.5": 2, "9": 2, "9.5": 2, "10": 1, "11": 2, "11.5": 1, "12": 1}},
+
+    {"articulo": "IH1799-901", "descripcion": "JR PHANTOM 6 LOW CLUB TF T", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 33328, "cantidad": 7, "importe": 233296, "precioventa": 66990,
+     "tallas": {"1Y": 1, "1.5Y": 1, "4.5Y": 1, "5Y": 2, "5.5Y": 2}},
+
+    {"articulo": "IH7397-001", "descripcion": "NIKE PACIFIC TD", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 33328, "cantidad": 17, "importe": 566576, "precioventa": 64990,
+     "tallas": {"5C": 1, "6C": 4, "8C": 4, "9C": 4, "10C": 4}},
+
+    {"articulo": "IO9414-003", "descripcion": "NIKE AIR MAX BIA", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 55550, "cantidad": 8, "importe": 444400, "precioventa": 107990, "_precio_duda": "107.990 (otra lectura: 109.990)",
+     "tallas": {"6.5": 1, "7": 2, "7.5": 1, "8": 2, "8.5": 1, "10": 1}},
+
+    {"articulo": "IQ2155-900", "descripcion": "REACTX PHANTOM 6 LOW PRO TF T", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 83328, "cantidad": 12, "importe": 999936, "precioventa": 159990,
+     "tallas": {"7": 1, "7.5": 1, "8": 2, "8.5": 2, "9": 2, "10": 2, "10.5": 2}},
+
+    {"articulo": "IQ2388-901", "descripcion": "TIEMPO MAESTRO ACADEMY TF T", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["baby"],
+     "costo": 51661, "cantidad": 12, "importe": 619932, "precioventa": 99990,
+     "tallas": {"8": 2, "8.5": 1, "9": 2, "9.5": 2, "10": 2, "11": 1, "12": 1, "13": 1}},
+
+    {"articulo": "415082-105", "descripcion": "NIKE AIR MORE UPTEMPO BG", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 77772, "cantidad": 10, "importe": 777720, "precioventa": 149990,
+     "tallas": {"4Y": 2, "4.5Y": 2, "5Y": 1, "5.5Y": 4, "6.5Y": 1}},
+
+    {"articulo": "749680-015", "descripcion": "NIKE AIR MAX INVIGOR", "genero": "UNISEX", "categoria": "Calzado > Zapatillas", "especialidades": ["urbano"],
+     "costo": 55550, "cantidad": 9, "importe": 499950, "precioventa": 109990,
+     "tallas": {"7": 1, "8": 2, "9": 3, "10": 3}}
+  ]
+}

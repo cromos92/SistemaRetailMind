@@ -2063,6 +2063,26 @@ def api_conciliacion_detectar_retiros_mp(request):
 
 
 @login_required
+def api_conciliacion_asignaciones_mp(request):
+    """GET .../conciliacion/asignaciones/?mes=YYYY-MM&cuenta=<config_id>&sucursal_id= (solo admin).
+
+    Cuánto de lo cobrado con MP cada mes ya se llevó un retiro al banco, los
+    retiros del mes (cuánto de cada uno está explicado con ventas) y cada cobro
+    del mes con el retiro que se lo llevó.
+    """
+    from .services import conciliacion_mp_service as conc
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo administradores.'}, status=403)
+    configs = None
+    cuenta = MercadoPagoConfig.objects.filter(pk=_int_o_cero(request.GET.get('cuenta'))).first()
+    if cuenta is not None:
+        configs = conc._configs_de_la_cuenta(cuenta)
+    data = conc.asignaciones_mp(request.GET.get('mes'), configs=configs,
+                                sucursal_id=_sucursal_filtro_conciliacion(request))
+    return JsonResponse({'success': True, **data})
+
+
+@login_required
 def api_conciliacion_retiro_detalle_mp(request, withdrawal_id):
     """GET .../conciliacion/retiro/<withdrawal_id>/ (solo admin): las ventas y
     documentos que se llevó un retiro, y lo que no se pudo explicar con ventas."""
@@ -2090,6 +2110,13 @@ def api_conciliacion_liberaciones_pedir_mp(request):
     d, h = conc.rango_fechas(request.POST.get('desde'), request.POST.get('hasta'),
                              dias_defecto=1, max_dias=60)
     try:
+        # Si Mercado Pago ya está generando uno de esta cuenta, se espera ese:
+        # pedir otro encima solo alarga la cola.
+        en_cola = conc._pedido_en_cola_mp(
+            [r for r in conc.listar_reportes_liberaciones(config, limite=10, incluir_pendientes=True)
+             if not r['file_name']])
+        if en_cola and str(request.POST.get('forzar') or '') != '1':
+            return JsonResponse({'success': True, 'en_cola': True, **en_cola})
         tarea = conc.pedir_reporte_liberaciones(config, d, h)
     except MercadoPagoError as e:
         return JsonResponse({'success': False, 'error': e.mensaje}, status=400)
