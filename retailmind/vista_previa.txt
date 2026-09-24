@@ -130,3 +130,358 @@ Bodega: EDEL ┬À usuario: javier (responsable "Sistema") ┬À venta = costo �
       Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 6Y como ┬½6┬╗ (sin la Y); corre primero revisar_guias_talla --apply
   Resumen factura 148761: ERROR: 8 ┬À NUEVO: 6
   unidades: 245 (factura: 245) ┬À neto l├¡neas: $6.736.032 (factura: $6.736.032 ┬À DTE en sistema: $6.736.031)
+
+ÔòÉÔòÉ FACTURA ELECTRONICA N┬░ 148763 ┬À EQUINOX LOS ANDES SPA (77402098-5) ┬À DTE id=2204917 ┬À emitida 2026-09-15 ┬À EQUINOX_148763.json
+Bodega: EDEL ┬À usuario: javier (responsable "Sistema") ┬À venta = costo ├ù 1.85 (< $40.000) / ├ù 1.8 ÔåÆ ...990 ┬À sobreprecio nuevos: 15%
+
+[ 1] HQ6034-001   NUEVO         14 u  M ZOOM VAPOR PRO 3 CLY
+      costo 73.883 ┬À sobreprecio 11.082 ┬À venta 139.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À HOMBRE ┬À MULTI ┬À NIKE ┬À esp: tenis
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 7.5├ù1  8├ù2  8.5├ù2  9├ù2  9.5├ù2  10├ù2  10.5├ù2  11├ù1
+[ 2] IB2765-009   NUEVO         23 u  NIKE UPLIFT SC
+      costo 38.883 ┬À sobreprecio 5.832 ┬À venta 77.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: urbano
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 7├ù2  7.5├ù4  8├ù2  8.5├ù4  9├ù4  9.5├ù1  10├ù4  10.5├ù1  11.5├ù1
+[ 3] IB4484-146   NUEVO         13 u  TIEMPO MAESTRO ACADEMY TF
+      costo 51.661 ┬À sobreprecio 7.749 ┬À venta 99.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: baby
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 7.5├ù1  8.5├ù2  9├ù2  9.5├ù2  10├ù2  10.5├ù2  11├ù2
+[ 4] IM4006-003   NUEVO         14 u  NIKE PACIFIC LTR
+      costo 48.328 ┬À sobreprecio 7.249 ┬À venta 89.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: urbano
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 7├ù2  7.5├ù2  8├ù2  8.5├ù2  9├ù2  9.5├ù2  10├ù1  10.5├ù1
+      ! precio de venta dudoso al leerlo: 89.990 (otra lectura: 99.990)
+[ 5] IQ7636-101   ERROR         20 u  NIKE CORTEZ VELCRO BPV
+      costo 36.106 ┬À sobreprecio 5.416 ┬À venta 69.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: urbano
+      tallas US (gu├¡a ┬½NIKE INFANTIL┬╗): 11C├ù4  12C├ù4  13C├ù4  2├ù4  3├ù4
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 2Y como ┬½2┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 3Y como ┬½3┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+[ 6] 749680-402   NUEVO         10 u  NIKE AIR MAX INVIGOR
+      costo 55.550 ┬À sobreprecio 8.333 ┬À venta 109.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À HOMBRE ┬À MULTI ┬À NIKE ┬À esp: urbano
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 7.5├ù1  8├ù2  8.5├ù2  9├ù2  9.5├ù2  11├ù1
+      ! g├®nero HOMBRE (no UNISEX): as├¡ est├ín cargados otros colores del modelo (749680-003, 749680-004 ┬À tambi├®n MUJER 1)
+[ 7] DB5945-161   NUEVO         17 u  NIKE COURT VISION LO
+      costo 41.661 ┬À sobreprecio 6.249 ┬À venta 79.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: urbano
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 7├ù1  7.5├ù2  8.5├ù2  9├ù2  9.5├ù2  10├ù2  10.5├ù2  11├ù2  11.5├ù1  12├ù1
+[ 8] HJ9198-122   NUEVO         15 u  NIKE REVOLUTION 8
+      costo 34.994 ┬À sobreprecio 5.249 ┬À venta 69.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: running
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 7├ù1  7.5├ù1  8├ù2  8.5├ù2  9├ù2  9.5├ù2  10├ù1  11├ù2  11.5├ù1  12├ù1
+[ 9] IH1799-901   ERROR          7 u  JR PHANTOM 6 LOW CLUB TF T
+      costo 33.328 ┬À sobreprecio 4.999 ┬À venta 66.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: baby
+      tallas US (gu├¡a ┬½NIKE INFANTIL┬╗): 1├ù1  1.5├ù1  4.5├ù1  5├ù2  5.5├ù2
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 1Y como ┬½1┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 1.5Y como ┬½1.5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 4.5Y como ┬½4.5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 5Y como ┬½5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 5.5Y como ┬½5.5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+[10] IH7397-001   NUEVO         17 u  NIKE PACIFIC TD
+      costo 33.328 ┬À sobreprecio 4.999 ┬À venta 64.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: urbano
+      tallas US (gu├¡a ┬½NIKE INFANTIL┬╗): 5C├ù1  6C├ù4  8C├ù4  9C├ù4  10C├ù4
+[11] IO9414-003   NUEVO          8 u  NIKE AIR MAX BIA
+      costo 55.550 ┬À sobreprecio 8.333 ┬À venta 107.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: urbano
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 6.5├ù1  7├ù2  7.5├ù1  8├ù2  8.5├ù1  10├ù1
+      ! precio de venta dudoso al leerlo: 107.990 (otra lectura: 109.990)
+[12] IQ2155-900   NUEVO         12 u  REACTX PHANTOM 6 LOW PRO TF T
+      costo 83.328 ┬À sobreprecio 12.499 ┬À venta 159.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: baby
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 7├ù1  7.5├ù1  8├ù2  8.5├ù2  9├ù2  10├ù2  10.5├ù2
+[13] IQ2388-901   NUEVO         12 u  TIEMPO MAESTRO ACADEMY TF T
+      costo 51.661 ┬À sobreprecio 7.749 ┬À venta 99.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: baby
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 8├ù2  8.5├ù1  9├ù2  9.5├ù2  10├ù2  11├ù1  12├ù1  13├ù1
+[14] 415082-105   ERROR         10 u  NIKE AIR MORE UPTEMPO BG
+      costo 77.772 ┬À sobreprecio 11.666 ┬À venta 149.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: urbano
+      tallas US (gu├¡a ┬½NIKE INFANTIL┬╗): 4├ù2  4.5├ù2  5├ù1  5.5├ù4  6.5├ù1
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 4Y como ┬½4┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 4.5Y como ┬½4.5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 5Y como ┬½5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 5.5Y como ┬½5.5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 6.5Y como ┬½6.5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+[15] 749680-015   NUEVO          9 u  NIKE AIR MAX INVIGOR
+      costo 55.550 ┬À sobreprecio 8.333 ┬À venta 109.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À HOMBRE ┬À MULTI ┬À NIKE ┬À esp: urbano
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 7├ù1  8├ù2  9├ù3  10├ù3
+      ! g├®nero HOMBRE (no UNISEX): as├¡ est├ín cargados otros colores del modelo (749680-003, 749680-004 ┬À tambi├®n MUJER 1)
+  Resumen factura 148763: ERROR: 3 ┬À NUEVO: 12
+  unidades: 201 (factura: 201) ┬À neto l├¡neas: $9.929.433 (factura: $9.929.433 ┬À DTE en sistema: $9.929.432)
+
+ÔòÉÔòÉ FACTURA ELECTRONICA N┬░ 148764 ┬À EQUINOX LOS ANDES SPA (77402098-5) ┬À DTE id=2204916 ┬À emitida 2026-09-15 ┬À EQUINOX_148764.json
+Bodega: EDEL ┬À usuario: javier (responsable "Sistema") ┬À venta = costo ├ù 1.85 (< $40.000) / ├ù 1.8 ÔåÆ ...990 ┬À sobreprecio nuevos: 15%
+
+[ 1] 415445-101   NUEVO          8 u  AIR MONARCH IV
+      costo 57.217 ┬À sobreprecio 8.583 ┬À venta 102.990  [regla ├ù1.85 / ├ù1.8]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: training
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 7.5├ù1  8├ù1  8.5├ù1  9├ù2  9.5├ù2  10├ù1
+[ 2] BQ4639-001   EXISTE         8 u  NIKE OFFCOURT SLIDE
+      vigente (ficha #82024 EDEL ┬½OFFCOURT SLIDE┬╗): costo 20.550 ┬À venta 39.990  ÔåÆ  factura: costo 24.994 ┬À venta 46.990 [regla ├ù1.85 / ├ù1.8]  sube la venta  ┬À te preguntar├í [s/c/n]
+      mismo c├│digo en: NICK1 (costo 20.550, venta 39.990) ÔÇö solo [s] les aplica el precio de la factura y avisa a esas tiendas
+      Zapatillas ┬À NI├æO ┬À MULTI ┬À NIKE
+      ficha: tipo talla US, gu├¡a ┬½NIKE HOMBRE┬╗
+      suma stock en tallas que ya tiene: 7├ù1  8├ù1  9├ù4  10├ù2
+      tallas nuevas que se agregan a la ficha: ÔÇö
+      ficha(s) NICK1 #82025, EDEL #82024 pasan a tipo US con gu├¡a ┬½NIKE HOMBRE┬╗
+        NICK1: renombra 8,0ÔåÆ8  9,0ÔåÆ9
+        EDEL: renombra 700ÔåÆ7  8,0ÔåÆ8  9,0ÔåÆ9
+        ! EDEL: ┬½100┬╗ no se renombra a ┬½10┬╗ porque esa talla ya existe en la ficha (fila duplicada, stock 0); fusionar aparte
+        ! EDEL: ┬½110┬╗ no se renombra a ┬½11┬╗ porque esa talla ya existe en la ficha (fila duplicada, stock 0); fusionar aparte
+        ! EDEL: ┬½800┬╗ no se renombra a ┬½8┬╗ porque esa talla ya existe en la ficha (fila duplicada, stock 0); fusionar aparte
+        ! EDEL: ┬½900┬╗ no se renombra a ┬½9┬╗ porque esa talla ya existe en la ficha (fila duplicada, stock 0); fusionar aparte
+      ! ya existe en EDEL como NIKE/MULTI/NI├æO/Zapatillas (el JSON dec├¡a MULTI/UNISEX/Sandalias y Chalas): se usa esa ficha tal como est├í
+      ! la talla 8,0 est├í 2 veces en la ficha (┬½8┬╗ SKU 4792889 stock 0, ┬½800┬╗ SKU 4689839 stock 0): el stock entra en ┬½8┬╗ SKU 4792889
+      ! la talla 9,0 est├í 2 veces en la ficha (┬½9┬╗ SKU 4792890 stock 0, ┬½900┬╗ SKU 4689840 stock 0): el stock entra en ┬½9┬╗ SKU 4792890
+      ! la talla 10 est├í 2 veces en la ficha (┬½10┬╗ SKU 4792891 stock 0, ┬½100┬╗ SKU 4689841 stock 0): el stock entra en ┬½10┬╗ SKU 4792891
+[ 3] CI0603-102   NUEVO         14 u  WMNS NIKE AIR HEIGHTS
+      costo 53.883 ┬À sobreprecio 8.082 ┬À venta 96.990  [regla ├ù1.85 / ├ù1.8]
+      Zapatillas ┬À MUJER ┬À MULTI ┬À NIKE ┬À esp: urbano
+      tallas US (gu├¡a ┬½NIKE MUJER┬╗): 5├ù1  5.5├ù1  6├ù2  7├ù2  9├ù2  9.5├ù2  10├ù2  10.5├ù1  11├ù1
+[ 4] CD5432-003   EXISTE        12 u  WMNS NIKE AIR MAX EXCEE
+      vigente (ficha #84256 EDEL ┬½W MNS EXCEE┬╗): costo 41.661 ┬À venta 83.990  ÔåÆ  factura: costo 64.994 ┬À venta 116.990 [regla ├ù1.85 / ├ù1.8]  sube la venta  ┬À te preguntar├í [s/c/n]
+      mismo c├│digo en: NICK2 (costo 41.661, venta 83.990) ÔÇö solo [s] les aplica el precio de la factura y avisa a esas tiendas
+      Zapatillas ┬À HOMBRE ┬À NEGRO/BLANCO ┬À NIKE
+      ficha: tipo talla US, gu├¡a ┬½NIKE MUJER┬╗
+      suma stock en tallas que ya tiene: 7├ù1  7.5├ù2  8├ù2  9├ù2
+      tallas nuevas que se agregan a la ficha: 6.5├ù1  9.5├ù2  10├ù2
+      ficha(s) NICK2 #84257, EDEL #84256 pasan a tipo US con gu├¡a ┬½NIKE MUJER┬╗
+        NICK2: renombra 5,0ÔåÆ5  7,0ÔåÆ7  7,5ÔåÆ7.5  8,0ÔåÆ8  8,5ÔåÆ8.5  9,0ÔåÆ9
+        EDEL: renombra 5,0ÔåÆ5  7,0ÔåÆ7  7,5ÔåÆ7.5  8,0ÔåÆ8  8,5ÔåÆ8.5  9,0ÔåÆ9
+      ! ya existe en EDEL como NIKE/NEGRO/BLANCO/HOMBRE/Zapatillas (el JSON dec├¡a MULTI/MUJER/Zapatillas): se usa esa ficha tal como est├í
+[ 5] CU3517-004   NUEVO          9 u  NIKE RUN SWIFT 2
+      costo 44.439 ┬À sobreprecio 6.666 ┬À venta 79.990  [regla ├ù1.85 / ├ù1.8]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: running
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 6.5├ù1  7.5├ù1  8.5├ù2  9├ù2  9.5├ù1  10├ù2
+[ 6] BQ4639-012   EXISTE        23 u  NIKE OFFCOURT SLIDE
+      vigente (ficha #82031 EDEL ┬½SANDALIA OFFCOURT┬╗): costo 22.217 ┬À venta 44.990  ÔåÆ  factura: costo 24.994 ┬À venta 46.990 [regla ├ù1.85 / ├ù1.8]  sube la venta  ┬À te preguntar├í [s/c/n]
+      mismo c├│digo en: NICK2 (costo 20.550, venta 39.990) [otra identidad: [s] no la toca], NICK1 (costo 20.550, venta 39.990) [otra identidad: [s] no la toca], NICK2 (costo 22.217, venta 44.990), NICK1 (costo 22.217, venta 44.990) ÔÇö solo [s] les aplica el precio de la factura y avisa a esas tiendas
+      Zapatillas ┬À UNISEX ┬À NEGRO ┬À NIKE
+      ficha: tipo talla US, gu├¡a ┬½NIKE HOMBRE┬╗
+      suma stock en tallas que ya tiene: 7├ù4  8├ù4  9├ù4  10├ù4  11├ù4  12├ù3
+      tallas nuevas que se agregan a la ficha: ÔÇö
+      ficha(s) NICK2 #82030, NICK1 #82029, NICK2 #82033, NICK1 #82032, EDEL #82031 pasan a tipo US con gu├¡a ┬½NIKE HOMBRE┬╗
+        NICK2: renombra 7,0ÔåÆ7  8,0ÔåÆ8  9,0ÔåÆ9  7,0ÔåÆ7  8,0ÔåÆ8  9,0ÔåÆ9
+        NICK1: renombra 7,0ÔåÆ7  8,0ÔåÆ8  9,0ÔåÆ9  7,0ÔåÆ7  8,0ÔåÆ8  9,0ÔåÆ9
+        EDEL: renombra 7,0ÔåÆ7  8,0ÔåÆ8  9,0ÔåÆ9
+      ! entra en #82031 (elegida en el JSON); no se tocan: #82028 EDEL ┬½ZAPATILLA SUPERFLY┬╗ NIKE/MULTI/UNISEX/Zapatillas (4 tallas, stock 0)
+[ 7] DH2987-001   EXISTE        11 u  NIKE COURT VISION LO BE
+      vigente (ficha #90132 EDEL ┬½ZAPATILLA COURT┬╗): costo 42.772 ┬À venta 72.990  ÔåÆ  factura: costo 40.550 ┬À venta 72.990 [regla ├ù1.85 / ├ù1.8]  ┬À te preguntar├í [s/c/n]
+      mismo c├│digo en: NICK2 (costo 29.196, venta 72.990), NICK1 (costo 42.772, venta 72.990) ÔÇö solo [s] les aplica el precio de la factura y avisa a esas tiendas
+      Zapatillas ┬À HOMBRE ┬À BLACK ┬À NIKE
+      ficha: tipo talla US, gu├¡a ┬½NIKE HOMBRE┬╗
+      suma stock en tallas que ya tiene: 7├ù1  8├ù1  8,5├ù1  9.5├ù2  10├ù2  10.5├ù2  11├ù1  11,5├ù1
+      tallas nuevas que se agregan a la ficha: ÔÇö
+      ficha(s) NICK2 #90134, NICK1 #90133, EDEL #90132 pasan a tipo US con gu├¡a ┬½NIKE HOMBRE┬╗
+        NICK2: renombra 10,5ÔåÆ10.5  11,5ÔåÆ11.5  6,5ÔåÆ6.5  7,0ÔåÆ7  7,5ÔåÆ7.5  8,0ÔåÆ8  8,5ÔåÆ8.5  9,0ÔåÆ9  9,5ÔåÆ9.5
+        NICK1: renombra 10,5ÔåÆ10.5  11,5ÔåÆ11.5  6,5ÔåÆ6.5  7,0ÔåÆ7  7,5ÔåÆ7.5  8,0ÔåÆ8  8,5ÔåÆ8.5  9,0ÔåÆ9  9,5ÔåÆ9.5
+        EDEL: renombra 10,5ÔåÆ10.5  11,5ÔåÆ11.5  6,5ÔåÆ6.5  7,0ÔåÆ7  7,5ÔåÆ7.5  8,0ÔåÆ8  8,5ÔåÆ8.5  9,0ÔåÆ9  9,5ÔåÆ9.5
+        ! NICK1: ┬½11,5┬╗ no se renombra a ┬½11.5┬╗ porque esa talla ya existe en la ficha (fila duplicada, stock 0); fusionar aparte
+        ! NICK1: ┬½8,5┬╗ no se renombra a ┬½8.5┬╗ porque esa talla ya existe en la ficha (fila duplicada, stock 0); fusionar aparte
+        ! EDEL: ┬½11,5┬╗ no se renombra a ┬½11.5┬╗ porque esa talla ya existe en la ficha (fila duplicada, stock 0); fusionar aparte
+        ! EDEL: ┬½8,5┬╗ no se renombra a ┬½8.5┬╗ porque esa talla ya existe en la ficha (fila duplicada, stock 0); fusionar aparte
+      ! mismo c├│digo con marca ┬½NIKE TODODEPORTE┬╗ en otra bodega: #90137 NICK2 ┬½ZAPATILLA COURT┬╗ NIKE TODODEPORTE/BLACK/NI├æO/Zapatillas (8 tallas, stock 1) ÔÇö no se usa (revisar esa ficha aparte)
+      ! mismo c├│digo con marca ┬½NIKE TODODEPORTE┬╗ en otra bodega: #90136 NICK1 ┬½ZAPATILLA COURT┬╗ NIKE TODODEPORTE/BLACK/NI├æO/Zapatillas (8 tallas, stock 1) ÔÇö no se usa (revisar esa ficha aparte)
+      ! mismo c├│digo con marca ┬½NIKE TODODEPORTE┬╗ en EDEL: #90135 EDEL ┬½ZAPATILLA COURT┬╗ NIKE TODODEPORTE/BLACK/NI├æO/Zapatillas (8 tallas, stock 0) ÔÇö si es el mismo producto mal creado, pon "ficha_id": 90135 en el JSON
+      ! la talla 8,5 est├í 2 veces en la ficha (┬½8.5┬╗ SKU 4783368 stock 0, ┬½8,5┬╗ SKU 4778545 stock 0): el stock entra en ┬½8,5┬╗ SKU 4778545
+      ! la talla 11,5 est├í 2 veces en la ficha (┬½11.5┬╗ SKU 4783374 stock 0, ┬½11,5┬╗ SKU 4778546 stock 0): el stock entra en ┬½11,5┬╗ SKU 4778546
+[ 8] 621716-008   NUEVO          1 u  NIKE REAX 8 TR MES
+      costo 51.661 ┬À sobreprecio 7.749 ┬À venta 92.990  [regla ├ù1.85 / ├ù1.8]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: training
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 10.5├ù1
+[ 9] CN9675-600   NUEVO         16 u  NIKE VICTORI ONE SLIDE
+      costo 22.217 ┬À sobreprecio 3.333 ┬À venta 41.990  [regla ├ù1.85 / ├ù1.8]
+      Sandalias y Chalas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: urbano
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 7├ù2  8├ù2  9├ù4  10├ù2  11├ù4  12├ù2
+[10] DX4816-001   EXISTE        12 u  W NIKE CALM SLIDE
+      vigente (ficha #91838 EDEL ┬½CALM SLIDE┬╗): costo 30.550 ┬À venta 59.990  ÔåÆ  factura: costo 31.661 ┬À venta 58.990 [regla ├ù1.85 / ├ù1.8]  BAJA la venta  ┬À te preguntar├í [s/c/n]
+      mismo c├│digo en: NICK2 (costo 30.550, venta 59.990), NICK1 (costo 30.550, venta 59.990) ÔÇö solo [s] les aplica el precio de la factura y avisa a esas tiendas
+      Zapatillas ┬À UNISEX ┬À NEGRO ┬À NIKE
+      ficha: tipo talla US, gu├¡a ┬½NIKE MUJER┬╗
+      suma stock en tallas que ya tiene: 5├ù2  6├ù2  7├ù2  8├ù2
+      tallas nuevas que se agregan a la ficha: 10├ù2  11├ù2
+      ficha(s) NICK2 #91840, NICK1 #91839, EDEL #91838 pasan a tipo US con gu├¡a ┬½NIKE MUJER┬╗
+        NICK2: renombra 8,0ÔåÆ8
+        NICK1: renombra 5,0ÔåÆ5  6,0ÔåÆ6  7,0ÔåÆ7  8,0ÔåÆ8  9,0ÔåÆ9
+        EDEL: renombra 5,0ÔåÆ5  6,0ÔåÆ6  7,0ÔåÆ7  8,0ÔåÆ8  9,0ÔåÆ9
+      ! ya existe en EDEL como NIKE/NEGRO/UNISEX/Zapatillas (el JSON dec├¡a MULTI/MUJER/Sandalias y Chalas): se usa esa ficha tal como est├í
+[11] FB7689-003   EXISTE        21 u  NIKE REVOLUTION 7 GS
+      vigente (ficha #95424 EDEL ┬½REVOLUTION 7 GS┬╗): costo 32.772 ┬À venta 64.990  ÔåÆ  factura: costo 33.328 ┬À venta 61.990 [regla ├ù1.85 / ├ù1.8]  BAJA la venta  ┬À te preguntar├í [s/c/n]
+      mismo c├│digo en: NICK2 (costo 32.772, venta 64.990), NICK1 (costo 32.772, venta 64.990) ÔÇö solo [s] les aplica el precio de la factura y avisa a esas tiendas
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE
+      ficha: tipo talla US, gu├¡a ┬½NIKE INFANTIL┬╗
+      suma stock en tallas que ya tiene: 4├ù4  4.5├ù4  5├ù3  5.5├ù4  6├ù4
+      tallas nuevas que se agregan a la ficha: 3.5├ù2
+      ficha(s) NICK2 #95426, NICK1 #95425, EDEL #95424 pasan a tipo US con gu├¡a ┬½NIKE INFANTIL┬╗
+        NICK2: renombra 1,0ÔåÆ1  1,5ÔåÆ1.5  2,5ÔåÆ2.5  4,0ÔåÆ4  4,5ÔåÆ4.5  5,0ÔåÆ5  5,5ÔåÆ5.5  6,0ÔåÆ6
+        NICK1: renombra 1,0ÔåÆ1  1,5ÔåÆ1.5  2,5ÔåÆ2.5  4,0ÔåÆ4  4,5ÔåÆ4.5  5,0ÔåÆ5  5,5ÔåÆ5.5  6,0ÔåÆ6
+        EDEL: renombra 1,0ÔåÆ1  1,5ÔåÆ1.5  2,5ÔåÆ2.5  4,0ÔåÆ4  4,5ÔåÆ4.5  5,0ÔåÆ5  5,5ÔåÆ5.5  6,0ÔåÆ6
+[12] FD6454-001   EXISTE        22 u  NIKE DOWNSHIFTER 13
+      vigente (ficha #95691 EDEL ┬½DOWNSHIFTER 13┬╗): costo 36.106 ┬À venta 74.990  ÔåÆ  factura: costo 36.106 ┬À venta 66.990 [regla ├ù1.85 / ├ù1.8]  BAJA la venta  ┬À te preguntar├í [s/t/n]
+      mismo c├│digo en: NICK1 (costo 36.106, venta 74.990), NICK2 (costo 36.106, venta 74.990) ÔÇö solo [s] les aplica el precio de la factura y avisa a esas tiendas
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE
+      ficha: tipo talla US, gu├¡a ┬½NIKE HOMBRE┬╗
+      suma stock en tallas que ya tiene: 7.5├ù2  8├ù4  8.5├ù3  9├ù4  9.5├ù2  10├ù3  10.5├ù2  12├ù1
+      tallas nuevas que se agregan a la ficha: 7├ù1
+      ficha(s) NICK1 #95692, NICK2 #95693, EDEL #95691 pasan a tipo US con gu├¡a ┬½NIKE HOMBRE┬╗
+        NICK1: renombra 10,5ÔåÆ10.5  11,5ÔåÆ11.5  12,5ÔåÆ12.5  6,5ÔåÆ6.5  7,5ÔåÆ7.5  8,0ÔåÆ8  8,5ÔåÆ8.5  9,0ÔåÆ9  9,5ÔåÆ9.5
+        NICK2: renombra 10,5ÔåÆ10.5  11,5ÔåÆ11.5  12,5ÔåÆ12.5  6,5ÔåÆ6.5  7,5ÔåÆ7.5  8,0ÔåÆ8  8,5ÔåÆ8.5  9,0ÔåÆ9  9,5ÔåÆ9.5
+        EDEL: renombra 10,5ÔåÆ10.5  11,5ÔåÆ11.5  12,5ÔåÆ12.5  6,5ÔåÆ6.5  7,5ÔåÆ7.5  8,0ÔåÆ8  8,5ÔåÆ8.5  9,0ÔåÆ9  9,5ÔåÆ9.5
+[13] FD6476-001   NUEVO         25 u  W NIKE DOWNSHIFTER 13
+      costo 36.106 ┬À sobreprecio 5.416 ┬À venta 66.990  [regla ├ù1.85 / ├ù1.8]
+      Zapatillas ┬À MUJER ┬À MULTI ┬À NIKE ┬À esp: running
+      tallas US (gu├¡a ┬½NIKE MUJER┬╗): 6.5├ù2  7├ù2  7.5├ù4  8├ù4  8.5├ù4  9├ù4  9.5├ù4  10├ù1
+[14] DV4342-002   NUEVO          2 u  LEGEND 10 ACADEMY TF
+      costo 49.994 ┬À sobreprecio 7.499 ┬À venta 89.990  [regla ├ù1.85 / ├ù1.8]
+      Zapatillas ┬À HOMBRE ┬À MULTI ┬À NIKE ┬À esp: baby
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 9.5├ù2
+      ! g├®nero HOMBRE (no UNISEX): as├¡ est├ín cargados otros colores del modelo (DV4342-300, DV4342-402, DV4342-601, DV4342-700)
+[15] CN9675-403   EXISTE        17 u  NIKE VICTORI ONE SLIDE
+      vigente (ficha #86203 EDEL ┬½VICTORY┬╗): costo 14.521 ┬À venta 39.990  ÔåÆ  factura: costo 22.217 ┬À venta 41.990 [regla ├ù1.85 / ├ù1.8]  sube la venta  ┬À te preguntar├í [s/c/n]
+      mismo c├│digo en: NICK2 (costo 14.521, venta 39.990), NICK1 (costo 14.521, venta 39.990) ÔÇö solo [s] les aplica el precio de la factura y avisa a esas tiendas
+      Zapatillas ┬À HOMBRE ┬À GREEN ┬À NIKE
+      ficha: tipo talla US, gu├¡a ┬½NIKE HOMBRE┬╗
+      suma stock en tallas que ya tiene: 7├ù2  8├ù4  9├ù4  10├ù1  11├ù4  12├ù2
+      tallas nuevas que se agregan a la ficha: ÔÇö
+      ficha(s) NICK2 #86205, NICK1 #86204, EDEL #86203 pasan a tipo US con gu├¡a ┬½NIKE HOMBRE┬╗
+        NICK2: renombra 7,0ÔåÆ7  8,0ÔåÆ8  9,0ÔåÆ9
+        NICK1: renombra 7,0ÔåÆ7  8,0ÔåÆ8  9,0ÔåÆ9
+        EDEL: renombra 7,0ÔåÆ7  8,0ÔåÆ8  9,0ÔåÆ9
+      ! ya existe en EDEL como NIKE/GREEN/HOMBRE/Zapatillas (el JSON dec├¡a MULTI/UNISEX/Sandalias y Chalas): se usa esa ficha tal como est├í
+[16] FV6040-001   EXISTE         8 u  NIKE AIR ZOOM RIVAL FLY 4
+      vigente (ficha #96896 EDEL ┬½AIR ZOOM RIVAL FLY 4┬╗): costo 62.217 ┬À venta 124.990  ÔåÆ  factura: costo 62.772 ┬À venta 112.990 [regla ├ù1.85 / ├ù1.8]  BAJA la venta  ┬À te preguntar├í [s/c/n]
+      mismo c├│digo en: NICK2 (costo 62.217, venta 124.990), NICK1 (costo 62.217, venta 124.990) ÔÇö solo [s] les aplica el precio de la factura y avisa a esas tiendas
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE
+      ficha: tipo talla US, gu├¡a ┬½NIKE HOMBRE┬╗
+      suma stock en tallas que ya tiene: 9├ù1  10.5├ù2  11├ù2  11.5├ù1
+      tallas nuevas que se agregan a la ficha: 7├ù1  12├ù1
+      ficha(s) NICK2 #96898, NICK1 #96897, EDEL #96896 pasan a tipo US con gu├¡a ┬½NIKE HOMBRE┬╗
+        NICK2: renombra 8,0ÔåÆ8
+        NICK1: renombra 10,5ÔåÆ10.5  11,5ÔåÆ11.5  7,5ÔåÆ7.5  8,0ÔåÆ8  8,5ÔåÆ8.5  9,0ÔåÆ9  9,5ÔåÆ9.5
+        EDEL: renombra 10,5ÔåÆ10.5  11,5ÔåÆ11.5  7,5ÔåÆ7.5  8,0ÔåÆ8  8,5ÔåÆ8.5  9,0ÔåÆ9  9,5ÔåÆ9.5
+[17] DM4044-108   NUEVO         10 u  NIKE CORTEZ LTR
+      costo 57.217 ┬À sobreprecio 8.583 ┬À venta 102.990  [regla ├ù1.85 / ├ù1.8]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: urbano
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 8├ù2  8.5├ù2  9├ù2  9.5├ù2  10├ù2
+[18] FD6033-006   NUEVO          8 u  NIKE QUEST 6
+      costo 49.994 ┬À sobreprecio 7.499 ┬À venta 89.990  [regla ├ù1.85 / ├ù1.8]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: running
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 8├ù1  8.5├ù1  9├ù2  9.5├ù1  10├ù2  11.5├ù1
+[19] FJ3794-004   NUEVO         14 u  W NIKE AL8
+      costo 57.217 ┬À sobreprecio 8.583 ┬À venta 102.990  [regla ├ù1.85 / ├ù1.8]
+      Zapatillas ┬À MUJER ┬À MULTI ┬À NIKE ┬À esp: urbano
+      tallas US (gu├¡a ┬½NIKE MUJER┬╗): 6.5├ù1  7.5├ù2  8├ù2  8.5├ù3  9├ù3  9.5├ù3
+[20] HF0400-600   NUEVO          8 u  AIR ZOOM PEGASUS 41 BTC
+      costo 79.439 ┬À sobreprecio 11.916 ┬À venta 142.990  [regla ├ù1.85 / ├ù1.8]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: running
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 7.5├ù1  9.5├ù2  10├ù2  10.5├ù2  11├ù1
+[21] HJ8485-001   NUEVO         34 u  W NIKE REVOLUTION 8
+      costo 34.994 ┬À sobreprecio 5.249 ┬À venta 64.990  [regla ├ù1.85 / ├ù1.8]
+      Zapatillas ┬À MUJER ┬À MULTI ┬À NIKE ┬À esp: running
+      tallas US (gu├¡a ┬½NIKE MUJER┬╗): 5.5├ù2  6├ù2  6.5├ù4  7├ù4  7.5├ù4  8├ù4  9├ù4  9.5├ù4  10├ù4  10.5├ù2
+[22] HM9593-002   EXISTE        32 u  W NIKE RUN DEFY
+      vigente (ficha #105568 EDEL ┬½VICTORY┬╗): costo 25.843 ┬À venta 59.990  ÔåÆ  factura: costo 31.661 ┬À venta 58.990 [regla ├ù1.85 / ├ù1.8]  BAJA la venta  ┬À te preguntar├í [s/c/n]
+      mismo c├│digo en: NICK2 (costo 25.843, venta 59.990), NICK1 (costo 25.843, venta 59.990) ÔÇö solo [s] les aplica el precio de la factura y avisa a esas tiendas
+      Zapatillas ┬À MUJER ┬À NEGRO ┬À NIKE
+      ficha: tipo talla US, gu├¡a ┬½NIKE MUJER┬╗
+      suma stock en tallas que ya tiene: 6├ù2  6.5├ù4  7├ù4  7.5├ù4  8├ù4  8.5├ù4  9├ù4  9.5├ù4
+      tallas nuevas que se agregan a la ficha: 5.5├ù2
+      ficha(s) NICK2 #105570, NICK1 #105569, EDEL #105568 pasan a tipo US con gu├¡a ┬½NIKE MUJER┬╗
+        NICK2: renombra 6,0ÔåÆ6  6,5ÔåÆ6.5  7,0ÔåÆ7  7,5ÔåÆ7.5  8,0ÔåÆ8  8,5ÔåÆ8.5  9,0ÔåÆ9  9,5ÔåÆ9.5
+        NICK1: renombra 6,0ÔåÆ6  6,5ÔåÆ6.5  7,5ÔåÆ7.5  8,0ÔåÆ8  8,5ÔåÆ8.5  9,0ÔåÆ9  9,5ÔåÆ9.5
+        EDEL: renombra 6,0ÔåÆ6  6,5ÔåÆ6.5  7,0ÔåÆ7  7,5ÔåÆ7.5  8,0ÔåÆ8  8,5ÔåÆ8.5  9,0ÔåÆ9  9,5ÔåÆ9.5
+      ! ya existe en EDEL como NIKE/NEGRO/MUJER/Zapatillas (el JSON dec├¡a MULTI/MUJER/Zapatillas): se usa esa ficha tal como est├í
+[23] FQ8317-600   EXISTE         6 u  SUPERFLY 10 CLUB TF
+      vigente (ficha #96557 EDEL ┬½SUPERFLY 10 CLUB TF┬╗): costo 44.439 ┬À venta 89.990  ÔåÆ  factura: costo 44.439 ┬À venta 79.990 [regla ├ù1.85 / ├ù1.8]  BAJA la venta  ┬À te preguntar├í [s/t/n]
+      mismo c├│digo en: NICK2 (costo 44.439, venta 89.990) ÔÇö solo [s] les aplica el precio de la factura y avisa a esas tiendas
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE
+      ficha: tipo talla US, gu├¡a ┬½NIKE HOMBRE┬╗
+      suma stock en tallas que ya tiene: 8├ù2  9.5├ù2  11├ù1
+      tallas nuevas que se agregan a la ficha: 12├ù1
+      ficha(s) NICK2 #96558, EDEL #96557 pasan a tipo US con gu├¡a ┬½NIKE HOMBRE┬╗
+        NICK2: renombra 10,5ÔåÆ10.5  7,5ÔåÆ7.5  8,5ÔåÆ8.5  9,0ÔåÆ9  9,5ÔåÆ9.5
+        EDEL: renombra 10,5ÔåÆ10.5  7,0ÔåÆ7  7,5ÔåÆ7.5  8,0ÔåÆ8  8,5ÔåÆ8.5  9,0ÔåÆ9  9,5ÔåÆ9.5
+[24] HQ2276-400   EXISTE        11 u  PHANTOM 360 DF CLUB TF
+      vigente (ficha #105862 EDEL ┬½PHANTOM  360 DF CLUB TF┬╗): costo 40.550 ┬À venta 79.990  ÔåÆ  factura: costo 40.550 ┬À venta 72.990 [regla ├ù1.85 / ├ù1.8]  BAJA la venta  ┬À te preguntar├í [s/t/n]
+      mismo c├│digo en: PAO2 (costo 40.550, venta 79.990), NICK2 (costo 40.550, venta 79.990) ÔÇö solo [s] les aplica el precio de la factura y avisa a esas tiendas
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE
+      ficha: tipo talla US, gu├¡a ┬½NIKE HOMBRE┬╗
+      suma stock en tallas que ya tiene: 7.5├ù2  9├ù1  9.5├ù2
+      tallas nuevas que se agregan a la ficha: 8├ù2  8.5├ù2  10├ù1  12├ù1
+      ficha(s) PAO2 #138574, NICK2 #105863, EDEL #105862 pasan a tipo US con gu├¡a ┬½NIKE HOMBRE┬╗
+        NICK2: renombra 10,5ÔåÆ10.5  7,0ÔåÆ7  7,5ÔåÆ7.5  9,0ÔåÆ9  9,5ÔåÆ9.5
+        EDEL: renombra 10,5ÔåÆ10.5  7,0ÔåÆ7  7,5ÔåÆ7.5  9,0ÔåÆ9  9,5ÔåÆ9.5
+[25] IH7653-105   ERROR         17 u  NIKE CORTEZ BG N
+      costo 42.772 ┬À sobreprecio 6.416 ┬À venta 76.990  [regla ├ù1.85 / ├ù1.8]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: urbano
+      tallas US (gu├¡a ┬½NIKE INFANTIL┬╗): 3.5├ù2  4.5├ù3  5├ù4  5.5├ù4  6├ù4
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 3.5Y como ┬½3.5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 4.5Y como ┬½4.5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 5Y como ┬½5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 5.5Y como ┬½5.5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 6Y como ┬½6┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+[26] DZ2795-606   NUEVO          1 u  W NIKE CORTEZ TXT
+      costo 57.217 ┬À sobreprecio 8.583 ┬À venta 102.990  [regla ├ù1.85 / ├ù1.8]
+      Zapatillas ┬À MUJER ┬À MULTI ┬À NIKE ┬À esp: urbano
+      tallas US (gu├¡a ┬½NIKE MUJER┬╗): 6.5├ù1
+  Resumen factura 148764: ERROR: 1 ┬À EXISTE: 12 ┬À NUEVO: 13
+  unidades: 350 (factura: 350) ┬À neto l├¡neas: $13.885.274 (factura: $13.885.274 ┬À DTE en sistema: $13.885.273)
+
+ÔòÉÔòÉ FACTURA ELECTRONICA N┬░ 148765 ┬À EQUINOX LOS ANDES SPA (77402098-5) ┬À DTE id=2204915 ┬À emitida 2026-09-15 ┬À EQUINOX_148765.json
+Bodega: EDEL ┬À usuario: javier (responsable "Sistema") ┬À venta = costo ├ù 1.85 (< $40.000) / ├ù 1.8 ÔåÆ ...990 ┬À sobreprecio nuevos: 15%
+
+[ 1] DZ2795-606   NUEVO          9 u  W NIKE CORTEZ TXT
+      costo 57.217 ┬À sobreprecio 8.583 ┬À venta 102.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À MUJER ┬À MULTI ┬À NIKE ┬À esp: urbano
+      tallas US (gu├¡a ┬½NIKE MUJER┬╗): 7├ù2  7.5├ù2  8├ù2  8.5├ù2  9├ù1
+      ! tambi├®n viene en la factura 148764: se crea con esa y aqu├¡ solo suma stock
+[ 2] FD6476-013   NUEVO         18 u  W NIKE DOWNSHIFTER 13
+      costo 36.106 ┬À sobreprecio 5.416 ┬À venta 69.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À MUJER ┬À MULTI ┬À NIKE ┬À esp: running
+      tallas US (gu├¡a ┬½NIKE MUJER┬╗): 6├ù1  6.5├ù2  7├ù2  7.5├ù2  8├ù3  8.5├ù1  9├ù3  9.5├ù2  10├ù1  10.5├ù1
+[ 3] FD6476-110   NUEVO         13 u  W NIKE DOWNSHIFTER 13
+      costo 36.106 ┬À sobreprecio 5.416 ┬À venta 69.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À MUJER ┬À MULTI ┬À NIKE ┬À esp: running
+      tallas US (gu├¡a ┬½NIKE MUJER┬╗): 5.5├ù2  6├ù2  6.5├ù2  7├ù2  7.5├ù2  8├ù2  9├ù1
+[ 4] FQ8291-300   NUEVO          8 u  JR VAPOR 16 CLUB TF PS V
+      costo 27.772 ┬À sobreprecio 4.166 ┬À venta 54.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: baby
+      tallas US (gu├¡a ┬½NIKE INFANTIL┬╗): 11C├ù2  11.5C├ù2  12C├ù1  12.5C├ù1  13C├ù2
+[ 5] HJ5226-105   NUEVO          8 u  NIKE V5 RNR
+      costo 57.217 ┬À sobreprecio 8.583 ┬À venta 102.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: urbano
+      tallas US (gu├¡a ┬½NIKE HOMBRE┬╗): 8├ù2  9├ù2  9.5├ù2  10.5├ù1  11├ù1
+      ! precio de venta dudoso al leerlo: 102.990 (otra lectura: 106.990)
+[ 6] HQ2038-800   ERROR         10 u  JR PHANTOM 6 LOW ACAD TF
+      costo 38.883 ┬À sobreprecio 5.832 ┬À venta 76.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: baby
+      tallas US (gu├¡a ┬½NIKE INFANTIL┬╗): 1├ù1  3.5├ù2  4├ù1  4.5├ù2  5├ù2  5.5├ù2
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 1Y como ┬½1┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 3.5Y como ┬½3.5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 4Y como ┬½4┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 4.5Y como ┬½4.5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 5Y como ┬½5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 5.5Y como ┬½5.5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+[ 7] HQ2049-800   ERROR         11 u  JR PHANTOM 6 HIGH ACAD TF
+      costo 46.106 ┬À sobreprecio 6.916 ┬À venta 89.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: baby
+      tallas US (gu├¡a ┬½NIKE INFANTIL┬╗): 1├ù2  1.5├ù1  2.5├ù2  3├ù1  4├ù2  5├ù2  6├ù1
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 1Y como ┬½1┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 1.5Y como ┬½1.5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 2.5Y como ┬½2.5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 3Y como ┬½3┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 4Y como ┬½4┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 5Y como ┬½5┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+      Ô£ù la gu├¡a ┬½NIKE INFANTIL┬╗ escribe la talla 6Y como ┬½6┬╗ (sin la Y); corre primero revisar_guias_talla --apply
+[ 8] FQ8291-446   NUEVO         15 u  JR VAPOR 16 CLUB TF PS-V
+      costo 27.772 ┬À sobreprecio 4.166 ┬À venta 54.990  [precio escrito a mano en la factura (Documentos escaneados.pdf)]
+      Zapatillas ┬À UNISEX ┬À MULTI ┬À NIKE ┬À esp: baby
+      tallas US (gu├¡a ┬½NIKE INFANTIL┬╗): 10.5C├ù1  11C├ù2  11.5C├ù3  12C├ù3  12.5C├ù3  13C├ù3
+  Resumen factura 148765: ERROR: 2 ┬À NUEVO: 6
+  unidades: 92 (factura: 92) ┬À neto l├¡neas: $3.626.727 (factura: $3.626.727 ┬À DTE en sistema: $3.626.726)
+
+VISTA PREVIA: no se escribi├│ nada. Para cargar, repite con --apply (te preguntar├í antes de tocar productos que ya existen).

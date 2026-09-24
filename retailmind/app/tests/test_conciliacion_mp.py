@@ -584,12 +584,12 @@ class DetectarPidiendoReporteTest(_Base):
         RetiroMercadoPago.objects.create(config=self.config, withdrawal_id='W-VIEJO', fecha=hoy - timedelta(days=90), monto=1)
         self.assertEqual(conc.inicio_reporte_cuenta(self.config), tope)
         RetiroMercadoPago.objects.create(config=self.config, withdrawal_id='W-1', fecha=hoy - timedelta(days=3), monto=1)
-        self.assertEqual(conc.inicio_reporte_cuenta(self.config), hoy - timedelta(days=3))
+        self.assertEqual(conc.inicio_reporte_cuenta(self.config), hoy - timedelta(days=3 + conc.MARGEN_LIBERACION_DIAS))
         # Un retiro de OTRA cuenta no cuenta.
         ajena = _config(crear_sucursal(empresa=crear_empresa(nombre='Ajena', rut='77.111.111-1'), alias='AJ1'),
                         nombre='Ajena', external_pos_id='POSAJ')
         RetiroMercadoPago.objects.create(config=ajena, withdrawal_id='W-AJENA', fecha=hoy, monto=1)
-        self.assertEqual(conc.inicio_reporte_cuenta(self.config), hoy - timedelta(days=3))
+        self.assertEqual(conc.inicio_reporte_cuenta(self.config), hoy - timedelta(days=3 + conc.MARGEN_LIBERACION_DIAS))
 
     def test_si_falto_tiempo_aplica_pero_no_marca_aplicado(self):
         t = self._cobro(1, monto=40000, external_reference='RM-1-1-c1i01')   # sin N° de operación de MP
@@ -1630,7 +1630,7 @@ class ColaReportesMPTest(_Base):
         cache.clear()
         cache.set(conc._CLAVE_PEDIDO.format(self.config.id), {'task_id': 77, 'end_date': _utc_hace(minutes=25)}, 600)
         with mock.patch.object(conc, 'estado_tarea_liberaciones', side_effect=MercadoPagoError('HTTP 404')):
-            self.assertEqual(conc._pedido_en_curso(self.config, [viejo]), (None, None, False, True))
+            self.assertEqual(conc._pedido_en_curso(self.config, [viejo]), (None, None, False, True, None))
         with mock.patch.object(conc, 'estado_tarea_liberaciones', side_effect=MercadoPagoError('timeout', red=True)):
             cache.set(conc._CLAVE_PEDIDO.format(self.config.id), {'task_id': 77, 'end_date': _utc_hace(minutes=25)}, 600)
             self.assertEqual(conc._pedido_en_curso(self.config, [viejo])[0]['task_id'], 77)
@@ -1719,10 +1719,10 @@ class CicloRetiroTest(_Base):
         abierto = self._retiro('W-10M', hoy - timedelta(days=3), 10000000, [{'caja': 'Saldo anterior', 'monto': 10000000}])
         self._retiro('W-NOCHE', hoy - timedelta(days=1), 500, [{'caja': 'SUC-TEST · Caja 1', 'monto': 500}])
         self.assertTrue(conc.retiro_abierto(abierto))
-        self.assertEqual(conc.inicio_reporte_cuenta(self.config), hoy - timedelta(days=3))
+        self.assertEqual(conc.inicio_reporte_cuenta(self.config), hoy - timedelta(days=3 + conc.MARGEN_LIBERACION_DIAS))
         abierto.raw_reporte = {'por_caja': [{'caja': 'SUC-TEST · Caja 1', 'monto': 10000000}], 'sin_venta': 0}
         abierto.save(update_fields=['raw_reporte'])
-        self.assertEqual(conc.inicio_reporte_cuenta(self.config), hoy - timedelta(days=1))
+        self.assertEqual(conc.inicio_reporte_cuenta(self.config), hoy - timedelta(days=1 + conc.MARGEN_LIBERACION_DIAS))
 
     def test_saldo_anterior_se_reasigna_aunque_el_nocturno_posterior_este_cerrado(self):
         # W10M (15:33) quedó «Saldo anterior»; la noche siguiente WN cerrado se llevó D.
@@ -1861,7 +1861,7 @@ class CicloRetiroTest(_Base):
         a.refresh_from_db(); w.refresh_from_db()
         self.assertIsNone(a.retiro_id)
         self.assertTrue(conc.retiro_abierto(w))
-        self.assertEqual(conc.inicio_reporte_cuenta(self.config), self.hoy)
+        self.assertEqual(conc.inicio_reporte_cuenta(self.config), self.hoy - timedelta(days=conc.MARGEN_LIBERACION_DIAS))
 
     def test_manual_contado_por_un_retiro_no_esta_sin_registrar(self):
         self._retiro('W1', self.hoy, 17710, [{'caja': 'SUC-TEST · MP manual', 'monto': 17710}],
@@ -1902,3 +1902,200 @@ class CicloRetiroTest(_Base):
         with mock.patch('app.services.mercadopago_service._request',
                         return_value=_resp(200, {'status': 'expired', 'file_name': None})):
             self.assertTrue(conc.estado_tarea_liberaciones(self.config, 1)['fallido'])
+
+
+@mock.patch.dict('os.environ', ENV_TEST)
+class RevisionV10Test(_Base):
+    """24-09 (tarde): Nicole «se queda cargando» (dos pedidos trabados en MP
+    desde las 09:35 y `date_created` en UTC etiquetado -04:00), Paola con el
+    retiro entero en «Sin caja» por las filas reserve_for_payout, y un
+    «Aplicar» que no terminaba dentro de los 30 s del servidor."""
+
+    def test_reserve_for_payout_no_es_un_pago(self):
+        self._cobro(1, payment_id_mp='700', monto=30000)
+        filas = conc.leer_csv(_csv(
+            "2026-09-23T00:00:00.000-03:00,,,initial_available_balance,,0.00,0.00,0.00",
+            "2026-09-23T10:00:00.000-03:00,700,,release,payment,30000.00,0.00,30000.00",
+            "2026-09-23T23:06:07.000-03:00,W1,,release,reserve_for_payout,0.00,30000.00,-30000.00",
+            "2026-09-23T23:06:09.000-03:00,W1,,release,reserve_for_payout,30000.00,0.00,30000.00",
+            "2026-09-23T23:06:09.000-03:00,W1,,release,payout,0.00,30000.00,-30000.00",
+        ))
+        # Ya estaba guardado con el error (el crédito de la reserva como «Sin caja»): se recalcula.
+        malo = RetiroMercadoPago.objects.create(
+            config=self.config, withdrawal_id='W1', fecha=timezone.localdate(), monto=30000, estado='CONCILIADO',
+            raw_reporte={'archivos': ['a.csv'], 'pagos': ['W1'], 'sin_local': {'W1': 30000},
+                         'por_caja': [{'caja': 'Sin caja (online, link de pago u otro)', 'monto': 30000}]})
+        self.assertTrue(conc.retiro_abierto(malo))
+        res = conc.procesar_reporte_liberaciones(filas, self.config, aplicar=True, archivo='b.csv')
+        r = res['retiros'][0]
+        self.assertEqual(r['estado'], 'CONCILIADO')
+        self.assertEqual([c['monto'] for c in r['por_caja']], [30000])
+        self.assertTrue(r['por_caja'][0]['caja'].endswith('Caja 1'), r['por_caja'])
+        self.assertEqual(res['pagos_sin_local'], 0)
+        malo.refresh_from_db()
+        self.assertTrue(malo.raw_reporte['por_caja'][0]['caja'].endswith('Caja 1'))
+        self.assertFalse(conc.retiro_abierto(malo))
+
+    def test_date_created_de_mp_es_utc_etiquetado_menos_cuatro(self):
+        inst, utc = conc._instante_creado_mp('2026-09-23T19:30:54.000-04:00',
+                                             'reserve-release-3655540473-manual-2026-09-23-163054.csv')
+        self.assertTrue(utc)
+        self.assertEqual(timezone.localtime(inst).strftime('%d/%m %H:%M:%S'), '23/09 16:30:54')
+        # Sin archivo (pedido en cola) sigue la regla del reporte terminado de la misma lista.
+        lista = [conc._normalizar_reporte({'id': 1, 'file_name': None, 'status': 'pending',
+                                           'date_created': '2026-09-24T12:35:26.000-04:00'}),
+                 conc._normalizar_reporte({'id': 2, 'file_name': 'reserve-release-1-manual-2026-09-23-163054.csv',
+                                           'status': 'enabled', 'date_created': '2026-09-23T19:30:54.000-04:00'})]
+        conc._corregir_creados(lista)
+        self.assertEqual(timezone.localtime(conc._instante(lista[0]['creado'])).strftime('%d/%m %H:%M'), '24/09 09:35')
+        # Un pedido en cola de hace 100 min leído tal cual parecía del futuro y se adoptaba.
+        real = timezone.now() - timedelta(minutes=100)
+        mal = real.astimezone(dt_timezone.utc).replace(tzinfo=None).strftime('%Y-%m-%dT%H:%M:%S.000') + '-04:00'
+        lista = [conc._normalizar_reporte({'id': 3, 'file_name': None, 'status': 'pending', 'date_created': mal,
+                                           'begin_date': f'{timezone.localdate() - timedelta(days=1)}T03:00:00Z',
+                                           'end_date': f'{timezone.localdate() + timedelta(days=1)}T02:59:59Z'}),
+                 conc._normalizar_reporte({'id': 4, 'file_name': 'reserve-release-1-manual-2026-09-23-163054.csv',
+                                           'status': 'enabled', 'date_created': '2026-09-23T19:30:54.000-04:00'})]
+        self.assertIsNotNone(conc._pedido_en_cola_mp([lista[0]]))
+        conc._corregir_creados(lista)
+        self.assertIsNone(conc._pedido_en_cola_mp([lista[0]]))
+        # Un reporte con la hora bien etiquetada se deja tal cual.
+        inst, utc = conc._instante_creado_mp('2026-09-23T16:30:54.000-03:00',
+                                             'reserve-release-1-manual-2026-09-23-163054.csv')
+        self.assertFalse(utc)
+        self.assertEqual(timezone.localtime(inst).strftime('%H:%M'), '16:30')
+
+    def test_pedido_vencido_deja_de_esperar_y_solo_forzar_pide_otro(self):
+        viejo = _reporte('viejo.csv', _utc_hace(hours=20), creado=_utc_hace(hours=20))
+        hace2h = (timezone.now() - timedelta(hours=2)).isoformat()
+        cache.set(conc._CLAVE_PEDIDO.format(self.config.id),
+                  {'task_id': 77, 'end_date': _utc_hace(minutes=5), 'pedido_a': '13:35', 'pedido_en': hace2h}, 600)
+        esperando = {'listo': False, 'fallido': False, 'file_name': '', 'estado': 'data-ready',
+                     'estado_texto': 'datos listos'}
+        with mock.patch.object(conc, 'listar_reportes_liberaciones', return_value=[viejo]), \
+             mock.patch.object(conc, 'descargar_reporte_liberaciones', return_value=_csv().encode()), \
+             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': False}), \
+             mock.patch.object(conc, 'estado_tarea_liberaciones', return_value=esperando), \
+             mock.patch.object(conc, 'pedir_reporte_liberaciones',
+                               return_value={'task_id': 9, 'begin_date': '', 'end_date': _utc_hace(minutes=5)}) as pedir:
+            res = conc.detectar_retiros()
+            pedir.assert_not_called()
+            self.assertIsNone(res[0]['pedido'])
+            self.assertGreaterEqual(res[0]['pedido_vencido']['minutos'], 119)
+            self.assertEqual(res[0]['pedido_vencido']['pedido_a'], '13:35')
+            self.assertIsNone(cache.get(conc._CLAVE_PEDIDO.format(self.config.id)))
+            # La página devuelve el pedido vencido (otro worker): tampoco se espera ni se pide.
+            res = conc.detectar_retiros(pedir=False, pedidos={self.config.id: {'task_id': 77, 'pedido_en': hace2h}})
+            pedir.assert_not_called()
+            self.assertTrue(res[0]['pedido_vencido'])
+            # «Pedir un reporte nuevo» sí pide.
+            res = conc.detectar_retiros(forzar=True)
+            self.assertEqual(pedir.call_count, 1)
+            self.assertEqual(res[0]['pedido']['task_id'], 9)
+            self.assertTrue(res[0]['pedido']['pedido_en'])
+
+    def test_pedidos_atascados_en_mp_se_informan(self):
+        viejo = _reporte('viejo.csv', _utc_hace(hours=20), creado=_utc_hace(hours=20))
+        atascado = conc._normalizar_reporte({'id': 5, 'file_name': None, 'status': 'pending',
+                                             'date_created': _utc_hace(hours=6),
+                                             'begin_date': viejo['end_date'], 'end_date': viejo['end_date']})
+        with mock.patch.object(conc, 'listar_reportes_liberaciones', return_value=[atascado, viejo]), \
+             mock.patch.object(conc, 'descargar_reporte_liberaciones', return_value=_csv().encode()), \
+             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': True}), \
+             mock.patch.object(conc, 'pedir_reporte_liberaciones') as pedir:
+            res = conc.detectar_retiros()
+        pedir.assert_not_called()
+        self.assertEqual(res[0]['atascados_mp']['n'], 1)
+        self.assertIsNone(res[0]['pedido'])
+
+    def test_reporte_cubierto_por_uno_aplicado_no_se_vuelve_a_bajar(self):
+        hoy = timezone.localdate()
+        RetiroMercadoPago.objects.create(config=self.config, withdrawal_id='W-DEF', fecha=hoy, monto=1000,
+                                         raw_reporte={'archivos': ['def.csv'],
+                                                      'por_caja': [{'caja': 'SUC-TEST · Caja 1', 'monto': 1000}]})
+        desde = f'{hoy - timedelta(days=7)}T03:00:00Z'
+        fin = f'{hoy + timedelta(days=1)}T02:59:59Z'
+        lista = [dict(_reporte('def.csv', fin, creado=_utc_hace(hours=1)), begin_date=desde),
+                 dict(_reporte('antes.csv', fin, creado=_utc_hace(hours=2)), begin_date=desde),
+                 dict(_reporte('mas_antiguo.csv', fin, creado=_utc_hace(hours=3)),
+                      begin_date=f'{hoy - timedelta(days=8)}T03:00:00Z')]
+        with mock.patch.object(conc, 'listar_reportes_liberaciones', return_value=lista), \
+             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': True}), \
+             mock.patch.object(conc, 'descargar_reporte_liberaciones', return_value=_csv().encode()) as bajar, \
+             mock.patch.object(conc, 'pedir_reporte_liberaciones'):
+            conc.detectar_retiros()
+        self.assertEqual([c.args[1] for c in bajar.call_args_list], ['mas_antiguo.csv'])
+
+    def test_retiro_abierto_se_reintenta_con_su_reporte_cada_6_horas(self):
+        hoy = timezone.localdate()
+        abierto = RetiroMercadoPago.objects.create(
+            config=self.config, withdrawal_id='W-AB', fecha=hoy, monto=1000,
+            raw_reporte={'archivos': ['def.csv'], 'por_caja': [{'caja': conc.CAJA_SALDO_ANTERIOR, 'monto': 1000}]})
+        self.assertEqual(conc.reportes_por_reintentar(self.config), {'def.csv'})
+        abierto.raw_reporte['reintento_en'] = (timezone.now() - timedelta(hours=1)).isoformat()
+        abierto.save()
+        self.assertEqual(conc.reportes_por_reintentar(self.config), set())
+        abierto.raw_reporte['reintento_en'] = (timezone.now() - timedelta(hours=7)).isoformat()
+        abierto.save()
+        self.assertEqual(conc.reportes_por_reintentar(self.config), {'def.csv'})
+        # Detectar lo vuelve a bajar aunque esté «aplicado» y, al seguir abierto, anota el reintento.
+        fin = f'{hoy + timedelta(days=1)}T02:59:59Z'
+        lista = [dict(_reporte('def.csv', fin, creado=_utc_hace(hours=1)), begin_date=f'{hoy}T03:00:00Z')]
+        csv_retiro = _csv(
+            f"{hoy}T00:00:00.000-03:00,,,initial_available_balance,,1000.00,0.00,1000.00",
+            f"{hoy}T10:00:00.000-03:00,W-AB,,release,payout,0.00,1000.00,-1000.00",
+        )
+        with mock.patch.object(conc, 'listar_reportes_liberaciones', return_value=lista), \
+             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': True}), \
+             mock.patch.object(conc, 'descargar_reporte_liberaciones', return_value=csv_retiro.encode()) as bajar, \
+             mock.patch.object(conc, 'pedir_reporte_liberaciones'):
+            conc.detectar_retiros()
+        self.assertEqual(bajar.call_count, 1)
+        abierto.refresh_from_db()
+        self.assertGreater(conc._instante(abierto.raw_reporte['reintento_en']), timezone.now() - timedelta(minutes=5))
+        self.assertEqual(conc.reportes_por_reintentar(self.config), set())
+
+    def test_inicio_del_reporte_parte_14_dias_antes_del_retiro(self):
+        hoy = timezone.localdate()
+        RetiroMercadoPago.objects.create(config=self.config, withdrawal_id='W1', fecha=hoy - timedelta(days=1), monto=1,
+                                         raw_reporte={'archivos': ['a.csv'], 'por_caja': [{'caja': 'X', 'monto': 1}]})
+        self.assertEqual(conc.inicio_reporte_cuenta(self.config), hoy - timedelta(days=15))
+
+    def test_completar_salta_dias_ya_leidos_y_devuelve_los_leidos(self):
+        d1, d2 = timezone.localdate() - timedelta(days=3), timezone.localdate() - timedelta(days=2)
+        with mock.patch('app.services.mercadopago_service.buscar_pagos_dia', return_value=[]) as buscar:
+            res = conc.completar_numeros_mp(self.config, [d1, d2], saltar={d1})
+        self.assertEqual(buscar.call_count, 1)
+        self.assertEqual(res['leidos'], [str(d2)])
+
+    def test_aplicar_por_partes_cuando_no_alcanza_a_completar(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        admin = crear_usuario(username='adm_partes', rol='administrador')
+        c = Client(); c.force_login(admin)
+        hoy = timezone.localdate()
+        csv = _csv(
+            f"{hoy}T00:00:00.000-03:00,,,initial_available_balance,,0.00,0.00,0.00",
+            f"{hoy}T10:00:00.000-03:00,700,,release,payment,30000.00,0.00,30000.00",
+            f"{hoy}T11:00:00.000-03:00,W1,,release,payout,0.00,30000.00,-30000.00",
+        ).encode()
+        self._cobro(1, payment_id_mp='700', monto=30000)
+        dias = [hoy - timedelta(days=2), hoy - timedelta(days=1), hoy]
+        parcial = {'dias': 1, 'completados': 0, 'actualizados': 0, 'importados': 0, 'sin_tiempo': True,
+                   'fallidos': 0, 'leidos': [str(dias[0])]}
+        entero = dict(parcial, sin_tiempo=False, leidos=[str(d) for d in dias[1:]])
+        with mock.patch('app.middleware_permisos.PermisoRol.tiene_permiso', return_value=True), \
+             mock.patch.object(conc, 'dias_para_completar', return_value=dias), \
+             mock.patch.object(conc, 'completar_numeros_mp', side_effect=[parcial, entero]) as completar:
+            r = c.post(reverse('api_conciliacion_liberaciones_mp'),
+                       {'config_id': self.config.id, 'aplicar': '1',
+                        'archivo': SimpleUploadedFile('r.csv', csv, content_type='text/csv')}).json()
+            self.assertTrue(r['continuar'])
+            self.assertEqual((r['dias_hechos'], r['dias_total'], r['dias_listos']), (1, 3, str(dias[0])))
+            self.assertEqual(RetiroMercadoPago.objects.count(), 0)   # todavía no se aplicó nada
+            r = c.post(reverse('api_conciliacion_liberaciones_mp'),
+                       {'config_id': self.config.id, 'aplicar': '1', 'dias_listos': r['dias_listos'],
+                        'archivo': SimpleUploadedFile('r.csv', csv, content_type='text/csv')}).json()
+            self.assertTrue(r['aplicado'])
+            self.assertFalse(r.get('continuar'))
+        self.assertEqual(completar.call_args_list[1].kwargs['saltar'], {dias[0]})
+        self.assertEqual(RetiroMercadoPago.objects.filter(withdrawal_id='W1').count(), 1)

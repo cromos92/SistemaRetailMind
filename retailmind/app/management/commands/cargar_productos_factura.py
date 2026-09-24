@@ -803,6 +803,11 @@ class Command(BaseCommand):
             clave = clave_talla_ficha(objetivo)
             if clave in existentes:
                 texto, sku, filas = existentes[clave]
+                # Si una fila ya está escrita como la guía (p.ej. «8.5» junto a
+                # un «8,5» que no se pudo renombrar), el stock entra en esa.
+                exacta = next(((t, s) for t, s, _st in filas if t == objetivo), None)
+                if exacta is not None:
+                    texto, sku = exacta
                 if texto != texto.strip():
                     err(f'la talla «{texto}» de la ficha tiene espacios: la vista crearía otra '
                         f'{texto.strip()} con SKU nuevo; corrígela en la ficha antes de cargar')

@@ -6,6 +6,7 @@ Espejo estructural de views_transbank_sdk.py: DRF para los endpoints del POS
 los servidores de MP, sin sesión).
 """
 import json
+import time
 import logging
 import re
 from datetime import datetime, timedelta
@@ -2015,15 +2016,29 @@ def api_conciliacion_liberaciones_mp(request):
                 'error': 'Elija un reporte de la lista de Mercado Pago o suba el archivo CSV.'
             }, status=400)
         filas = conc.leer_csv(contenido)
+        t0 = time.monotonic()
         resultado = conc.procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=origen)
+        t_previa = time.monotonic() - t0
         # Pagos del reporte que no se cruzaron: casi siempre es porque el cobro
         # no tiene guardado el N° de operación de MP. Se completa desde la API
         # (solo campos vacíos) y se vuelve a cruzar.
         completado = None
+        # Días que una vuelta anterior de esta misma página ya leyó (la caché es por worker).
+        listos = {f for f in (conc._fecha_libre(x) for x in str(request.POST.get('dias_listos') or '').split(','))
+                  if f}
         dias = conc.dias_para_completar(config, resultado, importar=aplicar)
         if dias:
             # Registrar pagos «MP manual» como cobro solo al aplicar (nunca en la vista previa).
-            completado = conc.completar_numeros_mp(config, dias, importar=aplicar)
+            # Techo corto: el servidor corta un request a los 30 s; si no alcanza,
+            # la página vuelve a llamar con `dias_listos` y se sigue por los que faltan.
+            completado = conc.completar_numeros_mp(config, dias, presupuesto_seg=18, importar=aplicar, saltar=listos)
+            if completado['sin_tiempo'] and completado.get('leidos') and not completado.get('fallidos'):
+                hechos = sorted({str(d) for d in listos} | set(completado['leidos']))
+                logger.info("Conciliación MP: liberaciones config=%s origen=%s: completar por partes %s/%s días",
+                            config.id, origen, len(hechos), len(dias))
+                return JsonResponse({'success': True, 'continuar': True, 'aplicado': False,
+                                     'dias_listos': ','.join(hechos), 'dias_hechos': len(hechos),
+                                     'dias_total': len(dias)})
         # Si MP no dejó terminar de completar N°/fechas, se aplica igual pero sin
         # marcar el reporte: «Detectar retiros» o un nuevo «Aplicar» lo rehace.
         completo = completado is None or (not completado['sin_tiempo'] and not completado.get('fallidos'))
@@ -2042,9 +2057,10 @@ def api_conciliacion_liberaciones_mp(request):
     if not filas or not (resultado['retiros'] or resultado['liberado_sin_retirar']):
         # Nada reconocible: devolver los encabezados ayuda a ajustar el lector.
         resultado['encabezados'] = list(filas[0].keys()) if filas else []
-    if aplicar:
-        logger.info("Conciliación MP: liberaciones aplicadas config=%s origen=%s retiros=%s por %s",
-                    config.id, origen, len(resultado['retiros']), request.user.username)
+    logger.info("Conciliación MP: liberaciones %s config=%s origen=%s retiros=%s por %s: %.1fs "
+                "(vista previa %.1fs, completar %s días)",
+                'aplicadas' if aplicar else 'vista previa', config.id, origen, len(resultado['retiros']),
+                request.user.username, time.monotonic() - t0, t_previa, len(dias))
     return JsonResponse({'success': True, 'aplicado': aplicar, 'filas_leidas': len(filas),
                          'origen': origen, **resultado})
 
@@ -2073,7 +2089,9 @@ def api_conciliacion_detectar_retiros_mp(request):
     pedidos = ({int(k): v for k, v in crudo.items() if str(k).isdigit() and isinstance(v, dict)}
                if isinstance(crudo, dict) else {})
     forzar = str(request.POST.get('forzar') or '') == '1'
-    cuentas = conc.detectar_retiros(presupuesto_seg=45, pedir=pedir, pedir_ids=pedir_ids, pedidos=pedidos,
+    # 22 s: gunicorn corta el request a los 30 s (Procfile sin --timeout); lo que
+    # no alcance lo rehace la vuelta siguiente de la página (falto_tiempo).
+    cuentas = conc.detectar_retiros(presupuesto_seg=22, pedir=pedir, pedir_ids=pedir_ids, pedidos=pedidos,
                                     forzar=forzar)
     logger.info("Conciliación MP: detectar retiros por %s → %s",
                 request.user.username,

@@ -310,6 +310,11 @@ _ALIAS_COLUMNAS = {
 # como retiro. Glosario oficial: payout = "withdrawal of available money".
 DESCRIPCIONES_RETIRO = ('payout', 'withdrawal', 'retiro')
 DESCRIPCIONES_PAGO = ('payment', 'pago')
+# 'reserve_for_payout': segundos antes del payout MP aparta la plata (débito) y
+# la suelta (crédito), las dos filas con el N° del retiro. Suman cero y no son
+# pagos: leído el crédito como liberación sin venta, el retiro entero quedaba en
+# «Sin caja (online…)» (Paola, retiro de $6.147.490 del 23-09).
+DESCRIPCIONES_INTERNAS = ('reserve_for_payout', 'reserva para retiro', 'reserva_para_retiro')
 
 
 def _solo_digitos(valor):
@@ -546,6 +551,9 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
             continue
         if tipo and tipo not in ('release', 'liberacion', 'liberado', 'liberaciones'):
             continue  # total, available_balance (pre_/pos_payout), block, …
+        descripcion = _sin_tildes(_col(fila, 'DESCRIPTION')).lower()
+        if descripcion in DESCRIPCIONES_INTERNAS:
+            continue
         instante = _instante(_col(fila, 'DATE'))
         if instante is None:
             continue
@@ -553,7 +561,7 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
             'instante': instante,
             'source_id': str(_col(fila, 'SOURCE_ID')).split('.')[0],
             'external_reference': _col(fila, 'EXTERNAL_REFERENCE'),
-            'descripcion': _sin_tildes(_col(fila, 'DESCRIPTION')).lower(),
+            'descripcion': descripcion,
             'credito': credito,
             'pos': (_col(fila, 'EXTERNAL_POS_ID'), _col(fila, 'POS_ID'), _col(fila, 'POS_NAME')),
             'debito': debito,
@@ -645,7 +653,8 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
     # al reprocesar; los que quedaron con algo sin explicar sí (FIFO de nuevo).
     cerrados = {wid for wid, x in registrados.items()
                 if isinstance(x.raw_reporte, dict) and x.raw_reporte.get('por_caja')
-                and _no_explicado(x.raw_reporte['por_caja']) == 0}
+                and _no_explicado(x.raw_reporte['por_caja']) == 0
+                and not _desglose_envenenado(wid, x.raw_reporte)}
     # Retiros guardados antes de existir el desglose: cerrados si las ventas que
     # ya tienen amarradas cubren su monto (si no, al reprocesar se desamarraban).
     legado = [wid for wid, x in registrados.items()
@@ -766,8 +775,9 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
             previo = registrados.get(withdrawal_id)
             raw_prev = previo.raw_reporte if previo is not None and isinstance(previo.raw_reporte, dict) else {}
             guardado = raw_prev.get('por_caja')
-            conservar = bool(guardado) and (_no_explicado(guardado) == 0
-                                            or _no_explicado(guardado) < _no_explicado(por_caja_lista))
+            conservar = (bool(guardado) and not _desglose_envenenado(withdrawal_id, raw_prev)
+                         and (_no_explicado(guardado) == 0
+                              or _no_explicado(guardado) < _no_explicado(por_caja_lista)))
             if conservar:
                 trxs = []
                 por_caja_lista = guardado
@@ -800,6 +810,8 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
                     if retiro is not None and conservar:
                         raw['archivos'] = sorted(archivos)
                         raw.pop('archivo', None)
+                        if _no_explicado(por_caja_lista):
+                            raw['reintento_en'] = timezone.now().isoformat()
                         retiro.raw_reporte = raw
                         retiro.save(update_fields=['raw_reporte', 'actualizado_en'])
                         # Sus vínculos quedan como estaban; solo se amarran los cobros
@@ -833,6 +845,8 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
                                  'sin_local': {str(it['id']): usado for it, usado in tomado[:2000]
                                                if it['trx'] is None and it.get('manual') is None
                                                and it['id'] and it['id'] != 'saldo inicial'}}
+                    if _no_explicado(por_caja_lista):
+                        raw_nuevo['reintento_en'] = timezone.now().isoformat()
                     datos = {'config': config, 'fecha': timezone.localtime(r['instante']).date(),
                              'monto': monto, 'estado': estado, 'detalle_diferencia': detalle,
                              'raw_reporte': raw_nuevo}
@@ -1160,7 +1174,7 @@ def _registrar_devoluciones_del_reporte(devoluciones):
             continue
 
 
-def completar_numeros_mp(config, dias, presupuesto_seg=35, importar=False):
+def completar_numeros_mp(config, dias, presupuesto_seg=35, importar=False, saltar=()):
     """Rellena `payment_id_mp` (y neto/comisión si faltan) de los cobros de la
     cuenta leyendo `payments/search` de esos días, cruzado por external_reference.
 
@@ -1177,13 +1191,16 @@ def completar_numeros_mp(config, dias, presupuesto_seg=35, importar=False):
     como cobro (`_importar_pago_manual`).
     `fallidos` son los días que no se pudieron leer por un error de red o de
     MP saturado (429/5xx): quien llama debe tratarlo como «no terminó».
+    `saltar`: días que otra vuelta ya leyó (la página los devuelve: la caché es
+    por worker). `leidos` en la respuesta: los días que esta vuelta dio por leídos.
     """
     import time as _time
     fin = _time.monotonic() + presupuesto_seg
     completados, leidos, fallidos, seguidos, actualizados, importados = 0, 0, 0, 0, 0, 0
+    lista_leidos = []
     configs = _configs_de_la_cuenta(config)
     hoy = timezone.localdate()
-    dias = sorted(set(dias))
+    dias = sorted(set(dias) - set(saltar))
     manuales = (_vouchers_mp_manual(configs, dias[0] - timedelta(days=1), dias[-1] + timedelta(days=1))
                 if dias and importar else {})
     cajas_de_tienda, retiro_de = {}, {}
@@ -1201,10 +1218,11 @@ def completar_numeros_mp(config, dias, presupuesto_seg=35, importar=False):
         # no la usa ni la deja, para que el «Aplicar» siguiente sí importe.
         clave_dia = f'conc_mp:dia_leido:{min(configs)}:{dia}'
         if importar and dia < hoy and cache.get(clave_dia):
+            lista_leidos.append(str(dia))
             continue
         if _time.monotonic() > fin:
             return {'dias': leidos, 'completados': completados, 'sin_tiempo': True, 'fallidos': fallidos,
-                    'actualizados': actualizados, 'importados': importados}
+                    'actualizados': actualizados, 'importados': importados, 'leidos': lista_leidos}
         try:
             pagos = mp.buscar_pagos_dia(config, dia)
         except mp.MercadoPagoError as e:
@@ -1217,6 +1235,7 @@ def completar_numeros_mp(config, dias, presupuesto_seg=35, importar=False):
             continue
         seguidos = 0
         leidos += 1
+        lista_leidos.append(str(dia))
         if importar and dia < hoy:
             cache.set(clave_dia, 1, 60 * 30)
         por_ref = {str(p.get('external_reference') or ''): p for p in pagos
@@ -1258,7 +1277,7 @@ def completar_numeros_mp(config, dias, presupuesto_seg=35, importar=False):
             if _importar_pago_manual(pago, p, caja, retiro=retiro_de.get(pid)) is not None:
                 importados += 1
     return {'dias': leidos, 'completados': completados, 'sin_tiempo': False, 'fallidos': fallidos,
-            'actualizados': actualizados, 'importados': importados}
+            'actualizados': actualizados, 'importados': importados, 'leidos': lista_leidos}
 
 
 def dias_cobros_sin_numero(config, resultado, dias_antes=60):
@@ -1412,6 +1431,64 @@ def _normalizar_reporte(item):
     }
 
 
+_RE_HORA_ARCHIVO = re.compile(r'-(\d{4}-\d{2}-\d{2})-(\d{6})\.\w+$')
+
+
+def _instante_creado_mp(texto, file_name='', como_utc=None):
+    """`date_created` de un reporte como instante real.
+
+    MP lo entrega etiquetado «-04:00» pero el instante es UTC: el archivo
+    `…-2026-09-23-163054.csv` (16:30:54 hora de Chile) trae
+    `date_created 2026-09-23T19:30:54.000-04:00`. Leído tal cual, cada reporte
+    parecía 4 h más nuevo (la página decía «revisado hasta 19:10» a las 15:44 y
+    un pedido trabado hacía 6 h parecía reciente y se seguía esperando). Con
+    nombre de archivo se comprueba contra su hora; sin él (pedidos en cola) se
+    usa `como_utc`, lo aprendido de los reportes terminados de la misma cuenta.
+    Devuelve (instante, como_utc): True si se leyó como UTC, False si tal cual,
+    None si no se pudo comprobar.
+    """
+    dt = _instante(texto)
+    if dt is None:
+        return None, None
+    m = _RE_HORA_ARCHIVO.search(str(file_name or ''))
+    if m:
+        try:
+            local = datetime.strptime(f'{m.group(1)} {m.group(2)}', '%Y-%m-%d %H%M%S')
+        except ValueError:
+            local = None
+        if local is not None:
+            en_utc = dt.replace(tzinfo=dt_timezone.utc)
+            if abs(timezone.localtime(en_utc).replace(tzinfo=None) - local) <= timedelta(minutes=5):
+                return en_utc, True
+            if abs(timezone.localtime(dt).replace(tzinfo=None) - local) <= timedelta(minutes=5):
+                return dt, False
+    if como_utc:
+        return dt.replace(tzinfo=dt_timezone.utc), True
+    return dt, (None if como_utc is None else False)
+
+
+def _corregir_creados(reportes):
+    """Deja `creado` de cada reporte como instante real en ISO UTC (ver
+    `_instante_creado_mp`). Los pedidos en cola, sin archivo, siguen la regla
+    que demostró el reporte terminado más reciente de la lista."""
+    como_utc, sin_comprobar = None, []
+    for r in reportes:
+        if not r.get('creado'):
+            continue
+        inst, decidido = _instante_creado_mp(r['creado'], r.get('file_name'))
+        if decidido is None:
+            sin_comprobar.append(r)
+            continue
+        r['creado'] = inst.astimezone(dt_timezone.utc).isoformat()
+        if como_utc is None:
+            como_utc = decidido
+    for r in sin_comprobar:
+        inst, _d = _instante_creado_mp(r['creado'], '', como_utc=bool(como_utc))
+        if inst is not None:
+            r['creado'] = inst.astimezone(dt_timezone.utc).isoformat()
+    return reportes
+
+
 def listar_reportes_liberaciones(config, limite=20, incluir_pendientes=False):
     """Reportes ya generados en MP, más recientes primero (solo los descargables).
 
@@ -1431,7 +1508,8 @@ def listar_reportes_liberaciones(config, limite=20, incluir_pendientes=False):
         if isinstance(data, dict):
             data = data.get('results') or []
         reportes = [_normalizar_reporte(i) for i in data]
-        reportes.sort(key=lambda r: r['creado'], reverse=True)
+    _corregir_creados(reportes)
+    reportes.sort(key=lambda r: r['creado'], reverse=True)   # ISO UTC: el orden de texto es el cronológico
     if incluir_pendientes:
         return reportes[:limite]
     return [r for r in reportes if r['file_name']][:limite]
@@ -1531,13 +1609,23 @@ def cuentas_mp():
 
 # Un reporte que termina hace menos de esto se considera al día (no se pide otro).
 FRESCURA_REPORTE_MIN = int(os.environ.get('MP_REPORTE_FRESCURA_MIN', '15'))
+# Más que esto sin que MP genere el reporte pedido, se deja de esperar (24-09:
+# la cuenta de Nicole tenía dos pedidos en 'pending' desde las 09:35 y a las
+# 15:44 la página seguía «Buscando retiros recientes…»).
+ESPERA_PEDIDO_MIN = int(os.environ.get('MP_ESPERA_PEDIDO_MIN', '90'))
+# Un retiro que quedó con parte sin explicar se vuelve a aplicar con su reporte
+# como máximo cada tantas horas (entre medio se completan N° y liberaciones).
+REINTENTO_RETIRO_ABIERTO_H = 6
+# La plata de un retiro se liberó días antes (Point libera a D+N): el reporte
+# parte con este margen antes del retiro para traer esas liberaciones con su N°.
+MARGEN_LIBERACION_DIAS = 14
 DIAS_MAX_REPORTE = 59          # MP acepta hasta 60 días por reporte
 _CLAVE_PEDIDO = 'conc_mp:pedido:{}'
 _CLAVE_SIN_RETIROS = 'conc_mp:sin_retiros:{}'
 
 
-def inicio_reporte_cuenta(config, ahora=None):
-    """Primer día del reporte que se pide para una cuenta.
+def _dia_desde_retiros(config, ahora=None):
+    """Día del último retiro (o del abierto más antiguo) del que parte el reporte.
 
     El día del último retiro registrado de la cuenta: el saldo que dejó ese
     retiro queda dentro y la cola FIFO parte bien (ese retiro se reprocesa y
@@ -1563,6 +1651,67 @@ def inicio_reporte_cuenta(config, ahora=None):
     return inicio
 
 
+def inicio_reporte_cuenta(config, ahora=None):
+    """Primer día del reporte que se pide para una cuenta: el del último retiro
+    registrado (o del abierto más antiguo, para que se recalcule) menos
+    MARGEN_LIBERACION_DIAS, porque la plata que se lleva un retiro se liberó
+    días antes y sin esas filas el retiro quedaba explicado solo por «Saldo
+    anterior» (Paola 23-09: $2,5M sin explicar con un reporte que partía el
+    mismo día). Sin retiros registrados, lo máximo que acepta MP (59 días)."""
+    ahora = ahora or timezone.now()
+    tope = timezone.localtime(ahora).date() - timedelta(days=DIAS_MAX_REPORTE)
+    return max(tope, _dia_desde_retiros(config, ahora) - timedelta(days=MARGEN_LIBERACION_DIAS))
+
+
+def reportes_por_reintentar(config, ahora=None):
+    """Reportes ya aplicados que vale la pena volver a aplicar: los de un retiro
+    reciente que quedó con parte sin explicar («Saldo anterior» / «No
+    explicado»). Suele resolverse solo al reprocesar, porque entre medio se
+    completaron N° y fechas de liberación de sus ventas o se registraron pagos
+    «MP manual». Como máximo cada REINTENTO_RETIRO_ABIERTO_H horas (queda
+    anotado en `raw_reporte['reintento_en']`). Hasta ahora un retiro así quedaba
+    en «Saldo anterior» para siempre salvo que alguien aplicara el reporte a mano."""
+    ahora = ahora or timezone.now()
+    limite = ahora - timedelta(hours=REINTENTO_RETIRO_ABIERTO_H)
+    archivos = set()
+    for r in (RetiroMercadoPago.objects
+              .filter(config_id__in=_configs_de_la_cuenta(config),
+                      fecha__gte=timezone.localtime(ahora).date() - timedelta(days=DIAS_MAX_REPORTE))
+              .annotate(n_trx=Count('transacciones'))):
+        raw = r.raw_reporte if isinstance(r.raw_reporte, dict) else {}
+        ultimo = _instante(raw.get('reintento_en'))
+        if retiro_abierto(r) and (ultimo is None or ultimo < limite):
+            archivos.update(a for a in (raw.get('archivos') or []) if a)
+    return archivos
+
+
+def _cubierto_por_aplicado(reporte, reportes, aplicados):
+    """Reporte sin aplicar que otro YA aplicado contiene entero (empieza antes
+    o igual y se generó después): no aporta nada y se salta. Sin esto, los
+    reportes que MP generó ayer antes del definitivo se volvían a bajar y
+    procesar en cada «Detectar retiros» (la marca «sin retiros» es por worker) y
+    cada vuelta se gastaba el tiempo en ellos."""
+    desde, fin = _instante(reporte.get('begin_date')), _fin_de_reporte(reporte)
+    if desde is None or fin is None:
+        return False
+    for a in reportes:
+        if a is reporte or a.get('file_name') not in aplicados:
+            continue
+        a_desde, a_fin = _instante(a.get('begin_date')), _fin_de_reporte(a)
+        if a_desde is not None and a_fin is not None and a_desde <= desde and a_fin >= fin:
+            return True
+    return False
+
+
+def _desglose_envenenado(withdrawal_id, raw):
+    """Desglose guardado con el error del 24-09: el crédito 'reserve_for_payout'
+    (que lleva el N° del propio retiro) leído como pago sin venta dejó el retiro
+    entero en «Sin caja» y, como eso cuenta como explicado, «cerrado» para
+    siempre. Se reconoce porque `sin_local` trae su propio N°: se recalcula."""
+    raw = raw if isinstance(raw, dict) else {}
+    return str(withdrawal_id) in {str(k) for k in (raw.get('sin_local') or {})}
+
+
 def retiro_abierto(retiro):
     """Retiro con parte sin explicar con ventas (se recalcula al reprocesar):
     desglose con «Saldo anterior»/«No explicado», o guardado sin desglose y sin
@@ -1572,7 +1721,7 @@ def retiro_abierto(retiro):
         return False
     por_caja = raw.get('por_caja')
     if por_caja:
-        return _no_explicado(por_caja) > 0
+        return _no_explicado(por_caja) > 0 or _desglose_envenenado(retiro.withdrawal_id, raw)
     n = getattr(retiro, 'n_trx', None)
     if n is None:
         n = retiro.transacciones.count()
@@ -1605,7 +1754,8 @@ def _pedido_valido(pedido):
         tarea = int(pedido.get('task_id') or 0)
     except (TypeError, ValueError):
         tarea = 0
-    limpio = {k: str(pedido.get(k) or '')[:40] for k in ('begin_date', 'end_date', 'hasta', 'desde', 'pedido_a')}
+    limpio = {k: str(pedido.get(k) or '')[:40]
+              for k in ('begin_date', 'end_date', 'hasta', 'desde', 'pedido_a', 'pedido_en')}
     limpio['task_id'] = tarea or None
     limpio['adoptado'] = bool(pedido.get('adoptado'))
     archivo = str(pedido.get('file_name') or '')
@@ -1616,7 +1766,7 @@ def _pedido_valido(pedido):
 ESTADOS_REPORTE_EN_PROCESO = ('pending', 'processing', 'data-ready', 'in_process', 'queued', '')
 
 
-def _pedido_en_cola_mp(pendientes, minutos=90, cubre_desde=None, cubre_hasta=None):
+def _pedido_en_cola_mp(pendientes, minutos=None, cubre_desde=None, cubre_hasta=None):
     """El pedido más reciente que MP todavía está generando, con la forma de un
     pedido propio, para esperarlo en vez de pedir otro encima.
 
@@ -1626,7 +1776,7 @@ def _pedido_en_cola_mp(pendientes, minutos=90, cubre_desde=None, cubre_hasta=Non
     llega hasta `cubre_hasta`. Su fin útil es la hora en que se pidió: MP pone
     de fin las 23:59 del día, pero no puede traer nada posterior a su creación.
     """
-    limite = timezone.now() - timedelta(minutes=minutos)
+    limite = timezone.now() - timedelta(minutes=ESPERA_PEDIDO_MIN if minutos is None else minutos)
     for r in pendientes:
         creado = _instante(r.get('creado'))
         if (r.get('file_name') or not r.get('id') or str(r.get('estado') or '') not in ESTADOS_REPORTE_EN_PROCESO
@@ -1642,9 +1792,19 @@ def _pedido_en_cola_mp(pendientes, minutos=90, cubre_desde=None, cubre_hasta=Non
                 'end_date': creado.isoformat(),
                 'desde': timezone.localtime(desde).strftime('%d/%m/%Y') if desde else '',
                 'hasta': timezone.localtime(creado).strftime('%d/%m %H:%M'),
-                'pedido_a': timezone.localtime(creado).strftime('%H:%M'),
+                'pedido_a': timezone.localtime(creado).strftime('%H:%M'), 'pedido_en': creado.isoformat(),
                 'estado_texto': texto_estado_reporte(r.get('estado')), 'adoptado': True}
     return None
+
+
+def _pedidos_atascados(pendientes, ahora=None):
+    """Instantes de los pedidos que MP tiene en cola desde hace más de
+    ESPERA_PEDIDO_MIN: la cola de esa cuenta está trabada y pedir otro no ayuda."""
+    limite = (ahora or timezone.now()) - timedelta(minutes=ESPERA_PEDIDO_MIN)
+    return sorted(c for c in (_instante(r.get('creado')) for r in pendientes
+                              if not r.get('file_name') and r.get('id')
+                              and str(r.get('estado') or '') in ESTADOS_REPORTE_EN_PROCESO)
+                  if c is not None and c < limite)
 
 
 def _pedido_en_curso(cfg, reportes, pedido_pagina=None, pedido_mp=None):
@@ -1652,46 +1812,53 @@ def _pedido_en_curso(cfg, reportes, pedido_pagina=None, pedido_mp=None):
 
     El pedido se busca en la caché del proceso y, si no está (otro worker de
     gunicorn), en el que devuelve la página. Devuelve
-    (pendiente, extra, resuelto, fallido):
+    (pendiente, extra, resuelto, fallido, vencido):
     - pendiente: el pedido, mientras MP lo genera o hasta aplicar su archivo.
     - extra: el reporte que MP ya terminó y /search todavía no lista; se procesa igual.
     - resuelto: el pedido llegó; aunque haya quedado viejo porque MP tardó, no
       se pide otro en esta pasada (eso encadenaba pedidos sin fin).
     - fallido: MP no pudo generarlo.
+    - vencido: el pedido (con 'minutos') si MP lleva más de ESPERA_PEDIDO_MIN
+      sin generarlo: se deja de esperar; solo «forzar» pide otro.
     """
     clave = _CLAVE_PEDIDO.format(cfg.id)
     pedido = cache.get(clave) or _pedido_valido(pedido_pagina) or pedido_mp
     if not pedido:
-        return None, None, False, False
+        return None, None, False, False, None
     fin_pedido = _instante(pedido.get('end_date'))
     if fin_pedido is not None and any(
             f is not None and f >= fin_pedido - timedelta(minutes=1)
             for f in (_fin_de_reporte(r) for r in reportes)):
         cache.delete(clave)
-        return None, None, True, False
+        return None, None, True, False, None
     archivo = pedido.get('file_name') or ''
     if not archivo and pedido.get('task_id'):
         try:
             estado = estado_tarea_liberaciones(cfg, pedido['task_id'])
         except mp.MercadoPagoError as e:
             if getattr(e, 'red', False):
-                return pedido, None, False, False   # sin red: se sigue esperando
-            cache.delete(clave)                     # MP no reconoce la tarea (4xx): se da por perdida
-            return None, None, False, True
+                return pedido, None, False, False, None   # sin red: se sigue esperando
+            cache.delete(clave)                           # MP no reconoce la tarea (4xx): se da por perdida
+            return None, None, False, True, None
         if estado['fallido']:
             cache.delete(clave)
-            return None, None, False, True
+            return None, None, False, True, None
         if estado['listo']:
             archivo = estado['file_name']
         pedido = dict(pedido, estado_texto=estado.get('estado_texto') or '')
     if not archivo:
-        return pedido, None, False, False
+        pedido_en = _instante(pedido.get('pedido_en'))
+        ahora = timezone.now()
+        if pedido_en is not None and pedido_en < ahora - timedelta(minutes=ESPERA_PEDIDO_MIN):
+            cache.delete(clave)
+            return None, None, False, False, dict(pedido, minutos=int((ahora - pedido_en).total_seconds() // 60))
+        return pedido, None, False, False, None
     pedido = dict(pedido, file_name=archivo)
     cache.set(clave, pedido, 60 * 20)   # hasta aplicarlo
     extra = {'file_name': archivo, 'begin_date': pedido.get('begin_date') or '',
              'end_date': pedido.get('end_date') or '', 'creado': '', 'origen': 'manual',
              'estado': 'processed'}
-    return pedido, extra, True, False
+    return pedido, extra, True, False, None
 
 
 def _pedir_si_hace_falta(cfg, reportes, fila, ahora=None, forzar=False, por_retiro_activo=False):
@@ -1718,6 +1885,7 @@ def _pedir_si_hace_falta(cfg, reportes, fila, ahora=None, forzar=False, por_reti
     fin = _instante(pedido.get('end_date'))
     pedido['hasta'] = timezone.localtime(fin).strftime('%d/%m %H:%M') if fin else ''
     pedido['pedido_a'] = timezone.localtime(ahora).strftime('%H:%M')
+    pedido['pedido_en'] = ahora.isoformat()
     pedido['estado_texto'] = 'en cola en Mercado Pago'
     desde = _instante(pedido.get('begin_date'))
     pedido['desde'] = timezone.localtime(desde).strftime('%d/%m/%Y') if desde else ''
@@ -1757,7 +1925,7 @@ def detectar_retiros(presupuesto_seg=45, pedir=True, pedir_ids=(), pedidos=None,
                 'reportes_aplicados': 0, 'retiros': [], 'por_retiro_activo': None,
                 'error': '', 'falto_tiempo': False, 'incompleto': False,
                 'pedido': None, 'error_pedido': '', 'revisado_hasta': '', 'pedir_pendiente': False,
-                'al_dia_hasta': ''}
+                'al_dia_hasta': '', 'pedido_vencido': None, 'atascados_mp': None}
         salida.append(fila)
         pedir_cuenta = pedir or cfg.id in pedir_ids
         pedido_pagina = (pedidos or {}).get(cfg.id)
@@ -1778,17 +1946,29 @@ def detectar_retiros(presupuesto_seg=45, pedir=True, pedir_ids=(), pedidos=None,
             fila['error'] = e.mensaje
             continue
         reportes = [r for r in todos if r['file_name']]
+        atascados = _pedidos_atascados([r for r in todos if not r['file_name']])
+        if atascados:
+            fila['atascados_mp'] = {'n': len(atascados),
+                                    'desde': timezone.localtime(atascados[0]).strftime('%d/%m %H:%M')}
         if forzar and pedir_cuenta:
             cache.delete(_CLAVE_PEDIDO.format(cfg.id))
             pedido_pagina, pedido_mp = None, None
         else:
+            # Basta con que parta el día del retiro (sin el margen de liberación):
+            # trae el retiro, y el reintento de retiros abiertos completa el resto.
             pedido_mp = _pedido_en_cola_mp([r for r in todos if not r['file_name']],
-                                           cubre_desde=inicio_reporte_cuenta(cfg))
-        pendiente, extra, resuelto, fallido = _pedido_en_curso(cfg, reportes, pedido_pagina, pedido_mp)
+                                           cubre_desde=_dia_desde_retiros(cfg))
+        pendiente, extra, resuelto, fallido, vencido = _pedido_en_curso(cfg, reportes, pedido_pagina, pedido_mp)
+        if vencido:
+            fila['pedido_vencido'] = {'pedido_a': vencido.get('pedido_a') or '', 'desde': vencido.get('desde') or '',
+                                      'minutos': int(vencido.get('minutos') or 0)}
         if extra and extra['file_name'] not in {r['file_name'] for r in reportes}:
             reportes = [extra] + reportes
         # Del más antiguo al más nuevo: los retiros se reconstruyen en orden.
-        nuevos = [r for r in reportes if r['file_name'] not in aplicados
+        reintentar = reportes_por_reintentar(cfg)
+        nuevos = [r for r in reportes
+                  if (r['file_name'] in reintentar
+                      or (r['file_name'] not in aplicados and not _cubierto_por_aplicado(r, reportes, aplicados)))
                   and not cache.get(_CLAVE_SIN_RETIROS.format(r['file_name']))]
         for rep in reversed(nuevos):
             if _time.monotonic() > fin:
@@ -1842,7 +2022,7 @@ def detectar_retiros(presupuesto_seg=45, pedir=True, pedir_ids=(), pedidos=None,
         adoptado = bool((pedido_mp or {}).get('adoptado') or (pedido_pagina or {}).get('adoptado'))
         if pendiente:
             fila['pedido'] = pendiente
-        elif pedir_cuenta and (not resuelto or adoptado or forzar):
+        elif pedir_cuenta and (not resuelto or adoptado or forzar) and (not vencido or forzar):
             if fila['incompleto'] or _time.monotonic() > fin:
                 fila['pedir_pendiente'] = True   # la página lo pide en la vuelta siguiente
             else:
