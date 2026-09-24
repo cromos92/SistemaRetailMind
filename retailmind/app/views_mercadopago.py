@@ -11,6 +11,7 @@ import re
 from datetime import datetime, timedelta
 
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Count, Sum
 from django.db.models.functions import Coalesce
@@ -1758,17 +1759,28 @@ def _nombre_cuenta_de_sucursal(sucursal_id):
 
 
 def _retirado_en_periodo(desde, hasta, sucursal_id=None):
-    """Suma de los retiros al banco con fecha en el período (de la cuenta MP de
-    la sucursal elegida). No depende de cuándo se cobraron las ventas: un
-    retiro de hoy puede llevarse ventas de hace semanas."""
+    """Retiros al banco con fecha en el período (de la cuenta MP de la sucursal
+    elegida): total, abonado (visto en cartola) y en tránsito. No depende de
+    cuándo se cobraron las ventas: un retiro de hoy puede llevarse ventas de
+    hace semanas. Los revertidos no cuentan."""
     from .services import conciliacion_mp_service as conc
-    qs = RetiroMercadoPago.objects.filter(fecha__gte=desde, fecha__lte=hasta)
+    qs = RetiroMercadoPago.objects.filter(fecha__gte=desde, fecha__lte=hasta).exclude(estado='REVERTIDO')
     if sucursal_id:
         cfg = MercadoPagoConfig.objects.filter(sucursal_id=sucursal_id).select_related('sucursal', 'cuenta').first()
         if cfg is None:
-            return 0
+            return {'total': 0, 'abonado': 0, 'en_transito': 0, 'n_en_transito': 0}
         qs = qs.filter(config_id__in=conc._configs_de_la_cuenta(cfg))
-    return int(qs.aggregate(total=Sum('monto'))['total'] or 0)
+    total = abonado = en_transito = n_tr = 0
+    for r in qs:
+        if isinstance(r.raw_reporte, dict) and r.raw_reporte.get('revertido'):
+            continue
+        total += r.monto
+        if r.visto_en_cartola:
+            abonado += r.monto
+        else:
+            en_transito += r.monto
+            n_tr += 1
+    return {'total': total, 'abonado': abonado, 'en_transito': en_transito, 'n_en_transito': n_tr}
 
 
 @login_required
@@ -1811,6 +1823,7 @@ def api_dineros_mercadopago(request):
     )
     depositado = aprobadas.filter(retiro__isnull=False)
 
+    retirado = _retirado_en_periodo(fecha_desde, fecha_hasta, sucursal_id)
     kpis = {
         'cobrado': _suma(aprobadas),
         'cantidad_cobros': aprobadas.count(),
@@ -1818,7 +1831,10 @@ def api_dineros_mercadopago(request):
         'pendiente_liberacion': _suma(pendiente_liberacion),
         'liberado_sin_retirar': _suma(liberado_sin_retirar),
         'depositado': _suma(depositado),
-        'retirado_periodo': _retirado_en_periodo(fecha_desde, fecha_hasta, sucursal_id),
+        'retirado_periodo': retirado['total'],
+        'retirado_abonado': retirado['abonado'],
+        'retirado_en_transito': retirado['en_transito'],
+        'retirado_n_en_transito': retirado['n_en_transito'],
         'retirado_cuenta': _nombre_cuenta_de_sucursal(sucursal_id),
         'pendiente_liberacion_neto': _neto(pendiente_liberacion),
         'liberado_sin_retirar_neto': _neto(liberado_sin_retirar),
@@ -1888,6 +1904,7 @@ def api_dineros_mercadopago(request):
             'visto_en_cartola': r.visto_en_cartola,
             'detalle': r.detalle_diferencia or '',
             'transacciones': r.n_trx,
+            **conc.etapa_bancaria(r),
             'por_caja': _raw(r, 'por_caja', []) or [],
         })
 
@@ -2055,7 +2072,9 @@ def api_conciliacion_detectar_retiros_mp(request):
         crudo = {}
     pedidos = ({int(k): v for k, v in crudo.items() if str(k).isdigit() and isinstance(v, dict)}
                if isinstance(crudo, dict) else {})
-    cuentas = conc.detectar_retiros(presupuesto_seg=45, pedir=pedir, pedir_ids=pedir_ids, pedidos=pedidos)
+    forzar = str(request.POST.get('forzar') or '') == '1'
+    cuentas = conc.detectar_retiros(presupuesto_seg=45, pedir=pedir, pedir_ids=pedir_ids, pedidos=pedidos,
+                                    forzar=forzar)
     logger.info("Conciliación MP: detectar retiros por %s → %s",
                 request.user.username,
                 [(c['cuenta'], c['reportes_aplicados'], len(c['retiros'])) for c in cuentas])
@@ -2114,7 +2133,7 @@ def api_conciliacion_liberaciones_pedir_mp(request):
         # pedir otro encima solo alarga la cola.
         en_cola = conc._pedido_en_cola_mp(
             [r for r in conc.listar_reportes_liberaciones(config, limite=10, incluir_pendientes=True)
-             if not r['file_name']])
+             if not r['file_name']], cubre_desde=d, cubre_hasta=h)
         if en_cola and str(request.POST.get('forzar') or '') != '1':
             return JsonResponse({'success': True, 'en_cola': True, **en_cola})
         tarea = conc.pedir_reporte_liberaciones(config, d, h)
@@ -2200,10 +2219,15 @@ def api_conciliacion_cartola_mp(request):
         return JsonResponse({'success': False, 'error': 'Solo administradores.'}, status=403)
     archivo = request.FILES.get('archivo')
     if archivo is None:
-        return JsonResponse({'success': False, 'error': 'Adjunte la cartola en CSV.'}, status=400)
+        return JsonResponse({'success': False, 'error': 'Adjunte la cartola (CSV o Excel).'}, status=400)
     aplicar = str(request.POST.get('aplicar') or '') in ('1', 'true', 'True')
+    # La cartola es de UN banco = una cuenta MP (cada empresa retira a la suya).
+    configs = None
+    cuenta = MercadoPagoConfig.objects.filter(pk=_int_o_cero(request.POST.get('config_id'))).first()
+    if cuenta is not None:
+        configs = conc._configs_de_la_cuenta(cuenta)
     try:
-        movimientos = conc.leer_cartola(archivo.read())
+        movimientos = conc.leer_cartola(archivo.read(), nombre=archivo.name)
     except Exception as e:  # noqa: BLE001
         return JsonResponse({'success': False, 'error': f'No se pudo leer la cartola: {e}'}, status=400)
     if not movimientos:
@@ -2211,7 +2235,7 @@ def api_conciliacion_cartola_mp(request):
             'success': False,
             'error': 'La cartola no tiene abonos reconocibles (se esperan columnas Fecha y Abonos/Monto).'
         }, status=400)
-    resultado = conc.conciliar_cartola(movimientos, aplicar=aplicar)
+    resultado = conc.conciliar_cartola(movimientos, aplicar=aplicar, configs=configs)
     return JsonResponse({'success': True, 'aplicado': aplicar,
                          'abonos_leidos': len(movimientos), **resultado})
 
@@ -2226,9 +2250,43 @@ def api_retiro_visto_cartola_mp(request):
         data = json.loads(request.body or '{}')
     except ValueError:
         return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+    from .services import conciliacion_mp_service as conc
     retiro = RetiroMercadoPago.objects.filter(withdrawal_id=str(data.get('withdrawal_id') or '')).first()
     if retiro is None:
         return JsonResponse({'success': False, 'error': 'Retiro no encontrado'}, status=404)
-    retiro.visto_en_cartola = bool(data.get('visto'))
-    retiro.save(update_fields=['visto_en_cartola', 'actualizado_en'])
-    return JsonResponse({'success': True, 'visto_en_cartola': retiro.visto_en_cartola})
+    conc.marcar_abono(retiro, bool(data.get('visto')), origen='MANUAL')
+    return JsonResponse({'success': True, 'visto_en_cartola': retiro.visto_en_cartola,
+                         **conc.etapa_bancaria(retiro)})
+
+
+@login_required
+@require_POST
+def api_conciliacion_retiro_recalcular_mp(request, withdrawal_id):
+    """POST .../conciliacion/retiro/<withdrawal_id>/recalcular/ (solo admin).
+
+    Abre un retiro para que se vuelva a repartir entre las ventas: se le quitan
+    las ventas amarradas y el desglose; el próximo «Detectar retiros» pide el
+    reporte desde su fecha y lo recalcula (un N° de operación mal digitado, una
+    venta asociada después, etc.).
+    """
+    from .services import conciliacion_mp_service as conc
+    if not _es_admin(request):
+        return JsonResponse({'success': False, 'error': 'Solo administradores.'}, status=403)
+    retiro = RetiroMercadoPago.objects.filter(withdrawal_id=withdrawal_id).first()
+    if retiro is None:
+        return JsonResponse({'success': False, 'error': 'No existe ese retiro.'}, status=404)
+    raw = retiro.raw_reporte if isinstance(retiro.raw_reporte, dict) else {}
+    with transaction.atomic():
+        desamarradas = TransaccionMercadoPago.objects.filter(retiro=retiro).update(retiro=None)
+        retiro.raw_reporte = {k: raw[k] for k in ('instante', 'fecha_abono', 'abono_origen') if k in raw}
+        retiro.raw_reporte['recalcular'] = timezone.now().isoformat()
+        retiro.estado = 'PENDIENTE_CONCILIAR'
+        retiro.detalle_diferencia = 'Pendiente de recalcular: apriete «Detectar retiros».'
+        retiro.save(update_fields=['raw_reporte', 'estado', 'detalle_diferencia', 'actualizado_en'])
+    for archivo in raw.get('archivos') or []:
+        cache.delete(conc._CLAVE_SIN_RETIROS.format(archivo))
+    logger.warning("Conciliación MP: %s abrió el retiro %s para recalcular (%s ventas desamarradas)",
+                   request.user.username, withdrawal_id, desamarradas)
+    return JsonResponse({'success': True, 'desamarradas': desamarradas,
+                         'mensaje': f'Retiro {withdrawal_id} abierto: se desamarraron {desamarradas} venta(s). '
+                                    'Apriete «Detectar retiros» y, si el reporte ya está al día, «Pedir un reporte nuevo igual».'})

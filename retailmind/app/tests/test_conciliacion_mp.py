@@ -5,6 +5,7 @@ cartola del banco y cruce contra la API (mockeada).
 Correr en BD local desechable:
     $env:DATABASE_URL='sqlite://:memory:'; python manage.py test app.tests.test_conciliacion_mp
 """
+import io
 from datetime import timedelta, timezone as dt_timezone
 from unittest import mock
 
@@ -778,7 +779,7 @@ class RevisionDetectarTest(_Base):
         archivos = archivos or {}
         with mock.patch.object(conc, 'listar_reportes_liberaciones', return_value=reportes), \
              mock.patch.object(conc, 'descargar_reporte_liberaciones', side_effect=lambda c, f: archivos[f]) as bajar, \
-             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': True}), \
+             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': False}), \
              mock.patch.object(conc, 'estado_tarea_liberaciones',
                                return_value=estado or {'fallido': False, 'listo': False, 'file_name': ''}), \
              mock.patch.object(conc, 'completar_numeros_mp',
@@ -1031,7 +1032,7 @@ class RevisionFixDetectarTest(_Base):
         archivos = archivos or {}
         with mock.patch.object(conc, 'listar_reportes_liberaciones', return_value=reportes), \
              mock.patch.object(conc, 'descargar_reporte_liberaciones', side_effect=lambda c, f: archivos[f]) as bajar, \
-             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': True}), \
+             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': False}), \
              mock.patch.object(conc, 'estado_tarea_liberaciones',
                                return_value=estado or {'fallido': False, 'listo': False, 'file_name': ''}), \
              mock.patch.object(conc, 'completar_numeros_mp',
@@ -1168,7 +1169,7 @@ class RevisionVerVentasTest(_Base):
         self.assertLess(fin, timezone.now() - timedelta(hours=2))
         with mock.patch.object(conc, 'listar_reportes_liberaciones', return_value=[rep]), \
              mock.patch.object(conc, 'descargar_reporte_liberaciones', return_value=_csv().encode()), \
-             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': True}), \
+             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': False}), \
              mock.patch.object(conc, 'pedir_reporte_liberaciones',
                                return_value={'task_id': 5, 'begin_date': '', 'end_date': _utc_hace(minutes=5)}) as pedir:
             conc.detectar_retiros()
@@ -1485,6 +1486,7 @@ class AsignacionRetirosTest(_Base):
     def _datos(self):
         retiro = RetiroMercadoPago.objects.create(
             config=self.config, withdrawal_id='W1', fecha=self.hoy, monto=9700, estado='CONCILIADO',
+            visto_en_cartola=True,
             raw_reporte={'por_caja': [{'caja': 'SUC-TEST · Caja 1', 'monto': 9700}], 'sin_venta': 0,
                          'instante': timezone.now().isoformat()})
         self._cobro(1, monto=10000, monto_neto=9700, payment_id_mp='1', retiro=retiro)
@@ -1510,7 +1512,8 @@ class AsignacionRetirosTest(_Base):
         self.assertEqual(len(d['retiros']), 1)
         w = d['retiros'][0]
         self.assertEqual((w['ventas'], w['explicado'], w['sin_venta'], w['pct_explicado']), (1, 9700, 0, 100))
-        self.assertEqual(d['conteo'], {'EN_BANCO': 1, 'EN_MP': 1, 'POR_LIBERAR': 1, 'DEVUELTA': 1, 'SIN_REGISTRAR': 1})
+        self.assertEqual(d['conteo'], {'EN_BANCO': 1, 'EN_TRANSITO': 0, 'EN_MP': 1, 'POR_LIBERAR': 1,
+                                       'DEVUELTA': 1, 'SIN_REGISTRAR': 1})
         en_banco = next(f for f in d['cobros'] if f['estado'] == 'EN_BANCO')
         self.assertEqual((en_banco['retiro'], en_banco['neto']), ('W1', 9700))
 
@@ -1563,11 +1566,19 @@ class ColaReportesMPTest(_Base):
     """24-09: «se queda pegado»: MP tenía los pedidos en 'data-ready' (datos listos,
     sin archivo) varios minutos, la página se rendía a los 10 y cada clic pedía otro."""
 
-    PENDIENTE = {'id': 889966018, 'file_name': None, 'begin_date': '2026-09-23T03:00:00Z',
-                 'end_date': '2026-09-25T02:59:59Z', 'created_from': 'manual', 'status': 'pending'}
+    def _pendiente(self, minutos=8, estado='pending', desde_dias=1):
+        ayer = timezone.localdate() - timedelta(days=desde_dias)
+        manana = timezone.localdate() + timedelta(days=1)
+        return conc._normalizar_reporte({
+            'id': 889966018, 'file_name': None, 'begin_date': f'{ayer}T03:00:00Z',
+            'end_date': f'{manana}T02:59:59Z', 'created_from': 'manual', 'status': estado,
+            'date_created': _utc_hace(minutes=minutos)})
 
-    def _pendiente(self, minutos=8):
-        return dict(conc._normalizar_reporte(dict(self.PENDIENTE, date_created=_utc_hace(minutes=minutos))))
+    def setUp(self):
+        super().setUp()
+        # La cuenta ya tiene un retiro de ayer: lo que se necesita parte ayer.
+        RetiroMercadoPago.objects.create(config=self.config, withdrawal_id='W-AYER',
+                                         fecha=self.hoy - timedelta(days=1), monto=1)
 
     def test_estado_de_tarea_con_estados_no_documentados(self):
         with mock.patch('app.services.mercadopago_service._request',
@@ -1586,7 +1597,7 @@ class ColaReportesMPTest(_Base):
         viejo = _reporte('viejo.csv', _utc_hace(hours=20), creado=_utc_hace(hours=20))
         with mock.patch.object(conc, 'listar_reportes_liberaciones', return_value=[self._pendiente(), viejo]), \
              mock.patch.object(conc, 'descargar_reporte_liberaciones', return_value=_csv().encode()), \
-             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': True}), \
+             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': False}), \
              mock.patch.object(conc, 'estado_tarea_liberaciones',
                                return_value={'listo': False, 'fallido': False, 'file_name': '',
                                              'estado': 'data-ready', 'estado_texto': 'datos listos'}), \
@@ -1596,17 +1607,298 @@ class ColaReportesMPTest(_Base):
         self.assertEqual(res[0]['pedido']['task_id'], 889966018)
         self.assertEqual(res[0]['pedido']['estado_texto'], 'datos listos')
 
-    def test_pedido_en_cola_muy_viejo_no_cuenta(self):
-        self.assertIsNone(conc._pedido_en_cola_mp([self._pendiente(minutos=60 * 8)]))
-        self.assertEqual(conc._pedido_en_cola_mp([self._pendiente()])['task_id'], 889966018)
+    def test_pedido_en_cola_viejo_terminado_o_de_otro_rango_no_cuenta(self):
+        self.assertIsNone(conc._pedido_en_cola_mp([self._pendiente(minutos=120)]))       # más de 90 min
+        self.assertIsNone(conc._pedido_en_cola_mp([self._pendiente(estado='expired')]))  # estado terminal
+        self.assertIsNone(conc._pedido_en_cola_mp([self._pendiente(desde_dias=0)],
+                                                  cubre_desde=self.hoy - timedelta(days=1)))   # no cubre desde ayer
+        adoptado = conc._pedido_en_cola_mp([self._pendiente()], cubre_desde=self.hoy - timedelta(days=1))
+        self.assertEqual(adoptado['task_id'], 889966018)
+        self.assertTrue(adoptado['end_date'])   # su fin útil es cuando se pidió
+
+    def test_forzar_pide_aunque_haya_uno_en_cola_y_tarea_404_se_da_por_perdida(self):
+        viejo = _reporte('viejo.csv', _utc_hace(hours=20), creado=_utc_hace(hours=20))
+        with mock.patch.object(conc, 'listar_reportes_liberaciones', return_value=[self._pendiente(), viejo]), \
+             mock.patch.object(conc, 'descargar_reporte_liberaciones', return_value=_csv().encode()), \
+             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': False}), \
+             mock.patch.object(conc, 'pedir_reporte_liberaciones',
+                               return_value={'task_id': 9, 'begin_date': '', 'end_date': _utc_hace(minutes=5)}) as pedir:
+            res = conc.detectar_retiros(forzar=True)
+        self.assertEqual(pedir.call_count, 1)
+        self.assertEqual(res[0]['pedido']['task_id'], 9)
+        from app.services.mercadopago_service import MercadoPagoError
+        cache.clear()
+        cache.set(conc._CLAVE_PEDIDO.format(self.config.id), {'task_id': 77, 'end_date': _utc_hace(minutes=25)}, 600)
+        with mock.patch.object(conc, 'estado_tarea_liberaciones', side_effect=MercadoPagoError('HTTP 404')):
+            self.assertEqual(conc._pedido_en_curso(self.config, [viejo]), (None, None, False, True))
+        with mock.patch.object(conc, 'estado_tarea_liberaciones', side_effect=MercadoPagoError('timeout', red=True)):
+            cache.set(conc._CLAVE_PEDIDO.format(self.config.id), {'task_id': 77, 'end_date': _utc_hace(minutes=25)}, 600)
+            self.assertEqual(conc._pedido_en_curso(self.config, [viejo])[0]['task_id'], 77)
 
     def test_pedir_reporte_a_mano_espera_el_que_ya_esta_en_cola(self):
         admin = crear_usuario(username='adm_cola', rol='administrador')
         c = Client(); c.force_login(admin)
         with mock.patch('app.middleware_permisos.PermisoRol.tiene_permiso', return_value=True), \
              mock.patch.object(conc, 'listar_reportes_liberaciones', return_value=[self._pendiente()]), \
-             mock.patch.object(conc, 'pedir_reporte_liberaciones') as pedir:
+             mock.patch.object(conc, 'pedir_reporte_liberaciones',
+                               return_value={'task_id': 5, 'begin_date': '', 'end_date': ''}) as pedir:
             r = c.post(reverse('api_conciliacion_liberaciones_pedir_mp'), {'config_id': self.config.id}).json()
-        pedir.assert_not_called()
-        self.assertTrue(r['en_cola'])
-        self.assertEqual(r['task_id'], 889966018)
+            self.assertTrue(r['en_cola'])
+            self.assertEqual(r['task_id'], 889966018)
+            pedir.assert_not_called()
+            # Otro rango (agosto): el pendiente no lo cubre, se pide.
+            r2 = c.post(reverse('api_conciliacion_liberaciones_pedir_mp'),
+                        {'config_id': self.config.id, 'desde': '2026-08-01', 'hasta': '2026-08-31'}).json()
+            self.assertFalse(r2.get('en_cola'))
+            self.assertEqual(pedir.call_count, 1)
+            # Y con «forzar» se pide igual aunque lo cubra.
+            c.post(reverse('api_conciliacion_liberaciones_pedir_mp'), {'config_id': self.config.id, 'forzar': '1'})
+            self.assertEqual(pedir.call_count, 2)
+
+
+@mock.patch.dict('os.environ', ENV_TEST)
+class AsignacionRetirosV2Test(_Base):
+    """Revisión de la pestaña: retiros antiguos, «sin venta» ya explicado,
+    devolución parcial, etapa bancaria, por tienda, mes absurdo."""
+
+    def test_retiro_antiguo_con_ventas_amarradas_esta_explicado(self):
+        w = RetiroMercadoPago.objects.create(config=self.config, withdrawal_id='WL', fecha=self.hoy, monto=9700,
+                                             raw_reporte={'archivos': ['a.csv'], 'pagos': ['1']})
+        self._cobro(1, monto=10000, monto_neto=9700, payment_id_mp='1', retiro=w)
+        r = conc.asignaciones_mp(sucursal_id=self.sucursal.id)['retiros'][0]
+        self.assertEqual((r['explicado'], r['sin_venta'], r['pct_explicado'], r['de_la_tienda']), (9700, 0, 100, 9700))
+        self.assertEqual(r['por_tienda'], [{'tienda': 'SUC-TEST', 'monto': 9700, 'ventas': 1}])
+
+    def test_sin_venta_descuenta_lo_que_despues_tuvo_cobro(self):
+        w = RetiroMercadoPago.objects.create(
+            config=self.config, withdrawal_id='W1', fecha=self.hoy, monto=10000,
+            raw_reporte={'sin_venta': 10000, 'sin_local': {'555': 10000}, 'pagos': ['555'],
+                         'por_caja': [{'caja': 'Sin caja (online, link de pago u otro)', 'monto': 10000}]})
+        self._cobro(1, monto=10000, monto_neto=10000, payment_id_mp='555', retiro=w)
+        r = conc.asignaciones_mp()['retiros'][0]
+        self.assertEqual((r['sin_venta'], r['pct_explicado']), (0, 100))
+
+    def test_devolucion_parcial_en_la_lista_y_etapa_bancaria(self):
+        w = RetiroMercadoPago.objects.create(config=self.config, withdrawal_id='W1',
+                                             fecha=self.hoy - timedelta(days=7), monto=5700,
+                                             raw_reporte={'por_caja': [{'caja': 'SUC-TEST · Caja 1', 'monto': 5700}], 'sin_venta': 0})
+        venta = self._cobro(1, monto=10000, monto_neto=9700, payment_id_mp='1', retiro=w)
+        TransaccionMercadoPago.objects.create(
+            config=self.config, sucursal=self.sucursal, correlativo_ticket='1', tipo='DEVOLUCION',
+            transaccion_origen=venta, external_reference='DEV-1', monto=4000, estado='DEVUELTA')
+        d = conc.asignaciones_mp()
+        fila = next(f for f in d['cobros'] if f['estado'] == 'EN_TRANSITO')   # el banco aún no lo abona
+        self.assertEqual((fila['neto'], fila['devuelto']), (5700, 4000))
+        r = d['retiros'][0]
+        self.assertEqual((r['etapa'], r['dias_transito'], r['alerta_transito']), ('EN_TRANSITO', 7, True))
+        self.assertGreaterEqual(r['dias_habiles'], 5)
+        self.assertEqual((d['retirado_mes'], d['sin_abonar'], d['sin_abonar_n'], d['sin_abonar_alerta']), (5700, 5700, 1, 1))
+        w.visto_en_cartola = True
+        w.save(update_fields=['visto_en_cartola'])
+        self.assertEqual(conc.asignaciones_mp()['retiros'][0]['etapa'], 'ABONADO')
+
+    def test_mes_absurdo_cae_al_mes_actual(self):
+        for mes in ('0000-01', '0001-03', '9999-12', 'x'):
+            self.assertEqual(conc.asignaciones_mp(mes)['mes'], self.hoy.strftime('%Y-%m'))
+
+
+@mock.patch.dict('os.environ', ENV_TEST)
+class CicloRetiroTest(_Base):
+    """Análisis de casos del 24-09: ventana del reporte, piso FIFO con el retiro
+    nocturno, retiro revertido, devoluciones del reporte, cartola por cuenta,
+    etapa bancaria en días hábiles, recalcular."""
+
+    def _retiro(self, wid, fecha, monto, por_caja=None, **kw):
+        raw = {'por_caja': por_caja, 'sin_venta': conc._no_explicado(por_caja)} if por_caja is not None else {}
+        return RetiroMercadoPago.objects.create(config=self.config, withdrawal_id=wid, fecha=fecha, monto=monto,
+                                                raw_reporte=raw or None, **kw)
+
+    def test_ventana_parte_en_el_retiro_abierto_mas_antiguo(self):
+        hoy = self.hoy
+        self._retiro('W-VIEJO', hoy - timedelta(days=5), 100, [{'caja': 'SUC-TEST · Caja 1', 'monto': 100}])
+        abierto = self._retiro('W-10M', hoy - timedelta(days=3), 10000000, [{'caja': 'Saldo anterior', 'monto': 10000000}])
+        self._retiro('W-NOCHE', hoy - timedelta(days=1), 500, [{'caja': 'SUC-TEST · Caja 1', 'monto': 500}])
+        self.assertTrue(conc.retiro_abierto(abierto))
+        self.assertEqual(conc.inicio_reporte_cuenta(self.config), hoy - timedelta(days=3))
+        abierto.raw_reporte = {'por_caja': [{'caja': 'SUC-TEST · Caja 1', 'monto': 10000000}], 'sin_venta': 0}
+        abierto.save(update_fields=['raw_reporte'])
+        self.assertEqual(conc.inicio_reporte_cuenta(self.config), hoy - timedelta(days=1))
+
+    def test_saldo_anterior_se_reasigna_aunque_el_nocturno_posterior_este_cerrado(self):
+        # W10M (15:33) quedó «Saldo anterior»; la noche siguiente WN cerrado se llevó D.
+        base = conc._instante('2026-09-23T15:33:00.000-03:00')
+        ventas = []
+        for i, (pid, monto, dias) in enumerate((('700', 6000, 5), ('701', 5000, 4), ('702', 4000, 3))):
+            v = self._cobro(i + 1, monto=monto, monto_neto=monto, payment_id_mp=pid)
+            TransaccionMercadoPago.objects.filter(pk=v.pk).update(money_release_date=base - timedelta(days=dias))
+            ventas.append(v)
+        d = self._cobro(9, monto=2000, monto_neto=2000, payment_id_mp='709')
+        e = self._cobro(10, monto=5000, monto_neto=5000, payment_id_mp='710')
+        reporte = conc.leer_csv(_csv(
+            "2026-09-23T00:00:00.000-03:00,,,initial_available_balance,,10000.00,0.00,10000.00",
+            "2026-09-23T15:33:00.000-03:00,W10M,,release,payout,0.00,10000.00,-10000.00",
+            "2026-09-23T18:00:00.000-03:00,709,,release,payment,2000.00,0.00,2000.00",
+            "2026-09-23T19:00:00.000-03:00,710,,release,payment,5000.00,0.00,5000.00",
+            "2026-09-23T23:30:00.000-03:00,WN,,release,payout,0.00,7000.00,-7000.00",
+        ).encode())
+        # Primera pasada sin fechas en las ventas: W10M queda «Saldo anterior»; WN cerrado con D.
+        TransaccionMercadoPago.objects.filter(pk__in=[v.pk for v in ventas]).update(money_release_date=None)
+        conc.procesar_reporte_liberaciones(reporte, self.config, aplicar=True, archivo='a.csv')
+        w10 = RetiroMercadoPago.objects.get(withdrawal_id='W10M')
+        self.assertEqual(conc._no_explicado(w10.raw_reporte['por_caja']), 10000)
+        self.assertFalse(conc.retiro_abierto(RetiroMercadoPago.objects.get(withdrawal_id='WN')))
+        # Llegan las fechas (completar): al reprocesar, W10M se lleva las más antiguas.
+        for v, dias in zip(ventas, (5, 4, 3)):
+            TransaccionMercadoPago.objects.filter(pk=v.pk).update(money_release_date=base - timedelta(days=dias))
+        conc.procesar_reporte_liberaciones(reporte, self.config, aplicar=True, archivo='b.csv')
+        w10.refresh_from_db()
+        # El saldo de 10.000 lo explican las liberaciones más recientes (702, 701 y parte de 700).
+        self.assertEqual(sorted(w10.transacciones.values_list('payment_id_mp', flat=True)), ['700', '701', '702'])
+        self.assertEqual(conc._no_explicado(w10.raw_reporte['por_caja']), 0)
+        d.refresh_from_db(); e.refresh_from_db()
+        self.assertEqual((d.retiro.withdrawal_id, e.retiro.withdrawal_id), ('WN', 'WN'))
+
+    def test_retiro_revertido_por_el_banco(self):
+        a = self._cobro(1, monto=10000, monto_neto=9700, payment_id_mp='801')
+        res = conc.procesar_reporte_liberaciones(conc.leer_csv(_csv(
+            "2026-09-22T10:00:00.000-03:00,801,,release,payment,9700.00,0.00,10000.00",
+            "2026-09-22T20:00:00.000-03:00,W1,,release,payout,0.00,9700.00,-9700.00",
+            "2026-09-23T09:00:00.000-03:00,W1,,release,payout_reversal,9700.00,0.00,9700.00",
+            "2026-09-23T20:00:00.000-03:00,W2,,release,payout,0.00,9700.00,-9700.00",
+        ).encode()), self.config, aplicar=True, archivo='r.csv')
+        self.assertEqual([x['estado'] for x in res['retiros']], ['REVERTIDO', 'CONCILIADO'])
+        w1 = RetiroMercadoPago.objects.get(withdrawal_id='W1')
+        self.assertEqual(w1.estado, 'REVERTIDO')
+        self.assertEqual(conc.etapa_bancaria(w1)['etapa'], 'REVERTIDO')
+        a.refresh_from_db()
+        self.assertEqual(a.retiro.withdrawal_id, 'W2')
+        d = conc.asignaciones_mp('2026-09')
+        self.assertEqual((d['revertidos'], d['retirado_mes']), (1, 9700))
+        self.assertFalse(conc.retiro_abierto(w1))
+
+    def test_devolucion_del_reporte_queda_registrada_y_no_se_duplica(self):
+        a = self._cobro(1, monto=10000, monto_neto=9700, payment_id_mp='801')
+        filas = conc.leer_csv(_csv(
+            "2026-09-22T10:00:00.000-03:00,801,,release,payment,9700.00,0.00,10000.00",
+            "2026-09-22T12:00:00.000-03:00,801,,release,refund,0.00,3000.00,-3000.00",
+            "2026-09-22T20:00:00.000-03:00,W1,,release,payout,0.00,6700.00,-6700.00",
+        ).encode())
+        conc.procesar_reporte_liberaciones(filas, self.config, aplicar=True, archivo='r.csv')
+        conc.procesar_reporte_liberaciones(filas, self.config, aplicar=True, archivo='r.csv')
+        devs = TransaccionMercadoPago.objects.filter(tipo='DEVOLUCION', transaccion_origen=a)
+        self.assertEqual([x.monto for x in devs], [3000])
+        a.refresh_from_db()
+        self.assertEqual(a.estado, 'APROBADA')   # parcial: la venta sigue vigente
+        self.assertEqual(conc.cuadre_por_sucursal('2026-09-20', '2026-09-25')['total']['devuelto'], 3000)
+
+    def test_cartola_por_cuenta_preambulo_tolerancia_y_aproximados(self):
+        hoy = self.hoy
+        w = self._retiro('W1', hoy - timedelta(days=4), 300000)
+        otra = _config(crear_sucursal(empresa=crear_empresa(nombre='Otra', rut='77.333.333-3'), alias='OT1'),
+                       nombre='Caja O', external_pos_id='POSO')
+        RetiroMercadoPago.objects.create(config=otra, withdrawal_id='WX', fecha=hoy - timedelta(days=4), monto=300000)
+        ya = self._retiro('W-VISTO', hoy - timedelta(days=4), 50000, visto_en_cartola=True)
+        cerca = self._retiro('W-CERCA', hoy - timedelta(days=2), 80000)
+        cartola = (
+            "Cartola histórica\nCuenta corriente: 123\n\n"
+            "Fecha;Descripción;Cargos;Abonos\n"
+            f"{hoy:%d/%m/%Y};TEF MERCADOPAGO;;300.000\n"
+            f"{hoy:%d/%m/%Y};TEF MERCADOPAGO;;50.000\n"
+            f"{hoy:%d/%m/%Y};TEF MERCADOPAGO;;79.500\n"
+        ).encode('utf-8')
+        movs = conc.leer_cartola(cartola, 'cartola.csv')
+        self.assertEqual([m[1] for m in movs], [300000, 50000, 79500])
+        res = conc.conciliar_cartola(movs, aplicar=True, configs=[self.config.id])
+        self.assertEqual([c['withdrawal_id'] for c in res['calzados']], ['W1'])       # 4 días: calza; la otra cuenta no
+        self.assertEqual([x['withdrawal_id'] for x in res['aproximados']], ['W-CERCA'])
+        self.assertEqual(res['aproximados'][0]['diferencia'], -500)
+        w.refresh_from_db(); cerca.refresh_from_db()
+        self.assertTrue(w.visto_en_cartola)
+        self.assertEqual((w.raw_reporte['abono_origen'], w.raw_reporte['fecha_abono']), ('CARTOLA', str(hoy)))
+        self.assertFalse(cerca.visto_en_cartola)                       # aproximado: no se aplica solo
+        self.assertFalse(RetiroMercadoPago.objects.get(withdrawal_id='WX').visto_en_cartola)
+        self.assertIn('W-CERCA', [x['withdrawal_id'] for x in res['retiros_sin_abono']])
+        self.assertNotIn('W-VISTO', [x['withdrawal_id'] for x in res['retiros_sin_abono']])
+        # El abono de 50.000 no se lo lleva el retiro ya visto: queda como abono sin retiro
+        # (y el de 79.500, aproximado, también hasta que se confirme).
+        self.assertEqual([x['monto'] for x in res['sin_calce_banco']], [50000, 79500])
+
+    def test_cartola_xlsx(self):
+        from openpyxl import Workbook
+        hoy = self.hoy
+        self._retiro('W1', hoy - timedelta(days=1), 12345)
+        libro = Workbook(); hoja = libro.active
+        hoja.append(['Banco Test']); hoja.append([])
+        hoja.append(['Fecha', 'Glosa', 'Abono'])
+        hoja.append([hoy, 'Transferencia MERCADOPAGO', 12345])
+        buf = io.BytesIO(); libro.save(buf)
+        movs = conc.leer_cartola(buf.getvalue(), 'cartola.xlsx')
+        self.assertEqual([(m[0], m[1]) for m in movs], [(hoy, 12345)])
+        self.assertEqual(len(conc.conciliar_cartola(movs)['calzados']), 1)
+
+    def test_etapa_en_dias_habiles_y_marcar_abono(self):
+        from datetime import date
+        viernes = date(2026, 9, 18)
+        w = self._retiro('W1', viernes, 1000)
+        lunes = date(2026, 9, 21)
+        self.assertEqual(conc.dias_habiles(viernes, lunes), 1)
+        self.assertFalse(conc.etapa_bancaria(w, hoy=lunes)['alerta_transito'])      # viernes → lunes: 1 hábil
+        self.assertTrue(conc.etapa_bancaria(w, hoy=date(2026, 9, 22))['alerta_transito'])
+        conc.marcar_abono(w, True, origen='MANUAL', fecha=lunes)
+        e = conc.etapa_bancaria(w, hoy=date(2026, 9, 30))
+        self.assertEqual((e['etapa'], e['fecha_abono'], e['abono_origen']), ('ABONADO', str(lunes), 'MANUAL'))
+        conc.marcar_abono(w, False)
+        self.assertEqual(conc.etapa_bancaria(w)['etapa'], 'EN_TRANSITO')
+
+    def test_recalcular_retiro_y_endpoint(self):
+        w = self._retiro('W1', self.hoy, 9700, [{'caja': 'SUC-TEST · Caja 1', 'monto': 9700}])
+        a = self._cobro(1, monto=10000, monto_neto=9700, payment_id_mp='1', retiro=w)
+        admin = crear_usuario(username='adm_rec', rol='administrador')
+        c = Client(); c.force_login(admin)
+        with mock.patch('app.middleware_permisos.PermisoRol.tiene_permiso', return_value=True):
+            r = c.post(reverse('api_conciliacion_retiro_recalcular_mp', args=['W1'])).json()
+        self.assertEqual(r['desamarradas'], 1)
+        a.refresh_from_db(); w.refresh_from_db()
+        self.assertIsNone(a.retiro_id)
+        self.assertTrue(conc.retiro_abierto(w))
+        self.assertEqual(conc.inicio_reporte_cuenta(self.config), self.hoy)
+
+    def test_manual_contado_por_un_retiro_no_esta_sin_registrar(self):
+        self._retiro('W1', self.hoy, 17710, [{'caja': 'SUC-TEST · MP manual', 'monto': 17710}],
+                     visto_en_cartola=True)
+        w = RetiroMercadoPago.objects.get(withdrawal_id='W1')
+        w.raw_reporte['pagos'] = ['179473941930']; w.raw_reporte['netos'] = {'179473941930': 17710}
+        w.save(update_fields=['raw_reporte'])
+        tk = self._ticket(5)
+        TicketDetallePago.objects.create(ticket=tk, metodo_pago='MP_POINT', monto=17980,
+                                         origen_pago='MANUAL', voucher='179 473 941-930')
+        d = conc.asignaciones_mp()
+        fila = next(f for f in d['cobros'] if f['origen'] == 'MP manual')
+        self.assertEqual((fila['estado'], fila['retiro'], fila['neto']), ('EN_BANCO', 'W1', 17710))
+        self.assertEqual(d['resumen']['manual_sin_registrar_n'], 0)
+        self.assertEqual(d['retiros'][0]['por_tienda'], [{'tienda': 'SUC-TEST', 'monto': 17710, 'ventas': None}])
+
+    def test_reporte_automatico_activo_no_pide_a_cada_rato_pero_forzar_si(self):
+        reciente = _reporte('auto.csv', _utc_hace(hours=5), creado=_utc_hace(hours=5))
+        with mock.patch.object(conc, 'listar_reportes_liberaciones', return_value=[reciente]), \
+             mock.patch.object(conc, 'descargar_reporte_liberaciones', return_value=_csv().encode()), \
+             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': True}), \
+             mock.patch.object(conc, 'pedir_reporte_liberaciones',
+                               return_value={'task_id': 3, 'begin_date': '', 'end_date': _utc_hace(minutes=5)}) as pedir:
+            res = conc.detectar_retiros()
+            self.assertEqual(pedir.call_count, 0)
+            self.assertTrue(res[0]['al_dia_hasta'])
+            conc.detectar_retiros(forzar=True)
+            self.assertEqual(pedir.call_count, 1)
+
+    def test_reporte_ilegible_avisa_y_tarea_en_estado_raro_es_fallida(self):
+        raro = "COLUMNA_A;COLUMNA_B\nx;y\n".encode()
+        with mock.patch.object(conc, 'listar_reportes_liberaciones', return_value=[_reporte('raro.csv', _utc_hace(minutes=3))]), \
+             mock.patch.object(conc, 'descargar_reporte_liberaciones', return_value=raro), \
+             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': True}):
+            res = conc.detectar_retiros(pedir=False)
+        self.assertIn('ilegible', res[0]['error'])
+        self.assertIsNone(cache.get(conc._CLAVE_SIN_RETIROS.format('raro.csv')))
+        with mock.patch('app.services.mercadopago_service._request',
+                        return_value=_resp(200, {'status': 'expired', 'file_name': None})):
+            self.assertTrue(conc.estado_tarea_liberaciones(self.config, 1)['fallido'])

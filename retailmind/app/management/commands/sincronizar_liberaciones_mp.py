@@ -80,6 +80,7 @@ class Command(BaseCommand):
                             pendientes.append(c)
                     pedidos = pendientes
                 self._mostrar(conc.detectar_retiros(presupuesto_seg=600, pedir=False))
+            self._avisar_sin_abono()
             return
         config = MercadoPagoConfig.objects.filter(pk=opts['config']).first() if opts['config'] else None
         if config is None:
@@ -125,6 +126,21 @@ class Command(BaseCommand):
                 self._procesar(config, fh.read(), opts['archivo'], opts['apply'])
         except mp.MercadoPagoError as e:
             raise CommandError(e.mensaje)
+
+    def _avisar_sin_abono(self):
+        """Retiros que MP ya envió y siguen sin abono confirmado en la cartola
+        (más de 2 días hábiles): queda en el log para el aviso diario."""
+        from app.models import RetiroMercadoPago
+        import logging
+        logger = logging.getLogger('app')
+        pendientes = [r for r in RetiroMercadoPago.objects.filter(visto_en_cartola=False).exclude(estado='REVERTIDO')
+                      .order_by('fecha') if conc.etapa_bancaria(r)['alerta_transito']]
+        if not pendientes:
+            return
+        detalle = ', '.join(f'{r.withdrawal_id} {r.fecha} ${r.monto:,}'.replace(',', '.') for r in pendientes[:20])
+        logger.warning("Conciliación MP: %s retiro(s) enviados al banco sin abono confirmado (>2 días hábiles): %s",
+                       len(pendientes), detalle)
+        self.stdout.write(self.style.WARNING(f'Sin abono confirmado ({len(pendientes)}): {detalle}'))
 
     def _mostrar(self, cuentas):
         for c in cuentas:

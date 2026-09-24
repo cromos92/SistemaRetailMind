@@ -21,8 +21,9 @@ Reglas:
   - Código NUEVO → se crea la ficha con tallas, stock, precios y especialidades.
     Género: el de la factura (W/WMNS = MUJER, M = HOMBRE); si no lo dice, el
     de los otros colores del mismo modelo ya cargados; si no hay, el del JSON.
-  - Código que YA EXISTE → nunca se crea otra ficha: se usa la existente (con
-    su identidad). Las tallas que ya tiene suman stock en su SKU; las que no
+  - Existe o no = artículo + MARCA, nada más (color/género/categoría de la
+    ficha pueden estar mal y sigue siendo el mismo producto). Código que YA
+    EXISTE → nunca se crea otra ficha: se usa la existente (con su identidad). Las tallas que ya tiene suman stock en su SKU; las que no
     tiene se agregan a esa misma ficha. Si la factura cambia precios, se
     pregunta por línea: [s] stock + costo + venta (también en esa variante de
     otras tiendas, con aviso) · [c] stock + costo, la venta sigue igual ·
@@ -31,8 +32,10 @@ Reglas:
   - Tallas: como elegir "Tipo Talla" + "Guía" en el modal. Ficha nueva → guía
     según "guias_talla" del JSON (INFANTIL si la talla trae C/Y, si no la del
     género) y la talla se escribe tal como está en la columna del tipo (US) de
-    la guía; si una talla no está en la guía → ERROR. Ficha existente → su tipo
-    y su guía (la talla de la factura se convierte por la guía si la tiene).
+    la guía; si una talla no está en la guía → ERROR. Ficha existente (y sus
+    gemelas en otras bodegas) → pasa al MISMO formato: tipo US + guía, y sus
+    tallas se renombran ('7,0'→'7', '700'→'7', '1,0'→'1Y') manteniendo el SKU,
+    igual que el lápiz del modal; --sin-renombrar-tallas las deja como están.
   - Si el código tiene varias fichas en la bodega con distinta identidad, la
     línea da ERROR hasta que el JSON diga en cuál entra ("ficha_id").
 
@@ -63,12 +66,13 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Count, Sum
 from django.test import RequestFactory
+from django.utils import timezone
 
 from app.models import (
     AtributoOpcion, Categoria, Dte, Dte_Productos, EmpresaUser, GuiaTalla,
-    Movimientos_Producto, Producto, Producto_Talla, Sucursal,
+    Movimientos_Producto, Producto, Producto_Talla, Productos_Recepcionados, Sucursal,
 )
 from app.utils_producto_match import normalizar_articulo, ordenar_por_reciente
 
@@ -159,6 +163,11 @@ def clave_talla_ficha(talla):
     return _numero(f'{entero}.{medio}')
 
 
+def _clave_marca(valor):
+    """'NIKE' ≡ 'Nike' ≡ 'NIKE .' (misma clave que unificar_marcas_duplicadas)."""
+    return re.sub(r'[^A-Z0-9]', '', str(valor or '').upper())
+
+
 def _preferencia_talla(texto):
     """Orden para elegir entre varias filas de la MISMA talla en una ficha:
     formato de la casa ('7,0') > otro formato ('7') > legacy ('700') > con
@@ -226,6 +235,9 @@ class Command(BaseCommand):
         parser.add_argument('--confirmar-duplicados', action='store_true',
                             help='Cargar aunque el código tenga 2+ fichas iguales en la '
                                  'bodega (entra en la más reciente)')
+        parser.add_argument('--sin-renombrar-tallas', dest='renombrar_tallas', action='store_false',
+                            help='No pasar a US con letra (7 / 7.5 / 11C / 1.5Y) las tallas de las '
+                                 'fichas que ya existen; dejarlas como están')
         parser.add_argument('--forzar', action='store_true',
                             help='Cargar aunque el DTE ya tenga ingreso de ese código (en esta u '
                                  'otra bodega). DUPLICA stock: solo si sabes por qué')
@@ -321,13 +333,20 @@ class Command(BaseCommand):
             return dte
         candidatos = list(qs.filter(numero_documento=data['folio'],
                                     emisor__rut__in=_variantes_rut(data['proveedor_rut'])))
-        compras = [d for d in candidatos if d.tipo_transaccion == 'COMPRA']
-        dtes = compras or candidatos
+        # Solo facturas: una NC o una guía del mismo proveedor puede tener el
+        # mismo número. Para colgar de otro tipo hay que dar el "dte_id".
+        facturas = [d for d in candidatos
+                    if 'FACTURA' in str(d.tipo_documento or '').upper()
+                    and not getattr(d, 'es_nota_credito', False)]
+        compras = [d for d in facturas if d.tipo_transaccion == 'COMPRA']
+        dtes = compras or facturas
         if not dtes:
+            otros = ', '.join(f'id={d.id} {d.tipo_documento} {d.tipo_transaccion}' for d in candidatos)
             raise CommandError(
-                f'{nombre}: no está en el sistema la factura {data["folio"]} del RUT '
-                f'{data["proveedor_rut"]}. Si la creaste con otro proveedor, pon su '
-                f'"dte_id" en el JSON.')
+                f'{nombre}: no está en el sistema la FACTURA {data["folio"]} del RUT '
+                f'{data["proveedor_rut"]}'
+                + (f' (con ese número solo hay: {otros})' if otros else '')
+                + '. Si la creaste con otro proveedor o tipo, pon su "dte_id" en el JSON.')
         if len(dtes) > 1:
             detalle = ', '.join(f'id={d.id} ({d.emisor.nombre}, {d.fecha_emision}, '
                                 f'{d.tipo_transaccion})' for d in dtes)
@@ -351,15 +370,18 @@ class Command(BaseCommand):
         """Unidades de cada código que YA entraron contra este DTE, por bodega.
 
         {articulo: {alias bodega: unidades}}. Se miran todas las bodegas (la
-        factura pudo recibirse en otra) y dos fuentes: las líneas del DTE y
-        los movimientos de ingreso. Por bodega se toma la mayor de las dos
-        para no contar dos veces lo que el modal registra en ambas.
+        factura pudo recibirse en otra) y dos fuentes que SÍ significan que
+        el stock entró: los movimientos de ingreso y las recepciones. Las
+        líneas Dte_Productos a secas NO cuentan: el importador XML las crea
+        con la cantidad facturada sin mover stock. Por bodega se toma la
+        mayor de las dos para no contar dos veces lo que el modal registra
+        en ambas.
         """
         lineas, movs = {}, {}
-        for art, alias, u in (Dte_Productos.objects.filter(dte=dte)
-                              .values_list('productoTalla__producto__articulo',
-                                           'productoTalla__producto__sucursal__alias')
-                              .annotate(u=Sum('stock'))):
+        for art, alias, u in (Productos_Recepcionados.objects.filter(dte=dte)
+                              .values_list('producto_talla__producto__articulo',
+                                           'producto_talla__producto__sucursal__alias')
+                              .annotate(u=Sum('stockArribado'))):
             clave = (normalizar_articulo(art), alias)
             lineas[clave] = lineas.get(clave, 0) + int(u or 0)
         for art, alias, u in (Movimientos_Producto.objects
@@ -533,13 +555,28 @@ class Command(BaseCommand):
         color = self._opcion(['Color'], linea.get('color') or comunes['color'])
         genero = self._opcion(_ATRIBUTOS_GENERO, linea.get('genero') or '')
         categoria = self._categoria(linea.get('categoria') or '')
+        genero_json = genero   # el de la factura (la ficha existente puede pisar `genero`)
 
         # --- fichas que ya existen con este código
-        fichas = [f for f in ordenar_por_reciente(
-                      Producto.objects.filter(articulo__iexact=articulo)
-                      .select_related('sucursal', 'atributo1', 'atributo2',
-                                      'atributo3', 'categoria', 'guia_talla'))
-                  if normalizar_articulo(f.articulo) == articulo]
+        # Identidad del producto para decidir si EXISTE = artículo + marca.
+        # Color, género y categoría NO cuentan: una ficha puede estar mal
+        # creada (otro género, otra categoría) y sigue siendo el mismo
+        # producto; crear otra sería duplicarlo. Las fichas del mismo código
+        # con OTRA marca se informan pero no se usan (salvo "ficha_id").
+        # Prefiltro por contención (no iexact): hay fichas legacy con espacios
+        # o NBSP en el código que iexact no ve; el filtro fino es normalizar.
+        token = articulo.split(' ')[0]
+        mismo_codigo = [f for f in ordenar_por_reciente(
+                            Producto.objects.filter(articulo__icontains=token)
+                            .select_related('sucursal', 'atributo1', 'atributo2',
+                                            'atributo3', 'categoria', 'guia_talla'))
+                        if normalizar_articulo(f.articulo) == articulo]
+        # Misma marca = mismo nombre canónico, no mismo id: la marca puede
+        # estar duplicada como opción ('NIKE' / 'Nike' / 'NIKE ').
+        clave_marca = _clave_marca(getattr(marca, 'valor', ''))
+        fichas = [f for f in mismo_codigo
+                  if marca is not None and _clave_marca(getattr(f.atributo1, 'valor', '')) == clave_marca]
+        otra_marca = [f for f in mismo_codigo if f not in fichas]
         locales = [f for f in fichas if f.sucursal_id == sucursal.id]
         otras = [f for f in fichas if f.sucursal_id != sucursal.id]
         pedida = (getattr(marca, 'id', None), getattr(color, 'id', None),
@@ -552,75 +589,89 @@ class Command(BaseCommand):
             return (f'{getattr(f.atributo1, "valor", "-")}/{getattr(f.atributo2, "valor", "-")}/'
                     f'{getattr(f.atributo3, "valor", "-")}/{getattr(f.categoria, "nombre", "-")}')
 
-        def agrupar(lista):
-            grupos = {}
-            for f in lista:
-                grupos.setdefault(identidad(f), []).append(f)
-            return grupos
+        def resumen_ficha(f):
+            n_tallas, stock = self._tallas_y_stock(f)
+            return (f'#{f.id} {f.sucursal.alias} «{f.descripcion}» {describir(f)} '
+                    f'({n_tallas} tallas, stock {stock})')
+
+        nombre_marca = str(getattr(marca, 'valor', '') or '').upper()
+        for f in otra_marca:
+            valor = str(getattr(f.atributo1, 'valor', '') or '').upper()
+            if nombre_marca and nombre_marca in valor and f.sucursal_id == sucursal.id:
+                avisar(f'mismo código con marca «{f.atributo1.valor}» en {sucursal.alias}: '
+                       f'{resumen_ficha(f)} — si es el mismo producto mal creado, pon '
+                       f'"ficha_id": {f.id} en el JSON')
+            elif nombre_marca and nombre_marca in valor:
+                avisar(f'mismo código con marca «{f.atributo1.valor}» en otra bodega: '
+                       f'{resumen_ficha(f)} — no se usa (revisar esa ficha aparte)')
+            else:
+                avisar(f'mismo código pero de otra marca ({valor}): {resumen_ficha(f)} — no se usa')
 
         ficha_id = linea.get('ficha_id')
         if ficha_id:
-            # Elegida a mano en el JSON: el código tiene varias fichas en la
-            # bodega con distinta identidad y hay que decir en cuál entra.
-            elegida = next((f for f in locales if f.id == int(ficha_id)), None)
+            # Elegida a mano en el JSON (cualquier ficha del código en la bodega).
+            elegida = next((f for f in mismo_codigo
+                            if f.id == int(ficha_id) and f.sucursal_id == sucursal.id), None)
             if elegida is None:
+                hay = "; ".join(resumen_ficha(f) for f in mismo_codigo if f.sucursal_id == sucursal.id)
                 err(f'ficha_id {ficha_id} no es una ficha de {articulo} en {sucursal.alias} '
-                    f'(hay: {", ".join("#" + str(f.id) + " " + describir(f) for f in locales) or "ninguna"})')
+                    f'(hay: {hay or "ninguna"})')
             else:
                 plan['destino'] = plan['referencia'] = elegida
                 plan['estado'] = 'EXISTE'
                 descartadas = [f for f in locales if f.id != elegida.id]
                 if descartadas:
                     avisar(f'entra en #{elegida.id} (elegida en el JSON); no se tocan: '
-                           + '; '.join(f'#{f.id} {describir(f)}' for f in descartadas))
-        elif locales:
-            grupos = agrupar(locales)
-            if pedida in grupos:
-                elegida = pedida
-            elif len(grupos) == 1:
-                elegida = next(iter(grupos))
-                avisar(f'ya existe en {sucursal.alias} como {describir(grupos[elegida][0])}: '
-                       f'se usa esa ficha')
-            else:
-                elegida = None
-                err(f'existe en {sucursal.alias} con varias identidades: '
-                    + '; '.join(f'#{g[0].id} {describir(g[0])}' for g in grupos.values())
-                    + ' — pon "ficha_id" en el JSON con la correcta')
-            if elegida:
-                iguales = grupos[elegida]
-                plan['destino'] = plan['referencia'] = iguales[0]
+                           + '; '.join(resumen_ficha(f) for f in descartadas))
+        elif len(locales) == 1:
+            plan['destino'] = plan['referencia'] = locales[0]
+            plan['estado'] = 'EXISTE'
+            if identidad(locales[0]) != pedida:
+                avisar(f'ya existe en {sucursal.alias} como {describir(locales[0])} '
+                       f'(el JSON decía {getattr(color, "valor", "-")}/{getattr(genero, "valor", "-")}/'
+                       f'{getattr(categoria, "nombre", "-")}): se usa esa ficha tal como está')
+        elif len(locales) > 1:
+            # Mismo código + marca dos o más veces en la bodega = el mismo
+            # producto creado varias veces. Hay que decir en cuál entra.
+            iguales = len({identidad(f) for f in locales}) == 1
+            if opts['confirmar_duplicados'] and iguales:
+                plan['destino'] = plan['referencia'] = locales[0]
                 plan['estado'] = 'EXISTE'
-                if len(iguales) > 1:
-                    if opts['confirmar_duplicados']:
-                        avisar(f'{len(iguales)} fichas iguales en {sucursal.alias}: '
-                               f'entra en la más reciente #{iguales[0].id}')
-                    else:
-                        plan['estado'] = 'DUPLICADAS'
-                        err(f'{len(iguales)} fichas iguales en {sucursal.alias} '
-                            f'({", ".join("#" + str(f.id) for f in iguales)}): '
-                            f'usa --confirmar-duplicados o fusiónalas')
-        elif otras:
-            grupos = agrupar(otras)
-            if pedida in grupos:
-                plan['referencia'] = grupos[pedida][0]
-            elif len(grupos) == 1:
-                plan['referencia'] = next(iter(grupos.values()))[0]
-                avisar(f'existe en {plan["referencia"].sucursal.alias} como '
-                       f'{describir(plan["referencia"])}: se usa esa identidad')
+                avisar(f'{len(locales)} fichas iguales en {sucursal.alias}: entra en la más reciente '
+                       f'#{locales[0].id}; no se tocan: '
+                       + '; '.join(resumen_ficha(f) for f in locales[1:]))
             else:
-                avisar('existe en otras bodegas con identidades distintas ('
-                       + '; '.join(f'{g[0].sucursal.alias} {describir(g[0])}' for g in grupos.values())
-                       + '): se crea con la del JSON')
-            if plan['referencia'] is not None:
-                plan['estado'] = 'EXISTE_OTRAS'
+                plan['estado'] = 'DUPLICADAS'
+                err(f'{len(locales)} fichas de este código en {sucursal.alias}: '
+                    + '; '.join(resumen_ficha(f) for f in locales)
+                    + (' — pon "ficha_id" en el JSON (o --confirmar-duplicados para la más reciente)'
+                       if iguales else
+                       ' — son fichas DISTINTAS (color/género/categoría): pon "ficha_id" en el JSON'))
+        elif otras:
+            # Solo en otras bodegas: la ficha nueva copia la identidad de la
+            # más reciente, para que sea la misma variante y sincronice.
+            plan['referencia'] = otras[0]
+            plan['estado'] = 'EXISTE_OTRAS'
+            distintas = {identidad(f) for f in otras}
+            if identidad(otras[0]) != pedida:
+                avisar(f'existe en {otras[0].sucursal.alias} como {describir(otras[0])}: '
+                       f'se crea con esa identidad')
+            if len(distintas) > 1:
+                avisar('en otras bodegas está con identidades distintas ('
+                       + '; '.join(f'{f.sucursal.alias} #{f.id} {describir(f)}' for f in otras)
+                       + f'): se copia la de la más reciente (#{otras[0].id})')
 
         ref = plan['referencia']
         if ref is not None:
             # La ficha existente manda: no se crea un gemelo con otra identidad.
             marca, color, genero, categoria = ref.atributo1, ref.atributo2, ref.atributo3, ref.categoria
-            # Misma variante en otras tiendas: solo [s] les cambia el precio.
-            plan['gemelas'] = [(f.sucursal.alias, int(f.costo or 0), int(f.precioventa or 0))
-                               for f in otras if identidad(f) == identidad(ref) and f.id != ref.id]
+            # Mismo código+marca en otras tiendas. [s] solo les cambia el
+            # precio a las de la MISMA identidad (así busca la vista).
+            plan['gemelas'] = [(f.sucursal.alias, int(f.costo or 0), int(f.precioventa or 0),
+                                identidad(f) == identidad(ref))
+                               for f in mismo_codigo
+                               if f.id != ref.id and f.sucursal_id != sucursal.id
+                               and f.atributo1_id == ref.atributo1_id]
         elif (not fichas and marca is not None and not linea.get('genero_fijo')
               and not _RE_GENERO_EXPLICITO.match(str(linea.get('descripcion') or '').upper())):
             # Código nuevo sin W/M en la factura: el género se toma de cómo
@@ -638,7 +689,11 @@ class Command(BaseCommand):
                                    ('color', color, linea.get('color') or comunes['color']),
                                    ('género', genero, linea.get('genero')),
                                    ('categoría', categoria, linea.get('categoria'))):
-            if obj is None:
+            if obj is None and ref is not None:
+                err(f'la ficha #{ref.id} de {ref.sucursal.alias} no tiene {nombre}: complétala en '
+                    f'Gestión de Productos antes de cargar (la vista no puede sumar stock a una '
+                    f'ficha sin {nombre})')
+            elif obj is None:
                 err(f'{nombre} {valor!r} no existe (o es ambigua) en el sistema')
         plan['marca'], plan['color'], plan['genero'], plan['categoria'] = marca, color, genero, categoria
 
@@ -667,25 +722,46 @@ class Command(BaseCommand):
         # ficha queda asociada a la guía y cada talla se escribe tal como está
         # en la columna del tipo (US) de esa guía. Ficha existente → la suya.
         destino = plan['destino']
-        if destino is not None:
+        plan['renombres'] = []        # (producto id, alias, Producto_Talla id, viejo, nuevo)
+        plan['fichas_formato'] = []   # fichas que pasan a tipo US + guía
+        plan['sin_resolver'] = []     # (alias, talla) que no calzan con la guía
+        plan['conflictos'] = []       # (alias, viejo, nuevo, stock) destino ya ocupado
+
+        # Guía que corresponde a la LÍNEA: por la factura (C/Y → INFANTIL) o
+        # por el género del JSON; de la marca de la ficha si ya existe.
+        marca_guia = ref.atributo1 if ref is not None else marca
+        nombre_guia = linea.get('guia') or self._nombre_guia(comunes['guias'], genero_json, tallas_fact)
+        guia_linea = None
+        if nombre_guia and comunes['tipo_talla'] == 'US' and marca_guia is not None:
+            guias = self._guias_de_marca(marca_guia)
+            elegidas = [g for g in guias if g.nombre.strip().upper() == nombre_guia.strip().upper()]
+            if elegidas:
+                guia_linea = elegidas[0]
+                if len(elegidas) > 1:
+                    avisar(f'hay {len(elegidas)} guías «{nombre_guia}»: se usa la #{elegidas[0].id}')
+            elif destino is None or opts['renombrar_tallas']:
+                err(f'no existe la guía de talla «{nombre_guia}» para {marca_guia.valor} '
+                    f'(hay: {", ".join(g.nombre for g in guias) or "ninguna"})')
+
+        # Fichas existentes (esta y las gemelas de otras bodegas) pasan al
+        # mismo formato que las nuevas: tipo US, guía, y cada talla escrita
+        # como la guía (7 / 7.5 / 11C / 1.5Y). Misma regla que el lápiz del
+        # modal (api_editar_talla_producto_global): si en una ficha ya existe
+        # la talla destino, esa fila no se toca y se informa.
+        renombrar = (opts['renombrar_tallas'] and guia_linea is not None and ref is not None)
+        if renombrar:
+            objetivo = [f for f in mismo_codigo
+                        if f.atributo1_id == marca_guia.id
+                        and ((destino is not None and f.id == destino.id) or f.sucursal_id != sucursal.id)]
+            self._planificar_renombres(plan, objetivo, guia_linea)
+            plan['tipo_talla'], plan['guia'] = 'US', guia_linea
+        elif destino is not None:
             plan['tipo_talla'] = destino.tipo_talla or 'CL'
             plan['guia'] = destino.guia_talla
         elif ref is not None and ref.guia_talla_id:
             plan['tipo_talla'], plan['guia'] = ref.tipo_talla or 'US', ref.guia_talla
         else:
-            plan['tipo_talla'], plan['guia'] = comunes['tipo_talla'], None
-            nombre_guia = linea.get('guia') or self._nombre_guia(comunes['guias'], genero, tallas_fact)
-            if nombre_guia:
-                guias = self._guias_de_marca(marca)
-                elegidas = [g for g in guias if g.nombre.strip().upper() == nombre_guia.strip().upper()]
-                if not elegidas:
-                    err(f'no existe la guía de talla «{nombre_guia}» para '
-                        f'{getattr(marca, "valor", "-")} (hay: '
-                        f'{", ".join(g.nombre for g in guias) or "ninguna"})')
-                else:
-                    plan['guia'] = elegidas[0]
-                    if len(elegidas) > 1:
-                        avisar(f'hay {len(elegidas)} guías «{nombre_guia}»: se usa la #{elegidas[0].id}')
+            plan['tipo_talla'], plan['guia'] = comunes['tipo_talla'], guia_linea
         mapa_guia = self._mapa_guia(plan['guia'], plan['tipo_talla']) if plan['guia'] else None
 
         def texto_talla(t_fact):
@@ -696,15 +772,24 @@ class Command(BaseCommand):
             if texto is None:
                 if destino is None:
                     err(f'la talla {t_fact} no está en la guía «{plan["guia"].nombre}» '
-                        f'(columna {plan["tipo_talla"]}); agrégala a la guía o corrige el JSON')
+                        f'(columna {plan["tipo_talla"]}); corre revisar_guias_talla')
                 return talla_casa(t_fact)
+            # Ficha nueva en US: la talla de niño va con su letra (11C, 1.5Y),
+            # igual que en la factura. Si la guía no la tiene, está por ajustar.
+            sufijo = str(t_fact).strip().upper()[-1:]
+            if (destino is None and plan['tipo_talla'] == 'US' and sufijo in ('C', 'Y')
+                    and not texto.upper().endswith(sufijo)):
+                err(f'la guía «{plan["guia"].nombre}» escribe la talla {t_fact} como «{texto}» '
+                    f'(sin la {sufijo}); corre primero revisar_guias_talla --apply')
             return texto
 
         existentes = {}   # clave → (texto que se envía, SKU que recibe, [todas las filas])
         if destino is not None:
+            renombrado = {pt_id: nuevo for pid, _a, pt_id, _v, nuevo in plan['renombres'] if pid == destino.id}
             por_clave = {}
-            for t, sku, stock in (Producto_Talla.objects.filter(producto=destino)
-                                  .order_by('id').values_list('talla', 'sku', 'stock')):
+            for pt_id, t, sku, stock in (Producto_Talla.objects.filter(producto=destino)
+                                         .order_by('id').values_list('id', 'talla', 'sku', 'stock')):
+                t = renombrado.get(pt_id, t)
                 por_clave.setdefault(clave_talla_ficha(t), []).append((t, sku, stock))
             for clave, filas in por_clave.items():
                 # min() es estable: a igual preferencia gana la de menor id,
@@ -764,6 +849,39 @@ class Command(BaseCommand):
                     plan['especialidades'].append(op)
         return plan
 
+    def _planificar_renombres(self, plan, fichas, guia):
+        """Qué tallas de `fichas` cambian de texto para quedar como la guía (US).
+
+        Talla legacy '700' → 7; '7,0' → 7; '3.5Y'/'11C' se mantienen; '1,0' en
+        guía INFANTIL → 1Y. Lo que no calza con la guía (p.ej. un «11» en una
+        ficha de niño: ¿11C?) se deja igual y se informa."""
+        mapa = self._mapa_guia(guia, 'US')
+        for f in fichas:
+            filas = list(Producto_Talla.objects.filter(producto=f)
+                         .order_by('id').values_list('id', 'talla', 'stock'))
+            textos = {t for _i, t, _s in filas}
+            for pt_id, t, stock in filas:
+                if es_talla_legacy(t):
+                    key = (clave_talla_ficha(t), '')
+                else:
+                    key = clave_guia(t)
+                nuevo = mapa.get(key)
+                if nuevo is None:
+                    plan['sin_resolver'].append((f.sucursal.alias, t))
+                    continue
+                if nuevo == t:
+                    continue
+                if nuevo in textos:
+                    plan['conflictos'].append((f.sucursal.alias, t, nuevo, int(stock or 0)))
+                    continue
+                plan['renombres'].append((f.id, f.sucursal.alias, pt_id, t, nuevo))
+                textos.add(nuevo)
+            plan['fichas_formato'].append(f)
+
+    def _tallas_y_stock(self, ficha):
+        agg = Producto_Talla.objects.filter(producto=ficha).aggregate(n=Count('id'), s=Sum('stock'))
+        return int(agg['n'] or 0), int(agg['s'] or 0)
+
     def _opciones_existente(self, plan):
         """Opciones que se ofrecen para un código existente.
 
@@ -791,8 +909,10 @@ class Command(BaseCommand):
         o = self.opts
         w('')
         w(self.style.MIGRATE_HEADING(
-            f'══ Factura {dte.numero_documento} · {dte.emisor.nombre} ({dte.emisor.rut}) '
-            f'· DTE id={dte.id} · emitida {dte.fecha_emision} · {f["ruta"].name}'))
+            f'══ {dte.tipo_documento} N° {dte.numero_documento} · {dte.emisor.nombre} '
+            f'({dte.emisor.rut}) · DTE id={dte.id} · emitida {dte.fecha_emision} · {f["ruta"].name}'))
+        if 'FACTURA' not in str(dte.tipo_documento or '').upper() or getattr(dte, 'es_nota_credito', False):
+            w(self.style.WARNING(f'  ! el DTE no es una factura ({dte.tipo_documento}); se usó por "dte_id"'))
         w(f'Bodega: {sucursal.alias} · usuario: {user.username} (responsable "{_RESPONSABLE}") '
           f'· venta = costo × {o["factor_bajo"]} (< ${_fmt(o["umbral_costo"])}) / × {o["factor_alto"]} '
           f'→ ...990 · sobreprecio nuevos: {f["margen"]}%')
@@ -838,8 +958,10 @@ class Command(BaseCommand):
               + ((sentido + f'  · te preguntará [{"/".join(opciones)}]') if opciones
                  else '  (sin cambios: solo suma stock)'))
             if plan['gemelas']:
-                w('      misma variante en: '
-                  + ', '.join(f'{a} (costo {_fmt(c)}, venta {_fmt(v)})' for a, c, v in plan['gemelas'])
+                w('      mismo código en: '
+                  + ', '.join(f'{a} (costo {_fmt(c)}, venta {_fmt(v)})'
+                              + ('' if misma else ' [otra identidad: [s] no la toca]')
+                              for a, c, v, misma in plan['gemelas'])
                   + ' — solo [s] les aplica el precio de la factura y avisa a esas tiendas')
         else:
             w(f'      costo {_fmt(costo)} · sobreprecio {_fmt(sobre)} · venta {_fmt(pv)}'
@@ -855,6 +977,22 @@ class Command(BaseCommand):
             w(f'      ficha: tipo talla {plan["tipo_talla"]}, {guia_txt}')
             w('      suma stock en tallas que ya tiene: ' + ('  '.join(suman) or '—'))
             w('      tallas nuevas que se agregan a la ficha: ' + ('  '.join(nuevas) or '—'))
+        if plan.get('fichas_formato'):
+            por_alias = {}
+            for _pid, alias, _pt, viejo, nuevo in plan['renombres']:
+                por_alias.setdefault(alias, []).append(f'{viejo}→{nuevo}')
+            fichas_txt = ', '.join(f'{f.sucursal.alias} #{f.id}' for f in plan['fichas_formato'])
+            w(self.style.WARNING(
+                f'      ficha(s) {fichas_txt} pasan a tipo US con guía «{plan["guia"].nombre}»'))
+            for alias, cambios in por_alias.items():
+                w(self.style.WARNING(f'        {alias}: renombra ' + '  '.join(cambios)))
+            if not por_alias:
+                w('        (las tallas ya estaban en ese formato)')
+            for alias, viejo, nuevo, stock in plan['conflictos']:
+                w(self.style.WARNING(f'        ! {alias}: «{viejo}» no se renombra a «{nuevo}» porque esa '
+                                     f'talla ya existe en la ficha (fila duplicada, stock {stock}); fusionar aparte'))
+            for alias, t in plan['sin_resolver']:
+                w(self.style.WARNING(f'        ! {alias}: «{t}» no calza con la guía (¿{t}C?): queda igual'))
         for a in plan['avisos']:
             w(self.style.WARNING(f'      ! {a}'))
         for e in plan['errores']:
@@ -933,7 +1071,7 @@ class Command(BaseCommand):
                 elif sin_preguntar:
                     opcion = 's'
                 else:
-                    gemelas = (' · también en ' + ', '.join(a for a, _c, _v in plan['gemelas'])
+                    gemelas = (' · también en ' + ', '.join(a for a, _c, _v, misma in plan['gemelas'] if misma)
                                if plan['gemelas'] else '')
                     textos = {
                         's': f'[s] stock + costo + venta{" (y en esas tiendas, con aviso)" if gemelas else ""}',
@@ -1002,6 +1140,13 @@ class Command(BaseCommand):
             # misma se traga), quedaría stock sin factura o tallas a medias.
             try:
                 with transaction.atomic():
+                    for _pid, _alias, pt_id, viejo, nuevo in plan.get('renombres', []):
+                        # .update() no dispara auto_now: updated_at explícito.
+                        Producto_Talla.objects.filter(id=pt_id, talla=viejo).update(
+                            talla=nuevo, updated_at=timezone.now())
+                    if plan.get('fichas_formato'):
+                        Producto.objects.filter(id__in=[f.id for f in plan['fichas_formato']]).update(
+                            tipo_talla='US', guia_talla=plan['guia'])
                     respuesta = json.loads(crear_producto_manual(request).content)
                     if not respuesta.get('success'):
                         raise _Revertir(respuesta.get('error') or 'la vista respondió error')
@@ -1027,7 +1172,8 @@ class Command(BaseCommand):
             cargadas = sum(t.get('stock_ingresado', 0) for t in respuesta.get('tallas_detalle', []))
             unidades += cargadas
             w(self.style.SUCCESS(f'[{plan["n"]:>2}] {plan["articulo"]:<12} OK  ')
-              + f'producto #{respuesta.get("producto_id")} · +{cargadas} u · {respuesta.get("mensaje", "")}')
+              + f'producto #{respuesta.get("producto_id")} · +{cargadas} u · {respuesta.get("mensaje", "")}'
+              + (f' · {len(plan["renombres"])} talla(s) renombradas a US' if plan.get('renombres') else ''))
             w('      ' + '  '.join(
                 f'{t["talla"]}: sku {t["sku"]} → {t["stock_final"]}'
                 for t in respuesta.get('tallas_detalle', [])))
