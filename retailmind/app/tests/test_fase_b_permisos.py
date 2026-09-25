@@ -38,7 +38,8 @@ CODIGOS_NUEVOS = {
     'inteligencia_compra': '/app/reportes/inteligencia-compra/',
 }
 
-ROLES_CON_ACCESO = ('administrador', 'administracion', 'jefe_local')
+# El rol Jefe (25-sep-2026) se siembra desde la política de perfiles: ve todo lo del administrador.
+ROLES_CON_ACCESO = ('administrador', 'jefe', 'administracion', 'jefe_local')
 ROLES_SIN_ACCESO = ('cajero', 'vendedor')
 
 

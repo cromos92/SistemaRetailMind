@@ -2162,6 +2162,10 @@
                                                     <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); color: white; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; box-shadow: 0 2px 6px rgba(0, 102, 255, 0.35);">
                                                         <i class="ri-shield-star-fill" style="font-size: 0.75rem;"></i> Administrador
                                                     </span>
+                                                    {% elif user.rol == 'jefe' %}
+                                                    <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #0066FF 0%, #0052CC 100%); color: white; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; box-shadow: 0 2px 6px rgba(0, 102, 255, 0.35);">
+                                                        <i class="ri-shield-user-fill" style="font-size: 0.75rem;"></i> Jefe
+                                                    </span>
                                                     {% elif user.rol == 'administracion' %}
                                                     <span style="display: inline-flex; align-items: center; gap: 4px; background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%); color: white; font-size: 0.7rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; box-shadow: 0 2px 6px rgba(99, 102, 241, 0.35);">
                                                         <i class="ri-briefcase-4-fill" style="font-size: 0.75rem;"></i> Administración

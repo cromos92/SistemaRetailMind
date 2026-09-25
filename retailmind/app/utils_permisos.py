@@ -24,6 +24,7 @@ ARQUEO_RANGO_DEFAULTS = {
     'jefe_local': {'tipo': 'dias', 'valor': 3},
     'administracion': {'tipo': 'dias', 'valor': 30},
     'administrador': {'tipo': 'dias', 'valor': 30},
+    'jefe': {'tipo': 'dias', 'valor': 30},
     'maestro': {'tipo': 'meses', 'valor': 12},
 }
 

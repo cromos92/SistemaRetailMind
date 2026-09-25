@@ -40,6 +40,7 @@ class Command(BaseCommand):
         self.crear_permisos_jefe_local()
         self.crear_permisos_cajero()
         self.crear_permisos_vendedor()
+        self.crear_permisos_jefe()
         
         self.stdout.write(self.style.SUCCESS('>> Permisos inicializados correctamente!'))
 
@@ -675,6 +676,14 @@ class Command(BaseCommand):
                 permiso.save(update_fields=['puede_ver', 'puede_crear', 'puede_aprobar'])
         
         self.stdout.write(f'   >> {opciones.count()} permisos creados para Cajero')
+
+    def crear_permisos_jefe(self):
+        """Rol Jefe: como Administrador con menos permisos (política en
+        app/services/perfiles_permisos.py). Solo crea filas que falten."""
+        from app.services import perfiles_permisos
+        self.stdout.write('[JEFE] Creando permisos para Jefe...')
+        cambios = perfiles_permisos.aplicar('jefe', escribir=True, solo_faltantes=True)
+        self.stdout.write(f'   >> {len(cambios)} permisos creados para Jefe')
 
     def crear_permisos_vendedor(self):
         """Crear permisos para el rol Vendedor"""

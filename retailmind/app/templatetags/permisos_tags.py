@@ -455,6 +455,7 @@ def rol_display(user):
         roles_dict = {
             'maestro': 'Maestro',
             'administrador': 'Administrador',
+            'jefe': 'Jefe',
             'administracion': 'Administración',
             'jefe_local': 'Jefe Local',
             'cajero': 'Cajero',
@@ -509,7 +510,7 @@ def es_jefe_o_admin(user):
     if not user or not user.is_authenticated:
         return False
     
-    return hasattr(user, 'rol') and user.rol in ['maestro', 'administrador', 'jefe_local']
+    return hasattr(user, 'rol') and user.rol in ['maestro', 'administrador', 'jefe', 'jefe_local']
 
 
 @register.simple_tag(takes_context=True)

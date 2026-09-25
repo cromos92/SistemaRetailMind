@@ -9,8 +9,28 @@ from django.conf import settings
 # rol normal que sí se puede restringir desde Gestión de Permisos.
 ROL_MAESTRO = 'maestro'
 
+# Rol "Jefe": mismas puertas fijas que el Administrador (gestión de usuarios,
+# supervisión de caja, etc.); lo que lo diferencia se configura en Permisos.
+ROL_JEFE = 'jefe'
+
 # Roles que pasan los chequeos fijos de "solo administrador" del código.
-ROLES_NIVEL_ADMINISTRADOR = (ROL_MAESTRO, 'administrador')
+ROLES_NIVEL_ADMINISTRADOR = (ROL_MAESTRO, 'administrador', ROL_JEFE)
+
+# Jerarquía: nadie asigna un rol de nivel mayor al suyo ni modifica a un
+# usuario de nivel mayor (users/views y Gestión de Permisos lo hacen cumplir).
+NIVEL_ROL = {
+    ROL_MAESTRO: 100,
+    'administrador': 80,
+    ROL_JEFE: 70,
+    'administracion': 60,
+    'jefe_local': 50,
+    'cajero': 20,
+    'vendedor': 10,
+}
+
+
+def nivel_rol(rol):
+    return NIVEL_ROL.get(rol, 0)
 
 
 def es_maestro(usuario):
@@ -18,7 +38,7 @@ def es_maestro(usuario):
 
 
 def es_rol_administrador(usuario):
-    """True para Maestro y Administrador (chequeos fijos por rol)."""
+    """True para Maestro, Administrador y Jefe (chequeos fijos por rol)."""
     return getattr(usuario, 'rol', None) in ROLES_NIVEL_ADMINISTRADOR
 
 
@@ -26,11 +46,27 @@ def rol_efectivo(usuario):
     """Rol a usar en los chequeos FIJOS del código (`rol == 'administrador'`,
     `rol in ('administrador', 'administracion')`, tablas por rol...).
 
-    El Maestro pasa como 'administrador' para que ninguna de esas reglas lo deje
-    afuera. Para mostrar o guardar el rol real, usar `usuario.rol`.
+    Maestro y Jefe pasan como 'administrador' para que ninguna de esas reglas
+    los deje afuera. Para mostrar o guardar el rol real, usar `usuario.rol`.
     """
     rol = getattr(usuario, 'rol', None)
-    return 'administrador' if rol == ROL_MAESTRO else rol
+    return 'administrador' if rol in (ROL_MAESTRO, ROL_JEFE) else rol
+
+
+def puede_asignar_rol(actor, rol):
+    """Un usuario solo asigna roles de nivel igual o menor al suyo (el Maestro, cualquiera)."""
+    if es_maestro(actor):
+        return True
+    return rol != ROL_MAESTRO and nivel_rol(rol) <= nivel_rol(getattr(actor, 'rol', None))
+
+
+def puede_gestionar_usuario(actor, usuario):
+    """Modificar (editar, resetear clave, desactivar…) solo a usuarios de nivel menor o igual."""
+    if es_maestro(actor):
+        return True
+    if usuario.rol == ROL_MAESTRO:
+        return False
+    return nivel_rol(usuario.rol) <= nivel_rol(getattr(actor, 'rol', None))
 
 
 # Permisos finos de Nota de Crédito (se exigen ADEMÁS del permiso de la
@@ -57,6 +93,14 @@ CODIGOS_EDICION_DOCUMENTOS = (
 def puede_emitir_nota_credito(usuario, sucursal_id=None, traspaso=False):
     codigo = CODIGO_NC_TRASPASO if traspaso else CODIGO_NC_CLIENTES
     return PermisoRol.tiene_permiso(usuario, codigo, 'puede_crear', sucursal_id=sucursal_id)
+
+
+# Devolver plata a la tarjeta por la API de Mercado Pago (NC con devolución MP).
+CODIGO_DEVOLUCION_MP = 'devolver_mercadopago'
+
+
+def puede_devolver_mercadopago(usuario, sucursal_id=None):
+    return PermisoRol.tiene_permiso(usuario, CODIGO_DEVOLUCION_MP, 'puede_crear', sucursal_id=sucursal_id)
 
 
 class ModuloSistema(models.Model):
@@ -176,6 +220,7 @@ class PermisoRol(models.Model):
     ROLES_CHOICES = [
         (ROL_MAESTRO, 'Maestro'),
         ('administrador', 'Administrador'),
+        (ROL_JEFE, 'Jefe'),
         ('administracion', 'Administración'),
         ('jefe_local', 'Jefe Local'),
         ('cajero', 'Cajero'),

@@ -111,21 +111,33 @@
             </div>
 
             <div class="modal-footer cf-composer">
-                <input type="file" id="cfArchivo" accept="application/pdf,.pdf" class="d-none">
-                <button type="button" class="btn btn-outline-primary btn-sm" id="cfBtnAdjuntar">
-                    <i class="bi bi-paperclip me-1"></i>Adjuntar PDF
-                </button>
-                <span id="cfNombreArchivo" class="small text-muted">ningún archivo</span>
-                <select id="cfSucursal" class="form-select form-select-sm w-auto" title="Bodega donde entra la mercadería"></select>
-                <input id="cfMarca" list="cfMarcas" class="form-control form-control-sm" style="max-width: 170px;" placeholder="Marca (opcional)" autocomplete="off">
-                <datalist id="cfMarcas"></datalist>
-                <select id="cfLecturas" class="form-select form-select-sm w-auto" title="Lecturas independientes que se comparan">
-                    <option value="2">2 lecturas (verifica)</option>
-                    <option value="1">1 lectura (rápida)</option>
-                </select>
-                <button type="button" class="btn btn-success btn-sm ms-auto" id="cfBtnEnviar">
-                    <i class="bi bi-send me-1"></i>Enviar al agente
-                </button>
+                <!-- Fila 1: escribirle al agente (corrige la vista previa; antes de leer, son
+                     indicaciones para el lector) -->
+                <div class="d-flex w-100 gap-2 align-items-center">
+                    <input id="cfTexto" class="form-control form-control-sm" autocomplete="off"
+                           placeholder="Escríbele al agente: «la marca es CHALADA», «tallas CL», «la línea 3 es de mujer, color plata», «margen 1,9»…">
+                    <button type="button" class="btn btn-primary btn-sm" id="cfBtnHablar" title="Enviar mensaje">
+                        <i class="bi bi-chat-dots me-1"></i>Enviar
+                    </button>
+                </div>
+                <!-- Fila 2: adjuntar la factura -->
+                <div class="d-flex w-100 gap-2 align-items-center flex-wrap">
+                    <input type="file" id="cfArchivo" accept="application/pdf,.pdf" class="d-none">
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="cfBtnAdjuntar">
+                        <i class="bi bi-paperclip me-1"></i>Adjuntar PDF
+                    </button>
+                    <span id="cfNombreArchivo" class="small text-muted">ningún archivo</span>
+                    <select id="cfSucursal" class="form-select form-select-sm w-auto" title="Bodega donde entra la mercadería"></select>
+                    <input id="cfMarca" list="cfMarcas" class="form-control form-control-sm" style="max-width: 170px;" placeholder="Marca (opcional)" autocomplete="off">
+                    <datalist id="cfMarcas"></datalist>
+                    <select id="cfLecturas" class="form-select form-select-sm w-auto" title="Lecturas independientes que se comparan">
+                        <option value="2">2 lecturas (verifica)</option>
+                        <option value="1">1 lectura (rápida)</option>
+                    </select>
+                    <button type="button" class="btn btn-success btn-sm ms-auto" id="cfBtnEnviar" title="Sube el PDF y empieza la lectura (lo escrito arriba va como indicaciones)">
+                        <i class="bi bi-send me-1"></i>Enviar PDF
+                    </button>
+                </div>
             </div>
         </div>
     </div>

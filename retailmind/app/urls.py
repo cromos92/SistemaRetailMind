@@ -1471,6 +1471,7 @@ urlpatterns = [
     path('carga-factura/<int:sesion_id>/', views_modulo_carga_factura.api_carga_factura_estado, name='api_carga_factura_estado'),
     path('carga-factura/<int:sesion_id>/planificar/', views_modulo_carga_factura.api_carga_factura_planificar, name='api_carga_factura_planificar'),
     path('carga-factura/<int:sesion_id>/cargar/', views_modulo_carga_factura.api_carga_factura_cargar, name='api_carga_factura_cargar'),
+    path('carga-factura/<int:sesion_id>/conversar/', views_modulo_carga_factura.api_carga_factura_conversar, name='api_carga_factura_conversar'),
     path('carga-factura/<int:sesion_id>/cerrar/', views_modulo_carga_factura.api_carga_factura_cerrar, name='api_carga_factura_cerrar'),
 
     # ========== DESPACHO A TODAS SUCURSALES ==========

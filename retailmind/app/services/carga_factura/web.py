@@ -17,6 +17,7 @@ planificador.py; aquí solo se orquesta y se traduce a JSON.
 """
 import logging
 import threading
+from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth import get_user_model
 from django.db import connection
@@ -28,11 +29,13 @@ from app.utils_producto_match import normalizar_articulo
 from . import lectura as svc_lectura
 from .aplicador import aplicar_linea
 from .facturas import ErrorCarga, factura_desde_datos, variantes_rut
+from .perfiles import perfil_para
 from .planificador import (
     ATRIBUTOS_GENERO, PlanificadorCarga, estado_visible, opciones_existente,
     tallas_y_stock,
 )
 from .precios import fmt
+from .tallas import COLUMNAS_GUIA
 
 logger = logging.getLogger('app')
 
@@ -43,14 +46,21 @@ USUARIO = 'usuario'
 # hilo (el hilo de fondo no vería la transacción del test).
 SINCRONO = False
 
-# Campos que la vista previa deja corregir. Cualquier otra clave del JSON
-# (folio, RUT, sucursal, totales…) se conserva tal como se leyó.
+# Campos que la vista previa (tarjeta o chat) deja corregir. Cualquier otra
+# clave del JSON (RUT, sucursal, totales…) se conserva tal como se leyó.
+# Los que empiezan con "_" son parámetros de esta carga que el JSON de
+# compras/facturas no trae: pisan la regla del perfil de la marca.
 CAMPOS_FACTURA_EDITABLES = ('marca', 'color', 'dte_id', 'folio', 'proveedor_rut',
-                            'fecha_emision', '_renombrar_tallas')
+                            'fecha_emision', 'tipo_talla', 'guias_talla', '_renombrar_tallas',
+                            '_umbral_costo', '_factor_bajo', '_factor_alto', '_margen_sobreprecio')
 CAMPOS_LINEA_EDITABLES = ('articulo', 'descripcion', 'costo', 'precioventa', 'genero',
                           'categoria', 'color', 'marca', 'especialidades', 'ficha_id',
                           'guia', 'tallas', 'cantidad', 'importe', '_omitir')
-_ENTEROS = ('costo', 'precioventa', 'ficha_id', 'dte_id', 'cantidad', 'importe', 'folio')
+_ENTEROS = ('costo', 'precioventa', 'ficha_id', 'dte_id', 'cantidad', 'importe', 'folio',
+            '_umbral_costo')
+_DECIMALES = ('_factor_bajo', '_factor_alto', '_margen_sobreprecio')
+TIPOS_TALLA = tuple(c.upper() for c in COLUMNAS_GUIA)
+GENEROS_GUIA = ('HOMBRE', 'MUJER', 'UNISEX', 'INFANTIL', 'DEFAULT')
 
 
 # ------------------------------------------------------------------ hilos
@@ -102,8 +112,12 @@ def leer_en_segundo_plano(sesion_id):
         avisar = _progreso(sesion_id)
         with sesion.archivo.open('rb') as fh:
             pdf = fh.read()
+        # Indicaciones que la persona escribió al subir ("la marca es X, las
+        # tallas son CL…"): van al lector junto con las pistas del perfil.
+        pistas = next((m.get('texto', '') for m in reversed(sesion.mensajes or [])
+                       if m.get('tipo') == 'indicaciones'), '')
         leido = svc_lectura.leer_pdf(pdf, marca=sesion.marca or None,
-                                     lecturas=sesion.lecturas, progreso=avisar)
+                                     lecturas=sesion.lecturas, progreso=avisar, pistas=pistas)
         avisar('Comparando las lecturas…')
         consolidada = svc_lectura.combinar_lecturas(leido['lecturas'])
         facturas = consolidada.get('facturas', [])
@@ -176,6 +190,36 @@ def _entero(valor):
         raise ErrorCarga(f'{valor!r} no es un número')
 
 
+def _decimal(valor):
+    """'1,9' → '1.9' (se guarda como texto: el JSON no tiene Decimal)."""
+    if valor is None or (isinstance(valor, str) and not valor.strip()):
+        return None
+    try:
+        d = Decimal(str(valor).replace(',', '.').strip())
+    except InvalidOperation:
+        raise ErrorCarga(f'{valor!r} no es un número')
+    if d <= 0:
+        raise ErrorCarga(f'{valor!r} tiene que ser mayor que 0')
+    return format(d.normalize(), 'f')
+
+
+def _guias_talla(valor):
+    """{'HOMBRE': 'NIKE HOMBRE', ...} desde un dict o una lista [{genero, guia}]."""
+    if not valor:
+        return None
+    pares = valor.items() if isinstance(valor, dict) else [
+        (p.get('genero'), p.get('guia')) for p in valor if isinstance(p, dict)]
+    guias = {}
+    for genero, guia in pares:
+        genero = str(genero or '').strip().upper()
+        guia = str(guia or '').strip()
+        if genero not in GENEROS_GUIA:
+            raise ErrorCarga(f'género de guía {genero!r} no válido (usa {", ".join(GENEROS_GUIA)})')
+        if guia:
+            guias[genero] = guia
+    return guias or None
+
+
 def _tallas(valor):
     """{'7': 2, '7.5': 3} desde un dict, o desde texto 'talla cantidad' por línea."""
     if isinstance(valor, dict):
@@ -225,12 +269,23 @@ def aplicar_correcciones(sesion, cambios):
             valor = cambio[campo]
             if campo in _ENTEROS:
                 valor = _entero(valor)
+            elif campo in _DECIMALES:
+                valor = _decimal(valor)
             elif campo == '_renombrar_tallas':
                 valor = bool(valor)
+            elif campo == 'tipo_talla':
+                valor = str(valor or '').strip().upper() or None
+                if valor and valor not in TIPOS_TALLA:
+                    raise ErrorCarga(f'tipo de talla {valor!r} no válido (usa {", ".join(TIPOS_TALLA)})')
+            elif campo == 'guias_talla':
+                valor = _guias_talla(valor)
             else:
                 valor = str(valor or '').strip().upper() if campo != 'fecha_emision' else str(valor or '').strip()
             if data.get(campo) != valor:
-                data[campo] = valor
+                if valor is None and campo.startswith('_') or valor is None and campo in ('tipo_talla', 'guias_talla'):
+                    data.pop(campo, None)
+                else:
+                    data[campo] = valor
                 tocado = True
         lineas = list(data.get('lineas') or [])
         for n, cambio_linea in enumerate(cambio.get('lineas') or []):
@@ -334,10 +389,12 @@ def _plan(plan):
         'omitida': bool(linea.get('_omitir')),
         'descripcion': linea.get('descripcion', ''), 'unidades': plan['unidades'],
         'costo': costo, 'sobreprecio': sobre, 'precioventa': pv, 'fuente_pv': plan['fuente_pv'],
+        'precio_lista': linea.get('precio_lista'), 'descuento': linea.get('descuento'),
         'precioventa_a_mano': linea.get('precioventa'),
         'vigentes': ({'costo': vigentes[0], 'sobreprecio': vigentes[1], 'precioventa': vigentes[2]}
                      if vigentes is not None else None),
         'opciones': opciones_existente(plan) if vigentes is not None else None,
+        'opcion_sugerida': opcion_por_defecto(plan) if vigentes is not None else None,
         'marca': _op(plan['marca']), 'color': _op(plan['color']), 'genero': _op(plan['genero']),
         'categoria': ({'id': plan['categoria'].id, 'nombre': plan['categoria'].nombre,
                        'ruta': (f'{plan["categoria"].padre.nombre} > ' if plan['categoria'].padre_id else '')
@@ -363,6 +420,23 @@ def _plan(plan):
         # Lo que dice hoy el JSON (para los editores de la vista previa).
         'json': {campo: linea.get(campo) for campo in CAMPOS_LINEA_EDITABLES},
     }
+
+
+def opcion_por_defecto(plan):
+    """Opción sugerida para un código existente: si la venta de la factura es
+    MENOR que la vigente, se conserva la venta ([c]: stock + costo); si sube o
+    es igual, [s]. Regla de la casa: no bajar precios sin que alguien lo pida."""
+    disponibles = opciones_existente(plan)
+    if not disponibles:
+        return 't'
+    _c0, _s0, v0 = plan['vigentes']
+    _c1, _s1, v1 = plan['factura']
+    if v1 < v0:
+        # [c] si el costo cambió; si no cambió, [t] (solo stock) conserva la venta.
+        for opcion in ('c', 't'):
+            if opcion in disponibles:
+                return opcion
+    return disponibles[0]
 
 
 def _bloqueante(plan):
@@ -398,7 +472,19 @@ def _totales(f, planes):
 
 
 def _motor(data):
-    return PlanificadorCarga({'renombrar_tallas': data.get('_renombrar_tallas', True) is not False})
+    """Planificador con los parámetros de esta factura (los "_" del JSON pisan
+    al perfil de la marca; None = perfil)."""
+    return PlanificadorCarga({
+        'renombrar_tallas': data.get('_renombrar_tallas', True) is not False,
+        'umbral_costo': _entero(data.get('_umbral_costo')),
+        'factor_bajo': Decimal(data['_factor_bajo']) if data.get('_factor_bajo') else None,
+        'factor_alto': Decimal(data['_factor_alto']) if data.get('_factor_alto') else None,
+    })
+
+
+def _factura(data, user):
+    margen = Decimal(data['_margen_sobreprecio']) if data.get('_margen_sobreprecio') else None
+    return factura_desde_datos(data, user, margen=margen)
 
 
 def planificar(sesion, user, solo_idx=None):
@@ -407,18 +493,24 @@ def planificar(sesion, user, solo_idx=None):
     for idx, data in enumerate(sesion.facturas or []):
         if solo_idx is not None and idx != solo_idx:
             continue
+        perfil = perfil_para(data.get('marca'))
         item = {
             'idx': idx, 'estado': data.get('_estado', 'PENDIENTE'),
             'folio': data.get('folio'), 'proveedor': data.get('proveedor_nombre'),
             'proveedor_rut': data.get('proveedor_rut'), 'fecha_emision': data.get('fecha_emision'),
             'marca': data.get('marca'), 'color': data.get('color'), 'sucursal': data.get('sucursal'),
             'dte_id': data.get('dte_id'), 'renombrar_tallas': data.get('_renombrar_tallas', True) is not False,
+            'tipo_talla': (data.get('tipo_talla') or perfil.tipo_talla or 'CL').upper(),
+            'guias_talla': {str(k).upper(): v for k, v in (data.get('guias_talla') or perfil.guias or {}).items()},
+            'perfil': perfil.marca or 'genérico',
+            'n_lineas': len(data.get('lineas') or []),
+            'descuento_global': data.get('descuento_global'),
             'fuente': data.get('_fuente'), 'revisar': list(data.get('_revisar') or []),
             'resultado': data.get('_resultado'),
             'dte': None, 'error': None, 'candidatos_dte': [], 'planes': [], 'totales': None,
         }
         try:
-            f = factura_desde_datos(data, user)
+            f = _factura(data, user)
             motor = _motor(data)
             planes = motor.planificar_factura(f, vistos)
             umbral, bajo, alto = motor.regla(f)
@@ -458,13 +550,15 @@ def cargar_en_segundo_plano(sesion_id, idx, opciones, user_id):
         data = dict(sesion.facturas[idx])
         avisar = _progreso(sesion_id)
         avisar('Revisando la factura antes de cargar…')
-        f = factura_desde_datos(data, user)
+        f = _factura(data, user)
         planes = _motor(data).planificar_factura(f, {})
         bloqueantes = [p['articulo'] for p in planes if _bloqueante(p)]
         if bloqueantes:
             raise ErrorCarga('Hay líneas con error: ' + ', '.join(bloqueantes)
                              + '. No se cargó nada.')
-        opciones = {normalizar_articulo(k): str(v).lower() for k, v in (opciones or {}).items()}
+        # Opciones por N° de línea (dos líneas pueden tener el mismo código:
+        # dos colores). Se acepta también por código, por compatibilidad.
+        opciones = {str(k).strip().upper(): str(v).lower() for k, v in (opciones or {}).items()}
         total = len(planes)
         for i, plan in enumerate(planes, start=1):
             avisar(f'Cargando {i} de {total}: {plan["articulo"]}…')
@@ -480,7 +574,8 @@ def cargar_en_segundo_plano(sesion_id, idx, opciones, user_id):
                     if disponibles is None:
                         opcion = 't'
                     else:
-                        opcion = opciones.get(plan['articulo'], 's')
+                        opcion = opciones.get(str(plan['n']), opciones.get(plan['articulo'])
+                                              or opcion_por_defecto(plan))
                         if opcion == 'n':
                             fila.update(estado='SALTADA', detalle='saltada por ti')
                         elif opcion not in disponibles:
@@ -494,6 +589,7 @@ def cargar_en_segundo_plano(sesion_id, idx, opciones, user_id):
                             estado='OK', opcion=opcion, producto_id=resp.get('producto_id'),
                             cargadas=cargadas, detalle=resp.get('mensaje', ''),
                             tallas=[{'talla': t.get('talla'), 'sku': t.get('sku'),
+                                     'ingresado': t.get('stock_ingresado'),
                                      'stock_final': t.get('stock_final')}
                                     for t in resp.get('tallas_detalle', [])],
                             renombradas=len(plan.get('renombres', [])))
@@ -568,7 +664,7 @@ def opciones_catalogo(user):
         generos = valores(nombre)
         if generos:
             break
-    categorias, especialidades = svc_lectura._listas_del_sistema()
+    categorias, especialidades, _colores = svc_lectura._listas_del_sistema()
     guias = {}
     for g in GuiaTalla.objects.select_related('marca').order_by('marca__valor', 'nombre'):
         guias.setdefault(str(g.marca.valor).strip().upper(), []).append(g.nombre)

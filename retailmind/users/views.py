@@ -21,7 +21,10 @@ import logging
 from datetime import datetime, timedelta
 
 from .models import Usuario, LogAcceso, SesionActiva, TokenResetPassword
-from app.models import Sucursal, EmpresaUser, Empresa, ROL_MAESTRO, es_maestro, es_rol_administrador
+from app.models import (
+    Sucursal, EmpresaUser, Empresa, ROL_MAESTRO, es_maestro, es_rol_administrador,
+    puede_asignar_rol, puede_gestionar_usuario,
+)
 import io
 
 logger = logging.getLogger('users')
@@ -44,18 +47,24 @@ ROLES_VALIDOS = dict(Usuario.ROLES)
 
 
 def _motivo_rol_no_asignable(actor, rol):
-    """None si `actor` puede asignar `rol` a un usuario."""
+    """None si `actor` puede asignar `rol` a un usuario (nivel igual o menor al suyo)."""
     if rol not in ROLES_VALIDOS:
         return f'Rol inválido: {rol}. Roles permitidos: {", ".join(ROLES_VALIDOS)}'
     if rol == ROL_MAESTRO and not es_maestro(actor):
         return 'Solo un Maestro puede asignar el rol Maestro.'
+    if not puede_asignar_rol(actor, rol):
+        return (f'No puedes asignar el rol {ROLES_VALIDOS[rol]}: es de un nivel mayor al tuyo '
+                f'({ROLES_VALIDOS.get(actor.rol, actor.rol)}).')
     return None
 
 
 def _motivo_usuario_protegido(actor, usuario):
-    """None si `actor` puede modificar a `usuario`."""
+    """None si `actor` puede modificar a `usuario` (nivel igual o menor al suyo)."""
     if usuario.rol == ROL_MAESTRO and not es_maestro(actor):
         return 'Solo un Maestro puede modificar a un usuario Maestro.'
+    if not puede_gestionar_usuario(actor, usuario):
+        return (f'No puedes modificar a un usuario {ROLES_VALIDOS.get(usuario.rol, usuario.rol)}: '
+                f'es de un nivel mayor al tuyo.')
     return None
 
 

@@ -385,6 +385,10 @@ def puede_cambiar_tipo_dte(user, origen: str, destino: str,
       * Que sean tipos compatibles (ver :data:`TIPOS_DTE_INTERCAMBIABLES`).
       * Que el usuario tenga permiso de edición sobre AMBOS tipos
         (`dte_editar_tipo_*`).
+      * Que además pueda editar el N° del documento (`dte_editar_numero`):
+        cambiar el tipo es cambiar la identidad del documento. Sin esto, un
+        rol que solo puede corregir el medio de pago (que también exige el
+        permiso del tipo) podría cambiar boleta electrónica ↔ papel.
     """
     if not son_tipos_compatibles(origen, destino):
         return False
@@ -395,6 +399,7 @@ def puede_cambiar_tipo_dte(user, origen: str, destino: str,
     return (
         _tiene_permiso_edicion(user, cod_origen, sucursal_id)
         and _tiene_permiso_edicion(user, cod_destino, sucursal_id)
+        and _tiene_permiso_edicion(user, CODIGO_PERMISO_CAMPO_DTE['numero_documento'], sucursal_id)
     )
 
 

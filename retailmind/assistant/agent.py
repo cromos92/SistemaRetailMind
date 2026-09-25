@@ -12,6 +12,8 @@ from datetime import datetime
 from django.conf import settings
 from django.utils import timezone
 
+from app.utils_anthropic import opciones_cliente_anthropic
+
 # Anthropic SDK
 try:
     import anthropic
@@ -71,7 +73,9 @@ class AssistantAgent:
         if ANTHROPIC_AVAILABLE:
             api_key = getattr(settings, 'ANTHROPIC_API_KEY', None)
             if api_key:
-                self.client = anthropic.Anthropic(api_key=api_key)
+                # Cabecera del workspace si la clave es de organización
+                # (ANTHROPIC_WORKSPACE_ID, ver app/utils_anthropic.py).
+                self.client = anthropic.Anthropic(api_key=api_key, **opciones_cliente_anthropic())
         
         # Historial de conversación
         self.conversation_history: List[Dict[str, Any]] = []

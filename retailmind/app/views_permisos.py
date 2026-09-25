@@ -30,7 +30,7 @@ from django.views.decorators.http import require_http_methods
 
 from .models import (
     ModuloSistema, OpcionMenu, PermisoRol, PermisoSucursal, PermisoUsuario,
-    Sucursal, EmpresaUser, ROL_MAESTRO, es_maestro,
+    Sucursal, EmpresaUser, ROL_MAESTRO, es_maestro, nivel_rol,
 )
 from users.models import Usuario
 from .decorators import solo_administrador
@@ -92,13 +92,20 @@ def _bool(valor, default=False):
 
 
 def _motivo_rol_no_editable(usuario_actual, rol):
-    """None si `usuario_actual` puede modificar los permisos de `rol`."""
+    """None si `usuario_actual` puede modificar los permisos de `rol`.
+
+    Solo se configuran roles de nivel MENOR al propio (nadie se sube el
+    techo a sí mismo ni a sus pares); el Maestro configura todos.
+    """
     if rol not in ROLES_VALIDOS:
         return f'Rol no válido: {rol}'
     if rol == ROL_MAESTRO:
         return 'El rol Maestro tiene acceso total a todo: no se configura.'
-    if rol == 'administrador' and not es_maestro(usuario_actual):
-        return 'Solo el Maestro puede modificar los permisos del rol Administrador.'
+    if es_maestro(usuario_actual):
+        return None
+    if nivel_rol(rol) >= nivel_rol(usuario_actual.rol):
+        return (f'Solo un rol superior (o el Maestro) puede modificar los permisos del rol '
+                f'{ROLES_VALIDOS[rol]}.')
     return None
 
 
@@ -110,8 +117,9 @@ def _motivo_usuario_no_editable(usuario_actual, usuario):
         return None
     if usuario.pk == usuario_actual.pk:
         return 'No puedes modificar tus propios permisos. Pídeselo al Maestro.'
-    if usuario.rol == 'administrador':
-        return 'Solo el Maestro puede modificar los permisos de un Administrador.'
+    if nivel_rol(usuario.rol) >= nivel_rol(usuario_actual.rol):
+        return (f'Solo un rol superior (o el Maestro) puede modificar los permisos de un usuario '
+                f'{ROLES_VALIDOS.get(usuario.rol, usuario.rol)}.')
     return None
 
 

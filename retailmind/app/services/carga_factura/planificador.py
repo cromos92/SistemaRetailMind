@@ -64,32 +64,39 @@ def tallas_y_stock(ficha):
 def ingresado_contra_dte(dte):
     """Unidades de cada código que YA entraron contra este DTE, por bodega.
 
-    {articulo: {alias bodega: unidades}}. Se miran todas las bodegas (la
-    factura pudo recibirse en otra) y dos fuentes que SÍ significan que el
-    stock entró: los movimientos de ingreso y las recepciones. Las líneas
-    Dte_Productos a secas NO cuentan: el importador XML las crea con la
-    cantidad facturada sin mover stock. Por bodega se toma la mayor de las dos
-    para no contar dos veces lo que el modal registra en ambas.
+    {'articulo': {articulo: {alias: unidades}}, 'color': {(articulo, COLOR):
+    {alias: unidades}}}: por código y, para las marcas donde el color es
+    parte de la identidad, por código + color de la ficha. Se miran todas las
+    bodegas (la factura pudo recibirse en otra) y dos fuentes que SÍ
+    significan que el stock entró: los movimientos de ingreso y las
+    recepciones. Las líneas Dte_Productos a secas NO cuentan: el importador
+    XML las crea con la cantidad facturada sin mover stock. Por bodega se
+    toma la mayor de las dos para no contar dos veces lo que el modal
+    registra en ambas.
     """
     lineas, movs = {}, {}
-    for art, alias, u in (Productos_Recepcionados.objects.filter(dte=dte)
-                          .values_list('producto_talla__producto__articulo',
-                                       'producto_talla__producto__sucursal__alias')
-                          .annotate(u=Sum('stockArribado'))):
-        clave = (normalizar_articulo(art), alias)
+    for art, color, alias, u in (Productos_Recepcionados.objects.filter(dte=dte)
+                                 .values_list('producto_talla__producto__articulo',
+                                              'producto_talla__producto__atributo2__valor',
+                                              'producto_talla__producto__sucursal__alias')
+                                 .annotate(u=Sum('stockArribado'))):
+        clave = (normalizar_articulo(art), str(color or '').strip().upper(), alias)
         lineas[clave] = lineas.get(clave, 0) + int(u or 0)
-    for art, alias, u in (Movimientos_Producto.objects
-                          .filter(dte=dte, concepto__in=CONCEPTOS_INGRESO, cantidad__gt=0)
-                          .values_list('ProductoTalla__producto__articulo',
-                                       'ProductoTalla__producto__sucursal__alias')
-                          .annotate(u=Sum('cantidad'))):
-        clave = (normalizar_articulo(art), alias)
+    for art, color, alias, u in (Movimientos_Producto.objects
+                                 .filter(dte=dte, concepto__in=CONCEPTOS_INGRESO, cantidad__gt=0)
+                                 .values_list('ProductoTalla__producto__articulo',
+                                              'ProductoTalla__producto__atributo2__valor',
+                                              'ProductoTalla__producto__sucursal__alias')
+                                 .annotate(u=Sum('cantidad'))):
+        clave = (normalizar_articulo(art), str(color or '').strip().upper(), alias)
         movs[clave] = movs.get(clave, 0) + int(u or 0)
-    resultado = {}
-    for (art, alias) in set(lineas) | set(movs):
-        resultado.setdefault(art, {})[alias] = max(lineas.get((art, alias), 0),
-                                                   movs.get((art, alias), 0))
-    return resultado
+    por_articulo, por_color = {}, {}
+    for (art, color, alias) in set(lineas) | set(movs):
+        u = max(lineas.get((art, color, alias), 0), movs.get((art, color, alias), 0))
+        bodegas = por_articulo.setdefault(art, {})
+        bodegas[alias] = bodegas.get(alias, 0) + u
+        por_color.setdefault((art, color), {})[alias] = u
+    return {'articulo': por_articulo, 'color': por_color}
 
 
 class PlanificadorCarga:
@@ -147,8 +154,7 @@ class PlanificadorCarga:
             articulo = normalizar_articulo(linea['articulo'])
             if pedidos is not None and articulo not in pedidos:
                 continue
-            plan = self.planificar_linea(n, linea, comunes, f['sucursal'],
-                                         ingresado.get(articulo, {}), f['margen'])
+            plan = self.planificar_linea(n, linea, comunes, f['sucursal'], ingresado, f['margen'])
             previa = vistos.get(articulo)
             if previa and plan['estado'] == 'NUEVO':
                 plan['avisos'].append(f'también viene en la factura {previa}: se crea con esa '
@@ -262,7 +268,10 @@ class PlanificadorCarga:
             err(f'las tallas suman {unidades} pero la factura dice {linea["cantidad"]}')
         if costo <= 0:
             err('costo en 0')
-        if linea.get('importe') is not None and costo * unidades != int(linea['importe']):
+        # Tolerancia de $1 por unidad: con descuento por línea el costo neto
+        # unitario viene redondeado (importe ÷ cantidad).
+        if (linea.get('importe') is not None
+                and abs(costo * unidades - int(linea['importe'])) > max(2, unidades)):
             avisar(f'costo × unidades = {fmt(costo * unidades)} ≠ importe {fmt(linea["importe"])}')
 
         # --- identidad pedida en el JSON
@@ -292,6 +301,17 @@ class PlanificadorCarga:
         fichas = [f for f in mismo_codigo
                   if marca is not None and clave_marca(getattr(f.atributo1, 'valor', '')) == clave]
         otra_marca = [f for f in mismo_codigo if f not in fichas]
+        # Marcas cuyo código NO lleva el color (perfil.identidad_color): con el
+        # color conocido solo cuentan las fichas de ese color; las de otros
+        # colores se informan y, si no hay ninguna del color, es variante
+        # NUEVA. Con el color por defecto (desconocido) se cae a la regla por
+        # código, que pide elegir ficha si hay varias.
+        otros_colores = []
+        color_conocido = (perfil.identidad_color and color is not None
+                          and str(color.valor).strip().upper() != str(perfil.color_defecto).upper())
+        if color_conocido and fichas:
+            otros_colores = [f for f in fichas if f.atributo2_id != color.id]
+            fichas = [f for f in fichas if f.atributo2_id == color.id]
         locales = [f for f in fichas if f.sucursal_id == sucursal.id]
         otras = [f for f in fichas if f.sucursal_id != sucursal.id]
         # Todas las fichas del código en la bodega (cualquier marca): son las
@@ -381,16 +401,23 @@ class PlanificadorCarga:
 
         ref = plan['referencia']
         re_genero = perfil.re_genero_explicito
+        if ref is None and otros_colores:
+            en_bodega = [f for f in otros_colores if f.sucursal_id == sucursal.id]
+            avisar(f'mismo código en otros colores ({", ".join(sorted({getattr(f.atributo2, "valor", "-") for f in otros_colores}))}'
+                   f'{" en " + sucursal.alias if en_bodega else " en otras bodegas"}): se crea la '
+                   f'variante {color.valor}; si en realidad es una de esas, elige la ficha')
         if ref is not None:
             # La ficha existente manda: no se crea un gemelo con otra identidad.
             marca, color, genero, categoria = ref.atributo1, ref.atributo2, ref.atributo3, ref.categoria
-            # Mismo código+marca en otras tiendas. [s] solo les cambia el
-            # precio a las de la MISMA identidad (así busca la vista).
+            # Mismo código+marca (y color, si es parte de la identidad) en
+            # otras tiendas. [s] solo les cambia el precio a las de la MISMA
+            # identidad (así busca la vista).
             plan['gemelas'] = [(f.sucursal.alias, int(f.costo or 0), int(f.precioventa or 0),
                                 identidad(f) == identidad(ref))
                                for f in mismo_codigo
                                if f.id != ref.id and f.sucursal_id != sucursal.id
-                               and f.atributo1_id == ref.atributo1_id]
+                               and f.atributo1_id == ref.atributo1_id
+                               and (not perfil.identidad_color or f.atributo2_id == ref.atributo2_id)]
         elif (not fichas and marca is not None and not linea.get('genero_fijo')
               and not (re_genero and re_genero.match(str(linea.get('descripcion') or '').upper()))):
             # Código nuevo sin género declarado en la factura: el género se
@@ -416,11 +443,19 @@ class PlanificadorCarga:
                 err(f'{nombre} {valor!r} no existe (o es ambigua) en el sistema')
         plan['marca'], plan['color'], plan['genero'], plan['categoria'] = marca, color, genero, categoria
 
-        # --- ¿ya entró contra este DTE? (por unidades, en cualquier bodega)
-        if ingresado:
-            total = sum(ingresado.values())
-            detalle = ', '.join(f'{a}: {u} u' for a, u in sorted(ingresado.items()))
-            fuera = [a for a in ingresado if a != sucursal.alias]
+        # --- ¿ya entró contra este DTE? (por unidades, en cualquier bodega).
+        # Si el color es parte de la identidad se mira solo ese color: dos
+        # colores del mismo código son dos líneas distintas de la factura.
+        color_ingreso = str(getattr(color, 'valor', '') or '').strip().upper()
+        if (perfil.identidad_color and color_ingreso
+                and color_ingreso != str(perfil.color_defecto).upper()):
+            ya = ingresado['color'].get((articulo, color_ingreso), {})
+        else:
+            ya = ingresado['articulo'].get(articulo, {})
+        if ya:
+            total = sum(ya.values())
+            detalle = ', '.join(f'{a}: {u} u' for a, u in sorted(ya.items()))
+            fuera = [a for a in ya if a != sucursal.alias]
             if forzar:
                 avisar(f'este DTE ya tiene ingreso de este código ({detalle}): se carga igual '
                        f'por --forzar')

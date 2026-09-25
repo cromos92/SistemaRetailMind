@@ -195,6 +195,8 @@
         fd.append('sucursal', document.getElementById('cfSucursal').value);
         fd.append('marca', document.getElementById('cfMarca').value.trim());
         fd.append('lecturas', document.getElementById('cfLecturas').value);
+        // Lo escrito en la caja del chat va como indicaciones para el lector.
+        fd.append('indicaciones', document.getElementById('cfTexto').value.trim());
         st.enviando = true;
         const $btn = document.getElementById('cfBtnEnviar');
         $btn.disabled = true;
@@ -207,6 +209,7 @@
             limpiarChat();
             document.getElementById('cfArchivo').value = '';
             document.getElementById('cfNombreArchivo').textContent = 'ningún archivo';
+            document.getElementById('cfTexto').value = '';
             cargarRecientes();
             await refrescar(true);
         } catch (e) {
@@ -215,6 +218,38 @@
         } finally {
             st.enviando = false;
             $btn.disabled = !(st.opciones && st.opciones.configurada);
+        }
+    }
+
+    /** Un mensaje al agente sobre la vista previa (marca, tallas, precios, dudas…). */
+    async function hablar() {
+        const $texto = document.getElementById('cfTexto');
+        const texto = $texto.value.trim();
+        if (!texto) return;
+        if (!st.sesion) {
+            avisar('Agente', 'Primero adjunta la factura y aprieta «Enviar PDF». Lo que escribas aquí ' +
+                'antes de enviarla me sirve como indicación para leerla (marca, tipo de talla…).', 'info');
+            return;
+        }
+        if (!st.resumen || st.resumen.estado !== 'LEIDA') {
+            avisar('Agente', 'Espera a que termine la lectura o la carga para conversar.', 'info');
+            return;
+        }
+        const id = st.sesion;
+        $texto.disabled = true;
+        setTyping('Pensando…');
+        try {
+            const data = await api(id + '/conversar/', { method: 'POST', json: { texto: texto } });
+            if (st.sesion !== id) return;
+            $texto.value = '';
+            await refrescar(false);   // pinta tu mensaje y la respuesta
+            (data.facturas || []).forEach(item => { st.previas[item.idx] = item; pintarPrevia(item); });
+        } catch (e) {
+            setTyping('');
+            avisar('Agente', e.message);
+        } finally {
+            $texto.disabled = false;
+            $texto.focus();
         }
     }
 
@@ -244,6 +279,11 @@
         const terminoAlgo = st.estadoPrevio && st.estadoPrevio !== estado && estado === 'LEIDA';
         if ((inicial || terminoAlgo) && (estado === 'LEIDA' || estado === 'CERRADA' || estado === 'CARGANDO')) {
             await planificar(null, null);
+        }
+        if (terminoAlgo && st.estadoPrevio === 'CARGANDO') {
+            // Los productos recién cargados aparecen en «Actividad reciente».
+            const $r = document.getElementById('btnRefrescarActividad');
+            if ($r) $r.click();
         }
         st.estadoPrevio = estado;
         if (estado === 'LEYENDO' || estado === 'CARGANDO') {
@@ -291,6 +331,7 @@
             card.querySelector('.cf-hora').remove();
         }
         card.querySelector('.cf-burbuja').innerHTML = htmlPrevia(item);
+        $chat().appendChild(card);   // la vista previa vigente siempre al final del chat
         bajar();
     }
 
@@ -322,6 +363,9 @@
             '<div>Bodega <strong>' + esc(suc) + '</strong></div>' +
             '<div>Marca <input class="form-control" data-campo="marca" value="' + esc(item.marca || '') + '" list="cfMarcas" style="width:120px"' + dis + '></div>' +
             '<div>Color por defecto <input class="form-control" data-campo="color" value="' + esc(item.color || '') + '" style="width:100px"' + dis + '></div>' +
+            '<div title="Tipo de talla y guías por género (se cambian por el chat)">Tallas <strong>' + esc(item.tipo_talla || 'CL') + '</strong>' +
+            (item.guias_talla && Object.keys(item.guias_talla).length ? ' · guías: ' + esc(Object.entries(item.guias_talla).map(([g, n]) => g + '→' + n).join(', ')) : ' · sin guías') + '</div>' +
+            (item.descuento_global ? '<div>Descuento global <strong>' + esc(item.descuento_global) + '</strong> (ya en los costos)</div>' : '') +
             '<div class="ms-auto">' + estadoBadge(item.estado) + '</div>' +
             '</div><div class="cf-card-body">';
 
@@ -406,6 +450,7 @@
             '<div class="cf-muted">importe</div><input class="form-control text-end" style="min-width:80px" data-campo="importe" title="Importe impreso en la factura" value="' + esc(j.importe == null ? '' : j.importe) + '"' + dis + '></td>';
         // Costo
         h += '<td><input class="form-control text-end" data-campo="costo" value="' + esc(j.costo == null ? '' : j.costo) + '"' + dis + '>' +
+            (p.precio_lista ? '<div class="cf-muted" title="Costo neto = importe ÷ unidades">lista $' + fmt(p.precio_lista) + ' − ' + esc(p.descuento) + '</div>' : '') +
             (p.vigentes ? '<div class="cf-muted">vigente $' + fmt(p.vigentes.costo) + '</div>' : '<div class="cf-muted">sobreprecio $' + fmt(p.sobreprecio) + '</div>') + '</td>';
         // Venta
         const sentido = p.vigentes ? (p.precioventa < p.vigentes.precioventa ? ' <b class="text-danger">BAJA</b>' : p.precioventa > p.vigentes.precioventa ? ' <span class="text-success">sube</span>' : ' igual') : '';
@@ -435,9 +480,12 @@
                 '</select>';
         }
         if (p.opciones && !p.omitida) {
+            const baja = p.vigentes && p.precioventa < p.vigentes.precioventa;
             h += '<div class="cf-muted">ya existe: ¿qué hago?</div>';
+            if (baja) h += '<div class="cf-nota error">la venta de la factura ($' + fmt(p.precioventa) + ') es MENOR que la vigente ($' + fmt(p.vigentes.precioventa) + '): se sugiere mantener la venta</div>';
             p.opciones.forEach((op, i) => {
-                h += '<label class="d-block small"><input type="radio" class="form-check-input me-1" name="cfOp-' + item.idx + '-' + n + '" value="' + op + '"' + (i === 0 ? ' checked' : '') + dis + '>' + esc(TEXTO_OPCION[op] || op) + '</label>';
+                const marcada = p.opcion_sugerida ? op === p.opcion_sugerida : i === 0;
+                h += '<label class="d-block small"><input type="radio" class="form-check-input me-1" name="cfOp-' + item.idx + '-' + n + '" value="' + op + '"' + (marcada ? ' checked' : '') + dis + '>' + esc(TEXTO_OPCION[op] || op) + '</label>';
             });
         } else if (p.vigentes && !p.omitida) {
             h += '<div class="cf-muted">mismos precios: solo suma stock</div>';
@@ -510,9 +558,10 @@
         const card = tarjeta(idx);
         const opciones = {};
         if (!card) return opciones;
+        // Por N° de línea (1-based): dos líneas pueden compartir código (dos colores).
         card.querySelectorAll('tr[data-n]').forEach(tr => {
             const r = tr.querySelector('input[type=radio]:checked');
-            if (r) opciones[tr.dataset.articulo] = r.value;
+            if (r) opciones[String(parseInt(tr.dataset.n, 10) + 1)] = r.value;
         });
         return opciones;
     }
@@ -531,7 +580,7 @@
         const opciones = leerOpciones(idx);
         const existentes = previa.planes.filter(p => p.opciones && !p.omitida);
         const detalle = existentes.length
-            ? '<br><br><small>Existentes: ' + existentes.map(p => esc(p.articulo) + ' → ' + esc(TEXTO_OPCION[opciones[p.articulo] || 's'])).join('; ') + '</small>'
+            ? '<br><br><small>Existentes: ' + existentes.map(p => 'línea ' + p.n + ' ' + esc(p.articulo) + ' → ' + esc(TEXTO_OPCION[opciones[String(p.n)] || p.opcion_sugerida || 's'])).join('; ') + '</small>'
             : '';
         const ok = await Swal.fire({
             title: 'Cargar la factura N° ' + esc(previa.folio) + '?',
@@ -576,6 +625,10 @@
             document.getElementById('cfNombreArchivo').textContent = this.files[0] ? this.files[0].name : 'ningún archivo';
         });
         document.getElementById('cfBtnEnviar').addEventListener('click', enviar);
+        document.getElementById('cfBtnHablar').addEventListener('click', hablar);
+        document.getElementById('cfTexto').addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); hablar(); }
+        });
         document.getElementById('cfBtnNueva').addEventListener('click', nuevaConversacion);
         document.getElementById('cfRecientes').addEventListener('change', function () {
             if (this.value) abrirSesion(parseInt(this.value, 10));

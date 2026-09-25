@@ -43,8 +43,8 @@ CATALOGO = {
             'puede_crear': 'Botón «Nueva Solicitud»: registrar la solicitud de devolución (queda pendiente, sin NC).',
             'puede_aprobar': 'Modal «Analizar solicitud»: ver detalle e impacto en caja, «Rechazar» y «Aprobar y generar NC».',
         },
-        'depende_de': ['emitir_nota_credito'],
-        'notas': '«Aprobar y generar NC» exige además Nota de Crédito (emitir_nota_credito): sin él el botón queda gris y solo se puede rechazar. '
+        'depende_de': [],
+        'notas': 'La NC de la garantía la autoriza «Aprobar» por sí solo (no exige el permiso de NC a clientes). '
                  'Solo administrador/administración ven solicitudes de otras sucursales.',
     },
 
@@ -154,7 +154,7 @@ CATALOGO = {
         'ruta': '',
         'resumen': 'Autoriza modificar boletas electrónicas desde Consulta Documentos y Cuadratura, junto con el permiso del campo que se edita.',
         'permisos': {
-            'puede_editar': 'Habilita «Editar» (fecha, N°, pagos, vendedor) en boletas electrónicas y, con Editar Boleta Papel, cambiar el tipo entre ambas.',
+            'puede_editar': 'Habilita «Editar» (fecha, N°, pagos, vendedor) en boletas electrónicas; cambiar a papel exige además Editar Boleta Papel y Editar N°.',
         },
         'depende_de': _CAMPOS_DTE + ['dte_editar_tipo_boleta_papel'],
         'notas': 'Sin este permiso ninguna boleta electrónica muestra «Editar», aunque el rol tenga los permisos por campo. Por defecto, solo el Maestro.',

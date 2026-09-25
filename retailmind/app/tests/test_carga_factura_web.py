@@ -99,13 +99,13 @@ class TestAgenteCargaFactura(TestCase):
         session['alias'] = 'EDEL'
         session.save()
 
-    def _subir(self, lectura=None):
+    def _subir(self, lectura=None, marca='NIKE'):
         with mock.patch('app.services.carga_factura.lectura.leer_pdf',
                         return_value=lectura or _lectura_simulada()):
             resp = self.client.post('/app/carga-factura/subir/', {
                 'archivo': SimpleUploadedFile('Factura 555.pdf', b'%PDF-1.4 prueba',
                                               content_type='application/pdf'),
-                'sucursal': self.sucursal.id, 'marca': 'NIKE', 'lecturas': 1,
+                'sucursal': self.sucursal.id, 'marca': marca, 'lecturas': 1,
             })
         data = resp.json()
         self.assertTrue(data['success'], data)
@@ -282,3 +282,152 @@ class TestAgenteCargaFactura(TestCase):
         self.assertEqual(data['categorias'], ['Calzado > Zapatillas'])
         self.assertEqual(data['guias']['NIKE'], ['NIKE HOMBRE'])
         self.assertEqual([s['alias'] for s in data['sucursales']], ['EDEL'])
+
+    # ------------------------------------------------ chat e indicaciones
+
+    def test_indicaciones_llegan_al_lector(self):
+        with mock.patch('app.services.carga_factura.lectura.leer_pdf',
+                        return_value=_lectura_simulada()) as leer:
+            resp = self.client.post('/app/carga-factura/subir/', {
+                'archivo': SimpleUploadedFile('f.pdf', b'%PDF', content_type='application/pdf'),
+                'sucursal': self.sucursal.id, 'indicaciones': 'la marca es NIKE, tallas US',
+            })
+        self.assertTrue(resp.json()['success'])
+        self.assertEqual(leer.call_args.kwargs['pistas'], 'la marca es NIKE, tallas US')
+        sesion = CargaFacturaPdf.objects.get(id=resp.json()['id'])
+        self.assertIn('indicaciones', [m['tipo'] for m in sesion.mensajes])
+
+    def test_chat_aplica_cambios_y_replanifica(self):
+        sesion_id = self._subir(_lectura_simulada(genero=None))
+        respuesta_claude = {
+            'respuesta': 'Listo, la dejé como hombre con margen 1,9.',
+            'cambios': [{
+                'idx': 0, 'factor_bajo': 1.9, 'factor_alto': 1.9, 'tipo_talla': 'US',
+                'guias_talla': [{'genero': 'HOMBRE', 'guia': 'NIKE HOMBRE'}],
+                'lineas': [{'n': 1, 'genero': 'HOMBRE',
+                            'tallas': [{'talla': '8', 'cantidad': 5}]}],
+            }],
+        }
+        with mock.patch('app.services.carga_factura.chat._preguntar',
+                        return_value=respuesta_claude) as preguntar:
+            resp = self.client.post(f'/app/carga-factura/{sesion_id}/conversar/',
+                                    data={'texto': 'es de hombre, talla 8 las 5, margen 1,9'},
+                                    content_type='application/json')
+        data = resp.json()
+        self.assertTrue(data['success'], data)
+        # Claude recibió la vista previa y las listas del sistema
+        catalogo, previa, _hist, texto = preguntar.call_args.args
+        self.assertIn('NIKE', catalogo['marcas'])
+        self.assertEqual(previa[0]['folio'], 555)
+        self.assertEqual(texto, 'es de hombre, talla 8 las 5, margen 1,9')
+        # Se aplicaron y la vista previa volvió recalculada
+        plan = data['facturas'][0]['planes'][0]
+        self.assertEqual(plan['genero']['valor'], 'HOMBRE')
+        self.assertEqual([t['ficha'] for t in plan['tallas']], ['8'])
+        self.assertEqual(plan['precioventa'],
+                         precio_por_regla(30000, 40000, Decimal('1.9'), Decimal('1.9')))
+        self.assertEqual(plan['errores'], [])
+        guardada = CargaFacturaPdf.objects.get(id=sesion_id)
+        self.assertEqual(guardada.facturas[0]['_factor_bajo'], '1.9')
+        self.assertEqual(guardada.facturas[0]['guias_talla'], {'HOMBRE': 'NIKE HOMBRE'})
+        self.assertEqual([m['tipo'] for m in guardada.mensajes[-2:]], ['chat', 'chat'])
+        self.assertIn('Apliqué', guardada.mensajes[-1]['texto'])
+
+    def test_chat_sin_cambios_solo_responde(self):
+        sesion_id = self._subir()
+        with mock.patch('app.services.carga_factura.chat._preguntar',
+                        return_value={'respuesta': 'La línea 1 está bien.', 'cambios': []}):
+            data = self.client.post(f'/app/carga-factura/{sesion_id}/conversar/',
+                                    data={'texto': '¿está bien?'},
+                                    content_type='application/json').json()
+        self.assertTrue(data['success'], data)
+        self.assertEqual(data['respuesta'], 'La línea 1 está bien.')
+        self.assertEqual(data['cambios'], [])
+
+    # ------------------------------------------- descuento, color, precios
+
+    def test_descuento_por_linea_deja_el_costo_neto(self):
+        # 24 × 15.990 − 10 % = 345.384: costo real 14.391, no el precio de lista.
+        lectura = _lectura_simulada(
+            tallas=[{'talla': '7', 'cantidad': 24}], cantidad=24, precio_unitario=15990,
+            descuento_pct=10, importe=345384)
+        lectura['lecturas'][0]['facturas'][0]['total_neto'] = 345384
+        sesion_id = self._subir(lectura)
+        linea = CargaFacturaPdf.objects.get(id=sesion_id).facturas[0]['lineas'][0]
+        self.assertEqual(linea['costo'], 14391)
+        self.assertEqual(linea['precio_lista'], 15990)
+        self.assertEqual(linea['descuento'], '10%')
+        plan = self._planificar(sesion_id)['facturas'][0]['planes'][0]
+        self.assertEqual(plan['costo'], 14391)
+        self.assertEqual(plan['precio_lista'], 15990)
+        self.assertFalse([a for a in plan['avisos'] if 'importe' in a], plan['avisos'])
+
+    def test_descuento_global_se_prorratea(self):
+        lectura = _lectura_simulada()
+        factura = lectura['lecturas'][0]['facturas'][0]
+        factura['descuento_global_pct'] = 20
+        factura['total_neto'] = 120000     # 150.000 − 20 %
+        sesion_id = self._subir(lectura)
+        data = CargaFacturaPdf.objects.get(id=sesion_id).facturas[0]
+        self.assertEqual(data['lineas'][0]['costo'], 24000)
+        self.assertEqual(data['lineas'][0]['importe'], 120000)
+        self.assertEqual(data['descuento_global'], '20%')
+        self.assertEqual(data['_revisar'], [])
+
+    def _fichas_chalada(self):
+        attr_marca = Productos_Atributos.objects.get(nombre='Marca')
+        attr_color = Productos_Atributos.objects.get(nombre='Color')
+        chalada = AtributoOpcion.objects.create(atributo=attr_marca, valor='CHALADA')
+        black = AtributoOpcion.objects.create(atributo=attr_color, valor='BLACK')
+        AtributoOpcion.objects.create(atributo=attr_color, valor='PLATA')
+        mujer = AtributoOpcion.objects.get(valor='MUJER')
+        ficha = Producto.objects.create(
+            articulo='12-REBI-1', descripcion='chala', sucursal=self.sucursal,
+            atributo1=chalada, atributo2=black, atributo3=mujer, categoria=self.cat,
+            costo=15990, sobreprecio=2000, precioventa=34990, tipo_talla='CL')
+        Producto_Talla.objects.create(producto=ficha, talla='36', sku=9000001, stock=1)
+        return ficha
+
+    def _lectura_chalada(self, color_2='PLATA'):
+        lectura = _lectura_simulada(
+            articulo='12-REBI-1', descripcion='NEGRO CHALADA', color='BLACK', marca='CHALADA',
+            genero='MUJER', tallas=[{'talla': '36', 'cantidad': 3}], cantidad=3,
+            precio_unitario=15990, importe=47970)
+        factura = lectura['lecturas'][0]['facturas'][0]
+        factura['marca'] = 'CHALADA'
+        segunda = dict(factura['lineas'][0], descripcion=f'{color_2} CHALADA', color=color_2)
+        factura['lineas'].append(segunda)
+        factura['total_unidades'], factura['total_neto'] = 6, 95940
+        return lectura
+
+    def test_color_es_parte_de_la_identidad_si_el_codigo_no_lo_lleva(self):
+        ficha = self._fichas_chalada()
+        sesion_id = self._subir(self._lectura_chalada(), marca='CHALADA')
+        item = self._planificar(sesion_id)['facturas'][0]
+        negro, plata = item['planes']
+        self.assertEqual(negro['estado'], 'EXISTE')
+        self.assertEqual(negro['destino']['id'], ficha.id)
+        self.assertEqual(plata['estado'], 'NUEVO')          # otra variante, no la misma ficha
+        self.assertEqual(plata['color']['valor'], 'PLATA')
+        self.assertTrue(any('otros colores' in a for a in plata['avisos']), plata['avisos'])
+        self.assertEqual(plata['errores'], [])
+
+    def test_venta_menor_sugiere_mantener_la_venta(self):
+        self._fichas_chalada()
+        sesion_id = self._subir(self._lectura_chalada(), marca='CHALADA')
+        negro = self._planificar(sesion_id)['facturas'][0]['planes'][0]
+        self.assertLess(negro['precioventa'], negro['vigentes']['precioventa'])
+        # Mismo costo que la ficha → no hay [c]; conservar la venta es [t] (solo stock).
+        self.assertEqual(negro['opcion_sugerida'], 't')
+        # Al cargar sin elegir, se respeta la sugerencia: la venta no baja.
+        resp = self.client.post(f'/app/carga-factura/{sesion_id}/cargar/',
+                                data={'idx': 0, 'opciones': {}}, content_type='application/json')
+        self.assertTrue(resp.json()['success'], resp.json())
+        ficha = Producto.objects.get(articulo='12-REBI-1', atributo2__valor='BLACK')
+        self.assertEqual(int(ficha.precioventa), 34990)
+        self.assertEqual(Producto_Talla.objects.get(producto=ficha, talla='36').stock, 4)
+        # La variante PLATA se creó aparte, con sus 3 unidades
+        plata = Producto.objects.get(articulo='12-REBI-1', atributo2__valor='PLATA')
+        self.assertEqual(Producto_Talla.objects.get(producto=plata, talla='36').stock, 3)
+        resultado = CargaFacturaPdf.objects.get(id=sesion_id).facturas[0]['_resultado']
+        self.assertEqual([l['opcion'] for l in resultado['lineas'] if l.get('opcion')], ['t', 's'])

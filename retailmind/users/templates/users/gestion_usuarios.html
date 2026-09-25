@@ -363,6 +363,11 @@
         display: inline-block;
     }
     
+    .rol-jefe {
+        background: linear-gradient(135deg, var(--nexo-primary) 0%, var(--nexo-primary-dark) 100%);
+        color: var(--nexo-white);
+    }
+
     .rol-maestro {
         background: linear-gradient(135deg, var(--nexo-secondary) 0%, #2D2D44 100%);
         color: var(--nexo-warning);
@@ -1102,6 +1107,7 @@
                             <option value="cajero">Cajero</option>
                             <option value="jefe_local">Jefe Local</option>
                             <option value="administracion">Administración</option>
+                            <option value="jefe">Jefe</option>
                             <option value="administrador">Administrador</option>
                             {# Solo un Maestro asigna el rol Maestro (el servidor también lo exige) #}
                             <option value="maestro" {% if user.rol != 'maestro' %}disabled{% endif %}>Maestro (acceso total)</option>
@@ -1267,6 +1273,7 @@
                             <option value="cajero">Cajero</option>
                             <option value="jefe_local">Jefe Local</option>
                             <option value="administracion">Administración</option>
+                            <option value="jefe">Jefe</option>
                             <option value="administrador">Administrador</option>
                             {# Solo un Maestro asigna el rol Maestro (el servidor también lo exige) #}
                             <option value="maestro" {% if user.rol != 'maestro' %}disabled{% endif %}>Maestro (acceso total)</option>
@@ -2809,6 +2816,7 @@ function cambiarRolRapido(usuarioId, nombreCompleto, rolActual) {
         'cajero': 'Cajero',
         'jefe_local': 'Jefe Local',
         'administracion': 'Administración',
+        'jefe': 'Jefe',
         'administrador': 'Administrador',
         'maestro': 'Maestro'
     };

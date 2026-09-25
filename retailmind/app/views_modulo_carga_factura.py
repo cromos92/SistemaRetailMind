@@ -20,6 +20,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_POST
 
 from .models import CargaFacturaPdf, Sucursal
+from .services.carga_factura import chat as svc_chat
 from .services.carga_factura import web as svc_web
 from .services.carga_factura.facturas import ErrorCarga
 from .utils_permisos import obtener_sucursales_usuario
@@ -113,6 +114,7 @@ def api_carga_factura_subir(request):
     except ValueError:
         lecturas = 2
     marca = (request.POST.get('marca') or '').strip().upper()[:100]
+    indicaciones = (request.POST.get('indicaciones') or '').strip()[:2000]
 
     sesion = CargaFacturaPdf.objects.create(
         creado_por=request.user, sucursal=sucursal, marca=marca, archivo=archivo,
@@ -123,6 +125,9 @@ def api_carga_factura_subir(request):
         svc_web.USUARIO,
         f'Factura «{sesion.nombre_archivo}» para la bodega {sucursal.alias}'
         + (f', marca {marca}' if marca else '') + '.', tipo='subida')
+    if indicaciones:
+        # Van al lector como pistas (ver web.leer_en_segundo_plano).
+        sesion.agregar_mensaje(svc_web.USUARIO, indicaciones, tipo='indicaciones')
     sesion.agregar_mensaje(
         svc_web.AGENTE,
         f'Recibí el PDF. Lo estoy leyendo con {lecturas} lectura(s) '
@@ -205,9 +210,12 @@ def api_carga_factura_cargar(request, sesion_id):
     resumen = (f'Cargar la factura N° {data.get("folio")} en {sesion.sucursal.alias}: '
                f'{previa["totales"]["a_cargar"]} línea(s)')
     if existentes:
-        textos = {'s': 'stock + costo + venta', 'c': 'stock + costo', 't': 'solo stock', 'n': 'saltar'}
+        textos = {'s': 'stock + costo + venta', 'c': 'stock + costo (venta sigue)',
+                  't': 'solo stock', 'n': 'saltar'}
+        # Opciones por N° de línea (dos líneas pueden compartir código: dos colores).
         resumen += ' · existentes: ' + ', '.join(
-            f'{p["articulo"]} → {textos.get(str(opciones.get(p["articulo"], "s")).lower(), "stock + costo + venta")}'
+            f'línea {p["n"]} {p["articulo"]} → '
+            f'{textos.get(str(opciones.get(str(p["n"]), p["opcion_sugerida"])).lower(), textos["s"])}'
             for p in existentes)
     sesion.estado = 'CARGANDO'
     sesion.progreso = 'Iniciando la carga…'
@@ -215,6 +223,27 @@ def api_carga_factura_cargar(request, sesion_id):
     sesion.agregar_mensaje(svc_web.USUARIO, resumen + '.', tipo='carga', factura=idx)
     svc_web.iniciar_carga(sesion.id, idx, opciones, request.user.id)
     return JsonResponse({'success': True, 'sesion': _resumen(sesion)})
+
+
+@require_POST
+@login_required
+def api_carga_factura_conversar(request, sesion_id):
+    """Un mensaje al agente sobre la vista previa: Claude lo traduce a
+    correcciones (mismos campos que la tarjeta) y responde."""
+    sesion = _sesion_del_usuario(request, sesion_id)
+    if sesion is None:
+        return _error('No existe esa sesión o no es de tus bodegas.', status=404)
+    try:
+        cuerpo = _cuerpo(request)
+        texto = cuerpo.get('texto') if isinstance(cuerpo, dict) else None
+        salida = svc_chat.conversar(sesion, request.user, texto)
+    except ErrorCarga as exc:
+        return _error(str(exc))
+    except Exception as exc:
+        logger.exception('carga_factura: error en el chat de la sesión %s', sesion_id)
+        return _error(f'No pude procesar el mensaje: {type(exc).__name__}: {exc}', status=500)
+    sesion.refresh_from_db()
+    return JsonResponse({'success': True, 'sesion': _resumen(sesion), **salida})
 
 
 @require_POST

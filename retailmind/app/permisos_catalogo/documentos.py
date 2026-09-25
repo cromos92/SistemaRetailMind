@@ -225,4 +225,16 @@ CATALOGO = {
             'Sin permiso el selector queda bloqueado con un candado.'
         ),
     },
+
+    'devolver_mercadopago': {
+        'pantalla': 'Devolver a la tarjeta por Mercado Pago',
+        'ruta': '',
+        'resumen': 'Acción dentro de la NC de Gestión DTE: devolver la plata a la tarjeta del cliente por la API de Mercado Pago.',
+        'permisos': {
+            'puede_crear': 'Elegir «Devolución a la tarjeta (Mercado Pago)» al emitir la NC: mueve plata real de la cuenta MP.',
+        },
+        'depende_de': ['emitir_nota_credito', 'gestion_dte'],
+        'notas': 'Sin este permiso la NC igual se puede emitir con devolución en efectivo, transferencia o sin afectar caja. '
+                 'Antes lo decidía el rol (administrador/administración).',
+    },
 }

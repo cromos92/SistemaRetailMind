@@ -592,7 +592,7 @@
                         data-rol="{{ r.codigo }}" data-nombre="{{ r.nombre }}">
                     {% if not r.editable %}<i class="ri-lock-2-line rol-candado" title="{{ r.motivo_bloqueo }}"></i>{% endif %}
                     <div class="rol-card-top">
-                        <div class="rol-icono"><i class="{% if r.codigo == 'maestro' %}ri-vip-crown-2-line{% elif r.codigo == 'administrador' %}ri-shield-star-line{% elif r.codigo == 'administracion' %}ri-briefcase-4-line{% elif r.codigo == 'jefe_local' %}ri-store-2-line{% elif r.codigo == 'cajero' %}ri-bank-card-line{% else %}ri-user-smile-line{% endif %}"></i></div>
+                        <div class="rol-icono"><i class="{% if r.codigo == 'maestro' %}ri-vip-crown-2-line{% elif r.codigo == 'administrador' %}ri-shield-star-line{% elif r.codigo == 'jefe' %}ri-shield-user-line{% elif r.codigo == 'administracion' %}ri-briefcase-4-line{% elif r.codigo == 'jefe_local' %}ri-store-2-line{% elif r.codigo == 'cajero' %}ri-bank-card-line{% else %}ri-user-smile-line{% endif %}"></i></div>
                         <div>
                             <div class="rol-nombre">{{ r.nombre }}</div>
                             <div class="rol-usuarios">{{ r.usuarios }} usuario{{ r.usuarios|pluralize }}</div>

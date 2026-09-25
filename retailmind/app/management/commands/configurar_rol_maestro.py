@@ -1,6 +1,10 @@
 """
 Configura el rol Maestro y los bloqueos del rol Administrador.
 
+SUPERSEDIDO (25-sep-2026) por `configurar_perfiles`, que aplica la política
+completa (Administrador conserva Conciliación MP; Jefe, Administración, etc.).
+Se conserva por si hace falta el bloqueo antiguo de dineros_mercadopago.
+
   1. Asigna el rol 'maestro' (acceso total, no configurable) a las cuentas
      indicadas con --maestro.
   2. Bloquea al rol Administrador:
@@ -48,7 +52,7 @@ BLOQUEOS_ADMIN = [
 
 
 class Command(BaseCommand):
-    help = ('Asigna el rol Maestro y bloquea al Administrador la Conciliación '
+    help = ('[Supersedido por configurar_perfiles] Asigna el rol Maestro y bloquea al Administrador la Conciliación '
             'Mercado Pago y la emisión de Notas de Crédito (vista previa por defecto).')
 
     def add_arguments(self, parser):

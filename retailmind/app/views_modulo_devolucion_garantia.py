@@ -131,11 +131,11 @@ def modulo_devolucion_garantia(request):
         'sucursal_actual': sucursal,
         'estado_choices': DevolucionGarantia._meta.get_field('estado').choices,
         'puede_aprobar': _puede_aprobar(request),
-        # Aprobar emite la NC: además de puede_aprobar exige el permiso fino
-        # de NC a clientes (api_aprobar_devolucion_garantia lo vuelve a validar).
-        'puede_emitir_nc': puede_emitir_nota_credito(
-            request.user, request.session.get('idSucursalActual'),
-        ),
+        # Aprobar emite la NC de la garantía. Es el propio permiso de aprobar el
+        # que autoriza esa NC: no se exige además `emitir_nota_credito` (así el
+        # Administrador aprueba garantías aunque tenga bloqueada la NC de
+        # Gestión DTE). Se conserva el nombre del flag para el template.
+        'puede_emitir_nc': _puede_aprobar(request),
         # Solo el administrador ve el selector de sucursal (y puede pedir
         # "todas"): el resto queda encerrado en su sucursal activa.
         'es_admin': es_admin,
@@ -620,12 +620,8 @@ def api_aprobar_devolucion_garantia(request, devolucion_id):
     """Aprueba una solicitud: genera la NC 61 + TXT con el impacto en caja elegido."""
     _cargar_devolucion(request, devolucion_id)
 
-    # Aprobar emite la NC: además de puede_aprobar, el permiso fino de NC a
-    # clientes. Se valida antes de tocar la solicitud o consumir folio.
-    if not puede_emitir_nota_credito(request.user, request.session.get('idSucursalActual')):
-        msg = 'No tienes permiso para emitir Notas de Crédito. Pídeselo al Maestro.'
-        return JsonResponse({'success': False, 'error': msg, 'mensaje': msg}, status=403)
-
+    # La NC de la garantía la autoriza `devolucion_garantia.puede_aprobar`
+    # (decorador de arriba); no se exige además `emitir_nota_credito`.
     try:
         body = json.loads(request.body or '{}')
     except (ValueError, json.JSONDecodeError):

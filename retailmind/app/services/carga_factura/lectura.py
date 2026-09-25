@@ -30,11 +30,12 @@ import logging
 import os
 import re
 import zlib
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
 
 from app.models import AtributoOpcion, Categoria
+from app.utils_anthropic import explicar_error_anthropic, opciones_cliente_anthropic
 
 from .facturas import ErrorCarga
 from .perfiles import perfil_para
@@ -134,19 +135,31 @@ def _cliente():
     except ImportError:
         raise ErrorLectura('Falta el paquete "anthropic" en este entorno (pip install anthropic).')
     clave = getattr(settings, 'ANTHROPIC_API_KEY', '') or None
-    return anthropic.Anthropic(api_key=clave) if clave else anthropic.Anthropic()
+    # Cabecera del workspace si la clave es de organización (ver utils_anthropic).
+    extra = opciones_cliente_anthropic()
+    return anthropic.Anthropic(api_key=clave, **extra) if clave else anthropic.Anthropic(**extra)
 
 
 def _pedir(cliente, **kwargs):
     """Una respuesta de Claude (streaming, con respaldo de modelo si la rechaza)."""
-    with cliente.beta.messages.stream(
-        model=MODELO,
-        betas=[_BETA_FALLBACK],
-        extra_body={'fallbacks': 'default'},
-        cache_control={'type': 'ephemeral'},
-        **kwargs,
-    ) as stream:
-        respuesta = stream.get_final_message()
+    import anthropic
+
+    try:
+        with cliente.beta.messages.stream(
+            model=MODELO,
+            betas=[_BETA_FALLBACK],
+            extra_body={'fallbacks': 'default'},
+            cache_control={'type': 'ephemeral'},
+            **kwargs,
+        ) as stream:
+            respuesta = stream.get_final_message()
+    except anthropic.APIStatusError as exc:
+        # Errores de configuración (clave, workspace, permisos) con un mensaje
+        # que diga qué arreglar; el resto sube tal cual.
+        explicacion = explicar_error_anthropic(exc)
+        if explicacion:
+            raise ErrorLectura(explicacion) from exc
+        raise
     if respuesta.stop_reason == 'refusal':
         detalle = getattr(respuesta, 'stop_details', None)
         raise ErrorLectura(f'Claude no quiso leer el documento ({getattr(detalle, "category", "")}).')
@@ -185,36 +198,48 @@ def _enderezar(cliente, img):
 
 
 def _listas_del_sistema():
-    """Categorías v1.2 ('Padre > Hija') y especialidades (slug) existentes."""
+    """Categorías v1.2 ('Padre > Hija'), especialidades (slug) y colores existentes."""
     categorias = sorted(
         f'{c.padre.nombre} > {c.nombre}'
         for c in Categoria.objects.filter(padre__nombre__in=('Calzado', 'Ropa', 'Accesorios'))
         .select_related('padre'))
     especialidades = sorted(set(AtributoOpcion.objects.filter(
         atributo__nombre__iexact='Especialidad').values_list('valor', flat=True)))
-    return categorias, especialidades
+    colores = sorted({str(v).strip().upper() for v in AtributoOpcion.objects.filter(
+        atributo__nombre__iexact='Color').values_list('valor', flat=True) if str(v).strip()})
+    return categorias, especialidades, colores
+
+
+def _redondear(valor):
+    """Entero en pesos, mitad hacia arriba (round() de Python va al par)."""
+    return int(Decimal(str(valor)).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
 
 
 def _nulo(tipo):
     return {'anyOf': [{'type': tipo}, {'type': 'null'}]}
 
 
-def _esquema(categorias, especialidades):
+def _esquema(categorias, especialidades, colores=()):
     categoria = ({'anyOf': [{'type': 'string', 'enum': categorias}, {'type': 'null'}]}
                  if categorias else _nulo('string'))
     especialidad = ({'type': 'string', 'enum': especialidades} if especialidades
                     else {'type': 'string'})
+    color = ({'anyOf': [{'type': 'string', 'enum': list(colores)}, {'type': 'null'}]}
+             if colores else _nulo('string'))
     linea = {
         'type': 'object',
         'properties': {
             'articulo': {'type': 'string'},
             'descripcion': {'type': 'string'},
+            'color': color,
             'tallas': {'type': 'array', 'items': {
                 'type': 'object',
                 'properties': {'talla': {'type': 'string'}, 'cantidad': {'type': 'integer'}},
                 'required': ['talla', 'cantidad'], 'additionalProperties': False}},
             'cantidad': _nulo('integer'),
             'precio_unitario': _nulo('integer'),
+            'descuento_pct': _nulo('number'),
+            'descuento_monto': _nulo('integer'),
             'importe': _nulo('integer'),
             'precio_venta_a_mano': _nulo('integer'),
             'precio_venta_a_mano_alternativa': _nulo('integer'),
@@ -229,7 +254,8 @@ def _esquema(categorias, especialidades):
             'confianza': {'type': 'string', 'enum': ['alta', 'media', 'baja']},
             'dudas': {'type': 'string'},
         },
-        'required': ['articulo', 'descripcion', 'tallas', 'cantidad', 'precio_unitario', 'importe',
+        'required': ['articulo', 'descripcion', 'color', 'tallas', 'cantidad', 'precio_unitario',
+                     'descuento_pct', 'descuento_monto', 'importe',
                      'precio_venta_a_mano', 'precio_venta_a_mano_alternativa', 'reparto_a_mano',
                      'marca', 'genero', 'categoria', 'especialidades', 'confianza', 'dudas'],
         'additionalProperties': False,
@@ -244,14 +270,16 @@ def _esquema(categorias, especialidades):
             'fecha_emision': {'type': 'string', 'format': 'date'},
             'marca': _nulo('string'),
             'total_unidades': _nulo('integer'),
+            'descuento_global_pct': _nulo('number'),
+            'descuento_global_monto': _nulo('integer'),
             'total_neto': _nulo('integer'),
             'paginas': {'type': 'array', 'items': {'type': 'integer'}},
             'lineas': {'type': 'array', 'items': linea},
             'observaciones': {'type': 'string'},
         },
         'required': ['tipo_documento', 'folio', 'proveedor_nombre', 'proveedor_rut',
-                     'fecha_emision', 'marca', 'total_unidades', 'total_neto', 'paginas',
-                     'lineas', 'observaciones'],
+                     'fecha_emision', 'marca', 'total_unidades', 'descuento_global_pct',
+                     'descuento_global_monto', 'total_neto', 'paginas', 'lineas', 'observaciones'],
         'additionalProperties': False,
     }
     return {'type': 'object',
@@ -282,11 +310,13 @@ _HERRAMIENTA_ZOOM = {
 }
 
 
-def _instrucciones(perfil, marca_hint, categorias, especialidades):
+def _instrucciones(perfil, marca_hint, categorias, especialidades, pistas='', colores=()):
     from app.management.commands._data_recategorizacion_v12 import ESPECIALIDADES
 
     leyenda = '; '.join(f'{slug} = {ESPECIALIDADES[slug][1]}' for slug in especialidades
                         if slug in ESPECIALIDADES)
+    indicaciones = (f'Indicaciones de la persona que sube la factura (mandan sobre lo demás): '
+                    f'{pistas.strip()}' if pistas and pistas.strip() else '')
     return f"""Transcribe esta(s) factura(s) de compra de un proveedor de calzado y ropa deportiva
 para cargar la mercadería en el sistema de una cadena de tiendas en Chile.
 
@@ -301,7 +331,15 @@ Cada línea de producto:
 - descripcion: la descripción impresa.
 - tallas: TODAS las celdas talla/cantidad de la línea, en el orden de la grilla. La talla
   va como está impresa (usa punto decimal: 8.5) y la cantidad como entero.
+- color: el color de la línea si la descripción o una columna lo dice (NEGRO, PLATA, "V BLACK"
+  es BLACK…), elegido de la lista de colores del sistema; null si no se sabe. En marcas
+  donde el color va dentro del código (Nike: HQ6034-001) la descripción no lo dice: null.
 - cantidad, precio_unitario (neto, entero en pesos), importe: los de las columnas impresas.
+- descuento_pct / descuento_monto: si la línea tiene columna de descuento (en % o en pesos).
+  En ese caso precio_unitario es el precio de LISTA (antes del descuento) e importe es el
+  neto de la línea DESPUÉS del descuento, tal como está impreso. Si el descuento es uno
+  solo aplicado al total de la factura (no por línea), ponlo en descuento_global_pct o
+  descuento_global_monto de la factura y deja los importes de línea como están impresos.
 - precio_venta_a_mano: si alguien escribió a mano un precio de venta junto a esa línea;
   si un dígito admite dos lecturas, pon la más probable y la otra en
   precio_venta_a_mano_alternativa (si no, null).
@@ -317,17 +355,21 @@ Cómo leer bien:
 - Amplía con la herramienta "ampliar" todo lo que no se lea con total seguridad: la
   grilla de tallas, precios, totales y todo lo escrito a mano. No adivines dígitos.
 - Antes de entregar, comprueba cada línea: la suma de cantidades por talla = cantidad, y
-  cantidad × precio_unitario = importe; y que la suma de importes = total neto. Si algo no
-  cuadra, vuelve a mirar con zoom antes de responder. Si aun así no cuadra, transcribe lo
-  que ves y explícalo en "dudas"; nunca ajustes un número para que cuadre.
+  cantidad × precio_unitario (menos el descuento de la línea, si lo hay) = importe, con
+  diferencia de pocos pesos por redondeo; y que la suma de importes (menos el descuento
+  global, si lo hay) = total neto. Si algo no cuadra, vuelve a mirar con zoom antes de
+  responder: casi siempre es una columna de descuento que no habías visto. Si aun así no
+  cuadra, transcribe lo que ves y explícalo en "dudas"; nunca ajustes un número para que cuadre.
 
 Listas permitidas:
 - genero: {', '.join(GENEROS)}
 - categoria: {'; '.join(categorias) if categorias else '(sin lista: usa null)'}
 - especialidades: {leyenda or ', '.join(especialidades) or '(sin lista: deja vacío)'}
+- color: {', '.join(colores) if colores else '(sin lista: usa null)'}
 
 {('Marca esperada: ' + marca_hint + '.') if marca_hint else ''}
 {perfil.pistas_lectura}
+{indicaciones}
 """.strip()
 
 
@@ -394,15 +436,17 @@ def _una_lectura(cliente, contenido, paginas, instrucciones, esquema, orden, tot
     raise ErrorLectura(f'La lectura no terminó después de {_MAX_TURNOS} vueltas.')
 
 
-def leer_pdf(pdf_bytes, marca=None, lecturas=2, progreso=None):
+def leer_pdf(pdf_bytes, marca=None, lecturas=2, progreso=None, pistas=''):
     """Lee el PDF. Devuelve {'lecturas': [dict, ...], 'modo': 'escaneo'|'pdf'}.
 
-    `progreso(texto)` (opcional) recibe cada paso, para mostrarlo mientras se espera."""
+    `progreso(texto)` (opcional) recibe cada paso, para mostrarlo mientras se
+    espera. `pistas`: indicaciones libres de la persona (marca, tipo de talla,
+    cómo leer algo) que se suman a las del perfil."""
     cliente = _cliente()
     perfil = perfil_para(marca)
-    categorias, especialidades = _listas_del_sistema()
-    esquema = _esquema(categorias, especialidades)
-    instrucciones = _instrucciones(perfil, marca, categorias, especialidades)
+    categorias, especialidades, colores = _listas_del_sistema()
+    esquema = _esquema(categorias, especialidades, colores)
+    instrucciones = _instrucciones(perfil, marca, categorias, especialidades, pistas, colores)
     avisar = progreso or (lambda texto: None)
 
     avisar('Revisando el PDF…')
@@ -443,11 +487,31 @@ def _tallas_dict(linea):
     return tallas
 
 
+def _importe_esperado(linea):
+    """cantidad × precio de lista, menos el descuento de la línea (None si falta un dato)."""
+    cant, precio = linea.get('cantidad'), linea.get('precio_unitario')
+    if cant is None or precio is None:
+        return None
+    bruto = Decimal(cant) * Decimal(precio)
+    if linea.get('descuento_pct'):
+        return bruto * (1 - Decimal(str(linea['descuento_pct'])) / 100)
+    if linea.get('descuento_monto'):
+        return bruto - Decimal(linea['descuento_monto'])
+    return bruto
+
+
+def _tolerancia(unidades):
+    """Pesos de diferencia que se aceptan por redondeo: $1 por unidad, mínimo $2."""
+    return max(2, int(unidades or 0))
+
+
 def _cuadra(linea):
     tallas = sum(_tallas_dict(linea).values())
-    cant, precio, importe = linea.get('cantidad'), linea.get('precio_unitario'), linea.get('importe')
+    cant, importe = linea.get('cantidad'), linea.get('importe')
+    esperado = _importe_esperado(linea)
     return ((cant is None or tallas == cant)
-            and (None in (cant, precio, importe) or cant * precio == importe))
+            and (esperado is None or importe is None
+                 or abs(esperado - Decimal(importe)) <= _tolerancia(cant)))
 
 
 def _clave_linea(linea):
@@ -480,7 +544,8 @@ def combinar_lecturas(lecturas):
                     linea.setdefault('_revisar', []).append('la otra lectura no vio esta línea')
                     continue
                 diferencias = []
-                for campo in ('cantidad', 'precio_unitario', 'importe', 'precio_venta_a_mano'):
+                for campo in ('cantidad', 'precio_unitario', 'descuento_pct', 'importe',
+                              'precio_venta_a_mano', 'color'):
                     if linea.get(campo) != par.get(campo):
                         diferencias.append(f'{campo}: {linea.get(campo)} / {par.get(campo)}')
                 if _tallas_dict(linea) != _tallas_dict(par):
@@ -488,6 +553,7 @@ def combinar_lecturas(lecturas):
                 if diferencias:
                     if not _cuadra(linea) and _cuadra(par):
                         linea.update({k: par[k] for k in ('tallas', 'cantidad', 'precio_unitario',
+                                                          'descuento_pct', 'descuento_monto',
                                                           'importe')})
                     if (linea.get('precio_venta_a_mano') != par.get('precio_venta_a_mano')
                             and par.get('precio_venta_a_mano')
@@ -505,22 +571,30 @@ def combinar_lecturas(lecturas):
 def revisar_cuadre(factura):
     """Problemas de cuadre de una factura leída (lista de textos)."""
     problemas = []
-    unidades = neto = 0
+    unidades, neto = 0, Decimal(0)
     for l in factura.get('lineas', []):
         suma = sum(_tallas_dict(l).values())
         unidades += suma
         if l.get('cantidad') is not None and suma != l['cantidad']:
             problemas.append(f'{l["articulo"]}: tallas suman {suma}, la línea dice {l["cantidad"]}')
-        if None not in (l.get('cantidad'), l.get('precio_unitario'), l.get('importe')):
-            if l['cantidad'] * l['precio_unitario'] != l['importe']:
-                problemas.append(f'{l["articulo"]}: {l["cantidad"]} × {l["precio_unitario"]} '
+        esperado = _importe_esperado(l)
+        if esperado is not None and l.get('importe') is not None:
+            if abs(esperado - Decimal(l['importe'])) > _tolerancia(l.get('cantidad')):
+                desc = (f' − {l["descuento_pct"]:g}%' if l.get('descuento_pct') else
+                        f' − ${l["descuento_monto"]}' if l.get('descuento_monto') else '')
+                problemas.append(f'{l["articulo"]}: {l["cantidad"]} × {l["precio_unitario"]}{desc} '
                                  f'≠ importe {l["importe"]}')
         if l.get('importe') is not None:
-            neto += l['importe']
+            neto += Decimal(l['importe'])
+    if factura.get('descuento_global_pct'):
+        neto *= 1 - Decimal(str(factura['descuento_global_pct'])) / 100
+    elif factura.get('descuento_global_monto'):
+        neto -= Decimal(factura['descuento_global_monto'])
     if factura.get('total_unidades') is not None and unidades != factura['total_unidades']:
         problemas.append(f'unidades: líneas suman {unidades}, la factura dice {factura["total_unidades"]}')
-    if factura.get('total_neto') is not None and neto != factura['total_neto']:
-        problemas.append(f'neto: líneas suman {neto}, la factura dice {factura["total_neto"]}')
+    if (factura.get('total_neto') is not None
+            and abs(neto - Decimal(factura['total_neto'])) > _tolerancia(len(factura.get('lineas', [])))):
+        problemas.append(f'neto: líneas suman {_redondear(neto)}, la factura dice {factura["total_neto"]}')
     return problemas
 
 
@@ -528,20 +602,49 @@ def a_json_de_carga(factura, sucursal, marca=None, fuente=''):
     """Factura leída → JSON de carga (el formato de compras/facturas/*.json)."""
     marca_final = (marca or factura.get('marca') or '').strip().upper()
     perfil = perfil_para(marca_final)
+    # Descuento aplicado al total de la factura: se reparte a prorrata en el
+    # costo de cada línea (el sistema registra el costo neto real).
+    bruto_total = sum(Decimal(l['importe']) for l in factura.get('lineas', []) if l.get('importe'))
+    g_pct, g_monto = factura.get('descuento_global_pct') or 0, factura.get('descuento_global_monto') or 0
+    if g_pct:
+        factor_global = 1 - Decimal(str(g_pct)) / 100
+    elif g_monto and bruto_total:
+        factor_global = (bruto_total - Decimal(g_monto)) / bruto_total
+    else:
+        factor_global = Decimal(1)
     lineas = []
     for l in factura.get('lineas', []):
+        tallas = _tallas_dict(l)
+        cantidad = l.get('cantidad') or sum(tallas.values())
+        lista, importe = l.get('precio_unitario'), l.get('importe')
+        pct, monto = l.get('descuento_pct') or 0, l.get('descuento_monto') or 0
+        if (pct or monto) and importe and cantidad:
+            # Descuento por línea: el importe impreso ya es neto.
+            costo, importe_neto = _redondear(Decimal(importe) / cantidad), importe
+            descuento = f'{pct:g}%' if pct else f'${monto}'
+        elif factor_global != 1 and lista is not None:
+            costo = _redondear(Decimal(lista) * factor_global)
+            importe_neto = _redondear(Decimal(importe) * factor_global) if importe is not None else None
+            descuento = f'{g_pct:g}% global' if g_pct else f'${g_monto} global'
+        else:
+            costo, importe_neto, descuento = lista, importe, ''
         linea = {
             'articulo': l['articulo'].strip().upper(),
             'descripcion': l['descripcion'].strip(),
             'genero': l.get('genero') or 'UNISEX',
             'categoria': l.get('categoria'),
             'especialidades': l.get('especialidades') or [],
-            'costo': l.get('precio_unitario'),
+            'costo': costo,
             'cantidad': l.get('cantidad'),
-            'importe': l.get('importe'),
+            'importe': importe_neto,
             'precioventa': l.get('precio_venta_a_mano'),
-            'tallas': _tallas_dict(l),
+            'tallas': tallas,
         }
+        if descuento and lista is not None:
+            linea['precio_lista'] = lista
+            linea['descuento'] = descuento
+        if l.get('color'):
+            linea['color'] = str(l['color']).strip().upper()
         if l.get('marca') and l['marca'].strip().upper() != marca_final:
             linea['marca'] = l['marca'].strip().upper()
         if l.get('precio_venta_a_mano') and l.get('precio_venta_a_mano_alternativa'):
@@ -567,5 +670,6 @@ def a_json_de_carga(factura, sucursal, marca=None, fuente=''):
         'color': perfil.color_defecto,
         'total_unidades': factura.get('total_unidades'),
         'total_neto': factura.get('total_neto'),
+        **({'descuento_global': f'{g_pct:g}%' if g_pct else f'${g_monto}'} if (g_pct or g_monto) else {}),
         'lineas': lineas,
     }

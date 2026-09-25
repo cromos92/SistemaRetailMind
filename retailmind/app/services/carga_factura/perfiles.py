@@ -41,6 +41,11 @@ class Perfil:
     # Separador modelo-color del código ('DV4342-002' → 'DV4342'): el género
     # de un código nuevo se toma de otros colores del mismo modelo. None = no.
     separador_modelo: str = '-'
+    # ¿El color es parte de la identidad? En Nike el código YA lleva el color
+    # (HQ6034-001) y basta artículo + marca. En marcas como Chalada el código
+    # es el modelo ('12-REBI-1') y cada color es otra ficha: con el color
+    # conocido solo calzan las fichas de ese color; si no hay, es variante nueva.
+    identidad_color: bool = True
     # Regla de precio de venta: costo × factor_bajo bajo el umbral, × factor_alto
     # desde él; factor_piso = mínimo que usa ajustar_productos_factura.
     umbral_costo: int = 40000
@@ -102,6 +107,7 @@ _REF_NIKE = {
 NIKE = Perfil(
     marca='NIKE',
     tipo_talla='US',
+    identidad_color=False,
     guias={'HOMBRE': 'NIKE HOMBRE', 'UNISEX': 'NIKE HOMBRE', 'MUJER': 'NIKE MUJER',
            'INFANTIL': 'NIKE INFANTIL'},
     referencia_guias=_REF_NIKE,

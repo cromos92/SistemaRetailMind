@@ -38,6 +38,7 @@ from .models import (
     rol_efectivo,
     es_rol_administrador,
     puede_emitir_nota_credito,
+    puede_devolver_mercadopago,
 )
 from django.contrib.auth.decorators import login_required
 from app.decorators import requiere_permiso, solo_administrador
@@ -32126,11 +32127,14 @@ def anular_factura_dte(request):
         metodo_devolucion = 'NO_AFECTA_CAJA'
 
     # Devolver a la tarjeta vía API de Mercado Pago: mueve plata real de la
-    # cuenta MP de la empresa — SOLO ADMINISTRADOR.
+    # cuenta MP de la empresa — permiso fino `devolver_mercadopago` (antes era
+    # rol fijo administrador/administración).
     if metodo_devolucion == 'MERCADOPAGO_API' and \
-            rol_efectivo(request.user) not in ('administrador', 'administracion'):
+            not puede_devolver_mercadopago(request.user, request.session.get('idSucursalActual')):
         return JsonResponse({
-            'error': 'La devolución a la tarjeta (Mercado Pago) requiere rol Administrador.'
+            'success': False,
+            'error': 'No tienes permiso para devolver a la tarjeta por Mercado Pago. Pídeselo al Maestro.',
+            'mensaje': 'No tienes permiso para devolver a la tarjeta por Mercado Pago. Pídeselo al Maestro.',
         }, status=403)
 
     if modalidad_nc == 'DEVOLUCION':

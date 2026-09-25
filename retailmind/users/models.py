@@ -22,6 +22,7 @@ class Usuario(AbstractUser):
     ROLES = [
         ('maestro', 'Maestro'),
         ('administrador', 'Administrador'),
+        ('jefe', 'Jefe'),
         ('administracion', 'Administración'),
         ('jefe_local', 'Jefe Local'),
         ('cajero', 'Cajero'),
@@ -161,7 +162,7 @@ class Usuario(AbstractUser):
     
     def tiene_permiso_usuarios(self, permiso):
         """Verifica si el usuario tiene un permiso específico de gestión de usuarios"""
-        if self.rol in ('maestro', 'administrador'):
+        if self.rol in ('maestro', 'administrador', 'jefe'):
             return True
 
         permisos = {
@@ -222,7 +223,7 @@ class Usuario(AbstractUser):
         return password_temporal
     
     # ===== PIN de Autorización (solo admins) =====
-    ROLES_CON_PIN = ('maestro', 'administrador', 'administracion', 'jefe_local')
+    ROLES_CON_PIN = ('maestro', 'administrador', 'jefe', 'administracion', 'jefe_local')
 
     def puede_tener_pin_autorizacion(self):
         """Solo administradores/jefes pueden configurar un PIN de autorización."""
