@@ -29,6 +29,7 @@ Uso (`--config` = cualquier caja de la CUENTA MP; el reporte es por cuenta):
 import time
 
 from django.core.management.base import BaseCommand, CommandError
+from django.db import transaction
 
 from app.models import MercadoPagoConfig
 from app.services import conciliacion_mp_service as conc
@@ -172,8 +173,9 @@ class Command(BaseCommand):
             if not completo:
                 self.stdout.write(self.style.WARNING(
                     '  Mercado Pago no respondió a tiempo: se aplica sin marcar el reporte (vuelva a correrlo).'))
-        res = conc.procesar_reporte_liberaciones(filas, config, aplicar=aplicar,
-                                                 archivo=origen if completo else '')
+        with transaction.atomic():   # todo o nada
+            res = conc.procesar_reporte_liberaciones(filas, config, aplicar=aplicar,
+                                                     archivo=origen if completo else '')
         modo = 'APLICADO' if aplicar else 'DRY-RUN (use --apply para escribir)'
         self.stdout.write(f'{modo} · {origen} · filas {len(filas)} · retiros {len(res["retiros"])} · '
                           f'ventas POS asociadas {res["pagos_amarrados"]} · pagos que no son del POS '

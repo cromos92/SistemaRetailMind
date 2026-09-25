@@ -2099,3 +2099,136 @@ class RevisionV10Test(_Base):
             self.assertFalse(r.get('continuar'))
         self.assertEqual(completar.call_args_list[1].kwargs['saltar'], {dias[0]})
         self.assertEqual(RetiroMercadoPago.objects.filter(withdrawal_id='W1').count(), 1)
+
+
+@mock.patch.dict('os.environ', ENV_TEST)
+class RevisionV11Test(_Base):
+    """Revisión adversarial de v10: el presupuesto de «Aplicar» se medía desde
+    `completar` y no desde el request; un pedido vencido no impedía pedir otro
+    en el clic siguiente; la página perdía `dias_listos` al agotar vueltas."""
+
+    def _csv_retiro(self):
+        hoy = timezone.localdate()
+        return _csv(
+            f"{hoy}T00:00:00.000-03:00,,,initial_available_balance,,0.00,0.00,0.00",
+            f"{hoy}T10:00:00.000-03:00,700,,release,payment,30000.00,0.00,30000.00",
+            f"{hoy}T11:00:00.000-03:00,W1,,release,payout,0.00,30000.00,-30000.00",
+        ).encode()
+
+    def test_aplicar_escribe_en_un_request_nuevo_si_la_vuelta_gasto_tiempo_leyendo(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from app import views_mercadopago as vistas
+        admin = crear_usuario(username='adm_v11', rol='administrador')
+        c = Client(); c.force_login(admin)
+        self._cobro(1, payment_id_mp='700', monto=30000)
+        hoy = timezone.localdate()
+        dias = [hoy - timedelta(days=1)]
+        leyo = {'dias': 1, 'completados': 0, 'actualizados': 0, 'importados': 0, 'sin_tiempo': False,
+                'fallidos': 0, 'leidos': [str(dias[0])]}
+        nada = dict(leyo, dias=0, leidos=[])
+        with mock.patch('app.middleware_permisos.PermisoRol.tiene_permiso', return_value=True), \
+             mock.patch.object(vistas, 'APLICAR_TOPE_SEG', 0), \
+             mock.patch.object(conc, 'dias_para_completar', return_value=dias), \
+             mock.patch.object(conc, 'completar_numeros_mp', side_effect=[leyo, nada]) as completar:
+            r = c.post(reverse('api_conciliacion_liberaciones_mp'),
+                       {'config_id': self.config.id, 'aplicar': '1',
+                        'archivo': SimpleUploadedFile('r.csv', self._csv_retiro(), content_type='text/csv')}).json()
+            # Leyó todos los días pero el request ya gastó su tiempo: la escritura va en otro.
+            self.assertTrue(r['continuar'])
+            self.assertEqual((r['dias_hechos'], r['dias_total']), (1, 1))
+            self.assertEqual(RetiroMercadoPago.objects.count(), 0)
+            r = c.post(reverse('api_conciliacion_liberaciones_mp'),
+                       {'config_id': self.config.id, 'aplicar': '1', 'dias_listos': r['dias_listos'],
+                        'archivo': SimpleUploadedFile('r.csv', self._csv_retiro(), content_type='text/csv')}).json()
+            self.assertTrue(r['aplicado'])
+            self.assertEqual(completar.call_args_list[1].kwargs['saltar'], {dias[0]})
+        self.assertEqual(RetiroMercadoPago.objects.filter(withdrawal_id='W1').count(), 1)
+
+    def test_completar_reserva_tiempo_para_el_dia_en_curso(self):
+        d1 = timezone.localdate() - timedelta(days=1)
+        with mock.patch('app.services.mercadopago_service.buscar_pagos_dia', return_value=[]) as buscar:
+            res = conc.completar_numeros_mp(self.config, [d1], presupuesto_seg=conc.RESERVA_DIA_SEG - 1)
+        buscar.assert_not_called()
+        self.assertTrue(res['sin_tiempo'])
+        self.assertEqual(res['leidos'], [])
+
+    def test_con_pedidos_atascados_en_mp_no_se_pide_otro_salvo_forzar(self):
+        viejo = _reporte('viejo.csv', _utc_hace(hours=2), creado=_utc_hace(hours=2))   # más de 15 min: pediría
+        atascado = conc._normalizar_reporte({'id': 5, 'file_name': None, 'status': 'pending',
+                                             'date_created': _utc_hace(hours=6),
+                                             'begin_date': viejo['end_date'], 'end_date': viejo['end_date']})
+        with mock.patch.object(conc, 'listar_reportes_liberaciones', return_value=[atascado, viejo]), \
+             mock.patch.object(conc, 'descargar_reporte_liberaciones', return_value=_csv().encode()), \
+             mock.patch.object(conc, 'leer_config_reporte', return_value={'execute_after_withdrawal': False}), \
+             mock.patch.object(conc, 'pedir_reporte_liberaciones',
+                               return_value={'task_id': 9, 'begin_date': '', 'end_date': _utc_hace(minutes=5)}) as pedir:
+            res = conc.detectar_retiros()
+            pedir.assert_not_called()
+            self.assertEqual(res[0]['atascados_mp']['n'], 1)
+            self.assertIsNone(res[0]['pedido'])
+            res = conc.detectar_retiros(forzar=True)
+            self.assertEqual(pedir.call_count, 1)
+            self.assertEqual(res[0]['pedido']['task_id'], 9)
+
+    def test_creacion_en_el_futuro_se_lee_como_utc_sin_hermano_que_lo_pruebe(self):
+        real = timezone.now() - timedelta(minutes=100)
+        mal = real.astimezone(dt_timezone.utc).replace(tzinfo=None).strftime('%Y-%m-%dT%H:%M:%S.000') + '-04:00'
+        lista = [conc._normalizar_reporte({'id': 3, 'file_name': None, 'status': 'pending', 'date_created': mal,
+                                           'begin_date': f'{timezone.localdate() - timedelta(days=1)}T03:00:00Z',
+                                           'end_date': f'{timezone.localdate() + timedelta(days=1)}T02:59:59Z'})]
+        conc._corregir_creados(lista)
+        self.assertLess(abs(conc._instante(lista[0]['creado']) - real), timedelta(minutes=1))
+        self.assertIsNone(conc._pedido_en_cola_mp([lista[0]]))
+        # Con etiqueta correcta y hora pasada, se deja tal cual.
+        bien = timezone.localtime(real).isoformat()
+        lista = [conc._normalizar_reporte({'id': 4, 'file_name': None, 'status': 'pending', 'date_created': bien})]
+        conc._corregir_creados(lista)
+        self.assertLess(abs(conc._instante(lista[0]['creado']) - real), timedelta(minutes=1))
+
+    def test_hora_del_archivo_con_una_hora_de_desfase_igual_decide(self):
+        # Invierno: MP nombra el archivo en GMT-03 y Chile está en GMT-04 → 1 h de diferencia.
+        inst, utc = conc._instante_creado_mp('2026-06-23T19:30:54.000-04:00',
+                                             'reserve-release-1-manual-2026-06-23-163054.csv')
+        self.assertTrue(utc)
+        self.assertEqual(inst.astimezone(dt_timezone.utc).strftime('%H:%M'), '19:30')
+        lista = [conc._normalizar_reporte({'id': 2, 'file_name': 'reserve-release-1-manual-2026-09-23-163054.csv',
+                                           'status': 'enabled', 'date_created': '2026-09-23T19:30:54.000-04:00'})]
+        conc._corregir_creados(lista)
+        self.assertEqual(lista[0]['creado_local'], '2026-09-23 16:30')
+
+    def test_pedido_vencido_aunque_mp_de_error_de_red(self):
+        from app.services.mercadopago_service import MercadoPagoError
+        viejo = _reporte('viejo.csv', _utc_hace(hours=20), creado=_utc_hace(hours=20))
+        cache.set(conc._CLAVE_PEDIDO.format(self.config.id),
+                  {'task_id': 77, 'end_date': _utc_hace(minutes=5),
+                   'pedido_en': (timezone.now() - timedelta(hours=2)).isoformat()}, 600)
+        with mock.patch.object(conc, 'estado_tarea_liberaciones', side_effect=MercadoPagoError('timeout', red=True)):
+            pend, extra, resuelto, fallido, vencido = conc._pedido_en_curso(self.config, [viejo])
+        self.assertIsNone(pend)
+        self.assertGreaterEqual(vencido['minutos'], 119)
+        # Reciente y sin red: se sigue esperando.
+        cache.set(conc._CLAVE_PEDIDO.format(self.config.id),
+                  {'task_id': 77, 'end_date': _utc_hace(minutes=5), 'pedido_en': timezone.now().isoformat()}, 600)
+        with mock.patch.object(conc, 'estado_tarea_liberaciones', side_effect=MercadoPagoError('timeout', red=True)):
+            self.assertEqual(conc._pedido_en_curso(self.config, [viejo])[0]['task_id'], 77)
+
+    def test_reintento_solo_se_gasta_en_una_pasada_completa(self):
+        hoy = timezone.localdate()
+        abierto = RetiroMercadoPago.objects.create(
+            config=self.config, withdrawal_id='W-AB', fecha=hoy, monto=1000,
+            raw_reporte={'archivos': ['def.csv'], 'por_caja': [{'caja': conc.CAJA_SALDO_ANTERIOR, 'monto': 1000}]})
+        legado = RetiroMercadoPago.objects.create(config=self.config, withdrawal_id='W-LEG', fecha=hoy, monto=500,
+                                                  raw_reporte={'archivo': 'old.csv'})
+        self.assertEqual(conc.reportes_por_reintentar(self.config), {'def.csv', 'old.csv'})
+        filas = conc.leer_csv(_csv(
+            f"{hoy}T00:00:00.000-03:00,,,initial_available_balance,,1000.00,0.00,1000.00",
+            f"{hoy}T10:00:00.000-03:00,W-AB,,release,payout,0.00,1000.00,-1000.00",
+        ))
+        conc.procesar_reporte_liberaciones(filas, self.config, aplicar=True, archivo='')   # faltó tiempo
+        abierto.refresh_from_db()
+        self.assertNotIn('reintento_en', abierto.raw_reporte)
+        conc.procesar_reporte_liberaciones(filas, self.config, aplicar=True, archivo='def.csv')
+        abierto.refresh_from_db()
+        self.assertIn('reintento_en', abierto.raw_reporte)
+        self.assertEqual(conc.reportes_por_reintentar(self.config), {'old.csv'})
+        self.assertEqual(legado.withdrawal_id, 'W-LEG')

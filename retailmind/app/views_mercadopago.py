@@ -1982,6 +1982,12 @@ def _config_conciliacion(request):
     return config, None
 
 
+# Tope de un request de «Aplicar»/«Vista previa» (gunicorn corta a los 30 s): la
+# lectura de Mercado Pago se reparte en vueltas y la escritura parte en una
+# vuelta nueva si la actual ya gastó su tiempo leyendo.
+APLICAR_TOPE_SEG = 20
+
+
 @login_required
 @require_POST
 def api_conciliacion_liberaciones_mp(request):
@@ -2004,6 +2010,7 @@ def api_conciliacion_liberaciones_mp(request):
     archivo = request.FILES.get('archivo')
     file_name = (request.POST.get('file_name') or '').strip()
     try:
+        t0 = time.monotonic()   # desde el inicio del request: la descarga y la vista previa también cuentan
         if archivo is not None:
             if archivo.size > 20 * 1024 * 1024:
                 return JsonResponse({'success': False, 'error': 'Archivo demasiado grande (máx. 20 MB).'}, status=400)
@@ -2016,9 +2023,7 @@ def api_conciliacion_liberaciones_mp(request):
                 'error': 'Elija un reporte de la lista de Mercado Pago o suba el archivo CSV.'
             }, status=400)
         filas = conc.leer_csv(contenido)
-        t0 = time.monotonic()
         resultado = conc.procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=origen)
-        t_previa = time.monotonic() - t0
         # Pagos del reporte que no se cruzaron: casi siempre es porque el cobro
         # no tiene guardado el N° de operación de MP. Se completa desde la API
         # (solo campos vacíos) y se vuelve a cruzar.
@@ -2031,20 +2036,30 @@ def api_conciliacion_liberaciones_mp(request):
             # Registrar pagos «MP manual» como cobro solo al aplicar (nunca en la vista previa).
             # Techo corto: el servidor corta un request a los 30 s; si no alcanza,
             # la página vuelve a llamar con `dias_listos` y se sigue por los que faltan.
-            completado = conc.completar_numeros_mp(config, dias, presupuesto_seg=18, importar=aplicar, saltar=listos)
-            if completado['sin_tiempo'] and completado.get('leidos') and not completado.get('fallidos'):
+            presupuesto = max(2, int(APLICAR_TOPE_SEG - (time.monotonic() - t0)))
+            completado = conc.completar_numeros_mp(config, dias, presupuesto_seg=presupuesto,
+                                                   importar=aplicar, saltar=listos)
+            leyo = bool(completado.get('leidos')) and not completado.get('fallidos')
+            # Faltan días, o al aplicar esta vuelta ya gastó su tiempo leyendo: la
+            # escritura (otra pasada completa) parte en un request nuevo.
+            if leyo and (completado['sin_tiempo']
+                         or (aplicar and time.monotonic() - t0 >= APLICAR_TOPE_SEG * 0.5)):
                 hechos = sorted({str(d) for d in listos} | set(completado['leidos']))
+                total = len(set(dias) | listos)
                 logger.info("Conciliación MP: liberaciones config=%s origen=%s: completar por partes %s/%s días",
-                            config.id, origen, len(hechos), len(dias))
+                            config.id, origen, len(hechos), total)
                 return JsonResponse({'success': True, 'continuar': True, 'aplicado': False,
                                      'dias_listos': ','.join(hechos), 'dias_hechos': len(hechos),
-                                     'dias_total': len(dias)})
+                                     'dias_total': total})
         # Si MP no dejó terminar de completar N°/fechas, se aplica igual pero sin
         # marcar el reporte: «Detectar retiros» o un nuevo «Aplicar» lo rehace.
         completo = completado is None or (not completado['sin_tiempo'] and not completado.get('fallidos'))
         if aplicar or (completado and completado.get('actualizados')):
-            resultado = conc.procesar_reporte_liberaciones(filas, config, aplicar=aplicar,
-                                                           archivo=origen if completo else '')
+            # Todo o nada: si el proceso muere a mitad (tope de gunicorn), no queda
+            # un retiro creado con el archivo «aplicado» y los demás sin crear.
+            with transaction.atomic():
+                resultado = conc.procesar_reporte_liberaciones(filas, config, aplicar=aplicar,
+                                                               archivo=origen if completo else '')
         resultado['numeros_completados'] = completado
         if aplicar and not completo:
             resultado['aviso'] = ('Mercado Pago no respondió a tiempo al completar los N° de operación: '
@@ -2058,9 +2073,9 @@ def api_conciliacion_liberaciones_mp(request):
         # Nada reconocible: devolver los encabezados ayuda a ajustar el lector.
         resultado['encabezados'] = list(filas[0].keys()) if filas else []
     logger.info("Conciliación MP: liberaciones %s config=%s origen=%s retiros=%s por %s: %.1fs "
-                "(vista previa %.1fs, completar %s días)",
+                "(completar %s días)",
                 'aplicadas' if aplicar else 'vista previa', config.id, origen, len(resultado['retiros']),
-                request.user.username, time.monotonic() - t0, t_previa, len(dias))
+                request.user.username, time.monotonic() - t0, len(dias))
     return JsonResponse({'success': True, 'aplicado': aplicar, 'filas_leidas': len(filas),
                          'origen': origen, **resultado})
 

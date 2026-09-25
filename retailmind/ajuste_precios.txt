@@ -1,0 +1,169 @@
+﻿
+ÔòÉÔòÉ Factura 148761
+  CAMBIA  FQ8310-700   costo 32.532 ┬À venta 82.990 (a mano, ├ù2.55)  JR ZOOM SUPERFLY 10 ACADEMY 
+      color: MULTI ÔåÆ YELLOW
+  CAMBIA  FQ8317-001   costo 27.720 ┬À venta 79.990 (a mano, ├ù2.89)  SUPERFLY 10 CLUB TF
+      color: MULTI ÔåÆ BLACK
+  CAMBIA  FQ8313-446   costo 21.666 ┬À venta 64.990 (a mano, ├ù3.00)  JR SUPERFLY 10 CLUB TF
+      color: MULTI ÔåÆ BLUE
+  CAMBIA  FQ8317-446   costo 26.570 ┬À venta 79.990 (a mano, ├ù3.01)  SUPERFLY 10 CLUB TF
+      color: MULTI ÔåÆ BLUE
+  CAMBIA  HJ9198-403   costo 23.915 ┬À venta 69.990 (a mano, ├ù2.93)  NIKE REVOLUTION 8
+      color: MULTI ÔåÆ NAVY
+  CAMBIA  HQ2038-446   costo 24.835 ┬À venta 69.990 (a mano, ├ù2.82)  JR PHANTOM 6 LOW ACAD TF
+      color: MULTI ÔåÆ BLUE
+  CAMBIA  HQ2324-446   costo 23.605 ┬À venta 69.990 (a mano, ├ù2.97)  PHANTOM 6 LOW CLUB TF
+      color: MULTI ÔåÆ BLUE
+  CAMBIA  HQ2326-603   costo 37.508 ┬À venta 99.990 (a mano, ├ù2.67)  PHANTOM 6 LOW ACAD TF EH
+      color: MULTI ÔåÆ PINK
+  CAMBIA  IO8449-661   costo 37.508 ┬À venta 99.990 (a mano, ├ù2.67)  PHANTOM 6 LOW ACAD TF NU3
+      color: MULTI ÔåÆ RED
+  CAMBIA  HQ2040-603   costo 27.577 ┬À venta 76.990 (a mano, ├ù2.79)  JR PHANTOM 6 LOW ACAD TF EH
+      color: MULTI ÔåÆ PINK
+  CAMBIA  IO9551-603   costo 27.441 ┬À venta 76.990 (a mano, ├ù2.81)  JR PHANTOM 6 LOW ACAD IC EH
+      color: MULTI ÔåÆ PINK
+    ok    IH1797-901   costo 26.901 ┬À venta 69.990 (a mano, ├ù2.60)  JR PHANTOM 6 LOW ACAD TF T
+    ok    IH1805-901   costo 24.779 ┬À venta 64.990 (a mano, ├ù2.62)  JR TIEMPO MAESTRO ACADEMY TF
+  CAMBIA  IH7378-001   costo 24.839 ┬À venta 69.990 (a mano, ├ù2.82)  NIKE PACIFIC GS
+      color: MULTI ÔåÆ BLACK
+
+ÔòÉÔòÉ Factura 148763
+  CAMBIA  HQ6034-001   costo 73.883 ┬À venta 139.990 (a mano, ├ù1.89)  M ZOOM VAPOR PRO 3 CLY
+      color: MULTI ÔåÆ BLACK
+  CAMBIA  IB2765-009   costo 38.883 ┬À venta 77.990 (a mano, ├ù2.01)  NIKE UPLIFT SC
+      color: MULTI ÔåÆ BLACK
+  CAMBIA  IB4484-146   costo 51.661 ┬À venta 99.990 (a mano, ├ù1.94)  TIEMPO MAESTRO ACADEMY TF
+      color: MULTI ÔåÆ WHITE
+  CAMBIA  IM4006-003   costo 48.328 ┬À venta 89.990 (a mano, ├ù1.86)  NIKE PACIFIC LTR
+      color: MULTI ÔåÆ BLACK
+      ? precio a mano dudoso: 89.990 (otra lectura: 99.990) ÔÇö si es otro, --precio IM4006-003=PRECIO
+  CAMBIA  IQ7636-101   costo 36.106 ┬À venta 69.990 (a mano, ├ù1.94)  NIKE CORTEZ VELCRO BPV
+      color: MULTI ÔåÆ WHITE
+  CAMBIA  749680-402   costo 55.550 ┬À venta 109.990 (a mano, ├ù1.98)  NIKE AIR MAX INVIGOR
+      color: MULTI ÔåÆ BLUE
+  CAMBIA  DB5945-161   costo 41.661 ┬À venta 79.990 (a mano, ├ù1.92)  NIKE COURT VISION LO
+      color: MULTI ÔåÆ WHITE
+  CAMBIA  HJ9198-122   costo 34.994 ┬À venta 69.990 (a mano, ├ù2.00)  NIKE REVOLUTION 8
+      color: MULTI ÔåÆ WHITE
+    ok    IH1799-901   costo 33.328 ┬À venta 66.990 (a mano, ├ù2.01)  JR PHANTOM 6 LOW CLUB TF T
+  CAMBIA  IH7397-001   costo 33.328 ┬À venta 64.990 (a mano, ├ù1.95)  NIKE PACIFIC TD
+      color: MULTI ÔåÆ BLACK
+  CAMBIA  IO9414-003   costo 55.550 ┬À venta 107.990 (a mano, ├ù1.94)  NIKE AIR MAX BIA
+      color: MULTI ÔåÆ BLACK
+      ? precio a mano dudoso: 107.990 (otra lectura: 109.990) ÔÇö si es otro, --precio IO9414-003=PRECIO
+    ok    IQ2155-900   costo 83.328 ┬À venta 159.990 (a mano, ├ù1.92)  REACTX PHANTOM 6 LOW PRO TF 
+    ok    IQ2388-901   costo 51.661 ┬À venta 99.990 (a mano, ├ù1.94)  TIEMPO MAESTRO ACADEMY TF T
+  CAMBIA  415082-105   costo 77.772 ┬À venta 149.990 (a mano, ├ù1.93)  NIKE AIR MORE UPTEMPO BG
+      color: MULTI ÔåÆ WHITE
+  CAMBIA  749680-015   costo 55.550 ┬À venta 109.990 (a mano, ├ù1.98)  NIKE AIR MAX INVIGOR
+      color: MULTI ÔåÆ GRAY
+
+ÔòÉÔòÉ Factura 148764
+  CAMBIA  415445-101   costo 57.217 ┬À venta 102.990 (regla, ├ù1.80) ┬À ├ù1.9 = 108.990  AIR MONARCH IV
+      precio EDEL #140014: 102.990 ÔåÆ 108.990 ┬À bajo costo ├ù 1.9
+      color: MULTI ÔåÆ WHITE
+  CAMBIA  BQ4639-001   costo 24.994 ┬À venta 46.990 (regla, ├ù1.88) ┬À ├ù1.9 = 47.990  NIKE OFFCOURT SLIDE
+      precio EDEL #82024: 46.990 ÔåÆ 47.990 (antes de la carga: 39.990) ┬À bajo costo ├ù 1.9
+      precio NICK1 #82025: 46.990 ÔåÆ 47.990 (antes de la carga: 39.990) ┬À bajo costo ├ù 1.9
+  CAMBIA  CI0603-102   costo 53.883 ┬À venta 96.990 (regla, ├ù1.80) ┬À ├ù1.9 = 102.990  WMNS NIKE AIR HEIGHTS
+      precio EDEL #140015: 96.990 ÔåÆ 102.990 ┬À bajo costo ├ù 1.9
+      color: MULTI ÔåÆ WHITE
+  CAMBIA  CD5432-003   costo 64.994 ┬À venta 116.990 (regla, ├ù1.80) ┬À ├ù1.9 = 123.990  WMNS NIKE AIR MAX EXCEE
+      precio EDEL #84256: 116.990 ÔåÆ 123.990 (antes de la carga: 83.990) ┬À bajo costo ├ù 1.9
+      precio NICK2 #84257: 116.990 ÔåÆ 123.990 (antes de la carga: 83.990) ┬À bajo costo ├ù 1.9
+  CAMBIA  CU3517-004   costo 44.439 ┬À venta 79.990 (regla, ├ù1.80) ┬À ├ù1.9 = 84.990  NIKE RUN SWIFT 2
+      precio EDEL #140016: 79.990 ÔåÆ 84.990 ┬À bajo costo ├ù 1.9
+      color: MULTI ÔåÆ BLACK
+  CAMBIA  BQ4639-012   costo 24.994 ┬À venta 46.990 (regla, ├ù1.88) ┬À ├ù1.9 = 47.990  NIKE OFFCOURT SLIDE
+      precio EDEL #82031: 46.990 ÔåÆ 47.990 (antes de la carga: 44.990) ┬À bajo costo ├ù 1.9
+      precio NICK2 #82033: 46.990 ÔåÆ 47.990 (antes de la carga: 44.990) ┬À bajo costo ├ù 1.9
+      precio NICK1 #82032: 46.990 ÔåÆ 47.990 (antes de la carga: 44.990) ┬À bajo costo ├ù 1.9
+  CAMBIA  DH2987-001   costo 40.550 ┬À venta 72.990 (regla, ├ù1.80) ┬À ├ù1.9 = 77.990  NIKE COURT VISION LO BE
+      precio EDEL #90132: 72.990 ÔåÆ 77.990 ┬À bajo costo ├ù 1.9
+      precio NICK2 #90134: 72.990 ÔåÆ 77.990 ┬À bajo costo ├ù 1.9
+      precio NICK1 #90133: 72.990 ÔåÆ 77.990 ┬À bajo costo ├ù 1.9
+  CAMBIA  621716-008   costo 51.661 ┬À venta 92.990 (regla, ├ù1.80) ┬À ├ù1.9 = 98.990  NIKE REAX 8 TR MES
+      precio EDEL #140017: 92.990 ÔåÆ 98.990 ┬À bajo costo ├ù 1.9
+      color: MULTI ÔåÆ BLACK
+  CAMBIA  CN9675-600   costo 22.217 ┬À venta 41.990 (regla, ├ù1.89) ┬À ├ù1.9 = 42.990  NIKE VICTORI ONE SLIDE
+      precio EDEL #140018: 41.990 ÔåÆ 42.990 ┬À bajo costo ├ù 1.9
+      color: MULTI ÔåÆ RED
+  CAMBIA  DX4816-001   costo 31.661 ┬À venta 58.990 (regla, ├ù1.86) ┬À ├ù1.9 = 60.990  W NIKE CALM SLIDE
+      precio EDEL #91838: 58.990 ÔåÆ 60.990 (antes de la carga: 59.990) ┬À bajo costo ├ù 1.9
+      precio NICK2 #91840: 58.990 ÔåÆ 60.990 (antes de la carga: 59.990) ┬À bajo costo ├ù 1.9
+      precio NICK1 #91839: 58.990 ÔåÆ 60.990 (antes de la carga: 59.990) ┬À bajo costo ├ù 1.9
+  CAMBIA  FB7689-003   costo 33.328 ┬À venta 61.990 (regla, ├ù1.86) ┬À ├ù1.9 = 63.990  NIKE REVOLUTION 7 GS
+      precio EDEL #95424: 61.990 ÔåÆ 64.990 (antes de la carga: 64.990) ┬À baj├│ en la carga (64.990 ÔåÆ 61.990): vuelve al anterior
+      precio NICK2 #95426: 61.990 ÔåÆ 64.990 (antes de la carga: 64.990) ┬À baj├│ en la carga (64.990 ÔåÆ 61.990): vuelve al anterior
+      precio NICK1 #95425: 61.990 ÔåÆ 64.990 (antes de la carga: 64.990) ┬À baj├│ en la carga (64.990 ÔåÆ 61.990): vuelve al anterior
+  CAMBIA  FD6454-001   costo 36.106 ┬À venta 66.990 (regla, ├ù1.86) ┬À ├ù1.9 = 68.990  NIKE DOWNSHIFTER 13
+      precio EDEL #95691: 66.990 ÔåÆ 74.990 (antes de la carga: 74.990) ┬À baj├│ en la carga (74.990 ÔåÆ 66.990): vuelve al anterior
+      precio NICK1 #95692: 66.990 ÔåÆ 74.990 (antes de la carga: 74.990) ┬À baj├│ en la carga (74.990 ÔåÆ 66.990): vuelve al anterior
+      precio NICK2 #95693: 66.990 ÔåÆ 74.990 (antes de la carga: 74.990) ┬À baj├│ en la carga (74.990 ÔåÆ 66.990): vuelve al anterior
+  CAMBIA  FD6476-001   costo 36.106 ┬À venta 66.990 (regla, ├ù1.86) ┬À ├ù1.9 = 68.990  W NIKE DOWNSHIFTER 13
+      precio EDEL #140019: 66.990 ÔåÆ 68.990 ┬À bajo costo ├ù 1.9
+      color: MULTI ÔåÆ BLACK
+  CAMBIA  DV4342-002   costo 49.994 ┬À venta 89.990 (regla, ├ù1.80) ┬À ├ù1.9 = 94.990  LEGEND 10 ACADEMY TF
+      precio EDEL #140020: 89.990 ÔåÆ 94.990 ┬À bajo costo ├ù 1.9
+      color: MULTI ÔåÆ BLACK
+  CAMBIA  CN9675-403   costo 22.217 ┬À venta 41.990 (regla, ├ù1.89) ┬À ├ù1.9 = 42.990  NIKE VICTORI ONE SLIDE
+      precio EDEL #86203: 41.990 ÔåÆ 42.990 (antes de la carga: 39.990) ┬À bajo costo ├ù 1.9
+      precio NICK2 #86205: 41.990 ÔåÆ 42.990 (antes de la carga: 39.990) ┬À bajo costo ├ù 1.9
+      precio NICK1 #86204: 41.990 ÔåÆ 42.990 (antes de la carga: 39.990) ┬À bajo costo ├ù 1.9
+  CAMBIA  FV6040-001   costo 62.772 ┬À venta 112.990 (regla, ├ù1.80) ┬À ├ù1.9 = 119.990  NIKE AIR ZOOM RIVAL FLY 4
+      precio EDEL #96896: 112.990 ÔåÆ 124.990 (antes de la carga: 124.990) ┬À baj├│ en la carga (124.990 ÔåÆ 112.990): vuelve al anterior
+      precio NICK2 #96898: 112.990 ÔåÆ 124.990 (antes de la carga: 124.990) ┬À baj├│ en la carga (124.990 ÔåÆ 112.990): vuelve al anterior
+      precio NICK1 #96897: 112.990 ÔåÆ 124.990 (antes de la carga: 124.990) ┬À baj├│ en la carga (124.990 ÔåÆ 112.990): vuelve al anterior
+  CAMBIA  DM4044-108   costo 57.217 ┬À venta 102.990 (regla, ├ù1.80) ┬À ├ù1.9 = 108.990  NIKE CORTEZ LTR
+      precio EDEL #140021: 102.990 ÔåÆ 108.990 ┬À bajo costo ├ù 1.9
+      color: MULTI ÔåÆ WHITE
+  CAMBIA  FD6033-006   costo 49.994 ┬À venta 89.990 (regla, ├ù1.80) ┬À ├ù1.9 = 94.990  NIKE QUEST 6
+      precio EDEL #140022: 89.990 ÔåÆ 94.990 ┬À bajo costo ├ù 1.9
+      color: MULTI ÔåÆ GRAY
+  CAMBIA  FJ3794-004   costo 57.217 ┬À venta 102.990 (regla, ├ù1.80) ┬À ├ù1.9 = 108.990  W NIKE AL8
+      precio EDEL #140023: 102.990 ÔåÆ 108.990 ┬À bajo costo ├ù 1.9
+      color: MULTI ÔåÆ GRAY
+  CAMBIA  HF0400-600   costo 79.439 ┬À venta 142.990 (regla, ├ù1.80) ┬À ├ù1.9 = 150.990  AIR ZOOM PEGASUS 41 BTC
+      precio EDEL #140024: 142.990 ÔåÆ 150.990 ┬À bajo costo ├ù 1.9
+      color: MULTI ÔåÆ RED
+  CAMBIA  HJ8485-001   costo 34.994 ┬À venta 64.990 (regla, ├ù1.86) ┬À ├ù1.9 = 66.990  W NIKE REVOLUTION 8
+      precio EDEL #140025: 64.990 ÔåÆ 66.990 ┬À bajo costo ├ù 1.9
+      color: MULTI ÔåÆ BLACK
+  CAMBIA  HM9593-002   costo 31.661 ┬À venta 58.990 (regla, ├ù1.86) ┬À ├ù1.9 = 60.990  W NIKE RUN DEFY
+      precio EDEL #105568: 58.990 ÔåÆ 60.990 (antes de la carga: 59.990) ┬À bajo costo ├ù 1.9
+      precio NICK2 #105570: 58.990 ÔåÆ 60.990 (antes de la carga: 59.990) ┬À bajo costo ├ù 1.9
+      precio NICK1 #105569: 58.990 ÔåÆ 60.990 (antes de la carga: 59.990) ┬À bajo costo ├ù 1.9
+  CAMBIA  FQ8317-600   costo 44.439 ┬À venta 79.990 (regla, ├ù1.80) ┬À ├ù1.9 = 84.990  SUPERFLY 10 CLUB TF
+      precio EDEL #96557: 79.990 ÔåÆ 89.990 (antes de la carga: 89.990) ┬À baj├│ en la carga (89.990 ÔåÆ 79.990): vuelve al anterior
+      precio NICK2 #96558: 79.990 ÔåÆ 89.990 (antes de la carga: 89.990) ┬À baj├│ en la carga (89.990 ÔåÆ 79.990): vuelve al anterior
+  CAMBIA  HQ2276-400   costo 40.550 ┬À venta 72.990 (regla, ├ù1.80) ┬À ├ù1.9 = 77.990  PHANTOM 360 DF CLUB TF
+      precio EDEL #105862: 72.990 ÔåÆ 79.990 (antes de la carga: 79.990) ┬À baj├│ en la carga (79.990 ÔåÆ 72.990): vuelve al anterior
+      precio PAO2 #138574: 72.990 ÔåÆ 79.990 (antes de la carga: 79.990) ┬À baj├│ en la carga (79.990 ÔåÆ 72.990): vuelve al anterior
+      precio NICK2 #105863: 72.990 ÔåÆ 79.990 (antes de la carga: 79.990) ┬À baj├│ en la carga (79.990 ÔåÆ 72.990): vuelve al anterior
+  CAMBIA  IH7653-105   costo 42.772 ┬À venta 76.990 (regla, ├ù1.80) ┬À ├ù1.9 = 81.990  NIKE CORTEZ BG N
+      precio EDEL #140026: 76.990 ÔåÆ 81.990 ┬À bajo costo ├ù 1.9
+      color: MULTI ÔåÆ WHITE
+  CAMBIA  DZ2795-606   costo 57.217 ┬À venta 102.990 (regla, ├ù1.80) ┬À ├ù1.9 = 108.990  W NIKE CORTEZ TXT
+      precio EDEL #140027: 102.990 ÔåÆ 108.990 ┬À bajo costo ├ù 1.9
+      color: MULTI ÔåÆ RED
+
+ÔòÉÔòÉ Factura 148765
+  CAMBIA  FD6476-013   costo 36.106 ┬À venta 69.990 (a mano, ├ù1.94)  W NIKE DOWNSHIFTER 13
+      color: MULTI ÔåÆ BLACK
+  CAMBIA  FD6476-110   costo 36.106 ┬À venta 69.990 (a mano, ├ù1.94)  W NIKE DOWNSHIFTER 13
+      color: MULTI ÔåÆ WHITE
+  CAMBIA  FQ8291-300   costo 27.772 ┬À venta 54.990 (a mano, ├ù1.98)  JR VAPOR 16 CLUB TF PS V
+      color: MULTI ÔåÆ GREEN
+  CAMBIA  HJ5226-105   costo 57.217 ┬À venta 102.990 (a mano, ├ù1.80)  NIKE V5 RNR
+      color: MULTI ÔåÆ WHITE
+      ? precio a mano dudoso: 102.990 (otra lectura: 106.990) ÔÇö si es otro, --precio HJ5226-105=PRECIO
+  CAMBIA  HQ2038-800   costo 38.883 ┬À venta 76.990 (a mano, ├ù1.98)  JR PHANTOM 6 LOW ACAD TF
+      color: MULTI ÔåÆ ORANGE
+  CAMBIA  HQ2049-800   costo 46.106 ┬À venta 89.990 (a mano, ├ù1.95)  JR PHANTOM 6 HIGH ACAD TF
+      color: MULTI ÔåÆ ORANGE
+  CAMBIA  FQ8291-446   costo 27.772 ┬À venta 54.990 (a mano, ├ù1.98)  JR VAPOR 16 CLUB TF PS-V
+      color: MULTI ÔåÆ BLUE
+
+Resumen: 47 ficha(s) cambian de precio ┬À 45 cambian de color ┬À 62 art├¡culos revisados
+
+VISTA PREVIA: no se escribi├│ nada. Repite con --apply.

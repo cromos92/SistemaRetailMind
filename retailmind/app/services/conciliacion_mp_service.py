@@ -810,7 +810,7 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
                     if retiro is not None and conservar:
                         raw['archivos'] = sorted(archivos)
                         raw.pop('archivo', None)
-                        if _no_explicado(por_caja_lista):
+                        if archivo and _no_explicado(por_caja_lista):
                             raw['reintento_en'] = timezone.now().isoformat()
                         retiro.raw_reporte = raw
                         retiro.save(update_fields=['raw_reporte', 'actualizado_en'])
@@ -845,7 +845,9 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
                                  'sin_local': {str(it['id']): usado for it, usado in tomado[:2000]
                                                if it['trx'] is None and it.get('manual') is None
                                                and it['id'] and it['id'] != 'saldo inicial'}}
-                    if _no_explicado(por_caja_lista):
+                    # Solo una pasada completa (con archivo) gasta el reintento de 6 h: una
+                    # incompleta (faltó tiempo) se rehace en la vuelta siguiente.
+                    if archivo and (_no_explicado(por_caja_lista) or _desglose_envenenado(withdrawal_id, raw_nuevo)):
                         raw_nuevo['reintento_en'] = timezone.now().isoformat()
                     datos = {'config': config, 'fecha': timezone.localtime(r['instante']).date(),
                              'monto': monto, 'estado': estado, 'detalle_diferencia': detalle,
@@ -1220,7 +1222,7 @@ def completar_numeros_mp(config, dias, presupuesto_seg=35, importar=False, salta
         if importar and dia < hoy and cache.get(clave_dia):
             lista_leidos.append(str(dia))
             continue
-        if _time.monotonic() > fin:
+        if _time.monotonic() > fin - RESERVA_DIA_SEG:
             return {'dias': leidos, 'completados': completados, 'sin_tiempo': True, 'fallidos': fallidos,
                     'actualizados': actualizados, 'importados': importados, 'leidos': lista_leidos}
         try:
@@ -1458,11 +1460,17 @@ def _instante_creado_mp(texto, file_name='', como_utc=None):
             local = None
         if local is not None:
             en_utc = dt.replace(tzinfo=dt_timezone.utc)
-            if abs(timezone.localtime(en_utc).replace(tzinfo=None) - local) <= timedelta(minutes=5):
-                return en_utc, True
-            if abs(timezone.localtime(dt).replace(tzinfo=None) - local) <= timedelta(minutes=5):
-                return dt, False
+            d_utc = abs(timezone.localtime(en_utc).replace(tzinfo=None) - local)
+            d_tal = abs(timezone.localtime(dt).replace(tzinfo=None) - local)
+            # Las dos lecturas están horas aparte: gana la más cercana a la hora
+            # del archivo (tolera 1 h si MP lo nombra en otro huso en invierno).
+            if min(d_utc, d_tal) <= timedelta(minutes=90):
+                return (en_utc, True) if d_utc <= d_tal else (dt, False)
     if como_utc:
+        return dt.replace(tzinfo=dt_timezone.utc), True
+    if como_utc is None and dt > timezone.now() + timedelta(minutes=5):
+        # Sin reporte terminado con que comprobar: una creación «en el futuro»
+        # solo la explica la etiqueta equivocada.
         return dt.replace(tzinfo=dt_timezone.utc), True
     return dt, (None if como_utc is None else False)
 
@@ -1480,12 +1488,14 @@ def _corregir_creados(reportes):
             sin_comprobar.append(r)
             continue
         r['creado'] = inst.astimezone(dt_timezone.utc).isoformat()
+        r['creado_local'] = timezone.localtime(inst).strftime('%Y-%m-%d %H:%M')
         if como_utc is None:
             como_utc = decidido
     for r in sin_comprobar:
-        inst, _d = _instante_creado_mp(r['creado'], '', como_utc=bool(como_utc))
+        inst, _d = _instante_creado_mp(r['creado'], '', como_utc=como_utc)
         if inst is not None:
             r['creado'] = inst.astimezone(dt_timezone.utc).isoformat()
+            r['creado_local'] = timezone.localtime(inst).strftime('%Y-%m-%d %H:%M')
     return reportes
 
 
@@ -1613,6 +1623,9 @@ FRESCURA_REPORTE_MIN = int(os.environ.get('MP_REPORTE_FRESCURA_MIN', '15'))
 # la cuenta de Nicole tenía dos pedidos en 'pending' desde las 09:35 y a las
 # 15:44 la página seguía «Buscando retiros recientes…»).
 ESPERA_PEDIDO_MIN = int(os.environ.get('MP_ESPERA_PEDIDO_MIN', '90'))
+# Un día de payments/search puede traer varias páginas (~1,5 s cada una): no se
+# empieza uno si queda menos que esto del presupuesto, para no pasarse del tope.
+RESERVA_DIA_SEG = 4
 # Un retiro que quedó con parte sin explicar se vuelve a aplicar con su reporte
 # como máximo cada tantas horas (entre medio se completan N° y liberaciones).
 REINTENTO_RETIRO_ABIERTO_H = 6
@@ -1682,6 +1695,8 @@ def reportes_por_reintentar(config, ahora=None):
         ultimo = _instante(raw.get('reintento_en'))
         if retiro_abierto(r) and (ultimo is None or ultimo < limite):
             archivos.update(a for a in (raw.get('archivos') or []) if a)
+            if raw.get('archivo'):
+                archivos.add(raw['archivo'])   # formato anterior
     return archivos
 
 
@@ -1832,11 +1847,23 @@ def _pedido_en_curso(cfg, reportes, pedido_pagina=None, pedido_mp=None):
         cache.delete(clave)
         return None, None, True, False, None
     archivo = pedido.get('file_name') or ''
+
+    def _vencido():
+        pedido_en = _instante(pedido.get('pedido_en'))
+        ahora = timezone.now()
+        if pedido_en is not None and pedido_en < ahora - timedelta(minutes=ESPERA_PEDIDO_MIN):
+            return dict(pedido, minutos=int((ahora - pedido_en).total_seconds() // 60))
+        return None
+
     if not archivo and pedido.get('task_id'):
         try:
             estado = estado_tarea_liberaciones(cfg, pedido['task_id'])
         except mp.MercadoPagoError as e:
             if getattr(e, 'red', False):
+                vencido = _vencido()   # MP saturado no alarga la espera
+                if vencido:
+                    cache.delete(clave)
+                    return None, None, False, False, vencido
                 return pedido, None, False, False, None   # sin red: se sigue esperando
             cache.delete(clave)                           # MP no reconoce la tarea (4xx): se da por perdida
             return None, None, False, True, None
@@ -1847,11 +1874,10 @@ def _pedido_en_curso(cfg, reportes, pedido_pagina=None, pedido_mp=None):
             archivo = estado['file_name']
         pedido = dict(pedido, estado_texto=estado.get('estado_texto') or '')
     if not archivo:
-        pedido_en = _instante(pedido.get('pedido_en'))
-        ahora = timezone.now()
-        if pedido_en is not None and pedido_en < ahora - timedelta(minutes=ESPERA_PEDIDO_MIN):
+        vencido = _vencido()
+        if vencido:
             cache.delete(clave)
-            return None, None, False, False, dict(pedido, minutos=int((ahora - pedido_en).total_seconds() // 60))
+            return None, None, False, False, vencido
         return pedido, None, False, False, None
     pedido = dict(pedido, file_name=archivo)
     cache.set(clave, pedido, 60 * 20)   # hasta aplicarlo
@@ -1925,7 +1951,8 @@ def detectar_retiros(presupuesto_seg=45, pedir=True, pedir_ids=(), pedidos=None,
                 'reportes_aplicados': 0, 'retiros': [], 'por_retiro_activo': None,
                 'error': '', 'falto_tiempo': False, 'incompleto': False,
                 'pedido': None, 'error_pedido': '', 'revisado_hasta': '', 'pedir_pendiente': False,
-                'al_dia_hasta': '', 'pedido_vencido': None, 'atascados_mp': None}
+                'al_dia_hasta': '', 'pedido_vencido': None, 'atascados_mp': None,
+                'espera_min': ESPERA_PEDIDO_MIN}
         salida.append(fila)
         pedir_cuenta = pedir or cfg.id in pedir_ids
         pedido_pagina = (pedidos or {}).get(cfg.id)
@@ -1997,8 +2024,11 @@ def detectar_retiros(presupuesto_seg=45, pedir=True, pedir_ids=(), pedidos=None,
                     restante = max(5, int(fin - _time.monotonic()) - 5)
                     comp = completar_numeros_mp(cfg, dias, presupuesto_seg=restante, importar=True)
                     completo = not comp['sin_tiempo'] and not comp.get('fallidos')
-                res = procesar_reporte_liberaciones(filas, cfg, aplicar=True,
-                                                    archivo=rep['file_name'] if completo else '')
+                # Todo o nada: si el proceso muere a mitad (tope de gunicorn), no queda
+                # un retiro creado con el archivo «aplicado» y los demás sin crear.
+                with transaction.atomic():
+                    res = procesar_reporte_liberaciones(filas, cfg, aplicar=True,
+                                                        archivo=rep['file_name'] if completo else '')
             except Exception as e:  # noqa: BLE001 — un reporte roto no debe tumbar las demás cuentas
                 logger.exception("Conciliación MP: error procesando %s", rep['file_name'])
                 fila['error'] = f'No se pudo procesar {rep["file_name"]}: {e}'
@@ -2022,7 +2052,8 @@ def detectar_retiros(presupuesto_seg=45, pedir=True, pedir_ids=(), pedidos=None,
         adoptado = bool((pedido_mp or {}).get('adoptado') or (pedido_pagina or {}).get('adoptado'))
         if pendiente:
             fila['pedido'] = pendiente
-        elif pedir_cuenta and (not resuelto or adoptado or forzar) and (not vencido or forzar):
+        elif pedir_cuenta and (not resuelto or adoptado or forzar) and (not vencido or forzar) \
+                and (not atascados or forzar):
             if fila['incompleto'] or _time.monotonic() > fin:
                 fila['pedir_pendiente'] = True   # la página lo pide en la vuelta siguiente
             else:

@@ -849,6 +849,7 @@
     function pintarResultadoLiberaciones(d) {
         const cont = document.getElementById('libResultado');
         if (!d.success) { cont.innerHTML = `<div class="text-danger small">${esc(d.error)}</div>`; return; }
+        d.retiros = d.retiros || [];
         let html = `<div class="small mb-2">${d.aplicado ? '<strong>Aplicado.</strong>' : '<strong>Vista previa</strong> (no se guardó nada).'}
             ${esc(d.origen || '')} · ${d.filas_leidas} filas · ${d.retiros.length} retiro(s) · ${d.pagos_amarrados} ventas del POS asociadas ·
             ${d.pagos_manuales ? d.pagos_manuales + ' pagos «MP manual» del POS · ' : ''}${d.pagos_sin_local} pagos sin venta en el sistema ·
@@ -873,8 +874,13 @@
                 ], d.muestra_sin_local) + '</details>';
         }
         cont.innerHTML = html;
-        if (d.aplicado) { cargarDineros(); cargarCobros(); cargarReportesMP(); }
+        if (d.aplicado) { libDiasListos = {}; cargarDineros(); cargarCobros(); cargarReportesMP(); }
     }
+
+    // Días de Mercado Pago ya leídos en vueltas anteriores, por cuenta y reporte:
+    // si el servidor corta o se agotan las vueltas, el próximo clic sigue desde ahí.
+    let libDiasListos = {};
+    const claveLib = fd => `${fd.get('config_id')}|${fd.get('file_name') || (fd.get('archivo') || {}).name || ''}`;
 
     // El servidor lee Mercado Pago por partes (cada request cabe en su tope de
     // 30 s) y devuelve `continuar` con los días ya leídos: se vuelve a mandar el
@@ -885,12 +891,18 @@
         if (!vuelta) cont.innerHTML = '<div class="conc-sub"><div class="spinner-border spinner-border-sm text-primary"></div> Procesando reporte…</div>';
         const ctl = new AbortController();
         const reloj = setTimeout(() => ctl.abort(), 120000);
+        if (!fd.get('dias_listos') && libDiasListos[claveLib(fd)]) fd.set('dias_listos', libDiasListos[claveLib(fd)]);
         fetch('/app/api/mercadopago/conciliacion/liberaciones/', {method: 'POST', headers: {'X-CSRFToken': csrf()}, body: fd, signal: ctl.signal})
             .then(r => r.json())
             .then(d => {
-                if (d.success && d.continuar && vuelta < 15) {
+                if (d.success && d.continuar) {
+                    libDiasListos[claveLib(fd)] = d.dias_listos || '';
+                    if (vuelta >= 15) {
+                        cont.innerHTML = `<div class="small text-warning">Se leyeron ${Number(d.dias_hechos)} de ${Number(d.dias_total)} días de Mercado Pago y se agotaron las vueltas. Vuelva a apretar el mismo botón: sigue desde donde quedó.</div>`;
+                        return;
+                    }
                     cont.innerHTML = `<div class="conc-sub"><div class="spinner-border spinner-border-sm text-primary"></div>
-                        Completando N° de operación y fechas de liberación desde Mercado Pago (${d.dias_hechos} de ${d.dias_total} días)…</div>`;
+                        Completando N° de operación y fechas de liberación desde Mercado Pago (${Number(d.dias_hechos)} de ${Number(d.dias_total)} días)…</div>`;
                     fd.set('dias_listos', d.dias_listos || '');
                     enviarLiberaciones(fd, vuelta + 1);
                     return;
@@ -970,7 +982,8 @@
                      Mientras tanto puede bajar el reporte de Liberaciones desde el panel de Mercado Pago y subirlo abajo (Opciones manuales → CSV), o
                      <button class="btn btn-link btn-sm p-0 align-baseline" onclick="detectarRetiros(false, true)">pedir un reporte nuevo</button>.</div>` : '';
             const atascados = c.atascados_mp
-                ? ` · <span class="conc-chip conc-chip--warn" title="Pedidos de reporte que Mercado Pago tiene en cola sin generar: pedir otro suele quedar atrás de ellos">${Number(c.atascados_mp.n)} pedido(s) sin generar en Mercado Pago desde el ${esc(c.atascados_mp.desde)}</span>` : '';
+                ? ` · <span class="conc-chip conc-chip--warn" title="Pedidos de reporte que Mercado Pago tiene en cola sin generar: pedir otro suele quedar atrás de ellos">${Number(c.atascados_mp.n)} pedido(s) sin generar en Mercado Pago desde el ${esc(c.atascados_mp.desde)}</span>
+                   <span class="conc-sub">(no se pide otro mientras tanto; <button class="btn btn-link btn-sm p-0 align-baseline" onclick="detectarRetiros(false, true)">pedir igual</button>)</span>` : '';
             const tabla = c.retiros.length ? tablaSimple([
                 ['Fecha', f => `${f.nuevo !== false ? '<span class="conc-chip conc-chip--ok me-1">nuevo</span>' : ''}${esc(f.fecha)} ${esc(f.hora || '')}`],
                 ['Monto', f => fmt(f.monto), 'num'],
@@ -1092,7 +1105,7 @@
         detectarTimer = setTimeout(() => {
             if (gen !== detectarGen) return;
             // Pedido con más de 90 min: el servidor lo da por vencido y avisa (no se sigue consultando).
-            if (pedidos.some(c => c.pedido.pedido_en && (Date.now() - Date.parse(c.pedido.pedido_en)) > 90 * 60000)) {
+            if (pedidos.some(c => c.pedido.pedido_en && (Date.now() - Date.parse(c.pedido.pedido_en)) > (Number(c.espera_min) || 90) * 60000)) {
                 detectarRetiros(true);
                 return;
             }
@@ -1137,7 +1150,7 @@
                 ultimosReportes = (d.reportes || []).map(r => r.file_name);
                 const fmtF = t => esc(String(t || '').replace('T', ' ').slice(0, 16));
                 cont.innerHTML = tablaSimple([
-                    ['Creado', r => fmtF(r.creado)],
+                    ['Creado', r => r.creado_local ? esc(r.creado_local) : fmtF(r.creado)],
                     ['Período', r => `${fmtF(r.begin_date)} a ${fmtF(r.end_date)} <span class="conc-sub">UTC</span>`],
                     ['Origen', r => r.origen === 'schedule' ? 'Automático' : 'Manual'],
                     ['', r => `${r.procesado ? '<span class="conc-chip conc-chip--ok me-1">Aplicado</span>' : ''}
