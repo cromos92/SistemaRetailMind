@@ -1,7 +1,7 @@
 {# Modal + JS para asociar cobros Mercado Pago con su venta. Se incluye ANTES del footer: #}
 {# jQuery / SweetAlert / Bootstrap se usan recién al hacer clic, cuando ya cargaron.       #}
 <style>
-    #modalAsociarMP .modal-dialog { max-width: min(1100px, 96vw); }
+    #modalAsociarMP .modal-dialog { max-width: min(1150px, 96vw); }
     #modalAsociarMP .asoc-resumen {
         display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: center;
         background: var(--nexo-primary-light); border-radius: var(--nexo-radius-md);
@@ -12,9 +12,12 @@
     #modalAsociarMP .conc-scroll { max-height: 34vh; }
     #modalAsociarMP tr.asoc-fila { cursor: pointer; }
     #modalAsociarMP tr.asoc-fila.seleccionada { background: var(--nexo-primary-light); }
+    #modalAsociarMP tr.asoc-bloqueada td { opacity: .6; }
     #modalAsociarMP input[type="radio"] { width: 18px; height: 18px; cursor: pointer; }
     #modalAsociarMP .asoc-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
     #modalAsociarMP .asoc-toolbar .form-control, #modalAsociarMP .asoc-toolbar .form-select { width: auto; min-height: 38px; }
+    .asoc-lote-tabla { width: 100%; font-size: .8rem; text-align: left; }
+    .asoc-lote-tabla td, .asoc-lote-tabla th { padding: 3px 6px; border-bottom: 1px solid var(--nexo-gray-100); }
 </style>
 
 <div class="modal fade" id="modalAsociarMP" tabindex="-1">
@@ -29,18 +32,18 @@
 
                 <!-- Elegir la VENTA (cobro sin venta / pago que solo está en MP) -->
                 <div id="asocBloqueVentas">
-                    <div class="asoc-seccion">¿A qué venta corresponde? <span class="text-muted fw-normal small">(pagos con tarjeta manual o «MP manual» del mismo monto)</span></div>
+                    <div class="asoc-seccion">¿A qué venta corresponde? <span class="text-muted fw-normal small">(ventas del mismo monto, sin cobro de Mercado Pago)</span></div>
                     <div class="asoc-toolbar">
-                        <input type="search" class="form-control" id="asocBuscar" placeholder="Ticket, folio o N° digitado">
-                        <div class="form-check">
+                        <input type="search" class="form-control" id="asocBuscar" placeholder="Ticket, N° de boleta/factura o N° digitado">
+                        <div class="form-check" {% if not es_admin %}style="display:none;"{% endif %}>
                             <input class="form-check-input" type="checkbox" id="asocTodas">
-                            <label class="form-check-label" for="asocTodas">Buscar en todas las sucursales</label>
+                            <label class="form-check-label" for="asocTodas">Buscar en todas las tiendas</label>
                         </div>
                         <button type="button" class="btn btn-sm btn-outline-primary" onclick="asocBuscarVentas()"><i class="ri-search-line me-1"></i>Buscar</button>
                     </div>
                     <div class="conc-scroll">
                         <table class="table conc-table">
-                            <thead><tr><th></th><th>Ticket / documento</th><th>Fecha</th><th>Sucursal</th><th>Pago registrado</th><th>N° digitado</th><th class="num">Monto</th><th>Coincidencia</th></tr></thead>
+                            <thead><tr><th></th><th>Ticket / documento</th><th>Pago registrado</th><th>Tienda</th><th>Anotado como</th><th>N° digitado</th><th class="num">Monto</th><th>Coincidencia</th></tr></thead>
                             <tbody id="asocTbodyVentas"></tbody>
                         </table>
                     </div>
@@ -87,10 +90,13 @@
 (function () {
     'use strict';
     const API = '/app/api/mercadopago/asociar/';
+    const ES_ADMIN_ASOC = {{ es_admin|yesno:"true,false" }};
+    // Con permiso solo de VER se listan los pendientes, sin botones que asignen.
+    const PUEDE_EDITAR_ASOC = {{ puede_asociar_mp|yesno:"true,false" }};
     const fmt = v => '$' + (Math.round(Number(v) || 0)).toLocaleString('es-CL');
     const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const csrf = () => { const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/); return m ? decodeURIComponent(m[1]) : ''; };
-    const estado = { modo: null, trxId: null, pagoId: null, fila: null, seleccion: null, cajas: [] };
+    const estado = { modo: null, trxId: null, pagoId: null, fila: null, seleccion: null, cajas: [], candidatos: {}, filasMP: {}, filasManual: {} };
 
     // Llegada desde la Cuadratura: ?desde=&hasta=&sucursal_id=&tab=asociar
     const qs = new URLSearchParams(window.location.search);
@@ -128,9 +134,18 @@
         return d;
     }
 
+    // Después de asignar: la pestaña Asociar, los KPIs y, si está abierta, «Contra Mercado Pago».
+    function refrescar() {
+        window.asocCargarPendientes();
+        if (typeof window.recargarConciliacion === 'function') window.recargarConciliacion();
+        const pane = document.getElementById('pane-contra');
+        if (pane && pane.classList.contains('active') && typeof window.consultarContraMP === 'function') window.consultarContraMP();
+    }
+
     function coincidencia(f) {
         const chips = [];
         if (f.mismo_voucher) chips.push('<span class="conc-chip conc-chip--ok">mismo N°</span>');
+        if (f.voucher_parecido) chips.push(`<span class="conc-chip conc-chip--warn" title="El N° digitado es este con un error de tipeo">N° parecido: ${esc(f.voucher_parecido)}</span>`);
         if (f.mismo_correlativo) chips.push('<span class="conc-chip conc-chip--ok">mismo ticket</span>');
         if (f.minutos != null) chips.push(`<span class="conc-chip conc-chip--mute">${f.minutos < 90 ? f.minutos + ' min' : Math.round(f.minutos / 60) + ' h'}</span>`);
         return chips.join(' ');
@@ -157,7 +172,7 @@
                     <td>${esc(c.medio)}${c.ultimos_4 ? ' ···' + esc(c.ultimos_4) : ''}</td>
                     <td><code>${esc(c.n_operacion || '—')}</code></td>
                     <td class="num fw-semibold">${fmt(c.monto)}</td>
-                    <td class="text-end"><button type="button" class="btn btn-sm btn-primary" onclick="asocAbrirCobro(${c.id})"><i class="ri-links-line me-1"></i>Asociar</button></td>
+                    <td class="text-end">${PUEDE_EDITAR_ASOC ? `<button type="button" class="btn btn-sm btn-primary" onclick="asocAbrirCobro(${Number(c.id)})"><i class="ri-links-line me-1"></i>Asociar</button>` : ''}</td>
                 </tr>`).join('') : '<tr><td colspan="7" class="conc-empty">Sin cobros pendientes en el período. 👍</td></tr>';
             tbM.innerHTML = d.manuales.length ? d.manuales.map(m => `
                 <tr>
@@ -167,7 +182,7 @@
                     <td>${esc(m.metodo_display)}</td>
                     <td><code>${esc(m.voucher || '—')}</code></td>
                     <td class="num fw-semibold">${fmt(m.monto)}</td>
-                    <td class="text-end"><button type="button" class="btn btn-sm btn-outline-primary" onclick="asocAbrirPago(${m.id})"><i class="ri-search-eye-line me-1"></i>Verificar</button></td>
+                    <td class="text-end">${PUEDE_EDITAR_ASOC ? `<button type="button" class="btn btn-sm btn-outline-primary" onclick="asocAbrirPago(${Number(m.id)})"><i class="ri-search-eye-line me-1"></i>Verificar</button>` : ''}</td>
                 </tr>`).join('') : '<tr><td colspan="7" class="conc-empty">Sin pagos «MP manual» pendientes. 👍</td></tr>';
         }).catch(e => {
             tbC.innerHTML = `<tr><td colspan="7" class="conc-empty text-danger">${esc(e.message)}</td></tr>`;
@@ -177,6 +192,7 @@
 
     // ── Ganchos en las tablas de la conciliación ──
     window.accionExtraConciliacion = function (f) {
+        if (!PUEDE_EDITAR_ASOC) return '';
         if (f.origen === 'COBRO_MP' && (f.categoria === 'SIN_VENTA' || f.categoria === 'COBRO_DIRECTO')) {
             return ` <button type="button" class="btn btn-sm btn-primary py-0" onclick="asocAbrirCobro(${Number(f.id)})"><i class="ri-links-line"></i> Asociar</button>`;
         }
@@ -186,21 +202,115 @@
         return '';
     };
     window.accionExtraContraMP = function (f) {
+        if (!PUEDE_EDITAR_ASOC) return '';
         if (f.tipo === 'SIN_REGISTRO') {
-            estado.filasMP = estado.filasMP || {};
             estado.filasMP[f.payment_id] = f;
-            return `<button type="button" class="btn btn-sm btn-primary py-0" onclick="asocAbrirPagoMP('${esc(f.payment_id)}')"><i class="ri-links-line"></i> Asociar a venta</button>`;
+            const pid = esc(f.payment_id);
+            if (f.sugerencia) {
+                return `<div class="d-flex flex-column align-items-end gap-1">
+                    <button type="button" class="btn btn-sm btn-primary py-0" style="white-space:nowrap;" onclick="asocAsignarSugerida('${pid}')"><i class="ri-links-line"></i> Asignar a #${esc(f.sugerencia.ticket)}</button>
+                    <button type="button" class="btn btn-link btn-sm p-0" onclick="asocAbrirPagoMP('${pid}')">Otra venta…</button></div>`;
+            }
+            if (f.n_mal_digitado) return '';   // se corrige desde la fila del «MP manual»
+            return `<button type="button" class="btn btn-sm btn-outline-primary py-0" style="white-space:nowrap;" onclick="asocAbrirPagoMP('${pid}')"><i class="ri-search-line"></i> Buscar venta</button>`;
         }
         if (f.tipo === 'MANUAL_SIN_PAGO' && f.pago_id) {
-            return `<button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="asocAbrirPago(${Number(f.pago_id)})"><i class="ri-search-eye-line"></i> Corregir</button>`;
+            estado.filasManual[f.pago_id] = f;
+            const corregir = f.sugerencia_n
+                ? `<button type="button" class="btn btn-sm btn-primary py-0" style="white-space:nowrap;" onclick="asocCorregirN(${Number(f.pago_id)})"><i class="ri-edit-line"></i> Corregir N°</button>` : '';
+            return `<div class="d-flex flex-column align-items-end gap-1">${corregir}
+                <button type="button" class="btn btn-sm ${corregir ? 'btn-link p-0' : 'btn-outline-primary py-0'}" style="white-space:nowrap;" onclick="asocAbrirPago(${Number(f.pago_id)})">${corregir ? 'Buscar otro…' : '<i class="ri-search-eye-line"></i> Buscar en MP'}</button></div>`;
         }
         return '';
+    };
+
+    // ── Asignar directo desde «Contra Mercado Pago» ──
+    const filaLote = f => `<tr><td>${esc(String(f.fecha || '').slice(5))}</td><td>${esc(f.sucursal || f.caja || '')}</td><td class="text-end">${fmt(f.monto)}</td>
+        <td>→ #${esc(f.sugerencia.ticket)}${f.sugerencia.documento ? ' · ' + esc(f.sugerencia.documento) : ''}</td>
+        <td>${esc(f.sugerencia.metodo)}${f.sugerencia.voucher ? ' N° ' + esc(f.sugerencia.voucher) : ''}${f.sugerencia.parecido ? ' <span class="text-warning">(' + esc(f.sugerencia.parecido) + ')</span>' : ''}</td></tr>`;
+
+    window.asocAsignarSugerida = async function (paymentId) {
+        const f = estado.filasMP[paymentId];
+        if (!f || !f.sugerencia) return;
+        const s = f.sugerencia;
+        const ok = await Swal.fire({
+            icon: 'question', title: `Asignar ${fmt(f.monto)} al ticket #${s.ticket}`, width: 620,
+            html: `<div class="text-start small">
+                <p class="mb-2">Cobro de Mercado Pago <code>${esc(f.payment_id)}</code> del ${esc(f.fecha)} (${esc(f.medio)}${f.ultimos_4 ? ' ···' + esc(f.ultimos_4) : ''}) en <strong>${esc(f.caja)}</strong>.</p>
+                <p class="mb-2">Venta: <strong>ticket #${esc(s.ticket)}</strong>${s.documento ? ' · ' + esc(s.documento) : ''}, anotada como <strong>${esc(s.metodo)}</strong>${s.voucher ? ' N° ' + esc(s.voucher) : ''} a las ${esc(s.hora_pago)}${s.vendedor ? ' por ' + esc(s.vendedor) : ''}.</p>
+                <p class="mb-0">El pago de esa venta pasa a <strong>Mercado Pago</strong> con el N° ${esc(f.payment_id)}, se corrige el documento y se recalcula el arqueo de ese día.</p></div>`,
+            showCancelButton: true, confirmButtonText: 'Sí, asignar', cancelButtonText: 'Cancelar', confirmButtonColor: '#0066FF',
+        });
+        if (!ok.isConfirmed) return;
+        Swal.fire({ title: 'Asignando…', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        try {
+            const d = await api(API + 'importar/', { payment_id: f.payment_id, pago_id: s.pago_id, config_id: f.config_id, recalcular_arqueo: true });
+            await Swal.fire({ icon: 'success', title: 'Asignado', text: d.mensaje });
+            refrescar();
+        } catch (e) {
+            Swal.fire('No se pudo asignar', e.message, 'error');
+        }
+    };
+
+    window.asocCorregirN = async function (pagoId) {
+        const f = estado.filasManual[pagoId];
+        if (!f || !f.sugerencia_n) return;
+        const s = f.sugerencia_n;
+        const ok = await Swal.fire({
+            icon: 'question', title: `Corregir el N° del ticket #${f.ticket}`, width: 600,
+            html: `<div class="text-start small">
+                <p class="mb-2">Anotado en el POS: <code>${esc(f.voucher)}</code><br>Cobro real en Mercado Pago: <code>${esc(s.payment_id)}</code> (${esc(s.explicacion)}),
+                   ${fmt(f.monto)}, ${esc(s.fecha)}${s.ultimos_4 ? ' ···' + esc(s.ultimos_4) : ''}.</p>
+                <p class="mb-0">Se corrige el N° en la venta y en el documento, y el cobro queda registrado en el sistema con su fecha real.</p></div>`,
+            showCancelButton: true, confirmButtonText: 'Sí, corregir', cancelButtonText: 'Cancelar', confirmButtonColor: '#0066FF',
+        });
+        if (!ok.isConfirmed) return;
+        Swal.fire({ title: 'Corrigiendo…', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        try {
+            const d = await api(API + 'importar/', { payment_id: s.payment_id, pago_id: Number(pagoId), config_id: s.config_id, recalcular_arqueo: true });
+            await Swal.fire({ icon: 'success', title: 'N° corregido', text: d.mensaje });
+            refrescar();
+        } catch (e) {
+            Swal.fire('No se pudo corregir', e.message, 'error');
+        }
+    };
+
+    window.asocAsignarLote = async function (filas) {
+        filas = (filas || []).filter(f => f && f.sugerencia);
+        if (!filas.length) return;
+        filas.forEach(f => { estado.filasMP[f.payment_id] = f; });
+        const ok = await Swal.fire({
+            icon: 'question', title: `Asignar ${filas.length} pago(s) a su venta`, width: 820,
+            html: `<div class="text-start small"><p class="mb-2">Cada cobro de Mercado Pago queda en la venta indicada (el pago pasa a Mercado Pago con su N°).
+                Los que no se puedan asignar se informan al final y no frenan a los demás.</p>
+                <div style="max-height:45vh;overflow:auto;"><table class="asoc-lote-tabla"><thead><tr><th>Cobro</th><th>Tienda</th><th class="text-end">Monto</th><th>Venta</th><th>Anotada como</th></tr></thead>
+                <tbody>${filas.map(filaLote).join('')}</tbody></table></div></div>`,
+            showCancelButton: true, confirmButtonText: `Sí, asignar ${filas.length}`, cancelButtonText: 'Cancelar', confirmButtonColor: '#0066FF',
+        });
+        if (!ok.isConfirmed) return;
+        Swal.fire({ title: `Asignando ${filas.length} pago(s)…`, text: 'Se consulta cada pago en Mercado Pago.', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        try {
+            const d = await api(API + 'lote/', { items: filas.map(f => ({ payment_id: f.payment_id, pago_id: f.sugerencia.pago_id, config_id: f.config_id })) });
+            const fallidos = (d.resultados || []).filter(r => !r.ok);
+            await Swal.fire({
+                icon: fallidos.length ? 'warning' : 'success', width: 720,
+                title: `${d.asignados} asignado(s)${fallidos.length ? ` · ${fallidos.length} no` : ''}`,
+                html: `<div class="text-start small">
+                    ${fallidos.length ? `<p class="mb-1 fw-semibold">No se asignaron:</p><ul>${fallidos.map(r => `<li><code>${esc(r.payment_id)}</code>: ${esc(r.error)}</li>`).join('')}</ul>` : ''}
+                    ${(d.arqueos || []).length ? `<p class="mb-1 fw-semibold">Arqueos:</p><ul>${d.arqueos.map(a => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}
+                    ${d.recortado ? '<p class="mb-0 text-warning">Había más pagos: vuelva a consultar y asigne el resto.</p>' : ''}</div>`,
+            });
+            refrescar();
+        } catch (e) {
+            Swal.fire('No se pudo asignar', e.message, 'error');
+        }
     };
 
     // ── Modal ──
     function abrirModal(modo, titulo) {
         estado.modo = modo;
         estado.seleccion = null;
+        estado.candidatos = {};
         document.getElementById('asocTitulo').textContent = titulo;
         document.getElementById('asocBloqueVentas').style.display = (modo === 'cobro' || modo === 'mpapi') ? '' : 'none';
         document.getElementById('asocBloqueCobros').style.display = modo === 'pago' ? '' : 'none';
@@ -224,6 +334,7 @@
         const tr = e.target.closest('tr.asoc-fila');
         if (!tr) return;
         const radio = tr.querySelector('input[type="radio"]');
+        if (!radio) return;
         radio.checked = true;
         seleccionar(radio.value, tr);
     });
@@ -237,17 +348,27 @@
 
     function pintarVentas(candidatos) {
         const tb = document.getElementById('asocTbodyVentas');
-        tb.innerHTML = candidatos.length ? candidatos.map(p => `
-            <tr class="asoc-fila">
-                <td><input type="radio" name="asocSel" value="pago:${p.id}"></td>
-                <td>#${esc(p.correlativo)} ${p.folio ? '<span class="conc-sub">' + esc(p.tipo_dte) + ' ' + esc(p.folio) + '</span>' : ''}${p.cliente ? '<div class="conc-sub">' + esc(p.cliente) + '</div>' : ''}</td>
-                <td>${esc(p.fecha)} <span class="conc-sub">${esc(p.hora)}</span></td>
+        estado.candidatos = {};
+        candidatos.forEach(p => { estado.candidatos[p.id] = p; });
+        tb.innerHTML = candidatos.length ? candidatos.map(p => {
+            const bloqueada = p.asociable === false;
+            const doc = p.documento || (p.folio ? `${p.tipo_dte} ${p.folio}` : '');
+            return `
+            <tr class="${bloqueada ? 'asoc-bloqueada' : 'asoc-fila'}" title="${bloqueada ? esc('No se puede asignar: ' + p.motivo) : ''}">
+                <td>${bloqueada ? '<i class="ri-lock-line text-muted"></i>' : `<input type="radio" name="asocSel" value="pago:${Number(p.id)}">`}</td>
+                <td>#${esc(p.correlativo)}${doc ? ' <span class="conc-sub">' + esc(doc) + '</span>' : ''}
+                    ${p.cliente ? '<div class="conc-sub">' + esc(p.cliente) + '</div>' : ''}
+                    ${p.vendedor || p.productos ? '<div class="conc-sub">' + esc([p.vendedor, p.productos].filter(Boolean).join(' · ')) + '</div>' : ''}</td>
+                <td>${esc(p.fecha)} <span class="conc-sub">${esc(p.hora_pago || p.hora)}</span></td>
                 <td>${esc(p.sucursal)}</td>
-                <td>${esc(p.metodo_display)}${p.origen === 'MANUAL' ? ' <span class="conc-chip conc-chip--mute">manual</span>' : ''}</td>
+                <td>${esc(p.metodo_display)}${p.origen === 'MANUAL' ? ' <span class="conc-chip conc-chip--mute">manual</span>' : ''}
+                    ${p.otro_medio && !bloqueada ? '<div class="conc-sub text-warning">al asignarlo baja el efectivo teórico del arqueo</div>' : ''}
+                    ${bloqueada ? '<div class="conc-sub text-danger">' + esc(p.motivo) + '</div>' : ''}</td>
                 <td><code>${esc(p.voucher || '—')}</code></td>
                 <td class="num fw-semibold">${fmt(p.monto)}</td>
                 <td>${coincidencia(p)}</td>
-            </tr>`).join('') : '<tr><td colspan="8" class="conc-empty">No hay pagos del mismo monto en esas fechas. Prueba buscando por N° de ticket o en todas las sucursales.</td></tr>';
+            </tr>`;
+        }).join('') : '<tr><td colspan="8" class="conc-empty">No hay ventas de ese monto en esas fechas. Busque por N° de ticket o de boleta; si la venta no se registró, regístrela en el POS y vuelva a asignar.</td></tr>';
     }
 
     window.asocBuscarVentas = function () {
@@ -257,7 +378,8 @@
         if (estado.modo === 'cobro') url = `${API}candidatos/?trx_id=${estado.trxId}&q=${q}&todas=${todas}`;
         else {
             const f = estado.fila;
-            url = `${API}candidatos/?monto=${f.monto}&fecha=${encodeURIComponent(f.fecha || '')}&sucursal_id=${f.sucursal_id || ''}&payment_id=${encodeURIComponent(f.payment_id)}&q=${q}&todas=${todas}`;
+            url = `${API}candidatos/?monto=${Number(f.monto)}&instante=${encodeURIComponent(f.instante || '')}&fecha=${encodeURIComponent(f.fecha || '')}`
+                + `&sucursal_id=${f.sucursal_id || ''}&payment_id=${encodeURIComponent(f.payment_id)}&q=${q}&todas=${todas}`;
         }
         document.getElementById('asocTbodyVentas').innerHTML = '<tr><td colspan="8" class="conc-empty"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
         seleccionar(null, null);
@@ -284,17 +406,19 @@
     };
 
     window.asocAbrirPagoMP = function (paymentId) {
-        const f = (estado.filasMP || {})[paymentId];
+        const f = estado.filasMP[paymentId];
         if (!f) return;
         estado.fila = f;
-        abrirModal('mpapi', 'Registrar pago de Mercado Pago en su venta');
+        abrirModal('mpapi', 'Asignar pago de Mercado Pago a su venta');
         document.getElementById('asocResumen').innerHTML = `
             <div><div class="conc-sub">Pago en Mercado Pago (no está en el sistema)</div><div class="asoc-monto">${fmt(f.monto)}</div></div>
-            <div><div class="conc-sub">Fecha</div>${esc(f.fecha)}</div>
+            <div><div class="conc-sub">Cobrado</div>${esc(f.fecha)}</div>
             <div><div class="conc-sub">N° operación</div><code>${esc(f.payment_id)}</code></div>
-            <div><div class="conc-sub">Medio</div>${esc(f.medio)}</div>
-            <div><div class="conc-sub">Cuenta / caja</div>${esc(f.caja || '')}</div>
+            <div><div class="conc-sub">Medio</div>${esc(f.medio)}${f.ultimos_4 ? ' ···' + esc(f.ultimos_4) : ''}</div>
+            <div><div class="conc-sub">Tienda</div>${f.atribuida ? esc(f.caja) : 'sin atribuir (Mercado Pago no informó la caja)'}</div>
             ${f.descripcion ? `<div><div class="conc-sub">Descripción</div>${esc(f.descripcion)}</div>` : ''}`;
+        // Sin tienda atribuida, el administrador busca en todas.
+        if (!f.atribuida && ES_ADMIN_ASOC) document.getElementById('asocTodas').checked = true;
         asocBuscarVentas();
     };
 
@@ -315,7 +439,7 @@
             const c = d.candidatos || [];
             tb.innerHTML = c.length ? c.map(t => `
                 <tr class="asoc-fila">
-                    <td><input type="radio" name="asocSel" value="trx:${t.id}"></td>
+                    <td><input type="radio" name="asocSel" value="trx:${Number(t.id)}"></td>
                     <td>${esc(t.fecha)} <span class="conc-sub">${esc(t.hora)}</span></td>
                     <td>${esc(t.sucursal)} <span class="conc-sub">${esc(t.caja)}</span></td>
                     <td>${t.es_directo ? '<span class="conc-chip conc-chip--info">cobro directo</span> ' : ''}<code>${esc(t.correlativo)}</code></td>
@@ -327,7 +451,7 @@
             const sel = document.getElementById('asocCaja');
             const propias = estado.cajas.filter(x => String(x.sucursal_id) === String(p.sucursal_id));
             const resto = estado.cajas.filter(x => String(x.sucursal_id) !== String(p.sucursal_id));
-            sel.innerHTML = propias.concat(resto).map(x => `<option value="${x.id}">${esc(x.sucursal)} · ${esc(x.nombre)}</option>`).join('')
+            sel.innerHTML = propias.concat(resto).map(x => `<option value="${Number(x.id)}">${esc(x.sucursal)} · ${esc(x.nombre)}</option>`).join('')
                 || '<option value="">No hay cajas Mercado Pago</option>';
         }).catch(e => { document.getElementById('asocResumen').innerHTML = `<span class="text-danger">${esc(e.message)}</span>`; });
     };
@@ -337,13 +461,13 @@
         const tb = document.getElementById('asocTbodyPagosMP');
         if (!caja) return;
         tb.innerHTML = '<tr><td colspan="7" class="conc-empty"><div class="spinner-border spinner-border-sm text-primary"></div> Consultando Mercado Pago…</td></tr>';
-        api(`${API}candidatos/?pago_id=${estado.pagoId}&buscar_mp=1&config_id=${caja}`).then(d => {
+        api(`${API}candidatos/?pago_id=${estado.pagoId}&buscar_mp=1&config_id=${encodeURIComponent(caja)}`).then(d => {
             const pagos = d.pagos_mp || [];
             tb.innerHTML = pagos.length ? pagos.map(p => `
                 <tr class="${p.ya_registrado ? '' : 'asoc-fila'}">
                     <td>${p.ya_registrado ? '' : `<input type="radio" name="asocSel" value="mp:${esc(p.payment_id)}">`}</td>
                     <td>${esc(p.fecha)}</td>
-                    <td><code>${esc(p.payment_id)}</code>${p.mismo_voucher ? ' <span class="conc-chip conc-chip--ok">mismo N°</span>' : ''}</td>
+                    <td><code>${esc(p.payment_id)}</code>${p.mismo_voucher ? ' <span class="conc-chip conc-chip--ok">mismo N°</span>' : ''}${p.parecido ? ` <span class="conc-chip conc-chip--warn" title="El N° digitado es este con un error de tipeo">N° parecido: ${esc(p.parecido)}</span>` : ''}</td>
                     <td>${esc(p.medio)}${p.ultimos_4 ? ' ···' + esc(p.ultimos_4) : ''}</td>
                     <td class="small">${esc(p.descripcion || p.external_reference || '')}</td>
                     <td class="num fw-semibold">${fmt(p.monto)}</td>
@@ -364,7 +488,7 @@
         } else if (estado.modo === 'mpapi') {
             url = API + 'importar/';
             cuerpo = { payment_id: estado.fila.payment_id, pago_id: Number(valor), config_id: estado.fila.config_id, recalcular_arqueo: recalcular };
-            texto = `El pago N° ${estado.fila.payment_id} se registrará en el sistema y quedará asociado a esa venta.`;
+            texto = `El pago N° ${estado.fila.payment_id} se registrará en el sistema con su fecha real y quedará en esa venta.`;
         } else if (tipo === 'trx') {
             url = API + 'cobro/'; cuerpo = { trx_id: Number(valor), pago_id: estado.pagoId, recalcular_arqueo: recalcular };
             texto = 'El pago «MP manual» quedará respaldado por ese cobro.';
@@ -373,7 +497,15 @@
             cuerpo = { payment_id: valor, pago_id: estado.pagoId, config_id: Number(document.getElementById('asocCaja').value), recalcular_arqueo: recalcular };
             texto = `Se traerá de Mercado Pago el pago N° ${valor} y respaldará esta venta (el N° digitado se corrige si era distinto).`;
         }
-        const ok = await Swal.fire({ icon: 'question', title: '¿Asociar?', text: texto, showCancelButton: true,
+        const elegido = tipo === 'pago' ? estado.candidatos[Number(valor)] : null;
+        let html = `<div class="small">${esc(texto)}</div>`;
+        if (elegido && elegido.otro_medio) {
+            cuerpo.confirmar_otro_medio = true;
+            html += `<div class="small text-start mt-2 p-2 rounded" style="background:#fff3cd;">La venta está anotada en <strong>${esc(elegido.metodo_display)}</strong>.
+                Al asignarla pasa a Mercado Pago y el <strong>efectivo teórico del arqueo de ese día baja ${fmt(elegido.monto)}</strong>.
+                Hágalo solo si está seguro de que se cobró con la máquina de Mercado Pago.</div>`;
+        }
+        const ok = await Swal.fire({ icon: elegido && elegido.otro_medio ? 'warning' : 'question', title: '¿Asociar?', html, showCancelButton: true,
                                      confirmButtonText: 'Sí, asociar', cancelButtonText: 'Cancelar' });
         if (!ok.isConfirmed) return;
         Swal.fire({ title: 'Asociando…', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
@@ -381,8 +513,7 @@
             const d = await api(url, cuerpo);
             bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAsociarMP')).hide();
             await Swal.fire({ icon: 'success', title: 'Asociado', text: d.mensaje });
-            window.asocCargarPendientes();
-            if (typeof window.recargarConciliacion === 'function') window.recargarConciliacion();
+            refrescar();
         } catch (e) {
             Swal.fire('No se pudo asociar', e.message, 'error');
         }

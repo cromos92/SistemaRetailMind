@@ -30,6 +30,7 @@ from .models import (
     Empresa,
     MercadoPagoConfig,
     MercadoPagoCuenta,
+    PermisoRol,
     RetiroMercadoPago,
     Sucursal,
     TransaccionMercadoPago,
@@ -1932,7 +1933,9 @@ def _sucursal_filtro_conciliacion(request):
     if _es_admin(request):
         valor = request.GET.get('sucursal_id') or request.POST.get('sucursal_id') or ''
         return int(valor) if str(valor).isdigit() else None
-    return _sucursal_sesion(request)
+    # Sin tienda en la sesión: ninguna (-1), nunca «todas».
+    sesion = _sucursal_sesion(request)
+    return int(sesion) if str(sesion or '').isdigit() else -1
 
 
 @login_required
@@ -1967,6 +1970,17 @@ def api_conciliacion_contra_mp(request):
         request.GET.get('desde'), request.GET.get('hasta'),
         sucursal_id=_sucursal_filtro_conciliacion(request),
     )
+    # Quien puede asignar pagos ve, en cada pago sin registro, la venta que lo
+    # explica (misma tienda, día y monto exacto) para asignarla con un clic.
+    puede_asignar = PermisoRol.tiene_permiso(
+        request.user, 'asociar_pagos_mercadopago', 'puede_editar', request.session.get('idSucursalActual'))
+    if puede_asignar:
+        from .services import asociacion_mp_service as asoc
+        from .views_mercadopago_asociacion import alcance
+        asoc.sugerir_ventas(data['sin_registro'], sucursal_permitida=alcance(request),
+                            vouchers_calzados=data.get('vouchers_calzados') or ())
+    data.pop('vouchers_calzados', None)   # uso interno
+    data['puede_asignar'] = puede_asignar
     data['success'] = True
     return JsonResponse(data)
 

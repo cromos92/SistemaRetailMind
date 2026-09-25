@@ -9,8 +9,8 @@ Cubre:
 2. Pago «MP manual» ↔ cobro directo sin venta.
 3. Montos distintos, cobros ya consumidos y pagos no asociables se rechazan.
 4. Importar desde la API (mockeada) un pago que el sistema no tenía.
-5. Permisos: solo quien tenga `asociar_pagos_mercadopago` (por defecto el
-   Maestro) usa los endpoints; el administrador recibe 403.
+5. Permisos: solo quien tenga `asociar_pagos_mercadopago` (Maestro, y desde la
+   0235 Administrador y Administración) usa los endpoints; un vendedor recibe 403.
 6. Alerta de caja (resumen_alerta_caja).
 """
 import json
@@ -160,21 +160,24 @@ class AsociarEndpointsTests(_Base):
         s.save()
         return c
 
-    def test_solo_maestro_por_defecto(self):
+    def test_administrador_si_vendedor_no(self):
+        """Desde la 0235 (pedido 25-09) Administrador y Administración asignan
+        pagos sin esperar al Maestro; un rol sin el permiso recibe 403."""
         _t, pago = self._venta(8200, 15000)
         trx = _transaccion(self.config, correlativo='8200', monto=15000)
         cuerpo = json.dumps({'trx_id': trx.id, 'pago_id': pago.id, 'recalcular_arqueo': False})
 
-        r = self._cliente(self.admin).post('/app/api/mercadopago/asociar/cobro/', cuerpo,
-                                           content_type='application/json', HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        vendedor = crear_usuario(username='vend-mp', rol='vendedor')
+        crear_empresa_user(vendedor, self.empresa, self.sucursal)
+        r = self._cliente(vendedor).post('/app/api/mercadopago/asociar/cobro/', cuerpo,
+                                         content_type='application/json', HTTP_X_REQUESTED_WITH='XMLHttpRequest')
         self.assertEqual(r.status_code, 403)
         trx.refresh_from_db()
         self.assertFalse(trx.consumida)
-        # La migración 0234 deja la fila del administrador explícita y apagada.
-        self.assertFalse(PermisoRol.objects.get(rol='administrador',
-                                                opcion_menu__codigo='asociar_pagos_mercadopago').puede_editar)
+        for rol in ('administrador', 'administracion'):
+            self.assertTrue(PermisoRol.objects.get(rol=rol, opcion_menu__codigo='asociar_pagos_mercadopago').puede_editar)
 
-        c = self._cliente(self.maestro)
+        c = self._cliente(self.admin)
         r = c.get('/app/api/mercadopago/asociar/pendientes/', HTTP_X_REQUESTED_WITH='XMLHttpRequest')
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()['resumen']['cobros_cantidad'], 1)

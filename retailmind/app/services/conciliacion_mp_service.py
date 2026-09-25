@@ -322,6 +322,41 @@ def _solo_digitos(valor):
     return re.sub(r'\D', '', str(valor or ''))
 
 
+def _distancia_edicion(a, b):
+    """Cambios de a un carácter (quitar, poner, cambiar o invertir dos vecinos)
+    para pasar de `a` a `b` (Damerau-Levenshtein restringida)."""
+    previa, actual = None, list(range(len(b) + 1))
+    for i in range(1, len(a) + 1):
+        anterior, previa, actual = previa, actual, [i] + [0] * len(b)
+        for j in range(1, len(b) + 1):
+            costo = 0 if a[i - 1] == b[j - 1] else 1
+            actual[j] = min(previa[j] + 1, actual[j - 1] + 1, previa[j - 1] + costo)
+            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                actual[j] = min(actual[j], anterior[j - 2] + 1)
+    return actual[len(b)]
+
+
+def n_parecido(digitado, real):
+    """Si el N° de operación `digitado` parece el `real` con UN error de tipeo,
+    dice cuál («falta un 8»); si no, ''. Solo para N° largos (8+ dígitos): los
+    N° de MP de una misma cuenta son casi correlativos y con N° cortos cualquier
+    cosa se parece. Caso real 21-09: 18014409060 digitado por 180148409060."""
+    a, b = _solo_digitos(digitado), _solo_digitos(real)
+    if not a or not b or a == b or min(len(a), len(b)) < 8 or abs(len(a) - len(b)) > 1:
+        return ''
+    if _distancia_edicion(a, b) != 1:
+        return ''
+    corto = min(len(a), len(b))
+    i = next((k for k in range(corto) if a[k] != b[k]), corto)
+    if len(a) < len(b):
+        return f'falta un {b[i]}'
+    if len(a) > len(b):
+        return f'sobra un {a[i]}'
+    if i + 1 < len(a) and a[i] == b[i + 1] and a[i + 1] == b[i]:
+        return f'«{b[i]}{b[i + 1]}» escrito al revés'
+    return f'dice {a[i]} donde va {b[i]}'
+
+
 def _sin_tildes(texto):
     return (str(texto or '').upper()
             .replace('Á', 'A').replace('É', 'E').replace('Í', 'I')
@@ -2700,11 +2735,13 @@ def diferencias_contra_mp(desde, hasta, sucursal_id=None):
 
     pagos_por_token_dia = {}
     config_de_token = {}
+    atribucion = {}              # N° de pago -> {config_id} donde el cierre lo atribuyó
     errores = []
     cajas = []
     ids_mp_vistos = set()
     sin_registro = []
     dias = [d + timedelta(days=i) for i in range((h - d).days + 1)]
+    cfg_por_id = {c.id: c for c in configs}
 
     for cfg in configs:
         try:
@@ -2726,6 +2763,12 @@ def diferencias_contra_mp(desde, hasta, sucursal_id=None):
             if pagos is None:
                 continue
             res = mp.conciliar_cierre_mp(cfg, dia, pagos=pagos)
+            # El cierre sabe de qué caja es cada pago sin registro (por el punto de
+            # venta que informa MP): se guarda para decir de qué TIENDA es cada fila
+            # de abajo, en vez de «la primera caja de la cuenta».
+            for item in res.get('sin_registro') or []:
+                if item.get('atribuible'):
+                    atribucion.setdefault(str(item.get('payment_id') or ''), set()).add(cfg.id)
             arqueo = (ArqueoCaja.objects.filter(sucursal_id=cfg.sucursal_id, fecha_arqueo=dia)
                       .order_by('-id').values('total_mercadopago_pos_teorico', 'cierre_mp_fisico')
                       .first()) or {}
@@ -2748,10 +2791,12 @@ def diferencias_contra_mp(desde, hasta, sucursal_id=None):
     # Pagos de MP (todas las cuentas, sin duplicar) vs registros locales.
     todos = {}
     cfg_de_pago = {}
+    token_de_pago = {}
     for (tok, _dia), pagos in pagos_por_token_dia.items():
         for p in pagos or []:
             todos[str(p.get('id'))] = p
             cfg_de_pago.setdefault(str(p.get('id')), config_de_token.get(tok))
+            token_de_pago.setdefault(str(p.get('id')), tok)
     ids_mp_vistos = set(todos)
     refs = {str(p.get('external_reference') or '') for p in todos.values()} - {''}
     refs_locales = set(TransaccionMercadoPago.objects.filter(external_reference__in=refs)
@@ -2765,9 +2810,26 @@ def diferencias_contra_mp(desde, hasta, sucursal_id=None):
                          creado_en__date__gte=d - timedelta(days=1),
                          creado_en__date__lte=h + timedelta(days=1))
                  .select_related('ticket', 'ticket__sucursal')):
-        voucher = re.sub(r'\D', '', pago.voucher or '')
+        voucher = _solo_digitos(pago.voucher)
         if voucher:
             vouchers_manuales[voucher] = pago
+    # Cuentas con UNA sola caja habilitada (todas las tiendas, no solo la filtrada):
+    # ahí un pago sin datos de caja es de esa caja sin duda.
+    cajas_por_token = {}
+    for c in MercadoPagoConfig.objects.select_related('sucursal', 'cuenta').filter(habilitado=True):
+        try:
+            cajas_por_token.setdefault(mp._token(c), []).append(c)
+        except mp.MercadoPagoError:
+            continue
+    unica_de_cuenta = {tok: cs[0] for tok, cs in cajas_por_token.items() if len(cs) == 1}
+    sin_atribuir_ocultos = 0
+    # N° de «MP manual» que YA son un pago aprobado de MP por el mismo monto (solo
+    # falta registrarlos al aplicar liberaciones): esas ventas tienen su cobro y no
+    # se le sugieren a otro pago.
+    vouchers_calzados = sorted(
+        v for v, pago in vouchers_manuales.items()
+        if v in todos and str(todos[v].get('status') or '') == 'approved'
+        and _monto(todos[v].get('transaction_amount')) == int(pago.monto or 0))
     for pid, p in todos.items():
         if str(p.get('status') or '') != 'approved':
             continue
@@ -2776,33 +2838,69 @@ def diferencias_contra_mp(desde, hasta, sucursal_id=None):
             continue
         cfg_pago = cfg_de_pago.get(pid)
         sucursal_ref = mp._sucursal_de_referencia(ref) if ref else None
+        # Tienda del pago: la caja a la que lo atribuyó el cierre; si no, la de la
+        # referencia propia; si la cuenta tiene una sola caja, esa. Si no, queda
+        # «sin atribuir» (nunca la primera caja de la cuenta a ciegas).
+        cajas_pago = [cfg_por_id[i] for i in (atribucion.get(pid) or ()) if i in cfg_por_id]
+        cfg_atr = None
+        if cajas_pago and len({c.sucursal_id for c in cajas_pago}) == 1:
+            # Una o más cajas de la MISMA tienda: la tienda es segura (se usa la principal).
+            cfg_atr = sorted(cajas_pago, key=lambda c: (not c.es_principal, c.id))[0]
+        if cfg_atr is None and sucursal_ref is not None:
+            cfg_atr = next((c for c in configs if c.sucursal_id == sucursal_ref), None)
+        if cfg_atr is None:
+            cfg_atr = unica_de_cuenta.get(token_de_pago.get(pid))
+        if sucursal_id and (cfg_atr is None or cfg_atr.sucursal_id != int(sucursal_id)):
+            if cfg_atr is None:
+                sin_atribuir_ocultos += 1
+            continue   # con una tienda elegida: solo los pagos que son de ella
+        instante = _instante(p.get('date_created'))
         sin_registro.append({
             'tipo': 'SIN_REGISTRO',
             'payment_id': pid,
-            'fecha': str(p.get('date_created') or '')[:16].replace('T', ' '),
+            # Hora de Chile (MP la entrega con su propio huso)
+            'fecha': (timezone.localtime(instante).strftime('%Y-%m-%d %H:%M') if instante
+                      else str(p.get('date_created') or '')[:16].replace('T', ' ')),
+            'instante': instante.isoformat() if instante else '',
             'monto': _monto(p.get('transaction_amount')),
             'medio': mp.etiqueta_medio_mp(p.get('payment_type_id')),
             'payment_type': str(p.get('payment_type_id') or ''),
+            'ultimos_4': str((p.get('card') or {}).get('last_four_digits') or '')[:4],
             'external_reference': ref,
             'descripcion': str(p.get('description') or '')[:60],
             'sucursal_ref': sucursal_ref,
-            # Cuenta por la que se leyó el pago (MP no dice la caja: si el
-            # external_reference es propio, sucursal_ref sí la identifica).
-            'config_id': cfg_pago.id if cfg_pago else None,
-            'caja': cfg_pago.nombre if cfg_pago else '',
-            'sucursal_id': sucursal_ref or (cfg_pago.sucursal_id if cfg_pago else None),
+            'atribuida': cfg_atr is not None,
+            # Caja por la que se lee el pago en la API (cualquiera de la cuenta sirve).
+            'config_id': (cfg_atr or cfg_pago).id if (cfg_atr or cfg_pago) else None,
+            'caja': f'{cfg_atr.sucursal.alias} · {cfg_atr.nombre}' if cfg_atr else 'Sin atribuir',
+            'sucursal_id': cfg_atr.sucursal_id if cfg_atr else None,
+            'sucursal': cfg_atr.sucursal.alias if cfg_atr else '',
         })
 
     manuales_sin_pago = []
     for pago in (TicketDetallePago.objects
                  .filter(metodo_pago__in=METODOS_MP, origen_pago='MANUAL', ticket__estado='PAGADO',
+                         transacciones_mercadopago__isnull=True,
                          creado_en__date__gte=d, creado_en__date__lte=h)
                  .select_related('ticket', 'ticket__sucursal')):
         if sucursal_id and pago.ticket.sucursal_id != int(sucursal_id):
             continue
-        voucher = re.sub(r'\D', '', pago.voucher or '')
-        if voucher and voucher in ids_mp_vistos:
+        voucher = _solo_digitos(pago.voucher)
+        pago_mp = todos.get(voucher) if voucher else None
+        estado_mp = str((pago_mp or {}).get('status') or '')
+        monto_mp = _monto((pago_mp or {}).get('transaction_amount'))
+        if pago_mp is not None and estado_mp == 'approved' and monto_mp == int(pago.monto or 0):
             continue
+        if not voucher:
+            motivo = 'sin N° de operación'
+        elif pago_mp is not None and estado_mp != 'approved':
+            motivo = f'el N° está «{estado_mp}» en Mercado Pago'
+        elif pago_mp is not None:
+            motivo = f'el N° existe en Mercado Pago pero por ${monto_mp:,}'.replace(',', '.')
+        elif len(voucher) < 9:
+            motivo = f'N° de {len(voucher)} dígitos: no parece de Mercado Pago (tienen 12)'
+        else:
+            motivo = 'N° no encontrado en Mercado Pago'
         manuales_sin_pago.append({
             'tipo': 'MANUAL_SIN_PAGO',
             'pago_id': pago.id,
@@ -2814,8 +2912,32 @@ def diferencias_contra_mp(desde, hasta, sucursal_id=None):
             'fecha': timezone.localtime(pago.creado_en).strftime('%Y-%m-%d %H:%M'),
             'monto': pago.monto,
             'voucher': pago.voucher or '',
-            'motivo': 'sin N° de operación' if not voucher else 'N° no encontrado en Mercado Pago',
+            'motivo': motivo,
+            'sugerencia_n': None,
         })
+
+    # N° mal digitado: un «MP manual» no reconocido y un pago sin registro del
+    # mismo monto, día y tienda cuyo N° difiere en UN dígito. Se sugiere solo si
+    # el par es único en las dos direcciones (los N° de una cuenta son casi
+    # correlativos y los precios se repiten).
+    parejas = {}
+    for m in manuales_sin_pago:
+        cands = [s for s in sin_registro
+                 if s['monto'] == int(m['monto'] or 0) and s['fecha'][:10] == m['fecha'][:10]
+                 and s['sucursal_id'] in (None, m['sucursal_id'])
+                 and n_parecido(m['voucher'], s['payment_id'])]
+        if len(cands) == 1:
+            parejas.setdefault(cands[0]['payment_id'], []).append((m, cands[0]))
+    for lista in parejas.values():
+        if len(lista) != 1:
+            continue
+        m, s = lista[0]
+        explicacion = n_parecido(m['voucher'], s['payment_id'])
+        m['sugerencia_n'] = {'payment_id': s['payment_id'], 'config_id': s['config_id'],
+                             'explicacion': explicacion, 'fecha': s['fecha'],
+                             'medio': s['medio'], 'ultimos_4': s['ultimos_4']}
+        s['n_mal_digitado'] = {'pago_id': m['pago_id'], 'ticket': m['ticket'],
+                               'voucher': m['voucher'], 'explicacion': explicacion}
 
     return {
         'desde': str(d), 'hasta': str(h),
@@ -2824,4 +2946,7 @@ def diferencias_contra_mp(desde, hasta, sucursal_id=None):
         'manuales_sin_pago': manuales_sin_pago,
         'errores': errores,
         'pagos_mp_consultados': len(todos),
+        # con una tienda elegida: pagos de la cuenta que MP no permite atribuir a una tienda
+        'sin_atribuir_ocultos': sin_atribuir_ocultos,
+        'vouchers_calzados': vouchers_calzados,
     }

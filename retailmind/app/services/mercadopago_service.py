@@ -753,6 +753,18 @@ def _imputacion_en_ventas(config, fecha, transacciones):
     return desviados, sum(d['monto'] for d in desviados)
 
 
+def _hora_local_mp(valor):
+    """'2026-09-21T10:55:12.000-04:00' → '11:55' (hora de Chile; MP usa su propio huso)."""
+    texto = str(valor or '')
+    try:
+        instante = _dt.datetime.fromisoformat(texto.replace('Z', '+00:00'))
+    except ValueError:
+        return texto[11:16]
+    if timezone.is_naive(instante):
+        return instante.strftime('%H:%M')
+    return timezone.localtime(instante).strftime('%H:%M')
+
+
 def conciliar_cierre_mp(config, fecha, pagos=None):
     """Compara lo que el sistema registró para esta caja con lo que MP cobró.
 
@@ -800,12 +812,18 @@ def conciliar_cierre_mp(config, fecha, pagos=None):
     }
 
     # Y por N° de operación: un pago «MP manual» registrado como cobro
-    # (external_reference 'MANUAL-<N°>') no trae nuestra referencia en MP.
+    # (external_reference 'MANUAL-<N°>') o uno asociado a mano a su venta
+    # ('ASOC-<N°>', Conciliación MP) no trae nuestra referencia en MP.
     ids_mp = [str(p.get('id')) for p in pagos if p.get('id')]
     por_id = {}
-    for t in (TransaccionMercadoPago.objects.filter(tipo='VENTA', external_reference__startswith='MANUAL-',
-                                                    payment_id_mp__in=ids_mp)
+    for t in (TransaccionMercadoPago.objects.filter(tipo='VENTA', payment_id_mp__in=ids_mp)
+              .filter(Q(external_reference__startswith='MANUAL-') | Q(external_reference__startswith='ASOC-'))
               .exclude(estado='CREADA').select_related('config')):
+        # Una ASOC- anterior al 25-09 quedó con la fecha del día en que se asoció
+        # (no la del cobro): solo calza el día en que el sistema la cuenta.
+        if (str(t.external_reference).startswith('ASOC-')
+                and timezone.localtime(t.creado_en).date() != fecha):
+            continue
         por_id[t.payment_id_mp] = t
 
     def _local(pago):
@@ -816,9 +834,9 @@ def conciliar_cierre_mp(config, fecha, pagos=None):
     ids_propios, ids_ajenos = set(), set()
     for pago in pagos:
         trx = _local(pago)
-        # Una fila MANUAL- (pago «MP manual» registrado por la conciliación) tiene
+        # Una fila MANUAL- o ASOC- (registrada por la conciliación o a mano) tiene
         # la caja deducida, no la real: no se aprende de ella a qué caja es un pos_id.
-        if trx is None or str(trx.external_reference).startswith('MANUAL-'):
+        if trx is None or str(trx.external_reference).startswith(('MANUAL-', 'ASOC-')):
             continue
         destino = ids_propios if trx.config_id == config.id else ids_ajenos
         for campo in ('pos_id', 'store_id'):
@@ -874,7 +892,7 @@ def conciliar_cierre_mp(config, fecha, pagos=None):
                 'external_reference': ext,
                 'monto': monto,
                 'medio': etiqueta_medio_mp(medio),
-                'hora': str(pago.get('date_created') or '')[11:16],
+                'hora': _hora_local_mp(pago.get('date_created')),
                 'descripcion': str(pago.get('description') or '')[:60],
                 # None = MP no dio datos para atribuirlo a una caja
                 'atribuible': bool(de_la_caja) or sucursal_ref is not None,
@@ -3026,7 +3044,7 @@ def _resolver_transaccion_por_payment(data_id):
         pid = str(payment.get('id') or data_id or '')
         if pid.isdigit():
             manual = TransaccionMercadoPago.objects.filter(
-                tipo='VENTA', external_reference=f'MANUAL-{pid}').first()
+                tipo='VENTA', external_reference__in=(f'MANUAL-{pid}', f'ASOC-{pid}')).first()
             if manual:
                 return manual, payment
     return None, None

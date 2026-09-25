@@ -24,11 +24,15 @@ Para un pago que Mercado Pago tiene y el sistema no (cobrado fuera del POS),
 consumida.
 
 Regla de oro: **monto EXACTO**. No se reparte plata entre pagos distintos.
+
+Alcance: quien no es administrador solo asocia ventas y cobros de SU tienda
+(`sucursal_permitida`); el servidor lo valida aunque se manipulen los ids.
 """
 import datetime as _dt
 import logging
+from collections import defaultdict
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -39,9 +43,12 @@ from app.models import (
     Dte_Detalle_Pago,
     MercadoPagoConfig,
     Ticket,
+    Ticket_Productos,
     TicketDetallePago,
     TransaccionMercadoPago,
+    TransaccionPOS,
 )
+from app.services import conciliacion_mp_service as conc
 from app.services import mercadopago_service as mp
 
 logger = logging.getLogger('app')
@@ -49,13 +56,21 @@ logger = logging.getLogger('app')
 CODIGO_PERMISO = 'asociar_pagos_mercadopago'
 
 # Métodos con los que un cajero registra una tarjeta "a mano" (Transbank o
-# genérico). Son los que se pueden convertir a Mercado Pago.
+# genérico). Son los que se pueden convertir a Mercado Pago, salvo que sean un
+# cobro Transbank REAL hecho por el POS integrado (esa plata está en Transbank).
 METODOS_TARJETA_MANUAL = (
     'TBK_CREDITO_POS', 'TBK_DEBITO_POS', 'TBK_PREPAGO_POS',
     'TBK_MANUAL', 'TBK_POS_INTEGRADO',
     'TARJETA_CREDITO', 'TARJETA_DEBITO',
 )
+ORIGENES_INTEGRADOS = ('POS_INTEGRADO', 'POS_WEB')
 METODOS_MP = ('MP_QR', 'MP_POINT', 'MP_POINT_DEBITO', 'MP_POINT_CREDITO')
+# Venta cobrada con la Point en modo manual pero anotada en efectivo o
+# transferencia: solo un ADMINISTRADOR la pasa a Mercado Pago, confirmándolo
+# (cambia el efectivo teórico del arqueo de ese día).
+METODOS_OTROS_CONVERTIBLES = ('EFECTIVO', 'TRANSFERENCIA')
+# Tope de pagos en «Asignar todas las sugeridas».
+MAX_LOTE = 60
 
 # Ticket.tipo_dte -> Dte.tipo_documento (para ubicar el espejo del pago)
 TIPO_DTE_A_DOCUMENTO = {
@@ -92,11 +107,51 @@ def _sin_transaccion():
     return ~Exists(TransaccionMercadoPago.objects.filter(detalle_pago_id=OuterRef('pk')))
 
 
-def es_pago_asociable(pago):
-    """Tarjeta manual, o MP digitado a mano que todavía no tiene transacción."""
+def _tbk_integrado(pago):
+    """Cobro Transbank REAL del POS integrado (su plata está en Transbank):
+    convertirlo a Mercado Pago descuadraría el cierre de Transbank."""
+    if pago.metodo_pago not in METODOS_TARJETA_MANUAL:
+        return False
+    if pago.origen_pago:
+        return pago.origen_pago in ORIGENES_INTEGRADOS
+    anotado = getattr(pago, 'tbk_real', None)   # anotado por los listados (evita una consulta)
+    if anotado is not None:
+        return bool(anotado)
+    return TransaccionPOS.objects.filter(detalle_pago_id=pago.pk).exists()
+
+
+def motivo_no_asociable(pago, permitir_otros_medios=False):
+    """'' si el pago de la venta se puede pasar a Mercado Pago; si no, por qué."""
     if pago.metodo_pago in METODOS_TARJETA_MANUAL:
-        return True
-    return pago.metodo_pago in METODOS_MP and pago.origen_pago == 'MANUAL'
+        return 'es un cobro Transbank real del POS integrado' if _tbk_integrado(pago) else ''
+    if pago.metodo_pago in METODOS_MP:
+        return '' if pago.origen_pago == 'MANUAL' else 'ya es un cobro Mercado Pago del POS'
+    if pago.metodo_pago in METODOS_OTROS_CONVERTIBLES:
+        return '' if permitir_otros_medios else (
+            f'está anotado en {pago.get_metodo_pago_display()}: solo un administrador puede pasarlo a Mercado Pago')
+    return f'está anotado en {pago.get_metodo_pago_display()}'
+
+
+def es_pago_asociable(pago, permitir_otros_medios=False):
+    """Tarjeta manual (no Transbank integrado real) o MP digitado a mano; con
+    `permitir_otros_medios`, también efectivo o transferencia."""
+    return not motivo_no_asociable(pago, permitir_otros_medios)
+
+
+def _pagos_posibles():
+    """TicketDetallePago de ventas cerradas, sin cobro MP, que podrían ser un
+    cobro de Mercado Pago: tarjeta manual (sin los Transbank integrados reales),
+    «MP manual», y efectivo / transferencia (que solo un administrador convierte)."""
+    return (TicketDetallePago.objects
+            .filter(ticket__estado='PAGADO')
+            .filter(Q(metodo_pago__in=METODOS_TARJETA_MANUAL)
+                    | Q(metodo_pago__in=METODOS_MP, origen_pago='MANUAL')
+                    | Q(metodo_pago__in=METODOS_OTROS_CONVERTIBLES))
+            .filter(_sin_transaccion())
+            .annotate(tbk_real=Exists(TransaccionPOS.objects.filter(detalle_pago_id=OuterRef('pk'))))
+            .exclude(Q(metodo_pago__in=METODOS_TARJETA_MANUAL)
+                     & (Q(origen_pago__in=ORIGENES_INTEGRADOS) | Q(origen_pago__isnull=True, tbk_real=True)))
+            .select_related('ticket', 'ticket__sucursal', 'ticket__vendedor'))
 
 
 # ---------------------------------------------------------------------------
@@ -122,20 +177,41 @@ def _fila_cobro(trx):
     }
 
 
-def _fila_pago(pago):
+def _productos_por_ticket(ticket_ids, maximo=2):
+    """{ticket_id: 'Zapatilla X T40, Polera Y +2'} para reconocer la venta (una consulta)."""
+    salida = defaultdict(list)
+    for tp in (Ticket_Productos.objects.filter(idTicket_id__in=list(ticket_ids))
+               .select_related('ProductoTalla__producto').order_by('id')):
+        pt = tp.ProductoTalla
+        salida[tp.idTicket_id].append(f'{pt.producto.articulo} T{pt.talla}' if pt else 'Ítem manual')
+    return {tid: ', '.join(items[:maximo]) + (f' +{len(items) - maximo}' if len(items) > maximo else '')
+            for tid, items in salida.items()}
+
+
+def _fila_pago(pago, dtes=None, productos=None):
     ticket = pago.ticket
     creado = timezone.localtime(ticket.created_at) if ticket.created_at else None
+    documento = ''
+    if dtes is not None:
+        documento, _dte_id = conc._documento_de_ticket(ticket, dtes)
+    vendedor = getattr(ticket, 'vendedor', None) if ticket.vendedor_id else None
     return {
         'id': pago.id,
         'ticket_id': ticket.id,
         'correlativo': ticket.correlativo,
         'folio': ticket.folio_dte or '',
         'tipo_dte': ticket.tipo_dte or '',
+        # Documento real (boleta/factura por la referencia TICKET-<corr>)
+        'documento': documento,
         'fecha': ticket.fecha.strftime('%d/%m/%Y') if ticket.fecha else '',
         'hora': creado.strftime('%H:%M') if creado else '',
+        # Cuándo se registró el pago en el POS (lo que se compara con la hora del cobro)
+        'hora_pago': timezone.localtime(pago.creado_en).strftime('%H:%M') if pago.creado_en else '',
         'sucursal_id': ticket.sucursal_id,
         'sucursal': ticket.sucursal.alias if ticket.sucursal_id else '',
         'cliente': ticket.cliente_nombre or '',
+        'vendedor': getattr(vendedor, 'nombre', '') or '',
+        'productos': (productos or {}).get(ticket.id, ''),
         'metodo': pago.metodo_pago,
         'metodo_display': pago.get_metodo_pago_display(),
         'origen': pago.origen_pago or '',
@@ -207,47 +283,68 @@ def resumen_alerta_caja(sucursal_id, fecha):
 # ---------------------------------------------------------------------------
 
 def candidatos_pagos(monto, momento, sucursal_id, buscar='', todas_sucursales=False,
-                     correlativo='', n_operaciones=(), dias=1):
+                     correlativo='', n_operaciones=(), dias=1, permitir_otros_medios=False):
     """Pagos de ventas cerradas que podrían ser un cobro de `monto` hecho en
-    `momento` (datetime con tz): tarjetas manuales o «MP manual» del mismo
-    monto, sin transacción, ordenados por coincidencia de N° / correlativo y
-    cercanía en el tiempo."""
+    `momento` (datetime con tz), del mismo monto y sin transacción.
+
+    Trae también las ventas anotadas en efectivo / transferencia, marcadas
+    `asociable=False` con su `motivo` salvo `permitir_otros_medios` (así quien
+    busca sabe que la venta existe aunque no la pueda convertir). Orden: las
+    asociables primero; luego mismo N°, N° parecido, mismo ticket y cercanía
+    entre la hora del cobro y la hora en que se registró el pago en el POS.
+    `buscar`: N° de ticket, folio de la boleta/factura o N° digitado."""
     dia = timezone.localtime(momento).date()
-    qs = (TicketDetallePago.objects
-          .filter(ticket__estado='PAGADO', monto=int(monto))
-          .filter(Q(metodo_pago__in=METODOS_TARJETA_MANUAL)
-                  | Q(metodo_pago__in=METODOS_MP, origen_pago='MANUAL'))
-          .filter(_sin_transaccion())
-          .select_related('ticket', 'ticket__sucursal'))
+    qs = _pagos_posibles().filter(monto=int(monto))
     buscar = (buscar or '').strip()
     if buscar:
         filtro = Q(ticket__folio_dte__icontains=buscar) | Q(voucher__icontains=buscar)
         if buscar.isdigit():
             filtro |= Q(ticket__correlativo=int(buscar))
+            # N° de la boleta / factura emitida (Dte con referencia TICKET-<corr>)
+            refs = [str(r) for r in Dte.objects.filter(numero_documento=int(buscar), referencias__startswith='TICKET-')
+                    .values_list('referencias', flat=True)[:20]]
+            corrs = [int(r.split('-', 1)[1]) for r in refs if r.split('-', 1)[1].isdigit()]
+            if corrs:
+                filtro |= Q(ticket__correlativo__in=corrs)
         qs = qs.filter(filtro)
     else:
         qs = qs.filter(ticket__fecha__range=(dia - _dt.timedelta(days=dias), dia + _dt.timedelta(days=dias)))
     if sucursal_id and not todas_sucursales:
         qs = qs.filter(ticket__sucursal_id=sucursal_id)
 
-    n_operaciones = {str(n).strip() for n in n_operaciones if n}
+    # Tope por separado: las ventas en efectivo / transferencia (muchas) no
+    # pueden dejar fuera a las tarjetas y «MP manual», que son las probables.
+    pagos = (list(qs.exclude(metodo_pago__in=METODOS_OTROS_CONVERTIBLES)[:200])
+             + list(qs.filter(metodo_pago__in=METODOS_OTROS_CONVERTIBLES)[:60]))
+    dtes = conc._dtes_por_ref([p.ticket for p in pagos])
+    productos = _productos_por_ticket({p.ticket_id for p in pagos})
+    n_operaciones = {conc._solo_digitos(n) for n in n_operaciones if n} - {''}
     filas = []
-    for pago in qs[:200]:
-        fila = _fila_pago(pago)
+    for pago in pagos:
+        fila = _fila_pago(pago, dtes, productos)
+        fila['motivo'] = motivo_no_asociable(pago, permitir_otros_medios)
+        fila['asociable'] = not fila['motivo']
+        fila['otro_medio'] = pago.metodo_pago in METODOS_OTROS_CONVERTIBLES
+        voucher = conc._solo_digitos(pago.voucher)
         fila['mismo_correlativo'] = bool(correlativo) and str(correlativo) == str(pago.ticket.correlativo)
-        fila['mismo_voucher'] = bool(pago.voucher) and pago.voucher.strip() in n_operaciones
-        creado = pago.ticket.created_at or momento
-        fila['minutos'] = int(abs((creado - momento).total_seconds()) // 60)
+        fila['mismo_voucher'] = bool(voucher) and voucher in n_operaciones
+        fila['voucher_parecido'] = next((t for t in (conc.n_parecido(voucher, n) for n in n_operaciones) if t), '')
+        # Minutos entre el cobro y el registro del pago en el POS (no la apertura
+        # del ticket, que puede ser de horas antes si quedó pendiente).
+        referencia = pago.creado_en or pago.ticket.created_at or momento
+        fila['minutos'] = int(abs((referencia - momento).total_seconds()) // 60)
         filas.append(fila)
-    filas.sort(key=lambda f: (not f['mismo_voucher'], not f['mismo_correlativo'], f['minutos']))
+    filas.sort(key=lambda f: (not f['asociable'], not f['mismo_voucher'], not f['voucher_parecido'],
+                              not f['mismo_correlativo'], f['minutos']))
     return filas[:MAX_CANDIDATOS]
 
 
-def candidatos_para_cobro(trx, buscar='', todas_sucursales=False, dias=1):
+def candidatos_para_cobro(trx, buscar='', todas_sucursales=False, dias=1, permitir_otros_medios=False):
     """Pagos de ventas cerradas que podrían ser ESTE cobro (mismo monto)."""
     return candidatos_pagos(
         trx.monto, trx.creado_en, trx.sucursal_id, buscar, todas_sucursales,
         correlativo=trx.correlativo_ticket, n_operaciones=(trx.payment_id_mp, trx.payment_id), dias=dias,
+        permitir_otros_medios=permitir_otros_medios,
     )
 
 
@@ -297,9 +394,15 @@ def pagos_api_para_pago(pago, config):
         .values_list('payment_id_mp', 'payment_id')
         for v in par if v
     }
+    # Un cobro del POS que todavía no tiene su N° se reconoce por la referencia.
+    referencias = {str(p.get('external_reference') or '') for p in filas} - {''}
+    refs_locales = set(TransaccionMercadoPago.objects.filter(external_reference__in=referencias)
+                       .exclude(estado='CREADA').values_list('external_reference', flat=True))
     resultado = []
     for p in filas:
         pid = str(p.get('id'))
+        if str(p.get('external_reference') or '') in refs_locales:
+            registrados.add(pid)
         creado = parse_datetime(p.get('date_created') or '')
         resultado.append({
             'payment_id': pid,
@@ -310,9 +413,11 @@ def pagos_api_para_pago(pago, config):
             'descripcion': p.get('description') or '',
             'external_reference': p.get('external_reference') or '',
             'ya_registrado': pid in registrados,
-            'mismo_voucher': pid == (pago.voucher or '').strip(),
+            'mismo_voucher': pid == conc._solo_digitos(pago.voucher),
+            # «falta un 8»: el N° digitado en el POS es este con un error de tipeo
+            'parecido': conc.n_parecido(pago.voucher, pid),
         })
-    resultado.sort(key=lambda f: (f['ya_registrado'], not f['mismo_voucher']))
+    resultado.sort(key=lambda f: (f['ya_registrado'], not f['mismo_voucher'], not f['parecido']))
     return resultado
 
 
@@ -383,35 +488,52 @@ def aplicar_asociacion(trx, pago, sello):
     return metodo_anterior, metodo_nuevo, espejo
 
 
+ESTADOS_ARQUEO_CERRADOS_POR_SUPERVISOR = ('DEPOSITO_DECLARADO', 'DEPOSITO_CONFIRMADO', 'REVISADO')
+
+
 def _recalcular_arqueo(ticket, usuario):
+    """Rehace los teóricos del arqueo del día de la venta (queda en su bitácora).
+    Si falla, la asociación ya quedó grabada: se avisa en vez de responder 500."""
     from app.views_modulo_ventas import _recalcular_teoricos_arqueo
     arqueo = ArqueoCaja.objects.filter(sucursal_id=ticket.sucursal_id, fecha_arqueo=ticket.fecha).first()
     if arqueo is None:
         return 'sin arqueo ese día'
-    resultado = _recalcular_teoricos_arqueo(
-        arqueo, usuario=usuario, registrar_bitacora=True,
-        razon='asociación de cobro Mercado Pago',
-    )
-    return 'arqueo recalculado' if resultado.get('hay_cambios') else 'arqueo sin cambios'
+    try:
+        resultado = _recalcular_teoricos_arqueo(
+            arqueo, usuario=usuario, registrar_bitacora=True,
+            razon='asociación de cobro Mercado Pago',
+        )
+    except Exception:  # noqa: BLE001 — la asociación ya está hecha; el arqueo se rehace a mano
+        logger.exception('MP: no se pudo recalcular el arqueo %s tras asociar', arqueo.id)
+        return 'no se pudo recalcular el arqueo: recalcúlelo desde la Cuadratura'
+    texto = 'arqueo recalculado' if resultado.get('hay_cambios') else 'arqueo sin cambios'
+    if resultado.get('hay_cambios') and arqueo.estado in ESTADOS_ARQUEO_CERRADOS_POR_SUPERVISOR:
+        texto += f' (ya estaba «{arqueo.get_estado_display()}»: avise al supervisor)'
+    return texto
 
 
-def _validar_pago(pago):
+def _validar_pago(pago, permitir_otros_medios=False, sucursal_permitida=None):
+    if sucursal_permitida is not None and pago.ticket.sucursal_id != sucursal_permitida:
+        raise AsociacionError('Esa venta es de otra tienda: solo puede asignar pagos de su tienda.')
     if pago.ticket.estado != 'PAGADO':
         raise AsociacionError(f'El ticket #{pago.ticket.correlativo} no es una venta cerrada ({pago.ticket.estado}).')
-    if not es_pago_asociable(pago):
-        raise AsociacionError(
-            f'El pago es {pago.get_metodo_pago_display()}: solo se asocian tarjetas manuales o «MP manual».')
+    motivo = motivo_no_asociable(pago, permitir_otros_medios)
+    if motivo:
+        raise AsociacionError(f'El pago del ticket #{pago.ticket.correlativo} {motivo}.')
     if TransaccionMercadoPago.objects.filter(detalle_pago=pago).exists():
         raise AsociacionError('Ese pago ya tiene un cobro de Mercado Pago asociado.')
 
 
-def asociar(trx_id, pago_id, usuario, recalcular_arqueo=True):
+def asociar(trx_id, pago_id, usuario, recalcular_arqueo=True, sucursal_permitida=None,
+            permitir_otros_medios=False):
     """Asocia un cobro MP sin venta al pago de un ticket (monto exacto)."""
     with transaction.atomic():
         trx = (TransaccionMercadoPago.objects.select_for_update()
                .select_related('sucursal', 'config').filter(id=trx_id).first())
         if trx is None:
             raise AsociacionError('El cobro de Mercado Pago no existe.')
+        if sucursal_permitida is not None and trx.sucursal_id != sucursal_permitida:
+            raise AsociacionError('Ese cobro es de otra tienda: solo puede asignar pagos de su tienda.')
         if trx.tipo != 'VENTA' or trx.estado != 'APROBADA':
             raise AsociacionError(f'El cobro está {trx.get_estado_display()}: solo se asocian cobros aprobados.')
         if trx.consumida:
@@ -420,7 +542,7 @@ def asociar(trx_id, pago_id, usuario, recalcular_arqueo=True):
                 .select_related('ticket', 'ticket__sucursal').filter(id=pago_id).first())
         if pago is None:
             raise AsociacionError('El pago del ticket no existe.')
-        _validar_pago(pago)
+        _validar_pago(pago, permitir_otros_medios, sucursal_permitida)
         if int(pago.monto) != int(trx.monto):
             raise AsociacionError(
                 f'Los montos no calzan: cobro {_plata(trx.monto)} vs pago {_plata(pago.monto)}. '
@@ -454,77 +576,213 @@ def _obtener_pago_api(config, payment_id):
         raise AsociacionError(e.mensaje)
 
 
-def importar_y_asociar(payment_id, pago_id, config_id, usuario, recalcular_arqueo=True):
+def _misma_cuenta(a, b):
+    """¿Las dos cajas cobran con la misma cuenta de Mercado Pago? Misma regla que
+    el cobro (la cuenta elegida en la caja o la de la empresa de la sucursal)."""
+    if a.id == b.id:
+        return True
+    ca, cb = conc._cuenta_efectiva(a), conc._cuenta_efectiva(b)
+    if ca is not None or cb is not None:
+        return ca is not None and cb is not None and ca.id == cb.id
+    try:   # entornos sin cuenta cargada: token por variable de entorno
+        return mp._token(a) == mp._token(b)
+    except mp.MercadoPagoError:
+        return False
+
+
+def _cajas_de_la_tienda(config, sucursal_id):
+    """Cajas de la tienda `sucursal_id` que cobran con la misma cuenta MP que `config`."""
+    return [c for c in (MercadoPagoConfig.objects.filter(sucursal_id=sucursal_id)
+                        .select_related('sucursal', 'cuenta').order_by('-habilitado', '-es_principal', 'id'))
+            if _misma_cuenta(c, config)]
+
+
+def _caja_de_la_tienda(config, sucursal_id, payment):
+    """Caja de la tienda de la venta en la MISMA cuenta MP que `config` (la cuenta
+    por la que se leyó el pago), o None si esa tienda cobra con otra cuenta.
+
+    Si `config` ya es de esa tienda (la caja que «Contra Mercado Pago» atribuyó
+    al pago), se respeta. Si no, la del punto de venta que informa MP o la
+    principal: antes quedaba en «la primera caja de la cuenta» (un pago de PAO4
+    terminaba sumando en el cierre de PAO1)."""
+    if config.sucursal_id == sucursal_id:
+        return config
+    cajas = _cajas_de_la_tienda(config, sucursal_id)
+    if not cajas:
+        return None
+    caja_id = conc._caja_del_pago(payment, cajas)
+    return next((c for c in cajas if c.id == caja_id), cajas[0])
+
+
+def _pago_es_de_la_tienda(caja, payment, cache_dias=None):
+    """¿El pago se cobró en la tienda de `caja`? Para quien no es administrador:
+    no puede quedarse con un cobro de OTRA tienda de la misma cuenta.
+
+    Sí si: la referencia propia es de esa tienda; o la cuenta la usa solo esa
+    tienda; o el cierre de ese día (mismos datos que «Contra Mercado Pago»)
+    atribuye el pago a una caja de esa tienda. `cache_dias`: {(token, día): pagos}
+    para no releer el mismo día en un lote."""
+    pid = str(payment.get('id') or '')
+    suc_ref = mp._sucursal_de_referencia(str(payment.get('external_reference') or ''))
+    if suc_ref is not None:
+        return suc_ref == caja.sucursal_id
+    cuenta = MercadoPagoConfig.objects.filter(id__in=conc._configs_de_la_cuenta(caja)).values_list('sucursal_id', flat=True)
+    if set(cuenta) <= {caja.sucursal_id}:
+        return True
+    instante = conc._instante(payment.get('date_created'))
+    if instante is None:
+        return False
+    dia = timezone.localtime(instante).date()
+    clave = (caja.id, dia)
+    cache_dias = cache_dias if cache_dias is not None else {}
+    if clave not in cache_dias:
+        cache_dias[clave] = mp.buscar_pagos_dia(caja, dia)
+    for c in _cajas_de_la_tienda(caja, caja.sucursal_id):
+        res = mp.conciliar_cierre_mp(c, dia, pagos=cache_dias[clave])
+        if any(str(x.get('payment_id')) == pid and x.get('atribuible') for x in res.get('sin_registro') or []):
+            return True
+    return False
+
+
+def _proteger_n_valido(pago, payment_id, config):
+    """Un «MP manual» cuyo N° digitado YA es un pago aprobado de MP por el mismo
+    monto tiene su cobro (solo falta registrarlo al aplicar liberaciones): no se
+    le puede poner otro N° encima (la revisión del 25-09 lo reprodujo con el lote)."""
+    if pago.metodo_pago not in METODOS_MP:
+        return
+    voucher = conc._solo_digitos(pago.voucher)
+    if len(voucher) < 9 or voucher == payment_id:
+        return
+    try:
+        propio = _obtener_pago_api(config, voucher)
+    except AsociacionError:
+        return          # el N° digitado no existe en la cuenta: se puede corregir
+    if propio.get('status') == 'approved' and conc._monto(propio.get('transaction_amount')) == int(pago.monto or 0):
+        raise AsociacionError(
+            f'La venta #{pago.ticket.correlativo} ya tiene su N° de operación {voucher}, que es un pago válido de '
+            f'Mercado Pago por el mismo monto: no se le puede asignar otro cobro.')
+
+
+def importar_y_asociar(payment_id, pago_id, config_id, usuario, recalcular_arqueo=True,
+                       sucursal_permitida=None, permitir_otros_medios=False, cache_dias=None):
     """Trae de la API un pago que el sistema no tiene y lo asocia a un pago del ticket.
 
-    Sirve para: cobros hechos en la máquina o la app de MP fuera del POS, y
-    pagos «MP manual» cuyo N° digitado no calza (se corrige al N° real).
+    Sirve para: cobros hechos en la máquina en modo manual o en la app de MP
+    fuera del POS, y pagos «MP manual» cuyo N° digitado no calza (se corrige al
+    N° real). La transacción queda con la fecha REAL del cobro, en la caja de la
+    tienda de la venta y amarrada al retiro que ya se llevó ese pago: así el
+    «Cierre por caja y día» de ese día cuadra (antes nacía con la fecha de hoy).
+    `config_id`: una caja de la cuenta MP del pago (se usa para leerlo).
+    Antes de preguntarle nada a MP se valida la venta, la tienda y la cuenta.
     """
     payment_id = str(payment_id or '').strip()
     if not payment_id.isdigit():
         raise AsociacionError('El N° de operación de Mercado Pago debe ser numérico.')
-    config = MercadoPagoConfig.objects.select_related('sucursal').filter(id=config_id).first()
+    config = MercadoPagoConfig.objects.select_related('sucursal', 'cuenta').filter(id=config_id).first()
     if config is None:
         raise AsociacionError('Elige la caja / cuenta de Mercado Pago.')
+    pago = TicketDetallePago.objects.select_related('ticket', 'ticket__sucursal').filter(id=pago_id).first()
+    if pago is None:
+        raise AsociacionError('El pago del ticket no existe.')
+    _validar_pago(pago, permitir_otros_medios, sucursal_permitida)
+    if not _cajas_de_la_tienda(config, pago.ticket.sucursal_id):
+        raise AsociacionError(
+            f'La caja elegida es de otra cuenta de Mercado Pago que la de la tienda {pago.ticket.sucursal.alias}.')
 
     existente = TransaccionMercadoPago.objects.filter(Q(payment_id_mp=payment_id) | Q(payment_id=payment_id)).first()
     if existente is not None:
         if existente.consumida:
             raise AsociacionError(f'El N° {payment_id} ya está asociado a otra venta.')
-        return asociar(existente.id, pago_id, usuario, recalcular_arqueo)
+        return asociar(existente.id, pago_id, usuario, recalcular_arqueo,
+                       sucursal_permitida=sucursal_permitida, permitir_otros_medios=permitir_otros_medios)
 
     payment = _obtener_pago_api(config, payment_id)
     if payment.get('status') != 'approved':
         raise AsociacionError(f'El pago {payment_id} está «{payment.get("status")}» en Mercado Pago, no aprobado.')
-    monto = int(round(float(payment.get('transaction_amount') or 0)))
+    if conc._monto(payment.get('transaction_amount_refunded') or 0) > 0 or payment.get('refunds'):
+        raise AsociacionError(f'El pago {payment_id} tiene devoluciones en Mercado Pago: revíselo en el panel antes de asignarlo.')
+    # Cobro del POS que el sistema ya tiene (aún sin su N°): se asocia ESE cobro,
+    # no se registra otro (el cierre lo contaría dos veces).
+    referencia = str(payment.get('external_reference') or '').strip()
+    if referencia:
+        local = (TransaccionMercadoPago.objects.filter(external_reference=referencia)
+                 .exclude(estado='CREADA').first())
+        if local is not None:
+            if local.tipo == 'VENTA' and local.estado == 'APROBADA' and not local.consumida:
+                return asociar(local.id, pago_id, usuario, recalcular_arqueo,
+                               sucursal_permitida=sucursal_permitida, permitir_otros_medios=permitir_otros_medios)
+            raise AsociacionError(f'El pago {payment_id} ya está registrado en el sistema como el cobro {referencia}.')
+    monto = conc._monto(payment.get('transaction_amount'))
+    if monto != int(pago.monto):
+        raise AsociacionError(f'Los montos no calzan: Mercado Pago {_plata(monto)} vs pago {_plata(pago.monto)}.')
+    caja = _caja_de_la_tienda(config, pago.ticket.sucursal_id, payment)
+    if sucursal_permitida is not None and not _pago_es_de_la_tienda(caja, payment, cache_dias):
+        raise AsociacionError(
+            f'Mercado Pago no muestra que el pago {payment_id} se haya cobrado en {pago.ticket.sucursal.alias}: '
+            'pídale a un administrador que lo asigne.')
+    _proteger_n_valido(pago, payment_id, config)
+    # Un retiro que ya se llevó este pago (lo contó por su N°) queda amarrado.
+    retiro = conc._retiros_por_operacion(conc._configs_de_la_cuenta(caja)).get(payment_id)
+    neto = (payment.get('transaction_details') or {}).get('net_received_amount')
+    neto = conc._monto(neto) if neto is not None else None
+    tipo_pago = payment.get('payment_type_id') or ''
 
-    with transaction.atomic():
-        pago = (TicketDetallePago.objects.select_for_update()
-                .select_related('ticket', 'ticket__sucursal').filter(id=pago_id).first())
-        if pago is None:
-            raise AsociacionError('El pago del ticket no existe.')
-        _validar_pago(pago)
-        if monto != int(pago.monto):
-            raise AsociacionError(
-                f'Los montos no calzan: Mercado Pago {_plata(monto)} vs pago {_plata(pago.monto)}.')
-        detalles = payment.get('transaction_details') or {}
-        neto = detalles.get('net_received_amount')
-        fee = sum(float(f.get('amount') or 0) for f in (payment.get('fee_details') or []))
-        tipo_pago = payment.get('payment_type_id') or ''
-        liberacion = parse_datetime(payment.get('money_release_date') or '') if payment.get('money_release_date') else None
-        trx = TransaccionMercadoPago.objects.create(
-            config=config,
-            sucursal=config.sucursal,
-            ticket=pago.ticket,
-            correlativo_ticket=str(pago.ticket.correlativo),
-            tipo='VENTA',
-            canal='POINT' if tipo_pago in ('debit_card', 'credit_card', 'prepaid_card') else 'QR',
-            external_reference=f'ASOC-{payment_id}',
-            payment_id=payment_id,
-            payment_id_mp=payment_id,
-            monto=monto,
-            monto_neto=int(round(float(neto))) if neto is not None else None,
-            fee_mp=int(round(fee)) if fee else None,
-            installments=int(payment.get('installments') or 1),
-            estado='APROBADA',
-            estado_detalle=(payment.get('status_detail') or '')[:120],
-            metodo_pago_mp=tipo_pago,
-            ultimos_4_digitos=((payment.get('card') or {}).get('last_four_digits') or '')[:4],
-            codigo_autorizacion=(payment.get('authorization_code') or '')[:30],
-            money_release_date=liberacion,
-            raw_response=payment,
-            usuario=usuario,
-        )
-        sello = (f'Asociado {timezone.localtime():%d-%m-%Y %H:%M} por {usuario.username}: pago Mercado Pago '
-                 f'N° {payment_id} traído desde la API (caja {config.nombre})')
-        anterior, nuevo, espejo = aplicar_asociacion(trx, pago, sello)
+    try:
+        with transaction.atomic():
+            pago = (TicketDetallePago.objects.select_for_update()
+                    .select_related('ticket', 'ticket__sucursal').filter(id=pago_id).first())
+            if pago is None:
+                raise AsociacionError('El pago del ticket no existe.')
+            _validar_pago(pago, permitir_otros_medios, sucursal_permitida)
+            if monto != int(pago.monto):
+                raise AsociacionError(
+                    f'Los montos no calzan: Mercado Pago {_plata(monto)} vs pago {_plata(pago.monto)}.')
+            ya = Q(payment_id_mp=payment_id) | Q(payment_id=payment_id) | Q(
+                external_reference__in=(f'MANUAL-{payment_id}', f'ASOC-{payment_id}'))
+            if TransaccionMercadoPago.objects.filter(ya).exists():
+                raise AsociacionError(f'El N° {payment_id} lo acaba de registrar otra persona: actualice la pantalla.')
+            trx = TransaccionMercadoPago.objects.create(
+                config=caja,
+                sucursal_id=pago.ticket.sucursal_id,
+                ticket=pago.ticket,
+                correlativo_ticket=str(pago.ticket.correlativo),
+                tipo='VENTA',
+                canal='POINT' if tipo_pago in ('debit_card', 'credit_card', 'prepaid_card') else 'QR',
+                external_reference=f'ASOC-{payment_id}',
+                payment_id=payment_id,
+                payment_id_mp=payment_id,
+                monto=monto,
+                monto_neto=neto,
+                # Comisión = lo que MP no le entrega al comercio (como en el resto del sistema)
+                fee_mp=(monto - neto) if neto is not None else None,
+                installments=int(payment.get('installments') or 1),
+                estado='APROBADA',
+                estado_detalle=(payment.get('status_detail') or '')[:120],
+                metodo_pago_mp=tipo_pago,
+                ultimos_4_digitos=((payment.get('card') or {}).get('last_four_digits') or '')[:4],
+                codigo_autorizacion=(payment.get('authorization_code') or '')[:30],
+                money_release_date=conc._instante(payment.get('money_release_date')),
+                raw_response=payment,
+                usuario=usuario,
+                retiro=retiro,
+            )
+            # Fecha del cobro real (creado_en es auto_now_add: quedaría con la de hoy
+            # y el cierre de caja de ese día seguiría descuadrado).
+            TransaccionMercadoPago.objects.filter(pk=trx.pk).update(
+                creado_en=conc._instante(payment.get('date_created')) or pago.creado_en)
+            sello = (f'Asociado {timezone.localtime():%d-%m-%Y %H:%M} por {usuario.username}: pago Mercado Pago '
+                     f'N° {payment_id} traído desde la API (caja {caja.sucursal.alias} · {caja.nombre})')
+            anterior, nuevo, espejo = aplicar_asociacion(trx, pago, sello)
+    except IntegrityError:
+        raise AsociacionError(f'El N° {payment_id} lo acaba de registrar otra persona: actualice la pantalla.')
 
     arqueo = _recalcular_arqueo(pago.ticket, usuario) if recalcular_arqueo else 'no se recalculó'
-    logger.warning('MP: %s importó el pago %s (%s) y lo asoció al ticket %s (%s -> %s)',
-                   usuario.username, payment_id, _plata(monto), pago.ticket.correlativo, anterior, nuevo)
+    logger.warning('MP: %s importó el pago %s (%s) y lo asoció al ticket %s de %s (%s -> %s)',
+                   usuario.username, payment_id, _plata(monto), pago.ticket.correlativo,
+                   pago.ticket.sucursal.alias, anterior, nuevo)
     return {
-        'mensaje': (f'Pago N° {payment_id} ({_plata(monto)}) traído de Mercado Pago y asociado al ticket '
-                    f'#{pago.ticket.correlativo} ({anterior} → {nuevo}). Documento: {espejo}. Arqueo: {arqueo}.'),
+        'mensaje': (f'Pago N° {payment_id} ({_plata(monto)}) asignado al ticket #{pago.ticket.correlativo} '
+                    f'de {pago.ticket.sucursal.alias} ({anterior} → {nuevo}). Documento: {espejo}. Arqueo: {arqueo}.'),
         'ticket_id': pago.ticket_id,
         'transaccion_id': trx.id,
         'metodo_anterior': anterior,
@@ -532,3 +790,141 @@ def importar_y_asociar(payment_id, pago_id, config_id, usuario, recalcular_arque
         'espejo': espejo,
         'arqueo': arqueo,
     }
+
+
+# ---------------------------------------------------------------------------
+# «Contra Mercado Pago»: venta sugerida y asignación por lote
+# ---------------------------------------------------------------------------
+
+# Dos cobros del mismo monto en la misma tienda y día se emparejan con sus
+# ventas en orden de hora solo si cada par queda a menos de esto.
+MINUTOS_PAR_ORDENADO = 45
+
+
+def _confianza(minutos):
+    return 'alta' if minutos <= 10 else ('media' if minutos <= 60 else 'baja')
+
+
+def sugerir_ventas(filas, sucursal_permitida=None, permitir_otros_medios=False, vouchers_calzados=()):
+    """Para cada pago de MP sin registro (filas de `diferencias_contra_mp`, ya
+    atribuidas a su tienda), la venta que lo explica si hay UNA razonable.
+
+    Candidatas: ventas cerradas de ESA tienda, del mismo día y monto EXACTO,
+    anotadas como tarjeta manual o «MP manual» (nunca Transbank integrado real),
+    sin cobro MP. Quedan fuera: un «MP manual» cuyo N° ya es un pago real de MP
+    (`vouchers_calzados`: solo falta registrarlo) y las ventas que ya tienen su
+    propio cobro local sin consumir (se asocian a ese cobro, no a otro).
+    Primero se empareja por N° (igual o con un error de tipeo); lo que queda, si
+    hay tantas ventas como cobros de ese monto, en orden de hora. Si no, no se
+    sugiere nada y el usuario elige en «Buscar venta».
+
+    Escribe en cada fila `sugerencia` (dict o None), `candidatos_n` y
+    `otros_medios_n` (ventas del mismo monto anotadas en efectivo/transferencia).
+    """
+    calzados = {conc._solo_digitos(v) for v in vouchers_calzados} - {''}
+    grupos = defaultdict(list)          # (sucursal_id, día, monto) -> [(instante, fila)]
+    for f in filas:
+        f['sugerencia'], f['candidatos_n'], f['otros_medios_n'] = None, 0, 0
+        instante = conc._instante(f.get('instante'))
+        if not f.get('sucursal_id') or instante is None:
+            continue
+        if sucursal_permitida is not None and f['sucursal_id'] != sucursal_permitida:
+            continue
+        grupos[(f['sucursal_id'], timezone.localtime(instante).date(), int(f['monto']))].append((instante, f))
+    montos_por_dia = defaultdict(set)
+    for suc, dia, monto in grupos:
+        montos_por_dia[(suc, dia)].add(monto)
+
+    for (suc, dia), montos in montos_por_dia.items():
+        inicio, fin = _rango_local(dia, dia)
+        pagos = list(_pagos_posibles().filter(ticket__sucursal_id=suc, monto__in=montos,
+                                              creado_en__range=(inicio, fin)).order_by('creado_en'))
+        # Cobros locales sin venta de esa tienda y día: la venta con su propio cobro
+        # se asocia a ESE cobro; y si hay cobros sueltos del mismo monto, el
+        # emparejamiento deja de ser uno a uno.
+        sueltos = list(cobros_sin_venta(suc, dia, dia).filter(monto__in=montos)
+                       .values_list('monto', 'correlativo_ticket', 'ticket_id'))
+        con_cobro_propio = {str(c) for _m, c, _t in sueltos if c} | {str(t) for _m, _c, t in sueltos if t}
+        dtes = conc._dtes_por_ref([p.ticket for p in pagos])
+        productos = _productos_por_ticket({p.ticket_id for p in pagos})
+        for monto in montos:
+            cobros = sorted(grupos[(suc, dia, monto)], key=lambda x: x[0])
+            del_monto = [p for p in pagos if int(p.monto) == monto]
+            ventas = [p for p in del_monto
+                      if p.metodo_pago not in METODOS_OTROS_CONVERTIBLES
+                      and not motivo_no_asociable(p, permitir_otros_medios)
+                      and not (p.metodo_pago in METODOS_MP and conc._solo_digitos(p.voucher) in calzados)
+                      and str(p.ticket.correlativo) not in con_cobro_propio and str(p.ticket_id) not in con_cobro_propio]
+            otros = sum(1 for p in del_monto if p.metodo_pago in METODOS_OTROS_CONVERTIBLES)
+            for _inst, f in cobros:
+                f['candidatos_n'], f['otros_medios_n'] = len(ventas), otros
+            pares = []
+            # 1) Por N°: el digitado en el POS es el del cobro o casi (error de tipeo).
+            libres_c, libres_v = list(cobros), list(ventas)
+            for inst, f in list(libres_c):
+                por_n = [p for p in libres_v if p.voucher and (
+                    conc._solo_digitos(p.voucher) == f['payment_id'] or conc.n_parecido(p.voucher, f['payment_id']))]
+                if len(por_n) == 1:
+                    pares.append(((inst, f), por_n[0]))
+                    libres_c.remove((inst, f))
+                    libres_v.remove(por_n[0])
+            # 2) El resto en orden de hora, solo si calzan uno a uno y sin cobros sueltos del mismo monto.
+            sueltos_monto = sum(1 for m, _c, _t in sueltos if int(m) == monto)
+            if libres_v and len(libres_v) == len(libres_c) and not sueltos_monto:
+                orden = list(zip(libres_c, libres_v))
+                if len(orden) == 1 or all(abs((p.creado_en - inst).total_seconds()) <= MINUTOS_PAR_ORDENADO * 60
+                                          for (inst, _f), p in orden):
+                    pares.extend(orden)
+            for (inst, f), p in pares:
+                minutos = int(abs((p.creado_en - inst).total_seconds()) // 60)
+                fila = _fila_pago(p, dtes, productos)
+                f['sugerencia'] = {
+                    'pago_id': p.id, 'ticket': fila['correlativo'], 'documento': fila['documento'],
+                    'hora_pago': fila['hora_pago'], 'metodo': fila['metodo_display'],
+                    'vendedor': fila['vendedor'], 'productos': fila['productos'], 'voucher': fila['voucher'],
+                    'minutos': minutos, 'confianza': _confianza(minutos),
+                    'parecido': conc.n_parecido(p.voucher, f['payment_id']) if p.metodo_pago in METODOS_MP else '',
+                }
+    return filas
+
+
+def asociar_lote(items, usuario, sucursal_permitida=None):
+    """«Asignar todas las sugeridas»: cada item {payment_id, pago_id, config_id}
+    se importa y asocia por separado (uno que falla no frena a los demás) y al
+    final se recalcula UNA vez el arqueo de cada tienda y día tocados, aunque
+    algo falle a mitad. Nunca convierte efectivo/transferencia (eso va de a uno
+    y con confirmación)."""
+    resultados, ticket_ids, arqueos = [], [], []
+    cache_dias = {}
+    try:
+        for item in list(items or [])[:MAX_LOTE]:
+            pid = ''
+            try:
+                pid = str(item.get('payment_id') or '')
+                r = importar_y_asociar(pid, int(item.get('pago_id') or 0), int(item.get('config_id') or 0),
+                                       usuario, recalcular_arqueo=False, sucursal_permitida=sucursal_permitida,
+                                       cache_dias=cache_dias)
+            except AsociacionError as e:
+                resultados.append({'payment_id': pid, 'ok': False, 'error': str(e)})
+                continue
+            except mp.MercadoPagoError as e:
+                resultados.append({'payment_id': pid, 'ok': False, 'error': e.mensaje})
+                continue
+            except Exception:  # noqa: BLE001 — un ítem roto no deja a medias a los demás
+                logger.exception('MP: lote de asignación, ítem %s', pid)
+                resultados.append({'payment_id': pid, 'ok': False, 'error': 'Error inesperado (quedó en el log).'})
+                continue
+            ticket_ids.append(r['ticket_id'])
+            resultados.append({'payment_id': pid, 'ok': True, 'ticket_id': r['ticket_id'],
+                               'mensaje': r['mensaje'].split(' Arqueo:')[0]})
+    finally:
+        vistos = set()
+        for ticket in Ticket.objects.filter(id__in=ticket_ids).select_related('sucursal'):
+            clave = (ticket.sucursal_id, ticket.fecha)
+            if clave in vistos:
+                continue
+            vistos.add(clave)
+            arqueos.append(f'{ticket.sucursal.alias} {ticket.fecha:%d-%m}: {_recalcular_arqueo(ticket, usuario)}')
+    return {'resultados': resultados, 'asignados': sum(1 for r in resultados if r['ok']),
+            'fallidos': sum(1 for r in resultados if not r['ok']), 'arqueos': arqueos,
+            'recortado': len(list(items or [])) > MAX_LOTE}

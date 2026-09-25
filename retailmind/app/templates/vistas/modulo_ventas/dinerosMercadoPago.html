@@ -495,7 +495,7 @@
     </div>
 </div>
 
-{% if puede_asociar_mp %}{% include 'vistas/modulo_ventas/_asociar_mp.html' %}{% endif %}
+{% if puede_ver_asociar_mp %}{% include 'vistas/modulo_ventas/_asociar_mp.html' %}{% endif %}
 {% include '../../layout/footer.html' %}
 
 <script>
@@ -1532,6 +1532,28 @@
         try { return window.accionExtraContraMP(f) || ''; } catch (e) { console.warn('accionExtraContraMP', e); return ''; }
     }
 
+    // Venta que explica un pago sin registro (la calcula el servidor: misma
+    // tienda, día y monto exacto) o por qué no hay una.
+    function celdaVentaSugerida(f) {
+        const s = f.sugerencia;
+        if (s) {
+            const tono = s.confianza === 'alta' ? 'ok' : (s.confianza === 'media' ? 'warn' : 'err');
+            const cerca = s.minutos < 90 ? `${s.minutos} min` : `${Math.round(s.minutos / 60)} h`;
+            return `<div><strong>Ticket #${esc(s.ticket)}</strong>${s.documento ? ` · ${esc(s.documento)}` : ''}</div>
+                <div class="conc-sub">${esc(s.metodo)}${s.voucher ? ` N° ${esc(s.voucher)}` : ''} · registrado ${esc(s.hora_pago)}
+                    <span class="conc-chip conc-chip--${tono}" title="Minutos entre el cobro en la máquina y el registro del pago en el POS">${cerca}</span></div>
+                ${s.parecido ? `<div class="conc-sub text-warning">N° digitado con error: ${esc(s.parecido)}</div>` : ''}
+                ${s.vendedor || s.productos ? `<div class="conc-sub">${esc([s.vendedor, s.productos].filter(Boolean).join(' · '))}</div>` : ''}`;
+        }
+        if (f.n_mal_digitado) {
+            return `<span class="conc-sub">Es el N° mal digitado del ticket #${esc(f.n_mal_digitado.ticket)} (${esc(f.n_mal_digitado.explicacion)}): corríjalo abajo.</span>`;
+        }
+        if (!f.atribuida) return '<span class="conc-sub">Mercado Pago no informó la caja: búsquela por monto en todas las tiendas.</span>';
+        if (f.candidatos_n > 1) return `<span class="conc-sub">${f.candidatos_n} ventas del mismo monto ese día: elija cuál.</span>`;
+        if (f.otros_medios_n) return `<span class="conc-sub">${f.otros_medios_n} venta(s) de ese monto anotada(s) en efectivo o transferencia.</span>`;
+        return '<span class="conc-sub">Sin venta de ese monto en la tienda ese día: ¿se registró la venta?</span>';
+    }
+
     window.consultarContraMP = function () {
         const btn = document.getElementById('btnContraMP');
         const cont = document.getElementById('contraResultado');
@@ -1542,6 +1564,16 @@
             .then(d => {
                 if (!d.success) { cont.innerHTML = `<div class="text-danger">${esc(d.error || 'Error')}</div>`; return; }
                 const errores = (d.errores || []).map(e => `<div class="small text-danger">${esc(e.sucursal)} · ${esc(e.caja)}${e.dia ? ' · ' + esc(e.dia) : ''}: ${esc(e.error)}</div>`).join('');
+                const sugeridas = (d.sin_registro || []).filter(f => f.sugerencia && f.sugerencia.confianza !== 'baja');
+                const puedeLote = d.puede_asignar && sugeridas.length && typeof window.asocAsignarLote === 'function';
+                window.__contraSugeridas = sugeridas;
+                const lote = puedeLote
+                    ? `<div class="conc-panel d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <div class="small"><strong>${sugeridas.length} pago(s)</strong> tienen su venta identificada (misma tienda, día y monto exacto).
+                            Al asignarlos, el pago de cada venta pasa a Mercado Pago con su N° de operación y la diferencia de ese día se cierra.</div>
+                        <button class="btn btn-primary btn-accion-sm" onclick="asocAsignarLote(window.__contraSugeridas)"><i class="ri-links-line me-1"></i>Asignar las ${sugeridas.length} sugeridas</button>
+                       </div>` : '';
+                const colSugerida = d.puede_asignar ? [['Venta sugerida', celdaVentaSugerida]] : [];
                 cont.innerHTML =
                     `<div class="small mb-2">Período ${esc(d.desde)} → ${esc(d.hasta)} · ${d.pagos_mp_consultados} pagos leídos en Mercado Pago.</div>${errores}` +
                     '<h6 class="fw-bold mt-2">Cierre por caja y día</h6>' +
@@ -1552,17 +1584,26 @@
                         ['Arqueo teórico MP', f => fmt(f.arqueo_teorico_mp), 'num'], ['Cierre físico', f => f.arqueo_cierre_fisico ? fmt(f.arqueo_cierre_fisico) : '—', 'num'],
                     ], d.cajas) +
                     `<h6 class="fw-bold">Cobrado en Mercado Pago sin registro en el sistema <span class="conc-chip conc-chip--err">${d.sin_registro.length}</span></h6>` +
-                    '<div class="conc-help">Plata que entró a la cuenta y no está en ninguna venta ni pago del POS: puede ser una venta sin documento.</div>' +
+                    `<div class="conc-help">Cobros hechos en la máquina que no quedaron en ninguna venta del sistema (por ejemplo, con la máquina en modo manual y la venta anotada como tarjeta).
+                        ${d.puede_asignar ? 'Asígnelos a su venta: el pago de la venta pasa a Mercado Pago y la diferencia de ese día se cierra.' : 'Un administrador puede asignarlos a su venta.'}</div>` +
+                    (d.sin_atribuir_ocultos ? `<div class="conc-sub text-warning mb-2">${Number(d.sin_atribuir_ocultos)} pago(s) de la cuenta no se pueden atribuir a una tienda (Mercado Pago no informó la caja) y no se muestran con la tienda elegida.</div>` : '') +
+                    lote +
                     tablaSimple([
-                        ['Fecha', f => esc(f.fecha)], ['N° MP', f => esc(f.payment_id)], ['Monto', f => fmt(f.monto), 'num'],
-                        ['Medio', f => esc(f.medio)], ['Cuenta', f => esc(f.caja || '-')],
-                        ['Referencia', f => esc(f.external_reference || '-')], ['Descripción', f => esc(f.descripcion)],
+                        ['Cobro', f => `${esc(f.fecha)}${f.descripcion && f.descripcion !== 'Venta presencial' ? `<div class="conc-sub">${esc(f.descripcion)}</div>` : ''}`],
+                        ['Tienda', f => f.atribuida ? esc(f.caja) : '<span class="conc-chip conc-chip--mute">Sin atribuir</span>'],
+                        ['N° MP', f => `<code>${esc(f.payment_id)}</code>`],
+                        ['Monto', f => fmt(f.monto), 'num'],
+                        ['Medio', f => `${esc(f.medio)}${f.ultimos_4 ? ` ···${esc(f.ultimos_4)}` : ''}`],
+                    ].concat(colSugerida, [
                         ['', f => accionExtraContra(f), 'text-end'],
-                    ], d.sin_registro) +
+                    ]), d.sin_registro) +
                     `<h6 class="fw-bold">Pagos «MP manual» del POS que Mercado Pago no reconoce <span class="conc-chip conc-chip--warn">${d.manuales_sin_pago.length}</span></h6>` +
+                    '<div class="conc-help">Ventas anotadas como Mercado Pago a mano cuyo N° de operación no calza con ningún cobro. Si el N° tiene un error de tipeo, se sugiere el correcto.</div>' +
                     tablaSimple([
-                        ['Fecha', f => esc(f.fecha)], ['Sucursal', f => esc(f.sucursal)], ['Ticket', f => '#' + f.ticket],
-                        ['Monto', f => fmt(f.monto), 'num'], ['N° registrado', f => esc(f.voucher || '—')], ['Motivo', f => esc(f.motivo)],
+                        ['Fecha', f => esc(f.fecha)], ['Tienda', f => esc(f.sucursal)], ['Ticket', f => '#' + esc(f.ticket)],
+                        ['Monto', f => fmt(f.monto), 'num'], ['N° registrado', f => `<code>${esc(f.voucher || '—')}</code>`],
+                        ['Motivo', f => `${esc(f.motivo)}${f.sugerencia_n
+                            ? `<div class="conc-sub text-success">N° correcto probable: <code>${esc(f.sugerencia_n.payment_id)}</code> (${esc(f.sugerencia_n.explicacion)}) · cobro ${esc(String(f.sugerencia_n.fecha || '').slice(11))}${f.sugerencia_n.ultimos_4 ? ` ···${esc(f.sugerencia_n.ultimos_4)}` : ''}</div>` : ''}`],
                         ['', f => accionExtraContra(f), 'text-end'],
                     ], d.manuales_sin_pago);
             })

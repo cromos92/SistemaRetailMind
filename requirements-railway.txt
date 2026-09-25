@@ -26,3 +26,6 @@ pyserial==3.5
 websockets==11.0.3
 cryptography>=42.0.0
 requests==2.30.0
+# Claude (Anthropic): lectura de facturas PDF (app/services/carga_factura/lectura.py)
+# y el asistente (app assistant). Requiere ANTHROPIC_API_KEY en el entorno.
+anthropic>=1.8,<2

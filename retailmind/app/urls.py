@@ -534,6 +534,7 @@ from .views_mercadopago_asociacion import (
     api_asociar_candidatos,
     api_asociar_cobro,
     api_asociar_importar,
+    api_asociar_lote,
 )
 from .views_mercadopago import (
     crear_pago_qr_mp,
@@ -1242,6 +1243,7 @@ urlpatterns = [
     path('api/mercadopago/asociar/candidatos/', api_asociar_candidatos, name='api_asociar_candidatos_mp'),
     path('api/mercadopago/asociar/cobro/', api_asociar_cobro, name='api_asociar_cobro_mp'),
     path('api/mercadopago/asociar/importar/', api_asociar_importar, name='api_asociar_importar_mp'),
+    path('api/mercadopago/asociar/lote/', api_asociar_lote, name='api_asociar_lote_mp'),
 
     # ========== MÓDULO DE CAMBIOS Y DEVOLUCIONES ==========
     # Vista principal

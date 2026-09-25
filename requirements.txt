@@ -36,3 +36,5 @@ requests==2.30.0
 # Dependencias solo de dev/migración (mysql-connector-python, statsmodels,
 # numpy) se movieron a requirements-dev.txt para no cargarlas en runtime
 # del servidor que atiende el POS.
+# Claude (Anthropic): lectura de facturas PDF y asistente. Requiere ANTHROPIC_API_KEY.
+anthropic>=1.8,<2
