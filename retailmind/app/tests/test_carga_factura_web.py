@@ -333,6 +333,54 @@ class TestAgenteCargaFactura(TestCase):
         self.assertEqual([m['tipo'] for m in guardada.mensajes[-2:]], ['chat', 'chat'])
         self.assertIn('Apliqué', guardada.mensajes[-1]['texto'])
 
+    def test_esquema_del_chat_sin_uniones_de_tipo(self):
+        """La API rechaza esquemas con más de 16 campos nullable/anyOf (el chat tenía 25):
+        ningún campo lleva anyOf ni type-lista; «sin cambio» va como '', -1 o []."""
+        from app.services.carga_factura import chat as svc_chat
+        catalogo = svc_web.opciones_catalogo(self.user)
+        esquema = svc_chat._esquema(catalogo)
+
+        def uniones(nodo):
+            if isinstance(nodo, dict):
+                n = int('anyOf' in nodo or 'oneOf' in nodo or isinstance(nodo.get('type'), list))
+                return n + sum(uniones(v) for v in nodo.values())
+            if isinstance(nodo, list):
+                return sum(uniones(v) for v in nodo)
+            return 0
+        self.assertEqual(uniones(esquema), 0)
+        linea = esquema['properties']['cambios']['items']['properties']['lineas']['items']
+        self.assertEqual(linea['properties']['color']['enum'][0], '')
+        self.assertEqual(linea['properties']['omitir']['enum'], ['', 'si', 'no'])
+        self.assertEqual(linea['required'], list(linea['properties']))
+
+    def test_chat_ignora_los_valores_sin_cambio(self):
+        from app.services.carga_factura import chat as svc_chat
+        previa = [{'idx': 0, 'folio': 1, 'n_lineas': 2, 'planes': [{}, {}]}]
+        cambios = svc_chat._a_correcciones([{
+            'idx': 0, 'marca': '', 'color': 'NEGRO', 'tipo_talla': '', 'guias_talla': [],
+            'umbral_costo': -1, 'factor_bajo': -1, 'factor_alto': 1.9, 'margen_sobreprecio': -1,
+            'dte_id': -1, 'renombrar_tallas': 'si',
+            'lineas': [
+                {'n': 1, 'articulo': '', 'descripcion': '', 'costo': -1, 'precioventa': 29990,
+                 'cantidad': -1, 'importe': -1, 'genero': 'MUJER', 'categoria': '', 'color': '',
+                 'marca': '', 'especialidades': [], 'ficha_id': -1, 'guia': '',
+                 'tallas': [{'talla': '37', 'cantidad': 2}], 'omitir': ''},
+                {'n': 2, 'articulo': '', 'descripcion': '', 'costo': -1, 'precioventa': -1,
+                 'cantidad': -1, 'importe': -1, 'genero': '', 'categoria': '', 'color': '',
+                 'marca': '', 'especialidades': [], 'ficha_id': -1, 'guia': '',
+                 'tallas': [], 'omitir': 'si'},
+            ],
+        }], previa)
+        self.assertEqual(cambios, [{
+            'idx': 0, 'color': 'NEGRO', '_factor_alto': 1.9, '_renombrar_tallas': True,
+            'lineas': [{'precioventa': 29990, 'genero': 'MUJER', 'tallas': {'37': 2}},
+                       {'_omitir': True}],
+        }])
+        # Todo «sin cambio» → ningún cambio (ni siquiera la factura).
+        self.assertEqual(svc_chat._a_correcciones([{'idx': 0, 'marca': '', 'lineas': [
+            {'n': 1, 'omitir': 'no'}]}], previa), [{'idx': 0, 'lineas': [{'_omitir': False}, {}]}])
+        self.assertEqual(svc_chat._a_correcciones([{'idx': 0, 'marca': '', 'lineas': []}], previa), [])
+
     def test_chat_sin_cambios_solo_responde(self):
         sesion_id = self._subir()
         with mock.patch('app.services.carga_factura.chat._preguntar',

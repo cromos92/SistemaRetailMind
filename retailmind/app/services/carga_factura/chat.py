@@ -48,21 +48,37 @@ SOLO lo que la persona pidió, con valores EXACTOS de las listas. Reglas:
 - Si algo es ambiguo (no sabes a qué línea o factura se refiere), pregunta en "respuesta" y
   deja "cambios" vacío. Si solo pregunta, responde con lo que ves en la vista previa y deja
   "cambios" vacío. Explica los errores y avisos en palabras simples.
-- No repitas toda la vista previa en la respuesta: di qué cambiaste (o qué falta) y nada más."""
+- No repitas toda la vista previa en la respuesta: di qué cambiaste (o qué falta) y nada más.
+- Todos los campos de un cambio van SIEMPRE, y los que NO cambian van vacíos: "" en textos y
+  en los campos de lista de opciones, -1 en los numéricos, [] en las listas, y "" en "omitir"
+  y "renombrar_tallas" (que valen "si" o "no" solo cuando la persona lo pide). Nunca
+  rellenes un campo con un valor real que la persona no pidió."""
 
 
-def _nulo(tipo):
-    return {'anyOf': [{'type': tipo}, {'type': 'null'}]}
+# Sin anyOf ni null: la API limita a 16 los campos con unión de tipos y este
+# esquema tiene 25. En su lugar cada tipo tiene un valor «sin cambio»: '' en
+# textos y enums, -1 en números, [] en listas, '' en los tri-estado si/no.
+SIN_CAMBIO_NUM = -1
+_TRI = {'type': 'string', 'enum': ['', 'si', 'no']}
 
 
-def _enum_nulo(valores):
+def _num(tipo):
+    return {'type': tipo, 'description': f'{SIN_CAMBIO_NUM} = sin cambio'}
+
+
+def _texto():
+    return {'type': 'string', 'description': '"" = sin cambio'}
+
+
+def _opcion(valores):
+    """Enum con '' («sin cambio») al frente; sin lista, texto libre."""
     valores = [v for v in valores if v]
-    return ({'anyOf': [{'type': 'string', 'enum': valores}, {'type': 'null'}]}
-            if valores else _nulo('string'))
+    return ({'type': 'string', 'enum': [''] + valores, 'description': '"" = sin cambio'}
+            if valores else _texto())
 
 
-def _lista_nula(item):
-    return {'anyOf': [{'type': 'array', 'items': item}, {'type': 'null'}]}
+def _lista(item):
+    return {'type': 'array', 'items': item, 'description': '[] = sin cambio'}
 
 
 def _esquema(catalogo):
@@ -73,21 +89,21 @@ def _esquema(catalogo):
         'type': 'object',
         'properties': {
             'n': {'type': 'integer'},
-            'articulo': _nulo('string'), 'descripcion': _nulo('string'),
-            'costo': _nulo('integer'), 'precioventa': _nulo('integer'),
-            'cantidad': _nulo('integer'), 'importe': _nulo('integer'),
-            'genero': _enum_nulo(catalogo['generos']),
-            'categoria': _enum_nulo(catalogo['categorias']),
-            'color': _enum_nulo(catalogo['colores']),
-            'marca': _enum_nulo(catalogo['marcas']),
-            'especialidades': _lista_nula(especialidad),
-            'ficha_id': _nulo('integer'),
-            'guia': _enum_nulo(guias),
-            'tallas': _lista_nula({
+            'articulo': _texto(), 'descripcion': _texto(),
+            'costo': _num('integer'), 'precioventa': _num('integer'),
+            'cantidad': _num('integer'), 'importe': _num('integer'),
+            'genero': _opcion(catalogo['generos']),
+            'categoria': _opcion(catalogo['categorias']),
+            'color': _opcion(catalogo['colores']),
+            'marca': _opcion(catalogo['marcas']),
+            'especialidades': _lista(especialidad),
+            'ficha_id': _num('integer'),
+            'guia': _opcion(guias),
+            'tallas': _lista({
                 'type': 'object',
                 'properties': {'talla': {'type': 'string'}, 'cantidad': {'type': 'integer'}},
                 'required': ['talla', 'cantidad'], 'additionalProperties': False}),
-            'omitir': _nulo('boolean'),
+            'omitir': _TRI,
         },
         'additionalProperties': False,
     }
@@ -96,17 +112,17 @@ def _esquema(catalogo):
         'type': 'object',
         'properties': {
             'idx': {'type': 'integer'},
-            'marca': _enum_nulo(catalogo['marcas']),
-            'color': _enum_nulo(catalogo['colores']),
-            'tipo_talla': _enum_nulo(list(svc_web.TIPOS_TALLA)),
-            'guias_talla': _lista_nula({
+            'marca': _opcion(catalogo['marcas']),
+            'color': _opcion(catalogo['colores']),
+            'tipo_talla': _opcion(list(svc_web.TIPOS_TALLA)),
+            'guias_talla': _lista({
                 'type': 'object',
                 'properties': {'genero': {'type': 'string', 'enum': list(svc_web.GENEROS_GUIA)},
                                'guia': {'type': 'string', 'enum': guias} if guias else {'type': 'string'}},
                 'required': ['genero', 'guia'], 'additionalProperties': False}),
-            'umbral_costo': _nulo('integer'), 'factor_bajo': _nulo('number'),
-            'factor_alto': _nulo('number'), 'margen_sobreprecio': _nulo('number'),
-            'dte_id': _nulo('integer'), 'renombrar_tallas': _nulo('boolean'),
+            'umbral_costo': _num('integer'), 'factor_bajo': _num('number'),
+            'factor_alto': _num('number'), 'margen_sobreprecio': _num('number'),
+            'dte_id': _num('integer'), 'renombrar_tallas': _TRI,
             'lineas': {'type': 'array', 'items': linea},
         },
         'additionalProperties': False,
@@ -193,6 +209,22 @@ _CAMPOS_FACTURA = {
 }
 
 
+_TRI_ESTADO = ('omitir', 'renombrar_tallas')
+
+
+def _sin_cambio(valor):
+    """True si el campo vino con su valor «sin cambio» (o faltó)."""
+    if valor is None or isinstance(valor, bool):
+        return valor is None
+    return valor == '' or valor == [] or (isinstance(valor, (int, float)) and valor == SIN_CAMBIO_NUM)
+
+
+def _valor(campo, valor):
+    if campo in _TRI_ESTADO and isinstance(valor, str):
+        return valor.strip().lower() == 'si'
+    return valor
+
+
 def _a_correcciones(cambios, previa):
     """Lo que devolvió Claude → lista para web.aplicar_correcciones (líneas por posición)."""
     por_idx = {item['idx']: item for item in previa}
@@ -203,8 +235,8 @@ def _a_correcciones(cambios, previa):
             continue
         cambio = {'idx': item['idx']}
         for origen, destino in _CAMPOS_FACTURA.items():
-            if c.get(origen) is not None:
-                cambio[destino] = c[origen]
+            if not _sin_cambio(c.get(origen)):
+                cambio[destino] = _valor(origen, c[origen])
         lineas = [{} for _ in range(item.get('n_lineas') or len(item['planes']))]
         for l in c.get('lineas') or []:
             n = l.get('n')
@@ -212,12 +244,12 @@ def _a_correcciones(cambios, previa):
                 continue
             destino = lineas[n - 1]
             for campo, valor in l.items():
-                if campo == 'n' or valor is None:
+                if campo == 'n' or _sin_cambio(valor):
                     continue
                 if campo == 'tallas':
                     destino['tallas'] = {str(t['talla']): int(t['cantidad']) for t in valor}
                 elif campo == 'omitir':
-                    destino['_omitir'] = bool(valor)
+                    destino['_omitir'] = _valor(campo, valor)
                 else:
                     destino[campo] = valor
         if any(lineas):
