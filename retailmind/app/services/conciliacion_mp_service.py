@@ -831,6 +831,8 @@ def procesar_reporte_liberaciones(filas, config, aplicar=False, archivo=''):
                                  'instante': r['instante'].isoformat(),
                                  'por_caja': por_caja_lista,
                                  'pagos_pos': len(trxs),
+                                 # lo que quedó disponible en MP: 0 = se llevó todo; > 0 = retiro por un monto
+                                 'quedan': quedan,
                                  # neto liberado de cada pago «MP manual» que este retiro terminó
                                  # de llevarse (el pago entero, no solo el trozo de este retiro)
                                  'netos': {str(it['id']): it.get('total', usado) for it, usado in tomado[:2000]

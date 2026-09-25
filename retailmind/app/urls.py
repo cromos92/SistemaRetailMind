@@ -525,6 +525,10 @@ from .views_transbank_sdk import (
     detalles,
     cerrar_dia,
 )
+from .views_mercadopago_retiros import (
+    api_conciliacion_empresas_mp,
+    api_conciliacion_asignacion_empresa_mp,
+)
 from .views_mercadopago_asociacion import (
     api_asociar_pendientes,
     api_asociar_candidatos,
@@ -1222,6 +1226,8 @@ urlpatterns = [
     path('api/mercadopago/conciliacion/liberaciones/detectar/', api_conciliacion_detectar_retiros_mp, name='api_conciliacion_detectar_retiros_mp'),
     path('api/mercadopago/conciliacion/retiro/<str:withdrawal_id>/', api_conciliacion_retiro_detalle_mp, name='api_conciliacion_retiro_detalle_mp'),
     path('api/mercadopago/conciliacion/asignaciones/', api_conciliacion_asignaciones_mp, name='api_conciliacion_asignaciones_mp'),
+    path('api/mercadopago/conciliacion/empresas/', api_conciliacion_empresas_mp, name='api_conciliacion_empresas_mp'),
+    path('api/mercadopago/conciliacion/asignacion-empresa/', api_conciliacion_asignacion_empresa_mp, name='api_conciliacion_asignacion_empresa_mp'),
     path('api/mercadopago/conciliacion/retiro/<str:withdrawal_id>/recalcular/', api_conciliacion_retiro_recalcular_mp, name='api_conciliacion_retiro_recalcular_mp'),
     path('api/mercadopago/conciliacion/liberaciones/tarea/', api_conciliacion_liberaciones_tarea_mp, name='api_conciliacion_liberaciones_tarea_mp'),
     path('api/mercadopago/conciliacion/liberaciones/reportes/', api_conciliacion_liberaciones_reportes_mp, name='api_conciliacion_liberaciones_reportes_mp'),

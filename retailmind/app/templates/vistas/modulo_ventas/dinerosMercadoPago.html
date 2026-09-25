@@ -69,6 +69,61 @@
 .asig-barra > span { display: block; height: 100%; background: var(--rm-accent); }
 .asig-barra--baja > span { background: var(--rm-warning); }
 
+/* Por empresa: la plata en 4 pasos (por liberar → disponible → enviado → abonado) */
+.emp-bloque { border: 1px solid var(--nexo-gray-100); border-radius: 14px; padding: 16px; margin-bottom: 18px; background: #fff; box-shadow: 0 2px 10px rgba(64, 81, 137, 0.06); }
+.emp-head { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.emp-head h6 { font-weight: 700; margin: 0; font-size: 16px; color: var(--rm-primary); }
+.emp-flujo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 12px; }
+.emp-paso { position: relative; border-radius: 10px; padding: 10px 12px; border-left: 3px solid var(--rm-info);
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); }
+.emp-paso + .emp-paso::before { content: '\2192'; position: absolute; left: -13px; top: 50%; transform: translateY(-50%);
+    color: var(--nexo-gray-500); font-weight: 700; font-size: 13px; }
+.emp-paso .v { font-weight: 700; font-size: 1.1rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.emp-paso .l { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--nexo-text-secondary); font-weight: 700; margin: 0; }
+.emp-paso .s { font-size: 11px; color: var(--nexo-text-secondary); margin: 0; }
+.emp-paso .cuando { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--nexo-text-muted); }
+.emp-paso--liberar { border-left-color: var(--rm-info); }
+.emp-paso--mp { border-left-color: var(--rm-warning); }
+.emp-paso--enviado { border-left-color: var(--rm-primary); }
+.emp-paso--abonado { border-left-color: var(--rm-accent); }
+.emp-avisos { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.conc-chip-wrap .conc-chip { white-space: normal; }
+.emp-bloque .conc-table .form-check-input { width: 1.1em; height: 1.1em; }
+
+/* Qué se llevó un retiro: barra apilada por parte */
+.comp-barra { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--nexo-gray-100); min-width: 140px; }
+.comp-barra > span { display: block; height: 100%; }
+.comp-barra--alta { height: 16px; }
+.comp--pos { background: var(--rm-accent); }
+.comp--manual { background: var(--rm-info); }
+.comp--otros { background: var(--rm-warning); }
+.comp--anterior { background: var(--nexo-gray-500); }
+.comp--sin_explicar { background: var(--rm-danger); }
+.comp--abonado { background: var(--rm-accent); }
+.comp--en_transito { background: var(--rm-primary); }
+.comp--en_mp { background: var(--rm-warning); }
+.comp--por_liberar { background: var(--rm-info); }
+.comp-leyenda { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--nexo-text-secondary); margin-top: 5px; }
+.comp-leyenda .dot, .tl-item .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+
+/* Asignación: línea de tiempo de retiros */
+.tl { position: relative; padding-left: 24px; }
+.tl::before { content: ''; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: var(--nexo-gray-100); }
+.tl-item { position: relative; border: 1px solid var(--nexo-gray-100); border-radius: 12px; padding: 10px 14px; margin-bottom: 10px; background: #fff; }
+.tl-item::before { content: ''; position: absolute; left: -21px; top: 16px; width: 12px; height: 12px; border-radius: 50%;
+    background: var(--rm-primary); border: 2px solid #fff; box-shadow: 0 0 0 2px var(--rm-primary); }
+.tl-item--queda { background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-color: rgba(255, 190, 11, .35); }
+.tl-item--queda::before { background: var(--rm-warning); box-shadow: 0 0 0 2px var(--rm-warning); }
+.tl-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.tl-monto { font-weight: 700; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.tl-acciones { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Asignación: los 4 pasos de la explicación */
+.como-pasos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.como-paso { background: #fff; border: 1px solid var(--nexo-gray-100); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+.como-paso .n { width: 24px; height: 24px; border-radius: 50%; background: var(--rm-primary); color: #fff; display: inline-flex;
+    align-items: center; justify-content: center; font-weight: 700; font-size: 12px; margin-right: 6px; }
+
 /* Filtros rápidos (mismo componente que gestion_creditos / cotizaciones) */
 .conc-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
 .conc-chips .qf-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--nexo-text-muted); margin-right: 4px; }
@@ -123,6 +178,12 @@
     .module-header-actions .form-control, .module-header-actions .form-select { flex: 1 1 45%; }
     .card.shadow > .card-body { padding: 14px; }
     .conc-tab { padding: 8px 10px; font-size: 13px; }
+    .emp-bloque { padding: 12px; }
+}
+@media (max-width: 991.98px) {
+    .emp-flujo, .como-pasos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .emp-paso + .emp-paso::before { display: none; }
+    .tl-acciones { margin-left: 0; }
 }
 </style>
 
@@ -239,6 +300,12 @@
 
                 <!-- ===== 2. Liberaciones y banco ===== -->
                 <div class="conc-pane" id="pane-banco">
+                    <p class="conc-help mb-3">
+                        La plata de Mercado Pago es de la <strong>empresa</strong>: cada RUT tiene una cuenta que junta lo cobrado en todas sus tiendas,
+                        y los retiros al banco salen de esa cuenta. Cada venta pasa por cuatro pasos:
+                        <strong>por liberar</strong> (Mercado Pago la retiene unos días) → <strong>disponible en Mercado Pago</strong> →
+                        <strong>enviada al banco</strong> (un retiro, automático o manual) → <strong>abonada</strong> (aparece en la cartola).
+                    </p>
                     {% if es_admin %}
                     <div class="conc-panel d-flex flex-wrap align-items-center justify-content-between gap-2">
                         <div>
@@ -251,6 +318,9 @@
                             <i class="ri-radar-line me-1"></i>Detectar retiros</button>
                     </div>
                     <div id="detectarResultado" class="mb-3"></div>
+                    {% endif %}
+                    <div id="empresasBanco" class="mb-3"><div class="conc-empty">Cargando…</div></div>
+                    {% if es_admin %}
                     <details class="mb-3">
                     <summary class="conc-sub" style="cursor:pointer;">Opciones manuales: elegir un reporte, pedir uno nuevo o subir un CSV, y la cartola del banco</summary>
                     <div class="row g-3 mt-1">
@@ -304,62 +374,64 @@
                     </div>
                     </details>
                     {% endif %}
-                    <h6 class="fw-bold mb-2">Retiros de Mercado Pago al banco</h6>
-                    <div class="conc-scroll">
-                        <table class="table conc-table">
-                            <thead><tr>
-                                <th>Retiro MP</th><th>Fecha</th><th>Cuenta</th><th class="num">Monto</th>
-                                <th>De qué caja salió</th>
-                                <th class="text-center">Cobros del POS</th><th>Estado</th><th>Detalle</th>
-                                <th class="text-center">Visto en cartola</th>
-                            </tr></thead>
-                            <tbody id="tbodyRetiros"><tr><td colspan="9" class="conc-empty">Cargando…</td></tr></tbody>
-                        </table>
-                    </div>
                 </div>
 
                 {% if es_admin %}
-                <!-- ===== Asignación de retiros: cobros del mes ↔ retiros al banco ===== -->
+                <!-- ===== Asignación de retiros: qué ventas se llevó cada retiro, por empresa ===== -->
                 <div class="conc-pane" id="pane-asignacion">
-                    <div class="conc-panel d-flex flex-wrap align-items-end gap-2">
+                    <div class="conc-panel d-flex flex-wrap align-items-end gap-3">
+                        <div>
+                            <div class="conc-sub mb-1">Empresa (cuenta Mercado Pago)</div>
+                            <div class="conc-chips mb-0" id="asigEmpresas" role="group" aria-label="Empresa"><span class="conc-sub">Cargando…</span></div>
+                        </div>
                         <div>
                             <label class="conc-sub d-block" for="asigMes">Mes</label>
-                            <input type="month" id="asigMes" class="form-control form-control-sm" style="max-width:170px;min-height:36px;">
-                        </div>
-                        <div>
-                            <label class="conc-sub d-block" for="asigCuenta">Cuenta Mercado Pago</label>
-                            <select id="asigCuenta" class="form-select form-select-sm" style="min-height:36px;">
-                                <option value="">Todas las cuentas</option>
-                                {% for c in cuentas_mp %}<option value="{{ c.id }}">{{ c.nombre }}</option>{% endfor %}
-                            </select>
+                            <input type="month" id="asigMes" class="form-control form-control-sm" style="width:200px;min-height:36px;">
                         </div>
                         <button class="btn btn-primary btn-accion-sm" style="min-height:36px;" onclick="cargarAsignaciones()"><i class="ri-refresh-line me-1"></i>Ver</button>
-                        <div class="conc-help mb-0 ms-lg-2" style="max-width:560px;">
-                            De lo cobrado con Mercado Pago en el mes, cuánto ya se llevó un retiro al banco (neto, después de la comisión).
-                            La tienda se elige arriba. Un pago «MP manual» se puede asignar recién cuando «Detectar retiros» lo registra por su N°.
+                    </div>
+
+                    <details class="conc-panel" id="asigComo" open>
+                        <summary class="fw-bold" style="cursor:pointer;"><i class="ri-question-line me-1"></i>¿Cómo se asigna una venta a un retiro?</summary>
+                        <div class="como-pasos mt-2">
+                            <div class="como-paso"><span class="n">1</span><strong>Se cobra</strong>
+                                <div class="conc-sub mt-1">Con la Point o el QR de cualquier tienda. La plata entra a la cuenta de Mercado Pago de la <strong>empresa</strong>.</div></div>
+                            <div class="como-paso"><span class="n">2</span><strong>Mercado Pago la libera</strong>
+                                <div class="conc-sub mt-1">Después de unos días (según el medio de pago) pasa a <strong>disponible</strong>, junto con la de las otras tiendas.</div></div>
+                            <div class="como-paso"><span class="n">3</span><strong>Un retiro se la lleva</strong>
+                                <div class="conc-sub mt-1">El retiro (automático o manual) transfiere lo disponible al banco. <strong>Lo que se liberó primero, sale primero.</strong></div></div>
+                            <div class="como-paso"><span class="n">4</span><strong>Llega al banco</strong>
+                                <div class="conc-sub mt-1">Se confirma cuando el abono aparece en la cartola («Abonado»).</div></div>
                         </div>
-                    </div>
-                    <div class="row g-2 mb-3" id="asigKpis"></div>
-                    <h6 class="fw-bold mb-2">Avance por mes</h6>
-                    <div class="conc-scroll mb-3">
-                        <table class="table conc-table">
-                            <thead><tr><th>Mes</th><th class="num">Cobros</th><th class="num">Neto cobrado</th><th class="num">Ya en el banco</th>
-                                <th class="num">Por liberar</th><th class="num">En Mercado Pago</th><th class="num">Devuelto</th>
-                                <th class="num">MP manual sin registrar</th><th>Completado</th></tr></thead>
-                            <tbody id="tbodyAsigMeses"><tr><td colspan="9" class="conc-empty">Elija un mes y apriete «Ver».</td></tr></tbody>
-                        </table>
-                    </div>
-                    <h6 class="fw-bold mb-1">Retiros del mes</h6>
+                        <ul class="conc-help mt-2 mb-0 ps-3">
+                            <li>Mercado Pago no dice qué ventas van en cada retiro. El sistema las reparte con el reporte de Liberaciones, <strong>en orden de liberación</strong>.</li>
+                            <li><strong>Retiro por todo lo disponible</strong>: se lleva todas las ventas liberadas desde el retiro anterior.</li>
+                            <li><strong>Retiro por un monto</strong> (típico de un retiro manual): se lleva las ventas liberadas más antiguas hasta completar el monto; el resto espera el retiro siguiente. Si una venta queda partida entre dos retiros, se anota en el que se llevó su último peso.</li>
+                            <li><strong>Saldo anterior</strong>: plata que ya estaba en la cuenta antes de la primera venta que el sistema tiene registrada<span id="asigPrimerCobro"></span>. No se puede atribuir a ventas.
+                                <strong>Sin venta en el sistema</strong>: ventas online, links de pago o cobros que nadie registró en el POS.</li>
+                            <li>Un pago <strong>MP manual</strong> (cobrado en la Point sin integración y anotado a mano) entra al retiro por su N° de operación. Si el N° está mal escrito queda afuera hasta asociarlo (pestaña «Asociar»).</li>
+                        </ul>
+                    </details>
+
+                    <div id="asigResumen" class="mb-3"></div>
+
+                    <h6 class="fw-bold mb-1">Retiros del mes, en orden</h6>
                     <div class="conc-sub mb-2" id="asigRetirosResumen"></div>
-                    <div class="conc-scroll mb-3">
-                        <table class="table conc-table">
-                            <thead><tr><th>Fecha</th><th>Cuenta</th><th>Retiro MP</th><th class="num">Monto</th>
-                                <th>Por tienda</th><th class="num">Ventas</th><th class="num">Sin explicar</th>
-                                <th>Explicado</th><th>Banco</th><th class="text-end"></th></tr></thead>
-                            <tbody id="tbodyAsigRetiros"><tr><td colspan="10" class="conc-empty">—</td></tr></tbody>
-                        </table>
-                    </div>
-                    <h6 class="fw-bold mb-2">Cobros del mes y su retiro</h6>
+                    <div id="asigTimeline" class="tl mb-3"><div class="conc-empty">Elija una empresa y un mes.</div></div>
+
+                    <details class="mb-3">
+                        <summary class="fw-bold" style="cursor:pointer;">Avance de los últimos 6 meses</summary>
+                        <div class="conc-scroll mt-2">
+                            <table class="table conc-table">
+                                <thead><tr><th>Mes</th><th class="num">Cobros</th><th class="num">Neto cobrado</th><th class="num">En el banco</th>
+                                    <th class="num">Sigue en Mercado Pago</th><th class="num">Devuelto</th>
+                                    <th class="num">MP manual sin registrar</th><th>% en el banco</th></tr></thead>
+                                <tbody id="tbodyAsigMeses"><tr><td colspan="8" class="conc-empty">—</td></tr></tbody>
+                            </table>
+                        </div>
+                    </details>
+
+                    <h6 class="fw-bold mb-2">Cada cobro del mes y su retiro</h6>
                     <div class="conc-chips" id="chipsAsig" role="group" aria-label="Filtrar cobros por dónde está la plata">
                         <span class="qf-label">Ver:</span>
                         <button type="button" class="quick-filter-btn active" data-asig="">Todos <span class="qf-count" id="asigCnt-todos"></span></button>
@@ -580,30 +652,6 @@
                     ? `Retirado al banco (cuenta ${k.retirado_cuenta})` : 'Retirado al banco en el período';
                 document.getElementById('kpiComisiones').textContent =
                     `Abonado ${fmt(k.retirado_abonado)} · en tránsito ${fmt(k.retirado_en_transito)}${k.retirado_n_en_transito ? ` (${k.retirado_n_en_transito})` : ''} · Comisiones ${fmt(k.comisiones)}`;
-                const retiros = data.retiros || [];
-                document.getElementById('tabCountRetiros').textContent = retiros.length;
-                document.getElementById('tbodyRetiros').innerHTML = retiros.length ? retiros.map(r => {
-                    const tono = r.estado === 'CONCILIADO' ? 'ok' : (r.estado === 'CON_DIFERENCIA' ? 'err' : 'warn');
-                    const visto = ES_ADMIN
-                        ? `<input type="checkbox" class="form-check-input" ${r.visto_en_cartola ? 'checked' : ''} onchange="marcarVisto('${esc(r.withdrawal_id)}', this.checked)" aria-label="Visto en cartola">`
-                        : (r.visto_en_cartola ? '✅' : '—');
-                    const cajas = (r.por_caja || []).map(x => `<div class="conc-sub">${esc(x.caja)}: <strong>${fmt(x.monto)}</strong></div>`).join('')
-                        || '<span class="conc-sub">—</span>';
-                    return `<tr>
-                        <td>${esc(r.withdrawal_id)}</td><td>${esc(r.fecha)}${r.hora ? ` <span class="conc-sub">${esc(r.hora)}</span>` : ''}</td>
-                        <td>${esc(r.cuenta || '—')}</td>
-                        <td class="num fw-semibold">${fmt(r.monto)}</td>
-                        <td style="min-width:200px;">${cajas}</td>
-                        <td class="text-center">${r.transacciones}${ES_ADMIN
-                            ? `<div><button class="btn btn-outline-primary btn-accion-sm mt-1" data-id="${esc(r.withdrawal_id)}" onclick="verVentasRetiro(this.dataset.id)"><i class="ri-list-check-2 me-1"></i>Ver ventas</button>
-                               <button class="btn btn-outline-secondary btn-accion-sm mt-1" data-id="${esc(r.withdrawal_id)}" onclick="recalcularRetiro(this.dataset.id)" title="Vuelve a repartir este retiro entre las ventas (por ejemplo tras corregir un N° de operación)">Recalcular</button></div>` : ''}</td>
-                        <td><span class="conc-chip conc-chip--${tono}">${esc(r.estado)}</span></td>
-                        <td class="conc-sub" style="max-width:340px;white-space:normal;">${esc(r.detalle || '')}</td>
-                        <td class="text-center">${r.etapa === 'REVERTIDO' ? '<span class="conc-chip conc-chip--err">Revertido</span>' : visto}${r.etapa === 'EN_TRANSITO'
-                            ? `<div class="conc-sub ${r.alerta_transito ? 'text-danger' : ''}">enviado al banco · sin abono ${r.dias_habiles} día(s) hábil(es)</div>` : ''}${r.etapa === 'ABONADO' && r.fecha_abono
-                            ? `<div class="conc-sub">abonado ${esc(r.fecha_abono)}</div>` : ''}</td>
-                    </tr>`;
-                }).join('') : '<tr><td colspan="9" class="conc-empty">Sin retiros registrados. Use «Detectar retiros» (arriba).</td></tr>';
                 const cuadre = data.cuadre || {filas: []};
                 const filaCuadre = (f, total) => `<tr${total ? ' class="fw-bold"' : ''}><td>${esc(f.sucursal)}</td><td class="num">${f.cobros}</td>
                     <td class="num">${fmt(f.vendido)}</td><td class="num">${fmt(f.devuelto)}</td><td class="num">${fmt(f.comision)}</td>
@@ -613,6 +661,150 @@
                     ? cuadre.filas.map(f => filaCuadre(f, false)).join('') + filaCuadre(cuadre.total, true)
                     : '<tr><td colspan="10" class="conc-empty">Sin cobros con Mercado Pago en el período.</td></tr>';
             });
+        // Lo llaman también «Detectar retiros», «Aplicar» y la cartola: los bloques
+        // por empresa se refrescan con ellos.
+        cargarEmpresasBanco();
+    }
+
+    // ── Piezas comunes: qué se llevó un retiro y en qué va en el banco ──
+    let PARTES_DEF = {};
+    const PARTES_ORDEN = ['pos', 'manual', 'otros', 'anterior', 'sin_explicar'];
+    const nombreParte = k => (PARTES_DEF[k] || [k])[0];
+    const fechaCorta = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? `${m[3]}/${m[2]}/${m[1]}` : esc(iso || ''); };
+
+    // Barra apilada genérica: segs = [[clase, monto, título], ...] sobre `total`.
+    function barraApilada(segs, total, alta) {
+        if (!(total > 0)) return '';
+        const partes = segs.filter(s => s[1] > 0).map(s =>
+            `<span class="comp--${s[0]}" style="width:${Math.min(100, 100 * s[1] / total).toFixed(2)}%" title="${esc(s[2])}: ${fmt(s[1])}"></span>`).join('');
+        return `<div class="comp-barra${alta ? ' comp-barra--alta' : ''}" role="img" aria-label="${esc(segs.filter(s => s[1] > 0).map(s => `${s[2]} ${fmt(s[1])}`).join(', '))}">${partes}</div>`;
+    }
+
+    function barraRetiro(r, alta) {
+        return barraApilada(PARTES_ORDEN.map(k => [k, (r.partes || {})[k] || 0, nombreParte(k)]), r.monto, alta);
+    }
+
+    function leyendaRetiro(r) {
+        const p = r.partes || {};
+        return `<div class="comp-leyenda">${PARTES_ORDEN.filter(k => p[k] > 0).map(k => {
+            let extra = '';
+            if (k === 'pos' && r.ventas_pos) extra = ` · ${r.ventas_pos} venta(s)`;
+            if (k === 'manual' && r.ventas_manual) extra = ` · ${r.ventas_manual} pago(s)`;
+            return `<span title="${esc((PARTES_DEF[k] || [])[1] || '')}"><i class="dot comp--${k}"></i>${esc(nombreParte(k))} <strong>${fmt(p[k])}</strong>${extra}</span>`;
+        }).join('')}</div>`;
+    }
+
+    function chipTipoRetiro(r) {
+        if (r.tipo === 'TOTAL') return '<span class="conc-chip conc-chip--mute" title="Se llevó todo lo que estaba disponible en Mercado Pago en ese momento">Todo lo disponible</span>';
+        if (r.tipo === 'PARCIAL') return `<span class="conc-chip conc-chip--info" title="Se retiró un monto (típico de un retiro manual); el resto quedó en Mercado Pago">Por un monto · quedaron ${fmt(r.quedan)} en MP</span>`;
+        return '';
+    }
+
+    function chipBanco(r) {
+        if (r.etapa === 'REVERTIDO') return '<span class="conc-chip conc-chip--err" title="El banco devolvió la transferencia a Mercado Pago">Revertido por el banco</span>';
+        if (r.etapa === 'ABONADO') return `<span class="conc-chip conc-chip--ok">Abonado${r.fecha_abono ? ' ' + fechaCorta(r.fecha_abono) : ''}</span>`;
+        return `<span class="conc-chip conc-chip--${r.alerta_transito ? 'err' : 'warn'}" title="Mercado Pago ya lo envió; falta verlo en la cartola del banco">Enviado · sin abono ${Number(r.dias_habiles) || 0} d hábil(es)</span>`;
+    }
+
+    // Frase corta con lo que se llevó el retiro (para la línea de tiempo y el modal).
+    function fraseRetiro(r, primerCobro) {
+        const p = r.partes || {};
+        const trozos = [];
+        if (r.ventas_pos) {
+            const vend = r.vendidas_desde === r.vendidas_hasta ? `vendidas el ${esc(r.vendidas_desde)}` : `vendidas del ${esc(r.vendidas_desde)} al ${esc(r.vendidas_hasta)}`;
+            const lib = r.liberadas_desde ? (r.liberadas_desde === r.liberadas_hasta ? `, liberadas el ${esc(r.liberadas_desde)}` : `, liberadas del ${esc(r.liberadas_desde)} al ${esc(r.liberadas_hasta)}`) : '';
+            trozos.push(`<strong>${r.ventas_pos} venta(s) del POS</strong> ${vend}${lib}`);
+        }
+        if (r.ventas_manual) trozos.push(`${r.ventas_manual} pago(s) MP manual`);
+        let txt = trozos.length ? 'Se llevó ' + trozos.join(' y ') + '.' : '';
+        if (p.anterior && p.anterior >= r.monto / 2) {
+            txt += ` ${txt ? 'La mayor parte' : 'Todo'} es <strong>saldo anterior</strong>: plata que ya estaba en Mercado Pago${primerCobro ? ` antes del ${esc(primerCobro)} (primer cobro registrado)` : ''} y que no se puede atribuir a ventas.`;
+        }
+        if (p.otros && p.otros >= r.monto / 2) txt += ' La mayor parte son pagos <strong>sin venta en el sistema</strong> (online, link de pago o cobros no registrados en el POS).';
+        if (p.sin_explicar && r.con_desglose) txt += ` ${fmt(p.sin_explicar)} no aparece en el reporte de Mercado Pago: pida un reporte que empiece antes.`;
+        if (r.pendiente_recalcular) txt = 'Abierto para recalcular: apriete «Detectar retiros» en «Liberaciones y banco».';
+        else if (!r.con_desglose) txt += ' Registrado antes del desglose: se muestran solo sus ventas amarradas.';
+        return txt.trim();
+    }
+
+    // ── Liberaciones y banco: un bloque por empresa ──
+    let empresasBancoCarga = 0;
+    function cargarEmpresasBanco() {
+        const cont = document.getElementById('empresasBanco');
+        if (!cont) return;
+        const gen = ++empresasBancoCarga;
+        fetch('/app/api/mercadopago/conciliacion/empresas/?' + params().toString())
+            .then(r => r.json())
+            .then(d => {
+                if (gen !== empresasBancoCarga) return;
+                if (!d.success) { cont.innerHTML = `<div class="conc-empty text-danger">${esc(d.error || 'Error')}</div>`; return; }
+                PARTES_DEF = d.partes || PARTES_DEF;
+                pintarEmpresasBanco(d);
+            })
+            .catch(() => { if (gen === empresasBancoCarga) cont.innerHTML = '<div class="conc-empty text-danger">Error al cargar los retiros.</div>'; });
+    }
+
+    function pasoFlujo(clase, cuando, etiqueta, valor, sub, titulo) {
+        return `<div class="emp-paso emp-paso--${clase}" title="${esc(titulo)}">
+            <div class="cuando">${cuando}</div><div class="v">${fmt(valor)}</div>
+            <p class="l">${etiqueta}</p><p class="s">${sub}</p></div>`;
+    }
+
+    function pintarEmpresasBanco(d) {
+        const cont = document.getElementById('empresasBanco');
+        const emps = d.empresas || [];
+        document.getElementById('tabCountRetiros').textContent = emps.reduce((s, e) => s + e.retiros.length, 0);
+        if (!emps.length) { cont.innerHTML = '<div class="conc-empty">No hay cuentas de Mercado Pago para mostrar.</div>'; return; }
+        const periodo = `del ${fechaCorta(d.desde)} al ${fechaCorta(d.hasta)}`;
+        cont.innerHTML = emps.map(e => {
+            const h = e.hoy || {}, p = e.periodo || {};
+            const flujo = `<div class="emp-flujo">
+                ${pasoFlujo('liberar', 'Hoy', 'Por liberar', h.por_liberar,
+                    `${h.por_liberar_n || 0} venta(s)${h.proxima_liberacion ? ' · la próxima se libera el ' + esc(h.proxima_liberacion) : ''}`,
+                    'Cobrado que Mercado Pago todavía retiene (neto, después de su comisión)')}
+                ${pasoFlujo('mp', 'Hoy', 'Disponible en Mercado Pago', h.disponible,
+                    `${h.disponible_n || 0} venta(s) esperan un retiro${h.disponible_desde ? ' · vendidas desde el ' + esc(h.disponible_desde) : ''}`,
+                    'Liberado y todavía en la cuenta: lo va a llevar el próximo retiro')}
+                ${pasoFlujo('enviado', periodo, 'Enviado al banco', p.retirado,
+                    `${p.retiros_n || 0} retiro(s)${p.en_transito ? ` · ${fmt(p.en_transito)} sin abono todavía` : ''}`,
+                    'Suma de los retiros con fecha en el período (fechas de arriba)')}
+                ${pasoFlujo('abonado', periodo, 'Abonado en el banco', p.abonado,
+                    `${p.abonado_n || 0} de ${p.retiros_n || 0} retiro(s) vistos en la cartola`,
+                    'Retiros cuyo abono ya se vio en la cartola del banco')}
+            </div>`;
+            const avisos = [];
+            if (p.alerta_transito) avisos.push(`<span class="conc-chip conc-chip--err">${p.alerta_transito} retiro(s) con más de 1 día hábil sin abono</span> <span class="conc-sub">Revise la cartola: si el abono está, márquelo como abonado (o suba la cartola abajo).</span>`);
+            if (e.arrastre_sin_abonar_n) avisos.push(`<span class="conc-chip conc-chip--warn">De antes del período, ${e.arrastre_sin_abonar_n} retiro(s) sin abono · ${fmt(e.arrastre_sin_abonar)}</span>`);
+            if (p.revertidos) avisos.push(`<span class="conc-chip conc-chip--err">${p.revertidos} retiro(s) revertido(s) por el banco</span>`);
+            if (h.sin_fecha_liberacion) avisos.push(`<span class="conc-sub">${h.sin_fecha_liberacion} venta(s) todavía sin fecha de liberación se cuentan como disponibles («Detectar retiros» completa esas fechas).</span>`);
+            const cobrado = p.cobros ? `<div class="conc-sub">Cobrado ${periodo}: <strong>${fmt(p.cobrado_bruto)}</strong> en ${p.cobros} cobro(s) · comisión ${fmt(p.comision)}${p.devuelto ? ` · devuelto ${fmt(p.devuelto)}` : ''} · neto <strong>${fmt(p.cobrado_neto)}</strong></div>` : '';
+            const filas = (e.retiros || []).map(r => `<tr>
+                <td style="min-width:150px;"><strong>${esc(r.fecha)}</strong>${r.hora ? ` <span class="conc-sub">${esc(r.hora)}</span>` : ''}<div class="conc-sub">N° ${esc(r.withdrawal_id)}</div>
+                    <div class="mt-1 conc-chip-wrap">${chipTipoRetiro(r)}</div></td>
+                <td class="num fw-semibold">${fmt(r.monto)}${r.de_la_tienda != null ? `<div class="conc-sub">de esta tienda ${fmt(r.de_la_tienda)}</div>` : ''}</td>
+                <td style="min-width:220px;">${barraRetiro(r)}${leyendaRetiro(r)}${r.pendiente_recalcular ? '<div class="conc-sub text-warning mt-1">Abierto para recalcular: apriete «Detectar retiros».</div>' : ''}</td>
+                <td>${(r.tiendas || []).map(t => `<div class="conc-sub" style="white-space:nowrap;">${esc(t.tienda)}: <strong>${fmt(t.monto)}</strong></div>`).join('') || '<span class="conc-sub">—</span>'}</td>
+                <td>${chipBanco(r)}${ES_ADMIN && r.etapa !== 'REVERTIDO' ? `<div class="form-check mt-1 mb-0"><input type="checkbox" class="form-check-input" id="ab-${esc(r.withdrawal_id)}" ${r.visto_en_cartola ? 'checked' : ''}
+                    data-id="${esc(r.withdrawal_id)}" onchange="marcarVisto(this.dataset.id, this.checked)"><label class="form-check-label conc-sub" for="ab-${esc(r.withdrawal_id)}">visto en la cartola</label></div>` : ''}</td>
+                <td class="text-end">${ES_ADMIN ? `<button class="btn btn-outline-primary btn-accion-sm" style="white-space:nowrap;" data-id="${esc(r.withdrawal_id)}" onclick="verVentasRetiro(this.dataset.id)"><i class="ri-list-check-2 me-1"></i>Ver ventas</button>` : ''}</td>
+            </tr>`).join('');
+            const ultimo = e.ultimo_retiro ? ` El último fue el ${esc(e.ultimo_retiro.fecha)} por ${fmt(e.ultimo_retiro.monto)}.` : ' Todavía no hay retiros registrados.';
+            const tabla = filas
+                ? `<div class="conc-scroll"><table class="table conc-table"><thead><tr><th>Retiro</th><th class="num">Monto</th><th>Qué se llevó</th>
+                    <th>Por tienda</th><th>En el banco</th><th class="text-end"></th></tr></thead><tbody>${filas}</tbody></table></div>`
+                : `<div class="conc-empty py-3">Sin retiros al banco ${periodo}.${ultimo}${ES_ADMIN ? ' Si hubo uno, apriete «Detectar retiros».' : ''}</div>`;
+            return `<section class="emp-bloque">
+                <div class="emp-head">
+                    <div><h6><i class="ri-building-line me-1"></i>${esc(e.nombre)}</h6>
+                        <div class="conc-sub">${e.rut ? 'RUT ' + esc(e.rut) + ' · ' : ''}Tiendas: ${esc((e.tiendas || []).join(', ') || '—')}</div></div>
+                    <div class="text-end">${cobrado}</div>
+                </div>
+                ${flujo}
+                ${avisos.length ? `<div class="emp-avisos">${avisos.map(a => `<div>${a}</div>`).join('')}</div>` : ''}
+                <div class="fw-semibold small mb-1">Retiros ${periodo}</div>
+                ${tabla}
+            </section>`;
+        }).join('');
     }
 
     window.recargarConciliacion = function () {
@@ -640,20 +832,21 @@
         });
     };
 
-    // Qué se llevó un retiro: ventas del POS con su ticket y documento, pagos
-    // «MP manual» y lo que no se pudo explicar con ventas.
+    // Qué se llevó un retiro: arriba, en partes (ventas del POS, MP manual, sin
+    // venta, saldo anterior) y por tienda; abajo, cada venta con su documento.
     window.verVentasRetiro = function (withdrawalId) {
         Swal.fire({title: 'Cargando…', didOpen: () => Swal.showLoading(), allowOutsideClick: false});
         fetch(`/app/api/mercadopago/conciliacion/retiro/${encodeURIComponent(withdrawalId)}/`)
             .then(r => r.json())
             .then(d => {
                 if (!d.success) { Swal.fire({icon: 'error', title: d.error || 'Error'}); return; }
-                const cajas = (d.por_caja || []).map(x => `<div>${esc(x.caja)}: <strong>${fmt(x.monto)}</strong></div>`).join('') || '—';
-                const sinVentas = d.sin_venta || 0;
+                if (d.partes_def) PARTES_DEF = d.partes_def;
+                const res = d.resumen || {};
+                const porTienda = (res.tiendas || []).map(t => `<div>${esc(t.tienda)}: <strong>${fmt(t.monto)}</strong>${t.manual ? ` <span class="conc-sub">(de eso, MP manual ${fmt(t.manual)})</span>` : ''}</div>`).join('') || '<span class="conc-sub">—</span>';
                 const tabla = tablaSimple([
+                    ['Tienda / caja', f => `${esc(f.sucursal)} <span class="conc-sub">${esc(f.caja)}</span>`],
                     ['Cobro', f => `${esc(f.fecha)}${f.origen !== 'POS' ? ` <span class="conc-chip conc-chip--info">${esc(f.origen)}</span>` : ''}`],
                     ['Liberado', f => esc(f.liberacion || '—')],
-                    ['Tienda / caja', f => `${esc(f.sucursal)} <span class="conc-sub">${esc(f.caja)}</span>`],
                     ['Ticket', f => f.ticket ? '#' + esc(f.ticket) : '—'],
                     ['Documento', f => esc(f.documento || 'Sin documento')],
                     ['Bruto', f => fmt(f.bruto), 'num'],
@@ -662,18 +855,20 @@
                     ['N° operación', f => esc(f.payment_id_mp || '—')],
                 ], d.filas || []);
                 Swal.fire({
-                    width: '95%', title: `Retiro ${esc(d.withdrawal_id)} · ${fmt(d.monto)}`,
+                    width: '95%', title: `Retiro del ${esc(d.fecha)}${res.hora ? ' · ' + esc(res.hora) : ''} · ${fmt(d.monto)}`,
                     html: `<div class="text-start small">
-                        <div class="row g-2 mb-2">
-                            <div class="col-md-4"><div class="conc-sub">Fecha</div><strong>${esc(d.fecha)}</strong> · <span class="conc-chip conc-chip--${d.estado === 'CONCILIADO' ? 'ok' : 'err'}">${esc(d.estado)}</span></div>
-                            <div class="col-md-4"><div class="conc-sub">De qué caja salió</div>${cajas}</div>
-                            <div class="col-md-4"><div class="conc-sub">Ventas identificadas (${(d.filas || []).length})</div>
+                        <div class="d-flex flex-wrap gap-2 align-items-center mb-2">${chipTipoRetiro(res)} ${chipBanco(res)}
+                            <span class="conc-sub">N° de retiro ${esc(d.withdrawal_id)}</span></div>
+                        ${barraRetiro(res, true)}${leyendaRetiro(res)}
+                        <div class="mt-2">${fraseRetiro(res, '')}</div>
+                        <div class="row g-2 mt-1 mb-2">
+                            <div class="col-md-6"><div class="conc-sub">Por tienda (caja por la que entró la plata)</div>${porTienda}</div>
+                            <div class="col-md-6"><div class="conc-sub">Ventas identificadas (${(d.filas || []).length})</div>
                                 <strong>${fmt(d.suma_neto)}</strong> neto · bruto ${fmt(d.bruto)} · comisión ${fmt(d.comision)}
-                                ${d.bruto_sin_neto ? `<div class="conc-sub">+ ${fmt(d.bruto_sin_neto)} bruto de pagos «MP manual» sin neto informado</div>` : ''}
-                                ${sinVentas ? `<div class="conc-sub mt-1">${fmt(sinVentas)} no se pudo explicar con ventas del POS (saldo que ya estaba en Mercado Pago, pagos online o sin N° de operación).</div>` : ''}</div>
+                                ${d.bruto_sin_neto ? `<div class="conc-sub">+ ${fmt(d.bruto_sin_neto)} bruto de pagos «MP manual» sin neto informado</div>` : ''}</div>
                         </div>
-                        ${d.detalle ? `<div class="conc-sub mb-2">${esc(d.detalle)}</div>` : ''}
-                        <div class="conc-sub mb-1">Una venta partida entre dos retiros aparece en el que se llevó su último peso.</div>
+                        <div class="conc-sub mb-1">Las ventas entran a los retiros en orden de liberación: lo que se liberó primero, sale primero.
+                            Una venta partida entre dos retiros aparece en el que se llevó su último peso.</div>
                         ${tabla}</div>`,
                     confirmButtonText: 'Cerrar', confirmButtonColor: '#0066FF',
                 });
@@ -681,9 +876,11 @@
             .catch(() => Swal.fire({icon: 'error', title: 'Error de conexión'}));
     };
 
-    // ── Asignación de retiros: cobros del mes ↔ retiros al banco ──
+    // ── Asignación de retiros: por empresa, qué ventas se llevó cada retiro ──
     let asignacion = null;
     let asigFiltro = '';
+    let asigEmpresa = '';
+    let asigCarga = 0;
     const ASIG = {EN_BANCO: 'ok', EN_TRANSITO: 'info', EN_MP: 'warn', POR_LIBERAR: 'info', DEVUELTA: 'mute', SIN_REGISTRAR: 'err'};
     const barra = pct => pct == null ? '<span class="conc-sub">—</span>'
         : `<div class="d-flex align-items-center gap-2"><div class="asig-barra${pct < 50 ? ' asig-barra--baja' : ''}"><span style="width:${Math.max(0, Math.min(100, pct))}%"></span></div><strong>${pct}%</strong></div>`;
@@ -691,69 +888,119 @@
         const [a, m] = String(ym || '').split('-').map(Number);
         return a ? new Date(a, m - 1, 1).toLocaleDateString('es-CL', {month: 'long', year: 'numeric'}) : ym;
     };
-    const kpiAsig = (clase, icono, valor, etiqueta, sub) => `<div class="col-xl-3 col-md-6 col-12">
-        <div class="kpi-card ${clase} card h-100"><div class="card-body d-flex align-items-center gap-2">
-        <div class="kpi-icon text-white"><i class="${icono}"></i></div>
-        <div class="overflow-hidden"><div class="kpi-value">${valor}</div><p class="kpi-label">${etiqueta}</p><p class="kpi-amount">${sub}</p></div>
-        </div></div></div>`;
 
     window.cargarAsignaciones = function () {
         const inp = document.getElementById('asigMes');
         if (!inp.value) { const h = new Date(); inp.value = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}`; }
-        const q = new URLSearchParams({mes: inp.value, cuenta: document.getElementById('asigCuenta').value || ''});
+        const q = new URLSearchParams({mes: inp.value});
+        if (asigEmpresa) q.set('empresa', asigEmpresa);
         const suc = params().get('sucursal_id');
         if (suc) q.set('sucursal_id', suc);
-        document.getElementById('tbodyAsigMeses').innerHTML = '<tr><td colspan="9" class="conc-empty">Cargando…</td></tr>';
-        fetch('/app/api/mercadopago/conciliacion/asignaciones/?' + q.toString())
+        const gen = ++asigCarga;
+        document.getElementById('asigTimeline').innerHTML = '<div class="conc-empty">Cargando…</div>';
+        fetch('/app/api/mercadopago/conciliacion/asignacion-empresa/?' + q.toString())
             .then(r => r.json())
             .then(d => {
-                if (!d.success) { document.getElementById('tbodyAsigMeses').innerHTML = `<tr><td colspan="9" class="conc-empty text-danger">${esc(d.error || 'Error')}</td></tr>`; return; }
+                if (gen !== asigCarga) return;
+                if (!d.success) { document.getElementById('asigTimeline').innerHTML = `<div class="conc-empty text-danger">${esc(d.error || 'Error')}</div>`; return; }
+                PARTES_DEF = d.partes || PARTES_DEF;
                 asignacion = d;
+                asigEmpresa = d.empresa ? d.empresa.clave : '';
                 pintarAsignaciones();
             })
-            .catch(() => { document.getElementById('tbodyAsigMeses').innerHTML = '<tr><td colspan="9" class="conc-empty text-danger">Error de conexión.</td></tr>'; });
+            .catch(() => { if (gen === asigCarga) document.getElementById('asigTimeline').innerHTML = '<div class="conc-empty text-danger">Error de conexión.</div>'; });
     };
+
+    function pintarEmpresasAsig(d) {
+        const cont = document.getElementById('asigEmpresas');
+        cont.innerHTML = (d.empresas || []).map(e =>
+            `<button type="button" class="quick-filter-btn${d.empresa && e.clave === d.empresa.clave ? ' active' : ''}" data-clave="${esc(e.clave)}"
+                title="Tiendas: ${esc((e.tiendas || []).join(', '))}">${esc(e.nombre)}</button>`).join('')
+            || '<span class="conc-sub">No hay cuentas de Mercado Pago.</span>';
+        cont.querySelectorAll('.quick-filter-btn').forEach(b => b.addEventListener('click', () => {
+            asigEmpresa = b.dataset.clave;
+            cargarAsignaciones();
+        }));
+    }
 
     function pintarAsignaciones() {
         const d = asignacion;
-        const r = d.resumen || {};
-        document.getElementById('asigKpis').innerHTML =
-            kpiAsig('kpi-card--total', 'ri-money-dollar-circle-line', fmt(r.neto), `Neto cobrado · ${esc(nombreMes(d.mes))}`,
-                    `${r.cobros || 0} cobros · comisión ${fmt(r.comision)}`) +
-            kpiAsig('kpi-card--ok', 'ri-bank-line', fmt(r.en_banco), 'Ya en el banco',
-                    (r.pct == null ? 'sin cobros' : `${r.pct}% del neto del mes`) + ` · abonado ${fmt(r.abonado)} · sin abono ${fmt(r.en_transito)}`) +
-            kpiAsig('kpi-card--info', 'ri-time-line', fmt((r.en_mp || 0) + (r.por_liberar || 0)), 'Sigue en Mercado Pago',
-                    `${fmt(r.en_mp)} disponible · ${fmt(r.por_liberar)} por liberar`) +
-            kpiAsig('kpi-card--vencido', 'ri-error-warning-line', fmt(r.manual_sin_registrar), 'MP manual sin registrar',
-                    `${r.manual_sin_registrar_n || 0} pagos: no se pueden asignar todavía`);
+        pintarEmpresasAsig(d);
+        const tl = document.getElementById('asigTimeline');
+        if (!d.empresa) {
+            tl.innerHTML = '<div class="conc-empty">No hay cuentas de Mercado Pago configuradas.</div>';
+            document.getElementById('asigResumen').innerHTML = '';
+            return;
+        }
+        const emp = d.empresa, r = d.resumen || {}, mes = esc(nombreMes(d.mes));
+        document.getElementById('asigPrimerCobro').textContent = d.primer_cobro ? ` (en ${emp.nombre}, el ${d.primer_cobro})` : '';
+
+        // ¿Dónde está hoy la plata cobrada en el mes? (neto = vendido − devuelto − comisión)
+        const neto = r.neto || 0;
+        const segs = [['abonado', r.abonado || 0, 'En el banco (abonado)'], ['en_transito', r.en_transito || 0, 'Enviado al banco, sin abono'],
+                      ['en_mp', r.en_mp || 0, 'Disponible en Mercado Pago'], ['por_liberar', r.por_liberar || 0, 'Por liberar']];
+        const pct = v => neto > 0 ? Math.round(100 * v / neto) : 0;
+        const extras = [];
+        if (r.devuelto) extras.push(`Devuelto a clientes: <strong>${fmt(r.devuelto)}</strong> (no llega al banco).`);
+        if (r.manual_sin_registrar) extras.push(`<span class="text-danger">${Number(r.manual_sin_registrar_n) || 0} pago(s) MP manual por ${fmt(r.manual_sin_registrar)} sin registrar</span>: no entran a ningún retiro hasta que «Detectar retiros» los encuentre por su N° o se asocien en «Asociar».`);
+        document.getElementById('asigResumen').innerHTML = `<section class="emp-bloque mb-0">
+            <div class="emp-head mb-2">
+                <div><h6><i class="ri-building-line me-1"></i>${esc(emp.nombre)} · ${mes}</h6>
+                    <div class="conc-sub">${emp.rut ? 'RUT ' + esc(emp.rut) + ' · ' : ''}Tiendas: ${esc((emp.tiendas || []).join(', '))}</div></div>
+                <div class="text-end"><div class="tl-monto">${fmt(neto)}</div>
+                    <div class="conc-sub">neto cobrado en el mes · ${r.cobros || 0} cobro(s) · comisión ${fmt(r.comision)}</div></div>
+            </div>
+            <div class="fw-semibold small mb-1">¿Dónde está hoy la plata cobrada en ${mes}?</div>
+            ${barraApilada(segs, neto, true) || '<div class="conc-sub">Sin cobros con Mercado Pago en el mes.</div>'}
+            <div class="comp-leyenda">${segs.map(s => `<span><i class="dot comp--${s[0]}"></i>${s[2]} <strong>${fmt(s[1])}</strong> (${pct(s[1])}%)</span>`).join('')}</div>
+            ${extras.length ? `<div class="conc-sub mt-2">${extras.join(' ')}</div>` : ''}
+        </section>`;
+
+        const retiros = d.retiros || [];
+        document.getElementById('asigRetirosResumen').innerHTML = retiros.length
+            ? `${retiros.length} retiro(s) en ${mes} por <strong>${fmt(d.retirado_mes)}</strong>, del más antiguo al más nuevo.
+               ${d.sin_abonar_n ? `${d.sin_abonar_n} todavía sin abono confirmado (${fmt(d.sin_abonar)}).` : 'Todos con el abono confirmado.'}
+               ${d.arrastre_sin_abonar_n ? `De meses anteriores siguen sin abono ${fmt(d.arrastre_sin_abonar)} (${d.arrastre_sin_abonar_n}).` : ''}`
+            : '';
+        const items = retiros.map(x => `<div class="tl-item">
+            <div class="tl-head">
+                <strong>${esc(x.fecha)}${x.hora ? ' · ' + esc(x.hora) : ''}</strong>
+                <span class="tl-monto">${fmt(x.monto)}</span>
+                ${chipTipoRetiro(x)} ${chipBanco(x)}
+                ${x.de_la_tienda != null ? `<span class="conc-sub">de esta tienda ${fmt(x.de_la_tienda)}</span>` : ''}
+                <span class="tl-acciones">
+                    <button class="btn btn-outline-primary btn-accion-sm" data-id="${esc(x.withdrawal_id)}" onclick="verVentasRetiro(this.dataset.id)"><i class="ri-list-check-2 me-1"></i>Ver ventas</button>
+                    <button class="btn btn-outline-secondary btn-accion-sm" data-id="${esc(x.withdrawal_id)}" onclick="recalcularRetiro(this.dataset.id)"
+                        title="Vuelve a repartir este retiro entre las ventas (p. ej. después de corregir un N° de operación o asociar un pago)">Recalcular</button>
+                </span>
+            </div>
+            <div class="mt-2">${barraRetiro(x)}${leyendaRetiro(x)}</div>
+            <div class="small mt-1">${fraseRetiro(x, d.primer_cobro)}</div>
+            ${(x.tiendas || []).length ? `<div class="conc-sub mt-1">Por tienda: ${x.tiendas.map(t => `${esc(t.tienda)} <strong>${fmt(t.monto)}</strong>`).join(' · ')}</div>` : ''}
+            <div class="conc-sub">N° de retiro ${esc(x.withdrawal_id)}</div>
+        </div>`).join('');
+        const q = d.queda || {}, qc = d.queda_cuenta || {};
+        const queda = `<div class="tl-item tl-item--queda">
+            <div class="tl-head"><strong>Hoy</strong><span class="tl-monto">${fmt((q.disponible || 0) + (q.por_liberar || 0))}</span>
+                <span class="conc-sub">de lo cobrado en ${mes} sigue en Mercado Pago</span></div>
+            <div class="small mt-1">
+                <div><i class="dot comp--en_mp"></i>Disponible, espera el próximo retiro: <strong>${fmt(q.disponible)}</strong> · ${q.disponible_n || 0} venta(s)${q.disponible_desde ? ` vendidas del ${esc(q.disponible_desde)} al ${esc(q.disponible_hasta)}` : ''}</div>
+                <div><i class="dot comp--por_liberar"></i>Por liberar: <strong>${fmt(q.por_liberar)}</strong> · ${q.por_liberar_n || 0} venta(s)${q.proxima_liberacion ? `; la próxima se libera el ${esc(q.proxima_liberacion)}` : ''}</div>
+            </div>
+            <div class="conc-sub mt-1">En toda la cuenta (todos los meses): disponible ${fmt(qc.disponible)} · por liberar ${fmt(qc.por_liberar)}.</div>
+        </div>`;
+        tl.innerHTML = (items || `<div class="tl-item"><div class="conc-sub">No hubo retiros al banco en ${mes}.</div></div>`) + queda;
+
         document.getElementById('tbodyAsigMeses').innerHTML = (d.serie || []).map(f => `<tr${f.mes === d.mes ? ' class="fw-semibold"' : ''}>
             <td>${esc(nombreMes(f.mes))}</td><td class="num">${f.cobros}</td><td class="num">${fmt(f.neto)}</td>
-            <td class="num">${fmt(f.en_banco)}</td><td class="num">${fmt(f.por_liberar)}</td><td class="num">${fmt(f.en_mp)}</td>
+            <td class="num">${fmt(f.en_banco)}</td><td class="num">${fmt((f.en_mp || 0) + (f.por_liberar || 0))}</td>
             <td class="num">${fmt(f.devuelto)}</td>
             <td class="num">${f.manual_sin_registrar ? `${fmt(f.manual_sin_registrar)} <span class="conc-sub">(${f.manual_sin_registrar_n})</span>` : '—'}</td>
-            <td>${barra(f.pct)}</td></tr>`).join('') || '<tr><td colspan="9" class="conc-empty">Sin datos.</td></tr>';
-        document.getElementById('asigRetirosResumen').innerHTML = ((d.retiros || []).length || d.arrastre_sin_abonar_n)
-            ? `Retirado al banco en el mes <strong>${fmt(d.retirado_mes)}</strong> · enviado y sin abono confirmado en la cartola
-               <strong>${fmt(d.sin_abonar)}</strong> (${d.sin_abonar_n} retiro(s)${d.sin_abonar_alerta ? `, <span class="text-danger">${d.sin_abonar_alerta} con más de 2 días hábiles</span>` : ''})${d.revertidos ? ` · <span class="text-danger">${d.revertidos} revertido(s) por el banco</span>` : ''}.
-               ${d.arrastre_sin_abonar_n ? `De meses anteriores siguen sin abono <strong>${fmt(d.arrastre_sin_abonar)}</strong> (${d.arrastre_sin_abonar_n}). ` : ''}
-               Marque «Visto en cartola» en «Liberaciones y banco» o suba la cartola cuando el abono aparezca en el banco.
-               <div class="mt-1">Cómo cuadra: cada retiro = explicado con ventas + sin explicar. De lo cobrado en el mes (neto) = ya en el banco (abonado + sin abono) + en Mercado Pago + por liberar + devuelto.</div>` : '';
-        document.getElementById('tbodyAsigRetiros').innerHTML = (d.retiros || []).map(x => `<tr>
-            <td>${esc(x.fecha)}${x.hora ? ` <span class="conc-sub">${esc(x.hora)}</span>` : ''}</td>
-            <td>${esc(x.cuenta || '—')}</td><td>${esc(x.withdrawal_id)}</td>
-            <td class="num fw-semibold">${fmt(x.monto)}${x.de_la_tienda != null ? `<div class="conc-sub">de esta tienda ${fmt(x.de_la_tienda)}</div>` : ''}</td>
-            <td style="min-width:150px;">${(x.por_tienda || []).map(t => `<div class="conc-sub">${esc(t.tienda || '—')}: <strong>${fmt(t.monto)}</strong>${t.ventas != null ? ` (${t.ventas})` : ''}</div>`).join('') || '<span class="conc-sub">—</span>'}</td>
-            <td class="num">${x.ventas}</td>
-            <td class="num">${x.sin_venta ? fmt(x.sin_venta) : '—'}</td>
-            <td>${barra(x.pct_explicado)}</td>
-            <td>${x.etapa === 'ABONADO' ? `<span class="conc-chip conc-chip--ok">Abonado</span>${x.fecha_abono ? `<div class="conc-sub">${esc(x.fecha_abono)}</div>` : ''}`
-                : x.etapa === 'REVERTIDO' ? '<span class="conc-chip conc-chip--err">Revertido</span>'
-                : `<span class="conc-chip conc-chip--${x.alerta_transito ? 'err' : 'warn'}">Enviado · sin abono ${x.dias_habiles} d hábil(es)</span>`}</td>
-            <td class="text-end"><button class="btn btn-outline-primary btn-accion-sm" data-id="${esc(x.withdrawal_id)}" onclick="verVentasRetiro(this.dataset.id)"><i class="ri-list-check-2 me-1"></i>Ver ventas</button>
-                <button class="btn btn-outline-secondary btn-accion-sm" data-id="${esc(x.withdrawal_id)}" onclick="recalcularRetiro(this.dataset.id)" title="Vuelve a repartir este retiro entre las ventas">Recalcular</button></td>
-        </tr>`).join('') || '<tr><td colspan="10" class="conc-empty">No hubo retiros al banco en este mes.</td></tr>';
+            <td>${barra(f.pct)}</td></tr>`).join('') || '<tr><td colspan="8" class="conc-empty">Sin datos.</td></tr>';
+
         const c = d.conteo || {};
         let total = 0;
+        document.querySelectorAll('[data-asig-cnt]').forEach(el => { el.textContent = ''; });
         Object.keys(c).forEach(k => {
             total += c[k];
             const el = document.querySelector(`[data-asig-cnt="${k}"]`);
@@ -766,7 +1013,7 @@
     function cobrosAsigVisibles() {
         const q = (document.getElementById('asigBuscar').value || '').trim().toLowerCase();
         return ((asignacion && asignacion.cobros) || []).filter(f => (!asigFiltro || f.estado === asigFiltro) &&
-            (!q || [f.ticket, f.payment_id_mp, f.documento, f.sucursal, f.caja, f.retiro].join(' ').toLowerCase().includes(q)));
+            (!q || [f.ticket, f.payment_id_mp, f.documento, f.sucursal, f.caja, f.retiro, f.retiro_fecha].join(' ').toLowerCase().includes(q)));
     }
 
     function pintarCobrosAsig() {
@@ -780,7 +1027,7 @@
             <td>${f.documento ? esc(f.documento) : '<span class="conc-sub">—</span>'}</td>
             <td class="num">${fmt(f.bruto)}</td><td class="num">${f.neto == null ? '—' : fmt(f.neto)}${f.devuelto ? `<div class="conc-sub">devuelto ${fmt(f.devuelto)}</div>` : ''}</td>
             <td><span class="conc-chip conc-chip--${ASIG[f.estado] || 'mute'}">${esc(est[f.estado] || f.estado)}</span>${f.liberacion ? `<div class="conc-sub">liberado ${esc(f.liberacion)}</div>` : ''}</td>
-            <td>${f.retiro ? `${esc(f.retiro)}<div class="conc-sub">${esc(f.retiro_fecha)}</div>` : '<span class="conc-sub">—</span>'}</td>
+            <td>${f.retiro ? `<button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-id="${esc(f.retiro)}" onclick="verVentasRetiro(this.dataset.id)">Retiro del ${esc(f.retiro_fecha)}</button><div class="conc-sub">N° ${esc(f.retiro)}</div>` : '<span class="conc-sub">—</span>'}</td>
         </tr>`).join('') || '<tr><td colspan="8" class="conc-empty">Sin cobros para este filtro.</td></tr>';
         const pie = [];
         if (filas.length > MAX) pie.push(`Mostrando ${MAX} de ${filas.length}: use el buscador, un filtro o el CSV.`);
@@ -800,13 +1047,14 @@
     window.exportarAsignacionesCSV = function () {
         const filas = cobrosAsigVisibles();
         const est = (asignacion && asignacion.estados) || {};
-        const cab = ['Cobro', 'Origen', 'Tienda', 'Caja', 'Ticket', 'Documento', 'Bruto', 'Neto', 'N° MP', 'Liberación', 'Dónde está', 'Retiro', 'Fecha retiro'];
-        const lineas = [cab.join(';')].concat(filas.map(f => [f.fecha, f.origen, f.sucursal, f.caja, f.ticket, f.documento, f.bruto,
+        const empresa = (asignacion && asignacion.empresa && asignacion.empresa.nombre) || '';
+        const cab = ['Empresa', 'Cobro', 'Origen', 'Tienda', 'Caja', 'Ticket', 'Documento', 'Bruto', 'Neto', 'N° MP', 'Liberación', 'Dónde está', 'Retiro', 'Fecha retiro'];
+        const lineas = [cab.join(';')].concat(filas.map(f => [empresa, f.fecha, f.origen, f.sucursal, f.caja, f.ticket, f.documento, f.bruto,
             f.neto == null ? '' : f.neto, f.payment_id_mp, f.liberacion, est[f.estado] || f.estado, f.retiro, f.retiro_fecha].map(csvCelda).join(';')));
-        const blob = new Blob(['\ufeff' + lineas.join('\n')], {type: 'text/csv;charset=utf-8'});
+        const blob = new Blob(['﻿' + lineas.join('\n')], {type: 'text/csv;charset=utf-8'});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `asignacion_retiros_${(asignacion && asignacion.mes) || ''}.csv`;
+        a.download = `asignacion_retiros_${(asignacion && asignacion.mes) || ''}_${empresa.replace(/[^\w]+/g, '_')}.csv`;
         a.click();
         URL.revokeObjectURL(a.href);
     };
@@ -833,7 +1081,11 @@
         fetch('/app/api/mercadopago/conciliacion/retiro-visto/', {
             method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
             body: JSON.stringify({withdrawal_id: withdrawalId, visto}),
-        }).then(r => r.json()).then(d => { if (!d.success) Swal.fire({icon: 'error', title: d.error || 'Error'}); });
+        }).then(r => r.json()).then(d => {
+            if (!d.success) { Swal.fire({icon: 'error', title: d.error || 'Error'}); return; }
+            cargarDineros();   // KPIs y bloques por empresa (abonado / sin abono)
+            if (asignacion) cargarAsignaciones();
+        });
     };
 
     function tablaSimple(cols, filas) {

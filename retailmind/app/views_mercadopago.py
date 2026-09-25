@@ -2144,7 +2144,11 @@ def api_conciliacion_retiro_detalle_mp(request, withdrawal_id):
     retiro = RetiroMercadoPago.objects.filter(withdrawal_id=withdrawal_id).first()
     if retiro is None:
         return JsonResponse({'success': False, 'error': 'No existe ese retiro.'}, status=404)
-    return JsonResponse({'success': True, **conc.detalle_retiro(retiro)})
+    from .services import conciliacion_mp_empresas as emp
+    # Qué se llevó en partes (ventas POS, MP manual, sin venta, saldo anterior) y
+    # si fue por todo lo disponible o por un monto: lo pinta el encabezado del modal.
+    return JsonResponse({'success': True, **conc.detalle_retiro(retiro),
+                         'resumen': emp.describir_retiros([retiro])[0], 'partes_def': emp.PARTES})
 
 
 @login_required
