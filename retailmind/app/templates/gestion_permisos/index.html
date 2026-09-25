@@ -390,6 +390,50 @@
     .permiso-item[data-tipo="habilitado"].active { background: rgba(0,212,170,0.12); border-color: var(--nexo-success); color: #00906f; }
     .permiso-item[data-tipo="habilitado"]:not(.active) { background: rgba(255,77,77,0.08); border-color: rgba(255,77,77,0.45); color: #CC3D3D; }
     .permiso-item.deshabilitado { opacity: 0.45; cursor: not-allowed; }
+    /* Casilleros que hoy no controlan nada en esa pantalla (según el catálogo) */
+    .permiso-item.sin-efecto { opacity: 0.4; border-style: dashed; }
+    .permiso-item.sin-efecto span { text-decoration: line-through; }
+    .ocultar-sin-efecto .permiso-item.sin-efecto, .ocultar-sin-efecto .celda-permiso.sin-efecto .btn-override,
+    .ocultar-sin-efecto .celda-permiso.sin-efecto .efectivo { display: none; }
+    .celda-permiso.sin-efecto { opacity: 0.45; }
+    .ocultar-sin-efecto .celda-permiso.sin-efecto::after { content: 'sin efecto'; font-size: 0.65rem; color: var(--nexo-gray-500); }
+
+    .opcion-resumen { display: block; font-size: 0.78rem; color: var(--nexo-gray-700); margin-top: 2px; max-width: 520px; }
+    .btn-info-opcion {
+        border: 1px solid var(--nexo-gray-300); background: var(--nexo-white); color: var(--nexo-primary);
+        width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+        display: inline-flex; align-items: center; justify-content: center; font-size: 1rem;
+    }
+    .btn-info-opcion:hover, .btn-info-opcion.abierto { background: var(--nexo-primary); color: var(--nexo-white); border-color: var(--nexo-primary); }
+    .opcion-detalle {
+        flex-basis: 100%; width: 100%;
+        background: var(--nexo-gray-100); border-radius: var(--nexo-radius-md);
+        padding: 12px 14px; margin-top: 6px; font-size: 0.83rem;
+    }
+    .opcion-detalle .od-cab { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; margin-bottom: 4px; }
+    .opcion-detalle .od-cab code { font-size: 0.75rem; }
+    .detalle-lista { list-style: none; padding: 0; margin: 8px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 4px 16px; }
+    .detalle-lista li { display: flex; gap: 6px; align-items: flex-start; }
+    .detalle-lista li i { margin-top: 2px; }
+    .detalle-lista li.puede i { color: #00906f; }
+    .detalle-lista li.no-puede { color: var(--nexo-gray-700); }
+    .detalle-lista li.no-puede i { color: #CC3D3D; }
+    .detalle-lista li.sin-efecto { color: var(--nexo-gray-500); }
+    .detalle-lista li b { font-weight: 600; }
+    .od-pie { margin-top: 8px; font-size: 0.78rem; color: var(--nexo-gray-700); }
+    .tabla-usuario tr.fila-detalle > td { background: var(--nexo-gray-100); padding: 0 !important; }
+    .tabla-usuario tr.fila-detalle .opcion-detalle { margin: 0; border-radius: 0; }
+
+    /* Modal «Qué puede hacer» */
+    .qp-modulo { margin-bottom: 14px; }
+    .qp-modulo h6 { font-weight: 700; border-bottom: 1px solid var(--nexo-gray-300); padding-bottom: 4px; margin-bottom: 8px; }
+    .qp-opcion { padding: 6px 0 8px; border-bottom: 1px dashed var(--nexo-gray-100); font-size: 0.85rem; }
+    .qp-opcion .qp-nombre { font-weight: 600; }
+    .qp-opcion .qp-lista { margin: 2px 0 0 0; padding-left: 18px; }
+    .qp-opcion .qp-lista.puede li::marker { color: #00906f; }
+    .qp-opcion .qp-lista.no-puede { color: var(--nexo-gray-700); }
+    .qp-opcion .qp-lista.no-puede li::marker { color: #CC3D3D; }
+    .qp-sin-acceso { font-size: 0.8rem; color: var(--nexo-gray-700); }
     .solo-lectura .permiso-item { cursor: default; }
 
     .empty-state { text-align: center; padding: 48px 16px; color: var(--nexo-gray-500); }
@@ -568,6 +612,7 @@
                         <h5><i class="ri-settings-3-line me-2 text-primary"></i><span id="tituloRol">Selecciona un rol</span></h5>
                         <div class="d-flex flex-wrap gap-2">
                             <button class="btn btn-nexo-success" id="btnGuardarRol" disabled><i class="ri-save-line me-1"></i>Guardar cambios</button>
+                            <button class="btn btn-nexo-outline" id="btnQuePuedeRol" disabled><i class="ri-list-check-2 me-1"></i>¿Qué puede hacer?</button>
                             <button class="btn btn-nexo-outline" id="btnCopiarRol" disabled><i class="ri-file-copy-line me-1"></i>Copiar de otro rol</button>
                             <div class="btn-group">
                                 <button type="button" class="btn btn-nexo-outline dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
@@ -634,6 +679,10 @@
                                 <button type="button" class="filtro-chip" data-filtro="acciones">Acciones internas</button>
                             </div>
                             <button type="button" class="quick-action-btn" data-colapsar="modulosRol"><i class="ri-fullscreen-exit-line me-1"></i>Colapsar / expandir</button>
+                            <label class="form-check form-switch m-0 small" title="Casilleros que hoy no controlan nada en esa pantalla">
+                                <input class="form-check-input" type="checkbox" data-sin-efecto="modulosRol">
+                                <span class="form-check-label">Mostrar casilleros sin efecto</span>
+                            </label>
                         </div>
 
                         <div class="resumen-permisos" id="resumenRol"></div>
@@ -698,6 +747,10 @@
                                 <button type="button" class="filtro-chip" data-filtro="restringidas">Con restricción</button>
                             </div>
                             <button type="button" class="quick-action-btn" data-colapsar="modulosSucursal"><i class="ri-fullscreen-exit-line me-1"></i>Colapsar / expandir</button>
+                            <label class="form-check form-switch m-0 small" title="Casilleros que hoy no controlan nada en esa pantalla">
+                                <input class="form-check-input" type="checkbox" data-sin-efecto="modulosSucursal">
+                                <span class="form-check-label">Mostrar casilleros sin efecto</span>
+                            </label>
                         </div>
                         <div class="quick-actions" id="accionesSucursal">
                             <span class="text-muted small me-1"><i class="ri-flashlight-line"></i> Toda la sucursal:</span>
@@ -734,6 +787,7 @@
                             </div>
                         </div>
                         <div class="col-lg-3 text-lg-end">
+                            <button class="btn btn-nexo-outline" id="btnQuePuedeUsuario" disabled><i class="ri-list-check-2 me-1"></i>¿Qué puede hacer?</button>
                             <button class="btn btn-nexo-success" id="btnGuardarUsuario" disabled><i class="ri-save-line me-1"></i>Guardar</button>
                             <button class="btn btn-nexo-outline" id="btnLimpiarUsuario" disabled><i class="ri-delete-bin-line me-1"></i>Quitar todos</button>
                         </div>
@@ -771,6 +825,10 @@
                                 <button type="button" class="filtro-chip" data-filtro="overrides">Con permiso propio</button>
                                 <button type="button" class="filtro-chip" data-filtro="con">Puede ver</button>
                             </div>
+                            <label class="form-check form-switch m-0 small" title="Casilleros que hoy no controlan nada en esa pantalla">
+                                <input class="form-check-input" type="checkbox" data-sin-efecto="modulosUsuario">
+                                <span class="form-check-label">Mostrar casilleros sin efecto</span>
+                            </label>
                             <div class="small text-muted">
                                 <span class="btn-override d-inline-flex align-items-center justify-content-center">--</span> usa el rol
                                 <span class="btn-override si d-inline-flex align-items-center justify-content-center ms-2">SI</span> otorgar
@@ -797,6 +855,33 @@
         </div>
 
         </div><!-- /tab-content -->
+    </div>
+</div>
+
+<!-- Modal: qué puede hacer (rol o usuario) -->
+<div class="modal fade" id="modalQuePuede" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="ri-list-check-2 me-2"></i><span id="quePuedeTitulo">¿Qué puede hacer?</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                    <span class="small text-muted" id="quePuedeSubtitulo"></span>
+                    <div class="ms-auto d-flex gap-1" data-filtros="quepuede">
+                        <button type="button" class="filtro-chip activo" data-filtro="todo">Todo</button>
+                        <button type="button" class="filtro-chip" data-filtro="puede">Solo lo que puede</button>
+                        <button type="button" class="filtro-chip" data-filtro="nopuede">Solo lo que no puede</button>
+                    </div>
+                </div>
+                <div id="quePuedeContenido"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-nexo-outline" id="btnCopiarQuePuede"><i class="ri-file-copy-line me-1"></i>Copiar como texto</button>
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -977,6 +1062,25 @@
         puede_exportar: 'Exporta a Excel/PDF',
         puede_aprobar: 'Aprueba operaciones críticas',
     };
+    // Ficha del catálogo por id de opción (la trae la API en `op.catalogo`).
+    const CAT_POR_ID = {};
+    const NOMBRE_POR_CODIGO = {};
+    const TIPO_CAT = t => (t === 'habilitado' ? 'puede_ver' : t);
+    function registrarCatalogo(op) {
+        CAT_POR_ID[op.id] = op.catalogo || null;
+        NOMBRE_POR_CODIGO[op.codigo] = (op.catalogo && op.catalogo.pantalla) || op.nombre;
+    }
+    function textoCasillero(op, t) {
+        const cat = CAT_POR_ID[op.id];
+        const tc = TIPO_CAT(t);
+        if (cat && cat.permisos[tc]) return cat.permisos[tc];
+        if (cat && cat.sin_efecto.includes(tc)) return 'Hoy no controla nada en esta pantalla.';
+        return AYUDA[t];
+    }
+    function esSinEfecto(op, t) {
+        const cat = CAT_POR_ID[op.id];
+        return !!(cat && cat.sin_efecto.includes(TIPO_CAT(t)));
+    }
     const MOTIVO = {
         MAESTRO: 'Maestro: acceso total',
         OVERRIDE_SI: 'Otorgado a este usuario',
@@ -1099,32 +1203,203 @@
     }
 
     function filaOpcion(op, esSub, tipos, editable, leer) {
+        registrarCatalogo(op);
         const info = leer(op);
+        const cat = CAT_POR_ID[op.id];
         const tags = [];
         if (op.tipo === 'accion') tags.push('<span class="tag-mini accion" title="Permiso de una acción dentro de otra pantalla (no es un ítem del menú)">Acción</span>');
         if (op.sensible) tags.push('<span class="tag-mini sensible" title="Mueve dinero, documentos SII o permisos">Sensible</span>');
         (info.tags || []).forEach(t => tags.push(t));
         const casillas = tipos.map(t => {
             const on = !!info.flags[t];
-            return `<label class="permiso-item ${on ? 'active' : ''}" data-tipo="${t}" title="${esc(AYUDA[t])}">
+            return `<label class="permiso-item ${on ? 'active' : ''} ${esSinEfecto(op, t) ? 'sin-efecto' : ''}" data-tipo="${t}" title="${esc(ETIQUETA[t] + ': ' + textoCasillero(op, t))}">
                         <input type="checkbox" class="permiso-check" data-opcion-id="${op.id}" data-permiso="${t}" ${on ? 'checked' : ''} ${editable ? '' : 'disabled'}>
                         <i class="${ICONO[t]}"></i><span>${ETIQUETA[t]}</span>
                     </label>`;
         }).join('');
         return `
             <div class="opcion-row ${esSub ? 'sub-opcion' : ''} ${info.extraClases || ''}" data-opcion-id="${op.id}"
-                 data-buscar="${esc((op.nombre + ' ' + op.codigo).toLowerCase())}"
+                 data-buscar="${esc((op.nombre + ' ' + op.codigo + ' ' + (cat ? cat.pantalla + ' ' + cat.resumen : '')).toLowerCase())}"
                  data-sensible="${op.sensible ? 1 : 0}" data-accion="${op.tipo === 'accion' ? 1 : 0}">
                 <div class="opcion-info">
+                    <button type="button" class="btn-info-opcion" data-info-opcion="${op.id}" title="¿Qué controla cada casillero en esta pantalla?"><i class="ri-question-line"></i></button>
                     <div class="opcion-icon"><i class="${esc(op.icono || 'ri-file-line')}"></i></div>
                     <div>
                         <span class="opcion-nombre">${esc(op.nombre)}</span>
                         <span class="opcion-meta"><code>${esc(op.codigo)}</code>${tags.join('')}</span>
+                        ${cat && cat.resumen ? `<span class="opcion-resumen">${esc(cat.resumen)}</span>` : ''}
                     </div>
                 </div>
                 <div class="permisos-group">${casillas}</div>
             </div>`;
     }
+
+    // ── Panel «¿qué controla cada casillero?» por opción ──
+    // `flags` = {tipo: true/false} con lo marcado hoy; `tipos` = casilleros de ese contenedor.
+    function htmlDetalle(op, flags, tipos) {
+        const cat = CAT_POR_ID[op.id];
+        if (!cat) {
+            return `<div class="opcion-detalle"><i class="ri-information-line me-1"></i>Esta opción todavía no tiene ficha en el catálogo de permisos (app/permisos_catalogo).</div>`;
+        }
+        const items = tipos.map(t => {
+            const tc = TIPO_CAT(t);
+            if (cat.permisos[tc]) {
+                const on = !!flags[t];
+                return `<li class="${on ? 'puede' : 'no-puede'}"><i class="${on ? 'ri-checkbox-circle-fill' : 'ri-close-circle-fill'}"></i><span><b>${ETIQUETA[t]}</b> — ${esc(cat.permisos[tc])}</span></li>`;
+            }
+            return `<li class="sin-efecto"><i class="ri-subtract-line"></i><span><b>${ETIQUETA[t]}</b> — sin efecto hoy en esta pantalla</span></li>`;
+        }).join('');
+        const depende = (cat.depende_de || []).map(c => esc(NOMBRE_POR_CODIGO[c] || c)).join(', ');
+        return `<div class="opcion-detalle">
+            <div class="od-cab"><strong>${esc(cat.pantalla || op.nombre)}</strong>${cat.ruta ? `<code>${esc(cat.ruta)}</code>` : '<span class="tag-mini accion">acción dentro de otra pantalla</span>'}</div>
+            <div>${esc(cat.resumen)}</div>
+            <ul class="detalle-lista">${items}</ul>
+            ${depende ? `<div class="od-pie"><i class="ri-git-merge-line me-1"></i>También depende de: <strong>${depende}</strong></div>` : ''}
+            ${cat.notas ? `<div class="od-pie"><i class="ri-information-line me-1"></i>${esc(cat.notas)}</div>` : ''}
+        </div>`;
+    }
+    function flagsDeFila(row) {
+        const f = {};
+        row.querySelectorAll('.permiso-check').forEach(c => { f[c.dataset.permiso] = c.checked; });
+        return f;
+    }
+    function opcionDeContenedor(contenedor, id) {
+        const cont = contenedor.id === 'modulosUsuario' ? (estadoUsr.datos && estadoUsr.datos.modulos)
+            : (contenedor.id === 'modulosSucursal' ? estadoSuc.modulos : estadoRol.modulos);
+        let hallada = null;
+        (cont || []).forEach(m => m.opciones.forEach(op => {
+            if (String(op.id) === String(id)) hallada = op;
+            (op.subopciones || []).forEach(s => { if (String(s.id) === String(id)) hallada = s; });
+        }));
+        return hallada;
+    }
+    function refrescarDetalle(row) {
+        const panel = row.querySelector('.opcion-detalle');
+        if (!panel) return;
+        const contenedor = row.closest('#modulosRol, #modulosSucursal');
+        const op = opcionDeContenedor(contenedor, row.dataset.opcionId);
+        if (!op) return;
+        const tipos = contenedor.id === 'modulosSucursal' ? TIPOS_SUC : TIPOS;
+        panel.outerHTML = htmlDetalle(op, flagsDeFila(row), tipos);
+    }
+    document.addEventListener('click', e => {
+        const btn = e.target.closest('[data-info-opcion]');
+        if (!btn) return;
+        e.preventDefault();
+        const id = btn.dataset.infoOpcion;
+        const fila = btn.closest('.opcion-row');
+        const contenedor = btn.closest('#modulosRol, #modulosSucursal, #modulosUsuario');
+        const op = opcionDeContenedor(contenedor, id);
+        if (!op) return;
+        if (fila.tagName === 'TR') {
+            const siguiente = fila.nextElementSibling;
+            if (siguiente && siguiente.classList.contains('fila-detalle')) { siguiente.remove(); btn.classList.remove('abierto'); return; }
+            const flags = {};
+            TIPOS.forEach(t => { flags[t] = efectivoDe(op, t, op.overrides[t], estadoUsr.datos.usuario.es_maestro)[0]; });
+            const tr = document.createElement('tr');
+            tr.className = 'fila-detalle';
+            tr.innerHTML = `<td colspan="${TIPOS.length + 1}">${htmlDetalle(op, flags, TIPOS)}</td>`;
+            fila.after(tr);
+            btn.classList.add('abierto');
+            return;
+        }
+        const abierto = fila.querySelector('.opcion-detalle');
+        if (abierto) { abierto.remove(); btn.classList.remove('abierto'); return; }
+        const tipos = contenedor.id === 'modulosSucursal' ? TIPOS_SUC : TIPOS;
+        fila.insertAdjacentHTML('beforeend', htmlDetalle(op, flagsDeFila(fila), tipos));
+        btn.classList.add('abierto');
+    });
+
+    // ── Casilleros sin efecto: ocultos por defecto (preferencia por navegador) ──
+    function aplicarSinEfecto(chk) {
+        document.getElementById(chk.dataset.sinEfecto).classList.toggle('ocultar-sin-efecto', !chk.checked);
+    }
+    document.querySelectorAll('[data-sin-efecto]').forEach(chk => {
+        let guardado = null;
+        try { guardado = localStorage.getItem('permisos.mostrarSinEfecto'); } catch (e) { /* sin storage */ }
+        chk.checked = guardado === '1';
+        aplicarSinEfecto(chk);
+        chk.addEventListener('change', () => {
+            try { localStorage.setItem('permisos.mostrarSinEfecto', chk.checked ? '1' : '0'); } catch (e) { /* sin storage */ }
+            document.querySelectorAll('[data-sin-efecto]').forEach(o => { o.checked = chk.checked; aplicarSinEfecto(o); });
+        });
+    });
+
+    // ── Modal «¿Qué puede hacer?» (rol o usuario) ──
+    let quePuedeDatos = null;
+    function lineasQuePuede(op, flags) {
+        const cat = CAT_POR_ID[op.id];
+        const puede = [], noPuede = [];
+        if (!cat) {
+            (flags.puede_ver ? puede : noPuede).push('Entrar a la pantalla (sin ficha en el catálogo)');
+            return { puede, noPuede };
+        }
+        TIPOS.forEach(t => {
+            if (!cat.permisos[t]) return;
+            (flags[t] ? puede : noPuede).push(cat.permisos[t]);
+        });
+        return { puede, noPuede };
+    }
+    function abrirQuePuede(titulo, subtitulo, modulos, flagsDe) {
+        quePuedeDatos = { titulo, modulos, flagsDe };
+        document.getElementById('quePuedeTitulo').textContent = titulo;
+        document.getElementById('quePuedeSubtitulo').textContent = subtitulo;
+        document.querySelectorAll('[data-filtros="quepuede"] .filtro-chip').forEach(c => c.classList.toggle('activo', c.dataset.filtro === 'todo'));
+        pintarQuePuede('todo');
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalQuePuede')).show();
+    }
+    function pintarQuePuede(filtro) {
+        if (!quePuedeDatos) return;
+        const html = [];
+        quePuedeDatos.modulos.forEach(m => {
+            const opciones = [];
+            m.opciones.forEach(op => { opciones.push(op); (op.subopciones || []).forEach(s => opciones.push(s)); });
+            const bloques = [], sinAcceso = [];
+            opciones.forEach(op => {
+                const { puede, noPuede } = lineasQuePuede(op, quePuedeDatos.flagsDe(op));
+                const cat = CAT_POR_ID[op.id];
+                const nombre = (cat && cat.pantalla) || op.nombre;
+                if (!puede.length) { sinAcceso.push(nombre); return; }
+                if (filtro === 'nopuede' && !noPuede.length) return;
+                bloques.push(`<div class="qp-opcion"><div class="qp-nombre">${esc(nombre)}</div>
+                    ${filtro !== 'nopuede' ? `<ul class="qp-lista puede">${puede.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+                    ${filtro !== 'puede' && noPuede.length ? `<ul class="qp-lista no-puede">${noPuede.map(t => `<li>No: ${esc(t)}</li>`).join('')}</ul>` : ''}
+                </div>`);
+            });
+            if (filtro === 'puede' && !bloques.length) return;
+            html.push(`<div class="qp-modulo"><h6><i class="${esc(m.icono || 'ri-folder-line')} me-1"></i>${esc(m.nombre)}</h6>
+                ${bloques.join('') || '<div class="qp-sin-acceso">Sin acceso a este módulo.</div>'}
+                ${sinAcceso.length && filtro !== 'puede' ? `<div class="qp-sin-acceso mt-1"><i class="ri-close-circle-line me-1"></i>Sin acceso: ${sinAcceso.map(esc).join(', ')}</div>` : ''}
+            </div>`);
+        });
+        document.getElementById('quePuedeContenido').innerHTML = html.join('') || '<div class="empty-state"><h5>Nada que mostrar</h5></div>';
+    }
+    conectarFiltros('quepuede', pintarQuePuede);
+    document.getElementById('btnCopiarQuePuede').addEventListener('click', async () => {
+        if (!quePuedeDatos) return;
+        const lineas = [quePuedeDatos.titulo, ''];
+        quePuedeDatos.modulos.forEach(m => {
+            lineas.push(m.nombre.toUpperCase());
+            const opciones = [];
+            m.opciones.forEach(op => { opciones.push(op); (op.subopciones || []).forEach(s => opciones.push(s)); });
+            opciones.forEach(op => {
+                const { puede, noPuede } = lineasQuePuede(op, quePuedeDatos.flagsDe(op));
+                const nombre = (CAT_POR_ID[op.id] && CAT_POR_ID[op.id].pantalla) || op.nombre;
+                if (!puede.length) { lineas.push(`  ${nombre}: sin acceso`); return; }
+                lineas.push(`  ${nombre}`);
+                puede.forEach(t => lineas.push(`    [SI] ${t}`));
+                noPuede.forEach(t => lineas.push(`    [NO] ${t}`));
+            });
+            lineas.push('');
+        });
+        const texto = lineas.join('\n');
+        try {
+            await navigator.clipboard.writeText(texto);
+            aviso('success', 'Copiado', 'El resumen quedó en el portapapeles.');
+        } catch (e) {
+            Swal.fire({ title: 'Copia este texto', html: `<textarea class="form-control" rows="14">${esc(texto)}</textarea>` });
+        }
+    });
 
     function actualizarContadores(contenedor, tipoClave) {
         contenedor.querySelectorAll('.modulo-card').forEach(card => {
@@ -1227,6 +1502,7 @@
             document.getElementById('accionesRol').style.display = data.editable ? '' : 'none';
             document.getElementById('btnGuardarRol').disabled = !data.editable;
             document.getElementById('btnCopiarRol').disabled = !data.editable;
+            document.getElementById('btnQuePuedeRol').disabled = false;
 
             pintarArbol(contRol, data.modulos, TIPOS, data.editable, op => ({
                 flags: op.permisos,
@@ -1275,6 +1551,14 @@
         chk.closest('.permiso-item').classList.toggle('active', chk.checked);
         marcarSucio('roles', true);
         refrescarRol();
+        refrescarDetalle(chk.closest('.opcion-row'));
+    });
+    document.getElementById('btnQuePuedeRol').addEventListener('click', () => {
+        if (!estadoRol.rol) return;
+        abrirQuePuede(`¿Qué puede hacer el rol ${estadoRol.nombre}?`,
+            'Según los casilleros marcados ahora (incluye cambios sin guardar). No considera restricciones por sucursal.',
+            estadoRol.modulos,
+            op => { const row = contRol.querySelector(`.opcion-row[data-opcion-id="${op.id}"]`); return row ? flagsDeFila(row) : {}; });
     });
     contRol.addEventListener('click', e => {
         const btn = e.target.closest('[data-mod-accion]');
@@ -1439,7 +1723,7 @@
     });
 
     // ========================================================= SUCURSALES
-    const estadoSuc = { id: null, alias: '', lista: [] };
+    const estadoSuc = { id: null, alias: '', lista: [], modulos: [] };
     const contSuc = document.getElementById('modulosSucursal');
     const selSuc = document.getElementById('sucursalSelector');
 
@@ -1477,6 +1761,7 @@
             Swal.close();
             estadoSuc.id = id;
             estadoSuc.alias = data.sucursal.alias;
+            estadoSuc.modulos = data.modulos;
             document.getElementById('sucursalVacia').style.display = 'none';
             document.getElementById('sucursalContenido').style.display = '';
             pintarArbol(contSuc, data.modulos, TIPOS_SUC, true, op => {
@@ -1519,6 +1804,7 @@
         if (chk.dataset.permiso === 'habilitado') sincronizarHabilitado(chk.closest('.opcion-row'));
         marcarSucio('sucursales', true);
         refrescarSucursal();
+        refrescarDetalle(chk.closest('.opcion-row'));
     });
     contSuc.addEventListener('click', e => {
         const btn = e.target.closest('[data-mod-accion]');
@@ -1799,6 +2085,7 @@
             pintarUsuario(d.modulos, d.usuario.es_maestro);
             document.getElementById('btnGuardarUsuario').disabled = !d.editable;
             document.getElementById('btnLimpiarUsuario').disabled = !d.editable;
+            document.getElementById('btnQuePuedeUsuario').disabled = false;
             marcarSucio('usuarios', false);
         } catch (e) {
             contUsr.innerHTML = `<div class="aviso-bloqueo"><i class="ri-error-warning-line"></i><div>${esc(e.message)}</div></div>`;
@@ -1822,7 +2109,7 @@
         const [valor, motivo] = efectivoDe(op, tipo, ov, esMaestro);
         const clase = ov === true ? 'si' : ov === false ? 'no' : '';
         const texto = ov === true ? 'SI' : ov === false ? 'NO' : '--';
-        return `<td class="celda-permiso">
+        return `<td class="celda-permiso ${esSinEfecto(op, tipo) ? 'sin-efecto' : ''}" title="${esc(ETIQUETA[tipo] + ': ' + textoCasillero(op, tipo))}">
                     <button type="button" class="btn-override ${clase}" data-opcion-id="${op.id}" data-tipo="${tipo}"
                             data-override="${ov === null || ov === undefined ? 'null' : ov}" ${estadoUsr.editable ? '' : 'disabled'}
                             title="Rol: ${op.permisos_rol[tipo] ? 'sí' : 'no'} · clic para cambiar">${texto}</button>
@@ -1833,17 +2120,27 @@
     }
 
     function pintarUsuario(modulos, esMaestro) {
-        const filas = op => `
-            <tr class="opcion-row" data-opcion-id="${op.id}" data-buscar="${esc((op.nombre + ' ' + op.codigo).toLowerCase())}"
+        const filas = op => {
+            registrarCatalogo(op);
+            const cat = CAT_POR_ID[op.id];
+            return `
+            <tr class="opcion-row" data-opcion-id="${op.id}" data-buscar="${esc((op.nombre + ' ' + op.codigo + ' ' + (cat ? cat.pantalla + ' ' + cat.resumen : '')).toLowerCase())}"
                 data-override="${TIPOS.some(t => op.overrides[t] !== null && op.overrides[t] !== undefined) ? 1 : 0}">
                 <td>
-                    <span class="opcion-nombre"><i class="${esc(op.icono || 'ri-file-line')} me-1 text-muted"></i>${esc(op.nombre)}</span>
-                    <span class="opcion-meta"><code>${esc(op.codigo)}</code>
-                        ${op.tipo === 'accion' ? '<span class="tag-mini accion">Acción</span>' : ''}
-                        ${op.sensible ? '<span class="tag-mini sensible">Sensible</span>' : ''}</span>
+                    <div class="d-flex align-items-start gap-2">
+                        <button type="button" class="btn-info-opcion" data-info-opcion="${op.id}" title="¿Qué controla cada casillero en esta pantalla?"><i class="ri-question-line"></i></button>
+                        <div>
+                            <span class="opcion-nombre"><i class="${esc(op.icono || 'ri-file-line')} me-1 text-muted"></i>${esc(op.nombre)}</span>
+                            <span class="opcion-meta"><code>${esc(op.codigo)}</code>
+                                ${op.tipo === 'accion' ? '<span class="tag-mini accion">Acción</span>' : ''}
+                                ${op.sensible ? '<span class="tag-mini sensible">Sensible</span>' : ''}</span>
+                            ${cat && cat.resumen ? `<span class="opcion-resumen">${esc(cat.resumen)}</span>` : ''}
+                        </div>
+                    </div>
                 </td>
                 ${TIPOS.map(t => celdaUsuario(op, t, esMaestro)).join('')}
             </tr>`;
+        };
         contUsr.innerHTML = modulos.map(m => {
             const cuerpo = [];
             m.opciones.forEach(op => { cuerpo.push(filas(op)); (op.subopciones || []).forEach(s => cuerpo.push(filas(s))); });
@@ -1899,10 +2196,28 @@
         const td = btn.closest('td');
         td.outerHTML = celdaUsuario(op, btn.dataset.tipo, estadoUsr.datos.usuario.es_maestro);
         const fila = contUsr.querySelector(`tr[data-opcion-id="${op.id}"]`);
-        if (fila) fila.dataset.override = TIPOS.some(t => op.overrides[t] !== null && op.overrides[t] !== undefined) ? '1' : '0';
+        if (fila) {
+            fila.dataset.override = TIPOS.some(t => op.overrides[t] !== null && op.overrides[t] !== undefined) ? '1' : '0';
+            const det = fila.nextElementSibling;
+            if (det && det.classList.contains('fila-detalle')) {
+                const flags = {};
+                TIPOS.forEach(t => { flags[t] = efectivoDe(op, t, op.overrides[t], estadoUsr.datos.usuario.es_maestro)[0]; });
+                det.firstElementChild.innerHTML = htmlDetalle(op, flags, TIPOS);
+            }
+        }
         marcarSucio('usuarios', true);
     });
     document.getElementById('chkVerTodasSucursales').addEventListener('change', () => marcarSucio('usuarios', true));
+    document.getElementById('btnQuePuedeUsuario').addEventListener('click', () => {
+        if (!estadoUsr.datos) return;
+        const d = estadoUsr.datos;
+        const sel = document.getElementById('sucursalSimulada');
+        const textoSuc = sel && sel.value !== '0' ? `en la sucursal ${sel.options[sel.selectedIndex].text}` : 'sin restricciones de sucursal';
+        abrirQuePuede(`¿Qué puede hacer ${d.usuario.nombre}?`,
+            `Permiso efectivo (rol ${d.usuario.rol_display} + permisos propios) ${textoSuc}. Incluye cambios sin guardar.`,
+            d.modulos,
+            op => { const f = {}; TIPOS.forEach(t => { f[t] = efectivoDe(op, t, op.overrides[t], d.usuario.es_maestro)[0]; }); return f; });
+    });
 
     async function guardarUsuario() {
         if (!estadoUsr.id || !estadoUsr.editable) return;
@@ -1987,6 +2302,9 @@
             const acentos = d.mal_codificados.length ? d.mal_codificados.map(m => `${esc(m.tipo)} <code>${esc(m.codigo)}</code>: ${esc(m.nombre)}`).join('<br>') +
                 '<br><small class="text-muted">Se corrigen con <code>python manage.py migrate app 0233</code>.</small>' : '';
 
+            const sinCatalogo = (d.sin_catalogo || []).length ? (d.sin_catalogo || []).map(o => `${esc(o.modulo)} › ${esc(o.nombre)} <code>${esc(o.codigo)}</code>`).join('<br>') +
+                '<br><small class="text-muted">Agrega la ficha en <code>app/permisos_catalogo/</code> para que la pantalla explique qué controla cada casillero.</small>' : '';
+
             const sinSucursal = d.usuarios_sin_sucursal.length ? d.usuarios_sin_sucursal.map(u => `${esc(u.nombre)} <span class="text-muted">(${esc(u.rol)})</span>`).join(' · ') +
                 '<br><small class="text-muted">Asígnales una sucursal en Gestión de Usuarios.</small>' : '';
 
@@ -2006,7 +2324,8 @@
                 seccion('Sucursales con restricciones', 'ri-building-line', sucursales, 'Ninguna sucursal tiene restricciones.') +
                 seccion('Usuarios con permisos propios', 'ri-user-star-line', overrides, 'Nadie tiene permisos individuales.') +
                 seccion('Usuarios sin sucursal asignada', 'ri-map-pin-user-line', sinSucursal, 'Todos tienen sucursal.') +
-                seccion('Nombres de menú con acentos rotos', 'ri-text', acentos, 'Sin problemas de acentos.');
+                seccion('Nombres de menú con acentos rotos', 'ri-text', acentos, 'Sin problemas de acentos.') +
+                seccion('Opciones sin ficha en el catálogo', 'ri-book-open-line', sinCatalogo, 'Todas las opciones tienen ficha: la pantalla explica qué controla cada casillero.');
         } catch (e) {
             document.getElementById('kpiAlertasValor').textContent = '—';
             cont.innerHTML = `<div class="aviso-bloqueo"><i class="ri-error-warning-line"></i><div>${esc(e.message)}</div></div>`;

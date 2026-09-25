@@ -34,6 +34,7 @@ from .models import (
 )
 from users.models import Usuario
 from .decorators import solo_administrador
+from .permisos_catalogo import descripcion as descripcion_catalogo
 from .utils_permisos import (
     obtener_configuracion_rango_arqueo,
     guardar_configuracion_rango_arqueo,
@@ -130,6 +131,8 @@ def _info_opcion(opcion):
         'es_submenu': opcion.es_submenu,
         'tipo': _tipo_opcion(opcion),
         'sensible': opcion.codigo in CODIGOS_SENSIBLES,
+        # Qué controla cada casillero en ESTA pantalla (app/permisos_catalogo).
+        'catalogo': descripcion_catalogo(opcion.codigo),
     }
 
 
@@ -1427,6 +1430,12 @@ def diagnostico_permisos(request):
         for o in opciones if _parece_mal_codificado(o.nombre)
     ]
 
+    # 4b. Opciones sin ficha en el catálogo (la pantalla no puede explicar qué controlan).
+    sin_catalogo = [
+        {'codigo': o.codigo, 'nombre': o.nombre, 'modulo': o.modulo.nombre}
+        for o in opciones if descripcion_catalogo(o.codigo) is None
+    ]
+
     # 5. Usuarios.
     activos = Usuario.objects.filter(es_activo=True, is_active=True)
     con_sucursal = set(
@@ -1463,6 +1472,9 @@ def diagnostico_permisos(request):
                         'o están inactivos: dan "Acceso denegado" a todos menos al Maestro.'})
     if mal_codificados:
         alertas.append({'nivel': 'info', 'texto': f'{len(mal_codificados)} nombre(s) de menú con acentos rotos.'})
+    if sin_catalogo:
+        alertas.append({'nivel': 'info', 'texto': f'{len(sin_catalogo)} opción(es) sin ficha en el catálogo de permisos: '
+                        'la pantalla no puede explicar qué controlan sus casilleros.'})
     if sin_sucursal:
         alertas.append({'nivel': 'warning', 'texto': f'{len(sin_sucursal)} usuario(s) activo(s) sin sucursal asignada.'})
     if rol_invalido:
@@ -1476,6 +1488,7 @@ def diagnostico_permisos(request):
         'urls_huerfanas': urls_huerfanas,
         'sucursales': sucursales,
         'mal_codificados': mal_codificados,
+        'sin_catalogo': sin_catalogo,
         'usuarios_sin_sucursal': sin_sucursal,
         'usuarios_con_overrides': con_overrides,
         'usuarios_rol_invalido': rol_invalido,

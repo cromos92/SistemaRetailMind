@@ -17,6 +17,7 @@ from . import views_fusion_duplicados
 from . import views_ecommerce
 from . import views_cron
 from . import views_modulo_campanas_liquidacion
+from . import views_modulo_carga_factura
 from .decorators import requiere_permiso
 
 
@@ -1459,6 +1460,18 @@ urlpatterns = [
     path('api/ingreso-manual/sumar-stock/', api_sumar_stock_rapido, name='api_sumar_stock_rapido'),
     path('api/ingreso-manual/preview-reasignar-dte/', api_preview_reasignar_dte, name='api_preview_reasignar_dte'),
     path('api/ingreso-manual/reasignar-dte/', api_reasignar_dte_ingreso, name='api_reasignar_dte_ingreso'),
+
+    # Agente "Cargar desde factura" (modal de verGestionProducto): PDF de la
+    # factura → lectura con Claude → vista previa editable → carga por el
+    # mismo camino que Crear Producto Manual. Permiso 'gestion_producto'
+    # (middleware_permisos) + la bodega elegida debe ser del usuario.
+    path('carga-factura/opciones/', views_modulo_carga_factura.api_carga_factura_opciones, name='api_carga_factura_opciones'),
+    path('carga-factura/lista/', views_modulo_carga_factura.api_carga_factura_lista, name='api_carga_factura_lista'),
+    path('carga-factura/subir/', views_modulo_carga_factura.api_carga_factura_subir, name='api_carga_factura_subir'),
+    path('carga-factura/<int:sesion_id>/', views_modulo_carga_factura.api_carga_factura_estado, name='api_carga_factura_estado'),
+    path('carga-factura/<int:sesion_id>/planificar/', views_modulo_carga_factura.api_carga_factura_planificar, name='api_carga_factura_planificar'),
+    path('carga-factura/<int:sesion_id>/cargar/', views_modulo_carga_factura.api_carga_factura_cargar, name='api_carga_factura_cargar'),
+    path('carga-factura/<int:sesion_id>/cerrar/', views_modulo_carga_factura.api_carga_factura_cerrar, name='api_carga_factura_cerrar'),
 
     # ========== DESPACHO A TODAS SUCURSALES ==========
     path('despacho-sucursales/', despacho_todas_sucursales, name='despacho_todas_sucursales'),

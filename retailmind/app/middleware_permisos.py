@@ -185,6 +185,9 @@ URL_PERMISO_MAP = {
     # Existencias
     '/app/verGestionProducto/': 'gestion_producto',
     '/app/productos/stock-salida/': 'gestion_producto',
+    # Agente "Cargar desde factura" (modal de verGestionProducto): cubre por
+    # substring subir/, lista/, opciones/ y <id>/{planificar,cargar,cerrar}/.
+    '/app/carga-factura/': 'gestion_producto',
     '/app/edicion-rapida-precios/': 'edicion_rapida_precios',
     '/app/gestion-precios/edicion-rapida/': 'edicion_rapida_precios',
     # La pantalla de Alertas de Precios vive en

@@ -97,6 +97,8 @@ from .compras import (  # noqa: F401
     CurvaDistribucion,
     CurvaDistribucionItem,
     ProveedorProductoEquivalencia,
+    CargaFacturaPdf,
+    ESTADO_CARGA_FACTURA_PDF_CHOICES,
 )
 
 from .cotizaciones import (  # noqa: F401

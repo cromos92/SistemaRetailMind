@@ -11980,6 +11980,7 @@ def obtener_compras_por_anio(request):
 
     return JsonResponse(response_data)
 
+@login_required
 def importar_csv_compra(request):
     if request.method == 'POST':
         data = json.loads(request.body)

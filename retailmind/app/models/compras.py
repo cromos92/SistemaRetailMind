@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+from ..storage_backends import storage_evidencias
 from .organizacion import Empresa, Sucursal
 from .catalogo import Producto_Talla, TIPO_TALLA_CHOICES, GuiaTalla, AtributoOpcion
 from .dte import Dte, Dte_Productos, ESTADO_RECEPCION_PRODUCTO_CHOICES, TIPO_PROBLEMA_CHOICES, TIPO_SOLUCION_CHOICES, ESTADO_SOLICITUD_CHOICES
@@ -703,3 +704,86 @@ class ProveedorProductoEquivalencia(models.Model):
 
     def __str__(self):
         return f"{self.empresa_proveedor.nombre}:{self.codigo_externo} → {self.producto_talla_id}"
+
+
+# =====================================================================
+# CARGA DE PRODUCTOS DESDE UNA FACTURA EN PDF (agente de Gestión de Productos)
+#
+# Una fila por PDF que alguien le pasa al agente desde verGestionProducto:
+# guarda el archivo, el resultado de la lectura con Claude (una entrada en
+# `facturas` por factura del PDF, en el MISMO formato JSON que
+# compras/facturas/*.json y que el comando cargar_productos_factura), lo que
+# la persona corrigió en la vista previa, la conversación (`mensajes`) y el
+# resultado de la carga. La lectura y la carga corren en segundo plano y la
+# pantalla consulta `estado` / `progreso`.
+#
+# La carga real va por app/services/carga_factura (planificador + aplicador →
+# views.crear_producto_manual): aquí no hay stock ni precios, solo el
+# expediente de lo que se leyó y de lo que se decidió.
+# =====================================================================
+ESTADO_CARGA_FACTURA_PDF_CHOICES = [
+    ('LEYENDO', 'Leyendo el PDF'),
+    ('LEIDA', 'Leída: en vista previa'),
+    ('ERROR', 'Error de lectura'),
+    ('CARGANDO', 'Cargando productos'),
+    ('CERRADA', 'Cerrada'),
+]
+
+
+def _ruta_carga_factura(instancia, nombre):
+    return f'carga_factura/{timezone.now():%Y/%m}/{nombre}'
+
+
+class CargaFacturaPdf(models.Model):
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cargas_factura_pdf',
+    )
+    sucursal = models.ForeignKey(
+        Sucursal, on_delete=models.PROTECT, related_name='cargas_factura_pdf',
+        help_text='Bodega donde entra la mercadería.',
+    )
+    marca = models.CharField(
+        max_length=100, blank=True,
+        help_text='Marca indicada al subir (si no, la que lea en la factura).',
+    )
+    # Mismo storage que la evidencia de requerimientos: Spaces si está
+    # configurado, disco local si no (ver storage_backends.py).
+    archivo = models.FileField(upload_to=_ruta_carga_factura, storage=storage_evidencias)
+    nombre_archivo = models.CharField(max_length=255)
+    lecturas = models.PositiveSmallIntegerField(
+        default=2, help_text='Lecturas independientes que se comparan.')
+    modelo = models.CharField(max_length=60, blank=True, help_text='Modelo de Claude usado.')
+    estado = models.CharField(
+        max_length=12, choices=ESTADO_CARGA_FACTURA_PDF_CHOICES, default='LEYENDO')
+    progreso = models.CharField(
+        max_length=255, blank=True, help_text='Último paso en curso (lectura o carga).')
+    error = models.TextField(blank=True)
+    facturas = models.JSONField(
+        default=list, blank=True,
+        help_text='Una entrada por factura del PDF, formato de compras/facturas/*.json, '
+                  'con las correcciones de la vista previa y el resultado de la carga.',
+    )
+    mensajes = models.JSONField(
+        default=list, blank=True,
+        help_text='Conversación: [{quien, texto, fecha, tipo, factura}].',
+    )
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+    leida_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Carga de productos desde factura PDF'
+        verbose_name_plural = 'Cargas de productos desde factura PDF'
+        ordering = ['-id']
+
+    def __str__(self):
+        return f'Carga #{self.id} {self.nombre_archivo} ({self.get_estado_display()})'
+
+    def agregar_mensaje(self, quien, texto, tipo='texto', factura=None):
+        """Agrega un mensaje a la conversación y lo persiste (solo ese campo)."""
+        self.mensajes = list(self.mensajes or []) + [{
+            'quien': quien, 'texto': texto, 'tipo': tipo, 'factura': factura,
+            'fecha': timezone.now().isoformat(timespec='seconds'),
+        }]
+        self.save(update_fields=['mensajes', 'actualizado_en'])

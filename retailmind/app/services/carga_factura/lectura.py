@@ -359,15 +359,22 @@ def _ejecutar_zoom(entrada, paginas):
     return _bloque_imagen(recorte, _LADO_ZOOM), None
 
 
-def _una_lectura(cliente, contenido, paginas, instrucciones, esquema, orden):
-    """Una lectura completa (con su propio bucle de zoom). Devuelve el dict del esquema."""
+def _una_lectura(cliente, contenido, paginas, instrucciones, esquema, orden, total=1,
+                 progreso=None):
+    """Una lectura completa (con su propio bucle de zoom). Devuelve el dict del esquema.
+
+    `progreso(texto)` (opcional) recibe en qué va: la pantalla lo muestra
+    mientras espera."""
     enfoque = ('Lee primero la tabla completa y después verifica.' if orden == 1 else
                'Esta es una segunda lectura independiente: recorre la tabla línea por línea '
                'y columna por columna, ampliando cada grilla de tallas.')
     mensajes = [{'role': 'user', 'content': contenido + [
         {'type': 'text', 'text': f'{instrucciones}\n\n{enfoque}'}]}]
     herramientas = [_HERRAMIENTA_ZOOM] if paginas else []
-    for _turno in range(_MAX_TURNOS):
+    for turno in range(_MAX_TURNOS):
+        if progreso:
+            progreso(f'Lectura {orden} de {total}: ' + (
+                'leyendo el documento…' if turno == 0 else f'ampliando detalles (vuelta {turno})…'))
         respuesta = _pedir(cliente, max_tokens=64000, tools=herramientas, messages=mensajes,
                            output_config={'effort': 'high',
                                           'format': {'type': 'json_schema', 'schema': esquema}})
@@ -387,17 +394,24 @@ def _una_lectura(cliente, contenido, paginas, instrucciones, esquema, orden):
     raise ErrorLectura(f'La lectura no terminó después de {_MAX_TURNOS} vueltas.')
 
 
-def leer_pdf(pdf_bytes, marca=None, lecturas=2):
-    """Lee el PDF. Devuelve {'lecturas': [dict, ...], 'modo': 'escaneo'|'pdf'}."""
+def leer_pdf(pdf_bytes, marca=None, lecturas=2, progreso=None):
+    """Lee el PDF. Devuelve {'lecturas': [dict, ...], 'modo': 'escaneo'|'pdf'}.
+
+    `progreso(texto)` (opcional) recibe cada paso, para mostrarlo mientras se espera."""
     cliente = _cliente()
     perfil = perfil_para(marca)
     categorias, especialidades = _listas_del_sistema()
     esquema = _esquema(categorias, especialidades)
     instrucciones = _instrucciones(perfil, marca, categorias, especialidades)
+    avisar = progreso or (lambda texto: None)
 
+    avisar('Revisando el PDF…')
     imagenes = _imagenes_de_pagina(pdf_bytes)
     if imagenes:
-        paginas = [_enderezar(cliente, img) for img in imagenes]
+        paginas = []
+        for n, img in enumerate(imagenes, start=1):
+            avisar(f'Enderezando la página {n} de {len(imagenes)}…')
+            paginas.append(_enderezar(cliente, img))
         contenido = []
         for n, img in enumerate(paginas, start=1):
             contenido += [{'type': 'text', 'text': f'Página {n}:'}, _bloque_imagen(img, _LADO_VISTA)]
@@ -411,8 +425,10 @@ def leer_pdf(pdf_bytes, marca=None, lecturas=2):
             'data': base64.standard_b64encode(pdf_bytes).decode('ascii')}}]
         modo = 'pdf'
 
-    resultado = [_una_lectura(cliente, contenido, paginas, instrucciones, esquema, orden)
-                 for orden in range(1, max(1, lecturas) + 1)]
+    total = max(1, lecturas)
+    resultado = [_una_lectura(cliente, contenido, paginas, instrucciones, esquema, orden,
+                              total=total, progreso=progreso)
+                 for orden in range(1, total + 1)]
     return {'lecturas': resultado, 'modo': modo}
 
 

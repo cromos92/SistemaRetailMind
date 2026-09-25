@@ -1,0 +1,132 @@
+<!-- ========== MODAL: AGENTE "CARGAR DESDE FACTURA" ==========
+     Chat con el agente de carga: se adjunta la factura del proveedor en PDF,
+     el agente la lee (Claude, en segundo plano), muestra una vista previa
+     editable por factura y carga por el mismo camino que Crear Producto
+     Manual. Endpoints en views_modulo_carga_factura.py; lógica en
+     static/js/carga_factura.js. Se incluye desde verGestionProductos.html. -->
+<style>
+    .cf-dialog { max-width: min(1440px, 96vw); }
+    .cf-dialog .modal-content { height: 92vh; }
+    .cf-body { background: #f3f6f9; }
+    .cf-chat { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; min-height: 100%; }
+    .cf-msg { display: flex; gap: 10px; max-width: 80%; }
+    .cf-msg.cf-usuario { align-self: flex-end; flex-direction: row-reverse; }
+    .cf-avatar {
+        width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+        background: var(--grad-primary); color: #fff; font-size: 1rem;
+    }
+    .cf-usuario .cf-avatar { background: var(--grad-success); }
+    .cf-burbuja {
+        background: #fff; border-radius: 14px; padding: 10px 14px; font-size: .9rem;
+        box-shadow: 0 2px 8px rgba(20,20,60,.06); white-space: pre-line; overflow-wrap: anywhere;
+    }
+    .cf-usuario .cf-burbuja { background: #405189; color: #fff; }
+    .cf-error .cf-burbuja { border-left: 4px solid #f06548; }
+    .cf-hora { font-size: .7rem; color: #8a93a6; margin-top: 4px; }
+    .cf-usuario .cf-hora { text-align: right; }
+    .cf-typing .cf-burbuja { color: #405189; }
+    .cf-typing .cf-burbuja i { animation: pulse 1.2s infinite; }
+
+    /* Tarjeta de vista previa de una factura (ocupa todo el ancho del chat) */
+    .cf-card { align-self: stretch; max-width: 100%; }
+    .cf-card .cf-burbuja { width: 100%; white-space: normal; padding: 0; overflow: hidden; }
+    .cf-card-head {
+        background: var(--grad-module); color: #fff; padding: 10px 16px;
+        display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center;
+    }
+    .cf-card-head .form-control, .cf-card-head .form-select {
+        font-size: .8rem; padding: 2px 6px; height: auto; width: auto; display: inline-block;
+    }
+    .cf-card-body { padding: 12px 16px; }
+    .cf-resumen { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .82rem; color: #495057; margin-bottom: 8px; }
+    .cf-tabla { margin-bottom: 0; }
+    .cf-tabla th { font-size: .7rem; text-transform: uppercase; letter-spacing: .3px; color: #6b7280; white-space: nowrap; }
+    .cf-tabla td { font-size: .83rem; vertical-align: top; }
+    .cf-tabla input.form-control, .cf-tabla select.form-select, .cf-tabla textarea.form-control {
+        font-size: .78rem; padding: 2px 6px; min-width: 84px;
+    }
+    .cf-tabla select[multiple] { min-height: 52px; }
+    .cf-tabla textarea.form-control { min-width: 110px; font-family: monospace; }
+    .cf-tabla tr.cf-detalle td { border-top: 0; padding-top: 0; }
+    .cf-tabla tr.cf-omitida td:not(.cf-col-decision) { opacity: .45; }
+    .cf-chip { display: inline-block; background: #eef2ff; color: #364574; border-radius: 6px; padding: 1px 6px; font-size: .74rem; margin: 1px; white-space: nowrap; }
+    .cf-chip.nueva { background: #e0f2f1; color: #0a7d6d; }
+    .cf-nota { font-size: .76rem; margin: 0; }
+    .cf-nota.aviso { color: #b7791f; }
+    .cf-nota.error { color: #d9534f; }
+    .cf-nota.ok { color: #0a7d6d; }
+    .cf-estado { font-size: .68rem; font-weight: 700; border-radius: 6px; padding: 2px 6px; white-space: nowrap; display: inline-block; }
+    .cf-estado.NUEVO { background: #e0f2f1; color: #0a7d6d; }
+    .cf-estado.EXISTE, .cf-estado.EXISTE_OTRAS { background: #e3f2fd; color: #1e7ab8; }
+    .cf-estado.YA_CARGADO, .cf-estado.PARCIAL, .cf-estado.CARGANDO { background: #fff3cd; color: #9a6b00; }
+    .cf-estado.DUPLICADAS, .cf-estado.ERROR, .cf-estado.FALLO { background: #fde2dd; color: #c0392b; }
+    .cf-estado.OMITIDA, .cf-estado.SALTADA, .cf-estado.PENDIENTE { background: #eceff3; color: #6b7280; }
+    .cf-estado.CARGADA, .cf-estado.OK { background: #d1f2eb; color: #0a7d6d; }
+    .cf-muted { font-size: .74rem; color: #8a93a6; }
+    .cf-card-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; background: #f8f9fb; border-top: 1px solid #e5e9f0; }
+    .cf-card-foot .btn { border-radius: 10px; font-size: .82rem; }
+
+    /* Compositor: adjuntar + bodega + marca + enviar */
+    .cf-composer { background: #fff; border-top: 1px solid #e5e9f0; gap: 8px; flex-wrap: wrap; justify-content: flex-start; }
+    .cf-composer .form-select, .cf-composer .form-control { font-size: .85rem; }
+    .cf-composer .btn { border-radius: 10px; }
+    @media (max-width: 767.98px) {
+        .cf-msg { max-width: 96%; }
+        .cf-chat { padding: 12px; }
+        .cf-dialog .modal-content { height: 96vh; }
+    }
+</style>
+
+<script>
+    // Bodega activa de la sesión: el compositor la deja preseleccionada.
+    window.SUCURSAL_ACTUAL_ID = {{ request.session.idSucursalActual|default:"null" }};
+</script>
+<div class="modal fade" id="modalCargaFactura" tabindex="-1" aria-labelledby="modalCargaFacturaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable cf-dialog">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header modal-header-primary text-white">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="modal-header-icon">
+                        <i class="bi bi-robot fs-5"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title text-white mb-0" id="modalCargaFacturaLabel">Cargar desde factura</h5>
+                        <small class="modal-header-subtitle">Adjunta la factura del proveedor: la leo, te muestro qué crearía y cargas con un clic</small>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <select id="cfRecientes" class="form-select form-select-sm" style="max-width: 320px;" title="Cargas recientes">
+                        <option value="">Cargas recientes…</option>
+                    </select>
+                    <button type="button" class="btn btn-sm btn-light" id="cfBtnNueva" title="Nueva conversación">
+                        <i class="bi bi-plus-lg"></i>
+                    </button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+            </div>
+
+            <div class="modal-body p-0 cf-body">
+                <div id="cfChat" class="cf-chat"></div>
+            </div>
+
+            <div class="modal-footer cf-composer">
+                <input type="file" id="cfArchivo" accept="application/pdf,.pdf" class="d-none">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="cfBtnAdjuntar">
+                    <i class="bi bi-paperclip me-1"></i>Adjuntar PDF
+                </button>
+                <span id="cfNombreArchivo" class="small text-muted">ningún archivo</span>
+                <select id="cfSucursal" class="form-select form-select-sm w-auto" title="Bodega donde entra la mercadería"></select>
+                <input id="cfMarca" list="cfMarcas" class="form-control form-control-sm" style="max-width: 170px;" placeholder="Marca (opcional)" autocomplete="off">
+                <datalist id="cfMarcas"></datalist>
+                <select id="cfLecturas" class="form-select form-select-sm w-auto" title="Lecturas independientes que se comparan">
+                    <option value="2">2 lecturas (verifica)</option>
+                    <option value="1">1 lectura (rápida)</option>
+                </select>
+                <button type="button" class="btn btn-success btn-sm ms-auto" id="cfBtnEnviar">
+                    <i class="bi bi-send me-1"></i>Enviar al agente
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

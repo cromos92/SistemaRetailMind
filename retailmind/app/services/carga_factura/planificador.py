@@ -294,6 +294,9 @@ class PlanificadorCarga:
         otra_marca = [f for f in mismo_codigo if f not in fichas]
         locales = [f for f in fichas if f.sucursal_id == sucursal.id]
         otras = [f for f in fichas if f.sucursal_id != sucursal.id]
+        # Todas las fichas del código en la bodega (cualquier marca): son las
+        # que se pueden elegir como "ficha_id" en la vista previa.
+        plan['candidatas'] = [f for f in mismo_codigo if f.sucursal_id == sucursal.id]
         pedida = (getattr(marca, 'id', None), getattr(color, 'id', None),
                   getattr(genero, 'id', None), getattr(categoria, 'id', None))
 
