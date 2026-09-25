@@ -12,6 +12,9 @@ desde aquí: para eso está el botón «Cargar» de la tarjeta.
 """
 import json
 import logging
+import re
+
+from app.models import CargaFacturaPdf
 
 from . import lectura as svc_lectura
 from . import web as svc_web
@@ -30,9 +33,10 @@ La persona te escribe para corregir datos, dar parámetros o preguntar.
 
 Responde en "respuesta" (español de Chile, tuteando, breve y concreto) y pon en "cambios"
 SOLO lo que la persona pidió, con valores EXACTOS de las listas. Reglas:
-- Si pide una marca, color, categoría, especialidad o guía que NO está en las listas, no la
-  inventes ni elijas otra parecida: dilo en la respuesta (se crea en Gestión de Productos y
-  después te lo vuelve a pedir) y no cambies ese campo.
+- Marca, color, categoría, especialidades, guía y tipo de talla van con el valor EXACTO tal
+  como aparece en listas_del_sistema (se validan al aplicar). Si pide una que NO está en las
+  listas, no la inventes ni elijas otra parecida: dilo en la respuesta (se crea en Gestión de
+  Productos y después te lo vuelve a pedir) y deja ese campo vacío.
 - Cambios de toda la factura (marca, color por defecto, tipo de talla, guías por género,
   regla de precio, margen de sobreprecio, DTE) van en el cambio de esa factura (por "idx").
   Cambios de una línea van en "lineas" con su "n". «Todas las líneas» = repetir en cada n.
@@ -49,16 +53,24 @@ SOLO lo que la persona pidió, con valores EXACTOS de las listas. Reglas:
   deja "cambios" vacío. Si solo pregunta, responde con lo que ves en la vista previa y deja
   "cambios" vacío. Explica los errores y avisos en palabras simples.
 - No repitas toda la vista previa en la respuesta: di qué cambiaste (o qué falta) y nada más.
+- Si preguntan por otra factura o por un código ya cargado antes («¿a cuánto lo compré?», «¿en
+  qué factura vino?»), responde con "facturas_anteriores": son lecturas ya hechas y guardadas
+  de otras cargas; nunca hace falta volver a leer un PDF. Si ahí no hay nada, dilo.
 - Todos los campos de un cambio van SIEMPRE, y los que NO cambian van vacíos: "" en textos y
   en los campos de lista de opciones, -1 en los numéricos, [] en las listas, y "" en "omitir"
   y "renombrar_tallas" (que valen "si" o "no" solo cuando la persona lo pide). Nunca
   rellenes un campo con un valor real que la persona no pidió."""
 
 
-# Sin anyOf ni null: la API limita a 16 los campos con unión de tipos y este
-# esquema tiene 25. En su lugar cada tipo tiene un valor «sin cambio»: '' en
-# textos y enums, -1 en números, [] en listas, '' en los tri-estado si/no.
+# La API compila el esquema a una gramática y tiene dos techos: 16 campos con
+# unión de tipos (anyOf / null) y un tamaño total («Schema is too complex»).
+# Por eso (1) no hay anyOf ni null: cada tipo tiene un valor «sin cambio» ('' en
+# textos y enums, -1 en números, [] en listas, '' en los tri-estado si/no); y
+# (2) las listas grandes del sistema (marcas, colores, categorías, guías,
+# especialidades) NO van como enum: Claude las ve en el contexto y el valor se
+# valida acá contra el catálogo (`_a_correcciones` rechaza lo que no exista).
 SIN_CAMBIO_NUM = -1
+ENUM_MAXIMO = 12
 _TRI = {'type': 'string', 'enum': ['', 'si', 'no']}
 
 
@@ -71,10 +83,12 @@ def _texto():
 
 
 def _opcion(valores):
-    """Enum con '' («sin cambio») al frente; sin lista, texto libre."""
+    """Enum con '' («sin cambio») al frente si la lista es corta; si no, texto
+    libre que se valida contra el catálogo al aplicar."""
     valores = [v for v in valores if v]
-    return ({'type': 'string', 'enum': [''] + valores, 'description': '"" = sin cambio'}
-            if valores else _texto())
+    if valores and len(valores) <= ENUM_MAXIMO:
+        return {'type': 'string', 'enum': [''] + valores, 'description': '"" = sin cambio'}
+    return {'type': 'string', 'description': '"" = sin cambio; si no, valor EXACTO de listas_del_sistema'}
 
 
 def _lista(item):
@@ -82,9 +96,8 @@ def _lista(item):
 
 
 def _esquema(catalogo):
-    guias = sorted({g for lista in catalogo['guias'].values() for g in lista})
-    especialidad = ({'type': 'string', 'enum': catalogo['especialidades']}
-                    if catalogo['especialidades'] else {'type': 'string'})
+    guias = _guias(catalogo)
+    especialidad = {'type': 'string', 'description': 'valor EXACTO de listas_del_sistema.especialidades'}
     linea = {
         'type': 'object',
         'properties': {
@@ -118,7 +131,7 @@ def _esquema(catalogo):
             'guias_talla': _lista({
                 'type': 'object',
                 'properties': {'genero': {'type': 'string', 'enum': list(svc_web.GENEROS_GUIA)},
-                               'guia': {'type': 'string', 'enum': guias} if guias else {'type': 'string'}},
+                               'guia': _opcion(guias)},
                 'required': ['genero', 'guia'], 'additionalProperties': False}),
             'umbral_costo': _num('integer'), 'factor_bajo': _num('number'),
             'factor_alto': _num('number'), 'margen_sobreprecio': _num('number'),
@@ -176,7 +189,17 @@ def _resumen_factura(item):
     }
 
 
-def _preguntar(catalogo, previa, historial, texto):
+def _texto_historial(m):
+    """Lo que Claude ve de un mensaje anterior: el texto y, si aplicó cambios, cuáles."""
+    texto = str(m.get('texto', ''))[:600]
+    if m.get('cambios'):
+        texto += ' [Apliqué: ' + '; '.join(m['cambios'])[:400] + ']'
+    if m.get('rechazos'):
+        texto += ' [No apliqué: ' + '; '.join(m['rechazos'])[:200] + ']'
+    return texto
+
+
+def _preguntar(catalogo, previa, historial, texto, anteriores=None):
     """Una vuelta con Claude: dict {'respuesta', 'cambios'} según el esquema."""
     cliente = svc_lectura._cliente()
     contexto = {
@@ -184,8 +207,9 @@ def _preguntar(catalogo, previa, historial, texto):
                                                           'categorias', 'especialidades', 'guias')},
         'tipos_de_talla': list(svc_web.TIPOS_TALLA),
         'vista_previa': [_resumen_factura(i) for i in previa],
+        'facturas_anteriores': anteriores or 'ninguna coincidencia con cargas anteriores',
         'conversacion_reciente': [
-            {'quien': m.get('quien'), 'texto': str(m.get('texto', ''))[:600]}
+            {'quien': m.get('quien'), 'texto': _texto_historial(m)}
             for m in historial[-_HISTORIAL:]],
         'mensaje_de_la_persona': texto,
     }
@@ -212,6 +236,68 @@ _CAMPOS_FACTURA = {
 _TRI_ESTADO = ('omitir', 'renombrar_tallas')
 
 
+def _guias(catalogo):
+    return sorted({g for lista in catalogo['guias'].values() for g in lista})
+
+
+def _listas(catalogo):
+    """Campo → valores admitidos (los que en el esquema van como texto libre).
+    Una lista vacía en el sistema no valida nada: el valor pasa tal cual."""
+    listas = {
+        'marca': catalogo['marcas'], 'color': catalogo['colores'], 'genero': catalogo['generos'],
+        'categoria': catalogo['categorias'], 'guia': _guias(catalogo),
+        'especialidades': catalogo['especialidades'], 'tipo_talla': list(svc_web.TIPOS_TALLA),
+    }
+    return {k: v for k, v in listas.items() if v}
+
+
+def _clave(valor):
+    return ' '.join(str(valor).split()).upper()
+
+
+def _normalizar(valor, lista):
+    """El valor del catálogo que coincide (sin mayúsculas ni espacios de más) o None."""
+    clave = _clave(valor)
+    for v in lista:
+        if _clave(v) == clave:
+            return v
+    return None
+
+
+def _validar(campo, valor, listas, rechazos):
+    """Valor normalizado contra el catálogo; None (y se anota) si no existe."""
+    if campo not in listas:
+        return valor
+    if campo == 'especialidades':
+        buenas = []
+        for v in valor if isinstance(valor, list) else [valor]:
+            n = _normalizar(v, listas[campo])
+            if n is None:
+                rechazos.append(f'especialidad «{v}»')
+            elif n not in buenas:
+                buenas.append(n)
+        return buenas or None
+    n = _normalizar(valor, listas[campo])
+    if n is None:
+        rechazos.append(f'{campo.replace("_", " ")} «{valor}»')
+    return n
+
+
+def _validar_guias_talla(valor, listas, rechazos):
+    buenas = []
+    for par in valor if isinstance(valor, list) else []:
+        if not isinstance(par, dict):
+            continue
+        genero = _normalizar(par.get('genero', ''), svc_web.GENEROS_GUIA)
+        guia = (_normalizar(par.get('guia', ''), listas['guia']) if 'guia' in listas
+                else (str(par.get('guia') or '').strip() or None))
+        if genero is None or guia is None:
+            rechazos.append(f'guía «{par.get("guia")}» para {par.get("genero")}')
+            continue
+        buenas.append({'genero': genero, 'guia': guia})
+    return buenas or None
+
+
 def _sin_cambio(valor):
     """True si el campo vino con su valor «sin cambio» (o faltó)."""
     if valor is None or isinstance(valor, bool):
@@ -225,18 +311,27 @@ def _valor(campo, valor):
     return valor
 
 
-def _a_correcciones(cambios, previa):
-    """Lo que devolvió Claude → lista para web.aplicar_correcciones (líneas por posición)."""
+def _a_correcciones(cambios, previa, catalogo):
+    """Lo que devolvió Claude → (lista para web.aplicar_correcciones, valores
+    rechazados por no existir en el catálogo). Líneas por posición."""
     por_idx = {item['idx']: item for item in previa}
-    salida = []
+    listas = _listas(catalogo)
+    salida, rechazos = [], []
     for c in cambios or []:
         item = por_idx.get(c.get('idx'))
         if item is None:
             continue
         cambio = {'idx': item['idx']}
         for origen, destino in _CAMPOS_FACTURA.items():
-            if not _sin_cambio(c.get(origen)):
-                cambio[destino] = _valor(origen, c[origen])
+            valor = c.get(origen)
+            if _sin_cambio(valor):
+                continue
+            if origen == 'guias_talla':
+                valor = _validar_guias_talla(valor, listas, rechazos)
+            else:
+                valor = _validar(origen, _valor(origen, valor), listas, rechazos)
+            if valor is not None:
+                cambio[destino] = valor
         lineas = [{} for _ in range(item.get('n_lineas') or len(item['planes']))]
         for l in c.get('lineas') or []:
             n = l.get('n')
@@ -251,12 +346,14 @@ def _a_correcciones(cambios, previa):
                 elif campo == 'omitir':
                     destino['_omitir'] = _valor(campo, valor)
                 else:
-                    destino[campo] = valor
+                    valor = _validar(campo, valor, listas, rechazos)
+                    if valor is not None:
+                        destino[campo] = valor
         if any(lineas):
             cambio['lineas'] = lineas
         if len(cambio) > 1:
             salida.append(cambio)
-    return salida
+    return salida, rechazos
 
 
 def _describir(cambios, previa):
@@ -275,9 +372,84 @@ def _describir(cambios, previa):
     return partes
 
 
+# ------------------------------------------------------ cargas anteriores
+
+_RE_TOKEN = re.compile(r'[A-Za-z0-9][A-Za-z0-9./-]{2,}')
+_SESIONES_A_MIRAR = 150
+_MAX_COINCIDENCIAS = 8
+
+
+def _claves(texto):
+    """Códigos/folios (con dígitos) y palabras largas (marca, proveedor) del mensaje."""
+    codigos, palabras = set(), set()
+    for t in _RE_TOKEN.findall(texto):
+        t = t.strip('.-/')
+        if any(c.isdigit() for c in t):
+            if len(t) >= 3:          # folios cortos (555) y códigos (126511-02)
+                codigos.add(t.upper())
+        elif len(t) >= 4:            # marca o proveedor (NIKE, CHALADA)
+            palabras.add(t.upper())
+    return codigos, palabras
+
+
+def facturas_anteriores(sesion, user, texto):
+    """Lo ya leído en OTRAS cargas de las bodegas de la persona que calza con el
+    mensaje: líneas cuyo código contiene un token con dígitos, y facturas cuyo
+    folio, proveedor o marca calzan. Así el agente responde «¿a cuánto lo compré
+    antes?» desde el expediente guardado, sin volver a leer ningún PDF."""
+    codigos, palabras = _claves(texto)
+    if not codigos and not palabras:
+        return {}
+    from app.utils_permisos import obtener_sucursales_usuario
+    ids = obtener_sucursales_usuario(user).values_list('id', flat=True)
+    sesiones = (CargaFacturaPdf.objects.filter(sucursal_id__in=ids).exclude(id=sesion.id)
+                .exclude(estado='LEYENDO').select_related('sucursal')
+                .only('id', 'facturas', 'creado_en', 'sucursal__alias').order_by('-id')[:_SESIONES_A_MIRAR])
+    facturas, lineas = [], []
+    for s in sesiones:
+        for d in s.facturas or []:
+            folio = str(d.get('folio') or '')
+            cabecera = ' '.join(str(d.get(k) or '') for k in ('proveedor_nombre', 'marca')).upper()
+            # Palabras completas: «para» no debe calzar con PARAGUAY S.A.
+            if folio in codigos or any(re.search(r'\b' + re.escape(p) + r'\b', cabecera) for p in palabras):
+                if len(facturas) < _MAX_COINCIDENCIAS:
+                    facturas.append({
+                        'sesion': s.id, 'folio': d.get('folio'), 'proveedor': d.get('proveedor_nombre'),
+                        'fecha': d.get('fecha_emision'), 'bodega': s.sucursal.alias, 'marca': d.get('marca'),
+                        'lineas': len(d.get('lineas') or []),
+                        'unidades': sum(sum((l.get('tallas') or {}).values()) for l in d.get('lineas') or []),
+                        'estado': d.get('_estado'), 'leida_el': s.creado_en.date().isoformat(),
+                    })
+            if not codigos or len(lineas) >= _MAX_COINCIDENCIAS:
+                continue
+            for l in d.get('lineas') or []:
+                art = str(l.get('articulo') or '').upper()
+                if any(c in art for c in codigos):
+                    lineas.append({
+                        'sesion': s.id, 'folio': d.get('folio'), 'proveedor': d.get('proveedor_nombre'),
+                        'fecha': d.get('fecha_emision'), 'bodega': s.sucursal.alias,
+                        'articulo': l.get('articulo'), 'descripcion': l.get('descripcion'),
+                        'color': l.get('color'), 'tallas': l.get('tallas'),
+                        'unidades': sum((l.get('tallas') or {}).values()),
+                        'costo': l.get('costo'), 'precioventa': l.get('precioventa'),
+                        'estado_factura': d.get('_estado'),
+                    })
+                    if len(lineas) >= _MAX_COINCIDENCIAS:
+                        break
+        if len(facturas) >= _MAX_COINCIDENCIAS and len(lineas) >= _MAX_COINCIDENCIAS:
+            break
+    salida = {}
+    if facturas:
+        salida['facturas'] = facturas
+    if lineas:
+        salida['lineas'] = lineas
+    return salida
+
+
 def conversar(sesion, user, texto):
-    """Un turno de chat. Guarda los dos mensajes, aplica los cambios y devuelve
-    {'respuesta', 'cambios': [textos], 'facturas': vista previa nueva}."""
+    """Un turno de chat. Guarda los dos mensajes (el del agente con `cambios` y
+    `rechazos` estructurados), aplica los cambios y devuelve
+    {'respuesta', 'cambios': [textos], 'rechazos': [textos], 'facturas': vista previa nueva}."""
     texto = (texto or '').strip()[:_MAX_TEXTO]
     if not texto:
         raise ErrorCarga('Escribe algo.')
@@ -287,23 +459,38 @@ def conversar(sesion, user, texto):
     previa = svc_web.planificar(sesion, user)
     sesion.agregar_mensaje(svc_web.USUARIO, texto, tipo='chat')
     try:
-        salida = _preguntar(catalogo, previa, sesion.mensajes, texto)
+        anteriores = facturas_anteriores(sesion, user, texto)
+    except Exception:
+        logger.exception('carga_factura: falló la búsqueda en cargas anteriores (sesión %s)', sesion.id)
+        anteriores = {}
+    try:
+        salida = _preguntar(catalogo, previa, sesion.mensajes, texto, anteriores=anteriores)
     except ErrorCarga:
         raise
     except Exception as exc:
         logger.exception('carga_factura: falló el chat de la sesión %s', sesion.id)
         raise ErrorCarga(f'No pude procesar el mensaje ({type(exc).__name__}: {exc}).')
     respuesta = str(salida.get('respuesta') or '').strip() or 'Listo.'
-    cambios = _a_correcciones(salida.get('cambios'), previa)
-    aplicados = []
+    cambios, rechazos = _a_correcciones(salida.get('cambios'), previa, catalogo)
+    rechazos = list(dict.fromkeys(rechazos))
+    aplicados, fallo = [], ''
     if cambios:
         try:
             svc_web.aplicar_correcciones(sesion, cambios)
             aplicados = _describir(cambios, previa)
         except ErrorCarga as exc:
-            respuesta += f'\n\nNo pude aplicar el cambio: {exc}'
+            fallo = str(exc)
+    # El mensaje guardado lleva el texto limpio y los cambios aparte (la
+    # pantalla los pinta como fichas); la respuesta de la API los lleva en texto.
+    sesion.agregar_mensaje(svc_web.AGENTE, respuesta, tipo='chat',
+                           cambios=aplicados, rechazos=rechazos, fallo=fallo)
+    texto_api = respuesta
+    if rechazos:
+        texto_api += ('\n\nNo apliqué (no existe en el sistema; se crea en Gestión de Productos y '
+                      'me lo vuelves a pedir): ' + '; '.join(rechazos) + '.')
+    if fallo:
+        texto_api += f'\n\nNo pude aplicar el cambio: {fallo}'
     if aplicados:
-        respuesta += '\n\nApliqué: ' + '; '.join(aplicados) + '. La vista previa ya está recalculada.'
-    sesion.agregar_mensaje(svc_web.AGENTE, respuesta, tipo='chat')
-    return {'respuesta': respuesta, 'cambios': aplicados,
+        texto_api += '\n\nApliqué: ' + '; '.join(aplicados) + '. La vista previa ya está recalculada.'
+    return {'respuesta': texto_api, 'cambios': aplicados, 'rechazos': rechazos,
             'facturas': svc_web.planificar(sesion, user)}

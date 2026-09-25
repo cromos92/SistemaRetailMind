@@ -15,6 +15,9 @@
 
     const BASE = '/app/carga-factura/';
     const INTERVALO_MS = 3000;
+    // La sesión vive en el servidor (PDF, lectura, chat y correcciones); esto
+    // solo recuerda cuál estaba abierta para retomarla si recargan la página.
+    const CLAVE_SESION = 'cargaFactura.sesion';
     const TEXTO_OPCION = {
         s: 'stock + costo + venta',
         c: 'stock + costo (la venta sigue)',
@@ -30,10 +33,27 @@
         mensajesVistos: 0,   // cuántos mensajes de la sesión ya están en pantalla
         estadoPrevio: null,
         previas: {},         // idx → último item de vista previa
-        enviando: false,
+        enviando: false,     // subiendo un PDF
+        hablando: false,     // esperando la respuesta del chat
+        cronometro: null,    // intervalo del reloj de la burbuja de progreso
+        progresoDesde: null,
     };
 
     // ------------------------------------------------------------ utilidades
+
+    function recordarSesion(id) {
+        try {
+            if (id) localStorage.setItem(CLAVE_SESION, String(id));
+            else localStorage.removeItem(CLAVE_SESION);
+        } catch (e) { /* modo privado o storage bloqueado: sin memoria, nada más */ }
+    }
+
+    function sesionRecordada() {
+        try {
+            const v = parseInt(localStorage.getItem(CLAVE_SESION) || '', 10);
+            return v > 0 ? v : null;
+        } catch (e) { return null; }
+    }
 
     function cookie(name) {
         const m = document.cookie.match('(?:^|; )' + name + '=([^;]*)');
@@ -91,6 +111,11 @@
         if (body) body.scrollTop = body.scrollHeight;
     }
 
+    function kb(bytes) {
+        if (bytes === null || bytes === undefined || bytes === '') return '';
+        return bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(bytes / 1024)) + ' KB';
+    }
+
     function burbuja(quien, html, extra) {
         const div = document.createElement('div');
         div.className = 'cf-msg ' + (quien === 'usuario' ? 'cf-usuario' : 'cf-agente') + (extra ? ' ' + extra : '');
@@ -102,12 +127,83 @@
         return div;
     }
 
+    /** Hito del proceso (factura enviada, lectura terminada, carga…): fila centrada con icono. */
+    function evento(icono, titulo, html, extra) {
+        const div = document.createElement('div');
+        div.className = 'cf-evento' + (extra ? ' ' + extra : '');
+        div.innerHTML =
+            '<div class="cf-evento-icono"><i class="bi ' + icono + '"></i></div>' +
+            '<div class="cf-evento-cuerpo"><div class="cf-evento-titulo">' + titulo + '</div>' +
+            (html ? '<div class="cf-evento-texto">' + html + '</div>' : '') +
+            '<div class="cf-hora"></div></div>';
+        $chat().appendChild(div);
+        bajar();
+        return div;
+    }
+
+    /** Tarjeta «Factura enviada a leer»: exactamente lo que se mandó. */
+    function htmlEnvio(e) {
+        const filas = [
+            ['bi-file-earmark-pdf', 'Archivo', esc(e.archivo) + (e.bytes ? ' <small>(' + kb(e.bytes) + ')</small>' : '')],
+            ['bi-shop', 'Bodega', esc(e.bodega)],
+            ['bi-tag', 'Marca', e.marca ? esc(e.marca) : '<span class="cf-muted">la detecta el lector</span>'],
+            ['bi-arrow-repeat', 'Lecturas', esc(e.lecturas) + (Number(e.lecturas) > 1 ? ' (se comparan entre sí)' : ' (rápida)')],
+        ];
+        if (e.indicaciones) filas.push(['bi-chat-left-text', 'Indicaciones', esc(e.indicaciones)]);
+        return '<div class="cf-envio"><div class="cf-envio-titulo"><i class="bi bi-cloud-arrow-up me-1"></i>Factura enviada a leer</div>' +
+            filas.map(f => '<div class="cf-envio-fila"><i class="bi ' + f[0] + '"></i><span>' + f[1] + '</span><b>' + f[2] + '</b></div>').join('') +
+            '</div>';
+    }
+
+    /** Debajo de una respuesta del agente: qué aplicó, qué no existe y qué falló. */
+    function htmlCambios(m) {
+        let h = '';
+        if (m.cambios && m.cambios.length) {
+            h += '<div class="cf-aplicado"><div class="cf-aplicado-titulo"><i class="bi bi-check2-circle me-1"></i>Apliqué en la vista previa</div>' +
+                m.cambios.map(c => '<span class="cf-chip nueva">' + esc(c) + '</span>').join(' ') + '</div>';
+        }
+        if (m.rechazos && m.rechazos.length) {
+            h += '<div class="cf-aplicado cf-aplicado-no"><div class="cf-aplicado-titulo"><i class="bi bi-exclamation-triangle me-1"></i>No apliqué: no existe en el sistema</div>' +
+                m.rechazos.map(c => '<span class="cf-chip no">' + esc(c) + '</span>').join(' ') +
+                '<div class="cf-muted mt-1">Se crea en Gestión de Productos y me lo vuelves a pedir.</div></div>';
+        }
+        if (m.fallo) {
+            h += '<div class="cf-aplicado cf-aplicado-no"><div class="cf-aplicado-titulo"><i class="bi bi-x-circle me-1"></i>No pude aplicar el cambio</div>' + esc(m.fallo) + '</div>';
+        }
+        return h;
+    }
+
     function mensaje(m) {
-        const div = burbuja(m.quien, esc(m.texto), m.tipo === 'error' ? 'cf-error' : '');
-        div.querySelector('.cf-hora').textContent = hora(m.fecha);
+        const texto = esc(m.texto);
+        let div;
+        switch (m.tipo) {
+            case 'subida':
+                div = burbuja('usuario', m.envio ? htmlEnvio(m.envio) : texto, 'cf-envio-msg');
+                break;
+            case 'indicaciones':
+                div = burbuja('usuario', '<div class="cf-etiqueta"><i class="bi bi-chat-left-text me-1"></i>Indicaciones para la lectura</div>' + texto);
+                break;
+            case 'lectura':
+                div = evento('bi-file-earmark-check', 'Lectura terminada', texto, 'cf-evento-ok');
+                break;
+            case 'carga':
+                div = m.quien === 'usuario'
+                    ? evento('bi-box-arrow-in-down', 'Orden de carga', texto)
+                    : evento('bi-check-circle', 'Carga terminada', texto, 'cf-evento-ok');
+                break;
+            case 'error':
+                div = evento('bi-exclamation-octagon', 'Problema', texto, 'cf-evento-error');
+                break;
+            default:
+                div = burbuja(m.quien, texto + (m.quien === 'agente' ? htmlCambios(m) : ''));
+        }
+        const h = div.querySelector('.cf-hora');
+        if (h) h.textContent = hora(m.fecha);
+        return div;
     }
 
     function limpiarChat() {
+        setTyping('');
         $chat().innerHTML = '';
         st.mensajesVistos = 0;
         st.previas = {};
@@ -115,23 +211,150 @@
     }
 
     function bienvenida() {
-        burbuja('agente', esc(
-            'Hola. Adjunta la factura del proveedor en PDF (escaneada o la del SII), elige la bodega ' +
-            'donde entra la mercadería y envíamela.\n' +
-            'La leo, te muestro qué crearía (códigos nuevos, los que ya existen y en qué ficha entran, ' +
-            'tallas, precios) y cargas cuando esté bien. Nada se escribe hasta que aprietes «Cargar».'));
+        burbuja('agente',
+            'Hola. Así funciona:' +
+            '<ol class="cf-pasos">' +
+            '<li><b>Adjunta el PDF</b> de la factura del proveedor (escaneado o el del SII) y elige la <b>bodega</b>. ' +
+            'Si quieres, escríbeme indicaciones (marca, tipo de talla, dónde vienen las tallas).</li>' +
+            '<li>Aprieta <b>Enviar PDF</b>: lo leo en el servidor (puedes cerrar esta ventana) y te muestro la ' +
+            '<b>vista previa</b>: códigos nuevos, los que ya existen y en qué ficha entran, tallas y precios.</li>' +
+            '<li>Corrige en la tabla o <b>escríbeme</b> («la marca es CHALADA», «línea 3 es de mujer, color plata») ' +
+            'y aprieta <b>Cargar</b>. Nada se escribe hasta ese clic.</li>' +
+            '</ol>' +
+            '<div class="cf-muted">Cada carga queda guardada: si recargas la página la retomo, y me puedes preguntar ' +
+            'por facturas ya leídas («¿a cuánto compré el 126511-02?») sin volver a subirlas.</div>');
     }
 
-    function setTyping(texto) {
+    /** Estado en curso (subiendo, leyendo, pensando, cargando…): una sola burbuja
+     *  con spinner y reloj, siempre al final del chat. setTyping('') la quita. */
+    function setTyping(texto, detalle) {
         let t = document.getElementById('cfTyping');
-        if (!texto) { if (t) t.remove(); return; }
+        if (!texto) {
+            if (t) t.remove();
+            if (st.cronometro) { clearInterval(st.cronometro); st.cronometro = null; }
+            st.progresoDesde = null;
+            return;
+        }
         if (!t) {
             t = burbuja('agente', '', 'cf-typing');
             t.id = 'cfTyping';
+            t.querySelector('.cf-hora').remove();
+            st.progresoDesde = Date.now();
         }
-        t.querySelector('.cf-burbuja').innerHTML = '<i class="bi bi-three-dots me-1"></i>' + esc(texto);
+        t.querySelector('.cf-burbuja').innerHTML =
+            '<div class="cf-progreso"><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>' +
+            '<div class="flex-grow-1"><div class="cf-progreso-texto">' + esc(texto) + '</div>' +
+            (detalle ? '<div class="cf-muted">' + esc(detalle) + '</div>' : '') + '</div>' +
+            '<span class="cf-crono" id="cfCrono">0:00</span></div>';
+        if (!st.cronometro) {
+            st.cronometro = setInterval(function () {
+                const el = document.getElementById('cfCrono');
+                if (!el || !st.progresoDesde) return;
+                const seg = Math.floor((Date.now() - st.progresoDesde) / 1000);
+                el.textContent = Math.floor(seg / 60) + ':' + String(seg % 60).padStart(2, '0');
+            }, 1000);
+        }
         $chat().appendChild(t);
         bajar();
+    }
+
+    // ------------------------------------------------------ estado y compositor
+
+    const ESTADOS = {
+        LEYENDO: ['Leyendo el PDF…', 'cf-pill-run'],
+        CARGANDO: ['Cargando productos…', 'cf-pill-run'],
+        LEIDA: ['Vista previa lista', 'cf-pill-ok'],
+        CERRADA: ['Cerrada', 'cf-pill-muted'],
+        ERROR: ['Error de lectura', 'cf-pill-error'],
+    };
+
+    /** Píldora del encabezado: en qué está la carga abierta. */
+    function pintarEstado() {
+        const pill = document.getElementById('cfEstadoPill');
+        if (!pill) return;
+        let texto = 'Sin carga abierta', clase = 'cf-pill-muted';
+        if (st.enviando) {
+            texto = 'Subiendo el PDF…'; clase = 'cf-pill-run';
+        } else if (st.sesion && st.resumen) {
+            const e = ESTADOS[st.resumen.estado] || [st.resumen.estado, 'cf-pill-muted'];
+            texto = 'Carga #' + st.sesion + ' · ' + e[0]; clase = e[1];
+        } else if (st.sesion) {
+            texto = 'Carga #' + st.sesion;
+        }
+        pill.className = 'cf-pill ' + clase;
+        pill.innerHTML = (clase === 'cf-pill-run' ? '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>' : '') + esc(texto);
+    }
+
+    function ocupado() {
+        return st.enviando || st.hablando ||
+            !!(st.resumen && (st.resumen.estado === 'LEYENDO' || st.resumen.estado === 'CARGANDO'));
+    }
+
+    /** Habilita lo que corresponde y explica, debajo de la caja, qué pasa al apretar. */
+    function actualizarComposer() {
+        const $texto = document.getElementById('cfTexto');
+        const $hablar = document.getElementById('cfBtnHablar');
+        const $enviar = document.getElementById('cfBtnEnviar');
+        const $ayuda = document.getElementById('cfAyuda');
+        const $suc = document.getElementById('cfSucursal');
+        if (!$texto || !$hablar || !$enviar) return;
+        const archivo = document.getElementById('cfArchivo').files[0];
+        const bodega = $suc && $suc.options[$suc.selectedIndex] ? $suc.options[$suc.selectedIndex].text : '';
+        const configurada = !!(st.opciones && st.opciones.configurada);
+        const conPrevia = !!(st.sesion && st.resumen && st.resumen.estado === 'LEIDA');
+        const bloqueado = ocupado();
+        let ayuda;
+        if (bloqueado) {
+            $texto.placeholder = st.enviando ? 'Subiendo el PDF…'
+                : st.hablando ? 'Pensando…'
+                : (st.resumen && st.resumen.estado === 'CARGANDO') ? 'Cargando… espera a que termine'
+                : 'Leyendo el PDF… espera a que termine';
+            ayuda = st.hablando ? 'Estoy ajustando la vista previa con lo que escribiste.'
+                : 'Sigo trabajando en el servidor. Puedes cerrar esta ventana y volver después: la carga queda guardada.';
+        } else if (conPrevia) {
+            $texto.placeholder = 'Corrige o pregunta: «la marca es CHALADA», «línea 3 es de mujer, color plata», «¿a cuánto compré el 126511-02 antes?»';
+            ayuda = archivo
+                ? '«Enviar PDF» empieza OTRA carga con ' + archivo.name + '; la actual queda en «Cargas recientes».'
+                : 'Lo que escribas se aplica a la vista previa de arriba (Enter envía). Para otra factura, adjunta su PDF.';
+        } else {
+            $texto.placeholder = 'Indicaciones para leer la factura (opcional): «marca CHALADA, tallas CL, el color va en la descripción»';
+            if (st.opciones && !configurada) {
+                ayuda = 'La lectura no está configurada en este servidor (falta la clave de Anthropic).';
+            } else if (archivo) {
+                ayuda = 'Listo: «Enviar PDF» sube ' + archivo.name + ' (' + kb(archivo.size) + ') a la bodega ' + bodega +
+                    ($texto.value.trim() ? ' con tus indicaciones' : '') + ' y empieza la lectura.';
+            } else {
+                ayuda = 'Adjunta el PDF de la factura para empezar.';
+            }
+        }
+        $texto.disabled = bloqueado;
+        $hablar.disabled = bloqueado || !conPrevia;
+        $hablar.title = conPrevia ? 'Enviar mensaje (Enter)' : 'Primero envía una factura: cuando tenga la vista previa me puedes escribir';
+        $hablar.innerHTML = st.hablando ? '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>' : '<i class="bi bi-send"></i>';
+        $enviar.disabled = !archivo || !configurada || bloqueado;
+        $enviar.innerHTML = st.enviando
+            ? '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Subiendo…'
+            : '<i class="bi bi-cloud-arrow-up me-1"></i>Enviar PDF';
+        if ($ayuda) $ayuda.textContent = ayuda;
+    }
+
+    function autoAlto(el) {
+        el.style.height = 'auto';
+        el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+    }
+
+    function mostrarArchivo() {
+        const f = document.getElementById('cfArchivo').files[0];
+        document.getElementById('cfNombreArchivo').textContent = f ? f.name : '';
+        document.getElementById('cfTamanoArchivo').textContent = f ? kb(f.size) : '';
+        document.getElementById('cfArchivoChip').classList.toggle('d-none', !f);
+        document.getElementById('cfBtnAdjuntar').classList.toggle('d-none', !!f);
+        actualizarComposer();
+    }
+
+    function quitarArchivo() {
+        document.getElementById('cfArchivo').value = '';
+        mostrarArchivo();
     }
 
     // ------------------------------------------------------------- sesiones
@@ -140,6 +363,7 @@
         if (st.opciones) return st.opciones;
         const data = await api('opciones/');
         st.opciones = data;
+        actualizarComposer();
         const $suc = document.getElementById('cfSucursal');
         $suc.innerHTML = data.sucursales.map(s => '<option value="' + s.id + '">' + esc(s.alias) + '</option>').join('');
         const actual = (window.SUCURSAL_ACTUAL_ID || '').toString();
@@ -172,52 +396,86 @@
         detenerSondeo();
         st.sesion = null;
         st.resumen = null;
+        recordarSesion(null);
         limpiarChat();
         bienvenida();
         document.getElementById('cfRecientes').value = '';
-        document.getElementById('cfArchivo').value = '';
-        document.getElementById('cfNombreArchivo').textContent = 'ningún archivo';
+        quitarArchivo();
+        pintarEstado();
+        actualizarComposer();
     }
 
     async function abrirSesion(id) {
         detenerSondeo();
         st.sesion = id;
+        recordarSesion(id);
         limpiarChat();
         await refrescar(true);
+    }
+
+    /** Tras recargar la página: retoma la última sesión abierta (si sigue existiendo). */
+    async function retomarSesion() {
+        const id = sesionRecordada();
+        if (!id || st.sesion) return;
+        try {
+            const data = await api(id + '/');
+            if (data.sesion.estado === 'CERRADA') { recordarSesion(null); return; }
+        } catch (e) {
+            recordarSesion(null);   // la sesión ya no existe o no es de sus bodegas
+            return;
+        }
+        burbuja('agente', esc('Retomé la carga #' + id + ' que tenías abierta. Para empezar otra, «Nueva».'));
+        await abrirSesion(id);
     }
 
     async function enviar() {
         if (st.enviando) return;
         const archivo = document.getElementById('cfArchivo').files[0];
         if (!archivo) { avisar('Falta la factura', 'Adjunta el PDF de la factura.', 'warning'); return; }
+        const $suc = document.getElementById('cfSucursal');
+        const $texto = document.getElementById('cfTexto');
+        const envio = {
+            archivo: archivo.name, bytes: archivo.size,
+            bodega: $suc.options[$suc.selectedIndex] ? $suc.options[$suc.selectedIndex].text : '',
+            marca: document.getElementById('cfMarca').value.trim().toUpperCase(),
+            lecturas: parseInt(document.getElementById('cfLecturas').value, 10) || 2,
+            // Lo escrito en la caja del chat va como indicaciones para el lector.
+            indicaciones: $texto.value.trim(),
+        };
         const fd = new FormData();
         fd.append('archivo', archivo);
-        fd.append('sucursal', document.getElementById('cfSucursal').value);
-        fd.append('marca', document.getElementById('cfMarca').value.trim());
-        fd.append('lecturas', document.getElementById('cfLecturas').value);
-        // Lo escrito en la caja del chat va como indicaciones para el lector.
-        fd.append('indicaciones', document.getElementById('cfTexto').value.trim());
+        fd.append('sucursal', $suc.value);
+        fd.append('marca', envio.marca);
+        fd.append('lecturas', envio.lecturas);
+        fd.append('indicaciones', envio.indicaciones);
         st.enviando = true;
-        const $btn = document.getElementById('cfBtnEnviar');
-        $btn.disabled = true;
+        pintarEstado();
+        actualizarComposer();
+        // Lo que se está enviando queda a la vista desde el primer segundo.
+        const local = burbuja('usuario', htmlEnvio(envio), 'cf-envio-msg');
+        setTyping('Subiendo el PDF…', kb(archivo.size) + ' · en cuanto llegue empiezo a leerlo');
         try {
-            if (st.sesion) { limpiarChat(); }
-            setTyping('Subiendo el PDF…');
             const data = await api('subir/', { method: 'POST', body: fd });
             detenerSondeo();
             st.sesion = data.id;
-            limpiarChat();
-            document.getElementById('cfArchivo').value = '';
-            document.getElementById('cfNombreArchivo').textContent = 'ningún archivo';
-            document.getElementById('cfTexto').value = '';
+            st.resumen = data.sesion || null;
+            recordarSesion(data.id);
+            limpiarChat();   // se repinta desde el servidor (incluye esta tarjeta de envío)
+            quitarArchivo();
+            $texto.value = '';
+            autoAlto($texto);
             cargarRecientes();
             await refrescar(true);
         } catch (e) {
             setTyping('');
+            local.classList.add('cf-error');
+            local.querySelector('.cf-burbuja').insertAdjacentHTML('beforeend',
+                '<div class="cf-nota error mt-2"><i class="bi bi-x-circle me-1"></i>No se pudo enviar: ' + esc(e.message) + '</div>');
             avisar('No se pudo enviar', e.message);
         } finally {
             st.enviando = false;
-            $btn.disabled = !(st.opciones && st.opciones.configurada);
+            pintarEstado();
+            actualizarComposer();
         }
     }
 
@@ -236,19 +494,29 @@
             return;
         }
         const id = st.sesion;
-        $texto.disabled = true;
-        setTyping('Pensando…');
+        st.hablando = true;
+        actualizarComposer();
+        // Tu mensaje aparece al tiro; el servidor lo devuelve después con su hora.
+        const local = burbuja('usuario', esc(texto));
+        $texto.value = '';
+        autoAlto($texto);
+        setTyping('Leyendo tu mensaje y ajustando la vista previa…');
         try {
             const data = await api(id + '/conversar/', { method: 'POST', json: { texto: texto } });
             if (st.sesion !== id) return;
-            $texto.value = '';
+            local.remove();
             await refrescar(false);   // pinta tu mensaje y la respuesta
             (data.facturas || []).forEach(item => { st.previas[item.idx] = item; pintarPrevia(item); });
         } catch (e) {
             setTyping('');
+            local.remove();
+            if (st.sesion === id) await refrescar(false);   // si el servidor alcanzó a guardar tu mensaje
+            $texto.value = texto;   // que no se pierda lo escrito
+            autoAlto($texto);
             avisar('Agente', e.message);
         } finally {
-            $texto.disabled = false;
+            st.hablando = false;
+            actualizarComposer();
             $texto.focus();
         }
     }
@@ -267,6 +535,8 @@
         }
         if (st.sesion !== id) return;   // cambiaron de sesión mientras tanto
         st.resumen = data.sesion;
+        pintarEstado();
+        actualizarComposer();
         const mensajes = data.mensajes || [];
         setTyping('');
         for (let i = st.mensajesVistos; i < mensajes.length; i++) mensaje(mensajes[i]);
@@ -274,7 +544,10 @@
 
         const estado = data.sesion.estado;
         if (estado === 'LEYENDO' || estado === 'CARGANDO') {
-            setTyping(data.sesion.progreso || (estado === 'LEYENDO' ? 'Leyendo el PDF…' : 'Cargando…'));
+            setTyping(data.sesion.progreso || (estado === 'LEYENDO' ? 'Leyendo el PDF…' : 'Cargando…'),
+                estado === 'LEYENDO'
+                    ? 'Puedes cerrar esta ventana: sigo en el servidor y aquí queda todo guardado.'
+                    : 'Escribiendo stock, lotes, DTE y compra…');
         }
         const terminoAlgo = st.estadoPrevio && st.estadoPrevio !== estado && estado === 'LEIDA';
         if ((inicial || terminoAlgo) && (estado === 'LEIDA' || estado === 'CERRADA' || estado === 'CARGANDO')) {
@@ -608,8 +881,11 @@
         if (typeof window.mostrarModal === 'function') window.mostrarModal('#modalCargaFactura');
         else bootstrap.Modal.getOrCreateInstance(el).show();
         if (!st.sesion && !$chat().children.length) bienvenida();
+        pintarEstado();
+        actualizarComposer();
         cargarOpciones().catch(e => avisar('Agente', e.message));
         cargarRecientes();
+        retomarSesion();
     }
 
     document.addEventListener('DOMContentLoaded', function () {
@@ -621,13 +897,19 @@
         modal.addEventListener('shown.bs.modal', function () { if (st.sesion) { detenerSondeo(); refrescar(false); } });
 
         document.getElementById('cfBtnAdjuntar').addEventListener('click', () => document.getElementById('cfArchivo').click());
-        document.getElementById('cfArchivo').addEventListener('change', function () {
-            document.getElementById('cfNombreArchivo').textContent = this.files[0] ? this.files[0].name : 'ningún archivo';
-        });
+        document.getElementById('cfArchivo').addEventListener('change', mostrarArchivo);
+        document.getElementById('cfQuitarArchivo').addEventListener('click', quitarArchivo);
+        document.getElementById('cfSucursal').addEventListener('change', actualizarComposer);
         document.getElementById('cfBtnEnviar').addEventListener('click', enviar);
         document.getElementById('cfBtnHablar').addEventListener('click', hablar);
-        document.getElementById('cfTexto').addEventListener('keydown', function (ev) {
-            if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); hablar(); }
+        const $texto = document.getElementById('cfTexto');
+        $texto.addEventListener('input', function () { autoAlto(this); actualizarComposer(); });
+        $texto.addEventListener('keydown', function (ev) {
+            if (ev.key !== 'Enter' || ev.shiftKey) return;
+            ev.preventDefault();
+            // Con vista previa, Enter le escribe al agente; antes, Enter envía el PDF adjunto.
+            if (st.sesion && st.resumen && st.resumen.estado === 'LEIDA') hablar();
+            else if (document.getElementById('cfArchivo').files[0]) enviar();
         });
         document.getElementById('cfBtnNueva').addEventListener('click', nuevaConversacion);
         document.getElementById('cfRecientes').addEventListener('change', function () {

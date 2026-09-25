@@ -780,10 +780,13 @@ class CargaFacturaPdf(models.Model):
     def __str__(self):
         return f'Carga #{self.id} {self.nombre_archivo} ({self.get_estado_display()})'
 
-    def agregar_mensaje(self, quien, texto, tipo='texto', factura=None):
-        """Agrega un mensaje a la conversación y lo persiste (solo ese campo)."""
+    def agregar_mensaje(self, quien, texto, tipo='texto', factura=None, **extra):
+        """Agrega un mensaje a la conversación y lo persiste (solo ese campo).
+        `extra` son datos estructurados que la pantalla pinta aparte del texto
+        (p. ej. `cambios` y `rechazos` de un turno de chat, `envio` de la subida)."""
         self.mensajes = list(self.mensajes or []) + [{
             'quien': quien, 'texto': texto, 'tipo': tipo, 'factura': factura,
             'fecha': timezone.now().isoformat(timespec='seconds'),
+            **{k: v for k, v in extra.items() if v not in (None, '', [], {})},
         }]
         self.save(update_fields=['mensajes', 'actualizado_en'])

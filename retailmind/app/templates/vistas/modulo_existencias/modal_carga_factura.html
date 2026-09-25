@@ -22,11 +22,59 @@
         box-shadow: 0 2px 8px rgba(20,20,60,.06); white-space: pre-line; overflow-wrap: anywhere;
     }
     .cf-usuario .cf-burbuja { background: #405189; color: #fff; }
+    .cf-usuario .cf-burbuja .cf-muted { color: rgba(255,255,255,.75); }
     .cf-error .cf-burbuja { border-left: 4px solid #f06548; }
     .cf-hora { font-size: .7rem; color: #8a93a6; margin-top: 4px; }
     .cf-usuario .cf-hora { text-align: right; }
-    .cf-typing .cf-burbuja { color: #405189; }
-    .cf-typing .cf-burbuja i { animation: pulse 1.2s infinite; }
+    .cf-pasos { padding-left: 18px; margin: 6px 0; white-space: normal; }
+    .cf-pasos li { margin-bottom: 4px; }
+    .cf-etiqueta { font-size: .68rem; text-transform: uppercase; letter-spacing: .4px; opacity: .8; margin-bottom: 2px; }
+
+    /* Píldora de estado en el encabezado */
+    .cf-pill {
+        display: inline-flex; align-items: center; gap: 4px; font-size: .72rem; font-weight: 600;
+        border-radius: var(--nexo-radius-full, 9999px); padding: 3px 10px; white-space: nowrap;
+        background: rgba(255,255,255,.18); color: #fff;
+    }
+    .cf-pill-run { background: rgba(255,255,255,.28); }
+    .cf-pill-ok { background: var(--nexo-accent, #00D4AA); color: #0b3b33; }
+    .cf-pill-error { background: var(--nexo-error, #FF4D4D); }
+    .cf-pill-muted { opacity: .85; }
+
+    /* Hitos del proceso (factura enviada, lectura terminada, carga, problema) */
+    .cf-evento {
+        align-self: center; display: flex; gap: 10px; max-width: 80%; background: #fff;
+        border: 1px solid #e5e9f0; border-radius: 12px; padding: 8px 12px; font-size: .82rem;
+        box-shadow: var(--nexo-shadow-sm, 0 1px 2px rgba(26,26,46,.05));
+    }
+    .cf-evento-icono {
+        width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; background: #eef2ff; color: #405189;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .cf-evento-ok .cf-evento-icono { background: #e0f2f1; color: #0a7d6d; }
+    .cf-evento-error { border-color: #f6c9c0; }
+    .cf-evento-error .cf-evento-icono { background: #fde2dd; color: #c0392b; }
+    .cf-evento-titulo { font-weight: 600; color: var(--nexo-text-primary, #1A1A2E); }
+    .cf-evento-texto { white-space: pre-line; color: var(--nexo-text-secondary, #4A4A5A); margin-top: 2px; }
+
+    /* Tarjeta «Factura enviada a leer» (burbuja de la persona) */
+    .cf-envio { display: grid; gap: 4px; min-width: 260px; white-space: normal; }
+    .cf-envio-titulo { font-weight: 600; margin-bottom: 4px; }
+    .cf-envio-fila { display: grid; grid-template-columns: 18px 92px 1fr; gap: 6px; align-items: baseline; font-size: .82rem; }
+    .cf-envio-fila span { opacity: .8; }
+    .cf-envio-fila b { font-weight: 600; overflow-wrap: anywhere; }
+
+    /* Debajo de una respuesta: qué aplicó / qué no existe / qué falló */
+    .cf-aplicado { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e5e9f0; white-space: normal; }
+    .cf-aplicado-titulo { font-size: .76rem; font-weight: 600; color: #0a7d6d; margin-bottom: 4px; }
+    .cf-aplicado-no .cf-aplicado-titulo { color: #b7791f; }
+
+    /* Burbuja de progreso: spinner + texto + reloj */
+    .cf-typing .cf-burbuja { min-width: 280px; }
+    .cf-progreso { display: flex; align-items: center; gap: 10px; }
+    .cf-progreso .spinner-border { color: #405189; flex-shrink: 0; }
+    .cf-progreso-texto { font-weight: 600; color: #405189; }
+    .cf-crono { font-variant-numeric: tabular-nums; font-size: .74rem; color: #8a93a6; padding-left: 10px; }
 
     /* Tarjeta de vista previa de una factura (ocupa todo el ancho del chat) */
     .cf-card { align-self: stretch; max-width: 100%; }
@@ -52,6 +100,7 @@
     .cf-tabla tr.cf-omitida td:not(.cf-col-decision) { opacity: .45; }
     .cf-chip { display: inline-block; background: #eef2ff; color: #364574; border-radius: 6px; padding: 1px 6px; font-size: .74rem; margin: 1px; white-space: nowrap; }
     .cf-chip.nueva { background: #e0f2f1; color: #0a7d6d; }
+    .cf-chip.no { background: #fff3cd; color: #9a6b00; }
     .cf-nota { font-size: .76rem; margin: 0; }
     .cf-nota.aviso { color: #b7791f; }
     .cf-nota.error { color: #d9534f; }
@@ -67,14 +116,34 @@
     .cf-card-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; background: #f8f9fb; border-top: 1px solid #e5e9f0; }
     .cf-card-foot .btn { border-radius: 10px; font-size: .82rem; }
 
-    /* Compositor: adjuntar + bodega + marca + enviar */
-    .cf-composer { background: #fff; border-top: 1px solid #e5e9f0; gap: 8px; flex-wrap: wrap; justify-content: flex-start; }
-    .cf-composer .form-select, .cf-composer .form-control { font-size: .85rem; }
-    .cf-composer .btn { border-radius: 10px; }
+    /* Compositor: adjunto + parámetros arriba, caja de texto + botones abajo, ayuda al pie */
+    .cf-composer { display: block; background: #fff; border-top: 1px solid #e5e9f0; padding: 10px 16px 12px; }
+    .cf-adjuntos { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-bottom: 8px; }
+    .cf-archivo {
+        display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+        background: #eef2ff; color: #364574; border-radius: 10px; padding: 4px 8px 4px 10px; font-size: .82rem;
+    }
+    .cf-archivo .bi-file-earmark-pdf { color: #d9534f; }
+    .cf-archivo-nombre { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+    .cf-archivo-quitar { border: 0; background: transparent; color: #6b7280; padding: 0 2px; line-height: 1; }
+    .cf-archivo-quitar:hover { color: #c0392b; }
+    .cf-param { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: .78rem; color: #6b7280; }
+    .cf-param .form-select, .cf-param .form-control { width: auto; font-size: .82rem; }
+    .cf-param #cfMarca { max-width: 170px; }
+    .cf-entrada { display: flex; gap: 8px; align-items: flex-end; }
+    .cf-entrada textarea { resize: none; border-radius: 12px; font-size: .9rem; line-height: 1.4; max-height: 120px; }
+    .cf-entrada .btn { border-radius: 10px; white-space: nowrap; }
+    .cf-btn-icono { width: 42px; height: 38px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+    .cf-ayuda { font-size: .74rem; color: #8a93a6; margin-top: 6px; min-height: 1em; }
+
     @media (max-width: 767.98px) {
-        .cf-msg { max-width: 96%; }
+        .cf-msg, .cf-evento { max-width: 96%; }
         .cf-chat { padding: 12px; }
         .cf-dialog .modal-content { height: 96vh; }
+        .cf-envio { min-width: 0; }
+        .cf-envio-fila { grid-template-columns: 18px 76px 1fr; }
+        .cf-archivo-nombre { max-width: 150px; }
+        .cf-typing .cf-burbuja { min-width: 0; }
     }
 </style>
 
@@ -95,11 +164,12 @@
                         <small class="modal-header-subtitle">Adjunta la factura del proveedor: la leo, te muestro qué crearía y cargas con un clic</small>
                     </div>
                 </div>
-                <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                    <span id="cfEstadoPill" class="cf-pill cf-pill-muted">Sin carga abierta</span>
                     <select id="cfRecientes" class="form-select form-select-sm" style="max-width: 320px;" title="Cargas recientes">
                         <option value="">Cargas recientes…</option>
                     </select>
-                    <button type="button" class="btn btn-sm btn-light" id="cfBtnNueva" title="Nueva conversación">
+                    <button type="button" class="btn btn-sm btn-light" id="cfBtnNueva" title="Nueva carga">
                         <i class="bi bi-plus-lg"></i>
                     </button>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
@@ -111,33 +181,45 @@
             </div>
 
             <div class="modal-footer cf-composer">
-                <!-- Fila 1: escribirle al agente (corrige la vista previa; antes de leer, son
-                     indicaciones para el lector) -->
-                <div class="d-flex w-100 gap-2 align-items-center">
-                    <input id="cfTexto" class="form-control form-control-sm" autocomplete="off"
-                           placeholder="Escríbele al agente: «la marca es CHALADA», «tallas CL», «la línea 3 es de mujer, color plata», «margen 1,9»…">
-                    <button type="button" class="btn btn-primary btn-sm" id="cfBtnHablar" title="Enviar mensaje">
-                        <i class="bi bi-chat-dots me-1"></i>Enviar
-                    </button>
-                </div>
-                <!-- Fila 2: adjuntar la factura -->
-                <div class="d-flex w-100 gap-2 align-items-center flex-wrap">
+                <!-- Fila 1: el PDF adjunto (como ficha, con tamaño y «quitar») y los parámetros de la lectura -->
+                <div class="cf-adjuntos">
                     <input type="file" id="cfArchivo" accept="application/pdf,.pdf" class="d-none">
                     <button type="button" class="btn btn-outline-primary btn-sm" id="cfBtnAdjuntar">
                         <i class="bi bi-paperclip me-1"></i>Adjuntar PDF
                     </button>
-                    <span id="cfNombreArchivo" class="small text-muted">ningún archivo</span>
-                    <select id="cfSucursal" class="form-select form-select-sm w-auto" title="Bodega donde entra la mercadería"></select>
-                    <input id="cfMarca" list="cfMarcas" class="form-control form-control-sm" style="max-width: 170px;" placeholder="Marca (opcional)" autocomplete="off">
-                    <datalist id="cfMarcas"></datalist>
-                    <select id="cfLecturas" class="form-select form-select-sm w-auto" title="Lecturas independientes que se comparan">
-                        <option value="2">2 lecturas (verifica)</option>
-                        <option value="1">1 lectura (rápida)</option>
-                    </select>
-                    <button type="button" class="btn btn-success btn-sm ms-auto" id="cfBtnEnviar" title="Sube el PDF y empieza la lectura (lo escrito arriba va como indicaciones)">
-                        <i class="bi bi-send me-1"></i>Enviar PDF
+                    <span id="cfArchivoChip" class="cf-archivo d-none">
+                        <i class="bi bi-file-earmark-pdf"></i>
+                        <span id="cfNombreArchivo" class="cf-archivo-nombre"></span>
+                        <small id="cfTamanoArchivo" class="cf-muted"></small>
+                        <button type="button" class="cf-archivo-quitar" id="cfQuitarArchivo" title="Quitar el archivo"><i class="bi bi-x-lg"></i></button>
+                    </span>
+                    <label class="cf-param"><span>Bodega</span>
+                        <select id="cfSucursal" class="form-select form-select-sm" title="Bodega donde entra la mercadería"></select>
+                    </label>
+                    <label class="cf-param"><span>Marca</span>
+                        <input id="cfMarca" list="cfMarcas" class="form-control form-control-sm" placeholder="la detecta el lector" autocomplete="off">
+                        <datalist id="cfMarcas"></datalist>
+                    </label>
+                    <label class="cf-param"><span>Lecturas</span>
+                        <select id="cfLecturas" class="form-select form-select-sm" title="Lecturas independientes que se comparan entre sí">
+                            <option value="2">2 (verifica)</option>
+                            <option value="1">1 (rápida)</option>
+                        </select>
+                    </label>
+                </div>
+                <!-- Fila 2: escribirle al agente (con vista previa corrige/pregunta; antes de leer, son
+                     indicaciones para el lector) y enviar el PDF -->
+                <div class="cf-entrada">
+                    <textarea id="cfTexto" class="form-control" rows="1" autocomplete="off"
+                              placeholder="Indicaciones para leer la factura (opcional)"></textarea>
+                    <button type="button" class="btn btn-primary cf-btn-icono" id="cfBtnHablar" title="Enviar mensaje (Enter)">
+                        <i class="bi bi-send"></i>
+                    </button>
+                    <button type="button" class="btn btn-success" id="cfBtnEnviar" title="Sube el PDF y empieza la lectura">
+                        <i class="bi bi-cloud-arrow-up me-1"></i>Enviar PDF
                     </button>
                 </div>
+                <div id="cfAyuda" class="cf-ayuda">Adjunta el PDF de la factura para empezar.</div>
             </div>
         </div>
     </div>

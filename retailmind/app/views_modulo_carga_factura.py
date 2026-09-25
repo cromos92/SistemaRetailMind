@@ -124,7 +124,11 @@ def api_carga_factura_subir(request):
     sesion.agregar_mensaje(
         svc_web.USUARIO,
         f'Factura «{sesion.nombre_archivo}» para la bodega {sucursal.alias}'
-        + (f', marca {marca}' if marca else '') + '.', tipo='subida')
+        + (f', marca {marca}' if marca else '') + '.', tipo='subida',
+        # Lo que se envió, tal cual, para que la pantalla lo muestre como tarjeta.
+        envio={'archivo': sesion.nombre_archivo, 'bytes': archivo.size, 'bodega': sucursal.alias,
+               'marca': marca, 'lecturas': lecturas,
+               **({'indicaciones': indicaciones} if indicaciones else {})})
     if indicaciones:
         # Van al lector como pistas (ver web.leer_en_segundo_plano).
         sesion.agregar_mensaje(svc_web.USUARIO, indicaciones, tipo='indicaciones')
@@ -144,6 +148,9 @@ def api_carga_factura_estado(request, sesion_id):
     sesion = _sesion_del_usuario(request, sesion_id)
     if sesion is None:
         return _error('No existe esa sesión o no es de tus bodegas.', status=404)
+    # Un hilo que murió con un reinicio del servidor dejaría la sesión
+    # «leyendo» para siempre: se cierra para que la persona pueda seguir.
+    svc_web.revisar_interrumpida(sesion)
     return JsonResponse({'success': True, 'sesion': _resumen(sesion), 'mensajes': sesion.mensajes})
 
 

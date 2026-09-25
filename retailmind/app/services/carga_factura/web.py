@@ -17,6 +17,7 @@ planificador.py; aquí solo se orquesta y se traduce a JSON.
 """
 import logging
 import threading
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth import get_user_model
@@ -96,6 +97,43 @@ def _guardar_factura(sesion_id, idx, data):
     sesion.facturas = facturas
     sesion.save(update_fields=['facturas', 'actualizado_en'])
     return sesion
+
+
+# Sin señal del hilo (progreso, mensajes, facturas) en este tiempo, la lectura
+# o la carga murieron con el proceso (deploy / reinicio del servidor): el hilo
+# es daemon y nadie la retoma. Una lectura larga avisa al empezar cada pasada.
+TIEMPO_MAX_SIN_SENAL = timedelta(minutes=30)
+
+
+def revisar_interrumpida(sesion):
+    """Si la sesión lleva demasiado LEYENDO / CARGANDO sin señal, la cierra en
+    un estado del que la persona pueda seguir. Devuelve True si la cambió."""
+    if sesion.estado not in ('LEYENDO', 'CARGANDO'):
+        return False
+    if timezone.now() - sesion.actualizado_en <= TIEMPO_MAX_SIN_SENAL:
+        return False
+    if sesion.estado == 'LEYENDO':
+        sesion.estado = 'ERROR'
+        sesion.error = 'La lectura se interrumpió (el servidor se reinició a mitad de camino).'
+        sesion.progreso = ''
+        sesion.save(update_fields=['estado', 'error', 'progreso', 'actualizado_en'])
+        sesion.agregar_mensaje(AGENTE, 'La lectura se interrumpió (el servidor se reinició a mitad '
+                               'de camino). Vuelve a subir el PDF: no se cargó nada.', tipo='error')
+        return True
+    facturas = list(sesion.facturas or [])
+    for d in facturas:
+        if d.get('_estado') == 'CARGANDO':
+            d['_estado'] = 'PARCIAL'
+    sesion.facturas = facturas
+    sesion.estado = 'LEIDA'
+    sesion.progreso = ''
+    sesion.save(update_fields=['facturas', 'estado', 'progreso', 'actualizado_en'])
+    sesion.agregar_mensaje(AGENTE, 'La carga se interrumpió (el servidor se reinició a mitad de '
+                           'camino). Las líneas que alcanzaron a entrar aparecen como YA CARGADO '
+                           'en la vista previa; aprieta «Cargar» de nuevo para las que faltan.',
+                           tipo='error')
+    logger.warning('carga_factura: sesión %s marcada como interrumpida', sesion.id)
+    return True
 
 
 # ---------------------------------------------------------------- lectura

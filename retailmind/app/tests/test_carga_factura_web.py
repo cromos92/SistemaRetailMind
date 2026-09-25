@@ -331,7 +331,10 @@ class TestAgenteCargaFactura(TestCase):
         self.assertEqual(guardada.facturas[0]['_factor_bajo'], '1.9')
         self.assertEqual(guardada.facturas[0]['guias_talla'], {'HOMBRE': 'NIKE HOMBRE'})
         self.assertEqual([m['tipo'] for m in guardada.mensajes[-2:]], ['chat', 'chat'])
-        self.assertIn('Apliqué', guardada.mensajes[-1]['texto'])
+        # El texto guardado va limpio; lo aplicado va aparte (la pantalla lo pinta como fichas).
+        self.assertNotIn('Apliqué', guardada.mensajes[-1]['texto'])
+        self.assertTrue(guardada.mensajes[-1]['cambios'])
+        self.assertIn('Apliqué', data['respuesta'])
 
     def test_esquema_del_chat_sin_uniones_de_tipo(self):
         """La API rechaza esquemas con más de 16 campos nullable/anyOf (el chat tenía 25):
@@ -349,15 +352,113 @@ class TestAgenteCargaFactura(TestCase):
             return 0
         self.assertEqual(uniones(esquema), 0)
         linea = esquema['properties']['cambios']['items']['properties']['lineas']['items']
-        self.assertEqual(linea['properties']['color']['enum'][0], '')
+        self.assertEqual(linea['properties']['genero']['enum'][0], '')
         self.assertEqual(linea['properties']['omitir']['enum'], ['', 'si', 'no'])
         self.assertEqual(linea['required'], list(linea['properties']))
 
+    def test_esquema_del_chat_acotado_con_catalogo_grande(self):
+        """«Schema is too complex for compilation»: con los ~400 marcas y ~300 colores
+        de producción repetidos en factura y línea, la gramática no compila. Las listas
+        grandes van como texto libre validado en `_a_correcciones`, no como enum."""
+        from app.services.carga_factura import chat as svc_chat
+        catalogo = svc_web.opciones_catalogo(self.user)
+        catalogo['marcas'] = [f'MARCA {i}' for i in range(400)]
+        catalogo['colores'] = [f'COLOR {i}' for i in range(300)]
+        catalogo['categorias'] = [f'Cat > Sub {i}' for i in range(40)]
+        catalogo['guias'] = {f'M{i}': [f'GUIA {i} HOMBRE', f'GUIA {i} MUJER'] for i in range(40)}
+        esquema = svc_chat._esquema(catalogo)
+
+        def valores_enum(nodo):
+            if isinstance(nodo, dict):
+                return len(nodo.get('enum') or []) + sum(valores_enum(v) for v in nodo.values())
+            if isinstance(nodo, list):
+                return sum(valores_enum(v) for v in nodo)
+            return 0
+        self.assertLess(valores_enum(esquema), 80)
+        linea = esquema['properties']['cambios']['items']['properties']['lineas']['items']
+        self.assertNotIn('enum', linea['properties']['color'])
+        self.assertNotIn('enum', linea['properties']['marca'])
+        self.assertNotIn('enum', esquema['properties']['cambios']['items']['properties']['marca'])
+
+    def test_chat_rechaza_valores_fuera_del_catalogo(self):
+        """Sin enum en el esquema, lo que no existe en el sistema se descarta y se avisa;
+        lo que existe se normaliza al valor exacto del catálogo."""
+        from app.services.carga_factura import chat as svc_chat
+        attr = Productos_Atributos.objects.create(nombre='Especialidad', descripcion='Especialidad')
+        AtributoOpcion.objects.create(atributo=attr, valor='running')
+        catalogo = svc_web.opciones_catalogo(self.user)
+        previa = [{'idx': 0, 'folio': 1, 'n_lineas': 1, 'planes': [{}]}]
+        cambios, rechazos = svc_chat._a_correcciones([{
+            'idx': 0, 'marca': 'nike', 'color': 'FUCSIA INVENTADO',
+            'guias_talla': [{'genero': 'hombre', 'guia': 'nike hombre'},
+                            {'genero': 'MUJER', 'guia': 'NO EXISTE'}],
+            'lineas': [{'n': 1, 'genero': 'mujer', 'categoria': 'Calzado > Zapatillas',
+                        'color': 'multi', 'especialidades': ['running', 'inventada']}],
+        }], previa, catalogo)
+        self.assertEqual(cambios, [{
+            'idx': 0, 'marca': 'NIKE', 'guias_talla': [{'genero': 'HOMBRE', 'guia': 'NIKE HOMBRE'}],
+            'lineas': [{'genero': 'MUJER', 'categoria': 'Calzado > Zapatillas', 'color': 'MULTI',
+                        'especialidades': ['running']}],
+        }])
+        self.assertEqual(rechazos, ['color «FUCSIA INVENTADO»', 'guía «NO EXISTE» para MUJER',
+                                    'especialidad «inventada»'])
+
+    def test_chat_avisa_lo_que_no_pudo_aplicar(self):
+        sesion_id = self._subir()
+        respuesta_claude = {'respuesta': 'Le puse el color.', 'cambios': [
+            {'idx': 0, 'lineas': [{'n': 1, 'color': 'FUCSIA INVENTADO'}]}]}
+        with mock.patch('app.services.carga_factura.chat._preguntar', return_value=respuesta_claude):
+            data = self.client.post(f'/app/carga-factura/{sesion_id}/conversar/',
+                                    data={'texto': 'color fucsia'},
+                                    content_type='application/json').json()
+        self.assertTrue(data['success'], data)
+        self.assertIn('No apliqué', data['respuesta'])
+        self.assertIn('FUCSIA INVENTADO', data['respuesta'])
+        self.assertEqual(data['cambios'], [])
+        self.assertEqual(data['facturas'][0]['planes'][0]['color']['valor'], 'MULTI')
+        guardada = CargaFacturaPdf.objects.get(id=sesion_id)
+        self.assertEqual(guardada.mensajes[-1]['rechazos'], ['color «FUCSIA INVENTADO»'])
+        self.assertNotIn('cambios', guardada.mensajes[-1])
+
+    def test_subida_guarda_lo_enviado(self):
+        """La tarjeta «Factura enviada a leer» del chat sale de estos datos."""
+        sesion_id = self._subir()
+        primero = CargaFacturaPdf.objects.get(id=sesion_id).mensajes[0]
+        self.assertEqual(primero['tipo'], 'subida')
+        self.assertEqual(primero['envio'], {
+            'archivo': 'Factura 555.pdf', 'bytes': len(b'%PDF-1.4 prueba'), 'bodega': 'EDEL',
+            'marca': 'NIKE', 'lecturas': 1})
+
+    def test_chat_recibe_lo_leido_en_cargas_anteriores(self):
+        """«¿A cuánto compré el HQ6034-001 antes?»: el agente recibe la línea de la carga
+        anterior desde el expediente guardado, sin volver a leer ningún PDF."""
+        from app.services.carga_factura import chat as svc_chat
+        anterior = self._subir()
+        sesion_id = self._subir()
+        with mock.patch('app.services.carga_factura.chat._preguntar',
+                        return_value={'respuesta': 'Lo compraste a $30.000.', 'cambios': []}) as preguntar:
+            data = self.client.post(f'/app/carga-factura/{sesion_id}/conversar/',
+                                    data={'texto': '¿a cuánto compré el HQ6034-001 la vez anterior?'},
+                                    content_type='application/json').json()
+        self.assertTrue(data['success'], data)
+        anteriores = preguntar.call_args.kwargs['anteriores']
+        self.assertEqual([l['sesion'] for l in anteriores['lineas']], [anterior])
+        self.assertEqual(anteriores['lineas'][0]['articulo'], 'HQ6034-001')
+        self.assertEqual(anteriores['lineas'][0]['folio'], 555)
+        self.assertEqual(anteriores['lineas'][0]['unidades'], 5)
+        self.assertNotIn('facturas', anteriores)   # no se nombró proveedor ni folio
+        # Por folio / proveedor devuelve la factura completa; sin pistas, nada.
+        sesion = CargaFacturaPdf.objects.get(id=sesion_id)
+        por_folio = svc_chat.facturas_anteriores(sesion, self.user, '¿qué traía la factura 555?')
+        self.assertEqual([f['sesion'] for f in por_folio['facturas']], [anterior])
+        self.assertEqual(svc_chat.facturas_anteriores(sesion, self.user, '¿y ahora?'), {})
+
     def test_chat_ignora_los_valores_sin_cambio(self):
         from app.services.carga_factura import chat as svc_chat
+        catalogo = svc_web.opciones_catalogo(self.user)
         previa = [{'idx': 0, 'folio': 1, 'n_lineas': 2, 'planes': [{}, {}]}]
-        cambios = svc_chat._a_correcciones([{
-            'idx': 0, 'marca': '', 'color': 'NEGRO', 'tipo_talla': '', 'guias_talla': [],
+        cambios, rechazos = svc_chat._a_correcciones([{
+            'idx': 0, 'marca': '', 'color': 'MULTI', 'tipo_talla': '', 'guias_talla': [],
             'umbral_costo': -1, 'factor_bajo': -1, 'factor_alto': 1.9, 'margen_sobreprecio': -1,
             'dte_id': -1, 'renombrar_tallas': 'si',
             'lineas': [
@@ -370,16 +471,54 @@ class TestAgenteCargaFactura(TestCase):
                  'marca': '', 'especialidades': [], 'ficha_id': -1, 'guia': '',
                  'tallas': [], 'omitir': 'si'},
             ],
-        }], previa)
+        }], previa, catalogo)
+        self.assertEqual(rechazos, [])
         self.assertEqual(cambios, [{
-            'idx': 0, 'color': 'NEGRO', '_factor_alto': 1.9, '_renombrar_tallas': True,
+            'idx': 0, 'color': 'MULTI', '_factor_alto': 1.9, '_renombrar_tallas': True,
             'lineas': [{'precioventa': 29990, 'genero': 'MUJER', 'tallas': {'37': 2}},
                        {'_omitir': True}],
         }])
         # Todo «sin cambio» → ningún cambio (ni siquiera la factura).
         self.assertEqual(svc_chat._a_correcciones([{'idx': 0, 'marca': '', 'lineas': [
-            {'n': 1, 'omitir': 'no'}]}], previa), [{'idx': 0, 'lineas': [{'_omitir': False}, {}]}])
-        self.assertEqual(svc_chat._a_correcciones([{'idx': 0, 'marca': '', 'lineas': []}], previa), [])
+            {'n': 1, 'omitir': 'no'}]}], previa, catalogo)[0], [{'idx': 0, 'lineas': [{'_omitir': False}, {}]}])
+        self.assertEqual(svc_chat._a_correcciones([{'idx': 0, 'marca': '', 'lineas': []}], previa, catalogo)[0], [])
+
+    # ------------------------------------------------ sesión interrumpida
+
+    def test_leyendo_sin_senal_pasa_a_error(self):
+        """Si el servidor se reinicia a mitad de la lectura, el hilo muere y la
+        sesión quedaría «leyendo» para siempre: al consultarla se cierra en ERROR."""
+        from datetime import timedelta
+        from django.utils import timezone
+        sesion_id = self._subir()
+        CargaFacturaPdf.objects.filter(id=sesion_id).update(estado='LEYENDO', progreso='Lectura 1 de 2')
+        # Con señal reciente no se toca.
+        data = self.client.get(f'/app/carga-factura/{sesion_id}/').json()
+        self.assertEqual(data['sesion']['estado'], 'LEYENDO')
+        CargaFacturaPdf.objects.filter(id=sesion_id).update(
+            actualizado_en=timezone.now() - timedelta(minutes=31))
+        data = self.client.get(f'/app/carga-factura/{sesion_id}/').json()
+        self.assertEqual(data['sesion']['estado'], 'ERROR')
+        self.assertIn('se interrumpió', data['sesion']['error'])
+        self.assertEqual(data['mensajes'][-1]['tipo'], 'error')
+        self.assertIn('Vuelve a subir', data['mensajes'][-1]['texto'])
+
+    def test_cargando_sin_senal_vuelve_a_vista_previa(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        sesion_id = self._subir()
+        sesion = CargaFacturaPdf.objects.get(id=sesion_id)
+        facturas = sesion.facturas
+        facturas[0]['_estado'] = 'CARGANDO'
+        CargaFacturaPdf.objects.filter(id=sesion_id).update(
+            estado='CARGANDO', facturas=facturas, actualizado_en=timezone.now() - timedelta(hours=1))
+        data = self.client.get(f'/app/carga-factura/{sesion_id}/').json()
+        self.assertEqual(data['sesion']['estado'], 'LEIDA')
+        self.assertEqual(data['sesion']['facturas'][0]['estado'], 'PARCIAL')
+        self.assertIn('Cargar', data['mensajes'][-1]['texto'])
+        # Y se puede seguir: la vista previa vuelve a calcularse.
+        previa = self._planificar(sesion_id)
+        self.assertEqual(previa['facturas'][0]['folio'], 555)
 
     def test_chat_sin_cambios_solo_responde(self):
         sesion_id = self._subir()
