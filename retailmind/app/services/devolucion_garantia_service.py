@@ -363,6 +363,9 @@ def pago_mercadopago_dte(dte, consultar_api=False):
     resultado = {
         'es_mp': False, 'monto_mp': 0, 'metodo_pago': '', 'tipo_tarjeta': '', 'medio': '',
         'operaciones': [], 'numero_operacion': '', 'monto_devuelto': 0, 'disponible': 0,
+        # Lo que se puede resolver a la tarjeta por la API (refund): saldo de
+        # los cobros con pago real en MP + refunds ya hechos que quedaron sin NC.
+        'devolvible_api': 0, 'refund_pendiente_nc': 0,
     }
     pagos_mp = [p for p in dte.dte_asociado.all() if _es_metodo_mp(p.metodo_pago)]
     if not pagos_mp:
@@ -373,7 +376,16 @@ def pago_mercadopago_dte(dte, consultar_api=False):
     devuelto = _monto_nc_mp_previas(dte)
 
     operaciones = []
-    for trx in _transacciones_mp_venta(dte, pagos_mp):
+    devolvible_api = 0
+    trxs = _transacciones_mp_venta(dte, pagos_mp)
+    # Refunds por API ya hechos sobre estos cobros cuya NC no alcanzó a
+    # emitirse: cuentan como "resuelto por API" (el siguiente intento los
+    # reutiliza sin volver a pedirlos).
+    refund_pendiente_nc = sum(int(r.monto or 0) for r in _refunds_pendientes_de_nc(
+        [t for t in trxs if _trx_devolvible_api(t)]))
+    for trx in trxs:
+        if _trx_devolvible_api(trx):
+            devolvible_api += _saldo_api_trx(trx)
         numero = trx.payment_id_mp or (completar_numero_operacion(trx) if consultar_api else '')
         operaciones.append({
             'numero': numero or '',
@@ -405,6 +417,8 @@ def pago_mercadopago_dte(dte, consultar_api=False):
         'numero_operacion': next((o['numero'] for o in operaciones if o['numero']), ''),
         'monto_devuelto': devuelto,
         'disponible': max(monto_mp - devuelto, 0),
+        'devolvible_api': min(devolvible_api + refund_pendiente_nc, max(monto_mp - devuelto, 0)),
+        'refund_pendiente_nc': refund_pendiente_nc,
     })
     return resultado
 
@@ -482,23 +496,249 @@ def _registrar_devolucion_en_libro_mp(*, dte, nc, monto, devolucion, usuario):
         restante -= tomar
 
 
+# ---------- Devolución a la tarjeta por la API de Mercado Pago (refund) ----------
+# La alternativa a «ya devuelto desde la app/panel/Point»: RetailMind le pide
+# a MP el refund y la plata vuelve sola a la tarjeta/cuenta del cliente. Mueve
+# plata real de la cuenta MP de la empresa, por eso la vista exige el permiso
+# `devolver_mercadopago` (por política, solo el Maestro).
+
+def _trx_devolvible_api(trx):
+    """¿Este cobro del libro MP tiene un pago real en Mercado Pago que la API
+    pueda reembolsar? Un «MP manual» no; una asignación (ASOC-) solo si ya
+    conoce el N° de pago."""
+    ref = str(trx.external_reference or '')
+    if ref.startswith('MANUAL-'):
+        return False
+    if ref.startswith('ASOC-'):
+        return bool(trx.payment_id_mp or (trx.payment_id or '').isdigit())
+    return True
+
+
+def _saldo_api_trx(trx):
+    from app.services import mercadopago_service as mp_service
+    return mp_service._disponible_trx(trx)
+
+
+def _validar_devolvible_api(mp, monto):
+    if int(monto) <= mp['devolvible_api']:
+        return
+    if not mp['devolvible_api']:
+        raise DevolucionGarantiaError(
+            'Este cobro no se puede devolver por la API de Mercado Pago (se registró como '
+            '«MP manual» o no tiene pago en Mercado Pago). Devuélvalo desde la app o el '
+            'panel de Mercado Pago y registre el N° de operación.'
+        )
+    raise DevolucionGarantiaError(
+        f'Por la API de Mercado Pago se pueden devolver hasta ${mp["devolvible_api"]:,} de '
+        f'este documento y la devolución es de ${int(monto):,}. Devuelva el resto desde la '
+        f'app o el panel de Mercado Pago y regístrelo con su N° de operación.'
+    )
+
+
+# Marca (estado_detalle) de un refund por API que MP ya hizo pero cuya NC no
+# alcanzó a emitirse (la transacción local se revirtió después del refund).
+# El siguiente intento lo reutiliza en vez de pedir otro refund.
+MARCA_REFUND_PENDIENTE_NC = 'Refund vía API - pendiente NC'
+
+
+def _ref_refund(trx, devolucion):
+    """external_reference / X-Idempotency-Key del refund: FIJA por (cobro,
+    devolución). Un reintento (timeout, rollback local) recibe de MP el mismo
+    refund y no crea otro."""
+    sufijo = f'-REF-{devolucion.numero_operacion}'
+    return f'{str(trx.external_reference or "")[:80 - len(sufijo)]}{sufijo}'
+
+
+def _refunds_pendientes_de_nc(trxs):
+    """Refunds por API ya hechos sobre estos cobros que quedaron sin NC."""
+    from app.models import TransaccionMercadoPago
+    if not trxs:
+        return []
+    return list(TransaccionMercadoPago.objects.filter(
+        tipo='DEVOLUCION', transaccion_origen__in=trxs,
+        estado_detalle__startswith=MARCA_REFUND_PENDIENTE_NC,
+    ).select_related('transaccion_origen').order_by('id'))
+
+
+def _devolver_por_api_mp(dte, monto, devolucion, usuario, ctx=None):
+    """Pide a Mercado Pago el refund de `monto` sobre los cobros de ESTA venta
+    con saldo (el mayor primero) y devuelve las filas DEVOLUCION del libro MP
+    (las de este intento y las «pendiente NC» de intentos anteriores).
+
+    Se llama ANTES de emitir la NC (refund-primero, igual que
+    `anular_factura_dte`): si MP rechaza, la NC no se emite ni se quema folio.
+
+    Contra la doble devolución si algo falla DESPUÉS del refund (correlativo,
+    BD) y la transacción local se revierte:
+      - la clave de idempotencia es fija por (cobro, devolución): un reintento
+        recibe de MP el mismo refund;
+      - cada refund hecho se anota en `ctx['refunds']` para que la vista, ya
+        fuera del atomic, lo vuelva a registrar (`persistir_refunds_sin_nc`);
+      - los refunds «pendiente NC» que ya existan sobre estos cobros se
+        descuentan de lo que falta por devolver.
+    """
+    from app.services import mercadopago_service as mp_service
+
+    pagos_mp = [p for p in dte.dte_asociado.all() if _es_metodo_mp(p.metodo_pago)]
+    trxs = [t for t in _transacciones_mp_venta(dte, pagos_mp) if _trx_devolvible_api(t)]
+    devoluciones = _refunds_pendientes_de_nc(trxs)
+    hechos = sum(int(r.monto or 0) for r in devoluciones)
+    if hechos:
+        logger.warning(
+            "MP: devolución %s reutiliza %s refund/s por API sin NC ($%s) sobre DTE %s",
+            devolucion.numero_operacion, len(devoluciones), hechos, dte.numero_documento,
+        )
+    restante = int(monto) - hechos
+    ya = {r.id for r in devoluciones}
+    for trx in trxs:
+        if restante <= 0:
+            break
+        saldo = _saldo_api_trx(trx)
+        if saldo <= 0:
+            continue
+        tomar = min(restante, saldo)
+        try:
+            fila = mp_service.reembolsar(
+                trx, monto=tomar, usuario=usuario, referencia=_ref_refund(trx, devolucion))
+        except mp_service.MercadoPagoError as e:
+            detalle = getattr(e, 'mensaje', str(e))
+            if getattr(e, 'red', False):
+                # Transporte: no se sabe si MP recibió el refund. Con la clave
+                # fija, reintentar es seguro (MP devuelve el mismo refund).
+                raise DevolucionGarantiaError(
+                    f'Mercado Pago no respondió: no se sabe si alcanzó a devolver ({detalle}). '
+                    f'Reintente en unos segundos: si ya devolvió, Mercado Pago reconocerá la '
+                    f'misma solicitud y no devolverá dos veces. La NC NO fue emitida.'
+                ) from e
+            raise DevolucionGarantiaError(
+                f'Mercado Pago no pudo devolver a la tarjeta: {detalle} La NC NO fue emitida.'
+            ) from e
+        if fila.id in ya:
+            # Misma clave ya registrada (no se movió plata nueva).
+            continue
+        ya.add(fila.id)
+        devoluciones.append(fila)
+        if ctx is not None:
+            ctx.setdefault('refunds', []).append(fila)
+        restante -= tomar
+    if restante > 0:
+        raise DevolucionGarantiaError(
+            f'Mercado Pago devolvió ${int(monto) - restante:,} y faltaron ${restante:,}: '
+            f'no había saldo devolvible por API. La NC NO fue emitida.'
+        )
+    logger.warning(
+        "MP: devolución de dinero por API de $%s sobre DTE %s (%s refund/s) autorizada por %s",
+        monto, dte.numero_documento, len(devoluciones), getattr(usuario, 'username', 'sistema'),
+    )
+    return devoluciones
+
+
+def persistir_refunds_sin_nc(ctx, causa='', numero_operacion=''):
+    """Vuelve a registrar en el libro MP los refunds que MP YA hizo en un
+    intento cuya transacción local se revirtió (la NC falló después del
+    refund). Llamar FUERA del atomic. Devuelve los ids de refund.
+
+    Sin esto el libro MP quedaba sin la fila, `devolvible_api` volvía a mostrar
+    el total y el reintento pedía otro refund (la clave fija lo frena en MP,
+    pero el libro quedaba ciego). Las filas quedan como «pendiente NC»: el
+    siguiente intento las reutiliza.
+    """
+    from app.models import TransaccionMercadoPago
+    from app.services import mercadopago_service as mp_service
+
+    ids = []
+    for fila in (ctx or {}).get('refunds') or []:
+        origen = fila.transaccion_origen
+        if origen is None:
+            continue
+        origen.refresh_from_db()
+        marca = f'{MARCA_REFUND_PENDIENTE_NC} ({numero_operacion or "s/n"}): {causa}'[:120]
+        row = TransaccionMercadoPago.objects.filter(external_reference=fila.external_reference).first()
+        if row is None:
+            row = TransaccionMercadoPago.objects.create(
+                config=fila.config, sucursal_id=fila.sucursal_id, ticket=fila.ticket,
+                correlativo_ticket=fila.correlativo_ticket, tipo='DEVOLUCION', canal=fila.canal,
+                transaccion_origen=origen, external_reference=fila.external_reference,
+                order_id=fila.order_id, payment_id=fila.payment_id, monto=fila.monto,
+                estado='DEVUELTA', estado_detalle=marca, metodo_pago_mp=origen.metodo_pago_mp,
+                raw_response=fila.raw_response, consumida=True, usuario=fila.usuario,
+            )
+        ids.append(str(row.payment_id or row.external_reference))
+        total_devuelto = sum(TransaccionMercadoPago.objects.filter(
+            transaccion_origen=origen, tipo='DEVOLUCION').values_list('monto', flat=True))
+        if origen.estado == 'APROBADA' and total_devuelto >= origen.monto:
+            mp_service._aplicar_estado(origen, 'DEVUELTA', detalle='Devolución total')
+    if ids:
+        logger.critical(
+            "MP: refund por API HECHO pero la NC no se emitió (%s). Refunds %s quedaron "
+            "registrados como pendiente NC; reintentar la aprobación. Causa: %s",
+            numero_operacion or 's/n', ', '.join(ids), causa,
+        )
+    return ids
+
+
+def _numero_cobro_tras_refund(mp, refunds):
+    """N° de operación que queda en la NC tras un refund por API: el del cobro
+    (lo que busca Consulta de Documentos); `reembolsar` lo completó si faltaba.
+    Como último recurso, el id del refund."""
+    if mp['numero_operacion']:
+        return mp['numero_operacion']
+    for r in refunds:
+        origen = r.transaccion_origen
+        if origen is not None and origen.payment_id_mp:
+            return origen.payment_id_mp
+    return next((str(r.payment_id) for r in refunds if r.payment_id), '')
+
+
+def _marca_refund_api(nc, devolucion):
+    # `numero_operacion` es único: es la llave para reconocer después qué
+    # filas del libro MP son los refunds de ESTA devolución.
+    return f'Refund vía API - NC {nc.numero_documento} ({devolucion.numero_operacion})'[:120]
+
+
+def _marcar_refunds_api(refunds, nc, devolucion):
+    marca = _marca_refund_api(nc, devolucion)
+    for r in refunds:
+        r.estado_detalle = marca
+        r.save(update_fields=['estado_detalle', 'actualizado_en'])
+
+
+def _nota_pago_refund_api(refunds, devolucion):
+    ids = ', '.join(str(r.payment_id) for r in refunds if r.payment_id) or 's/n'
+    return (f'Devuelto a la tarjeta por API de Mercado Pago (refund {ids}) - '
+            f'{devolucion.numero_operacion}')
+
+
+def refunds_api_de_devolucion(devolucion):
+    """Filas DEVOLUCION del libro MP hechas por API para esta devolución."""
+    from app.models import TransaccionMercadoPago
+    return TransaccionMercadoPago.objects.filter(
+        tipo='DEVOLUCION',
+        external_reference__contains='-REF-',
+        estado_detalle__endswith=f'({devolucion.numero_operacion})',
+    ).select_related('transaccion_origen').order_by('id')
+
+
 def mercadopago_de_devolucion(devolucion):
     """Datos de Mercado Pago que muestran el comprobante y el detalle.
 
     Aprobada por MP: el N° y el medio del pago de la NC (lo que quedó
-    registrado). Pendiente pedida por MP: el N° del cobro original, para que
-    quien la resuelva lo ubique. En otro caso, None.
+    registrado) y, si la plata volvió por la API, los ids del refund.
+    Pendiente pedida por MP: el N° del cobro original, para que quien la
+    resuelva lo ubique. En otro caso, None.
     """
     if devolucion.metodo_devolucion == 'MERCADO_PAGO' and devolucion.nota_credito_id:
         pago = next((p for p in devolucion.nota_credito.dte_asociado.all()
                      if _es_metodo_mp(p.metodo_pago)), None)
         if pago is not None:
+            refunds = [str(r.payment_id) for r in refunds_api_de_devolucion(devolucion) if r.payment_id]
             return {'numero_operacion': pago.voucher or '',
                     'medio': _medio_mp(pago.metodo_pago, pago.tipo_tarjeta),
-                    'devuelto': True}
+                    'devuelto': True, 'api': bool(refunds), 'refunds': refunds}
     if devolucion.estado == 'PENDIENTE' and devolucion.metodo_solicitado == 'MERCADO_PAGO':
         mp = pago_mercadopago_dte(devolucion.dte_original)
-        return {'numero_operacion': mp['numero_operacion'], 'medio': mp['medio'], 'devuelto': False}
+        return {'numero_operacion': mp['numero_operacion'], 'medio': mp['medio'],
+                'devuelto': False, 'api': False, 'refunds': []}
     return None
 
 
@@ -1107,7 +1347,8 @@ def crear_solicitud_devolucion(*, dte_original, sucursal, receptor, motivo,
 
 @transaction.atomic
 def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
-                       fecha_imputacion=None, observaciones='', numero_operacion_mp=''):
+                       fecha_imputacion=None, observaciones='', numero_operacion_mp='',
+                       devolver_mp_api=False, refund_ctx=None):
     """
     Aprueba una solicitud PENDIENTE: genera la NC 61 + TXT Acepta con el
     impacto en caja elegido por el aprobador. Re-valida disponibilidad bajo
@@ -1203,10 +1444,17 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
 
     # Mercado Pago: la venta tiene que haberse cobrado por ahí (y por hasta lo
     # cobrado), y el N° de operación queda en la NC para ubicar la devolución.
+    # `devolver_mp_api`: en vez de registrar una devolución hecha a mano en la
+    # app/panel, RetailMind pide el refund a MP (la vista ya validó el permiso
+    # `devolver_mercadopago` de quien firma).
     mp = numero_mp = None
+    refunds_api = []
     if metodo_devolucion == 'MERCADO_PAGO':
         mp = _validar_devolucion_mercadopago(dte_original, monto_con_iva_nc)
-        numero_mp = _numero_operacion_mp(numero_operacion_mp, mp)
+        if devolver_mp_api:
+            _validar_devolvible_api(mp, monto_con_iva_nc)
+        else:
+            numero_mp = _numero_operacion_mp(numero_operacion_mp, mp)
 
     # Razón SII dinámica: '1' solo si la NC cubre el saldo REAL del documento
     # (monto_original - NC previas vivas) y no hay NC previas; si no '3'.
@@ -1215,6 +1463,12 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
     # "anula documento" si otra solicitud reservaba el resto.
     saldo_real_documento = saldo['monto_original'] - saldo['total_nc_previas']
     razon = '1' if (monto_con_iva_nc == saldo_real_documento and total_nc_previas == 0) else '3'
+
+    # Refund por API ANTES de emitir la NC: si MP rechaza, no se quema folio.
+    if devolver_mp_api and mp is not None:
+        refunds_api = _devolver_por_api_mp(
+            dte_original, monto_con_iva_nc, devolucion, aprobador, ctx=refund_ctx)
+        numero_mp = _numero_cobro_tras_refund(mp, refunds_api)
 
     numero_nc = obtener_siguiente_correlativo(sucursal, 'NOTA DE CREDITO')
     # Referencia SII: 33 factura electrónica, 39 boleta electrónica, 35 boleta
@@ -1327,14 +1581,21 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
     # NO_AFECTA_CAJA: sin Dte_Detalle_Pago (NC informativa que no resta teóricos).
     metodo_pago_nc = METODO_PAGO_NC_POR_DG.get(metodo_devolucion)
     if metodo_devolucion == 'MERCADO_PAGO':
+        datos_pago = _datos_pago_nc_mercadopago(mp, numero_mp, devolucion)
+        if refunds_api:
+            datos_pago['notas'] = _nota_pago_refund_api(refunds_api, devolucion)
         Dte_Detalle_Pago.objects.create(
-            dte=nc, monto=monto_con_iva_nc, fecha_pago=fecha_imp,
-            **_datos_pago_nc_mercadopago(mp, numero_mp, devolucion),
+            dte=nc, monto=monto_con_iva_nc, fecha_pago=fecha_imp, **datos_pago,
         )
-        _registrar_devolucion_en_libro_mp(
-            dte=dte_original, nc=nc, monto=monto_con_iva_nc,
-            devolucion=devolucion, usuario=aprobador,
-        )
+        if refunds_api:
+            # `reembolsar` ya dejó las filas DEVOLUCION del libro MP; solo se
+            # marcan como de esta NC.
+            _marcar_refunds_api(refunds_api, nc, devolucion)
+        else:
+            _registrar_devolucion_en_libro_mp(
+                dte=dte_original, nc=nc, monto=monto_con_iva_nc,
+                devolucion=devolucion, usuario=aprobador,
+            )
     elif metodo_pago_nc:
         Dte_Detalle_Pago.objects.create(
             dte=nc, metodo_pago=metodo_pago_nc, monto=monto_con_iva_nc, fecha_pago=fecha_imp,
@@ -1448,7 +1709,10 @@ def cambiar_metodo_devolucion(*, devolucion_id, usuario, metodo_nuevo,
 
     Devuelve un dict con el antes/después para informar.
     """
-    devolucion = DevolucionGarantia.objects.select_for_update().select_related(
+    # of=('self',): `nota_credito` es FK nullable (LEFT JOIN) y Postgres no
+    # admite FOR UPDATE sobre el lado nullable de un outer join. Sqlite lo
+    # ignora, por eso los tests no lo ven (mismo caso que `_validar_lineas`).
+    devolucion = DevolucionGarantia.objects.select_for_update(of=('self',)).select_related(
         'dte_original', 'nota_credito', 'sucursal',
     ).get(id=devolucion_id)
     if devolucion.estado != 'NC_GENERADA' or not devolucion.nota_credito_id:
@@ -1461,6 +1725,13 @@ def cambiar_metodo_devolucion(*, devolucion_id, usuario, metodo_nuevo,
             'El método nuevo debe ser Efectivo, Transferencia o Mercado Pago.'
         )
     anterior = devolucion.metodo_devolucion
+    if anterior == 'MERCADO_PAGO':
+        refunds = [str(r.payment_id) for r in refunds_api_de_devolucion(devolucion) if r.payment_id]
+        if refunds:
+            raise DevolucionGarantiaError(
+                f'La plata ya volvió a la tarjeta por la API de Mercado Pago '
+                f'(refund {", ".join(refunds)}): no se puede cambiar el método ni el N°.'
+            )
     if anterior not in METODOS_CORREGIBLES:
         raise DevolucionGarantiaError(
             f'La devolución quedó como «{devolucion.get_metodo_devolucion_display() or "sin método"}»: '

@@ -2488,18 +2488,59 @@ def liberar_terminal(config, dias=10, aplicar=False, usuario=None, solo_ids=None
 
 # ==================== DEVOLUCIONES ====================
 
-def reembolsar(transaccion, monto=None, usuario=None):
-    """Refund total (monto=None) o parcial vía /v1/payments/{id}/refunds.
-    Crea la fila DEVOLUCION vinculada y marca la venta DEVUELTA si fue total.
+def _id_pago_para_refund(transaccion):
+    """Id NUMÉRICO del pago para `/v1/payments/{id}/refunds`.
+
+    Mercado Pago identifica el mismo cobro con dos ids: en Point integrado
+    `payment_id` guarda el ULID de la Orders API (`PAY01…`), que el endpoint
+    de refunds NO reconoce; el número real (`177422093000`) vive en
+    `payment_id_mp` (lo llena el webhook / `payments/search`) y en producción
+    casi nunca quedó guardado. Antes se mandaba el ULID tal cual y el refund
+    fallaba con «not found». Si falta el número se busca UNA vez por
+    external_reference; sin número no hay refund por API (la devolución se
+    hace desde la app/panel y se registra con `registrar_devolucion_externa`).
     """
-    if transaccion.tipo != 'VENTA' or transaccion.estado not in ('APROBADA', 'DEVUELTA'):
-        raise MercadoPagoError('Solo se puede devolver una venta MP aprobada.')
+    if transaccion.payment_id_mp:
+        return transaccion.payment_id_mp
+    if (transaccion.payment_id or '').isdigit():
+        return transaccion.payment_id
     if not transaccion.payment_id:
         # La orden puede tener el payment adentro — refrescar antes de rendirse
         consultar_estado(transaccion, forzar=True)
         transaccion.refresh_from_db()
-        if not transaccion.payment_id:
-            raise MercadoPagoError('La transacción no tiene payment_id: no se puede devolver por API.')
+        if transaccion.payment_id_mp:
+            return transaccion.payment_id_mp
+        if (transaccion.payment_id or '').isdigit():
+            return transaccion.payment_id
+    numero = completar_numero_operacion(transaccion)
+    if numero:
+        return numero
+    raise MercadoPagoError(
+        'No se encontró el N° de pago en Mercado Pago para devolver por API '
+        f'({transaccion.external_reference}). Devuelva desde la app o el panel de '
+        'Mercado Pago y registre el N° de operación.'
+    )
+
+
+def reembolsar(transaccion, monto=None, usuario=None, referencia=None):
+    """Refund total (monto=None) o parcial vía /v1/payments/{id}/refunds.
+    Crea la fila DEVOLUCION vinculada y marca la venta DEVUELTA si fue total.
+
+    `referencia`: external_reference / X-Idempotency-Key DETERMINISTA del
+    refund (p. ej. por devolución de dinero + cobro). Con ella, un reintento
+    tras un timeout o un rollback local recibe de MP el MISMO refund en vez de
+    crear otro (mismo mecanismo anti doble cobro del POS), y si la fila ya
+    existe localmente se devuelve tal cual sin llamar a la API. Sin ella se
+    genera una al azar (comportamiento histórico).
+    """
+    if transaccion.tipo != 'VENTA' or transaccion.estado not in ('APROBADA', 'DEVUELTA'):
+        raise MercadoPagoError('Solo se puede devolver una venta MP aprobada.')
+    if referencia:
+        referencia = str(referencia)[:80]
+        existente = TransaccionMercadoPago.objects.filter(external_reference=referencia).first()
+        if existente is not None:
+            return existente
+    id_pago = _id_pago_para_refund(transaccion)
 
     body = {}
     if monto is not None:
@@ -2507,11 +2548,11 @@ def reembolsar(transaccion, monto=None, usuario=None):
         if monto <= 0 or monto > transaccion.monto:
             raise MercadoPagoError('Monto de devolución inválido.')
         body['amount'] = monto
-    ref_devolucion = f"{transaccion.external_reference}-REF-{uuid.uuid4().hex[:6]}"
+    ref_devolucion = referencia or f"{transaccion.external_reference}-REF-{uuid.uuid4().hex[:6]}"
     resp = _request(transaccion.config, 'POST',
-                    f'/v1/payments/{transaccion.payment_id}/refunds',
+                    f'/v1/payments/{id_pago}/refunds',
                     json_body=body or None, idempotency_key=ref_devolucion)
-    data = _json_o_error(resp, f'refund payment {transaccion.payment_id}')
+    data = _json_o_error(resp, f'refund payment {id_pago}')
 
     monto_devuelto = int(round(float(data.get('amount') or monto or transaccion.monto)))
     devolucion = TransaccionMercadoPago.objects.create(

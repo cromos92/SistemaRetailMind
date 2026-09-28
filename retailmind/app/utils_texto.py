@@ -17,4 +17,6 @@ def limpiar_html(texto) -> str:
     """HTML → texto plano. ``None``/'' → ''."""
     if not texto:
         return ''
-    return _html.unescape(strip_tags(str(texto))).strip()
+    # ``&nbsp;`` desescapa a U+00A0, que no es un espacio para .strip()/.split()
+    # y se ve como un hueco raro en la UI: se normaliza a espacio común.
+    return _html.unescape(strip_tags(str(texto))).replace('\xa0', ' ').strip()

@@ -152,7 +152,7 @@ class Command(BaseCommand):
         self.stdout.write('')
         self.stdout.write(self.style.MIGRATE_HEADING('=== Veredicto ==='))
         for nombre in ('exacto (empresa)', 'exacto (todas)', 'case-insensitive',
-                       'trim', 'trim+case-insensitive'):
+                       'trim', 'trim+case-insensitive', 'clave compuesta (1er tramo)'):
             pct = (matches[nombre] / total) * 100 if total else 0
             if pct >= 80:
                 self.stdout.write(self.style.SUCCESS(
@@ -174,6 +174,9 @@ class Command(BaseCommand):
             'upper': 0,
             'trim': 0,
             'trim+case-insensitive': 0,
+            # AllConnected publica `articulo||marca||color||genero||categoria`
+            # desde mediados de 2026: el articulo es el primer tramo.
+            'clave compuesta (1er tramo)': 0,
         }
         for sku in skus:
             if sku in art_empresa:
@@ -188,6 +191,8 @@ class Command(BaseCommand):
                 m['trim'] += 1
             if sku.strip().lower() in art_trim_lower:
                 m['trim+case-insensitive'] += 1
+            if '||' in sku and sku.split('||', 1)[0].strip() in art_todos:
+                m['clave compuesta (1er tramo)'] += 1
         return m
 
     def _clasificar(self, sku, art_empresa, art_todos,
@@ -202,4 +207,10 @@ class Command(BaseCommand):
             return 'trim', art_trim[sku.strip()]
         if sku.strip().lower() in art_trim_lower:
             return 'trim+case', art_trim_lower[sku.strip().lower()]
+        if '||' in sku:
+            tramo = sku.split('||', 1)[0].strip()
+            if tramo in art_todos:
+                return 'compuesto', tramo
+            if tramo.lower() in art_lower:
+                return 'compuesto+case', art_lower[tramo.lower()]
         return 'NO_MATCH', None

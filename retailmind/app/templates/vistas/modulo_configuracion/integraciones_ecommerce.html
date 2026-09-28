@@ -4,220 +4,334 @@
 {% include '../../layout/menu.html' %}
 {% csrf_token %}
 
+{{ credenciales_js|json_script:"data-credenciales" }}
+
 <style>
-    :root {
-        --nexo-primary: #0066FF;
-        --nexo-primary-dark: #0052CC;
-        --nexo-primary-light: #E6F0FF;
-        --nexo-accent: #00D4AA;
-        --nexo-warning: #FFB020;
-        --nexo-error: #FF4D4D;
-        --nexo-gray-100: #F5F5F7;
-        --nexo-gray-300: #D1D1D9;
-        --nexo-gray-500: #8A8A9A;
-        --nexo-gray-700: #4A4A5A;
-        --nexo-gray-900: #1A1A2E;
-    }
+/* ==================== ESTILOS MÓDULO INTEGRACIONES ECOMMERCE ==================== */
+/* Estructura estándar de módulo: ver templates/vistas/ESTILOS_MODULOS.md.
+   Los tokens --nexo-* vienen de static/css/nexo-design-system.css (layout/header.html). */
 
-    .module-header {
-        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
-        color: white;
-        padding: 1.5rem;
-        border-radius: 12px;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 4px 6px rgba(26, 26, 46, 0.1);
-    }
+.page-content {
+    background: #ffffff !important;
+    min-height: calc(100vh - 70px);
+}
 
-    .module-header h2 {
-        margin: 0;
-        font-size: 1.5rem;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
+:root {
+    --rm-primary: #405189;
+    --rm-accent: #0ab39c;
+    --rm-warning: #ffbe0b;
+    --rm-danger: #f06548;
+    --rm-info: #299cdb;
+    --rm-gradient: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+}
 
-    .module-header p {
-        margin: 0.5rem 0 0 0;
-        opacity: 0.9;
-        font-size: 0.9rem;
-    }
+/* Card principal */
+.card.shadow {
+    border: none;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(64, 81, 137, 0.1);
+    animation: fadeInCard 0.4s ease;
+}
+@keyframes fadeInCard {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 
-    .kpi-row {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 1rem;
-        margin-bottom: 1.5rem;
-    }
+/* Header con gradiente */
+.module-header {
+    background: var(--rm-gradient);
+    color: white;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.module-header-left { display: flex; align-items: center; gap: 14px; }
+.module-header-icon {
+    width: 48px;
+    height: 48px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+}
+.module-header-info h5 { margin: 0; font-size: 18px; font-weight: 600; color: white; }
+.module-header-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    opacity: 0.9;
+    margin-top: 4px;
+}
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background: #4ade80;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+.status-dot.alerta { background: var(--rm-warning); }
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+.module-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.module-header-actions .btn {
+    border-radius: 10px;
+    font-weight: 500;
+    padding: 8px 14px;
+    font-size: 13px;
+    border: none;
+    transition: all 0.2s ease;
+}
+.module-header-actions .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
 
-    .kpi-card {
-        background: white;
-        border-radius: 10px;
-        padding: 1rem 1.25rem;
-        box-shadow: 0 1px 2px rgba(26, 26, 46, 0.05);
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
+.card-body { padding: 24px; background: white; }
+.modulo-intro { color: var(--nexo-gray-700); font-size: 0.875rem; margin: 0 0 16px; }
 
-    .kpi-icon {
-        width: 40px;
-        height: 40px;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.1rem;
-        color: white;
-    }
+/* KPI cards (colores por tipo de ESTILOS_MODULOS) */
+.kpi-card { border-radius: 12px; border: none; overflow: hidden; transition: all 0.3s ease; }
+.kpi-card:hover { transform: translateY(-4px); box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); }
+.kpi-card .card-body { padding: 12px 16px; background: transparent; }
+.kpi-card .kpi-icon {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    color: white;
+}
+.kpi-card .kpi-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--nexo-text-secondary);
+    margin: 0;
+    line-height: 1.2;
+}
+.kpi-card .kpi-value { font-size: 1.35rem; font-weight: 700; color: var(--rm-primary); margin: 0; line-height: 1.1; }
+.kpi-yellow { background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 4px solid var(--rm-warning); }
+.kpi-yellow .kpi-icon { background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%); }
+.kpi-red { background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); border-left: 4px solid var(--rm-danger); }
+.kpi-red .kpi-icon { background: linear-gradient(135deg, #f06548 0%, #d9534f 100%); }
+.kpi-green { background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 4px solid var(--rm-accent); }
+.kpi-green .kpi-icon { background: linear-gradient(135deg, #0ab39c 0%, #099885 100%); }
+.kpi-blue { background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid var(--rm-info); }
+.kpi-blue .kpi-icon { background: linear-gradient(135deg, #299cdb 0%, #1976d2 100%); }
 
-    .kpi-icon.primary { background: linear-gradient(135deg, #405189, #0ab39c); }
-    .kpi-icon.accent { background: var(--nexo-accent); }
-    .kpi-icon.warning { background: var(--nexo-warning); }
-    .kpi-icon.error { background: var(--nexo-error); }
+.aviso-atencion { border-radius: 12px; }
 
-    .badge-salud {
-        display: inline-block;
-        padding: 2px 9px;
-        border-radius: 12px;
-        font-size: 0.7rem;
-        font-weight: 600;
-        white-space: nowrap;
-    }
-    .badge-salud.ok        { background: #e8f9f3; color: #008060; }
-    .badge-salud.atrasada  { background: #fff4e0; color: #8a5a00; }
-    .badge-salud.nunca     { background: var(--nexo-gray-100); color: var(--nexo-gray-700); }
-    .badge-salud.error     { background: #f9eaea; color: #a13030; }
-    .badge-salud.inactiva  { background: var(--nexo-gray-100); color: var(--nexo-gray-500); }
+/* Tabla */
+.tabla-integraciones { margin-bottom: 0; }
+.tabla-integraciones thead th {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--nexo-gray-500);
+    font-weight: 600;
+    border-bottom: 1px solid var(--nexo-gray-300);
+    white-space: nowrap;
+}
+.tabla-integraciones td { font-size: 0.85rem; vertical-align: middle; }
+.integracion-nombre { font-weight: 600; color: var(--nexo-gray-900); }
+.integracion-meta { font-size: 0.75rem; color: var(--nexo-gray-500); margin-top: 2px; }
+.integracion-meta code {
+    font-size: 0.72rem;
+    color: var(--nexo-gray-700);
+    background: var(--nexo-gray-100);
+    padding: 1px 5px;
+    border-radius: 4px;
+}
+.integracion-url {
+    display: inline-block;
+    font-family: Consolas, Monaco, monospace;
+    font-size: 0.72rem;
+    color: var(--rm-primary);
+    text-decoration: none;
+    margin-top: 4px;
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+.integracion-url:hover { text-decoration: underline; }
+.celda-fecha { font-weight: 600; color: var(--nexo-gray-900); font-size: 0.8rem; }
 
-    .kpi-value { font-weight: 700; font-size: 1.25rem; color: var(--nexo-gray-900); line-height: 1; }
-    .kpi-label { font-size: 0.75rem; color: var(--nexo-gray-500); text-transform: uppercase; letter-spacing: 0.5px; }
+/* Badges y chips */
+.badge-tipo {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: var(--nexo-primary-light);
+    color: var(--nexo-primary-dark);
+}
+.badge-estado, .badge-salud {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.badge-estado.si, .badge-salud.ok { background: #e8f9f3; color: #008060; }
+.badge-estado.no, .badge-salud.inactiva { background: var(--nexo-gray-100); color: var(--nexo-gray-500); }
+.badge-salud.atrasada { background: #fff4e0; color: #8a5a00; }
+.badge-salud.nunca { background: var(--nexo-gray-100); color: var(--nexo-gray-700); }
+.badge-salud.error { background: #f9eaea; color: #a13030; }
+.chip {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+    margin: 2px 2px 0 0;
+    white-space: nowrap;
+}
+.chip.ok { background: #e8f9f3; color: #008060; }
+.chip.bad { background: #f9eaea; color: #a13030; }
+.chip.warn { background: #fff4e0; color: #8a5a00; }
 
-    .integraciones-card {
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 1px 2px rgba(26, 26, 46, 0.05);
-        padding: 1.25rem;
-    }
+/* Miniaturas de la fila */
+.muestra-fotos { display: flex; gap: 4px; }
+.muestra-foto {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: var(--nexo-gray-100);
+    border: 1px solid var(--nexo-gray-300);
+    display: block;
+}
+.muestra-foto.is-broken { border-color: var(--rm-danger); opacity: 0.7; cursor: default; }
+.muestra-rotas { color: #a13030; font-weight: 600; }
+.fotos-total { font-weight: 700; font-size: 1rem; color: var(--nexo-gray-900); }
+.btn-ver-fotos { font-size: 0.75rem; padding: 0; text-decoration: none; }
 
-    .integraciones-card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 1rem;
-    }
+/* Botones de acción */
+.acciones { display: inline-flex; gap: 4px; }
+.btn-accion {
+    background: #fff;
+    border: 1px solid var(--nexo-gray-300);
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--nexo-gray-700);
+    font-size: 0.95rem;
+    transition: all 0.15s ease;
+}
+.btn-accion:hover { background: var(--nexo-gray-100); color: var(--rm-primary); border-color: var(--rm-primary); }
+.btn-accion.danger:hover { background: #ffeded; border-color: #f5b5b5; color: #a13030; }
+.btn-accion[disabled] { opacity: 0.5; pointer-events: none; }
 
-    .integraciones-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
+/* Empty state */
+.empty-state { text-align: center; padding: 3rem 1rem; color: var(--nexo-gray-500); }
+.empty-state i { font-size: 3rem; color: var(--nexo-gray-300); }
+.empty-state p { margin: 0.75rem 0 1rem; }
 
-    .integraciones-table th {
-        text-align: left;
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: var(--nexo-gray-500);
-        padding: 0.5rem 0.75rem;
-        border-bottom: 1px solid var(--nexo-gray-300);
-    }
+/* Modales */
+.modal-content { border-radius: 12px; border: none; }
+.modal-header-rm { background: var(--rm-gradient); color: white; border-radius: 12px 12px 0 0; }
+.modal-header-rm .modal-title { color: white; font-weight: 600; }
+.form-label-required::after { content: ' *'; color: var(--nexo-error); }
+.form-text-rm { font-size: 0.75rem; color: var(--nexo-gray-500); }
 
-    .integraciones-table td {
-        padding: 0.75rem;
-        border-bottom: 1px solid var(--nexo-gray-100);
-        font-size: 0.875rem;
-        vertical-align: middle;
-    }
+.resultado-log {
+    background: #1A1A2E;
+    color: #ddd;
+    font-family: Consolas, Monaco, monospace;
+    font-size: 0.78rem;
+    padding: 0.75rem;
+    border-radius: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+}
+.cobertura-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.cobertura-table th, .cobertura-table td { padding: 4px 8px; border-bottom: 1px solid var(--nexo-gray-100); text-align: left; }
+.cobertura-table th { color: var(--nexo-gray-500); text-transform: uppercase; font-size: 0.7rem; }
+.liveness-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0; }
+.muertas-list { max-height: 220px; overflow-y: auto; font-size: 0.75rem; }
+.muertas-list .motivo { font-weight: 600; color: #a13030; }
 
-    .integraciones-table tr:hover { background: var(--nexo-gray-100); }
+/* Galería de fotos */
+.fotos-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.fotos-toolbar .form-control { max-width: 260px; }
+.fotos-resumen { font-size: 0.8rem; color: var(--nexo-gray-700); margin-left: auto; }
+.fotos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    min-height: 120px;
+}
+.foto-card { border: 1px solid var(--nexo-gray-300); border-radius: 10px; overflow: hidden; background: #fff; }
+.foto-card img {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    background: var(--nexo-gray-100);
+    display: block;
+}
+.foto-card .foto-rota {
+    display: none;
+    aspect-ratio: 1 / 1;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    color: #a13030;
+    background: #fdf2f2;
+    font-size: 0.72rem;
+    text-align: center;
+    padding: 8px;
+}
+.foto-card .foto-rota i { font-size: 1.4rem; }
+.foto-card.is-broken img { display: none; }
+.foto-card.is-broken .foto-rota { display: flex; }
+.foto-info { padding: 6px 8px; font-size: 0.72rem; }
+.foto-articulo { font-weight: 600; color: var(--nexo-gray-900); word-break: break-all; }
+.foto-desc { color: var(--nexo-gray-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.foto-motivo { color: #a13030; font-weight: 600; }
+.foto-link { font-size: 0.7rem; }
+.fotos-paginacion {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: 0.8rem;
+}
 
-    .badge-tipo {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        background: var(--nexo-primary-light);
-        color: var(--nexo-primary-dark);
-    }
-
-    .badge-activo {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 0.7rem;
-        font-weight: 600;
-    }
-    .badge-activo.si { background: #e8f9f3; color: #008060; }
-    .badge-activo.no { background: #f9eaea; color: #a13030; }
-
-    .btn-icon-action {
-        background: transparent;
-        border: 1px solid var(--nexo-gray-300);
-        border-radius: 6px;
-        padding: 4px 8px;
-        font-size: 0.85rem;
-        cursor: pointer;
-        margin-right: 4px;
-    }
-    .btn-icon-action:hover { background: var(--nexo-gray-100); }
-    .btn-icon-action.danger:hover { background: #ffeded; border-color: #f5b5b5; color: #a13030; }
-
-    .empty-state {
-        text-align: center;
-        padding: 3rem 1rem;
-        color: var(--nexo-gray-500);
-    }
-    .empty-state i { font-size: 3rem; color: var(--nexo-gray-300); }
-    .empty-state p { margin: 0.75rem 0 0 0; }
-
-    .modal-content { border-radius: 12px; border: none; }
-    .form-label-required::after { content: ' *'; color: var(--nexo-error); }
-
-    .ultima-sync-info {
-        font-size: 0.75rem;
-        color: var(--nexo-gray-500);
-        line-height: 1.3;
-        word-break: break-word;
-        max-width: 280px;
-    }
-    .ultima-sync-info strong { color: var(--nexo-gray-900); display: block; }
-    .ultima-sync-info .verif-line {
-        margin-top: 0.35rem;
-        padding-top: 0.35rem;
-        border-top: 1px dashed var(--nexo-gray-300);
-    }
-    .verif-line .verif-label { font-weight: 600; color: var(--nexo-gray-700); }
-    .badge-muertas {
-        display: inline-block;
-        padding: 1px 6px;
-        border-radius: 10px;
-        font-size: 0.7rem;
-        font-weight: 600;
-        background: #f9eaea;
-        color: #a13030;
-    }
-    .badge-muertas.cero { background: #e8f9f3; color: #008060; }
-    .cobertura-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-    .cobertura-table th, .cobertura-table td { padding: 4px 8px; border-bottom: 1px solid var(--nexo-gray-100); text-align: left; }
-    .cobertura-table th { color: var(--nexo-gray-500); text-transform: uppercase; font-size: 0.7rem; }
-    .liveness-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0; }
-    .liveness-chip { padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; background: var(--nexo-gray-100); color: var(--nexo-gray-700); }
-    .liveness-chip.ok { background: #e8f9f3; color: #008060; }
-    .liveness-chip.bad { background: #f9eaea; color: #a13030; }
-    .muertas-list { max-height: 220px; overflow-y: auto; font-size: 0.75rem; }
-    .muertas-list .motivo { font-weight: 600; color: #a13030; }
-
-    .resultado-log {
-        background: #1A1A2E;
-        color: #ddd;
-        font-family: 'Consolas', 'Monaco', monospace;
-        font-size: 0.8rem;
-        padding: 0.75rem;
-        border-radius: 6px;
-        max-height: 300px;
-        overflow-y: auto;
-        white-space: pre-wrap;
-    }
+@media (max-width: 768px) {
+    .module-header { padding: 12px 16px; }
+    .module-header-icon { width: 40px; height: 40px; font-size: 20px; }
+    .card-body { padding: 16px; }
+    .integracion-url { max-width: 160px; }
+    .fotos-toolbar .form-control { max-width: 100%; }
+    .fotos-resumen { margin-left: 0; }
+}
 </style>
 
 <div class="page-content">
@@ -227,198 +341,279 @@
             {% for message in messages %}
                 <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
                     {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
                 </div>
             {% endfor %}
         {% endif %}
 
-        <div class="module-header">
-            <h2><i class="ri-image-line"></i> Integraciones Ecommerce</h2>
-            <p>Credenciales de APIs externas para traer fotos de portada (realsport.cl, paola.cl, etc).</p>
-        </div>
-
-        <div class="kpi-row">
-            <div class="kpi-card">
-                <div class="kpi-icon primary"><i class="ri-plug-line"></i></div>
-                <div>
-                    <div class="kpi-value">{{ kpi_total }}</div>
-                    <div class="kpi-label">Integraciones</div>
+        <div class="card shadow">
+            <!-- Header con gradiente -->
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon">
+                        <i class="ri-image-line"></i>
+                    </div>
+                    <div class="module-header-info">
+                        <h5>Integraciones Ecommerce</h5>
+                        <div class="module-header-status">
+                            <span class="status-dot{% if kpi_con_problema %} alerta{% endif %}" id="header-status-dot"></span>
+                            <span>
+                                <span id="header-activas">{{ kpi_activas }}</span> de {{ kpi_total }} activa(s) ·
+                                <span id="header-total-fotos">{{ kpi_total_fotos }}</span> fotos de portada
+                            </span>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-icon accent"><i class="ri-checkbox-circle-line"></i></div>
-                <div>
-                    <div class="kpi-value">{{ kpi_activas }}</div>
-                    <div class="kpi-label">Activas (de {{ kpi_total }})</div>
-                </div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-icon warning"><i class="ri-image-2-line"></i></div>
-                <div>
-                    <div class="kpi-value" id="kpi-total-fotos">{{ kpi_total_fotos }}</div>
-                    <div class="kpi-label">Fotos sincronizadas</div>
-                </div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-icon {% if kpi_con_problema %}error{% else %}accent{% endif %}">
-                    <i class="ri-alarm-warning-line"></i>
-                </div>
-                <div>
-                    <div class="kpi-value">{{ kpi_con_problema }}</div>
-                    <div class="kpi-label">Sin sincronizar / con error</div>
-                </div>
-            </div>
-        </div>
-
-        {% if kpi_con_problema %}
-        <div class="alert alert-warning d-flex align-items-start gap-2" role="alert" style="border-radius:10px;">
-            <i class="ri-error-warning-line" style="font-size:1.2rem;"></i>
-            <div>
-                <strong>{{ kpi_con_problema }} integración(es) activa(s) necesitan atención.</strong>
-                Nunca se sincronizaron, su última sincronización registró un error, o pasaron más de
-                {{ horas_sync_atrasada }} horas desde la última corrida. Usá el botón
-                <i class="ri-refresh-line"></i> <em>Sincronizar ahora</em> de la fila para reintentar.
-            </div>
-        </div>
-        {% endif %}
-
-        <div class="integraciones-card">
-            <div class="integraciones-card-header">
-                <h5 style="margin:0;">Credenciales configuradas</h5>
-                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalIntegracion" onclick="abrirModalNueva()">
-                    <i class="ri-add-line"></i> Nueva integración
-                </button>
-            </div>
-
-            {% if credenciales %}
-            <div style="overflow-x:auto;">
-            <table class="integraciones-table">
-                <thead>
-                    <tr>
-                        <th>Nombre</th>
-                        <th>Empresa</th>
-                        <th>Tipo</th>
-                        <th>URL API</th>
-                        <th>Prioridad</th>
-                        <th>Activo</th>
-                        <th>Fotos</th>
-                        <th>Salud</th>
-                        <th>Última sync</th>
-                        <th style="text-align:right;">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                {% for c in credenciales %}
-                    <tr data-id="{{ c.id }}">
-                        <td><strong>{{ c.nombre }}</strong><br><small style="color:var(--nexo-gray-500);">{{ c.codigo }}</small></td>
-                        <td>{{ c.empresa.nombre }}<br><small style="color:var(--nexo-gray-500);">{{ c.empresa.rut }}</small></td>
-                        <td><span class="badge-tipo">{{ c.get_tipo_display }}</span></td>
-                        <td style="font-family:monospace;font-size:0.75rem;">{{ c.url_api }}</td>
-                        <td>{{ c.prioridad }}</td>
-                        <td>
-                            {% if c.activo %}
-                                <span class="badge-activo si">Activa</span>
-                            {% else %}
-                                <span class="badge-activo no">Inactiva</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ c.total_fotos }}</td>
-                        <td>
-                            {% if c.estado_sync == 'ok' %}
-                                <span class="badge-salud ok" title="Sincronizada hace {{ c.horas_sync }} h">
-                                    <i class="ri-checkbox-circle-fill"></i> Al día
-                                </span>
-                            {% elif c.estado_sync == 'atrasada' %}
-                                <span class="badge-salud atrasada" title="Última sincronización hace {{ c.horas_sync }} h">
-                                    <i class="ri-time-line"></i> Atrasada ({{ c.horas_sync }} h)
-                                </span>
-                            {% elif c.estado_sync == 'error' %}
-                                <span class="badge-salud error" title="{{ c.ultima_sync_resultado }}">
-                                    <i class="ri-error-warning-fill"></i> Con error
-                                </span>
-                            {% elif c.estado_sync == 'nunca' %}
-                                <span class="badge-salud nunca"><i class="ri-question-line"></i> Nunca</span>
-                            {% else %}
-                                <span class="badge-salud inactiva"><i class="ri-pause-circle-line"></i> Apagada</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <div class="ultima-sync-info">
-                                {% if c.ultima_sync_at %}
-                                    <strong>{{ c.ultima_sync_at|date:"d/m/Y H:i" }}</strong>
-                                    {{ c.ultima_sync_resultado }}
-                                {% else %}
-                                    Nunca sincronizado
-                                {% endif %}
-                                {% if c.ultima_verif_at %}
-                                    <div class="verif-line">
-                                        <span class="verif-label">Verificado:</span>
-                                        {{ c.ultima_verif_at|date:"d/m/Y H:i" }}<br>
-                                        {{ c.ultima_verif_resultado }}
-                                    </div>
-                                {% endif %}
-                            </div>
-                        </td>
-                        <td style="text-align:right;white-space:nowrap;">
-                            <button class="btn-icon-action" title="Probar conexión" onclick="probarConexion({{ c.id }}, '{{ c.nombre|escapejs }}')">
-                                <i class="ri-pulse-line"></i>
-                            </button>
-                            <button class="btn-icon-action" title="Sincronizar ahora" onclick="sincronizarAhora({{ c.id }}, '{{ c.nombre|escapejs }}')">
-                                <i class="ri-refresh-line"></i>
-                            </button>
-                            <button class="btn-icon-action" title="Verificar fotos" onclick="verificarFotos({{ c.id }}, '{{ c.nombre|escapejs }}')">
-                                <i class="ri-shield-check-line"></i>
-                            </button>
-                            <button class="btn-icon-action" title="Editar" onclick="abrirModalEditar({{ c.id }})">
-                                <i class="ri-pencil-line"></i>
-                            </button>
-                            <button class="btn-icon-action danger" title="Eliminar" onclick="eliminarIntegracion({{ c.id }}, '{{ c.nombre|escapejs }}')">
-                                <i class="ri-delete-bin-line"></i>
-                            </button>
-                        </td>
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-            </div>
-            {% else %}
-                <div class="empty-state">
-                    <i class="ri-plug-2-line"></i>
-                    <p>No hay integraciones configuradas.</p>
-                    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalIntegracion" onclick="abrirModalNueva()">
-                        <i class="ri-add-line"></i> Crear la primera
+                <div class="module-header-actions">
+                    <button type="button" class="btn btn-light" data-accion="nueva">
+                        <i class="ri-add-line me-1"></i>Nueva integración
                     </button>
                 </div>
-            {% endif %}
+            </div>
+
+            <div class="card-body">
+                <p class="modulo-intro">
+                    Cada tienda web (realsport.cl, calzadospaola.cl, …) entrega la URL de la foto de portada de sus
+                    productos. RetailMind las guarda por código de artículo y las muestra en el POS, Existencias y
+                    Emisión DTE. El scheduler sincroniza y verifica todas las integraciones activas una vez al día;
+                    desde acá podés forzarlo y <strong>ver</strong> las fotos que realmente están llegando.
+                </p>
+
+                <!-- KPIs -->
+                <div class="row g-2 mb-3">
+                    <div class="col-xl-3 col-md-6 col-6">
+                        <div class="kpi-card kpi-blue card h-100">
+                            <div class="card-body d-flex align-items-center gap-2">
+                                <div class="kpi-icon"><i class="ri-plug-line"></i></div>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <p class="kpi-label">Integraciones</p>
+                                    <div class="kpi-value">{{ kpi_total }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6 col-6">
+                        <div class="kpi-card kpi-green card h-100">
+                            <div class="card-body d-flex align-items-center gap-2">
+                                <div class="kpi-icon"><i class="ri-checkbox-circle-line"></i></div>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <p class="kpi-label">Activas</p>
+                                    <div class="kpi-value">{{ kpi_activas }} <small class="text-muted fw-normal">de {{ kpi_total }}</small></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6 col-6">
+                        <div class="kpi-card kpi-yellow card h-100">
+                            <div class="card-body d-flex align-items-center gap-2">
+                                <div class="kpi-icon"><i class="ri-image-2-line"></i></div>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <p class="kpi-label">Fotos sincronizadas</p>
+                                    <div class="kpi-value" id="kpi-total-fotos">{{ kpi_total_fotos }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6 col-6">
+                        <div class="kpi-card {% if kpi_con_problema %}kpi-red{% else %}kpi-green{% endif %} card h-100" id="kpi-card-problema">
+                            <div class="card-body d-flex align-items-center gap-2">
+                                <div class="kpi-icon"><i class="ri-alarm-warning-line"></i></div>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <p class="kpi-label">Necesitan atención</p>
+                                    <div class="kpi-value" id="kpi-con-problema">{{ kpi_con_problema }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-warning d-flex align-items-start gap-2 aviso-atencion" role="alert"
+                     id="aviso-atencion" {% if not kpi_con_problema %}hidden{% endif %}>
+                    <i class="ri-error-warning-line fs-5"></i>
+                    <div>
+                        <strong><span id="aviso-cantidad">{{ kpi_con_problema }}</span> integración(es) activa(s) necesitan atención.</strong>
+                        Nunca se sincronizaron, su última sincronización registró un error, o pasaron más de
+                        {{ horas_sync_atrasada }} horas desde la última corrida. Usá <em>Sincronizar ahora</em>
+                        (<i class="ri-refresh-line"></i>) en la fila para reintentar y <em>Verificar fotos</em>
+                        (<i class="ri-shield-check-line"></i>) para comprobar que las URLs realmente cargan.
+                    </div>
+                </div>
+
+                {% if credenciales %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle tabla-integraciones">
+                        <thead>
+                            <tr>
+                                <th scope="col">Integración</th>
+                                <th scope="col">Empresa</th>
+                                <th scope="col">Muestra</th>
+                                <th scope="col" class="text-end">Fotos</th>
+                                <th scope="col">Estado</th>
+                                <th scope="col">Última sincronización</th>
+                                <th scope="col">Verificación</th>
+                                <th scope="col" class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for c in credenciales %}
+                            <tr data-id="{{ c.id }}"
+                                data-nombre="{{ c.nombre }}"
+                                data-activo="{{ c.activo|yesno:'1,0' }}"
+                                data-estado-sync="{{ c.estado_sync }}"
+                                data-verif-muertas="{{ c.verif_muertas }}"
+                                data-url-probar="{% url 'probar_integracion_ecommerce' c.id %}"
+                                data-url-sync="{% url 'sincronizar_integracion_ecommerce' c.id %}"
+                                data-url-verificar="{% url 'verificar_integracion_ecommerce' c.id %}"
+                                data-url-fotos="{% url 'fotos_integracion_ecommerce' c.id %}"
+                                data-url-eliminar="{% url 'eliminar_integracion_ecommerce' c.id %}">
+                                <td>
+                                    <div class="integracion-nombre">{{ c.nombre }}</div>
+                                    <div class="integracion-meta">
+                                        <span class="badge-tipo">{{ c.get_tipo_display }}</span>
+                                        <code>{{ c.codigo }}</code>
+                                        {% if c.prioridad %}· prioridad {{ c.prioridad }}{% endif %}
+                                    </div>
+                                    <a class="integracion-url" href="{{ c.url_api }}" target="_blank" rel="noopener" title="{{ c.url_api }}">{{ c.url_api }}</a>
+                                </td>
+                                <td>
+                                    {{ c.empresa.nombre }}
+                                    <div class="integracion-meta">{{ c.empresa.rut }}</div>
+                                </td>
+                                <td>
+                                    <div class="muestra-fotos" data-campo="muestra">
+                                        {% for f in c.muestra_fotos %}
+                                            <img class="muestra-foto" src="{{ f.url_foto }}" alt="" loading="lazy"
+                                                 title="{{ f.articulo }}" data-foto-zoom="{{ f.url_foto }}">
+                                        {% empty %}
+                                            <span class="text-muted small">Sin fotos</span>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="integracion-meta muestra-rotas" data-campo="rotas" hidden></div>
+                                </td>
+                                <td class="text-end">
+                                    <span class="fotos-total" data-campo="fotos">{{ c.total_fotos }}</span>
+                                    <div>
+                                        <button type="button" class="btn btn-link btn-sm btn-ver-fotos" data-accion="fotos">
+                                            <i class="ri-gallery-line"></i> Ver fotos
+                                        </button>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div>
+                                        {% if c.activo %}
+                                            <span class="badge-estado si">Activa</span>
+                                        {% else %}
+                                            <span class="badge-estado no">Inactiva</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="mt-1" data-campo="salud">
+                                        {% if c.estado_sync == 'ok' %}
+                                            <span class="badge-salud ok" title="Sincronizada hace {{ c.horas_sync }} h"><i class="ri-checkbox-circle-fill"></i> Al día</span>
+                                        {% elif c.estado_sync == 'atrasada' %}
+                                            <span class="badge-salud atrasada" title="Última sincronización hace {{ c.horas_sync }} h"><i class="ri-time-line"></i> Atrasada ({{ c.horas_sync }} h)</span>
+                                        {% elif c.estado_sync == 'error' %}
+                                            <span class="badge-salud error" title="{{ c.ultima_sync_resultado }}"><i class="ri-error-warning-fill"></i> Con error</span>
+                                        {% elif c.estado_sync == 'nunca' %}
+                                            <span class="badge-salud nunca"><i class="ri-question-line"></i> Nunca sincronizada</span>
+                                        {% else %}
+                                            <span class="badge-salud inactiva"><i class="ri-pause-circle-line"></i> Apagada</span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td data-campo="sync">
+                                    {% if c.ultima_sync_at %}
+                                        <div class="celda-fecha">{{ c.ultima_sync_at|date:"d/m/Y H:i" }}</div>
+                                        {% if c.sync_resumen.error %}
+                                            <span class="chip bad" title="{{ c.ultima_sync_resultado }}">Error: {{ c.sync_resumen.error|truncatechars:60 }}</span>
+                                        {% elif c.sync_resumen.texto %}
+                                            <div class="integracion-meta">{{ c.sync_resumen.texto }}</div>
+                                        {% elif c.sync_resumen %}
+                                            <span class="chip ok" title="SKUs del ecommerce que matchearon un artículo local">{{ c.sync_resumen.con_foto }} con foto</span>
+                                            <span class="chip {% if c.sync_resumen.sin_match %}warn{% else %}ok{% endif %}" title="SKUs del ecommerce sin artículo en RetailMind">{{ c.sync_resumen.sin_match }} sin match</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted small">Nunca sincronizada</span>
+                                    {% endif %}
+                                </td>
+                                <td data-campo="verif">
+                                    {% if c.ultima_verif_at %}
+                                        <div class="celda-fecha">{{ c.ultima_verif_at|date:"d/m/Y H:i" }}</div>
+                                        {% if c.verif_resumen.articulos %}
+                                            <span class="chip" title="Artículos del catálogo de la empresa que resuelven a una foto">{{ c.verif_resumen.con_foto }}/{{ c.verif_resumen.articulos }} art. con foto</span>
+                                        {% endif %}
+                                        {% if c.verif_resumen.tiene_urls %}
+                                            <span class="chip ok">{{ c.verif_resumen.urls_ok }} URLs ok</span>
+                                            <span class="chip {% if c.verif_resumen.urls_malas %}bad{% else %}ok{% endif %}">{{ c.verif_resumen.urls_malas }} con problema{% if c.verif_resumen.muestra %} (muestra){% endif %}</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted small">Nunca verificada</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <div class="acciones">
+                                        <button type="button" class="btn-accion" data-accion="probar" title="Probar conexión" aria-label="Probar conexión de {{ c.nombre }}">
+                                            <i class="ri-pulse-line"></i>
+                                        </button>
+                                        <button type="button" class="btn-accion" data-accion="sincronizar" title="Sincronizar ahora" aria-label="Sincronizar fotos de {{ c.nombre }}">
+                                            <i class="ri-refresh-line"></i>
+                                        </button>
+                                        <button type="button" class="btn-accion" data-accion="verificar" title="Verificar fotos" aria-label="Verificar fotos de {{ c.nombre }}">
+                                            <i class="ri-shield-check-line"></i>
+                                        </button>
+                                        <button type="button" class="btn-accion" data-accion="editar" title="Editar" aria-label="Editar {{ c.nombre }}">
+                                            <i class="ri-pencil-line"></i>
+                                        </button>
+                                        <button type="button" class="btn-accion danger" data-accion="eliminar" title="Eliminar" aria-label="Eliminar {{ c.nombre }}">
+                                            <i class="ri-delete-bin-line"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                    <div class="empty-state">
+                        <i class="ri-plug-2-line"></i>
+                        <p>No hay integraciones configuradas para tus empresas.</p>
+                        <button type="button" class="btn btn-primary btn-sm" data-accion="nueva">
+                            <i class="ri-add-line"></i> Crear la primera
+                        </button>
+                    </div>
+                {% endif %}
+            </div>
         </div>
 
     </div>
 </div>
 
 <!-- Modal: crear/editar integración -->
-<div class="modal fade" id="modalIntegracion" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="modalIntegracion" tabindex="-1" aria-labelledby="modalIntegracionTitulo" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <form method="POST" action="{% url 'guardar_integracion_ecommerce' %}" id="formIntegracion">
+            <form method="POST" action="{% url 'guardar_integracion_ecommerce' %}" id="formIntegracion" autocomplete="off">
                 {% csrf_token %}
                 <input type="hidden" name="id" id="form-id" value="">
-                <div class="modal-header" style="background:linear-gradient(135deg,#405189,#0ab39c);color:white;border-radius:12px 12px 0 0;">
+                <div class="modal-header modal-header-rm">
                     <h5 class="modal-title" id="modalIntegracionTitulo">Nueva integración</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
                 <div class="modal-body">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label form-label-required">Nombre</label>
-                            <input type="text" name="nombre" id="form-nombre" class="form-control" required maxlength="100">
+                            <label class="form-label form-label-required" for="form-nombre">Nombre</label>
+                            <input type="text" name="nombre" id="form-nombre" class="form-control" required maxlength="100" placeholder="realsport.cl (Ecommerce Django)">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label form-label-required">Código (slug)</label>
-                            <input type="text" name="codigo" id="form-codigo" class="form-control" required maxlength="50" pattern="[a-z0-9_-]+">
-                            <small class="text-muted">Sólo minúsculas, números, guiones. Ej: realsport, paola.</small>
+                            <label class="form-label form-label-required" for="form-codigo">Código</label>
+                            <input type="text" name="codigo" id="form-codigo" class="form-control" required maxlength="50"
+                                   pattern="[a-z0-9][a-z0-9_-]*" placeholder="realsport"
+                                   title="Solo minúsculas, números, guion y guion bajo">
+                            <div class="form-text-rm">Identificador único. Es el <code>--codigo</code> de los comandos de consola.</div>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label form-label-required">Tipo</label>
+                            <label class="form-label form-label-required" for="form-tipo">Tipo</label>
                             <select name="tipo" id="form-tipo" class="form-select" required>
                                 <option value="">Seleccione...</option>
                                 {% for v, label in tipos %}
@@ -427,32 +622,38 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label form-label-required">Empresa propietaria</label>
+                            <label class="form-label form-label-required" for="form-empresa">Empresa propietaria</label>
                             <select name="empresa_id" id="form-empresa" class="form-select" required>
                                 <option value="">Seleccione...</option>
                                 {% for e in empresas %}
                                     <option value="{{ e.id }}">{{ e.nombre }} ({{ e.rut }})</option>
                                 {% endfor %}
                             </select>
+                            <div class="form-text-rm">Sus productos usan primero las fotos de este ecommerce; el resto de empresas las hereda por prioridad.</div>
                         </div>
                         <div class="col-md-12">
-                            <label class="form-label form-label-required">URL API base</label>
+                            <label class="form-label form-label-required" for="form-url-api">URL API base</label>
                             <input type="url" name="url_api" id="form-url-api" class="form-control" required placeholder="https://realsport.cl">
-                            <small class="text-muted">Sin <code>/api/v1/</code> al final — RetailMind lo agrega solo.</small>
+                            <div class="form-text-rm">Sin <code>/api/v1/</code> al final: RetailMind lo agrega solo.</div>
                         </div>
                         <div class="col-md-8">
-                            <label class="form-label form-label-required">API Key</label>
-                            <input type="text" name="api_key" id="form-api-key" class="form-control" required>
-                            <small class="text-muted">Al editar, dejar el placeholder <code>__sin_cambio__</code> para no reemplazar.</small>
+                            <label class="form-label form-label-required" for="form-api-key" id="form-api-key-label">API Key</label>
+                            <div class="input-group">
+                                <input type="password" name="api_key" id="form-api-key" class="form-control" required autocomplete="new-password">
+                                <button type="button" class="btn btn-outline-secondary" id="form-api-key-toggle" aria-label="Mostrar u ocultar la API key">
+                                    <i class="ri-eye-line"></i>
+                                </button>
+                            </div>
+                            <div class="form-text-rm" id="form-api-key-ayuda">Se guarda en la base y viaja en el header al ecommerce.</div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Header name</label>
-                            <input type="text" name="header_name" id="form-header" class="form-control" value="X-AllConnected-Key">
+                            <label class="form-label" for="form-header">Header HTTP</label>
+                            <input type="text" name="header_name" id="form-header" class="form-control" value="X-AllConnected-Key" maxlength="50">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Prioridad</label>
+                            <label class="form-label" for="form-prioridad">Prioridad</label>
                             <input type="number" name="prioridad" id="form-prioridad" class="form-control" value="0">
-                            <small class="text-muted">Mayor = gana en conflictos.</small>
+                            <div class="form-text-rm">Si dos ecommerce tienen el mismo artículo, gana la mayor.</div>
                         </div>
                         <div class="col-md-4 d-flex align-items-center">
                             <div class="form-check form-switch">
@@ -464,28 +665,23 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Guardar</button>
+                    <button type="submit" class="btn btn-primary"><i class="ri-save-line me-1"></i>Guardar</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<!-- Modal: resultado de sync/probar -->
-<div class="modal fade" id="modalResultado" tabindex="-1" aria-hidden="true">
+<!-- Modal: resultado de probar / sincronizar / verificar -->
+<div class="modal fade" id="modalResultado" tabindex="-1" aria-labelledby="modalResultadoTitulo" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalResultadoTitulo">Resultado</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                <div id="modalResultadoCuerpo">
-                    <div class="text-center" style="padding:1rem;">
-                        <div class="spinner-border text-primary"></div>
-                        <p class="mt-2">Procesando...</p>
-                    </div>
-                </div>
+                <div id="modalResultadoCuerpo" aria-live="polite"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
@@ -494,229 +690,609 @@
     </div>
 </div>
 
+<!-- Modal: galería de fotos sincronizadas -->
+<div class="modal fade" id="modalFotos" tabindex="-1" aria-labelledby="modalFotosTitulo" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header modal-header-rm">
+                <h5 class="modal-title" id="modalFotosTitulo">Fotos</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="fotos-toolbar">
+                    <input type="search" class="form-control form-control-sm" id="fotos-q" placeholder="Buscar por código de artículo…" aria-label="Buscar por código de artículo">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="fotos-solo-muertas">
+                        <label class="form-check-label small" for="fotos-solo-muertas">
+                            Solo URLs con problema (<span id="fotos-muertas-n">0</span> en la última verificación)
+                        </label>
+                    </div>
+                    <div class="fotos-resumen" id="fotos-resumen"></div>
+                </div>
+                <div class="fotos-grid" id="fotos-grid" aria-live="polite"></div>
+                <div class="fotos-paginacion">
+                    <button type="button" class="btn btn-light btn-sm" id="fotos-prev"><i class="ri-arrow-left-s-line"></i> Anterior</button>
+                    <span id="fotos-pagina" class="text-muted"></span>
+                    <button type="button" class="btn btn-light btn-sm" id="fotos-next">Siguiente <i class="ri-arrow-right-s-line"></i></button>
+                </div>
+                <p class="form-text-rm mt-2 mb-0">Click en una foto para ampliarla. Las tarjetas en rojo son URLs que el CDN no entrega (403/404): en el POS esos productos salen con el placeholder.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% include '../../layout/footer.html' %}
 
+<script src="{% static 'js/foto_lightbox.js' %}"></script>
 <script>
-const CREDENCIALES = {
-    {% for c in credenciales %}
-    "{{ c.id }}": {
-        id: {{ c.id }},
-        nombre: "{{ c.nombre|escapejs }}",
-        codigo: "{{ c.codigo|escapejs }}",
-        tipo: "{{ c.tipo|escapejs }}",
-        empresa_id: {{ c.empresa.id }},
-        url_api: "{{ c.url_api|escapejs }}",
-        header_name: "{{ c.header_name|escapejs }}",
-        activo: {{ c.activo|yesno:"true,false" }},
-        prioridad: {{ c.prioridad }}
-    }{% if not forloop.last %},{% endif %}
-    {% endfor %}
-};
+(function () {
+    'use strict';
 
-function csrfToken() {
-    return document.querySelector('[name=csrfmiddlewaretoken]').value;
-}
+    var PLACEHOLDER = "{% static 'images/producto_placeholder.svg' %}";
+    var API_KEY_SIN_CAMBIO = "{{ api_key_sin_cambio|escapejs }}";
+    var VERIF_MUESTRA = {{ verif_ui_muestra }};
+    var CREDENCIALES = {};
+    try {
+        var datos = JSON.parse(document.getElementById('data-credenciales').textContent) || [];
+        datos.forEach(function (c) { CREDENCIALES[c.id] = c; });
+    } catch (e) { /* sin credenciales */ }
 
-function abrirModalNueva() {
-    document.getElementById('modalIntegracionTitulo').textContent = 'Nueva integración';
-    document.getElementById('formIntegracion').reset();
-    document.getElementById('form-id').value = '';
-    document.getElementById('form-activo').checked = true;
-}
+    var MOTIVOS = {
+        http_404: 'No existe (404)',
+        http_otro: 'El CDN rechazó la URL',
+        no_imagen: 'La URL no devuelve una imagen',
+        error_red: 'Error de red / timeout'
+    };
 
-function abrirModalEditar(id) {
-    const c = CREDENCIALES[id];
-    if (!c) return;
-    document.getElementById('modalIntegracionTitulo').textContent = `Editar: ${c.nombre}`;
-    document.getElementById('form-id').value = c.id;
-    document.getElementById('form-nombre').value = c.nombre;
-    document.getElementById('form-codigo').value = c.codigo;
-    document.getElementById('form-tipo').value = c.tipo;
-    document.getElementById('form-empresa').value = c.empresa_id;
-    document.getElementById('form-url-api').value = c.url_api;
-    document.getElementById('form-header').value = c.header_name;
-    document.getElementById('form-prioridad').value = c.prioridad;
-    document.getElementById('form-activo').checked = c.activo;
-    document.getElementById('form-api-key').value = '__sin_cambio__';
-    new bootstrap.Modal(document.getElementById('modalIntegracion')).show();
-}
+    // ---------- utilidades ----------
+    function $id(id) { return document.getElementById(id); }
 
-function probarConexion(id, nombre) {
-    document.getElementById('modalResultadoTitulo').textContent = `Probar: ${nombre}`;
-    document.getElementById('modalResultadoCuerpo').innerHTML = `
-        <div class="text-center" style="padding:1rem;">
-            <div class="spinner-border text-primary"></div>
-            <p class="mt-2">Conectando...</p>
-        </div>`;
-    new bootstrap.Modal(document.getElementById('modalResultado')).show();
-
-    fetch(`/app/configuracion/integraciones-ecommerce/${id}/probar/`)
-        .then(r => r.json())
-        .then(data => {
-            const color = data.ok ? 'success' : 'danger';
-            const icon = data.ok ? 'ri-checkbox-circle-line' : 'ri-error-warning-line';
-            document.getElementById('modalResultadoCuerpo').innerHTML = `
-                <div class="alert alert-${color}">
-                    <i class="${icon}"></i>
-                    <strong>${data.ok ? 'Conexión OK' : 'Falló'}</strong>
-                </div>
-                <table class="table table-sm">
-                    <tr><th>URL probada</th><td>${data.url}/api/v1/health/</td></tr>
-                    <tr><th>HTTP status</th><td>${data.status ?? '(sin respuesta)'}</td></tr>
-                    <tr><th>Detalle</th><td><code>${data.detalle || '(vacío)'}</code></td></tr>
-                </table>`;
-        })
-        .catch(err => {
-            document.getElementById('modalResultadoCuerpo').innerHTML =
-                `<div class="alert alert-danger">Error: ${err}</div>`;
-        });
-}
-
-function sincronizarAhora(id, nombre) {
-    if (!confirm(`Sincronizar fotos de "${nombre}" ahora?\n\nPuede tardar varios minutos si hay muchos articulos sin foto.`)) return;
-
-    document.getElementById('modalResultadoTitulo').textContent = `Sincronizando: ${nombre}`;
-    document.getElementById('modalResultadoCuerpo').innerHTML = `
-        <div class="text-center" style="padding:1rem;">
-            <div class="spinner-border text-primary"></div>
-            <p class="mt-2">Sincronizando... puede tardar.</p>
-        </div>`;
-    new bootstrap.Modal(document.getElementById('modalResultado')).show();
-
-    fetch(`/app/configuracion/integraciones-ecommerce/${id}/sincronizar/`, {
-        method: 'POST',
-        headers: {'X-CSRFToken': csrfToken()},
-    })
-        .then(r => r.json())
-        .then(data => {
-            const color = data.ok ? 'success' : 'danger';
-            const icon = data.ok ? 'ri-checkbox-circle-line' : 'ri-error-warning-line';
-            const ultima = data.ultima_sync_at
-                ? new Date(data.ultima_sync_at).toLocaleString('es-CL')
-                : 'sin registro';
-            document.getElementById('modalResultadoCuerpo').innerHTML = `
-                <div class="alert alert-${color}">
-                    <i class="${icon}"></i>
-                    <strong>${data.ok ? 'Sync completado' : 'Sync con errores'}</strong>
-                </div>
-                <p><strong>Última sync:</strong> ${ultima}</p>
-                <p><strong>Resumen:</strong> ${data.ultima_sync_resultado || '(no actualizado)'}</p>
-                <details open>
-                    <summary>Log completo</summary>
-                    <div class="resultado-log mt-2">${data.stdout || ''}${data.stderr ? '\n\n[STDERR]\n' + data.stderr : ''}</div>
-                </details>
-                <p class="text-muted mt-2"><small>Recargá la página para ver los contadores actualizados.</small></p>`;
-        })
-        .catch(err => {
-            document.getElementById('modalResultadoCuerpo').innerHTML =
-                `<div class="alert alert-danger">Error: ${err}</div>`;
-        });
-}
-
-function escHtml(s) {
-    return String(s == null ? '' : s)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-
-function renderReporteVerif(data) {
-    if (!data.ok) {
-        return `<div class="alert alert-danger">Error: ${escHtml(data.error || 'desconocido')}</div>`;
-    }
-    const r = data.resultado;
-    const cob = r.cobertura;
-    const u = r.urls;
-
-    let html = `<div class="alert alert-info" style="margin-bottom:0.75rem;">
-        <strong>Cobertura de ${escHtml(cob.empresa)}:</strong>
-        ${cob.con_foto}/${cob.articulos} artículos con foto (${cob.sin_foto} sin foto)
-    </div>`;
-
-    // Cobertura por sucursal
-    if (cob.por_sucursal && cob.por_sucursal.length) {
-        html += `<table class="cobertura-table"><thead><tr>
-            <th>Sucursal</th><th>Artículos</th><th>Con foto</th><th>Sin foto</th><th>%</th>
-        </tr></thead><tbody>`;
-        cob.por_sucursal.forEach(s => {
-            const pct = s.articulos ? Math.round(100 * s.con_foto / s.articulos) : 0;
-            html += `<tr>
-                <td>${escHtml(s.sucursal)}</td>
-                <td>${s.articulos}</td>
-                <td>${s.con_foto}</td>
-                <td>${s.sin_foto}</td>
-                <td>${pct}%</td>
-            </tr>`;
-        });
-        html += `</tbody></table>`;
+    function escHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
-    // Liveness de URLs
-    if (u.verificadas) {
-        const c = u.counters;
-        const marca = u.muestra ? ` (muestra de ${u.verificadas}/${u.total_urls})` : ` (${u.verificadas} URLs)`;
-        html += `<p style="margin:0.9rem 0 0.3rem;"><strong>URLs verificadas${marca}:</strong></p>`;
-        html += `<div class="liveness-chips">
-            <span class="liveness-chip ok">${c.ok} ok</span>
-            <span class="liveness-chip ${c.http_404 ? 'bad' : ''}">${c.http_404} 404</span>
-            <span class="liveness-chip ${c.no_imagen ? 'bad' : ''}">${c.no_imagen} no-imagen</span>
-            <span class="liveness-chip ${c.http_otro ? 'bad' : ''}">${c.http_otro} otro</span>
-            <span class="liveness-chip ${c.error_red ? 'bad' : ''}">${c.error_red} red</span>
-        </div>`;
+    function csrfToken() {
+        var el = document.querySelector('[name=csrfmiddlewaretoken]');
+        return el ? el.value : '';
+    }
 
-        if (u.muertas_ejemplos && u.muertas_ejemplos.length) {
-            html += `<details open><summary>URLs con problema (${u.muertas_ejemplos.length})</summary>
-                <div class="muertas-list mt-2">`;
-            u.muertas_ejemplos.forEach(m => {
-                html += `<div>
-                    <span class="motivo">[${escHtml(m.motivo)}${m.status ? ' ' + m.status : ''}]</span>
-                    ${escHtml(m.articulo)} →
-                    <a href="${escHtml(m.url)}" target="_blank" rel="noopener">${escHtml(m.url)}</a>
-                </div>`;
-            });
-            html += `</div></details>`;
-        } else {
-            html += `<div class="alert alert-success mt-2">Todas las URLs verificadas devuelven una imagen viva.</div>`;
+    function fmtFecha(iso) {
+        if (!iso) { return 'sin registro'; }
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) { return iso; }
+        var p = function (n) { return (n < 10 ? '0' : '') + n; };
+        return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() +
+            ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+
+    function modal(id) {
+        var el = $id(id);
+        if (window.bootstrap && bootstrap.Modal.getOrCreateInstance) {
+            return bootstrap.Modal.getOrCreateInstance(el);
         }
-    } else {
-        html += `<p class="text-muted">Liveness de URL omitido (solo cobertura).</p>`;
+        return bootstrap.Modal.getInstance(el) || new bootstrap.Modal(el);
     }
 
-    html += `<p class="text-muted mt-2"><small>Para el barrido completo (todas las URLs):
-        <code>python manage.py verificar_fotos_ecommerce --codigo ${escHtml(r.codigo)}</code></small></p>`;
-    return html;
-}
+    function confirmar(titulo, texto, botonOk, peligro) {
+        if (window.Swal) {
+            return Swal.fire({
+                icon: peligro ? 'warning' : 'question',
+                title: titulo,
+                text: texto,
+                showCancelButton: true,
+                confirmButtonText: botonOk || 'Sí, continuar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: peligro ? '#f06548' : '#405189',
+                reverseButtons: true
+            }).then(function (r) { return r.isConfirmed; });
+        }
+        return Promise.resolve(window.confirm(titulo + '\n\n' + texto));
+    }
 
-function verificarFotos(id, nombre) {
-    document.getElementById('modalResultadoTitulo').textContent = `Verificar fotos: ${nombre}`;
-    document.getElementById('modalResultadoCuerpo').innerHTML = `
-        <div class="text-center" style="padding:1rem;">
-            <div class="spinner-border text-primary"></div>
-            <p class="mt-2">Verificando cobertura y URLs (muestra)...</p>
-        </div>`;
-    new bootstrap.Modal(document.getElementById('modalResultado')).show();
+    function avisar(icono, titulo, texto) {
+        if (window.Swal) {
+            Swal.fire({ icon: icono, title: titulo, text: texto, confirmButtonColor: '#405189' });
+        } else {
+            window.alert(titulo + '\n\n' + texto);
+        }
+    }
 
-    fetch(`/app/configuracion/integraciones-ecommerce/${id}/verificar/`, {
-        method: 'POST',
-        headers: {'X-CSRFToken': csrfToken()},
-    })
-        .then(r => r.json())
-        .then(data => {
-            document.getElementById('modalResultadoCuerpo').innerHTML = renderReporteVerif(data);
-        })
-        .catch(err => {
-            document.getElementById('modalResultadoCuerpo').innerHTML =
-                `<div class="alert alert-danger">Error: ${escHtml(err)}</div>`;
+    function fetchJson(url, opciones) {
+        opciones = opciones || {};
+        opciones.credentials = 'same-origin';
+        opciones.headers = Object.assign({
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+        }, opciones.headers || {});
+        if (opciones.method && opciones.method !== 'GET') {
+            opciones.headers['X-CSRFToken'] = csrfToken();
+        }
+        return fetch(url, opciones).then(function (r) {
+            return r.json().catch(function () {
+                throw new Error('HTTP ' + r.status + ' (respuesta no es JSON)');
+            }).then(function (data) {
+                if (!r.ok && data && data.error) { throw new Error(data.error); }
+                return data;
+            });
         });
-}
+    }
 
-function eliminarIntegracion(id, nombre) {
-    if (!confirm(`Eliminar integración "${nombre}"?\n\nSe borrarán también todas las URLs de portada que vinieron de esta integración.`)) return;
+    function spinner(texto) {
+        return '<div class="text-center py-3"><div class="spinner-border text-primary" role="status"></div>' +
+            '<p class="mt-2 mb-0">' + escHtml(texto) + '</p></div>';
+    }
 
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = `/app/configuracion/integraciones-ecommerce/${id}/eliminar/`;
-    form.innerHTML = `<input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken()}">`;
-    document.body.appendChild(form);
-    form.submit();
-}
+    function abrirResultado(titulo, textoCarga) {
+        $id('modalResultadoTitulo').textContent = titulo;
+        $id('modalResultadoCuerpo').innerHTML = spinner(textoCarga);
+        modal('modalResultado').show();
+    }
+
+    function setResultado(html) { $id('modalResultadoCuerpo').innerHTML = html; }
+
+    // ---------- render de celdas (espejo del template) ----------
+    function renderSalud(estado, horas) {
+        var h = horas != null ? horas : '?';
+        switch (estado) {
+            case 'ok':
+                return '<span class="badge-salud ok" title="Sincronizada hace ' + escHtml(h) + ' h"><i class="ri-checkbox-circle-fill"></i> Al día</span>';
+            case 'atrasada':
+                return '<span class="badge-salud atrasada"><i class="ri-time-line"></i> Atrasada (' + escHtml(h) + ' h)</span>';
+            case 'error':
+                return '<span class="badge-salud error"><i class="ri-error-warning-fill"></i> Con error</span>';
+            case 'nunca':
+                return '<span class="badge-salud nunca"><i class="ri-question-line"></i> Nunca sincronizada</span>';
+            default:
+                return '<span class="badge-salud inactiva"><i class="ri-pause-circle-line"></i> Apagada</span>';
+        }
+    }
+
+    function renderSync(iso, resumen, crudo) {
+        if (!iso) { return '<span class="text-muted small">Nunca sincronizada</span>'; }
+        var html = '<div class="celda-fecha">' + escHtml(fmtFecha(iso)) + '</div>';
+        if (resumen && resumen.error) {
+            html += '<span class="chip bad" title="' + escHtml(crudo) + '">Error: ' + escHtml(String(resumen.error).slice(0, 60)) + '</span>';
+        } else if (resumen && resumen.texto) {
+            html += '<div class="integracion-meta">' + escHtml(resumen.texto) + '</div>';
+        } else if (resumen) {
+            html += '<span class="chip ok">' + resumen.con_foto + ' con foto</span>' +
+                '<span class="chip ' + (resumen.sin_match ? 'warn' : 'ok') + '">' + resumen.sin_match + ' sin match</span>';
+        }
+        return html;
+    }
+
+    function renderVerif(iso, resumen) {
+        if (!iso) { return '<span class="text-muted small">Nunca verificada</span>'; }
+        var html = '<div class="celda-fecha">' + escHtml(fmtFecha(iso)) + '</div>';
+        if (resumen && resumen.articulos) {
+            html += '<span class="chip">' + resumen.con_foto + '/' + resumen.articulos + ' art. con foto</span>';
+        }
+        if (resumen && resumen.tiene_urls) {
+            html += '<span class="chip ok">' + resumen.urls_ok + ' URLs ok</span>' +
+                '<span class="chip ' + (resumen.urls_malas ? 'bad' : 'ok') + '">' + resumen.urls_malas +
+                ' con problema' + (resumen.muestra ? ' (muestra)' : '') + '</span>';
+        }
+        return html;
+    }
+
+    function renderMuestra(fila, muestra) {
+        var cont = fila.querySelector('[data-campo="muestra"]');
+        if (!cont) { return; }
+        if (!muestra || !muestra.length) {
+            cont.innerHTML = '<span class="text-muted small">Sin fotos</span>';
+        } else {
+            cont.innerHTML = muestra.map(function (f) {
+                return '<img class="muestra-foto" src="' + escHtml(f.url) + '" alt="" loading="lazy" title="' +
+                    escHtml(f.articulo) + '" data-foto-zoom="' + escHtml(f.url) + '">';
+            }).join('');
+        }
+        var rotas = fila.querySelector('[data-campo="rotas"]');
+        if (rotas) { rotas.hidden = true; rotas.textContent = ''; }
+    }
+
+    function actualizarRotas(fila) {
+        if (!fila) { return; }
+        var imgs = fila.querySelectorAll('.muestra-foto');
+        var rotas = fila.querySelectorAll('.muestra-foto.is-broken').length;
+        var el = fila.querySelector('[data-campo="rotas"]');
+        if (!el) { return; }
+        if (rotas) {
+            el.hidden = false;
+            el.innerHTML = '<i class="ri-alert-line"></i> ' + rotas + ' de ' + imgs.length + ' no cargan';
+            el.title = 'El CDN respondió error para estas URLs: en el POS se ve el placeholder.';
+        } else {
+            el.hidden = true;
+        }
+    }
+
+    function recalcularKpis() {
+        var filas = document.querySelectorAll('tr[data-id]');
+        var problema = 0;
+        filas.forEach(function (f) {
+            var e = f.dataset.estadoSync;
+            if (e === 'nunca' || e === 'error' || e === 'atrasada') { problema += 1; }
+        });
+        $id('kpi-con-problema').textContent = problema;
+        $id('aviso-cantidad').textContent = problema;
+        $id('aviso-atencion').hidden = problema === 0;
+        var card = $id('kpi-card-problema');
+        card.classList.toggle('kpi-red', problema > 0);
+        card.classList.toggle('kpi-green', problema === 0);
+        $id('header-status-dot').classList.toggle('alerta', problema > 0);
+    }
+
+    // ---------- formulario ----------
+    function modoApiKey(editando) {
+        var input = $id('form-api-key');
+        input.value = '';
+        input.type = 'password';
+        input.required = !editando;
+        input.placeholder = editando ? '•••••••• (dejá vacío para conservar la actual)' : '';
+        $id('form-api-key-ayuda').textContent = editando
+            ? 'Dejá el campo vacío para conservar la API key guardada; escribí una nueva para reemplazarla.'
+            : 'Se guarda en la base y viaja en el header al ecommerce.';
+        $id('form-api-key-label').classList.toggle('form-label-required', !editando);
+    }
+
+    function abrirModalNueva() {
+        var form = $id('formIntegracion');
+        form.reset();
+        $id('modalIntegracionTitulo').textContent = 'Nueva integración';
+        $id('form-id').value = '';
+        $id('form-header').value = 'X-AllConnected-Key';
+        $id('form-prioridad').value = 0;
+        $id('form-activo').checked = true;
+        modoApiKey(false);
+        modal('modalIntegracion').show();
+        setTimeout(function () { $id('form-nombre').focus(); }, 300);
+    }
+
+    function abrirModalEditar(id) {
+        var c = CREDENCIALES[id];
+        if (!c) { return; }
+        $id('modalIntegracionTitulo').textContent = 'Editar: ' + c.nombre;
+        $id('form-id').value = c.id;
+        $id('form-nombre').value = c.nombre;
+        $id('form-codigo').value = c.codigo;
+        $id('form-tipo').value = c.tipo;
+        $id('form-empresa').value = c.empresa_id;
+        $id('form-url-api').value = c.url_api;
+        $id('form-header').value = c.header_name;
+        $id('form-prioridad').value = c.prioridad;
+        $id('form-activo').checked = !!c.activo;
+        modoApiKey(true);
+        modal('modalIntegracion').show();
+    }
+
+    // Autocompletar el código a partir del nombre (solo al crear, si no lo tocaron).
+    var codigoManual = false;
+    $id('form-codigo').addEventListener('input', function () { codigoManual = true; });
+    $id('form-nombre').addEventListener('input', function () {
+        if ($id('form-id').value || codigoManual) { return; }
+        var slug = this.value.toLowerCase()
+            .normalize('NFD').replace(/[̀-ͯ]/g, '')
+            .replace(/\.[a-z]{2,4}\b/g, '')
+            .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50);
+        $id('form-codigo').value = slug;
+    });
+    $id('modalIntegracion').addEventListener('hidden.bs.modal', function () { codigoManual = false; });
+
+    $id('form-api-key-toggle').addEventListener('click', function () {
+        var input = $id('form-api-key');
+        var esPassword = input.type === 'password';
+        input.type = esPassword ? 'text' : 'password';
+        this.innerHTML = esPassword ? '<i class="ri-eye-off-line"></i>' : '<i class="ri-eye-line"></i>';
+    });
+
+    $id('formIntegracion').addEventListener('submit', function () {
+        // Al editar sin nueva key, mandar el centinela (el backend acepta vacío o centinela).
+        var input = $id('form-api-key');
+        if ($id('form-id').value && !input.value.trim()) { input.value = API_KEY_SIN_CAMBIO; input.type = 'text'; }
+    });
+
+    // ---------- acciones por fila ----------
+    function probarConexion(fila) {
+        abrirResultado('Probar conexión: ' + fila.dataset.nombre, 'Conectando con el ecommerce…');
+        fetchJson(fila.dataset.urlProbar)
+            .then(function (data) {
+                var color = data.ok ? 'success' : 'danger';
+                var icon = data.ok ? 'ri-checkbox-circle-line' : 'ri-error-warning-line';
+                setResultado(
+                    '<div class="alert alert-' + color + '"><i class="' + icon + ' me-1"></i><strong>' +
+                    (data.ok ? 'Conexión OK' : 'Falló la conexión') + '</strong></div>' +
+                    '<table class="table table-sm mb-0">' +
+                    '<tr><th scope="row">URL probada</th><td><code>' + escHtml(data.url) + '/api/v1/health/</code></td></tr>' +
+                    '<tr><th scope="row">HTTP status</th><td>' + escHtml(data.status != null ? data.status : '(sin respuesta)') + '</td></tr>' +
+                    '<tr><th scope="row">Detalle</th><td><code>' + escHtml(data.detalle || '(vacío)') + '</code></td></tr>' +
+                    '</table>'
+                );
+            })
+            .catch(function (err) {
+                setResultado('<div class="alert alert-danger">Error: ' + escHtml(err.message || err) + '</div>');
+            });
+    }
+
+    function aplicarSync(fila, data) {
+        fila.dataset.estadoSync = data.estado_sync || fila.dataset.estadoSync;
+        var salud = fila.querySelector('[data-campo="salud"]');
+        if (salud && data.estado_sync) { salud.innerHTML = renderSalud(data.estado_sync, data.horas_sync); }
+        var sync = fila.querySelector('[data-campo="sync"]');
+        if (sync) { sync.innerHTML = renderSync(data.ultima_sync_at, data.resumen, data.ultima_sync_resultado); }
+        var fotos = fila.querySelector('[data-campo="fotos"]');
+        if (fotos && data.total_fotos != null) { fotos.textContent = data.total_fotos; }
+        if (data.kpi_total_fotos != null) {
+            $id('kpi-total-fotos').textContent = data.kpi_total_fotos;
+            $id('header-total-fotos').textContent = data.kpi_total_fotos;
+        }
+        if (data.muestra) { renderMuestra(fila, data.muestra); }
+        recalcularKpis();
+    }
+
+    function sincronizarAhora(fila) {
+        var nombre = fila.dataset.nombre;
+        confirmar(
+            'Sincronizar fotos de "' + nombre + '"',
+            'Se pide el catálogo completo de portadas al ecommerce y se actualizan las URLs. ' +
+            'Suele tardar entre 15 y 30 segundos.',
+            'Sincronizar ahora'
+        ).then(function (ok) {
+            if (!ok) { return; }
+            abrirResultado('Sincronizando: ' + nombre, 'Sincronizando… puede tardar hasta un minuto.');
+            fetchJson(fila.dataset.urlSync, { method: 'POST' })
+                .then(function (data) {
+                    var color = data.ok ? 'success' : 'danger';
+                    var icon = data.ok ? 'ri-checkbox-circle-line' : 'ri-error-warning-line';
+                    var log = (data.stdout || '') + (data.stderr ? '\n\n[ERROR]\n' + data.stderr : '');
+                    setResultado(
+                        '<div class="alert alert-' + color + '"><i class="' + icon + ' me-1"></i><strong>' +
+                        (data.ok ? 'Sincronización completada' : 'Sincronización con errores') + '</strong></div>' +
+                        '<p class="mb-1"><strong>Última sync:</strong> ' + escHtml(fmtFecha(data.ultima_sync_at)) + '</p>' +
+                        '<p class="mb-2"><strong>Resumen:</strong> <code>' + escHtml(data.ultima_sync_resultado || '(no actualizado)') + '</code></p>' +
+                        '<details' + (data.ok ? '' : ' open') + '><summary>Log completo</summary>' +
+                        '<div class="resultado-log mt-2">' + escHtml(log || '(sin salida)') + '</div></details>' +
+                        (data.ok ? '<p class="form-text-rm mt-2 mb-0">La fila ya quedó actualizada. Usá <em>Verificar fotos</em> para comprobar que las URLs cargan.</p>' : '')
+                    );
+                    aplicarSync(fila, data);
+                })
+                .catch(function (err) {
+                    setResultado('<div class="alert alert-danger">Error: ' + escHtml(err.message || err) + '</div>');
+                });
+        });
+    }
+
+    function renderReporteVerif(data) {
+        if (!data.ok) {
+            return '<div class="alert alert-danger">Error: ' + escHtml(data.error || 'desconocido') + '</div>';
+        }
+        var r = data.resultado;
+        var cob = r.cobertura;
+        var u = r.urls;
+
+        var html = '<div class="alert alert-info mb-2"><strong>Cobertura de ' + escHtml(cob.empresa) + ':</strong> ' +
+            cob.con_foto + '/' + cob.articulos + ' artículos con foto (' + cob.sin_foto + ' sin foto)</div>';
+
+        if (cob.por_sucursal && cob.por_sucursal.length) {
+            html += '<table class="cobertura-table"><thead><tr>' +
+                '<th scope="col">Sucursal</th><th scope="col">Artículos</th><th scope="col">Con foto</th><th scope="col">Sin foto</th><th scope="col">%</th>' +
+                '</tr></thead><tbody>';
+            cob.por_sucursal.forEach(function (s) {
+                var pct = s.articulos ? Math.round(100 * s.con_foto / s.articulos) : 0;
+                html += '<tr><td>' + escHtml(s.sucursal) + '</td><td>' + s.articulos + '</td><td>' + s.con_foto +
+                    '</td><td>' + s.sin_foto + '</td><td>' + pct + '%</td></tr>';
+            });
+            html += '</tbody></table>';
+        }
+
+        if (u.verificadas) {
+            var c = u.counters;
+            var marca = u.muestra ? ' (muestra de ' + u.verificadas + '/' + u.total_urls + ')' : ' (' + u.verificadas + ' URLs)';
+            html += '<p class="mt-3 mb-1"><strong>URLs verificadas' + marca + ':</strong></p>' +
+                '<div class="liveness-chips">' +
+                '<span class="chip ok">' + c.ok + ' ok</span>' +
+                '<span class="chip ' + (c.http_404 ? 'bad' : '') + '">' + c.http_404 + ' no existen (404)</span>' +
+                '<span class="chip ' + (c.no_imagen ? 'bad' : '') + '">' + c.no_imagen + ' no son imagen</span>' +
+                '<span class="chip ' + (c.http_otro ? 'bad' : '') + '">' + c.http_otro + ' rechazadas (403/otro)</span>' +
+                '<span class="chip ' + (c.error_red ? 'bad' : '') + '">' + c.error_red + ' error de red</span>' +
+                '</div>';
+
+            if (u.muertas_ejemplos && u.muertas_ejemplos.length) {
+                var malas = u.verificadas - c.ok;
+                if (c.http_otro && c.http_otro >= u.verificadas * 0.8) {
+                    html += '<div class="alert alert-danger py-2 mb-2"><strong>Casi todas las URLs vienen rechazadas por el CDN.</strong> ' +
+                        'Eso no se arregla desde RetailMind: el bucket/CDN del ecommerce (Spaces) no está sirviendo esas rutas como públicas. ' +
+                        'En el POS esos productos salen con el placeholder.</div>';
+                }
+                html += '<details open><summary>URLs con problema (' + malas + ' en la muestra, ' + u.muertas_ejemplos.length + ' listadas)</summary>' +
+                    '<div class="muertas-list mt-2">';
+                u.muertas_ejemplos.forEach(function (m) {
+                    html += '<div><span class="motivo">[' + escHtml(MOTIVOS[m.motivo] || m.motivo) + (m.status ? ' ' + m.status : '') + ']</span> ' +
+                        escHtml(m.articulo) + ' → <a href="' + escHtml(m.url) + '" target="_blank" rel="noopener">' + escHtml(m.url) + '</a></div>';
+                });
+                html += '</div></details>';
+            } else {
+                html += '<div class="alert alert-success mt-2 mb-0">Todas las URLs verificadas devuelven una imagen viva.</div>';
+            }
+        } else {
+            html += '<p class="text-muted">Chequeo de URLs omitido (solo cobertura).</p>';
+        }
+
+        html += '<p class="form-text-rm mt-2 mb-0">Se verifica una muestra de ' + VERIF_MUESTRA + ' URLs para responder rápido. Barrido completo: ' +
+            '<code>python manage.py verificar_fotos_ecommerce --codigo ' + escHtml(r.codigo) + '</code></p>';
+        return html;
+    }
+
+    function verificarFotos(fila) {
+        abrirResultado('Verificar fotos: ' + fila.dataset.nombre, 'Midiendo cobertura del catálogo y probando una muestra de URLs…');
+        fetchJson(fila.dataset.urlVerificar, { method: 'POST' })
+            .then(function (data) {
+                setResultado(renderReporteVerif(data));
+                if (data.ok) {
+                    var verif = fila.querySelector('[data-campo="verif"]');
+                    if (verif) { verif.innerHTML = renderVerif(data.ultima_verif_at, data.verif_resumen); }
+                    if (data.verif_muertas != null) { fila.dataset.verifMuertas = data.verif_muertas; }
+                }
+            })
+            .catch(function (err) {
+                setResultado('<div class="alert alert-danger">Error: ' + escHtml(err.message || err) + '</div>');
+            });
+    }
+
+    function eliminarIntegracion(fila) {
+        var nombre = fila.dataset.nombre;
+        var fotos = fila.querySelector('[data-campo="fotos"]');
+        confirmar(
+            'Eliminar "' + nombre + '"',
+            'Se borran también las ' + (fotos ? fotos.textContent.trim() : '') + ' URLs de portada que vinieron de esta integración. ' +
+            'Los productos volverán a mostrarse sin foto.',
+            'Sí, eliminar', true
+        ).then(function (ok) {
+            if (!ok) { return; }
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = fila.dataset.urlEliminar;
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'csrfmiddlewaretoken';
+            input.value = csrfToken();
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+        });
+    }
+
+    // ---------- galería ----------
+    var galeria = { fila: null, page: 1, q: '', solo: '' };
+
+    function abrirGaleria(fila) {
+        galeria = { fila: fila, page: 1, q: '', solo: '' };
+        $id('modalFotosTitulo').textContent = 'Fotos sincronizadas: ' + fila.dataset.nombre;
+        $id('fotos-q').value = '';
+        $id('fotos-solo-muertas').checked = false;
+        $id('fotos-muertas-n').textContent = fila.dataset.verifMuertas || '0';
+        $id('fotos-solo-muertas').disabled = !(parseInt(fila.dataset.verifMuertas || '0', 10) > 0);
+        modal('modalFotos').show();
+        cargarGaleria();
+    }
+
+    function cargarGaleria() {
+        if (!galeria.fila) { return; }
+        var grid = $id('fotos-grid');
+        grid.innerHTML = spinner('Cargando fotos…');
+        var url = galeria.fila.dataset.urlFotos + '?page=' + galeria.page +
+            '&q=' + encodeURIComponent(galeria.q) + (galeria.solo ? '&solo=' + galeria.solo : '');
+        fetchJson(url)
+            .then(renderGaleria)
+            .catch(function (err) {
+                grid.innerHTML = '<div class="alert alert-danger w-100">Error: ' + escHtml(err.message || err) + '</div>';
+            });
+    }
+
+    function renderGaleria(data) {
+        var grid = $id('fotos-grid');
+        if (!data.items.length) {
+            grid.innerHTML = '<div class="empty-state w-100"><i class="ri-image-line"></i><p>' +
+                (data.solo === 'muertas' ? 'La última verificación no dejó URLs con problema.' :
+                    (data.q ? 'Ningún artículo coincide con la búsqueda.' : 'Esta integración todavía no tiene fotos sincronizadas.')) +
+                '</p></div>';
+        } else {
+            grid.innerHTML = data.items.map(function (it) {
+                var motivo = it.motivo ? (MOTIVOS[it.motivo] || it.motivo) + (it.status ? ' (' + it.status + ')' : '') : '';
+                return '<div class="foto-card">' +
+                    '<img class="producto-portada-img" loading="lazy" alt="" src="' + escHtml(it.url) + '" data-foto-zoom="' + escHtml(it.url) + '">' +
+                    '<div class="foto-rota"><i class="ri-image-line"></i><span>No carga</span></div>' +
+                    '<div class="foto-info">' +
+                    '<div class="foto-articulo">' + escHtml(it.articulo) + '</div>' +
+                    (it.descripcion ? '<div class="foto-desc" title="' + escHtml(it.descripcion) + '">' + escHtml(it.descripcion) + '</div>' : '') +
+                    (motivo ? '<div class="foto-motivo">' + escHtml(motivo) + '</div>' : '') +
+                    '<a class="foto-link" href="' + escHtml(it.url) + '" target="_blank" rel="noopener">abrir URL</a>' +
+                    '</div></div>';
+            }).join('');
+        }
+        $id('fotos-resumen').textContent = data.total + ' foto(s)' + (data.q ? ' para "' + data.q + '"' : '') +
+            (data.solo === 'muertas' ? ' con problema' : '');
+        $id('fotos-pagina').textContent = 'Página ' + data.page + ' de ' + Math.max(1, data.pages);
+        $id('fotos-prev').disabled = data.page <= 1;
+        $id('fotos-next').disabled = data.page >= data.pages;
+        galeria.page = data.page;
+        actualizarRotasGaleria();
+    }
+
+    function actualizarRotasGaleria() {
+        var grid = $id('fotos-grid');
+        var total = grid.querySelectorAll('.foto-card').length;
+        var rotas = grid.querySelectorAll('.foto-card.is-broken').length;
+        var base = $id('fotos-resumen').textContent.replace(/ · .*$/, '');
+        $id('fotos-resumen').textContent = base + (rotas ? ' · ' + rotas + ' de ' + total + ' en esta página no cargan' : '');
+    }
+
+    var timerBusqueda = null;
+    $id('fotos-q').addEventListener('input', function () {
+        clearTimeout(timerBusqueda);
+        var valor = this.value.trim();
+        timerBusqueda = setTimeout(function () {
+            galeria.q = valor;
+            galeria.page = 1;
+            cargarGaleria();
+        }, 300);
+    });
+    $id('fotos-solo-muertas').addEventListener('change', function () {
+        galeria.solo = this.checked ? 'muertas' : '';
+        galeria.page = 1;
+        cargarGaleria();
+    });
+    $id('fotos-prev').addEventListener('click', function () {
+        if (galeria.page > 1) { galeria.page -= 1; cargarGaleria(); }
+    });
+    $id('fotos-next').addEventListener('click', function () {
+        galeria.page += 1;
+        cargarGaleria();
+    });
+
+    // ---------- delegación de eventos ----------
+    document.addEventListener('click', function (ev) {
+        var btn = ev.target.closest('[data-accion]');
+        if (!btn) { return; }
+        var accion = btn.dataset.accion;
+        if (accion === 'nueva') { abrirModalNueva(); return; }
+        var fila = btn.closest('tr[data-id]');
+        if (!fila) { return; }
+        switch (accion) {
+            case 'probar': probarConexion(fila); break;
+            case 'sincronizar': sincronizarAhora(fila); break;
+            case 'verificar': verificarFotos(fila); break;
+            case 'editar': abrirModalEditar(fila.dataset.id); break;
+            case 'eliminar': eliminarIntegracion(fila); break;
+            case 'fotos': abrirGaleria(fila); break;
+            default: break;
+        }
+    });
+
+    // Imágenes que el CDN no entrega (403/404): marcar en la fila y en la galería.
+    function marcarImagenRota(img) {
+        if (img.classList.contains('muestra-foto')) {
+            if (img.classList.contains('is-broken')) { return; }
+            img.classList.add('is-broken');
+            img.removeAttribute('data-foto-zoom');
+            img.title = (img.title ? img.title + ' — ' : '') + 'no carga (el CDN respondió error)';
+            img.src = PLACEHOLDER;
+            actualizarRotas(img.closest('tr'));
+            return;
+        }
+        var card = img.closest('.foto-card');
+        if (card && !card.classList.contains('is-broken')) {
+            card.classList.add('is-broken');
+            actualizarRotasGaleria();
+        }
+    }
+    document.addEventListener('error', function (ev) {
+        var el = ev.target;
+        if (el && el.tagName === 'IMG') { marcarImagenRota(el); }
+    }, true);
+    // Las que ya fallaron antes de engancharnos (cache del navegador).
+    document.querySelectorAll('img.muestra-foto').forEach(function (img) {
+        if (img.complete && img.naturalWidth === 0 && img.getAttribute('src') !== PLACEHOLDER) { marcarImagenRota(img); }
+    });
+})();
 </script>

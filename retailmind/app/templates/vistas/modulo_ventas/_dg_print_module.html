@@ -17,6 +17,7 @@
 (function () {
     // Plantilla con id=0 que se reemplaza por el id real.
     const URL_TICKET_DG = '{% url "api_ticket_devolucion_garantia" 0 %}';
+    const URL_CORREO_DG = '{% url "api_enviar_comprobante_devolucion_garantia" 0 %}';
     const _clpDG = (n) => '$' + Number(n || 0).toLocaleString('es-CL');
     const _escDG = (s) => String(s == null ? '' : s)
         .replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
@@ -150,7 +151,47 @@ ${td.motivo ? `<div class="hr"></div><div class="b">MOTIVO:</div><div class="mot
 </body></html>`;
     }
 
-    // Se invoca desde onclick inline → debe vivir en window.
+    function _csrfDG() {
+        const inp = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (inp && inp.value) { return inp.value; }
+        const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+        return m ? decodeURIComponent(m[1]) : '';
+    }
+
+    /* Manda el comprobante (PDF 80mm adjunto) al correo del cliente.
+       `emailSugerido` prellena el campo con el correo del receptor; se puede
+       corregir antes de enviar. Queda en la bitácora de correo. */
+    function enviarComprobanteDG(id, emailSugerido) {
+        Swal.fire({
+            title: 'Enviar comprobante por correo',
+            input: 'email', inputLabel: 'Correo del cliente', inputValue: emailSugerido || '',
+            inputPlaceholder: 'cliente@correo.cl', validationMessage: 'Ingresa un correo válido',
+            showCancelButton: true, confirmButtonColor: '#0066FF',
+            confirmButtonText: '<i class="ri-mail-send-line me-1"></i> Enviar', cancelButtonText: 'Cancelar',
+            showLoaderOnConfirm: true,
+            allowOutsideClick: () => !Swal.isLoading(),
+            preConfirm: (email) => $.ajax({
+                url: URL_CORREO_DG.replace('/0/', '/' + id + '/'), method: 'POST', contentType: 'application/json',
+                headers: { 'X-CSRFToken': _csrfDG() }, data: JSON.stringify({ email: email }),
+            }).catch(function (xhr) {
+                // El decorador de permisos y el timeout de sesión responden
+                // {error: true, mensaje: '...'}: sin esto se mostraba «true».
+                const r = (xhr && xhr.responseJSON) || {};
+                const msg = (typeof r.error === 'string' && r.error)
+                    || (typeof r.mensaje === 'string' && r.mensaje)
+                    || 'No se pudo enviar el correo';
+                Swal.showValidationMessage(msg);
+                if (r.session_expired && r.redirect_url) { setTimeout(() => { window.location.href = r.redirect_url; }, 1500); }
+            }),
+        }).then(function (r) {
+            if (!r.isConfirmed || !r.value || !r.value.success) { return; }
+            Swal.fire({ icon: 'success', title: 'Correo enviado', text: r.value.message, timer: 2500, showConfirmButton: false });
+            if (typeof window.dgCorreoEnviado === 'function') { window.dgCorreoEnviado(id, r.value.data); }
+        });
+    }
+
+    // Se invocan desde onclick inline → deben vivir en window.
     window.imprimirDevolucionGarantia = imprimirDevolucionGarantia;
+    window.enviarComprobanteDG = enviarComprobanteDG;
 })();
 </script>

@@ -394,3 +394,93 @@ False  # → confirma que ya no existe en RetailMind
 - Resultado: **1087 fotos sincronizadas** (99.3%)
 - Tiempo de ejecución: ~15 segundos
 - Productos sin match: 8
+
+
+---
+
+## Actualización 28-sep-2026 — clave compuesta y thumbnails inexistentes
+
+Auditoría en solo lectura (BD de RetailMind, API de las dos tiendas y bucket
+`media-ecommerce` con `boto3`).
+
+### 1. Las tiendas ya no publican `Producto_Talla.sku`: publican una clave compuesta
+
+AllConnected (`system/marketplaces/retailmind/client.py`, `SEP_CLAVE = "||"`)
+ancla cada producto con `codigo||marca||color||genero` y la tienda la expone como
+`Product.sku`, p. ej. `SP0040-101||PASSER||NEGRO||MUJER||CHALAS`. Los productos
+anteriores al cambio conservan el SKU numérico de talla.
+
+| Tienda | SKUs con foto | match por talla (viejos) | clave compuesta | sin match |
+|---|---|---|---|---|
+| calzadospaola | 2.836 | 2.331 | 505 | 0 |
+| realsport | 1.951 | 1.081 | 867 | 3 (códigos vacíos/mal formados) |
+
+Con las 3 estrategias originales **1.372 productos nuevos quedaban sin foto**.
+
+### 4️⃣ Match por clave compuesta (nuevo)
+
+```python
+if '||' in sku:
+    tramo = sku.split('||', 1)[0].strip()
+    # exacto → trim+upper → Producto_Talla.sku, contra el primer tramo
+```
+
+Recupera el 100 % de los compuestos (0 sin match en Paola, 3 en realsport).
+Contador `compuesto=N` en `ultima_sync_resultado`.
+
+### 2. Paola: 2.072 de 2.155 portadas guardadas en RetailMind **no existen** en el bucket
+
+No es un problema de ACL (todos los objetos muestreados son `public-read`): las
+URLs apuntan al thumbnail de imagekit (`paola/media/CACHE/images/…/<hash>.webp`)
+y ese archivo **nunca se generó** para los productos importados desde Shopify en
+mayo-2026. La estrategia de imagekit es `Optimistic` (genera al guardar la fila,
+no al pedir la URL), y la web de la tienda dejó de usar imagekit: usa las
+variantes del `image_optimizer` (`CACHE/optimized/<modelo>/<pk>/image_400.webp`).
+
+La tienda YA corrigió esto para su propio serializer el 19-jun-2026
+(`ProductImageSerializer.get_thumbnail_url`, commit `f536d323`/`75a1591a`), pero
+**no** para el endpoint que consume RetailMind: `_cover_image_url` en
+`apps/api/views.py` sigue devolviendo `img.thumbnail.url`. El CDN responde 403
+(`AccessDenied`) para claves inexistentes, por eso parecía un problema de permisos.
+
+**Arreglo (repo ecommerce, ambas ramas), misma lógica que el serializer:**
+
+```python
+def _cover_image_url(product, request) -> str | None:
+    img = (product.images.filter(is_primary=True).first()
+           or product.images.order_by("order", "id").first())
+    if img is None:
+        return None
+    from apps.catalog.templatetags.image_tags import webp_url
+    url = webp_url(img.image, 400)          # variante optimizada (la que usa la web)
+    if not url:
+        try:
+            url = img.thumbnail.url          # imagekit, si existe
+        except Exception:
+            url = img.image.url              # original
+    return url if url.startswith(("http://", "https://")) else request.build_absolute_uri(url)
+```
+
+Alternativa sin tocar código: `python manage.py generateimages` en el deploy de
+Paola crea los CACHE que faltan exactamente en las claves que RetailMind ya tiene.
+Después, `Sincronizar ahora` + `Verificar fotos` en RetailMind.
+
+Realsport: sus 1.069 portadas guardadas existen; 27 de 30 llegan como
+`application/octet-stream` (la verificación ahora lee los magic bytes).
+
+### 3. AllConnected NO es la fuente de las fotos de RetailMind
+
+RetailMind pide las portadas directo a cada tienda (`/api/v1/products/images/`).
+AllConnected es otro **consumidor** de las mismas imágenes: `image_puller` /
+`diagnostico_fotos` leen `images[].url` (la original, siempre existe) y las
+guardan en `ProductoCanal.metadatos_canal['images']`; y **empuja** URLs hacia la
+tienda (`add_images_from_urls` → `POST /api/v1/products/<sku>/images/`) desde el
+enriquecimiento con IA y desde la publicación manual. Las fotos históricas de las
+tiendas vienen del importador Shopify (`shopify_<id>` en el nombre del archivo).
+
+### 4. Operación
+
+La pasada diaria de `run_scheduler` (04:00) sincroniza y verifica las
+integraciones activas (`SCHEDULER_SYNC_FOTOS=0` la apaga); el cron HTTP acepta
+`?incluir_fotos=1`. En la pantalla, *Ver fotos* muestra la galería y marca en rojo
+las URLs que el CDN no entrega.

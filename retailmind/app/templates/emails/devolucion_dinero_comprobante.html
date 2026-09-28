@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comprobante de devolución {{ td.numero_operacion }}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f5f7;font-family:Arial,Helvetica,sans-serif;">
+  <div style="display:none;max-height:0;overflow:hidden;">Devolución {{ td.numero_operacion }} por ${{ td.total|floatformat:"0g" }} — comprobante adjunto.</div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:24px 0;">
+    <tr><td align="center">
+
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:12px;overflow:hidden;">
+
+        <!-- Header -->
+        <tr>
+          <td style="background-color:#1A1A2E;padding:28px 40px;text-align:center;">
+            <div style="font-size:22px;font-weight:bold;letter-spacing:3px;color:#ffffff;">{{ td.sucursal.empresa|upper }}</div>
+            <div style="font-size:12px;letter-spacing:2px;color:#00D4AA;margin-top:4px;">DEVOLUCIÓN DE DINERO</div>
+          </td>
+        </tr>
+
+        <!-- Saludo -->
+        <tr>
+          <td style="padding:32px 40px 8px 40px;color:#1A1A2E;">
+            <p style="margin:0 0 6px 0;font-size:20px;font-weight:bold;">
+              {% if td.nota_credito %}Tu devolución está lista{% else %}Recibimos tu solicitud de devolución{% endif %}
+            </p>
+            <p style="margin:0;font-size:14px;color:#555a66;line-height:1.6;">
+              Hola{% if td.cliente.nombre %} <strong>{{ td.cliente.nombre }}</strong>{% endif %},
+              {% if td.nota_credito %}
+              te confirmamos la devolución <strong>{{ td.numero_operacion }}</strong> por
+              <strong>${{ td.total|floatformat:"0g" }}</strong>{% if td.metodo_solicitado_display %} mediante <strong>{{ td.metodo_solicitado_display }}</strong>{% endif %}.
+              Adjuntamos el comprobante en PDF.
+              {% else %}
+              registramos la solicitud <strong>{{ td.numero_operacion }}</strong> por
+              <strong>${{ td.total|floatformat:"0g" }}</strong>. Queda <strong>sujeta a aprobación</strong>; te avisaremos cuando se resuelva.
+              Adjuntamos el comprobante en PDF.
+              {% endif %}
+            </p>
+          </td>
+        </tr>
+
+        <!-- Resumen -->
+        <tr>
+          <td style="padding:24px 40px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#1A1A2E;border-radius:14px;">
+              <tr>
+                <td style="padding:24px 32px;text-align:center;">
+                  <div style="font-size:12px;letter-spacing:2px;color:#9aa0b4;">MONTO</div>
+                  <div style="font-size:36px;font-weight:bold;color:#ffffff;margin:6px 0 14px 0;">${{ td.total|floatformat:"0g" }}</div>
+                  <div style="font-size:12px;letter-spacing:2px;color:#9aa0b4;">N° DE OPERACIÓN</div>
+                  <div style="font-family:'Courier New',Courier,monospace;font-size:20px;font-weight:bold;letter-spacing:2px;color:#00D4AA;margin:6px 0 10px 0;">{{ td.numero_operacion }}</div>
+                  <div style="font-size:13px;color:#c9cdda;">Estado: <strong style="color:#ffffff;">{{ td.estado_display }}</strong></div>
+                  {% if td.nota_credito %}<div style="font-size:13px;color:#c9cdda;margin-top:4px;">Nota de Crédito N° <strong style="color:#ffffff;">{{ td.nota_credito }}</strong></div>{% endif %}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Detalle -->
+        <tr>
+          <td style="padding:0 40px 8px 40px;color:#1A1A2E;">
+            <p style="margin:0 0 10px 0;font-size:15px;font-weight:bold;">Detalle</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;color:#555a66;line-height:1.7;">
+              <tr><td style="padding:2px 0;width:42%;">Fecha</td><td style="padding:2px 0;">{{ td.fecha }} {{ td.hora }}</td></tr>
+              {% if td.dte.folio %}<tr><td style="padding:2px 0;">Documento original</td><td style="padding:2px 0;">{{ td.dte.tipo }} #{{ td.dte.folio }}{% if td.dte.fecha %} ({{ td.dte.fecha }}){% endif %}</td></tr>{% endif %}
+              {% if td.metodo_solicitado_display %}<tr><td style="padding:2px 0;">Forma de devolución</td><td style="padding:2px 0;">{{ td.metodo_solicitado_display }}</td></tr>{% endif %}
+              {% if td.mercadopago and td.mercadopago.numero_operacion %}<tr><td style="padding:2px 0;">N° operación Mercado Pago</td><td style="padding:2px 0;font-family:'Courier New',Courier,monospace;">{{ td.mercadopago.numero_operacion }}</td></tr>{% endif %}
+              {% if td.transferencia %}<tr><td style="padding:2px 0;">Cuenta de destino</td><td style="padding:2px 0;">{{ td.transferencia.banco }} · {{ td.transferencia.tipo_cuenta }} · N° {{ td.transferencia.numero_cuenta }}</td></tr>{% endif %}
+              {% if td.motivo %}<tr><td style="padding:2px 0;">Motivo</td><td style="padding:2px 0;">{{ td.motivo }}</td></tr>{% endif %}
+            </table>
+          </td>
+        </tr>
+
+        <!-- Productos -->
+        {% if td.productos %}
+        <tr>
+          <td style="padding:8px 40px 16px 40px;color:#1A1A2E;">
+            <p style="margin:0 0 8px 0;font-size:15px;font-weight:bold;">Productos</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;color:#555a66;border-collapse:collapse;">
+              {% for p in td.productos %}
+              <tr style="border-bottom:1px solid #e6e8ee;">
+                <td style="padding:6px 0;width:12%;text-align:center;">{% if p.modo == 'MONTO' %}—{% else %}{{ p.cantidad }}{% endif %}</td>
+                <td style="padding:6px 0;">{{ p.descripcion }}{% if p.talla %} <span style="color:#8a8a9a;">(T:{{ p.talla }})</span>{% endif %}{% if p.modo == 'MONTO' %} <span style="color:#8a8a9a;">abono parcial</span>{% endif %}</td>
+                <td style="padding:6px 0;width:24%;text-align:right;">${{ p.subtotal|floatformat:"0g" }}</td>
+              </tr>
+              {% endfor %}
+            </table>
+          </td>
+        </tr>
+        {% endif %}
+
+        <!-- Tienda -->
+        <tr>
+          <td style="padding:8px 40px 28px 40px;color:#555a66;font-size:12px;line-height:1.6;">
+            {% if td.sucursal.alias %}<strong style="color:#1A1A2E;">{{ td.sucursal.alias }}</strong>{% if td.sucursal.direccion %} · {{ td.sucursal.direccion }}{% endif %}{% if td.sucursal.telefono %} · Tel {{ td.sucursal.telefono }}{% endif %}<br>{% endif %}
+            {% if td.sucursal.rut_empresa %}{{ td.sucursal.empresa }} · RUT {{ td.sucursal.rut_empresa }}<br>{% endif %}
+            Este correo es un comprobante de la operación. Si tienes dudas, responde a este mensaje o acércate a la tienda con tu comprobante.
+          </td>
+        </tr>
+
+      </table>
+
+    </td></tr>
+  </table>
+</body>
+</html>

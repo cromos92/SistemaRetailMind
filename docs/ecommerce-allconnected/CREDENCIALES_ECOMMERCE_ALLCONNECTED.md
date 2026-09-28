@@ -111,13 +111,35 @@ Esta es la integración **por-ecommerce** y sus credenciales viven en la **BD**.
   (default `X-AllConnected-Key`), `activo`, `prioridad`.
 - **Se gestiona desde la UI**: Configuración → Integraciones Ecommerce
   (`/app/configuracion/integraciones-ecommerce/`,
-  [views_modulo_configuracion.py](retailmind/app/views_modulo_configuracion.py#L30)).
-  Botones: Guardar / Probar / Sincronizar / Eliminar.
+  [views_modulo_configuracion.py](retailmind/app/views_modulo_configuracion.py)).
+  Acciones por fila: Probar / Sincronizar / Verificar fotos / Ver fotos (galería
+  paginada de las portadas, con filtro "solo URLs con problema") / Editar / Eliminar.
+  La fila muestra 4 miniaturas: si salen en rojo, el CDN no entrega esas URLs.
 - **Endpoints remotos** ([realsport_imagenes_service.py](retailmind/app/services/realsport_imagenes_service.py)):
   - `GET <url_api>/api/v1/health/` → probar conexión
   - `GET <url_api>/api/v1/products/images/?skus=...` (lookup) o `?page=&page_size=` (catálogo)
   - Header: `<header_name>: <api_key>` (default `X-AllConnected-Key`)
-- **Sincronización**: comando `python manage.py sincronizar_fotos_ecommerce --codigo <realsport|paola>`.
+- **Sincronización automática (desde 28-sep-2026)**: la pasada diaria de
+  `run_scheduler` (04:00 Chile) sincroniza y verifica todas las integraciones
+  activas (`sincronizar_y_verificar_todas`, apagable con `SCHEDULER_SYNC_FOTOS=0`).
+  Sin worker, el cron HTTP acepta `?incluir_fotos=1`. Manual:
+  `python manage.py sincronizar_fotos_ecommerce --codigo <realsport|calzadospaola>`
+  y `python manage.py verificar_fotos_ecommerce --codigo <...>`.
+- **Estado verificado en prod (28-sep-2026, solo lectura)**: `realsport` 1.069
+  fotos (última sync 14-may) y `calzadospaola` 2.155 fotos (última sync 12-jun);
+  ninguna verificada nunca. Contra el bucket `media-ecommerce` (boto3, HEAD):
+  realsport 1.069/1.069 existen (27 de 30 llegan como `application/octet-stream`,
+  por eso la verificación lee los magic bytes); **calzadospaola: 2.072 de 2.155 NO
+  existen** (`NoSuchKey`; el CDN responde 403 para claves inexistentes, no es ACL).
+  Son thumbnails de imagekit que nunca se generaron para los productos importados de
+  Shopify; la web de la tienda usa otras variantes. Se arregla en el repo ecommerce
+  (`_cover_image_url` debe usar `webp_url(img.image, 400)` como ya hace su serializer)
+  o corriendo `manage.py generateimages` en Paola. Detalle y parche en
+  [MATCH_FOTOS_REALSPORT_RETAILMIND.md](MATCH_FOTOS_REALSPORT_RETAILMIND.md#actualización-28-sep-2026--clave-compuesta-y-thumbnails-inexistentes).
+- **Clave compuesta (28-sep-2026)**: las tiendas publican ahora
+  `codigo||marca||color||genero||categoria` como SKU (AllConnected, `SEP_CLAVE`);
+  el sync agrega la estrategia 4 (primer tramo) que recupera 505 fotos en Paola y
+  867 en realsport que antes quedaban `sin_match`.
 
 ---
 

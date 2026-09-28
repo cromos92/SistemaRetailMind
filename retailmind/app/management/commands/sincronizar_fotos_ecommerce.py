@@ -103,7 +103,8 @@ class Command(BaseCommand):
                         f'con_foto={resultado["con_foto"]}  '
                         f'(exacto={resultado.get("match_exacto", 0)}, '
                         f'flexible={resultado.get("match_flexible", 0)}, '
-                        f'talla={resultado.get("match_por_talla", 0)})  '
+                        f'talla={resultado.get("match_por_talla", 0)}, '
+                        f'compuesto={resultado.get("match_compuesto", 0)})  '
                         f'sin_match={resultado["sin_match_local"]}'
                     ))
                     for k in total_global:

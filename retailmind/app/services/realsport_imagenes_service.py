@@ -360,16 +360,23 @@ def sincronizar_credencial(
     match_exacto = 0
     match_flexible = 0
     match_por_talla = 0
+    match_compuesto = 0
     paginas = 0
     articulos_actualizados: List[str] = []
 
-    # Tres niveles de match. Por qué tres: realsport.cl puede tener su
-    # `Product.sku` poblado con cualquiera de estas tres cosas según cómo
-    # AllConected publique:
+    # Cuatro niveles de match. Por qué cuatro: realsport.cl / calzadospaola.cl
+    # pueden tener su `Product.sku` poblado con cualquiera de estas cosas según
+    # cómo (y cuándo) AllConnected publicó:
     #   1. articulo "tal cual" → match directo.
     #   2. articulo normalizado (trim + upper) → match flexible.
     #   3. Producto_Talla.sku (código numérico por talla, BigInt) → en este
     #      caso encontramos el articulo padre y guardamos la foto contra él.
+    #      Es el formato de los productos publicados hasta mediados de 2026.
+    #   4. Clave compuesta `articulo||marca||color||genero||categoria`
+    #      (AllConnected, SEP_CLAVE = "||"): es el formato de todo lo publicado
+    #      desde entonces. Se toma el primer tramo y se prueban 1→2→3 sobre él.
+    #      Sin esto, en sep-2026 quedaban sin foto 505 productos de Paola y 867
+    #      de realsport (todos los nuevos).
     todos_articulos = (
         Producto.objects.values_list('articulo', flat=True).distinct()
     )
@@ -421,6 +428,20 @@ def sincronizar_credencial(
                         if articulo_real:
                             match_por_talla += 1
 
+                # Intento 4: clave compuesta de AllConnected. El primer tramo es
+                # el articulo (o, en publicaciones viejas re-ancladas, el sku de
+                # talla); los demás tramos son marca/color/género/categoría.
+                if not articulo_real and '||' in sku:
+                    tramo = sku.split('||', 1)[0].strip()
+                    if tramo:
+                        articulo_real = (
+                            (tramo if tramo in articulos_exactos else None)
+                            or articulos_norm.get(tramo.upper())
+                            or talla_sku_a_articulo.get(tramo)
+                        )
+                        if articulo_real:
+                            match_compuesto += 1
+
                 if not articulo_real:
                     sin_match_local += 1
                     continue
@@ -443,7 +464,8 @@ def sincronizar_credencial(
     credencial.ultima_sync_resultado = (
         f'paginas={paginas}, procesados={procesados}, '
         f'con_foto={con_foto} (exacto={match_exacto}, '
-        f'flexible={match_flexible}, talla={match_por_talla}), '
+        f'flexible={match_flexible}, talla={match_por_talla}, '
+        f'compuesto={match_compuesto}), '
         f'sin_match={sin_match_local}'
     )
     credencial.save(update_fields=['ultima_sync_at', 'ultima_sync_resultado'])
@@ -457,6 +479,7 @@ def sincronizar_credencial(
         'match_exacto': match_exacto,
         'match_flexible': match_flexible,
         'match_por_talla': match_por_talla,
+        'match_compuesto': match_compuesto,
         'sin_match_local': sin_match_local,
     }
 

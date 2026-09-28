@@ -121,28 +121,75 @@ def _clasificar(status: Optional[int], content_type: str) -> str:
     return 'http_otro'
 
 
+_MAGIC_IMAGEN = (
+    (b'\xff\xd8\xff', 'image/jpeg'),
+    (b'\x89PNG\r\n\x1a\n', 'image/png'),
+    (b'GIF87a', 'image/gif'),
+    (b'GIF89a', 'image/gif'),
+    (b'BM', 'image/bmp'),
+)
+
+
+def _sniff_imagen(cabecera: bytes) -> str:
+    """Content-Type deducido de los primeros bytes; ``''`` si no parece imagen.
+
+    Los CDN de Spaces sirven los WebP de imagekit como ``application/octet-stream``
+    (en producción 27 de 30 URLs de realsport vienen así). Sin esto, la
+    verificación las marcaba ``no_imagen`` aunque el navegador las muestre bien.
+    """
+    if not cabecera:
+        return ''
+    if len(cabecera) >= 12 and cabecera[:4] == b'RIFF' and cabecera[8:12] == b'WEBP':
+        return 'image/webp'
+    if len(cabecera) >= 12 and cabecera[4:8] == b'ftyp' and cabecera[8:12] in (b'avif', b'avis'):
+        return 'image/avif'
+    for magic, ct in _MAGIC_IMAGEN:
+        if cabecera.startswith(magic):
+            return ct
+    return ''
+
+
+def _leer_cabecera(respuesta, largo: int = 16) -> bytes:
+    """Primeros ``largo`` bytes de una respuesta ``stream=True`` (nunca lanza)."""
+    try:
+        for chunk in respuesta.iter_content(chunk_size=largo):
+            return chunk or b''
+    except Exception:  # noqa: BLE001
+        pass
+    return b''
+
+
 def _check_url(url: str, session, timeout: int, auth_headers: Optional[dict]):
     """Devuelve ``(estado, status_code, content_type)`` para una URL de foto.
 
-    Intenta HEAD; si el CDN no lo soporta (405) o no da Content-Type, reintenta
-    con GET de 1 byte (``Range``). Si da 403 y hay credenciales, reintenta con el
-    header de la integración (por si el CDN está detrás del mismo auth).
+    Intenta HEAD; si el CDN no lo soporta (405), da 403, o responde 200 sin un
+    ``Content-Type: image/*``, reintenta con GET de 16 bytes (``Range``) y
+    deduce el tipo real por los magic bytes. Si da 403 y hay credenciales,
+    reintenta con el header de la integración (por si el CDN está detrás del
+    mismo auth).
     """
     try:
         r = session.head(url, timeout=timeout, allow_redirects=True)
-        if r.status_code in (403, 405) or (
-            r.status_code in (200, 206) and not r.headers.get('Content-Type')
-        ):
-            hdrs = {'Range': 'bytes=0-0'}
+        ct = r.headers.get('Content-Type') or ''
+        necesita_get = r.status_code in (403, 405) or (
+            r.status_code in (200, 206) and not ct.lower().startswith('image/')
+        )
+        if necesita_get:
+            hdrs = {'Range': 'bytes=0-15'}
             if r.status_code == 403 and auth_headers:
                 hdrs.update(auth_headers)
             r = session.get(url, timeout=timeout, allow_redirects=True,
                             headers=hdrs, stream=True)
-            r.close()
+            try:
+                cabecera = _leer_cabecera(r) if r.status_code in (200, 206) else b''
+            finally:
+                r.close()
+            ct = r.headers.get('Content-Type') or ''
+            if r.status_code in (200, 206) and not ct.lower().startswith('image/'):
+                ct = _sniff_imagen(cabecera) or ct
     except Exception as exc:  # noqa: BLE001 — cualquier fallo de red => error_red
         return ('error_red', None, str(exc)[:120])
 
-    ct = r.headers.get('Content-Type') or ''
     return (_clasificar(r.status_code, ct), r.status_code, ct)
 
 
@@ -295,3 +342,57 @@ def persistir_resultado(credencial: CredencialesEcommerce, resultado: Dict) -> N
     credencial.save(update_fields=[
         'ultima_verif_at', 'ultima_verif_resultado', 'ultima_verif_detalle',
     ])
+
+
+# ───────────────────────── Tarea diaria ─────────────────────────
+
+def sincronizar_y_verificar_todas(
+    *, muestra: int = 150, timeout: int = 5, workers: int = WORKERS_DEFAULT,
+) -> List[Dict]:
+    """Sincroniza y luego verifica TODAS las integraciones activas.
+
+    Es lo que corre el scheduler una vez al día (y el cron HTTP con
+    ``incluir_fotos=1``). Antes el sync era 100 % manual: en producción las
+    dos integraciones llevaban meses sin sincronizarse ni verificarse.
+
+    Cada integración se procesa aislada: un fallo (ecommerce caído, CDN con
+    403) se registra en ``ultima_sync_resultado`` / ``ultima_verif_resultado``
+    y NO impide procesar las demás. Devuelve un resumen por credencial.
+    """
+    from app.services.realsport_imagenes_service import (
+        RealsportImagenesError, sincronizar_credencial,
+    )
+
+    resumen: List[Dict] = []
+    credenciales = list(
+        CredencialesEcommerce.objects.filter(activo=True)
+        .select_related('empresa').order_by('-prioridad', 'nombre')
+    )
+    for cred in credenciales:
+        item = {'codigo': cred.codigo, 'sync_ok': False, 'verif_ok': False,
+                'con_foto': 0, 'sync_error': '', 'verif_error': ''}
+        try:
+            r = sincronizar_credencial(cred)
+            item['sync_ok'] = True
+            item['con_foto'] = r.get('con_foto', 0)
+        except RealsportImagenesError as exc:
+            item['sync_error'] = str(exc)[:200]
+        except Exception as exc:  # noqa: BLE001
+            logger.exception('Tarea diaria: sync de %s falló', cred.codigo)
+            item['sync_error'] = str(exc)[:200]
+
+        try:
+            resultado = verificar_credencial(
+                cred, muestra=muestra, timeout=timeout, workers=workers,
+            )
+            persistir_resultado(cred, resultado)
+            item['verif_ok'] = True
+            item['verif_resumen'] = construir_resumen(resultado)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception('Tarea diaria: verificación de %s falló', cred.codigo)
+            item['verif_error'] = str(exc)[:200]
+
+        resumen.append(item)
+
+    logger.info('Tarea diaria fotos ecommerce: %s', resumen)
+    return resumen

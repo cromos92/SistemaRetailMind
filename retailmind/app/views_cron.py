@@ -40,11 +40,13 @@ def _autorizado(request):
 @require_POST
 def ejecutar_tareas_periodicas(request):
     """
-    POST /app/api/cron/tareas/?incluir_puntos=1
+    POST /app/api/cron/tareas/?incluir_puntos=1&incluir_fotos=1
     Header: X-Cron-Key: <CRON_TRIGGER_KEY>
 
     Expira reservas y vales vencidos siempre. Expira los lotes de puntos vencidos
     solo si `incluir_puntos` está activo (esa tarea es diaria, no cada minuto).
+    Con `incluir_fotos` sincroniza y verifica las fotos de portada de todos los
+    ecommerce activos (también diaria: tarda 15-30 s por tienda).
     """
     if not _autorizado(request):
         raise Http404()
@@ -55,13 +57,19 @@ def ejecutar_tareas_periodicas(request):
     if request.GET.get('incluir_puntos') in ('1', 'true', 'True'):
         lotes = fidelizacion_service.expirar_lotes_vencidos()
 
-    logger.info('Cron HTTP ejecutado: reservas=%s vales=%s lotes_puntos=%s',
-                reservas, vales, lotes)
+    fotos = None
+    if request.GET.get('incluir_fotos') in ('1', 'true', 'True'):
+        from app.services.verificacion_fotos_service import sincronizar_y_verificar_todas
+        fotos = sincronizar_y_verificar_todas()
+
+    logger.info('Cron HTTP ejecutado: reservas=%s vales=%s lotes_puntos=%s fotos=%s',
+                reservas, vales, lotes, fotos)
     return JsonResponse({
         'ok': True,
         'reservas_expiradas': reservas,
         'vales_expirados': vales,
         'lotes_puntos_expirados': lotes,
+        'fotos_ecommerce': fotos,
     })
 
 

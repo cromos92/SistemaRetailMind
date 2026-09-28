@@ -33,6 +33,10 @@ logger = logging.getLogger('app')
 
 INTERVALO_DEFAULT = int(os.environ.get('SCHEDULER_INTERVALO_SEG', '300'))   # 5 min
 HORA_PUNTOS = int(os.environ.get('SCHEDULER_HORA_PUNTOS', '4'))             # 04:00 Chile
+# Sincronizar + verificar las fotos de portada de los ecommerce en la pasada
+# diaria. Apagar con SCHEDULER_SYNC_FOTOS=0. Antes era 100 % manual y en
+# producción las integraciones llevaban meses sin sincronizarse.
+SYNC_FOTOS = (os.environ.get('SCHEDULER_SYNC_FOTOS', '1') or '1').strip() != '0'
 
 
 class Command(BaseCommand):
@@ -97,3 +101,15 @@ class Command(BaseCommand):
                 # Un fallo acá (SMTP caído, etc.) no debe tumbar el resto del
                 # scheduler ni impedir que mañana se vuelva a intentar.
                 logger.exception('Scheduler (diario): falló la alerta de correlativos en rojo')
+            if SYNC_FOTOS:
+                try:
+                    from app.services.verificacion_fotos_service import (
+                        sincronizar_y_verificar_todas,
+                    )
+                    fotos = sincronizar_y_verificar_todas()
+                    self.stdout.write(self.style.SUCCESS(
+                        f'   fotos ecommerce: {len(fotos)} integración(es) sincronizada(s) y verificada(s).'
+                    ))
+                except Exception:
+                    # Un ecommerce caído no debe frenar el resto de la pasada diaria.
+                    logger.exception('Scheduler (diario): falló la sincronización de fotos ecommerce')

@@ -33,6 +33,7 @@ from django.db.models import Q
 from .decorators import requiere_permiso
 from .models import (
     Sucursal, DevolucionGarantia, PermisoRol, RegistroAutorizacion, rol_efectivo,
+    puede_devolver_mercadopago, EnvioCorreo,
 )
 from .services import devolucion_garantia_service as service
 from .services.codigo_autorizacion_service import (
@@ -54,6 +55,30 @@ PREFIJO_DIRECTA = '[DIRECTA]'
 # `validar_efectivo_directo`; MERCADO_PAGO exige que la venta se haya cobrado
 # con MP (lo valida `aprobar_devolucion`).
 METODOS_DIRECTA = ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA', 'REBAJA_CREDITO', 'MERCADO_PAGO')
+
+
+def _respuesta_error(refund_ctx, error, status, code=None, log=None):
+    """Error al aprobar / devolver en directa. Si en este intento Mercado Pago
+    YA devolvió (refund por API) y la transacción local se revirtió, deja los
+    refunds registrados en el libro MP y lo dice: reintentar no pide otro."""
+    if log:
+        logger.exception(log)
+    ids = []
+    if refund_ctx and refund_ctx.get('refunds'):
+        ids = service.persistir_refunds_sin_nc(
+            refund_ctx, causa=str(error)[:80], numero_operacion=refund_ctx.get('numero_operacion', ''))
+    data = {'success': False, 'error': str(error)}
+    if code:
+        data['code'] = code
+    if ids:
+        data['code'] = 'REFUND_SIN_NC'
+        data['refunds_mp'] = ids
+        data['error'] = (
+            f'Mercado Pago YA devolvió la plata a la tarjeta (refund {", ".join(ids)}) pero la '
+            f'operación no se completó: {error} La devolución quedó registrada en el libro MP: '
+            f'reintente y no se volverá a pedir el refund.'
+        )
+    return JsonResponse(data, status=status)
 
 
 def _txt(valor):
@@ -174,6 +199,12 @@ def modulo_devolucion_garantia(request):
         'usuario_id': request.user.id,
         # Impresión térmica 80mm compartida con el ticket de venta (QZ Tray).
         'qz_config': _get_qz_config(sucursal.id if sucursal else None),
+        # Devolver a la tarjeta por la API de Mercado Pago mueve plata real de
+        # la cuenta MP: permiso fino `devolver_mercadopago` (por política, el
+        # Maestro). Gobierna la opción en el modal de aprobación; en la directa
+        # decide el permiso de quien firma con su código.
+        'puede_devolver_mp': puede_devolver_mercadopago(
+            request.user, sucursal.id if sucursal else None),
     }
     return render(request, 'vistas/modulo_ventas/devolucion_garantia.html', context)
 
@@ -199,6 +230,12 @@ def detalle_devolucion_garantia(request, devolucion_id):
         'devolucion': devolucion,
         # N° de operación / medio de Mercado Pago (None si no es por MP).
         'mercadopago': service.mercadopago_de_devolucion(devolucion),
+        # Comprobantes mandados al cliente (bitácora de correo).
+        'envios_correo': list(
+            EnvioCorreo.objects.filter(modulo='DEVOLUCION_DINERO', objeto_id=devolucion.id)
+            .order_by('-id')[:10]
+        ),
+        'puede_enviar_correo': devolucion.estado in ('PENDIENTE', 'NC_GENERADA'),
         # Impresión térmica 80mm del comprobante (mismo módulo QZ del ticket).
         'qz_config': _get_qz_config(sucursal.id),
     }
@@ -312,12 +349,31 @@ def api_generar_devolucion_garantia(request):
     if not productos:
         return JsonResponse({'success': False, 'error': 'Debe indicar al menos un producto'}, status=400)
 
+    # El correo del cliente se guarda en el receptor y lo interpolan el
+    # listado, el comprobante y el correo: nada que no sea un correo válido.
+    email_cliente = _txt(body.get('email'))
+    if email_cliente:
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from django.core.validators import validate_email
+        try:
+            validate_email(email_cliente)
+        except DjangoValidationError:
+            return JsonResponse({'success': False, 'error': 'El correo del cliente no es válido.'}, status=400)
+        if len(email_cliente) > 100:
+            return JsonResponse({'success': False, 'error': 'El correo del cliente es demasiado largo (máx. 100).'}, status=400)
+
     sucursal = _sucursal_actual(request)
     if not sucursal:
         return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'}, status=400)
 
     codigo_obj = autorizador = None
     metodo_directo = None
+    # Solo tiene sentido con MERCADO_PAGO: pedirle el refund a MP en vez de
+    # registrar una devolución hecha a mano en la app/panel.
+    devolver_mp_api = (
+        body.get('devolver_mp_api') in (True, 1, '1', 'true')
+        and _txt(body.get('metodo_solicitado')).upper() == 'MERCADO_PAGO'
+    )
     if directa:
         # Las guardas de efectivo y Mercado Pago van con el documento, abajo.
         metodo_directo = _txt(body.get('metodo_solicitado')).upper() or 'TRANSFERENCIA_BANCARIA'
@@ -353,6 +409,19 @@ def api_generar_devolucion_garantia(request):
                           f'permiso para aprobar devoluciones de dinero en {sucursal.alias}.'),
             }, status=403)
 
+        # Refund por la API de Mercado Pago: plata real de la cuenta MP. Lo
+        # autoriza el permiso `devolver_mercadopago` de QUIEN FIRMA (el dueño
+        # del código), no del cajero que ingresa la devolución.
+        if devolver_mp_api and not puede_devolver_mercadopago(autorizador, sucursal.id):
+            return JsonResponse({
+                'success': False,
+                'code': 'AUTHORIZER_CANNOT_REFUND_MP',
+                'error': (f'{autorizador.get_full_name() or autorizador.username} no tiene '
+                          f'permiso para devolver a la tarjeta por Mercado Pago. Pídale el '
+                          f'código al Maestro, o registre la devolución hecha desde la app/panel '
+                          f'de Mercado Pago con su N° de operación.'),
+            }, status=403)
+
     requerimiento = None
     if requerimiento_id:
         from .models import Requerimiento
@@ -362,6 +431,9 @@ def api_generar_devolucion_garantia(request):
 
     nc = contenido_txt = None
     txt_warnings = []
+    # Refunds por API hechos en este intento (para registrarlos si la
+    # transacción se revierte después de que MP devolvió).
+    refund_ctx = {'refunds': []}
     try:
         with transaction.atomic():
             if directa:
@@ -418,6 +490,8 @@ def api_generar_devolucion_garantia(request):
                     fecha_imputacion=timezone.localdate(),
                     observaciones=observaciones,
                     numero_operacion_mp=_txt(body.get('numero_operacion_mp')),
+                    devolver_mp_api=devolver_mp_api,
+                    refund_ctx=refund_ctx,
                 )
                 RegistroAutorizacion.objects.create(
                     codigo_usado=codigo_obj,
@@ -444,10 +518,11 @@ def api_generar_devolucion_garantia(request):
     except CodigoAutorizacionError as e:
         return JsonResponse(e.as_json(), status=e.status)
     except service.DevolucionGarantiaError as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        return _respuesta_error(refund_ctx, e, 400)
     except Exception as e:
-        logger.exception("Error al crear devolución de dinero (directa=%s)", directa)
-        return JsonResponse({'success': False, 'error': f'Error inesperado: {e}'}, status=500)
+        return _respuesta_error(
+            refund_ctx, f'Error inesperado: {e}', 500,
+            log=f"Error al crear devolución de dinero (directa={directa})")
 
     data = {
         'devolucion_id': devolucion.id,
@@ -458,7 +533,10 @@ def api_generar_devolucion_garantia(request):
             'id': receptor.id,
             'rut': receptor.rut,
             'nombre': receptor.nombre,
+            'email': receptor.correoVendedor or '',
         },
+        # Para el botón «Enviar por correo» del aviso de éxito.
+        'cliente_email': receptor.correoVendedor or '',
         'requerimiento_vinculado': requerimiento.numero_requerimiento if requerimiento else None,
         'directa': directa,
     }
@@ -484,6 +562,9 @@ def api_generar_devolucion_garantia(request):
 
     mp_dev = service.mercadopago_de_devolucion(devolucion)
     data.update({
+        # Refund pedido a Mercado Pago por la API (ids que muestra MP).
+        'devuelto_api': bool(mp_dev and mp_dev.get('api')),
+        'refunds_mp': (mp_dev or {}).get('refunds') or [],
         'nc_id': nc.id,
         'nc_numero': nc.numero_documento,
         'metodo_devolucion': devolucion.get_metodo_devolucion_display(),
@@ -564,6 +645,15 @@ def api_listar_devoluciones_garantia(request):
     es_admin = _es_admin(request)
     uid = request.user.id
 
+    # Comprobantes ya mandados por correo (para el ícono del listado).
+    from django.db.models import Count
+    correos_por_devolucion = dict(
+        EnvioCorreo.objects.filter(
+            modulo='DEVOLUCION_DINERO', objeto_id__in=[d.id for d in pagina],
+            estado__in=['ENVIADO', 'ENTREGADO', 'ABIERTO', 'CLICK', 'RESPONDIDO'],
+        ).values_list('objeto_id').annotate(n=Count('id')).values_list('objeto_id', 'n')
+    )
+
     data = [{
         'id': d.id,
         'numero_operacion': d.numero_operacion,
@@ -572,6 +662,8 @@ def api_listar_devoluciones_garantia(request):
         'dte_folio': d.dte_original.numero_documento,
         'receptor_nombre': d.receptor.nombre,
         'receptor_rut': d.receptor.rut,
+        'receptor_email': d.receptor.correoVendedor or '',
+        'correos_enviados': correos_por_devolucion.get(d.id, 0),
         'monto_total': float(d.monto_total),
         'nc_numero': d.nota_credito.numero_documento if d.nota_credito else None,
         'metodo_devolucion': d.get_metodo_devolucion_display() if d.metodo_devolucion else '',
@@ -621,7 +713,12 @@ def api_ticket_devolucion_garantia(request, devolucion_id):
         extra_select=['sucursal__empresa'],
         prefetch=['detalles__dte_producto__productoTalla', 'nota_credito__dte_asociado'],
     )
+    return JsonResponse({'success': True, 'data': _payload_comprobante(devolucion)})
 
+
+def _payload_comprobante(devolucion):
+    """Datos del comprobante: los leen el ESC/POS, el HTML de impresión, el PDF
+    y el correo al cliente (un solo lugar decide qué sale en el papel)."""
     suc, emp, dte = devolucion.sucursal, devolucion.sucursal.empresa, devolucion.dte_original
     receptor, solicitante = devolucion.receptor, devolucion.solicitado_por
 
@@ -653,48 +750,165 @@ def api_ticket_devolucion_garantia(request, devolucion_id):
     es_transf = metodo == 'TRANSFERENCIA_BANCARIA'
     mp_dev = service.mercadopago_de_devolucion(devolucion)
 
+    return {
+        'modulo_origen': 'DEVOLUCION_GARANTIA',
+        'devolucion_id': devolucion.id,
+        'numero_operacion': devolucion.numero_operacion,
+        'estado': devolucion.estado,
+        'estado_display': devolucion.get_estado_display(),
+        'fecha': creado.strftime('%d/%m/%Y'),
+        'hora': creado.strftime('%H:%M'),
+        'motivo': devolucion.motivo or '',
+        'solicitante': (solicitante.get_full_name() or solicitante.username) if solicitante else '',
+        'sucursal': {
+            'empresa': emp.razon_social or emp.nombre or '',
+            'rut_empresa': emp.rut or '',
+            'alias': suc.alias or '',
+            'direccion': suc.direccion or '',
+            'telefono': suc.telefono or '',
+        },
+        'cliente': {
+            'nombre': receptor.nombre or '',
+            'rut': receptor.rut or '',
+            'email': receptor.correoVendedor or '',
+            'telefono': receptor.contacto1 or '',
+        },
+        'dte': {
+            'tipo': dte.get_tipo_documento_display(),
+            'folio': dte.numero_documento,
+            'fecha': dte.fecha_emision.strftime('%d/%m/%Y') if dte.fecha_emision else '',
+        },
+        # Nombre histórico del campo: lo leen el ESC/POS y el HTML.
+        'metodo_solicitado_display': metodo_display,
+        'mercadopago': mp_dev,
+        'transferencia': {
+            'banco': devolucion.banco or '',
+            'tipo_cuenta': devolucion.get_tipo_cuenta_display() if devolucion.tipo_cuenta else '',
+            'numero_cuenta': devolucion.numero_cuenta or '',
+            'titular_rut': devolucion.cuenta_titular_rut or '',
+        } if es_transf else None,
+        'nota_credito': devolucion.nota_credito.numero_documento if devolucion.nota_credito_id else None,
+        'productos': productos,
+        'total': int(devolucion.monto_total or 0),
+    }
+
+
+@require_POST
+@requiere_permiso('devolucion_garantia', 'puede_ver')
+def api_enviar_comprobante_devolucion_garantia(request, devolucion_id):
+    """Manda al cliente el comprobante: PDF 80mm adjunto + resumen en el cuerpo.
+
+    Mismo alcance que ver la devolución (anti-IDOR de `_cargar_devolucion`).
+    Queda en la bitácora de correo (`EnvioCorreo`, módulo DEVOLUCION_DINERO)
+    con el mismo seguimiento que los requerimientos; el detalle muestra a
+    quién y cuándo se mandó. Si el receptor no tenía correo, se le guarda el
+    indicado para la próxima.
+    """
+    from django.core.exceptions import ValidationError as DjangoValidationError
+    from django.core.validators import validate_email
+    from django.template.loader import render_to_string
+    from .services.correo_service import CorreoError, enviar_correo_trazado
+    from .services.pdf_comprobante_devolucion import (
+        generar_comprobante_devolucion_pdf, nombre_archivo_comprobante,
+    )
+
+    devolucion = _cargar_devolucion(
+        request, devolucion_id,
+        extra_select=['sucursal__empresa'],
+        prefetch=['detalles__dte_producto__productoTalla', 'nota_credito__dte_asociado'],
+    )
+    if devolucion.estado not in ('PENDIENTE', 'NC_GENERADA'):
+        return JsonResponse({
+            'success': False,
+            'error': (f'La devolución está {devolucion.get_estado_display().lower()}: '
+                      f'no corresponde enviarle el comprobante al cliente.'),
+        }, status=400)
+
+    try:
+        body = json.loads(request.body or '{}')
+    except (ValueError, json.JSONDecodeError):
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+
+    receptor = devolucion.receptor
+    email = _txt(body.get('email')) or (receptor.correoVendedor or '').strip()
+    try:
+        validate_email(email)
+    except DjangoValidationError:
+        return JsonResponse({
+            'success': False, 'error': 'Indique un correo válido para el cliente.',
+        }, status=400)
+    if len(email) > 100:
+        # `correoVendedor` es CharField(100): truncar sería guardar otra dirección.
+        return JsonResponse({
+            'success': False, 'error': 'El correo es demasiado largo (máx. 100 caracteres).',
+        }, status=400)
+
+    td = _payload_comprobante(devolucion)
+    td['cliente']['email'] = email
+    try:
+        pdf = generar_comprobante_devolucion_pdf(td)
+    except Exception:
+        logger.exception("No se pudo generar el PDF del comprobante de %s", devolucion.numero_operacion)
+        return JsonResponse({'success': False, 'error': 'No se pudo generar el comprobante en PDF.'}, status=500)
+
+    empresa = td['sucursal']['empresa']
+    total = f"${td['total']:,}".replace(',', '.')
+    asunto = f"Comprobante de devolución {td['numero_operacion']} — {empresa}"
+    lineas = [
+        f'{empresa.upper()} - DEVOLUCION DE DINERO', '',
+        f"N° de operación: {td['numero_operacion']}",
+        f'Monto: {total}',
+        f"Estado: {td['estado_display']}",
+    ]
+    if td['dte'].get('folio'):
+        lineas.append(f"Documento original: {td['dte']['tipo']} #{td['dte']['folio']}")
+    if td['metodo_solicitado_display']:
+        lineas.append(f"Forma de devolución: {td['metodo_solicitado_display']}")
+    if td['nota_credito']:
+        lineas.append(f"Nota de Crédito N° {td['nota_credito']}")
+    lineas += ['', 'Adjuntamos el comprobante en PDF. Conserve este correo.']
+    if td['sucursal'].get('alias'):
+        lineas.append(f"{td['sucursal']['alias']} · {td['sucursal'].get('direccion') or ''}".rstrip(' ·'))
+
+    html = render_to_string('emails/devolucion_dinero_comprobante.html', {'td': td})
+    # El correo invita a responder: la respuesta debe llegar a quien lo mandó
+    # (y a la empresa), no a la casilla del relay.
+    reply_to = [d for d in (
+        (request.user.email or '').strip(),
+        (devolucion.sucursal.empresa.email or '').strip(),
+    ) if d]
+    try:
+        envio = enviar_correo_trazado(
+            modulo='DEVOLUCION_DINERO',
+            objeto_id=devolucion.id,
+            asunto=asunto,
+            texto='\n'.join(lineas),
+            destinatario=email,
+            html=html,
+            adjuntos=[(nombre_archivo_comprobante(td), pdf, 'application/pdf')],
+            usuario=request.user,
+            tags=['devolucion-dinero'],
+            reply_to=reply_to,
+            con_token_respuesta=False,
+        )
+    except CorreoError as e:
+        return JsonResponse({'success': False, 'error': f'No se pudo enviar el correo: {e}'}, status=502)
+
+    # Recién con el envío aceptado: si el receptor no tenía correo, se le
+    # guarda el usado para la próxima (no antes, o un envío fallido lo dejaría pegado).
+    if not (receptor.correoVendedor or '').strip():
+        receptor.correoVendedor = email
+        receptor.save(update_fields=['correoVendedor'])
+
+    logger.info("Comprobante de %s enviado a %s por %s (envio=%s)",
+                devolucion.numero_operacion, email, request.user.username, envio.id)
     return JsonResponse({
         'success': True,
+        'message': f'Comprobante enviado a {email}.',
         'data': {
-            'modulo_origen': 'DEVOLUCION_GARANTIA',
-            'devolucion_id': devolucion.id,
-            'numero_operacion': devolucion.numero_operacion,
-            'estado': devolucion.estado,
-            'estado_display': devolucion.get_estado_display(),
-            'fecha': creado.strftime('%d/%m/%Y'),
-            'hora': creado.strftime('%H:%M'),
-            'motivo': devolucion.motivo or '',
-            'solicitante': (solicitante.get_full_name() or solicitante.username) if solicitante else '',
-            'sucursal': {
-                'empresa': emp.razon_social or emp.nombre or '',
-                'rut_empresa': emp.rut or '',
-                'alias': suc.alias or '',
-                'direccion': suc.direccion or '',
-                'telefono': suc.telefono or '',
-            },
-            'cliente': {
-                'nombre': receptor.nombre or '',
-                'rut': receptor.rut or '',
-                'email': receptor.correoVendedor or '',
-                'telefono': receptor.contacto1 or '',
-            },
-            'dte': {
-                'tipo': dte.get_tipo_documento_display(),
-                'folio': dte.numero_documento,
-                'fecha': dte.fecha_emision.strftime('%d/%m/%Y') if dte.fecha_emision else '',
-            },
-            # Nombre histórico del campo: lo leen el ESC/POS y el HTML.
-            'metodo_solicitado_display': metodo_display,
-            'mercadopago': mp_dev,
-            'transferencia': {
-                'banco': devolucion.banco or '',
-                'tipo_cuenta': devolucion.get_tipo_cuenta_display() if devolucion.tipo_cuenta else '',
-                'numero_cuenta': devolucion.numero_cuenta or '',
-                'titular_rut': devolucion.cuenta_titular_rut or '',
-            } if es_transf else None,
-            'nota_credito': devolucion.nota_credito.numero_documento if devolucion.nota_credito_id else None,
-            'productos': productos,
-            'total': int(devolucion.monto_total or 0),
+            'envio_id': envio.id,
+            'email': email,
+            'enviado_en': timezone.localtime(envio.enviado_en).strftime('%d/%m/%Y %H:%M') if envio.enviado_en else '',
         },
     })
 
@@ -833,7 +1047,25 @@ def api_aprobar_devolucion_garantia(request, devolucion_id):
         except ValueError:
             return JsonResponse({'success': False, 'error': 'Fecha de imputación inválida (use YYYY-MM-DD)'}, status=400)
 
+    # Refund por la API de Mercado Pago: mueve plata real de la cuenta MP,
+    # permiso fino `devolver_mercadopago` del aprobador (por política, el Maestro).
+    devolver_mp_api = body.get('devolver_mp_api') in (True, 1, '1', 'true') and metodo == 'MERCADO_PAGO'
+    if devolver_mp_api and not puede_devolver_mercadopago(
+            request.user, request.session.get('idSucursalActual')):
+        return JsonResponse({
+            'success': False,
+            'code': 'CANNOT_REFUND_MP',
+            'error': ('No tienes permiso para devolver a la tarjeta por Mercado Pago. '
+                      'Pídeselo al Maestro, o registra la devolución hecha desde la app/panel '
+                      'de Mercado Pago con su N° de operación.'),
+        }, status=403)
+
+    # Refunds por API hechos en este intento (para registrarlos si la
+    # transacción se revierte después de que MP devolvió).
+    refund_ctx = {'refunds': [], 'numero_operacion': ''}
     try:
+        refund_ctx['numero_operacion'] = DevolucionGarantia.objects.filter(
+            id=devolucion_id).values_list('numero_operacion', flat=True).first() or ''
         devolucion, nc, contenido_txt, txt_warnings = service.aprobar_devolucion(
             devolucion_id=devolucion_id,
             aprobador=request.user,
@@ -841,21 +1073,33 @@ def api_aprobar_devolucion_garantia(request, devolucion_id):
             fecha_imputacion=fecha_imp,
             observaciones=observaciones,
             numero_operacion_mp=_txt(body.get('numero_operacion_mp')),
+            devolver_mp_api=devolver_mp_api,
+            refund_ctx=refund_ctx,
         )
     except service.DevolucionGarantiaError as e:
         # La solicitud queda PENDIENTE: el aprobador decide rechazar o reintentar.
-        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        return _respuesta_error(refund_ctx, e, 400)
     except Exception as e:
-        logger.exception("Error al aprobar devolución por garantía %s", devolucion_id)
-        return JsonResponse({'success': False, 'error': f'Error inesperado: {e}'}, status=500)
+        return _respuesta_error(
+            refund_ctx, f'Error inesperado: {e}', 500,
+            log=f"Error al aprobar devolución por garantía {devolucion_id}")
 
+    mp_dev = service.mercadopago_de_devolucion(devolucion)
     return JsonResponse({
         'success': True,
         'message': f'Devolución {devolucion.numero_operacion} aprobada. NC #{nc.numero_documento} generada.',
         'data': {
+            'devolucion_id': devolucion.id,
+            'numero_operacion': devolucion.numero_operacion,
             'nc_id': nc.id,
             'nc_numero': nc.numero_documento,
             'monto_total': float(devolucion.monto_total),
+            'metodo_devolucion': devolucion.get_metodo_devolucion_display(),
+            'numero_operacion_mp': mp_dev['numero_operacion'] if mp_dev else '',
+            'devuelto_api': bool(mp_dev and mp_dev.get('api')),
+            'refunds_mp': (mp_dev or {}).get('refunds') or [],
+            # Para el botón «Enviar por correo» del aviso de éxito.
+            'cliente_email': devolucion.receptor.correoVendedor or '',
             'txt_generado': contenido_txt is not None,
             'txt_warnings': txt_warnings or [],
             'nc_txt_url': reverse('descargar_txt_nc_api', args=[nc.id]),

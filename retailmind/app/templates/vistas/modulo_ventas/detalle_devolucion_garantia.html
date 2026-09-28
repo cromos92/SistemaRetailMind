@@ -100,6 +100,7 @@
             <p class="mb-1"><strong>Mercado Pago:</strong>
                 {% if mercadopago.numero_operacion %}N° de operación <code>{{ mercadopago.numero_operacion }}</code>{% else %}<span class="text-warning">sin N° de operación registrado</span>{% endif %}
                 {% if mercadopago.medio %} · {{ mercadopago.medio }}{% endif %}
+                {% if mercadopago.api %} · <span class="text-success"><i class="ri-refund-2-line"></i> devuelto a la tarjeta por la API{% if mercadopago.refunds %} (refund {{ mercadopago.refunds|join:", " }}){% endif %}</span>{% endif %}
             </p>
             {% endif %}
             {% if devolucion.observaciones_aprobacion %}
@@ -118,6 +119,19 @@
             <button class="btn btn-sm btn-outline-primary" onclick="imprimirDevolucionGarantia({{ devolucion.id }})">
                 <i class="ri-printer-line me-1"></i> Imprimir comprobante 80mm
             </button>
+            {% if puede_enviar_correo %}
+            <button class="btn btn-sm btn-outline-info" onclick="enviarComprobanteDG({{ devolucion.id }}, '{{ devolucion.receptor.correoVendedor|default:''|escapejs }}')">
+                <i class="ri-mail-send-line me-1"></i> Enviar comprobante por correo
+            </button>
+            {% endif %}
+            {% if envios_correo %}
+            <div class="mt-2 small text-muted" id="dg-envios-correo">
+                <i class="ri-mail-check-line me-1"></i> Comprobante enviado a:
+                {% for e in envios_correo %}
+                <span class="badge bg-light text-dark border ms-1">{{ e.destinatario }} · {% if e.enviado_en %}{{ e.enviado_en|date:"d/m/Y H:i" }}{% else %}{{ e.get_estado_display }}{% endif %}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
         </div>
 
     </div>

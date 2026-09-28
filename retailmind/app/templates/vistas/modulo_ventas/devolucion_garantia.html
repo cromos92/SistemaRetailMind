@@ -386,8 +386,21 @@
                            Point; aquí queda registrada con su N° de operación. #}
                         <div id="dg-mp-fields" class="d-none">
                             <div id="dg-mp-info" class="alert alert-info py-1 px-2 small mb-2"></div>
-                            {# Solo en «Devolver ahora»: con aprobación, el N° lo registra
-                               quien aprueba (se le prellena con el del cobro). #}
+                            {# Solo en «Devolver ahora»: RetailMind le pide el reembolso a
+                               Mercado Pago por la API (plata real: el código debe ser de quien
+                               tenga permiso `devolver_mercadopago`, el Maestro) o se registra
+                               una devolución ya hecha desde la app/panel/Point. #}
+                            <div id="dg-mp-modo-wrap" class="d-none mb-2">
+                                <div class="btn-group btn-group-sm w-100" role="group">
+                                    <input type="radio" class="btn-check" name="dg-mp-modo" id="dg-mp-modo-api" value="API" onchange="dgWizard.mpModoElegido = true; dgToggleModoMP()">
+                                    <label class="btn btn-outline-light" for="dg-mp-modo-api"><i class="ri-refund-2-line me-1"></i> Devolver a la tarjeta ahora (API)</label>
+                                    <input type="radio" class="btn-check" name="dg-mp-modo" id="dg-mp-modo-manual" value="MANUAL" checked onchange="dgWizard.mpModoElegido = true; dgToggleModoMP()">
+                                    <label class="btn btn-outline-light" for="dg-mp-modo-manual"><i class="ri-smartphone-line me-1"></i> Ya devuelto en la app / panel / Point</label>
+                                </div>
+                                <div id="dg-mp-modo-info" class="form-text text-secondary" style="font-size:0.7rem;"></div>
+                            </div>
+                            {# Con aprobación, el N° lo registra quien aprueba (se le prellena
+                               con el del cobro). #}
                             <div id="dg-mp-operacion-wrap">
                                 <label for="dg-mp-operacion" class="form-label text-white small mb-1">
                                     N° de operación de Mercado Pago <span class="text-warning">(obligatorio)</span>
@@ -503,9 +516,22 @@
                         </div>
                     </div>
                     <div id="apr-mp-wrap" class="mb-2 d-none">
-                        <label for="apr-mp-operacion" class="form-label text-white small mb-1">N° de operación de Mercado Pago</label>
-                        <input type="text" id="apr-mp-operacion" class="form-control form-control-sm font-monospace" maxlength="50"
-                               placeholder="Ej: 177422093000 (app / panel de Mercado Pago o voucher de la Point)">
+                        {% if puede_devolver_mp %}
+                        {# Refund por la API de Mercado Pago: plata real de la cuenta MP.
+                           Solo lo ve quien tiene el permiso `devolver_mercadopago`. #}
+                        <div class="btn-group btn-group-sm w-100 mb-1" role="group">
+                            <input type="radio" class="btn-check" name="apr-mp-modo" id="apr-mp-modo-api" value="API" onchange="aprToggleModoMP()">
+                            <label class="btn btn-outline-light" for="apr-mp-modo-api"><i class="ri-refund-2-line me-1"></i> Devolver a la tarjeta ahora (API)</label>
+                            <input type="radio" class="btn-check" name="apr-mp-modo" id="apr-mp-modo-manual" value="MANUAL" checked onchange="aprToggleModoMP()">
+                            <label class="btn btn-outline-light" for="apr-mp-modo-manual"><i class="ri-smartphone-line me-1"></i> Ya devuelto en la app / panel / Point</label>
+                        </div>
+                        <div id="apr-mp-modo-info" class="form-text text-secondary mb-2" style="font-size:0.72rem;"></div>
+                        {% endif %}
+                        <div id="apr-mp-operacion-wrap">
+                            <label for="apr-mp-operacion" class="form-label text-white small mb-1">N° de operación de Mercado Pago</label>
+                            <input type="text" id="apr-mp-operacion" class="form-control form-control-sm font-monospace" maxlength="50"
+                                   placeholder="Ej: 177422093000 (app / panel de Mercado Pago o voucher de la Point)">
+                        </div>
                         <div id="apr-mp-info" class="form-text text-secondary" style="font-size:0.72rem;"></div>
                     </div>
                     <div id="apr-impacto" class="apr-impacto-box text-secondary">—</div>
@@ -539,6 +565,9 @@
     // Permiso fino de NC a clientes: aprobar genera la NC (el backend lo vuelve a validar).
     const PUEDE_EMITIR_NC = {{ puede_emitir_nc|yesno:"true,false" }};
     const PUEDE_CREAR = {{ puede_crear|yesno:"true,false" }};
+    // Permiso fino `devolver_mercadopago` del usuario logueado (refund por API
+    // desde el modal de aprobación). En la directa decide quien firma.
+    const PUEDE_DEVOLVER_MP = {{ puede_devolver_mp|yesno:"true,false" }};
     const URLS_DG = {
         buscarDte: '{% url "api_buscar_dte_devolucion_garantia" %}',
         buscarCliente: '{% url "buscar_cliente_rut" %}',
@@ -646,6 +675,8 @@
         $('#dg-aviso-credito, #dg-aviso-transbank').addClass('d-none').empty();
         $('#dg-mp-operacion').val('');
         $('#dg-mp-info').empty();
+        $('#dg-mp-modo-manual').prop('checked', true);
+        $('#dg-mp-modo-wrap').addClass('d-none');
         $('#dg-banco, #dg-num-cuenta, #dg-titular-rut').val('');
         $('#dg-tipo-cuenta').val('');
         $('#dg-titular-mismo').prop('checked', true);
@@ -696,25 +727,57 @@
     }
 
     // Recuadro del método Mercado Pago: qué se cobró por MP, cuánto queda por
-    // devolver por esa vía y dónde hacer la devolución.
+    // devolver por esa vía y cómo se devuelve (refund por API o registro).
     function dgRenderInfoMP() {
         const mp = dgWizard.pagoMP || {};
         const ops = (mp.operaciones || []).map(o =>
             `N° <strong>${esc(o.numero || 'sin N° en el sistema')}</strong> · ${clp(o.monto)}` +
             (o.medio ? ` · ${esc(o.medio)}` : '') + (o.ultimos_4 ? ` ****${esc(o.ultimos_4)}` : '') +
             (o.fecha ? ` · ${esc(o.fecha)}` : '')).join('<br>');
+        const directa = dgEsDirecta();
         $('#dg-mp-info').html(
             `<i class="ri-smartphone-line me-1"></i>Cobrada con <strong>Mercado Pago</strong> ${esc(mp.medio || '')} ` +
             `(${clp(mp.monto_mp)}` + (mp.monto_devuelto ? `, ya devuelto ${clp(mp.monto_devuelto)}` : '') +
             `; se pueden devolver hasta <strong>${clp(mp.disponible)}</strong>).` +
             (ops ? `<br>${ops}` : '') +
-            (dgEsDirecta()
-                ? `<br>Devuelve el dinero desde la <strong>app o el panel de Mercado Pago</strong> (o la Point): ` +
-                  `este sistema solo lo registra.`
-                : `<br>Quien apruebe hace la devolución en Mercado Pago y registra el N° de operación.`) +
+            (directa
+                ? ''
+                : `<br>Quien apruebe elige si RetailMind le pide el reembolso a Mercado Pago (vuelve a la tarjeta) ` +
+                  `o registra una devolución hecha desde la app/panel.`) +
             ` Resta de <strong>Mercado Pago POS</strong> en la caja, no del efectivo.`
         );
-        $('#dg-mp-operacion-wrap').toggleClass('d-none', !dgEsDirecta());
+        $('#dg-mp-modo-wrap').toggleClass('d-none', !directa);
+        if (directa) { dgConfigurarModoMP(mp); }
+        dgToggleModoMP();
+    }
+    // Directa: el refund por API solo si el cobro tiene pago real en Mercado
+    // Pago con saldo suficiente (un «MP manual» no). Se preselecciona cuando se
+    // puede; el permiso de quien firma lo valida el backend con el código.
+    function dgConfigurarModoMP(mp) {
+        const total = dgTotalNC();
+        const porApi = Number(mp.devolvible_api || 0);
+        const posible = total > 0 && porApi >= total;
+        const $api = $('#dg-mp-modo-api');
+        $api.prop('disabled', !posible);
+        $('label[for="dg-mp-modo-api"]').toggleClass('disabled', !posible);
+        if (!posible) { $('#dg-mp-modo-manual').prop('checked', true); }
+        else if (!dgWizard.mpModoElegido) { $api.prop('checked', true); }
+        $('#dg-mp-modo-info').html(posible
+            ? `<i class="ri-shield-keyhole-line me-1"></i>Con <strong>Devolver a la tarjeta ahora</strong> RetailMind le pide el ` +
+              `reembolso de ${clp(total)} a Mercado Pago y la plata vuelve a la tarjeta/cuenta del cliente. ` +
+              `El código debe ser de quien tenga permiso para devolver por Mercado Pago (Maestro).`
+            : `<i class="ri-information-line me-1"></i>Este cobro no se puede reembolsar por la API` +
+              (porApi > 0 ? ` (por API alcanza solo para ${clp(porApi)})` : ` (cobro «MP manual» o sin pago registrado en Mercado Pago)`) +
+              `: devuélvelo desde la app/panel de Mercado Pago y registra el N° de operación.`);
+    }
+    function dgEsMPApi() {
+        return dgEsDirecta() && $('#dg-metodo-mp').is(':checked')
+            && $('#dg-mp-modo-api').is(':checked') && !$('#dg-mp-modo-api').prop('disabled');
+    }
+    function dgToggleModoMP() {
+        // El N° de operación se pide solo al registrar una devolución hecha a
+        // mano; con el refund por API lo trae Mercado Pago.
+        $('#dg-mp-operacion-wrap').toggleClass('d-none', !dgEsDirecta() || dgEsMPApi());
     }
     function dgToggleTitular() {
         const mismo = $('#dg-titular-mismo').is(':checked');
@@ -762,7 +825,9 @@
         $('#dg-btn-anterior').toggleClass('d-none', p === 1);
         $('#dg-btn-siguiente').toggleClass('d-none', p === 4);
         $('#dg-btn-confirmar').toggleClass('d-none', p !== 4);
-        if (p === 4) { dgRenderResumen(); }
+        // Al entrar al paso 4 el total puede haber cambiado (paso 2): el modo
+        // API/manual de Mercado Pago y su texto se recalculan con el vigente.
+        if (p === 4) { dgRenderResumen(); dgToggleMetodo(); }
     }
 
     function dgIrPaso(n, force) {
@@ -820,6 +885,10 @@
             if (!rut || !validarRutChileno(rut)) { dgMostrarErrorCliente('Ingresa un RUT válido.'); return false; }
             if (rutEsGenerico(rut)) { dgMostrarErrorCliente('El RUT 66666666-6 es Consumidor Final. Ingresa el RUT real del cliente.'); return false; }
             if (!nombre) { dgMostrarErrorCliente('Ingresa el nombre / razón social.'); return false; }
+            const correo = $('#dg-cliente-email').val().trim();
+            if (correo && (correo.length > 100 || !/^[^\s@'"<>]+@[^\s@'"<>]+\.[^\s@'"<>]+$/.test(correo))) {
+                dgMostrarErrorCliente('El correo del cliente no es válido.'); return false;
+            }
             dgAutoGiro();
             if (esRutJuridico(rut)) {
                 const faltan = ['giro', 'direccion', 'comuna', 'ciudad'].filter(f => !$('#dg-cliente-' + f).val().trim());
@@ -846,7 +915,12 @@
                         ' (lo cobrado con MP). El resto va por el medio con que se pagó.');
                     return false;
                 }
-                if (dgEsDirecta() && !$('#dg-mp-operacion').val().trim()) {
+                if (dgEsMPApi() && dgTotalNC() > Number(mp.devolvible_api || 0)) {
+                    dgMostrarErrorMetodo('Por la API de Mercado Pago se pueden devolver hasta ' + clp(mp.devolvible_api) +
+                        '. Para el resto elige «Ya devuelto en la app / panel / Point» y registra el N°.');
+                    return false;
+                }
+                if (dgEsDirecta() && !dgEsMPApi() && !$('#dg-mp-operacion').val().trim()) {
                     dgMostrarErrorMetodo('Ingresa el N° de operación de Mercado Pago de la devolución.');
                     $('#dg-mp-operacion').trigger('focus');
                     return false;
@@ -1197,7 +1271,10 @@
             tipo_cuenta: esTransf ? $('#dg-tipo-cuenta').val() : '',
             numero_cuenta: esTransf ? $('#dg-num-cuenta').val().trim() : '',
             cuenta_titular_rut: titularRut,
-            numero_operacion_mp: ($('#dg-metodo-mp').is(':checked') && dgEsDirecta()) ? $('#dg-mp-operacion').val().trim() : '',
+            numero_operacion_mp: ($('#dg-metodo-mp').is(':checked') && dgEsDirecta() && !dgEsMPApi()) ? $('#dg-mp-operacion').val().trim() : '',
+            // Refund por la API de Mercado Pago (solo directa + MP): el backend
+            // exige que quien firma tenga el permiso `devolver_mercadopago`.
+            devolver_mp_api: dgEsMPApi(),
         };
 
         // Última confirmación del caso Transbank: que quien crea la solicitud
@@ -1213,8 +1290,11 @@
                 ? `<br><span class="text-warning">Entregue <strong>${clp(dgTotalNC())} en efectivo</strong> al cliente desde la caja.</span>`
                 : '') +
             (directa && $('#dg-metodo-mp').is(':checked')
-                ? `<br><span class="text-info">Confirme que devolvió <strong>${clp(dgTotalNC())}</strong> desde Mercado Pago ` +
-                  `(N° de operación ${esc($('#dg-mp-operacion').val().trim())}).</span>`
+                ? (dgEsMPApi()
+                    ? `<br><span class="text-info">RetailMind le pedirá a <strong>Mercado Pago</strong> el reembolso de ` +
+                      `<strong>${clp(dgTotalNC())}</strong> a la tarjeta/cuenta del cliente. Si Mercado Pago rechaza, no se crea nada.</span>`
+                    : `<br><span class="text-info">Confirme que devolvió <strong>${clp(dgTotalNC())}</strong> desde Mercado Pago ` +
+                      `(N° de operación ${esc($('#dg-mp-operacion').val().trim())}).</span>`)
                 : '');
         Swal.fire({
             title: directa ? 'Devolver dinero ahora' : 'Crear solicitud de devolución',
@@ -1256,11 +1336,14 @@
                             html: `<p><strong>${esc(resp.data.numero_operacion)}</strong></p>` +
                                   `<p>Total ${clp(resp.data.monto_total)} — pendiente de aprobación.</p>` +
                                   (resp.data.requerimiento_vinculado ? `<p class="small text-muted">Vinculada al requerimiento ${esc(resp.data.requerimiento_vinculado)}</p>` : ''),
-                            showCancelButton: true, confirmButtonColor: '#0066FF',
+                            showCancelButton: true, showDenyButton: true,
+                            confirmButtonColor: '#0066FF', denyButtonColor: '#00A080',
                             confirmButtonText: '<i class="ri-printer-line me-1"></i> Imprimir comprobante',
+                            denyButtonText: '<i class="ri-mail-send-line me-1"></i> Enviar por correo',
                             cancelButtonText: 'Cerrar',
                         }).then(function (r) {
                             if (r.isConfirmed) { imprimirDevolucionGarantia(resp.data.devolucion_id); }
+                            else if (r.isDenied) { enviarComprobanteDG(resp.data.devolucion_id, resp.data.cliente_email || ''); }
                         });
                     }
                     cargarDevoluciones();
@@ -1292,6 +1375,10 @@
             html: `<p class="mb-1"><strong>${esc(d.numero_operacion)}</strong> — ${clp(d.monto_total)}</p>` +
                   `<p class="mb-1">NC #${esc(d.nc_numero)} · ${esc(d.metodo_devolucion)}` +
                   (d.numero_operacion_mp ? ` · N° operación MP <strong>${esc(d.numero_operacion_mp)}</strong>` : '') + `</p>` +
+                  (d.devuelto_api
+                      ? `<p class="mb-1 text-success"><i class="ri-refund-2-line me-1"></i>Mercado Pago devolvió la plata a la tarjeta/cuenta del cliente` +
+                        ((d.refunds_mp || []).length ? ` (refund ${esc((d.refunds_mp || []).join(', '))})` : '') + `.</p>`
+                      : '') +
                   `<p class="small text-muted mb-2">Autorizó ${esc(d.autorizado_por)}. ${esc(d.descripcion_caja || '')}</p>` +
                   `<a href="${d.nc_txt_url}" class="btn btn-sm btn-outline-primary"><i class="ri-download-line me-1"></i> Descargar TXT Acepta</a>` +
                   avisos.map(a => `<div class="alert alert-warning text-start small mt-2 mb-0"><i class="ri-alert-line me-1"></i>${esc(a)}</div>`).join('') +
@@ -1300,11 +1387,14 @@
                         `<strong>Revisa el TXT antes de subirlo a Acepta:</strong><ul class="mb-0 ps-3">` +
                         warns.map(w => `<li>${esc(w)}</li>`).join('') + `</ul></div>`
                       : ''),
-            showCancelButton: true, confirmButtonColor: '#0066FF',
+            showCancelButton: true, showDenyButton: true,
+            confirmButtonColor: '#0066FF', denyButtonColor: '#00A080',
             confirmButtonText: '<i class="ri-printer-line me-1"></i> Imprimir comprobante',
+            denyButtonText: '<i class="ri-mail-send-line me-1"></i> Enviar por correo',
             cancelButtonText: 'Cerrar',
         }).then(function (r) {
             if (r.isConfirmed) { imprimirDevolucionGarantia(d.devolucion_id); }
+            else if (r.isDenied) { enviarComprobanteDG(d.devolucion_id, d.cliente_email || ''); }
         });
     }
 
@@ -1333,6 +1423,11 @@
             resp.data.forEach(function (d) {
                 let acciones = `<a href="/app/devolucion-garantia/${d.id}/" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Ver"><i class="ri-eye-line"></i></a>`;
                 acciones += ` <button class="btn btn-sm btn-outline-primary py-0 px-1" onclick="imprimirDevolucionGarantia(${d.id})" title="Imprimir comprobante 80mm"><i class="ri-printer-line"></i></button>`;
+                if (d.estado === 'PENDIENTE' || d.estado === 'NC_GENERADA') {
+                    // El correo es texto del usuario: va en un data-attribute
+                    // (escape HTML), nunca dentro de un string JS en el onclick.
+                    acciones += ` <button class="btn btn-sm btn-outline-info py-0 px-1 js-dg-correo" data-id="${d.id}" data-email="${esc(d.receptor_email || '')}" title="Enviar comprobante por correo${d.correos_enviados ? ' (ya enviado ' + d.correos_enviados + ' vez/veces)' : ''}"><i class="${d.correos_enviados ? 'ri-mail-check-line' : 'ri-mail-send-line'}"></i></button>`;
+                }
                 if (PUEDE_APROBAR && d.estado === 'PENDIENTE') {
                     acciones += ` <button class="btn btn-sm btn-outline-success py-0 px-1" onclick="abrirModalAprobacion(${d.id})" title="Analizar"><i class="ri-shield-check-line"></i></button>`;
                 }
@@ -1465,12 +1560,15 @@
             const hayMP = !!(mp.es_mp && Number(mp.disponible) > 0);
             $('#apr-metodo option[value="MERCADO_PAGO"]').prop('hidden', !hayMP).prop('disabled', !hayMP);
             $('#apr-mp-operacion').val(hayMP ? (mp.numero_operacion || '') : '');
+            aprConfigurarModoMP(mp, d.monto_total);
             const mpHtml = mp.es_mp
                 ? `<div class="alert alert-info py-1 px-2 small mt-2 mb-0"><i class="ri-smartphone-line me-1"></i>` +
                   `Cobrada con <strong>Mercado Pago</strong> ${esc(mp.medio || '')} (${clp(mp.monto_mp)}` +
                   (mp.monto_devuelto ? `, ya devuelto ${clp(mp.monto_devuelto)}` : '') + `)` +
                   (mp.numero_operacion ? ` · N° operación <strong>${esc(mp.numero_operacion)}</strong>` : '') +
-                  `. Si se devuelve por Mercado Pago, hazlo desde la app o el panel de MP y regístralo aquí.</div>`
+                  (PUEDE_DEVOLVER_MP
+                      ? `. Si se devuelve por Mercado Pago, elige si RetailMind pide el reembolso por la API o registras uno hecho desde la app/panel.</div>`
+                      : `. Si se devuelve por Mercado Pago, hazlo desde la app o el panel de MP y regístralo aquí.</div>`)
                 : '';
             $('#apr-resumen').html(
                 `<div class="mb-1"><strong>Solicitante:</strong> ${esc(d.solicitado_por)} · ${esc(d.fecha_solicitud)}${d.sucursal ? ' · ' + esc(d.sucursal) : ''}</div>` +
@@ -1535,45 +1633,86 @@
         });
     }
 
+    // Refund por API elegido en el modal (solo existe si el usuario tiene el permiso).
+    function aprModoApiMP() {
+        return PUEDE_DEVOLVER_MP && $('#apr-mp-modo-api').is(':checked') && !$('#apr-mp-modo-api').prop('disabled');
+    }
+    function aprConfigurarModoMP(mp, total) {
+        if (!PUEDE_DEVOLVER_MP) { return; }
+        const porApi = Number((mp || {}).devolvible_api || 0);
+        const posible = !!(mp && mp.es_mp && Number(total) > 0 && porApi >= Number(total));
+        $('#apr-mp-modo-api').prop('disabled', !posible).prop('checked', posible);
+        $('#apr-mp-modo-manual').prop('checked', !posible);
+        $('#apr-mp-modo-info').html(!mp || !mp.es_mp ? '' : (posible
+            ? `<i class="ri-shield-keyhole-line me-1"></i>Con <strong>Devolver a la tarjeta ahora</strong> RetailMind le pide el reembolso de ${clp(total)} a Mercado Pago y la plata vuelve a la tarjeta/cuenta del cliente.`
+            : `<i class="ri-information-line me-1"></i>Este cobro no se puede reembolsar por la API` +
+              (porApi > 0 ? ` (por API alcanza solo para ${clp(porApi)})` : ` (cobro «MP manual» o sin pago registrado en Mercado Pago)`) +
+              `: devuélvelo desde la app/panel de Mercado Pago y registra el N° de operación.`));
+        aprToggleModoMP();
+    }
+    function aprToggleModoMP() {
+        $('#apr-mp-operacion-wrap').toggleClass('d-none', aprModoApiMP());
+    }
+
     function aprAprobar() {
         if (!aprActual || !PUEDE_EMITIR_NC) { return; }
         const metodo = $('#apr-metodo').val();
         const fecha = metodo !== 'NO_AFECTA_CAJA' ? $('#apr-fecha').val() : null;
-        const numeroMP = metodo === 'MERCADO_PAGO' ? $('#apr-mp-operacion').val().trim() : '';
-        if (metodo === 'MERCADO_PAGO' && !numeroMP) {
+        const apiMP = metodo === 'MERCADO_PAGO' && aprModoApiMP();
+        const numeroMP = (metodo === 'MERCADO_PAGO' && !apiMP) ? $('#apr-mp-operacion').val().trim() : '';
+        if (metodo === 'MERCADO_PAGO' && !apiMP && !numeroMP) {
             Swal.fire({ icon: 'info', title: 'Falta el N° de operación',
                 text: 'Ingresa el N° de operación de Mercado Pago de la devolución: queda en la NC para ubicarla.' });
             $('#apr-mp-operacion').trigger('focus');
             return;
         }
         Swal.fire({
-            title: 'Aprobar y generar NC',
-            html: `Se generará la Nota de Crédito y el TXT Acepta.<br><small class="text-muted">${esc($('#apr-impacto').text())}</small>` +
+            title: apiMP ? 'Devolver a la tarjeta y generar NC' : 'Aprobar y generar NC',
+            html: (apiMP
+                    ? `RetailMind le pedirá a <strong>Mercado Pago</strong> el reembolso a la tarjeta/cuenta del cliente y luego generará la Nota de Crédito y el TXT Acepta. Si Mercado Pago rechaza, la NC no se emite.<br>`
+                    : `Se generará la Nota de Crédito y el TXT Acepta.<br>`) +
+                  `<small class="text-muted">${esc($('#apr-impacto').text())}</small>` +
                   (numeroMP ? `<br><small>N° de operación Mercado Pago: <strong>${esc(numeroMP)}</strong></small>` : ''),
             icon: 'question', showCancelButton: true, confirmButtonColor: '#00A080',
-            confirmButtonText: 'Aprobar', cancelButtonText: 'Cancelar',
+            confirmButtonText: apiMP ? 'Devolver y aprobar' : 'Aprobar', cancelButtonText: 'Cancelar',
         }).then(function (r) {
             if (!r.isConfirmed) { return; }
             $('#apr-btn-aprobar').prop('disabled', true);
             $.ajax({
                 url: urlCon(URLS_DG.aprobar, aprActual), method: 'POST', contentType: 'application/json',
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
-                data: JSON.stringify({ metodo_devolucion: metodo, fecha_imputacion: fecha, observaciones: $('#apr-observaciones').val().trim(), numero_operacion_mp: numeroMP }),
+                data: JSON.stringify({ metodo_devolucion: metodo, fecha_imputacion: fecha, observaciones: $('#apr-observaciones').val().trim(),
+                                       numero_operacion_mp: numeroMP, devolver_mp_api: apiMP }),
                 success: function (resp) {
                     $('#apr-btn-aprobar').prop('disabled', false);
                     if (resp.success) {
                         bootstrap.Modal.getInstance(document.getElementById('modalAprobarDevolucion'))?.hide();
                         const warns = resp.data.txt_warnings || [];
+                        const dd = resp.data;
                         Swal.fire({
                             icon: warns.length ? 'warning' : 'success',
                             title: 'Aprobada',
-                            html: `<p>NC #${resp.data.nc_numero} — ${clp(resp.data.monto_total)}</p>` +
-                                  `<a href="${resp.data.nc_txt_url}" class="btn btn-sm btn-outline-primary"><i class="ri-download-line me-1"></i> Descargar TXT Acepta</a>` +
+                            html: `<p class="mb-1">NC #${esc(dd.nc_numero)} — ${clp(dd.monto_total)}` +
+                                  (dd.metodo_devolucion ? ` · ${esc(dd.metodo_devolucion)}` : '') +
+                                  (dd.numero_operacion_mp ? ` · N° operación MP <strong>${esc(dd.numero_operacion_mp)}</strong>` : '') + `</p>` +
+                                  (dd.devuelto_api
+                                      ? `<p class="mb-2 text-success"><i class="ri-refund-2-line me-1"></i>Mercado Pago devolvió la plata a la tarjeta/cuenta del cliente` +
+                                        ((dd.refunds_mp || []).length ? ` (refund ${esc((dd.refunds_mp || []).join(', '))})` : '') + `.</p>`
+                                      : '') +
+                                  `<a href="${dd.nc_txt_url}" class="btn btn-sm btn-outline-primary"><i class="ri-download-line me-1"></i> Descargar TXT Acepta</a>` +
                                   (warns.length
                                       ? `<div class="alert alert-warning text-start small mt-3 mb-0">` +
                                         `<strong>Revisa el TXT antes de subirlo a Acepta:</strong><ul class="mb-0 ps-3">` +
                                         warns.map(w => `<li>${esc(w)}</li>`).join('') + `</ul></div>`
                                       : ''),
+                            showCancelButton: true, showDenyButton: true,
+                            confirmButtonColor: '#0066FF', denyButtonColor: '#00A080',
+                            confirmButtonText: '<i class="ri-printer-line me-1"></i> Imprimir comprobante',
+                            denyButtonText: '<i class="ri-mail-send-line me-1"></i> Enviar por correo',
+                            cancelButtonText: 'Cerrar',
+                        }).then(function (rr) {
+                            if (rr.isConfirmed) { imprimirDevolucionGarantia(dd.devolucion_id); }
+                            else if (rr.isDenied) { enviarComprobanteDG(dd.devolucion_id, dd.cliente_email || ''); }
                         });
                         cargarDevoluciones();
                     } else {
@@ -1629,6 +1768,12 @@
         new bootstrap.Modal(document.getElementById('modalNuevaDevolucion')).show();
         buscarDteDevolucionGarantia();
     }
+
+    // Botón «Enviar comprobante por correo» del listado (handler delegado: el
+    // correo viaja en data-email, no dentro del onclick).
+    $(document).on('click', '.js-dg-correo', function () {
+        enviarComprobanteDG($(this).data('id'), String($(this).attr('data-email') || ''));
+    });
 
     $(document).ready(function () {
         dgRenderPaso();

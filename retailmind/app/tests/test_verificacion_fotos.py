@@ -10,7 +10,7 @@ Correr:  python manage.py test app.tests.test_verificacion_fotos
 from unittest import mock
 
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 
 from app.models import CredencialesEcommerce, FotoPortadaArticulo
 from app.tests.factories import (
@@ -132,3 +132,123 @@ class LivenessYVerificarTest(TestCase):
         self.assertIn('cobertura', self.cred.ultima_verif_resultado)
         self.assertIn('404', self.cred.ultima_verif_resultado)
         self.assertIn('DEAD1', self.cred.ultima_verif_detalle)
+
+
+class SniffImagenTest(SimpleTestCase):
+    """El CDN de Spaces sirve los WebP de imagekit como ``application/octet-stream``
+    (27 de 30 URLs de realsport en producción): la imagen se reconoce por sus
+    primeros bytes, no por el Content-Type."""
+
+    def test_reconoce_formatos_por_magic_bytes(self):
+        from app.services.verificacion_fotos_service import _sniff_imagen
+        self.assertEqual(_sniff_imagen(b'RIFF\x10\x00\x00\x00WEBPVP8 '), 'image/webp')
+        self.assertEqual(_sniff_imagen(b'\xff\xd8\xff\xe0\x00\x10JFIF'), 'image/jpeg')
+        self.assertEqual(_sniff_imagen(b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR'), 'image/png')
+        self.assertEqual(_sniff_imagen(b'GIF89a\x01\x00'), 'image/gif')
+
+    def test_lo_que_no_es_imagen_devuelve_vacio(self):
+        from app.services.verificacion_fotos_service import _sniff_imagen
+        self.assertEqual(_sniff_imagen(b'<!DOCTYPE html><html>'), '')
+        self.assertEqual(_sniff_imagen(b'<?xml version="1.0"?><Error>'), '')
+        self.assertEqual(_sniff_imagen(b''), '')
+
+    def _sesion(self, head_status, head_ct, get_status=None, get_ct=None, cuerpo=b''):
+        session = mock.Mock()
+        head = mock.Mock(status_code=head_status, headers={'Content-Type': head_ct})
+        session.head.return_value = head
+        get = mock.Mock(
+            status_code=head_status if get_status is None else get_status,
+            headers={'Content-Type': head_ct if get_ct is None else get_ct},
+        )
+        get.iter_content.return_value = iter([cuerpo])
+        session.get.return_value = get
+        return session
+
+    def test_octet_stream_con_magic_webp_es_ok(self):
+        from app.services import verificacion_fotos_service as svc
+        session = self._sesion(
+            200, 'application/octet-stream', 206, 'application/octet-stream',
+            b'RIFF\x10\x00\x00\x00WEBPVP8 ',
+        )
+        self.assertEqual(
+            svc._check_url('https://cdn/x.webp', session, 5, None),
+            ('ok', 206, 'image/webp'),
+        )
+        session.get.assert_called_once()
+        self.assertEqual(session.get.call_args.kwargs['headers'], {'Range': 'bytes=0-15'})
+
+    def test_content_type_image_no_necesita_get(self):
+        from app.services import verificacion_fotos_service as svc
+        session = self._sesion(200, 'image/webp')
+        self.assertEqual(
+            svc._check_url('https://cdn/x.webp', session, 5, None),
+            ('ok', 200, 'image/webp'),
+        )
+        session.get.assert_not_called()
+
+    def test_403_del_cdn_es_http_otro_y_reintenta_con_el_header(self):
+        from app.services import verificacion_fotos_service as svc
+        session = self._sesion(403, 'application/xml', cuerpo=b'<?xml version="1.0"?>')
+        self.assertEqual(
+            svc._check_url('https://cdn/paola/x.webp', session, 5, {'X-Key': 'k'}),
+            ('http_otro', 403, 'application/xml'),
+        )
+        self.assertEqual(session.get.call_args.kwargs['headers']['X-Key'], 'k')
+
+    def test_200_con_html_sigue_siendo_no_imagen(self):
+        from app.services import verificacion_fotos_service as svc
+        session = self._sesion(200, 'text/html', cuerpo=b'<!DOCTYPE html>')
+        self.assertEqual(
+            svc._check_url('https://cdn/login', session, 5, None),
+            ('no_imagen', 200, 'text/html'),
+        )
+
+
+class TareaDiariaTest(TestCase):
+    """``sincronizar_y_verificar_todas`` procesa cada integración aislada: un
+    ecommerce caído no frena a los demás y la verificación corre igual."""
+
+    def setUp(self):
+        cache.clear()
+        self.empresa = crear_empresa(nombre='Grupo', rut='76.333.333-3')
+        self.sucursal = crear_sucursal(empresa=self.empresa, alias='Local')
+        crear_producto_con_talla(self.sucursal, articulo='ART1', sku=1)
+        base = dict(
+            tipo='realsport', empresa=self.empresa, url_api='https://x.cl',
+            api_key='k', activo=True,
+        )
+        self.c_ok = CredencialesEcommerce.objects.create(codigo='a', nombre='A', **base)
+        self.c_fail = CredencialesEcommerce.objects.create(codigo='b', nombre='B', **base)
+        base['activo'] = False
+        self.c_off = CredencialesEcommerce.objects.create(codigo='c', nombre='C', **base)
+        FotoPortadaArticulo.objects.create(
+            articulo='ART1', url_foto='https://cdn/a.webp', origen=self.c_ok,
+        )
+
+    def test_sincroniza_y_verifica_solo_las_activas(self):
+        from app.services import verificacion_fotos_service as svc
+        from app.services.realsport_imagenes_service import RealsportImagenesError
+
+        def fake_sync(cred):
+            if cred.codigo == 'b':
+                raise RealsportImagenesError('ecommerce caído')
+            return {'con_foto': 3}
+
+        with mock.patch(
+            'app.services.realsport_imagenes_service.sincronizar_credencial',
+            side_effect=fake_sync,
+        ), mock.patch.object(svc, '_check_url', return_value=('ok', 200, 'image/webp')):
+            resumen = svc.sincronizar_y_verificar_todas(muestra=10)
+
+        self.assertEqual([r['codigo'] for r in resumen], ['a', 'b'])
+        self.assertTrue(resumen[0]['sync_ok'])
+        self.assertEqual(resumen[0]['con_foto'], 3)
+        self.assertTrue(resumen[0]['verif_ok'])
+        self.assertFalse(resumen[1]['sync_ok'])
+        self.assertIn('caído', resumen[1]['sync_error'])
+        self.assertTrue(resumen[1]['verif_ok'])
+        for cred in (self.c_ok, self.c_fail):
+            cred.refresh_from_db()
+            self.assertIsNotNone(cred.ultima_verif_at)
+        self.c_off.refresh_from_db()
+        self.assertIsNone(self.c_off.ultima_verif_at)

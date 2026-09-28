@@ -437,6 +437,7 @@ from .views_modulo_devolucion_garantia import (
     api_impacto_caja_devolucion_garantia,
     api_aprobar_devolucion_garantia,
     api_rechazar_devolucion_garantia,
+    api_enviar_comprobante_devolucion_garantia,
 )
 from .views_modulo_fidelizacion import (
     # Vistas HTML
@@ -1452,6 +1453,9 @@ urlpatterns = [
     path('configuracion/integraciones-ecommerce/<int:pk>/verificar/',
          views_modulo_configuracion.verificar_integracion_ecommerce,
          name='verificar_integracion_ecommerce'),
+    path('configuracion/integraciones-ecommerce/<int:pk>/fotos/',
+         views_modulo_configuracion.fotos_integracion_ecommerce,
+         name='fotos_integracion_ecommerce'),
 
     # ========== MÓDULO DE GENERACIÓN DE ARCHIVOS TXT ACEPTA ==========
     path('configuracion/interfaz-prueba-acepta/', views_modulo_documentos.interfaz_prueba_acepta, name='interfaz_prueba_acepta'),
@@ -1713,6 +1717,7 @@ urlpatterns = [
     path('api/devolucion-garantia/<int:devolucion_id>/aprobar/', api_aprobar_devolucion_garantia, name='api_aprobar_devolucion_garantia'),
     path('api/devolucion-garantia/<int:devolucion_id>/rechazar/', api_rechazar_devolucion_garantia, name='api_rechazar_devolucion_garantia'),
     path('api/devolucion-garantia/<int:devolucion_id>/anular/', api_anular_solicitud_devolucion_garantia, name='api_anular_solicitud_devolucion_garantia'),
+    path('api/devolucion-garantia/<int:devolucion_id>/enviar-correo/', api_enviar_comprobante_devolucion_garantia, name='api_enviar_comprobante_devolucion_garantia'),
 
     # ========== MÓDULO FIDELIZACIÓN (PUNTOS) ==========
     # Landing PÚBLICA (QR impreso en tickets del POS) — sin login

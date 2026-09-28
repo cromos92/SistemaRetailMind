@@ -35,6 +35,7 @@ MODULO_CORREO_CHOICES = [
     ('COTIZACION', 'Cotización'),
     ('OTP', 'Código de verificación'),
     ('PASSWORD', 'Recuperación de contraseña'),
+    ('DEVOLUCION_DINERO', 'Devolución de dinero'),
     ('OTRO', 'Otro'),
 ]
 

@@ -1618,3 +1618,722 @@ class DevolucionDineroMercadoPagoTest(TestCase):
         listado = client.get(reverse('api_listar_devoluciones_garantia'),
                              {'q': self.NUMERO_MP}).json()
         self.assertEqual([d['id'] for d in listado['data']], [dev.id])
+
+
+@override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)
+class DevolucionDineroRefundApiTest(TestCase):
+    """Devolver a la tarjeta por la API de Mercado Pago desde Devolución de
+    Dinero (28-09-2026): RetailMind pide el refund a MP (refund-primero, la NC
+    solo se emite si MP acepta), la NC queda con el N° del cobro y las filas
+    DEVOLUCION del libro MP quedan marcadas como de esta devolución. Mueve
+    plata real: permiso `devolver_mercadopago` (Maestro)."""
+
+    NUMERO_MP = '177000000001'
+    REFUND_ID = 3361111606
+
+    def setUp(self):
+        from app.models import MercadoPagoConfig, TransaccionMercadoPago
+        self.env = setup_entorno_completo()
+        self.user = self.env['user']
+        self.sucursal = self.env['sucursal']
+        self.pt = self.env['producto_talla']
+        crear_correlativo(self.sucursal, tipo_dte='NOTA DE CREDITO')
+        self.hoy = timezone.localdate()
+        self.boleta = _crear_documento(self.env, 6200, [(self.pt, 2, 11900)], metodo_pago=None)
+        Dte_Detalle_Pago.objects.create(
+            dte=self.boleta, metodo_pago='MP_POINT_DEBITO', tipo_tarjeta='debit_card',
+            voucher='PAY01TESTULID0002', monto=23800, notas='MP Point Aut: -')
+        self.config = MercadoPagoConfig.objects.create(
+            sucursal=self.sucursal, habilitado=True, modo='POINT',
+            token_env='MP_TOKEN_TEST', webhook_secret_env='MP_SECRET_TEST',
+            external_pos_id='POS002', external_store_id='SUC002',
+        )
+        self.trx = TransaccionMercadoPago.objects.create(
+            config=self.config, sucursal=self.sucursal, correlativo_ticket='12181',
+            tipo='VENTA', canal='POINT', external_reference='RM-TEST-12181-c6i02',
+            payment_id='PAY01TESTULID0002', payment_id_mp=self.NUMERO_MP,
+            metodo_pago_mp='debit_card', monto=23800, estado='APROBADA', consumida=True,
+        )
+        self.llamadas = []
+
+    # ----- utilidades -----
+
+    def _mock_request(self, refund_status=201, refund_json=None, search_results=None):
+        """Simula `_request` de mercadopago_service: POST refunds y GET payments/search."""
+        from unittest import mock
+        llamadas = self.llamadas
+
+        def _fake(config, metodo, path, json_body=None, idempotency_key=None, params=None,
+                  timeout=None, cuenta_breaker=True):
+            llamadas.append((metodo, path, json_body, params))
+            resp = mock.MagicMock()
+            if metodo == 'POST' and path.endswith('/refunds'):
+                resp.status_code = refund_status
+                resp.json.return_value = refund_json if refund_json is not None else {
+                    'id': self.REFUND_ID, 'amount': (json_body or {}).get('amount', 23800),
+                    'status': 'approved',
+                }
+            elif metodo == 'GET' and path == '/v1/payments/search':
+                resp.status_code = 200
+                resp.json.return_value = {'results': search_results or []}
+            else:
+                resp.status_code = 404
+                resp.json.return_value = {'message': f'unexpected {metodo} {path}'}
+            return resp
+        return mock.patch('app.services.mercadopago_service._request', side_effect=_fake)
+
+    def _solicitud(self, cantidad=1, dte=None):
+        dte = dte or self.boleta
+        return service.crear_solicitud_devolucion(
+            dte_original=dte, sucursal=self.sucursal, receptor=_receptor(self.env),
+            motivo='Falla', usuario=self.user, metodo_solicitado='MERCADO_PAGO',
+            detalles=[{'dte_producto_id': dte.dte_productos.first().id,
+                       'modo': 'CANTIDAD', 'cantidad': cantidad}],
+        )
+
+    def _aprobar_api(self, dev):
+        return service.aprobar_devolucion(
+            devolucion_id=dev.id, aprobador=self.user, metodo_devolucion='MERCADO_PAGO',
+            fecha_imputacion=self.hoy, devolver_mp_api=True,
+        )
+
+    # ----- service -----
+
+    def test_detecta_cuanto_se_puede_devolver_por_api(self):
+        mp = service.pago_mercadopago_dte(self.boleta)
+        self.assertEqual(mp['devolvible_api'], 23800)
+
+    def test_refund_por_api_emite_la_nc_y_marca_el_libro_mp(self):
+        from app.models import TransaccionMercadoPago
+        dev = self._solicitud(cantidad=1)
+
+        with self._mock_request():
+            dev, nc, _txt, _w = self._aprobar_api(dev)
+
+        posts = [c for c in self.llamadas if c[0] == 'POST']
+        self.assertEqual(len(posts), 1)
+        self.assertEqual(posts[0][1], f'/v1/payments/{self.NUMERO_MP}/refunds')
+        self.assertEqual(posts[0][2], {'amount': 11900})
+
+        dev.refresh_from_db()
+        self.assertEqual(dev.estado, 'NC_GENERADA')
+        self.assertEqual(dev.metodo_devolucion, 'MERCADO_PAGO')
+        pago = nc.dte_asociado.get()
+        self.assertEqual(pago.metodo_pago, 'MP_POINT_DEBITO')
+        self.assertEqual(pago.voucher, self.NUMERO_MP)
+        self.assertIn('API', pago.notas)
+        self.assertIn(str(self.REFUND_ID), pago.notas)
+
+        refund = TransaccionMercadoPago.objects.get(tipo='DEVOLUCION')
+        self.assertEqual(refund.payment_id, str(self.REFUND_ID))
+        self.assertEqual(refund.transaccion_origen_id, self.trx.id)
+        self.assertTrue(refund.estado_detalle.endswith(f'({dev.numero_operacion})'))
+        self.trx.refresh_from_db()
+        self.assertEqual(self.trx.estado, 'APROBADA')  # parcial: sigue con saldo
+
+        info = service.mercadopago_de_devolucion(dev)
+        self.assertTrue(info['api'])
+        self.assertEqual(info['refunds'], [str(self.REFUND_ID)])
+        self.assertEqual(info['numero_operacion'], self.NUMERO_MP)
+        # Ya no queda nada devolvible por API sobre la parte devuelta.
+        self.assertEqual(service.pago_mercadopago_dte(self.boleta)['devolvible_api'], 11900)
+
+    def test_refund_total_deja_el_cobro_devuelto(self):
+        dev = self._solicitud(cantidad=2)
+        with self._mock_request():
+            self._aprobar_api(dev)
+        self.trx.refresh_from_db()
+        self.assertEqual(self.trx.estado, 'DEVUELTA')
+
+    def test_refund_usa_el_numero_real_y_no_el_ulid(self):
+        """Point integrado guarda el ULID `PAY01…` en payment_id; el refund debe
+        ir con el número real, buscándolo en MP si no está guardado."""
+        self.trx.payment_id_mp = ''
+        self.trx.save(update_fields=['payment_id_mp'])
+        dev = self._solicitud(cantidad=1)
+        busqueda = [{'id': self.NUMERO_MP, 'external_reference': self.trx.external_reference,
+                     'status': 'approved'}]
+
+        with self._mock_request(search_results=busqueda):
+            dev, nc, _txt, _w = self._aprobar_api(dev)
+
+        posts = [c for c in self.llamadas if c[0] == 'POST']
+        self.assertEqual(posts[0][1], f'/v1/payments/{self.NUMERO_MP}/refunds')
+        self.assertNotIn('PAY01', posts[0][1])
+        self.trx.refresh_from_db()
+        self.assertEqual(self.trx.payment_id_mp, self.NUMERO_MP)
+        self.assertEqual(nc.dte_asociado.get().voucher, self.NUMERO_MP)
+
+    def test_sin_numero_de_pago_no_hay_refund_ni_nc(self):
+        from app.models import TransaccionMercadoPago
+        self.trx.payment_id_mp = ''
+        self.trx.save(update_fields=['payment_id_mp'])
+        dev = self._solicitud(cantidad=1)
+
+        with self._mock_request(search_results=[]):
+            with self.assertRaises(service.DevolucionGarantiaError) as ctx:
+                self._aprobar_api(dev)
+
+        self.assertIn('N° de pago', str(ctx.exception))
+        self.assertFalse([c for c in self.llamadas if c[0] == 'POST'])
+        dev.refresh_from_db()
+        self.assertEqual(dev.estado, 'PENDIENTE')
+        self.assertIsNone(dev.nota_credito_id)
+        self.assertFalse(TransaccionMercadoPago.objects.filter(tipo='DEVOLUCION').exists())
+
+    def test_si_mp_rechaza_el_refund_no_se_emite_la_nc(self):
+        from app.models import TransaccionMercadoPago
+        dev = self._solicitud(cantidad=1)
+
+        with self._mock_request(refund_status=400, refund_json={'message': 'Refund not allowed'}):
+            with self.assertRaises(service.DevolucionGarantiaError) as ctx:
+                self._aprobar_api(dev)
+
+        self.assertIn('Mercado Pago no pudo devolver', str(ctx.exception))
+        self.assertIn('NC NO fue emitida', str(ctx.exception))
+        dev.refresh_from_db()
+        self.assertEqual(dev.estado, 'PENDIENTE')
+        self.assertFalse(Dte.objects.filter(tipo_documento='NOTA DE CREDITO').exists())
+        self.assertFalse(TransaccionMercadoPago.objects.filter(tipo='DEVOLUCION').exists())
+
+    def test_cambiar_metodo_bloqueado_tras_refund_por_api(self):
+        dev = self._solicitud(cantidad=1)
+        with self._mock_request():
+            self._aprobar_api(dev)
+
+        with self.assertRaises(service.DevolucionGarantiaError) as ctx:
+            service.cambiar_metodo_devolucion(
+                devolucion_id=dev.id, usuario=self.user, metodo_nuevo='TRANSFERENCIA_BANCARIA')
+        self.assertIn('API', str(ctx.exception))
+        self.assertIn(str(self.REFUND_ID), str(ctx.exception))
+
+    def test_mp_manual_no_es_devolvible_por_api(self):
+        """Cobro «MP manual» (sin pago en Mercado Pago): no hay qué reembolsar."""
+        manual = _crear_documento(self.env, 6201, [(self.pt, 1, 11900)], metodo_pago=None)
+        Dte_Detalle_Pago.objects.create(
+            dte=manual, metodo_pago='MP_MANUAL_DEBITO', tipo_tarjeta='debit_card',
+            voucher='180000000123', monto=11900)
+        self.assertTrue(service.pago_mercadopago_dte(manual)['es_mp'])
+        self.assertEqual(service.pago_mercadopago_dte(manual)['devolvible_api'], 0)
+        dev = self._solicitud(cantidad=1, dte=manual)
+
+        with self._mock_request():
+            with self.assertRaises(service.DevolucionGarantiaError) as ctx:
+                self._aprobar_api(dev)
+
+        self.assertIn('no se puede devolver por la API', str(ctx.exception))
+        self.assertFalse(self.llamadas)
+        dev.refresh_from_db()
+        self.assertEqual(dev.estado, 'PENDIENTE')
+
+    def test_registrar_devolucion_hecha_a_mano_sigue_igual(self):
+        """Sin `devolver_mp_api` no se llama a MP: se registra el N° indicado."""
+        dev = self._solicitud(cantidad=1)
+        with self._mock_request():
+            dev, nc, _txt, _w = service.aprobar_devolucion(
+                devolucion_id=dev.id, aprobador=self.user, metodo_devolucion='MERCADO_PAGO',
+                fecha_imputacion=self.hoy, numero_operacion_mp='177000000999')
+        self.assertFalse(self.llamadas)
+        self.assertEqual(nc.dte_asociado.get().voucher, '177000000999')
+        self.assertFalse(service.mercadopago_de_devolucion(dev)['api'])
+
+    # ----- endpoints: permiso `devolver_mercadopago` -----
+
+    def _permisos_modulo(self):
+        modulo, _ = ModuloSistema.objects.get_or_create(
+            codigo='ventas', defaults={'nombre': 'Ventas', 'orden': 2})
+        opcion, _ = OpcionMenu.objects.get_or_create(
+            codigo='devolucion_garantia',
+            defaults={'modulo': modulo, 'nombre': 'Devolucion de Dinero', 'orden': 3})
+        PermisoRol.objects.update_or_create(
+            rol='administrador', opcion_menu=opcion,
+            defaults={'puede_ver': True, 'puede_crear': True, 'puede_aprobar': True})
+        PermisoRol.objects.update_or_create(
+            rol='jefe_local', opcion_menu=opcion,
+            defaults={'puede_ver': True, 'puede_crear': True})
+        # La migración 0237 siembra `devolver_mercadopago` en True para el
+        # Administrador (para no quitar nada al desplegar); en producción la
+        # política de perfiles lo apaga. Acá se apaga igual: el Maestro pasa
+        # siempre, el Administrador no.
+        opcion_mp, _ = OpcionMenu.objects.get_or_create(
+            codigo='devolver_mercadopago',
+            defaults={'modulo': modulo, 'nombre': 'Devolver por Mercado Pago', 'orden': 99})
+        PermisoRol.objects.update_or_create(
+            rol='administrador', opcion_menu=opcion_mp,
+            defaults={'puede_ver': False, 'puede_crear': False})
+
+    def _cliente(self, usuario):
+        client = Client()
+        client.force_login(usuario)
+        session = client.session
+        session['idSucursalActual'] = self.sucursal.id
+        session.save()
+        return client
+
+    def test_aprobar_por_api_exige_permiso_devolver_mercadopago(self):
+        import json as _json
+        self._permisos_modulo()
+        admin = crear_usuario(username='admin_sin_mp', rol='administrador')
+        dev = self._solicitud(cantidad=1)
+
+        with self._mock_request():
+            resp = self._cliente(admin).post(
+                reverse('api_aprobar_devolucion_garantia', args=[dev.id]),
+                data=_json.dumps({'metodo_devolucion': 'MERCADO_PAGO', 'devolver_mp_api': True,
+                                  'fecha_imputacion': self.hoy.strftime('%Y-%m-%d')}),
+                content_type='application/json')
+
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()['code'], 'CANNOT_REFUND_MP')
+        self.assertFalse(self.llamadas)
+        dev.refresh_from_db()
+        self.assertEqual(dev.estado, 'PENDIENTE')
+
+    def test_maestro_aprueba_con_refund_por_api(self):
+        import json as _json
+        self._permisos_modulo()
+        maestro = crear_usuario(username='maestro_mp', rol='maestro')
+        dev = self._solicitud(cantidad=1)
+
+        with self._mock_request():
+            resp = self._cliente(maestro).post(
+                reverse('api_aprobar_devolucion_garantia', args=[dev.id]),
+                data=_json.dumps({'metodo_devolucion': 'MERCADO_PAGO', 'devolver_mp_api': True,
+                                  'fecha_imputacion': self.hoy.strftime('%Y-%m-%d')}),
+                content_type='application/json')
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()['data']
+        self.assertTrue(data['devuelto_api'])
+        self.assertEqual(data['refunds_mp'], [str(self.REFUND_ID)])
+        self.assertEqual(data['numero_operacion_mp'], self.NUMERO_MP)
+        self.assertEqual(len([c for c in self.llamadas if c[0] == 'POST']), 1)
+
+    def test_pagina_ofrece_refund_por_api_solo_con_permiso(self):
+        self._permisos_modulo()
+        admin = crear_usuario(username='admin_pagina', rol='administrador')
+        html = self._cliente(admin).get(reverse('modulo_devolucion_garantia')).content.decode()
+        self.assertIn('const PUEDE_DEVOLVER_MP = false', html)
+        self.assertNotIn('id="apr-mp-modo-api"', html)
+        maestro = crear_usuario(username='maestro_pagina', rol='maestro')
+        html = self._cliente(maestro).get(reverse('modulo_devolucion_garantia')).content.decode()
+        self.assertIn('const PUEDE_DEVOLVER_MP = true', html)
+        self.assertIn('id="apr-mp-modo-api"', html)
+        # El wizard siempre ofrece la opción: en la directa decide quien firma.
+        self.assertIn('id="dg-mp-modo-api"', html)
+
+    def _codigo(self, usuario, codigo):
+        from app.models import CodigoAutorizacionDinamico
+        return CodigoAutorizacionDinamico.objects.create(
+            codigo=codigo,
+            fecha_hora_inicio=timezone.now() - timedelta(minutes=1),
+            fecha_hora_fin=timezone.now() + timedelta(minutes=30),
+            generado_por=usuario,
+        )
+
+    def _post_directa(self, client, codigo, devolver_api=True):
+        import json as _json
+        return client.post(
+            reverse('api_generar_devolucion_garantia'),
+            data=_json.dumps({
+                'folio_dte': self.boleta.numero_documento,
+                'productos': [{'dte_producto_id': self.boleta.dte_productos.first().id,
+                               'modo': 'CANTIDAD', 'cantidad': 1}],
+                'rut': '13013448-3', 'nombre': 'Cliente MP', 'motivo': 'Falla',
+                'metodo_solicitado': 'MERCADO_PAGO',
+                'directa': True, 'codigo_autorizacion': codigo,
+                'devolver_mp_api': devolver_api,
+            }),
+            content_type='application/json')
+
+    def test_directa_con_codigo_de_maestro_devuelve_por_api(self):
+        self._permisos_modulo()
+        jefe = crear_usuario(username='jefe_directa_mp', rol='jefe_local')
+        maestro = crear_usuario(username='maestro_directa_mp', rol='maestro')
+        codigo = self._codigo(maestro, '731901')
+
+        with self._mock_request():
+            resp = self._post_directa(self._cliente(jefe), codigo.codigo)
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()['data']
+        self.assertTrue(data['devuelto_api'])
+        self.assertEqual(data['refunds_mp'], [str(self.REFUND_ID)])
+        dev = DevolucionGarantia.objects.get(id=data['devolucion_id'])
+        self.assertEqual(dev.estado, 'NC_GENERADA')
+        self.assertEqual(dev.autorizado_por_id, maestro.id)
+        codigo.refresh_from_db()
+        self.assertTrue(codigo.usado)
+
+    def test_directa_con_codigo_de_administrador_sin_permiso_mp_se_rechaza(self):
+        self._permisos_modulo()
+        jefe = crear_usuario(username='jefe_directa_mp2', rol='jefe_local')
+        admin = crear_usuario(username='admin_directa_mp', rol='administrador')
+        codigo = self._codigo(admin, '731902')
+
+        with self._mock_request():
+            resp = self._post_directa(self._cliente(jefe), codigo.codigo)
+
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()['code'], 'AUTHORIZER_CANNOT_REFUND_MP')
+        self.assertFalse(self.llamadas)
+        self.assertFalse(DevolucionGarantia.objects.exists())
+        codigo.refresh_from_db()
+        self.assertFalse(codigo.usado)
+
+    def test_directa_si_mp_rechaza_no_queda_nada_ni_se_quema_el_codigo(self):
+        self._permisos_modulo()
+        jefe = crear_usuario(username='jefe_directa_mp3', rol='jefe_local')
+        maestro = crear_usuario(username='maestro_directa_mp3', rol='maestro')
+        codigo = self._codigo(maestro, '731903')
+
+        with self._mock_request(refund_status=400, refund_json={'message': 'Refund not allowed'}):
+            resp = self._post_directa(self._cliente(jefe), codigo.codigo)
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('Mercado Pago no pudo devolver', resp.json()['error'])
+        self.assertFalse(DevolucionGarantia.objects.exists())
+        codigo.refresh_from_db()
+        self.assertFalse(codigo.usado)
+
+
+@override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)
+class DevolucionDineroCorreoTest(TestCase):
+    """Enviar el comprobante (PDF 80mm) al correo del cliente (28-09-2026)."""
+
+    def setUp(self):
+        self.env = setup_entorno_completo()
+        self.sucursal = self.env['sucursal']
+        crear_correlativo(self.sucursal, tipo_dte='NOTA DE CREDITO')
+        self.boleta = _crear_documento(self.env, 6300, [(self.env['producto_talla'], 1, 11900)])
+        self.receptor = _receptor(self.env)
+        self.receptor.correoVendedor = ''
+        self.receptor.save(update_fields=['correoVendedor'])
+        self.dev = service.crear_solicitud_devolucion(
+            dte_original=self.boleta, sucursal=self.sucursal, receptor=self.receptor,
+            motivo='Producto fallado', usuario=self.env['user'],
+            detalles=[{'dte_producto_id': self.boleta.dte_productos.first().id,
+                       'modo': 'CANTIDAD', 'cantidad': 1}],
+        )
+        modulo, _ = ModuloSistema.objects.get_or_create(
+            codigo='ventas', defaults={'nombre': 'Ventas', 'orden': 2})
+        opcion, _ = OpcionMenu.objects.get_or_create(
+            codigo='devolucion_garantia',
+            defaults={'modulo': modulo, 'nombre': 'Devolucion de Dinero', 'orden': 3})
+        PermisoRol.objects.update_or_create(
+            rol='jefe_local', opcion_menu=opcion, defaults={'puede_ver': True, 'puede_crear': True})
+        self.user = crear_usuario(username='jefe_correo', rol='jefe_local')
+        self.client = Client()
+        self.client.force_login(self.user)
+        session = self.client.session
+        session['idSucursalActual'] = self.sucursal.id
+        session.save()
+        self.url = reverse('api_enviar_comprobante_devolucion_garantia', args=[self.dev.id])
+
+    def _post(self, email='cliente@correo.cl', **extra):
+        import json as _json
+        body = {'email': email}
+        body.update(extra)
+        return self.client.post(self.url, data=_json.dumps(body), content_type='application/json')
+
+    def test_envia_pdf_adjunto_y_lo_registra(self):
+        from django.core import mail
+        from app.models import EnvioCorreo
+
+        resp = self._post()
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(resp.json()['data']['email'], 'cliente@correo.cl')
+        self.assertEqual(len(mail.outbox), 1)
+        correo = mail.outbox[0]
+        self.assertEqual(correo.to, ['cliente@correo.cl'])
+        self.assertIn(self.dev.numero_operacion, correo.subject)
+        self.assertIn(self.dev.numero_operacion, correo.body)
+        html = next(c for c, t in correo.alternatives if t == 'text/html')
+        self.assertIn(self.dev.numero_operacion, html)
+        self.assertIn('DEVOLUCIÓN DE DINERO', html)
+        self.assertEqual(len(correo.attachments), 1)
+        nombre, contenido, tipo = correo.attachments[0]
+        self.assertEqual(nombre, f'Comprobante_{self.dev.numero_operacion}.pdf')
+        self.assertEqual(tipo, 'application/pdf')
+        self.assertTrue(contenido.startswith(b'%PDF'))
+
+        envio = EnvioCorreo.objects.get(modulo='DEVOLUCION_DINERO', objeto_id=self.dev.id)
+        self.assertEqual(envio.destinatario, 'cliente@correo.cl')
+        self.assertEqual(envio.estado, 'ENVIADO')
+        self.assertEqual(envio.adjuntos, 1)
+        self.assertEqual(envio.enviado_por_id, self.user.id)
+        # El receptor no tenía correo: queda guardado para la próxima.
+        self.receptor.refresh_from_db()
+        self.assertEqual(self.receptor.correoVendedor, 'cliente@correo.cl')
+
+    def test_sin_correo_usa_el_del_receptor(self):
+        from django.core import mail
+        self.receptor.correoVendedor = 'guardado@correo.cl'
+        self.receptor.save(update_fields=['correoVendedor'])
+        resp = self._post(email='')
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(mail.outbox[0].to, ['guardado@correo.cl'])
+
+    def test_correo_invalido(self):
+        from django.core import mail
+        resp = self._post(email='no-es-correo')
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(mail.outbox)
+
+    def test_rechazada_no_se_envia(self):
+        from django.core import mail
+        service.rechazar_devolucion(devolucion_id=self.dev.id, aprobador=self.env['user'],
+                                    motivo_rechazo='No corresponde')
+        resp = self._post()
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(mail.outbox)
+
+    def test_aislado_por_sucursal(self):
+        otra = crear_sucursal(self.env['empresa'], alias='SUC-CORREO-OTRA')
+        session = self.client.session
+        session['idSucursalActual'] = otra.id
+        session.save()
+        self.assertEqual(self._post().status_code, 404)
+
+    def test_aprobada_lleva_la_nc_en_el_comprobante(self):
+        from django.core import mail
+        service.aprobar_devolucion(
+            devolucion_id=self.dev.id, aprobador=self.env['user'],
+            metodo_devolucion='TRANSFERENCIA_BANCARIA', fecha_imputacion=timezone.localdate())
+        self.dev.refresh_from_db()
+        resp = self._post()
+        self.assertEqual(resp.status_code, 200, resp.content)
+        html = next(c for c, t in mail.outbox[0].alternatives if t == 'text/html')
+        self.assertIn(str(self.dev.nota_credito.numero_documento), html)
+        self.assertIn('Tu devolución está lista', html)
+
+    def test_detalle_y_listado_muestran_el_envio(self):
+        self._post()
+        detalle = self.client.get(reverse('detalle_devolucion_garantia', args=[self.dev.id])).content.decode()
+        self.assertIn('Comprobante enviado a', detalle)
+        self.assertIn('cliente@correo.cl', detalle)
+        self.assertIn('enviarComprobanteDG(', detalle)
+        fila = self.client.get(reverse('api_listar_devoluciones_garantia')).json()['data'][0]
+        self.assertEqual(fila['receptor_email'], 'cliente@correo.cl')
+        self.assertEqual(fila['correos_enviados'], 1)
+
+    def test_pdf_del_comprobante(self):
+        from app.services.pdf_comprobante_devolucion import generar_comprobante_devolucion_pdf
+        from app.services.pdf_guia_preparacion import _paginas
+        from app.views_modulo_devolucion_garantia import _payload_comprobante
+        pdf = generar_comprobante_devolucion_pdf(_payload_comprobante(self.dev))
+        self.assertTrue(pdf.startswith(b'%PDF'))
+        self.assertEqual(_paginas(pdf), 1)
+
+
+@override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)
+class DevolucionDineroRefundApiRobustezTest(DevolucionDineroRefundApiTest):
+    """Revisión adversarial 28-09: el refund por API no puede duplicarse aunque
+    la NC falle después, y el listado no interpola el correo en un onclick."""
+
+    def _mock_request_con_claves(self, respuestas_refund):
+        """Como _mock_request, pero cada POST /refunds consume la siguiente
+        respuesta de `respuestas_refund` [(status, json), ...] y registra la
+        X-Idempotency-Key en `self.claves`."""
+        from unittest import mock
+        if not hasattr(self, 'claves'):
+            self.claves = []
+        llamadas, claves = self.llamadas, self.claves
+        cola = list(respuestas_refund)
+
+        def _fake(config, metodo, path, json_body=None, idempotency_key=None, params=None,
+                  timeout=None, cuenta_breaker=True):
+            llamadas.append((metodo, path, json_body, params))
+            resp = mock.MagicMock()
+            if metodo == 'POST' and path.endswith('/refunds'):
+                claves.append(idempotency_key)
+                status, js = cola.pop(0) if cola else (201, None)
+                resp.status_code = status
+                resp.json.return_value = js if js is not None else {
+                    'id': self.REFUND_ID + len(claves), 'amount': (json_body or {}).get('amount'),
+                    'status': 'approved'}
+            else:
+                resp.status_code = 200
+                resp.json.return_value = {'results': []}
+            return resp
+        return mock.patch('app.services.mercadopago_service._request', side_effect=_fake)
+
+    def test_reintento_tras_fallo_local_no_pide_otro_refund(self):
+        """MP devuelve, la NC falla después (rollback local): el refund queda
+        registrado como pendiente de NC y el reintento lo reutiliza."""
+        import json as _json
+        from unittest import mock
+        from app.models import TransaccionMercadoPago
+        import app.views as views_mod
+        self._permisos_modulo()
+        maestro = crear_usuario(username='maestro_retry', rol='maestro')
+        client = self._cliente(maestro)
+        dev = self._solicitud(cantidad=1)
+        original = views_mod.obtener_siguiente_correlativo
+        body = _json.dumps({'metodo_devolucion': 'MERCADO_PAGO', 'devolver_mp_api': True,
+                            'fecha_imputacion': self.hoy.strftime('%Y-%m-%d')})
+        url = reverse('api_aprobar_devolucion_garantia', args=[dev.id])
+
+        with self._mock_request_con_claves([]), \
+                mock.patch.object(views_mod, 'obtener_siguiente_correlativo',
+                                  side_effect=[RuntimeError('correlativo caído'), None]) as m_corr:
+            resp1 = client.post(url, data=body, content_type='application/json')
+        self.assertEqual(resp1.status_code, 500)
+        self.assertEqual(resp1.json()['code'], 'REFUND_SIN_NC')
+        self.assertIn('YA devolvió', resp1.json()['error'])
+        dev.refresh_from_db()
+        self.assertEqual(dev.estado, 'PENDIENTE')
+        huerfano = TransaccionMercadoPago.objects.get(tipo='DEVOLUCION')
+        self.assertTrue(huerfano.estado_detalle.startswith(service.MARCA_REFUND_PENDIENTE_NC))
+        self.assertEqual(huerfano.monto, 11900)
+        # Lo que la API puede resolver: saldo (11.900) + lo ya devuelto sin NC (11.900).
+        mp = service.pago_mercadopago_dte(self.boleta)
+        self.assertEqual(mp['refund_pendiente_nc'], 11900)
+        self.assertEqual(mp['devolvible_api'], 23800)
+
+        with self._mock_request_con_claves([]):
+            resp2 = client.post(url, data=body, content_type='application/json')
+        self.assertEqual(resp2.status_code, 200, resp2.content)
+        # Un solo POST a MP en total: el segundo intento no volvió a pedir el refund.
+        self.assertEqual(len([c for c in self.llamadas if c[0] == 'POST']), 1)
+        self.assertEqual(TransaccionMercadoPago.objects.filter(tipo='DEVOLUCION').count(), 1)
+        fila = TransaccionMercadoPago.objects.get(tipo='DEVOLUCION')
+        dev.refresh_from_db()
+        self.assertTrue(fila.estado_detalle.endswith(f'({dev.numero_operacion})'))
+        self.assertEqual(dev.estado, 'NC_GENERADA')
+        self.assertEqual(resp2.json()['data']['refunds_mp'], [fila.payment_id])
+
+    def test_refund_parcial_multi_cobro_persiste_lo_hecho(self):
+        """Dos cobros MP: el primer refund pasa y el segundo lo rechaza MP. Lo
+        hecho queda en el libro y el reintento solo pide lo que falta."""
+        from app.models import TransaccionMercadoPago
+        trx2 = TransaccionMercadoPago.objects.create(
+            config=self.config, sucursal=self.sucursal, correlativo_ticket='12181',
+            tipo='VENTA', canal='POINT', external_reference='RM-TEST-12181-c6i03',
+            payment_id_mp='177000000002', metodo_pago_mp='debit_card', monto=10000,
+            estado='APROBADA', consumida=True, ticket=None)
+        # El cobro de 23.800 del setUp pasa a ser 13.800 + 10.000.
+        self.trx.monto = 13800
+        self.trx.save(update_fields=['monto'])
+        Dte_Detalle_Pago.objects.filter(dte=self.boleta).update(voucher='PAY01TESTULID0002')
+        Dte_Detalle_Pago.objects.create(
+            dte=self.boleta, metodo_pago='MP_POINT_DEBITO', tipo_tarjeta='debit_card',
+            voucher='177000000002', monto=10000)
+        Dte_Detalle_Pago.objects.filter(dte=self.boleta, voucher='PAY01TESTULID0002').update(monto=13800)
+        self.assertEqual(service.pago_mercadopago_dte(self.boleta)['devolvible_api'], 23800)
+        dev = self._solicitud(cantidad=2)  # 23.800
+        refund_ctx = {'refunds': []}
+
+        with self._mock_request_con_claves([(201, None), (400, {'message': 'Refund not allowed'})]):
+            with self.assertRaises(service.DevolucionGarantiaError):
+                service.aprobar_devolucion(
+                    devolucion_id=dev.id, aprobador=self.user, metodo_devolucion='MERCADO_PAGO',
+                    fecha_imputacion=self.hoy, devolver_mp_api=True, refund_ctx=refund_ctx)
+        # El atomic del service revirtió la fila del primer refund…
+        self.assertFalse(TransaccionMercadoPago.objects.filter(tipo='DEVOLUCION').exists())
+        # …la vista la re-registra fuera del atomic:
+        ids = service.persistir_refunds_sin_nc(refund_ctx, causa='MP rechazó el 2°',
+                                               numero_operacion=dev.numero_operacion)
+        self.assertEqual(len(ids), 1)
+        mp = service.pago_mercadopago_dte(self.boleta)
+        self.assertEqual(mp['refund_pendiente_nc'], 13800)
+        self.assertEqual(mp['devolvible_api'], 23800)  # 10.000 de saldo + 13.800 ya devueltos
+
+        with self._mock_request_con_claves([]):
+            dev, nc, _t, _w = service.aprobar_devolucion(
+                devolucion_id=dev.id, aprobador=self.user, metodo_devolucion='MERCADO_PAGO',
+                fecha_imputacion=self.hoy, devolver_mp_api=True)
+        posts = [c for c in self.llamadas if c[0] == 'POST']
+        self.assertEqual([p[1] for p in posts], [
+            f'/v1/payments/{self.NUMERO_MP}/refunds',
+            '/v1/payments/177000000002/refunds',   # rechazado en el 1er intento
+            '/v1/payments/177000000002/refunds',   # solo lo que faltaba en el 2°
+        ])
+        self.assertEqual(TransaccionMercadoPago.objects.filter(tipo='DEVOLUCION').count(), 2)
+        for fila in TransaccionMercadoPago.objects.filter(tipo='DEVOLUCION'):
+            self.assertTrue(fila.estado_detalle.endswith(f'({dev.numero_operacion})'))
+        self.assertEqual(len(service.mercadopago_de_devolucion(dev)['refunds']), 2)
+
+    def test_clave_de_idempotencia_fija_por_devolucion_y_cobro(self):
+        dev = self._solicitud(cantidad=1)
+        with self._mock_request_con_claves([(400, {'message': 'x'})]):
+            with self.assertRaises(service.DevolucionGarantiaError):
+                self._aprobar_api(dev)
+        with self._mock_request_con_claves([]):
+            self._aprobar_api(dev)
+        self.assertEqual(len(self.claves), 2)
+        self.assertEqual(self.claves[0], self.claves[1])
+        self.assertTrue(self.claves[0].endswith(f'-REF-{dev.numero_operacion}'))
+        self.assertLessEqual(len(self.claves[0]), 80)
+
+    def test_timeout_de_mp_avisa_que_reintentar_es_seguro(self):
+        from unittest import mock
+        from app.services import mercadopago_service as mp_service
+        dev = self._solicitud(cantidad=1)
+        with mock.patch.object(mp_service, '_request',
+                               side_effect=mp_service.MercadoPagoError('Mercado Pago no respondió a tiempo.', red=True)):
+            with self.assertRaises(service.DevolucionGarantiaError) as ctx:
+                self._aprobar_api(dev)
+        self.assertIn('no se sabe si alcanzó a devolver', str(ctx.exception))
+        self.assertIn('no devolverá dos veces', str(ctx.exception))
+        dev.refresh_from_db()
+        self.assertEqual(dev.estado, 'PENDIENTE')
+
+    def test_listado_no_interpola_el_correo_en_un_onclick(self):
+        self._permisos_modulo()
+        admin = crear_usuario(username='admin_xss', rol='administrador')
+        html = self._cliente(admin).get(reverse('modulo_devolucion_garantia')).content.decode()
+        self.assertIn('js-dg-correo', html)
+        self.assertIn('data-email="${esc(d.receptor_email', html)
+        self.assertNotIn("enviarComprobanteDG(${d.id}, '${esc(d.receptor_email", html)
+
+    def test_api_generar_rechaza_correo_invalido(self):
+        import json as _json
+        self._permisos_modulo()
+        jefe = crear_usuario(username='jefe_mail_malo', rol='jefe_local')
+        resp = self._cliente(jefe).post(
+            reverse('api_generar_devolucion_garantia'),
+            data=_json.dumps({
+                'folio_dte': self.boleta.numero_documento,
+                'productos': [{'dte_producto_id': self.boleta.dte_productos.first().id,
+                               'modo': 'CANTIDAD', 'cantidad': 1}],
+                'rut': '13013448-3', 'nombre': 'Cliente', 'email': 'no-es-correo',
+                'metodo_solicitado': 'TRANSFERENCIA_BANCARIA', 'banco': 'B', 'tipo_cuenta': 'VISTA',
+                'numero_cuenta': '1', 'cuenta_titular_rut': '13013448-3',
+            }), content_type='application/json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('correo', resp.json()['error'].lower())
+        self.assertFalse(DevolucionGarantia.objects.exists())
+
+
+@override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)
+class DevolucionDineroCorreoRobustezTest(DevolucionDineroCorreoTest):
+    """Revisión adversarial 28-09 (correo)."""
+
+    def test_correo_demasiado_largo_400(self):
+        from django.core import mail
+        largo = 'a' * 95 + '@correo.cl'
+        resp = self._post(email=largo)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('largo', resp.json()['error'])
+        self.assertFalse(mail.outbox)
+        self.receptor.refresh_from_db()
+        self.assertEqual(self.receptor.correoVendedor, '')
+
+    def test_si_el_envio_falla_no_se_guarda_el_correo_en_el_receptor(self):
+        from unittest import mock
+        from app.services import correo_service
+        with mock.patch.object(correo_service, 'enviar_correo_trazado',
+                               side_effect=correo_service.CorreoError('relay caído')):
+            resp = self._post()
+        self.assertEqual(resp.status_code, 502)
+        self.receptor.refresh_from_db()
+        self.assertEqual(self.receptor.correoVendedor, '')
+
+    def test_reply_to_va_a_quien_envia(self):
+        from django.core import mail
+        self.user.email = 'jefe@tienda.cl'
+        self.user.save(update_fields=['email'])
+        self._post()
+        self.assertIn('jefe@tienda.cl', mail.outbox[0].reply_to)

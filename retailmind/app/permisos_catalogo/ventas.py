@@ -45,7 +45,9 @@ CATALOGO = {
         },
         'depende_de': [],
         'notas': 'La NC de la garantía la autoriza «Aprobar» por sí solo (no exige el permiso de NC a clientes). '
-                 'Solo administrador/administración ven solicitudes de otras sucursales.',
+                 'Solo administrador/administración ven solicitudes de otras sucursales. '
+                 '«Devolver a la tarjeta ahora (API)» por Mercado Pago exige además el permiso devolver_mercadopago '
+                 '(Maestro) de quien aprueba o de quien firma con su código; «Enviar comprobante por correo» solo pide Ver.',
     },
 
     'pos_dashboard': {
