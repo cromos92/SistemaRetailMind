@@ -13,15 +13,30 @@ Cómo lee:
     líneas con código, descripción, curva de tallas, cantidad, precio, importe,
     precio de venta escrito a mano, reparto a tiendas y una propuesta de
     género / categoría / especialidades tomada de las listas reales del sistema.
-  - Varias lecturas independientes (default 2) que se comparan; lo que no
-    coincide queda marcado para revisión. Se verifica el cuadre (tallas =
-    cantidad, cantidad × precio = importe, suma = total neto).
+  - Cuadre en código (tallas = cantidad, cantidad × precio = importe, suma =
+    total neto) y, si algo no cuadra o el lector dejó dudas, una segunda
+    mirada independiente SOLO a esas líneas (las páginas ya cacheadas, así
+    que cuesta una fracción de releer todo). Con `lecturas=3` se hacen dos
+    lecturas completas y se comparan.
 
 Nada de esto escribe en la base: el resultado se revisa en la vista previa de
 cargar_productos_factura (o de la pantalla) antes de cargar.
 
-Configuración: ANTHROPIC_API_KEY (settings) y opcionalmente
-CARGA_FACTURA_MODELO (default claude-opus-5).
+Dónde se va el dinero (medido en prod, sesión #8 del 28-09-2026, 9 líneas):
+cada vuelta de zoom es una petición completa (prefijo cacheado + imagen nueva
++ razonamiento) y la segunda lectura repetía todo sin caché. Por eso: (1) las
+páginas van también en cuadrantes a resolución nativa (la API reduce toda
+imagen a ~1,15 MP: una página entera queda a menos de la mitad de su
+resolución y obliga a ampliar); (2) instrucciones y páginas llevan
+cache_control explícito y la verificación las reutiliza; (3) el cuadre lo
+hace Python, no el modelo; (4) las rotaciones vienen del /Rotate del PDF
+cuando existe.
+
+Configuración (variables de entorno):
+  ANTHROPIC_API_KEY (settings) · CARGA_FACTURA_MODELO (claude-opus-5) ·
+  CARGA_FACTURA_MODELO_RAPIDO (claude-sonnet-5, enderezar) ·
+  CARGA_FACTURA_ESFUERZO (high) · CARGA_FACTURA_ESFUERZO_VERIFICACION (medium) ·
+  CARGA_FACTURA_CUADRANTES (1; 0 = mandar solo la página entera, como antes).
 """
 import base64
 import io
@@ -47,11 +62,30 @@ MODELO = os.environ.get('CARGA_FACTURA_MODELO', 'claude-opus-5')
 # Tareas triviales (¿cuántos grados está girada la página?) con un modelo más
 # barato; la lectura propiamente tal sigue con MODELO.
 MODELO_RAPIDO = os.environ.get('CARGA_FACTURA_MODELO_RAPIDO', 'claude-sonnet-5')
+# Esfuerzo de razonamiento de la lectura y de la verificación dirigida.
+ESFUERZO = os.environ.get('CARGA_FACTURA_ESFUERZO', 'high')
+ESFUERZO_VERIFICACION = os.environ.get('CARGA_FACTURA_ESFUERZO_VERIFICACION', 'medium')
+# Página escaneada: además de la vista completa se mandan 4 cuadrantes a
+# resolución nativa (ver _bloques_pagina). 0 = solo la página entera.
+CUADRANTES = os.environ.get('CARGA_FACTURA_CUADRANTES', '1').strip().lower() not in ('0', 'false', 'no', '')
 
-# --- Contador de uso (tokens y búsquedas) por hilo: quien orquesta llama a
-# uso_iniciar() antes y uso_actual() después; _pedir suma cada respuesta.
+# Precio de lista (USD por millón de tokens): entrada, salida, caché leída,
+# caché escrita. Solo para mostrar cuánto costó cada paso; la cuenta real la
+# lleva Anthropic. Se busca por prefijo del nombre del modelo.
+PRECIOS_USD_POR_MILLON = {
+    'claude-opus-5': (5.0, 25.0, 0.5, 6.25),
+    'claude-opus-4': (5.0, 25.0, 0.5, 6.25),
+    'claude-sonnet-5': (2.0, 10.0, 0.2, 2.5),
+    'claude-sonnet-4': (3.0, 15.0, 0.3, 3.75),
+    'claude-haiku-4': (1.0, 5.0, 0.1, 1.25),
+}
+PRECIO_BUSQUEDA_USD = 0.01     # web_search: US$10 por cada 1.000 búsquedas
+
+# --- Contador de uso (tokens, búsquedas y costo estimado) por hilo: quien
+# orquesta llama a uso_iniciar() antes y uso_actual() después; _pedir suma
+# cada respuesta.
 _USO = threading.local()
-_CAMPOS_USO = ('llamadas', 'entrada', 'salida', 'cache_leida', 'cache_escrita', 'busquedas')
+_CAMPOS_USO = ('llamadas', 'entrada', 'salida', 'cache_leida', 'cache_escrita', 'busquedas', 'costo_usd')
 
 
 def uso_iniciar():
@@ -59,7 +93,27 @@ def uso_iniciar():
 
 
 def uso_actual():
-    return dict(getattr(_USO, 'datos', None) or {})
+    datos = dict(getattr(_USO, 'datos', None) or {})
+    if 'costo_usd' in datos:
+        datos['costo_usd'] = round(float(datos['costo_usd']), 4)
+    return datos
+
+
+def _precios(modelo):
+    """(entrada, salida, caché leída, caché escrita) del modelo, por prefijo más largo."""
+    nombre = str(modelo or '')
+    mejor = ''
+    for prefijo in PRECIOS_USD_POR_MILLON:
+        if nombre.startswith(prefijo) and len(prefijo) > len(mejor):
+            mejor = prefijo
+    return PRECIOS_USD_POR_MILLON[mejor or 'claude-opus-5']
+
+
+def costo_estimado(modelo, entrada=0, salida=0, cache_leida=0, cache_escrita=0, busquedas=0):
+    """US$ de una respuesta según el precio de lista del modelo."""
+    p_in, p_out, p_cr, p_cw = _precios(modelo)
+    return ((entrada * p_in + salida * p_out + cache_leida * p_cr + cache_escrita * p_cw) / 1e6
+            + busquedas * PRECIO_BUSQUEDA_USD)
 
 
 def _registrar_uso(respuesta):
@@ -67,16 +121,29 @@ def _registrar_uso(respuesta):
     u = getattr(respuesta, 'usage', None)
     if datos is None or u is None:
         return
-    datos['llamadas'] += 1
-    datos['entrada'] += int(getattr(u, 'input_tokens', 0) or 0)
-    datos['salida'] += int(getattr(u, 'output_tokens', 0) or 0)
-    datos['cache_leida'] += int(getattr(u, 'cache_read_input_tokens', 0) or 0)
-    datos['cache_escrita'] += int(getattr(u, 'cache_creation_input_tokens', 0) or 0)
+    entrada = int(getattr(u, 'input_tokens', 0) or 0)
+    salida = int(getattr(u, 'output_tokens', 0) or 0)
+    leida = int(getattr(u, 'cache_read_input_tokens', 0) or 0)
+    escrita = int(getattr(u, 'cache_creation_input_tokens', 0) or 0)
     servidor = getattr(u, 'server_tool_use', None)
-    datos['busquedas'] += int(getattr(servidor, 'web_search_requests', 0) or 0) if servidor else 0
+    busquedas = int(getattr(servidor, 'web_search_requests', 0) or 0) if servidor else 0
+    datos['llamadas'] += 1
+    datos['entrada'] += entrada
+    datos['salida'] += salida
+    datos['cache_leida'] += leida
+    datos['cache_escrita'] += escrita
+    datos['busquedas'] += busquedas
+    datos['costo_usd'] = float(datos.get('costo_usd') or 0) + costo_estimado(
+        getattr(respuesta, 'model', None) or MODELO, entrada, salida, leida, escrita, busquedas)
 _BETA_FALLBACK = 'server-side-fallback-2026-07-01'
-_LADO_VISTA = 1600          # lado mayor de la imagen de página que se envía
-_LADO_ZOOM = 1600           # lado mayor de un recorte ampliado
+# La API reduce toda imagen a ≤ 1568 px de lado mayor y ≈ 1,15 megapíxeles;
+# mandar más grande solo cuesta ancho de banda. Una página escaneada (2200 ×
+# 2900) queda así a menos de la mitad de su resolución: por eso los cuadrantes.
+_LADO_MAX = 1568
+_PIXELES_MAX = 1_150_000
+_LADO_VISTA = 1000          # vista completa de la página cuando van cuadrantes (para ubicarse)
+_SOLAPE = 0.08              # fracción de solape entre cuadrantes (que ninguna fila quede cortada)
+_LADO_ZOOM = 1568           # lado mayor de un recorte ampliado
 _MAX_TURNOS = 40            # tope de idas y vueltas con la herramienta de zoom
 _PX_PAGINA = 1_000_000      # una imagen de más de esto se considera página escaneada
 
@@ -142,19 +209,86 @@ def _imagenes_de_pagina(pdf):
     return imagenes
 
 
-def _jpeg_b64(img, lado_max):
+def _rotaciones_pdf(pdf):
+    """/Rotate de cada objeto página (grados horarios), en el orden del archivo.
+
+    Si el escáner dejó la imagen acostada pero marcó /Rotate 90, el visor la
+    muestra derecha: con ese dato no hace falta preguntarle al modelo. Sin
+    /Rotate (o en 0) no se sabe nada y se pregunta igual que antes."""
+    giros = []
+    for m in re.finditer(rb'/Type\s*/Page(?![a-zA-Z])', pdf):
+        ini = pdf.rfind(b'obj', max(0, m.start() - 4000), m.start())
+        fin = pdf.find(b'endobj', m.end())
+        if ini < 0 or fin < 0:
+            giros.append(None)
+            continue
+        r = re.search(rb'/Rotate\s+(-?\d+)', pdf[ini:fin])
+        giros.append(int(r.group(1)) % 360 if r else None)
+    return giros
+
+
+def _ajustar_para_api(img):
+    """Copia escalada a lo que la API muestra de verdad (lado ≤ 1568 px y
+    ≈ 1,15 MP); más grande no aporta y la API lo reduce igual."""
+    from PIL import Image
+
+    ancho, alto = img.size
+    factor = min(1.0, _LADO_MAX / max(ancho, alto), (_PIXELES_MAX / float(ancho * alto)) ** 0.5)
+    if factor >= 1.0:
+        return img
+    return img.resize((max(1, int(ancho * factor)), max(1, int(alto * factor))), Image.LANCZOS)
+
+
+def _jpeg_b64(img, lado_max=None):
     from PIL import Image
 
     img = img.copy()
-    img.thumbnail((lado_max, lado_max), Image.LANCZOS)
+    if lado_max:
+        img.thumbnail((lado_max, lado_max), Image.LANCZOS)
+    img = _ajustar_para_api(img)
     buf = io.BytesIO()
     img.save(buf, format='JPEG', quality=90)
     return base64.standard_b64encode(buf.getvalue()).decode('ascii')
 
 
-def _bloque_imagen(img, lado_max):
+def _bloque_imagen(img, lado_max=None):
     return {'type': 'image', 'source': {'type': 'base64', 'media_type': 'image/jpeg',
                                         'data': _jpeg_b64(img, lado_max)}}
+
+
+def _cuadrantes(img, solape=_SOLAPE):
+    """[(nombre, recorte), ...]: 4 cuadrantes con una franja de solape, para
+    que ninguna fila de la tabla quede partida entre arriba y abajo."""
+    ancho, alto = img.size
+    dx, dy = int(ancho * solape / 2), int(alto * solape / 2)
+    mx, my = ancho // 2, alto // 2
+    cajas = (
+        ('superior izquierdo', (0, 0, mx + dx, my + dy)),
+        ('superior derecho', (mx - dx, 0, ancho, my + dy)),
+        ('inferior izquierdo', (0, my - dy, mx + dx, alto)),
+        ('inferior derecho', (mx - dx, my - dy, ancho, alto)),
+    )
+    return [(nombre, img.crop(caja)) for nombre, caja in cajas]
+
+
+def _bloques_pagina(n, img, cuadrantes=None):
+    """Bloques (texto + imagen) con que se manda una página escaneada.
+
+    Con cuadrantes: la página entera chica (para ubicar las zonas) y los 4
+    cuadrantes casi a resolución nativa (un escaneo de 2209 × 2878 llega
+    entero a 0,43× y por cuadrantes a ≈ 0,8×), así los dígitos de la grilla
+    se leen sin pedir ampliaciones (cada ampliación es una vuelta completa a
+    la API). Una página que ya cabe entera en lo que muestra la API va sola."""
+    if cuadrantes is None:
+        cuadrantes = CUADRANTES
+    if not cuadrantes or img.width * img.height <= _PIXELES_MAX:
+        return [{'type': 'text', 'text': f'Página {n}:'}, _bloque_imagen(img)]
+    bloques = [{'type': 'text', 'text': f'Página {n} (vista completa, para ubicar las zonas):'},
+               _bloque_imagen(img, _LADO_VISTA)]
+    for nombre, recorte in _cuadrantes(img):
+        bloques += [{'type': 'text', 'text': f'Página {n}, cuadrante {nombre} (resolución completa):'},
+                    _bloque_imagen(recorte)]
+    return bloques
 
 
 # ------------------------------------------------------------------ Claude
@@ -171,20 +305,27 @@ def _cliente():
     return anthropic.Anthropic(api_key=clave, **extra) if clave else anthropic.Anthropic(**extra)
 
 
-def _pedir(cliente, modelo=None, **kwargs):
+CACHE = {'type': 'ephemeral'}
+
+
+def _pedir(cliente, modelo=None, cachear=True, **kwargs):
     """Una respuesta de Claude (streaming, con respaldo de modelo si la rechaza).
 
-    `cache_control` a nivel de petición: el prefijo estable (instrucciones,
-    imágenes de las páginas, listas del sistema) se cachea entre las vueltas
-    de zoom, entre la primera y la segunda lectura y entre turnos del chat."""
+    `cachear`: cache_control a nivel de petición (la API marca el último
+    bloque): sirve cuando la conversación CRECE y la próxima petición repite
+    esta entera (las vueltas de zoom). Para una petición suelta (enderezar,
+    búsqueda) o cuando el final cambia en cada turno (chat) solo paga el
+    recargo de escritura sin que nadie lo lea: ahí va False y los bloques
+    estables llevan su propio cache_control (ver _una_lectura y chat)."""
     import anthropic
 
+    if cachear:
+        kwargs['cache_control'] = CACHE
     try:
         with cliente.beta.messages.stream(
             model=modelo or MODELO,
             betas=[_BETA_FALLBACK],
             extra_body={'fallbacks': 'default'},
-            cache_control={'type': 'ephemeral'},
             **kwargs,
         ) as stream:
             respuesta = stream.get_final_message()
@@ -222,7 +363,7 @@ _ESQUEMA_ROTACION = {
 def _enderezar(cliente, img):
     """Imagen derecha: Claude dice cuántos grados girarla en sentido horario."""
     respuesta = _pedir(
-        cliente, modelo=MODELO_RAPIDO, max_tokens=4000, output_config={
+        cliente, modelo=MODELO_RAPIDO, max_tokens=4000, cachear=False, output_config={
             'effort': 'low', 'format': {'type': 'json_schema', 'schema': _ESQUEMA_ROTACION}},
         messages=[{'role': 'user', 'content': [
             _bloque_imagen(img, 1000),
@@ -260,11 +401,18 @@ def _redondear(valor):
 # grandes del sistema (colores) no van como enum: Claude las ve en el pedido y
 # el valor se valida acá contra el catálogo (_limpiar_lectura). Menos esquema
 # = menos tokens por vuelta de zoom.
+# Los campos que casi nunca traen dato (descuentos, reparto a mano, marca de
+# la línea, dudas…) son OPCIONALES (fuera de `required`, tope 24): así el
+# modelo no escribe 60 tokens de centinelas por línea. _limpiar_lectura los
+# rellena con None cuando faltan.
 SIN_DATO_NUM = -1
 _ENUM_MAXIMO = 80
 _NUM_LINEA = ('cantidad', 'precio_unitario', 'descuento_pct', 'descuento_monto', 'importe',
               'precio_venta_a_mano', 'precio_venta_a_mano_alternativa')
 _NUM_FACTURA = ('total_unidades', 'descuento_global_pct', 'descuento_global_monto', 'total_neto')
+_OPCIONALES_LINEA = ('descuento_pct', 'descuento_monto', 'precio_venta_a_mano_alternativa',
+                     'reparto_a_mano', 'marca', 'dudas')
+_OPCIONALES_FACTURA = ('descuento_global_pct', 'descuento_global_monto', 'observaciones')
 
 
 def _num(tipo):
@@ -315,7 +463,7 @@ def _esquema(categorias, especialidades, colores=()):
         },
         'additionalProperties': False,
     }
-    linea['required'] = list(linea['properties'])
+    linea['required'] = [k for k in linea['properties'] if k not in _OPCIONALES_LINEA]
     factura = {
         'type': 'object',
         'properties': {
@@ -335,7 +483,21 @@ def _esquema(categorias, especialidades, colores=()):
         },
         'additionalProperties': False,
     }
-    factura['required'] = list(factura['properties'])
+    factura['required'] = [k for k in factura['properties'] if k not in _OPCIONALES_FACTURA]
+    return {'type': 'object',
+            'properties': {'facturas': {'type': 'array', 'items': factura}},
+            'required': ['facturas'], 'additionalProperties': False}
+
+
+def _esquema_verificacion(esquema):
+    """Salida de la segunda mirada: solo folio + las líneas pedidas (mismo
+    formato de línea que la lectura completa)."""
+    linea = esquema['properties']['facturas']['items']['properties']['lineas']['items']
+    factura = {
+        'type': 'object',
+        'properties': {'folio': {'type': 'integer'}, 'lineas': {'type': 'array', 'items': linea}},
+        'required': ['folio', 'lineas'], 'additionalProperties': False,
+    }
     return {'type': 'object',
             'properties': {'facturas': {'type': 'array', 'items': factura}},
             'required': ['facturas'], 'additionalProperties': False}
@@ -405,13 +567,27 @@ _HERRAMIENTA_ZOOM = {
 }
 
 
-def _instrucciones(perfil, marca_hint, categorias, especialidades, pistas='', colores=()):
+def _instrucciones(perfil, marca_hint, categorias, especialidades, pistas='', colores=(),
+                   cuadrantes=None):
     from app.management.commands._data_recategorizacion_v12 import ESPECIALIDADES
 
+    if cuadrantes is None:
+        cuadrantes = CUADRANTES
     leyenda = '; '.join(f'{slug} = {ESPECIALIDADES[slug][1]}' for slug in especialidades
                         if slug in ESPECIALIDADES)
     indicaciones = (f'Indicaciones de la persona que sube la factura (mandan sobre lo demás): '
                     f'{pistas.strip()}' if pistas and pistas.strip() else '')
+    como_mirar = (
+        '- Cada página escaneada va entera (chica, para ubicar las zonas) y en 4 cuadrantes a\n'
+        '  resolución completa: lee los datos en los cuadrantes. Las filas de la tabla siguen del\n'
+        '  cuadrante izquierdo al derecho a la misma altura, y la franja de solape entre cuadrantes\n'
+        '  aparece repetida (no dupliques esas filas).\n'
+        '- Amplía con la herramienta "ampliar" solo lo que aun así no se lea con total seguridad\n'
+        '  (lo escrito a mano, sellos, dígitos borrosos). No amplíes lo que ya se lee bien.'
+        if cuadrantes else
+        '- Amplía con la herramienta "ampliar" lo que no se lea con total seguridad: la grilla de\n'
+        '  tallas (por bloques de varias líneas, no una por una), precios, totales y lo escrito a\n'
+        '  mano. No adivines dígitos, pero tampoco amplíes lo que ya se lee bien.')
     return f"""Transcribe esta(s) factura(s) de compra de un proveedor de calzado y ropa deportiva
 para cargar la mercadería en el sistema de una cadena de tiendas en Chile.
 
@@ -446,19 +622,18 @@ Cada línea de producto:
 - confianza: alta / media / baja, y en "dudas" cualquier celda que no hayas podido leer
   con seguridad (vacío si nada).
 
-Datos que no vienen: {SIN_DATO_NUM} en los números y "" en los textos. Nunca inventes un valor.
+Datos que no vienen: {SIN_DATO_NUM} en los números y "" en los textos. Los campos opcionales
+(descuentos, precio a mano alternativo, reparto a tiendas, marca de la línea, dudas,
+observaciones) se incluyen SOLO cuando hay dato. Nunca inventes un valor.
 
 Cómo leer bien:
-- Amplía con la herramienta "ampliar" lo que no se lea con total seguridad: la grilla de
-  tallas (por bloques de varias líneas, no una por una), precios, totales y lo escrito a
-  mano. No adivines dígitos, pero tampoco amplíes lo que ya se lee bien: normalmente
-  bastan entre 4 y 10 ampliaciones por factura.
-- Antes de entregar, comprueba cada línea: la suma de cantidades por talla = cantidad, y
-  cantidad × precio_unitario (menos el descuento de la línea, si lo hay) = importe, con
-  diferencia de pocos pesos por redondeo; y que la suma de importes (menos el descuento
-  global, si lo hay) = total neto. Si algo no cuadra, vuelve a mirar con zoom antes de
-  responder: casi siempre es una columna de descuento que no habías visto. Si aun así no
-  cuadra, transcribe lo que ves y explícalo en "dudas"; nunca ajustes un número para que cuadre.
+{como_mirar}
+- No hagas cuentas para cuadrar: el sistema comprueba que las tallas sumen la cantidad, que
+  cantidad × precio_unitario (menos el descuento de la línea) dé el importe y que los importes
+  (menos el descuento global) sumen el total neto, y si algo no calza te devuelve esa línea
+  para que la mires de nuevo. Lo que sí debes mirar es si la tabla trae una columna de
+  descuento (en % o en pesos) o el total un descuento global: es lo que más se pasa por alto.
+  Nunca ajustes un número para que cuadre; transcribe lo impreso y anota la duda.
 
 Listas permitidas:
 - genero: {', '.join(GENEROS)}
@@ -501,22 +676,31 @@ def _ejecutar_zoom(entrada, paginas):
 
 
 def _una_lectura(cliente, contenido, paginas, instrucciones, esquema, orden,
-                 etiqueta='Leyendo el documento', progreso=None):
-    """Una lectura completa (con su propio bucle de zoom). Devuelve el dict del esquema.
+                 etiqueta='Leyendo el documento', progreso=None, pedido=None, esfuerzo=None):
+    """Una lectura (con su propio bucle de zoom). Devuelve el dict del esquema.
 
-    `progreso(texto)` (opcional) recibe en qué va: la pantalla lo muestra
-    mientras espera."""
-    enfoque = ('Lee primero la tabla completa y después verifica.' if orden == 1 else
-               'Esta es una segunda lectura independiente: recorre la tabla línea por línea '
-               'y columna por columna, ampliando cada grilla de tallas.')
-    mensajes = [{'role': 'user', 'content': contenido + [
-        {'type': 'text', 'text': f'{instrucciones}\n\n{enfoque}'}]}]
+    Las instrucciones van como `system` con cache_control y `contenido` (las
+    páginas) trae su propio cache_control en el último bloque: la segunda
+    lectura o la verificación dirigida reutilizan ese prefijo desde la caché
+    y solo pagan el texto del pedido. `pedido` reemplaza el enfoque por
+    defecto (p.ej. «vuelve a mirar solo estas líneas»). `progreso(texto)`
+    (opcional) recibe en qué va: la pantalla lo muestra mientras espera."""
+    if pedido:
+        enfoque = pedido
+    elif orden == 1:
+        enfoque = 'Lee la tabla completa, línea por línea, y devuelve el JSON.'
+    else:
+        enfoque = ('Esta es una segunda lectura independiente: recorre la tabla línea por línea '
+                   'y columna por columna, ampliando cada grilla de tallas que no se lea con claridad.')
+    sistema = [{'type': 'text', 'text': instrucciones, 'cache_control': CACHE}]
+    mensajes = [{'role': 'user', 'content': contenido + [{'type': 'text', 'text': enfoque}]}]
     herramientas = [_HERRAMIENTA_ZOOM] if paginas else []
     for turno in range(_MAX_TURNOS):
         if progreso:
             progreso(f'{etiqueta}…' if turno == 0 else f'{etiqueta}: ampliando detalles (vuelta {turno})…')
-        respuesta = _pedir(cliente, max_tokens=64000, tools=herramientas, messages=mensajes,
-                           output_config={'effort': 'high',
+        respuesta = _pedir(cliente, max_tokens=64000, system=sistema, tools=herramientas,
+                           messages=mensajes,
+                           output_config={'effort': esfuerzo or ESFUERZO,
                                           'format': {'type': 'json_schema', 'schema': esquema}})
         if respuesta.stop_reason != 'tool_use':
             return json.loads(_texto(respuesta))
@@ -534,27 +718,75 @@ def _una_lectura(cliente, contenido, paginas, instrucciones, esquema, orden,
     raise ErrorLectura(f'La lectura no terminó después de {_MAX_TURNOS} vueltas.')
 
 
-def _con_dudas(lectura):
-    """True si la primera lectura deja algo que merece una segunda pasada: no
-    cuadra, confianza media/baja, dudas anotadas, o hay precios o repartos a
-    mano (lo más fácil de leer mal)."""
+def _lineas_dudosas(lectura):
+    """[(folio, articulo, motivo), ...]: lo que merece una segunda mirada tras
+    la primera lectura (ya limpia): no cuadra, confianza media/baja, dudas
+    anotadas, o precios / repartos escritos a mano (lo más fácil de leer mal).
+    Si los totales de la factura no calzan y ninguna línea explica por qué, se
+    piden todas las líneas de esa factura."""
+    dudosas = []
     for f in lectura.get('facturas') or []:
-        if revisar_cuadre(f):
-            return True
-        for l in f.get('lineas') or []:
-            if l.get('confianza') != 'alta' or str(l.get('dudas') or '').strip():
-                return True
-            if l.get('precio_venta_a_mano') is not None or l.get('reparto_a_mano'):
-                return True
-    return False
+        por_articulo, de_factura = {}, []
+        for problema in revisar_cuadre(f):
+            clave, sep, resto = problema.partition(': ')
+            if sep and clave not in ('unidades', 'neto'):
+                por_articulo.setdefault(clave, []).append(resto)
+            else:
+                de_factura.append(problema)
+        lineas = f.get('lineas') or []
+        marcadas = []
+        for l in lineas:
+            motivos = list(por_articulo.get(l.get('articulo'), []))
+            if l.get('confianza') != 'alta':
+                motivos.append(f'confianza {l.get("confianza") or "baja"}')
+            if str(l.get('dudas') or '').strip():
+                motivos.append(str(l['dudas']).strip())
+            if l.get('precio_venta_a_mano') is not None:
+                motivos.append('precio de venta escrito a mano: confirma cada dígito')
+            if l.get('reparto_a_mano'):
+                motivos.append('reparto a tiendas escrito a mano')
+            if motivos:
+                marcadas.append((f.get('folio'), l.get('articulo'), '; '.join(motivos)))
+        if de_factura and not marcadas:
+            motivo = 'los totales no calzan (' + '; '.join(de_factura) + '): revisa cantidad, precio e importe'
+            marcadas = [(f.get('folio'), l.get('articulo'), motivo) for l in lineas]
+        dudosas += marcadas
+    return dudosas
+
+
+def _con_dudas(lectura):
+    """True si la primera lectura deja algo que merece una segunda pasada."""
+    return bool(_lineas_dudosas(lectura))
+
+
+def _pedido_verificacion(dudosas):
+    lineas = '\n'.join(f'- Factura {folio}, línea {articulo}: {motivo}'
+                       for folio, articulo, motivo in dudosas)
+    return (f'Segunda mirada, independiente de cualquier lectura anterior, SOLO a estas '
+            f'{len(dudosas)} línea(s); el resto de la factura ya está bien leído y no lo '
+            f'devuelvas. Ubica cada una, amplía lo que haga falta y transcríbela completa de '
+            f'nuevo (código, descripción, todas las tallas con su cantidad, cantidad, precio, '
+            f'descuento si lo hay, importe y lo escrito a mano). Devuelve únicamente esas líneas, '
+            f'agrupadas por folio, con el código tal como está impreso:\n{lineas}')
+
+
+def _verificar_lineas(cliente, contenido, paginas, instrucciones, esquema, dudosas, progreso=None):
+    """Segunda mirada dirigida: misma conversación base (instrucciones y páginas
+    desde la caché), solo las líneas con dudas y un esquema chico. Devuelve un
+    dict de lectura PARCIAL (marcado con _parcial) para combinar_lecturas."""
+    otra = _una_lectura(cliente, contenido, paginas, instrucciones, _esquema_verificacion(esquema), 2,
+                        etiqueta=f'Verificando {len(dudosas)} línea(s) con dudas', progreso=progreso,
+                        pedido=_pedido_verificacion(dudosas), esfuerzo=ESFUERZO_VERIFICACION)
+    otra['_parcial'] = True
+    return otra
 
 
 def leer_pdf(pdf_bytes, marca=None, lecturas=2, progreso=None, pistas=''):
     """Lee el PDF. Devuelve {'lecturas': [dict, ...], 'modo': 'escaneo'|'pdf',
-    'segunda': por qué hubo (o no) segunda lectura}.
+    'segunda': por qué hubo (o no) segunda pasada, 'verificadas': n líneas}.
 
-    `lecturas`: 1 = una sola; 2 = la segunda solo si la primera deja dudas
-    (default: una factura limpia cuesta la mitad); 3 = dos siempre.
+    `lecturas`: 1 = una sola; 2 = lectura + verificación dirigida de las líneas
+    que dejan dudas (default); 3 = dos lecturas completas que se comparan.
     `progreso(texto)` (opcional) recibe cada paso, para mostrarlo mientras se
     espera. `pistas`: indicaciones libres de la persona (marca, tipo de talla,
     cómo leer algo) que se suman a las del perfil."""
@@ -568,13 +800,20 @@ def leer_pdf(pdf_bytes, marca=None, lecturas=2, progreso=None, pistas=''):
     avisar('Revisando el PDF…')
     imagenes = _imagenes_de_pagina(pdf_bytes)
     if imagenes:
+        rotaciones = _rotaciones_pdf(pdf_bytes)
+        if len(rotaciones) != len(imagenes):
+            rotaciones = [None] * len(imagenes)
         paginas = []
-        for n, img in enumerate(imagenes, start=1):
+        for n, (img, giro) in enumerate(zip(imagenes, rotaciones), start=1):
+            if giro:
+                # El PDF ya dice cómo se muestra derecha: no hay que preguntar.
+                paginas.append(img.rotate(-giro, expand=True))
+                continue
             avisar(f'Enderezando la página {n} de {len(imagenes)}…')
             paginas.append(_enderezar(cliente, img))
         contenido = []
         for n, img in enumerate(paginas, start=1):
-            contenido += [{'type': 'text', 'text': f'Página {n}:'}, _bloque_imagen(img, _LADO_VISTA)]
+            contenido += _bloques_pagina(n, img)
         modo = 'escaneo'
     else:
         if len(pdf_bytes) > 30 * 1024 * 1024:
@@ -584,20 +823,30 @@ def leer_pdf(pdf_bytes, marca=None, lecturas=2, progreso=None, pistas=''):
             'type': 'base64', 'media_type': 'application/pdf',
             'data': base64.standard_b64encode(pdf_bytes).decode('ascii')}}]
         modo = 'pdf'
+    # Las páginas (lo caro) se cachean hasta el último bloque: la segunda
+    # pasada las lee desde la caché y solo paga el texto de su pedido.
+    contenido[-1]['cache_control'] = CACHE
 
     modo_lecturas = max(1, min(3, int(lecturas or 2)))
     primera = _una_lectura(cliente, contenido, paginas, instrucciones, esquema, 1,
                            etiqueta='Leyendo el documento', progreso=progreso)
     resultado = [_limpiar_lectura(primera, categorias, especialidades, colores)]
-    segunda = 'no pedida'
-    if modo_lecturas == 3 or (modo_lecturas == 2 and _con_dudas(resultado[0])):
+    segunda, verificadas = 'no pedida', 0
+    if modo_lecturas == 3:
         otra = _una_lectura(cliente, contenido, paginas, instrucciones, esquema, 2,
-                            etiqueta='Segunda lectura (verificación)', progreso=progreso)
+                            etiqueta='Segunda lectura completa', progreso=progreso)
         resultado.append(_limpiar_lectura(otra, categorias, especialidades, colores))
-        segunda = 'siempre' if modo_lecturas == 3 else 'por dudas'
+        segunda = 'siempre'
     elif modo_lecturas == 2:
-        segunda = 'no hizo falta'
-    return {'lecturas': resultado, 'modo': modo, 'segunda': segunda}
+        dudosas = _lineas_dudosas(resultado[0])
+        if dudosas:
+            otra = _verificar_lineas(cliente, contenido, paginas, instrucciones, esquema, dudosas,
+                                     progreso=progreso)
+            resultado.append(_limpiar_lectura(otra, categorias, especialidades, colores))
+            segunda, verificadas = 'verificación', len(dudosas)
+        else:
+            segunda = 'no hizo falta'
+    return {'lecturas': resultado, 'modo': modo, 'segunda': segunda, 'verificadas': verificadas}
 
 
 # ------------------------------------------------------ comparar y convertir
@@ -648,15 +897,20 @@ def combinar_lecturas(lecturas):
     Por factura (folio) y línea (código): si las lecturas coinciden, listo; si
     no, se queda la que cuadra (tallas = cantidad y cantidad × precio = importe)
     y la diferencia se anota en la línea para que la persona la revise.
+
+    Una lectura marcada `_parcial` (verificación dirigida) solo trae las
+    líneas pedidas: lo que no trae no cuenta como «no lo vio».
     """
     base = json.loads(json.dumps(lecturas[0]))
     for otra in lecturas[1:]:
+        parcial = bool(otra.get('_parcial'))
         por_folio = {f['folio']: f for f in otra.get('facturas', [])}
         for factura in base.get('facturas', []):
             gemela = por_folio.get(factura['folio'])
             if gemela is None:
-                factura.setdefault('_revisar', []).append(
-                    'otra lectura no encontró esta factura')
+                if not parcial:
+                    factura.setdefault('_revisar', []).append(
+                        'otra lectura no encontró esta factura')
                 continue
             por_codigo = {_clave_linea(l): l for l in gemela.get('lineas', [])}
             vistos = set()
@@ -665,7 +919,8 @@ def combinar_lecturas(lecturas):
                 vistos.add(clave)
                 par = por_codigo.get(clave)
                 if par is None:
-                    linea.setdefault('_revisar', []).append('la otra lectura no vio esta línea')
+                    if not parcial:
+                        linea.setdefault('_revisar', []).append('la otra lectura no vio esta línea')
                     continue
                 diferencias = []
                 for campo in ('cantidad', 'precio_unitario', 'descuento_pct', 'importe',
@@ -674,6 +929,11 @@ def combinar_lecturas(lecturas):
                         diferencias.append(f'{campo}: {linea.get(campo)} / {par.get(campo)}')
                 if _tallas_dict(linea) != _tallas_dict(par):
                     diferencias.append(f'tallas: {_tallas_dict(linea)} / {_tallas_dict(par)}')
+                if not diferencias and parcial and par.get('confianza') == 'alta':
+                    # La segunda mirada, independiente, leyó lo mismo con
+                    # seguridad: la duda de la primera queda resuelta.
+                    linea['confianza'] = 'alta'
+                    linea['dudas'] = ''
                 if diferencias:
                     if not _cuadra(linea) and _cuadra(par):
                         linea.update({k: par[k] for k in ('tallas', 'cantidad', 'precio_unitario',
@@ -684,7 +944,10 @@ def combinar_lecturas(lecturas):
                             and not linea.get('precio_venta_a_mano_alternativa')):
                         linea['precio_venta_a_mano_alternativa'] = par['precio_venta_a_mano']
                     linea.setdefault('_revisar', []).append(
-                        'las lecturas no coinciden (' + '; '.join(diferencias) + ')')
+                        ('la verificación no coincide (' if parcial else 'las lecturas no coinciden (')
+                        + '; '.join(diferencias) + ')')
+            if parcial:
+                continue
             for clave, par in por_codigo.items():
                 if clave not in vistos:
                     factura.setdefault('_revisar', []).append(

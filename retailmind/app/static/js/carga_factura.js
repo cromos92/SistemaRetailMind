@@ -148,7 +148,7 @@
             ['bi-file-earmark-pdf', 'Archivo', esc(e.archivo) + (e.bytes ? ' <small>(' + kb(e.bytes) + ')</small>' : '')],
             ['bi-shop', 'Bodega', esc(e.bodega)],
             ['bi-tag', 'Marca', e.marca ? esc(e.marca) : '<span class="cf-muted">la detecta el lector</span>'],
-            ['bi-arrow-repeat', 'Lecturas', ({ 1: '1 (rápida)', 2: 'auto: la segunda solo si hay dudas', 3: '2 siempre (se comparan)' })[Number(e.lecturas)] || esc(e.lecturas)],
+            ['bi-arrow-repeat', 'Lecturas', ({ 1: '1 (rápida, sin verificación)', 2: 'auto: verifica con zoom solo las líneas con dudas', 3: '2 completas (se comparan; cuesta el doble)' })[Number(e.lecturas)] || esc(e.lecturas)],
         ];
         if (e.indicaciones) filas.push(['bi-chat-left-text', 'Indicaciones', esc(e.indicaciones)]);
         return '<div class="cf-envio"><div class="cf-envio-titulo"><i class="bi bi-cloud-arrow-up me-1"></i>Factura enviada a leer</div>' +
@@ -174,15 +174,23 @@
         return h;
     }
 
-    /** Tokens y búsquedas que consumió un paso (lectura, chat, búsqueda). */
+    /** «≈ US$0,28» o '' si el servidor no calculó el costo (cargas antiguas). */
+    function usd(v) {
+        if (v === null || v === undefined || v === '' || isNaN(Number(v))) return '';
+        return '≈ US$' + Number(v).toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    /** Tokens, búsquedas y costo estimado que consumió un paso (lectura, chat, búsqueda). */
     function htmlUso(u) {
         if (!u || !u.llamadas) return '';
         const k = n => (n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : String(n || 0));
+        const costo = usd(u.costo_usd);
         return '<div class="cf-uso"><i class="bi bi-cpu me-1"></i>' + u.llamadas + ' llamada(s) · ' +
-            k((u.entrada || 0) + (u.cache_leida || 0)) + ' tokens de entrada' +
+            k((u.entrada || 0) + (u.cache_leida || 0) + (u.cache_escrita || 0)) + ' tokens de entrada' +
             (u.cache_leida ? ' (' + k(u.cache_leida) + ' desde caché)' : '') +
             ' · ' + k(u.salida || 0) + ' de salida' +
-            (u.busquedas ? ' · ' + u.busquedas + ' búsqueda(s) web' : '') + '</div>';
+            (u.busquedas ? ' · ' + u.busquedas + ' búsqueda(s) web' : '') +
+            (costo ? ' · <b>' + costo + '</b>' : '') + '</div>';
     }
 
     /** Lo que quedó (o venía) aprendido: chips moradas. */
@@ -319,7 +327,8 @@
             texto = 'Subiendo el PDF…'; clase = 'cf-pill-run';
         } else if (st.sesion && st.resumen) {
             const e = ESTADOS[st.resumen.estado] || [st.resumen.estado, 'cf-pill-muted'];
-            texto = 'Carga #' + st.sesion + ' · ' + e[0]; clase = e[1];
+            const costo = usd(st.resumen.uso && st.resumen.uso.costo_usd);
+            texto = 'Carga #' + st.sesion + ' · ' + e[0] + (costo ? ' · ' + costo : ''); clase = e[1];
         } else if (st.sesion) {
             texto = 'Carga #' + st.sesion;
         }

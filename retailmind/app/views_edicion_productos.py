@@ -143,12 +143,22 @@ def obtener_producto_edicion(request, producto_id):
     try:
         producto = get_object_or_404(
             Producto.objects.select_related(
-                'categoria', 'sucursal', 'guia_talla',
+                'categoria', 'categoria__padre', 'sucursal', 'guia_talla',
                 'atributo1', 'atributo2', 'atributo3', 'atributo4'
             ),
             id=producto_id
         )
-        
+        cat = producto.categoria
+        categoria_ruta = ''
+        if cat is not None:
+            categoria_ruta = f'{cat.padre.nombre} › {cat.nombre}' if cat.padre_id else cat.nombre
+        # Especialidades v1.2 (atributo "Especialidad", multi-etiqueta)
+        especialidades = [
+            {'id': v.opcion_id, 'valor': v.opcion.valor}
+            for v in producto.atributos.filter(atributo__nombre__iexact='Especialidad')
+                                       .select_related('opcion').order_by('opcion__valor')
+        ]
+
         # Datos del producto base
         producto_data = {
             'id': producto.id,
@@ -156,6 +166,8 @@ def obtener_producto_edicion(request, producto_id):
             'descripcion': producto.descripcion or '',
             'categoria_id': producto.categoria.id if producto.categoria else None,
             'categoria_nombre': producto.categoria.nombre if producto.categoria else '',
+            'categoria_ruta': categoria_ruta,
+            'especialidades': especialidades,
             'sucursal_id': producto.sucursal.id if producto.sucursal else None,
             'sucursal_nombre': producto.sucursal.alias if producto.sucursal else '',  # Corrección: alias en lugar de nombre
             'atributo1_id': producto.atributo1.id if producto.atributo1 else None,
@@ -422,7 +434,30 @@ def actualizar_producto(request, producto_id):
                 lotes_afectados=lotes_actualizados,
             ):
                 historial_registrado = True
-        
+
+        # ========== ESPECIALIDADES v1.2 (solo si el payload las trae) ==========
+        # La especialidad es propiedad de la variante: se deja EXACTAMENTE la
+        # selección enviada en todas las fichas tocadas (modo «reemplazar» del
+        # endpoint masivo). Sin la clave en el payload no se toca nada.
+        if 'especialidad_ids' in data:
+            from .models import ProductoAtributoValor
+            esp_attr = Productos_Atributos.objects.filter(nombre__iexact='Especialidad').first()
+            if esp_attr is not None:
+                pedidas = [int(i) for i in (data.get('especialidad_ids') or []) if str(i).strip().isdigit()]
+                ids_sel = list(AtributoOpcion.objects.filter(atributo=esp_attr, id__in=pedidas)
+                               .values_list('id', flat=True))
+                ProductoAtributoValor.objects.filter(
+                    producto_id__in=ids_actualizados, atributo=esp_attr
+                ).exclude(opcion_id__in=ids_sel).delete()
+                existentes = set(ProductoAtributoValor.objects.filter(
+                    producto_id__in=ids_actualizados, atributo=esp_attr, opcion_id__in=ids_sel
+                ).values_list('producto_id', 'opcion_id'))
+                nuevos = [ProductoAtributoValor(producto_id=pid, atributo=esp_attr, opcion_id=oid)
+                          for pid in ids_actualizados for oid in ids_sel
+                          if (pid, oid) not in existentes]
+                if nuevos:
+                    ProductoAtributoValor.objects.bulk_create(nuevos)
+
         # Construir mensaje de respuesta
         if productos_actualizados > 1:
             mensaje = f'Producto actualizado en {productos_actualizados} sucursales: {", ".join(sorted(sucursales_afectadas))}'

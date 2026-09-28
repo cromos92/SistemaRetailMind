@@ -89,19 +89,109 @@ window.cargarDatosProductoEnModal = function(producto, variaciones) {
     $('#edit_precioventa').val(producto.precioventa);
     $('#edit_precioSugerido').val(producto.precioSugerido);
     
-    // Mostrar sucursal en el modal
+    // Cabecera: QUÉ variante se está editando (bodega · marca · color · género · categoría)
     const $sucBadge = $('#editSucursalBadge');
     if ($sucBadge.length) {
-        $sucBadge.text(producto.sucursal_nombre || 'Sin bodega');
+        const identidad = [
+            producto.sucursal_nombre || 'Sin bodega', producto.articulo,
+            producto.atributo1_nombre, producto.atributo2_nombre, producto.atributo3_nombre,
+            producto.categoria_ruta || producto.categoria_nombre,
+        ].filter(Boolean).join(' · ');
+        $sucBadge.text(identidad);
     }
-    
+    // Precios vigentes, para ver el cambio mientras se edita
+    window._preciosVigentesEdicion = {
+        costo: parseInt(producto.costo) || 0, precioventa: parseInt(producto.precioventa) || 0,
+    };
+    actualizarMargenEdicion();
+    // En cuántas bodegas vive esta variante (lo que la sincronización va a tocar)
+    cargarAlcanceVariante(producto.id);
+
     // Cargar todas las opciones con Select2
     cargarOpcionesConSelect2(producto);
-    
+
     // Cargar variaciones en la tabla
     console.log('Llamando a cargarVariacionesEnTabla con', variaciones);
     cargarVariacionesEnTabla(variaciones);
 };
+
+// ========== ALCANCE, MARGEN Y ESPECIALIDADES (modal de edición) ==========
+
+/**
+ * «Esta variante existe en N bodegas: EDEL, NICK1…»: el mismo cálculo que se
+ * hace al guardar, pero mostrado ANTES para que se entienda qué toca el switch.
+ */
+function cargarAlcanceVariante(productoId) {
+    const $out = $('#editAlcanceVariante');
+    if (!$out.length) return;
+    $out.html('<span class="text-muted"><i class="bi bi-hourglass-split me-1"></i>Buscando la variante en las otras bodegas…</span>');
+    fetch('/app/productos/preview-edicion-masiva/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+        body: JSON.stringify({ producto_ids: [productoId], propagar_sucursales: true })
+    })
+    .then(r => r.json())
+    .catch(() => ({ success: false }))
+    .then(data => {
+        if (String($('#edit_producto_id').val()) !== String(productoId)) return;   // ya cambió de producto
+        const imp = data && data.success ? data.impacto : null;
+        if (!imp) { $out.empty(); return; }
+        const bodegas = (imp.sucursales || []).map(b => `<span class="badge bg-secondary ms-1">${escapeHtmlEdicionProductos(b)}</span>`).join('');
+        const n = imp.productos_total || 1;
+        let h = n > 1
+            ? `<i class="bi bi-buildings me-1"></i>Esta variante existe en <b>${n}</b> fichas:${bodegas}`
+            : '<i class="bi bi-geo-alt me-1"></i>Esta variante solo existe en esta bodega.';
+        const t = imp.traspasos_en_transito;
+        if (t && t.total_documentos) {
+            h += ` <span class="text-warning-emphasis"><i class="bi bi-truck ms-2 me-1"></i>${t.total_documentos} guía(s) en tránsito (${t.unidades} u)</span>`;
+        }
+        $out.html(h);
+    });
+}
+
+function redondear990Edicion(valor) {
+    if (typeof redondearPrecio990 === 'function') return redondearPrecio990(valor);
+    const v = Math.round(valor);
+    return v < 1000 ? v : Math.floor(v / 1000) * 1000 + 990;
+}
+
+/** Margen / markup en vivo + resumen del cambio de precio respecto al vigente. */
+function actualizarMargenEdicion() {
+    const $info = $('#editPrecioInfo');
+    if (!$info.length) return;
+    const costo = parseInt($('#edit_costo').val()) || 0;
+    const venta = parseInt($('#edit_precioventa').val()) || 0;
+    const $margen = $info.find('.precio-margen-badge'), $markup = $info.find('.precio-markup-badge');
+    $info.find('.btn-markup-edicion').removeClass('active');
+    if (costo <= 0 || venta <= 0) {
+        $info.find('.margen-pct-display, .markup-display').text('--');
+        $margen.removeClass('bueno medio bajo'); $markup.removeClass('bueno medio bajo');
+    } else {
+        const margen = (venta - costo) / venta * 100, markup = venta / costo;
+        $info.find('.margen-pct-display').text(margen.toFixed(1) + '%');
+        $info.find('.markup-display').text('x' + markup.toFixed(2));
+        $margen.removeClass('bueno medio bajo').addClass(margen >= 40 ? 'bueno' : (margen >= 25 ? 'medio' : 'bajo'));
+        $markup.removeClass('bueno medio bajo').addClass(markup >= 1.7 ? 'bueno' : (markup >= 1.4 ? 'medio' : 'bajo'));
+        $info.find('.btn-markup-edicion').each(function () {
+            if (Math.abs(markup - parseFloat($(this).data('markup'))) < 0.03) $(this).addClass('active');
+        });
+    }
+    const vig = window._preciosVigentesEdicion || {};
+    const $cambio = $('#editPrecioCambio');
+    if (vig.precioventa && venta && venta !== vig.precioventa) {
+        const dif = venta - vig.precioventa, pct = (dif / vig.precioventa * 100).toFixed(1);
+        $cambio.html(`Venta vigente $${vig.precioventa.toLocaleString('es-CL')} → <b class="${dif > 0 ? 'text-success' : 'text-danger'}">$${venta.toLocaleString('es-CL')} (${dif > 0 ? '+' : ''}${pct}%)</b>: se avisa a las tiendas`);
+    } else {
+        $cambio.text('');
+    }
+}
+
+$(document).on('input change', '#edit_costo, #edit_precioventa', actualizarMargenEdicion);
+$(document).on('click', '.btn-markup-edicion', function () {
+    const costo = parseInt($('#edit_costo').val()) || 0;
+    if (costo <= 0) { mostrarError('Ingresa el costo primero'); return; }
+    $('#edit_precioventa').val(redondear990Edicion(costo * parseFloat($(this).data('markup')))).trigger('input');
+});
 
 /**
  * Función auxiliar para inicializar Select2 en modal de edición
@@ -142,29 +232,73 @@ function cargarOpcionesConSelect2(producto) {
     
     console.log('📋 IDs de atributos:', { marca: ID_ATRIBUTO_MARCA, color: ID_ATRIBUTO_COLOR, genero: ID_ATRIBUTO_GENERO, otro: ID_ATRIBUTO_OTRO });
     
-    // Cargar CATEGORÍAS
+    // Cargar CATEGORÍAS como árbol v1.2 («General › Específica»), igual que el
+    // picker de Crear Manual; las categorías planas antiguas quedan al final,
+    // en su propio grupo, para no perder la que tenga el producto.
     $.ajax({
-        url: '/app/api/categorias/listar/',
+        url: '/app/categorias_existentes/?tree=1',
         method: 'GET',
         success: function(response) {
             const $select = $('#edit_categoria_id');
             $select.empty().append('<option value="">Seleccionar categoría...</option>');
-            
-            const categorias = response.categorias || response;
-            console.log('📦 Categorías cargadas:', Array.isArray(categorias) ? categorias.length : 0);
-            if (Array.isArray(categorias)) {
-                categorias.forEach(cat => {
-                    const selected = producto.categoria_id == cat.id ? 'selected' : '';
-                    $select.append(`<option value="${cat.id}" ${selected}>${cat.nombre}</option>`);
+            const cats = Array.isArray(response) ? response : [];
+            const esc = escapeHtmlEdicionProductos;
+            const raices = cats.filter(c => !c.padre_id && cats.some(x => x.padre_id === c.id));
+            const enArbol = new Set();
+            raices.forEach(r => {
+                enArbol.add(r.id);
+                let g = `<optgroup label="${esc(r.nombre)}">`;
+                g += `<option value="${r.id}" ${producto.categoria_id == r.id ? 'selected' : ''}>${esc(r.nombre)} (general)</option>`;
+                cats.filter(c => c.padre_id === r.id).forEach(k => {
+                    enArbol.add(k.id);
+                    g += `<option value="${k.id}" ${producto.categoria_id == k.id ? 'selected' : ''}>${esc(r.nombre)} › ${esc(k.nombre)}</option>`;
                 });
+                $select.append(g + '</optgroup>');
+            });
+            const planas = cats.filter(c => !enArbol.has(c.id));
+            if (planas.length) {
+                let g = '<optgroup label="Otras (antiguas, sin árbol)">';
+                planas.forEach(c => {
+                    g += `<option value="${c.id}" ${producto.categoria_id == c.id ? 'selected' : ''}>${esc(c.nombre)}</option>`;
+                });
+                $select.append(g + '</optgroup>');
             }
-            
+            console.log('📦 Categorías cargadas:', cats.length);
             inicializarSelect2EnModalEdicion($select, 'Buscar categoría...');
         },
         error: function(xhr, status, error) {
             console.error('❌ Error cargando categorías:', error);
         }
     });
+
+    // Cargar ESPECIALIDADES v1.2 (multi) con las etiquetas amigables de la pantalla
+    const $esp = $('#edit_especialidad_ids');
+    const idEsp = window.ID_ATRIBUTO_ESP_V12;
+    if ($esp.length && idEsp) {
+        $('#containerEspecialidadEdicion').show();
+        $.ajax({
+            url: `/app/opciones_atributo/?atributo_id=${idEsp}`,
+            method: 'GET',
+            success: function(response) {
+                const opciones = Array.isArray(response) ? response : (response.opciones || []);
+                const actuales = new Set((producto.especialidades || []).map(e => String(e.id)));
+                $esp.empty();
+                opciones.forEach(o => {
+                    const label = (window.ESP_LABEL_V12 && window.ESP_LABEL_V12[o.valor]) || o.valor;
+                    $esp.append(`<option value="${o.id}" ${actuales.has(String(o.id)) ? 'selected' : ''}>${escapeHtmlEdicionProductos(label)}</option>`);
+                });
+                if ($esp.hasClass('select2-hidden-accessible')) { try { $esp.select2('destroy'); } catch (e) { /* nada */ } }
+                $esp.select2({
+                    dropdownParent: $('#modalEdicionProducto'), width: '100%',
+                    placeholder: 'Sin especialidad (opcional)', closeOnSelect: false,
+                    language: { noResults: function () { return 'Sin resultados'; } }
+                });
+            },
+            error: function() { $('#containerEspecialidadEdicion').hide(); }
+        });
+    } else {
+        $('#containerEspecialidadEdicion').hide();
+    }
     
     // Cargar MARCAS (atributo1)
     $.ajax({
@@ -346,10 +480,10 @@ window.cargarVariacionesEnTabla = function(variaciones) {
 function guardarProductoBase() {
     const productoId = $('#edit_producto_id').val();
     
-    // Validar campos requeridos
-    const articulo = $('#edit_articulo').val().trim();
+    // Validar campos requeridos (el código va SIEMPRE en mayúsculas, como al crear)
+    const articulo = $('#edit_articulo').val().trim().toUpperCase();
     if (!articulo) {
-        mostrarError('El nombre del producto es requerido');
+        mostrarError('El código de artículo es obligatorio');
         return;
     }
     
@@ -380,7 +514,11 @@ function guardarProductoBase() {
         propagar_sucursales: propagar,
         excluir_de_analitica: $('#edit_excluir_de_analitica').is(':checked'),
     };
-    
+    // Especialidades: solo viajan si el selector está activo (atributo configurado)
+    if (window.ID_ATRIBUTO_ESP_V12 && $('#edit_especialidad_ids').length && $('#containerEspecialidadEdicion').is(':visible')) {
+        datos.especialidad_ids = ($('#edit_especialidad_ids').val() || []).map(v => parseInt(v, 10)).filter(v => v > 0);
+    }
+
     // Confirmación si va a propagar
     const guardar = () => {
         mostrarLoading('Guardando cambios...');
@@ -473,14 +611,25 @@ function guardarProductoBase() {
     .then(data => {
         const imp = (data && data.success) ? data.impacto : null;
         const transito = imp ? imp.traspasos_en_transito : null;
+        const otrasFichas = imp ? Math.max(0, (imp.productos_total || 1) - 1) : 0;
 
-        // Sin propagacion y sin mercaderia viajando no hay nada que advertir.
-        if (!propagar && !transito) {
+        // Sin propagacion: si la variante vive en otras bodegas, avisar que
+        // quedaran distintas (la politica de la casa es una sola variante).
+        if (!propagar && !transito && !otrasFichas) {
             guardar();
             return;
         }
 
         let html = '';
+        if (!propagar && otrasFichas) {
+            const bodegas = (imp.sucursales || []).map(b => `<span class="badge bg-secondary ms-1">${b}</span>`).join('');
+            html += `<div class="alert alert-warning text-start mb-2" style="font-size:.85rem;">
+                <div class="fw-bold mb-1"><i class="bi bi-exclamation-triangle me-1"></i>Solo esta bodega</div>
+                La misma variante existe en <strong>${otrasFichas}</strong> ficha(s) mas:${bodegas}.
+                Quedaran con el dato ANTERIOR y el codigo pasara a tener versiones distintas por bodega.
+                Si es una correccion del articulo, activa <strong>Global</strong>.
+            </div>`;
+        }
         if (propagar) {
             const bodegas = (imp && imp.sucursales && imp.sucursales.length)
                 ? imp.sucursales.map(b => `<span class="badge bg-secondary ms-1">${b}</span>`).join('')
@@ -516,8 +665,8 @@ function guardarProductoBase() {
         }
 
         Swal.fire({
-            icon: transito ? 'warning' : 'question',
-            title: transito ? 'Hay despachos en transito' : 'Confirmar cambios globales',
+            icon: (transito || !propagar) ? 'warning' : 'question',
+            title: transito ? 'Hay despachos en transito' : (propagar ? 'Confirmar cambios globales' : 'Guardar solo en esta bodega'),
             html: html,
             width: transito ? 640 : 520,
             showCancelButton: true,

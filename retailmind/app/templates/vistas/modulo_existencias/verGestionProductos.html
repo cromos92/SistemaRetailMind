@@ -379,68 +379,24 @@
         font-size: .85rem;
     }
 
-    /* Stepper mejorado */
-    #stepperCrearManual {
-        gap: 0;
-        padding: 0 10px;
+    /* Checklist de avance del modal Crear Manual (qué falta, con clic al campo) */
+    .cl-manual {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+        padding: 8px 12px; font-size: .78rem;
+        background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 10px;
     }
-    .stepper-step {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        flex: 0 0 auto;
-        position: relative;
-        min-width: 90px;
+    .cl-manual.completo { background: #f2fbf6; border-color: #a5d6a7; }
+    .cl-manual .cl-titulo { color: #405189; font-weight: 700; white-space: nowrap; }
+    .cl-manual.completo .cl-titulo { color: #146c43; }
+    .cl-manual .cl-items { display: inline-flex; flex-wrap: wrap; gap: 5px; }
+    .cl-item {
+        display: inline-flex; align-items: center; gap: 3px;
+        border-radius: 20px; padding: 2px 9px; font-weight: 600; line-height: 1.4;
+        border: 1px solid transparent; font-size: .76rem;
     }
-    .stepper-circle {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        background: #e9ecef;
-        color: #adb5bd;
-        font-weight: 700;
-        font-size: 0.85rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border: 2.5px solid #dee2e6;
-        transition: all .3s ease;
-        z-index: 1;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-    }
-    .stepper-label {
-        font-size: .75rem;
-        margin-top: 5px;
-        color: #6c757d;
-        white-space: nowrap;
-        font-weight: 600;
-        transition: color .3s ease;
-    }
-    .stepper-step.active .stepper-circle {
-        background: linear-gradient(135deg, #405189, #364574);
-        color: #fff;
-        border-color: #405189;
-        box-shadow: 0 3px 10px rgba(64,81,137,0.3);
-    }
-    .stepper-step.active .stepper-label { color: #405189; }
-    .stepper-step.completed .stepper-circle {
-        background: linear-gradient(135deg, #0ab39c, #099885);
-        color: #fff;
-        border-color: #0ab39c;
-        box-shadow: 0 3px 10px rgba(10,179,156,0.3);
-    }
-    .stepper-step.completed .stepper-label { color: #0ab39c; }
-    .stepper-line {
-        flex: 1;
-        height: 3px;
-        background: #dee2e6;
-        margin-top: -22px;
-        border-radius: 2px;
-        transition: background .3s ease;
-    }
-    .stepper-line.filled {
-        background: linear-gradient(90deg, #0ab39c, #405189);
-    }
+    .cl-item.ok { background: #d1e7dd; color: #146c43; }
+    .cl-item.falta { background: #fff; color: #b34700; border-color: #ffd8b5; cursor: pointer; }
+    .cl-item.falta:hover { background: #fff3e6; border-color: #e65100; }
     
     /* Asegurar que Select2 dropdown sea visible */
     #modalCrearProductoManual .select2-container--open .select2-dropdown {
@@ -2842,34 +2798,18 @@
                         </div>
                         <div>
                             <h5 class="modal-title text-white mb-0" id="crearProductoManualLabel">Crear Producto Manual</h5>
-                            <small class="modal-header-subtitle">Ingrese todos los datos del nuevo producto</small>
+                            <small class="modal-header-subtitle">Crea un producto nuevo o suma stock a uno que ya existe: escribe el código y te digo cuál es</small>
                         </div>
                     </div>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
                 </div>
                 <form id="formCrearProductoManual">
                     <div class="modal-body">
-                        <!-- ===== STEPPER DE PROGRESO ===== -->
-                        <div class="d-flex align-items-center justify-content-center mb-3 px-3" id="stepperCrearManual">
-                            <div class="stepper-step active" id="step1" data-step="1">
-                                <div class="stepper-circle">1</div>
-                                <div class="stepper-label">Proveedor / DTE</div>
-                            </div>
-                            <div class="stepper-line" id="stepLine1"></div>
-                            <div class="stepper-step" id="step2" data-step="2">
-                                <div class="stepper-circle">2</div>
-                                <div class="stepper-label">Artículo / Atributos</div>
-                            </div>
-                            <div class="stepper-line" id="stepLine2"></div>
-                            <div class="stepper-step" id="step3" data-step="3">
-                                <div class="stepper-circle">3</div>
-                                <div class="stepper-label">Tallas / Stock</div>
-                            </div>
-                            <div class="stepper-line" id="stepLine3"></div>
-                            <div class="stepper-step" id="step4" data-step="4">
-                                <div class="stepper-circle">4</div>
-                                <div class="stepper-label">Precios</div>
-                            </div>
+                        <!-- ===== CHECKLIST DE AVANCE: qué está listo y qué falta; un clic en
+                             lo pendiente lleva al campo (reemplaza al stepper decorativo) ===== -->
+                        <div class="cl-manual mb-3" id="checklistCrearManual" aria-live="polite">
+                            <span class="cl-titulo"><i class="bi bi-list-check me-1"></i>Para crear falta:</span>
+                            <span class="cl-items" id="checklistCrearManualItems"></span>
                         </div>
 
                         <!-- Resultado de sincronización multi-sucursal -->
@@ -9990,50 +9930,95 @@ function abrirModalCrearProductoManual() {
     
 }
 
-/**
- * Stepper para modalCrearProductoManual:
- * Actualiza visualmente los pasos según el progreso del usuario.
- * Paso 1: Proveedor/DTE | Paso 2: Artículo/Atributos | Paso 3: Tallas/Stock | Paso 4: Precios
- */
-function actualizarStepperManual(pasoActivo) {
-    for (let i = 1; i <= 4; i++) {
-        const $step = $(`#step${i}`);
-        const $line = $(`#stepLine${i}`);
-        $step.removeClass('active completed');
-        if ($line.length) $line.removeClass('filled');
-        if (i < pasoActivo) {
-            $step.addClass('completed');
-            if ($line.length) $line.addClass('filled');
-        } else if (i === pasoActivo) {
-            $step.addClass('active');
-        }
-    }
+// ==================================================================
+// CHECKLIST DE AVANCE del modal Crear Manual (reemplaza al stepper, que solo
+// decoraba: sus 4 pasos no coincidían con dónde están los campos). Muestra
+// qué está listo y qué falta para poder crear; un clic en lo pendiente
+// lleva al campo. Se recalcula con cada cambio del formulario.
+// ==================================================================
+function _abrirSelect2OFoco(selector) {
+    const $s = $(selector);
+    try { if ($s.data('select2')) { $s.select2('open'); return; } } catch (e) { /* sin select2 */ }
+    $s.trigger('focus');
 }
 
-// Click en step 3 (Tallas/Stock) abre el tab correspondiente
-$(document).on('click', '#step3', function() {
-    const $tabBtn = document.querySelector('[data-bs-target="#tabTallasStock"]');
-    if ($tabBtn) bootstrap.Tab.getOrCreateInstance($tabBtn).show();
-});
-
-function detectarPasoManual() {
-    const proveedor = $('#selectProveedorManual').val();
-    const dte = $('#hiddenDteManual').val();
-    const articulo = $('form#formCrearProductoManual input[name="articulo"]').val();
-    const atributo1 = $('form#formCrearProductoManual select[name="atributo1"]').val();
-    const tallas = $('#tablaTallasManual tbody tr').length;
-    const costo = $('form#formCrearProductoManual input[name="costo"]').val();
-
-    if (costo) return 4;
-    if (tallas > 0) return 3;
-    if (articulo || atributo1) return 2;
-    if (proveedor && dte) return 2;
-    return 1;
+function _irATallasManual() {
+    const $tab = document.querySelector('[data-bs-target="#tabTallasStock"]');
+    if ($tab) bootstrap.Tab.getOrCreateInstance($tab).show();
+    const $stock = $('#tablaTallasManual tbody tr:first .stock-input');
+    if ($stock.length) { $stock.trigger('focus').select(); return; }
+    $('#btnAgregarTallaManual').trigger('click');
 }
 
-$(document).on('change input', '#selectProveedorManual, #hiddenDteManual, #formCrearProductoManual input[name="articulo"], #formCrearProductoManual select[name="atributo1"], #formCrearProductoManual input[name="costo"]', function() {
-    actualizarStepperManual(detectarPasoManual());
+function stockTotalTablaManual() {
+    let total = 0;
+    $('#tablaTallasManual tbody input[name="stock[]"]').each(function () { total += parseInt($(this).val()) || 0; });
+    return total;
+}
+
+const CHECKLIST_MANUAL = [
+    { id: 'proveedor', label: 'Proveedor', ok: () => !!$('#selectProveedorManual').val(),
+      ir: () => _abrirSelect2OFoco('#selectProveedorManual') },
+    { id: 'dte', label: 'DTE', ok: () => !!($('#hiddenDteManual').val() || $('#selectDteManual').val()),
+      ir: () => _abrirSelect2OFoco('#selectDteManual') },
+    { id: 'articulo', label: 'Código', ok: () => !!($('#formCrearProductoManual input[name="articulo"]').val() || '').trim(),
+      ir: () => $('#formCrearProductoManual input[name="articulo"]').trigger('focus') },
+    { id: 'marca', label: 'Marca', ok: () => !!$('#formCrearProductoManual select[name="atributo1"]').val(),
+      ir: () => _abrirSelect2OFoco('#formCrearProductoManual select[name="atributo1"]') },
+    { id: 'color', label: 'Color', ok: () => !!$('#formCrearProductoManual select[name="atributo2"]').val(),
+      ir: () => _abrirSelect2OFoco('#formCrearProductoManual select[name="atributo2"]') },
+    { id: 'genero', label: 'Género', ok: () => !!$('#formCrearProductoManual select[name="atributo3"]').val(),
+      ir: () => _abrirSelect2OFoco('#formCrearProductoManual select[name="atributo3"]') },
+    { id: 'categoria', label: 'Categoría', ok: () => !!$('#catManualValue').val(),
+      ir: () => $('#catManualBtn').trigger('click') },
+    { id: 'tallas', label: 'Stock en alguna talla', ok: () => stockTotalTablaManual() > 0, ir: _irATallasManual },
+    { id: 'costo', label: 'Costo', ok: () => (parseInt($('#formCrearProductoManual input[name="costo"]').val()) || 0) > 0,
+      ir: () => $('#formCrearProductoManual input[name="costo"]').trigger('focus').select() },
+    { id: 'venta', label: 'Precio venta', ok: () => (parseInt($('#formCrearProductoManual input[name="precioventa"]').val()) || 0) > 0,
+      ir: () => $('#formCrearProductoManual input[name="precioventa"]').trigger('focus').select() },
+];
+
+function actualizarChecklistManual() {
+    const $items = $('#checklistCrearManualItems');
+    if (!$items.length) return;
+    const listos = [], pendientes = [];
+    CHECKLIST_MANUAL.forEach(it => { let ok = false; try { ok = !!it.ok(); } catch (e) { ok = false; } (ok ? listos : pendientes).push(it); });
+    let h = '';
+    listos.forEach(it => { h += `<span class="cl-item ok" title="Listo"><i class="bi bi-check2"></i>${it.label}</span>`; });
+    pendientes.forEach(it => { h += `<button type="button" class="cl-item falta" data-cl="${it.id}" title="Ir a ${it.label}">${it.label}</button>`; });
+    $items.html(h);
+    const existe = !!window.productoExistenteManual;
+    $('#checklistCrearManual').toggleClass('completo', pendientes.length === 0);
+    $('#checklistCrearManual .cl-titulo').html(pendientes.length
+        ? `<i class="bi bi-list-check me-1"></i>Para ${existe ? 'sumar stock' : 'crear'} falta <b>${pendientes.length}</b>:`
+        : `<i class="bi bi-check-circle-fill me-1"></i>Todo listo para ${existe ? 'sumar stock' : 'crear'}:`);
+}
+
+$(document).on('click', '#checklistCrearManualItems .cl-item.falta', function () {
+    const it = CHECKLIST_MANUAL.find(x => x.id === $(this).data('cl'));
+    if (it) it.ir();
 });
+
+// Compatibilidad: el resto del modal llamaba al stepper (actualizarStepperManual(paso)).
+function actualizarStepperManual() { actualizarChecklistManual(); }
+function detectarPasoManual() { return 1; }
+
+let _tChecklistManual = null;
+$(document).on('change input', '#modalCrearProductoManual input, #modalCrearProductoManual select', function () {
+    clearTimeout(_tChecklistManual);
+    _tChecklistManual = setTimeout(actualizarChecklistManual, 120);
+});
+
+// El botón principal dice lo que va a pasar: crear una ficha nueva o sumar
+// stock a la que ya existe (en bodega, el caso más común).
+function actualizarBotonCrearManual() {
+    const existe = !!window.productoExistenteManual;
+    $('#btnSubmitProductoManual')
+        .toggleClass('btn-primary', !existe).toggleClass('btn-warning text-dark', existe)
+        .html(existe ? '<i class="bi bi-box-arrow-in-down me-1"></i> Sumar stock al existente'
+                     : '<i class="bi bi-check-lg me-1"></i> Crear producto');
+    $('#btnCrearYSeguirManual').html('<i class="bi bi-arrow-repeat me-1"></i> ' + (existe ? 'Sumar y seguir' : 'Crear y seguir'));
+}
 $(document).on('change', '#selectDteManual', function() {
     $('#hiddenDteManual').val($(this).val());
     setTimeout(() => actualizarStepperManual(detectarPasoManual()), 200);
@@ -10870,6 +10855,7 @@ function actualizarResumenTallasManual() {
         $totalResumen.text('0');
         $('#footerUnidadesManual').text('0');
         $('#footerTallasManual').text('0');
+        actualizarChecklistManual();
         return;
     }
     
@@ -10915,6 +10901,7 @@ function actualizarResumenTallasManual() {
     // Animar el total si cambió
     $totalResumen.addClass('pulse-animation');
     setTimeout(() => $totalResumen.removeClass('pulse-animation'), 300);
+    actualizarChecklistManual();
 }
 
 // Eventos para actualizar resumen automáticamente
@@ -11778,6 +11765,8 @@ function renderEstadoCodigoManual(estado, response) {
             ${body ? `<div class="ec-body">${body}</div>` : ''}
         </div>`);
     actualizarComparePrecioManual();
+    actualizarBotonCrearManual();
+    actualizarChecklistManual();
 }
 
 // esc() del template vive DENTRO de otros ámbitos y NO es visible desde
@@ -14211,18 +14200,33 @@ $('#formCrearProductoManual').on('submit', function(e) {
         const tallasNoEncontradas = $('#tablaTallasManual .detalle-guia').filter(function() {
             return $(this).text().includes('no encontrada') || $(this).text().includes('no estándar');
         }).length;
-        
+
         if (tallasNoEncontradas > 0) {
             advertenciasGuia.push(`${tallasNoEncontradas} talla(s) no están en la guía seleccionada.`);
         }
     }
 
     if (!valido) {
+        actualizarChecklistManual();
         Swal.fire({
             icon: 'error',
             title: 'Campos incompletos',
-            html: mensajes.join('<br>'),
+            html: mensajes.join('<br>') +
+                  '<div class="text-muted mt-2" style="font-size:.8rem;">Arriba, en la lista de pendientes, un clic en cada uno te lleva al campo.</div>',
             confirmButtonText: 'Aceptar'
+        }).then(() => {
+            // Foco al primer campo marcado (o al primer pendiente del checklist)
+            const $inv = modal.find('.is-invalid').first();
+            if ($inv.length) {
+                if ($inv.closest('#tabTallasStock').length) {
+                    const $tab = document.querySelector('[data-bs-target="#tabTallasStock"]');
+                    if ($tab) bootstrap.Tab.getOrCreateInstance($tab).show();
+                }
+                _abrirSelect2OFoco($inv);
+                return;
+            }
+            const $pend = $('#checklistCrearManualItems .cl-item.falta').first();
+            if ($pend.length) $pend.trigger('click');
         });
         return false;
     }
@@ -16854,10 +16858,10 @@ $('#btnConfirmarActualizacion').on('click', function() {
 </script>
 
 <!-- ========== SCRIPT DE EDICIÓN DE PRODUCTOS ========== -->
-<script src="{% static 'js/edicion_productos.js' %}?v=202608191200"></script>
+<script src="{% static 'js/edicion_productos.js' %}?v=202609281800"></script>
 
 <!-- Agente "Cargar desde factura": botón #btnCargarFacturaIA → modal #modalCargaFactura -->
-<script src="{% static 'js/carga_factura.js' %}?v=202609270100"></script>
+<script src="{% static 'js/carga_factura.js' %}?v=202609281800"></script>
 
 <!-- SortableJS: reordenar tallas en el modal de Guía de Talla (se inicializa en shown.bs.modal) -->
 <script src="{% static 'libs/sortablejs/Sortable.min.js' %}"></script>

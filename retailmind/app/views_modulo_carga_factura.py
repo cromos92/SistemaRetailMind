@@ -134,9 +134,9 @@ def api_carga_factura_subir(request):
     if indicaciones:
         # Van al lector como pistas (ver web.leer_en_segundo_plano).
         sesion.agregar_mensaje(svc_web.USUARIO, indicaciones, tipo='indicaciones')
-    como = {1: 'con una lectura rápida',
-            2: 'con una lectura y, solo si deja dudas, una segunda de verificación',
-            3: 'con dos lecturas independientes que después comparo'}[lecturas]
+    como = {1: 'con una sola lectura, sin verificación',
+            2: 'con una lectura y, solo para las líneas que dejen dudas, una verificación con zoom',
+            3: 'con dos lecturas completas independientes que después comparo (cuesta el doble)'}[lecturas]
     sesion.agregar_mensaje(
         svc_web.AGENTE,
         f'Recibí el PDF. Lo estoy leyendo {como}; suele tardar unos minutos. '

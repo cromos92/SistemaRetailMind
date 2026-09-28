@@ -112,7 +112,10 @@ def _sumar_uso(sesion_id, paso, uso):
     sesion = CargaFacturaPdf.objects.get(id=sesion_id)
     total = dict(sesion.uso or {})
     for k, v in uso.items():
-        total[k] = int(total.get(k) or 0) + int(v or 0)
+        if k == 'costo_usd':
+            total[k] = round(float(total.get(k) or 0) + float(v or 0), 4)
+        else:
+            total[k] = int(total.get(k) or 0) + int(v or 0)
     pasos = list(total.get('pasos') or [])
     pasos.append({'paso': paso, 'fecha': timezone.now().isoformat(timespec='seconds'), **uso})
     total['pasos'] = pasos[-40:]
@@ -215,9 +218,11 @@ def leer_en_segundo_plano(sesion_id):
         sesion.error = ''
         sesion.save(update_fields=['facturas', 'estado', 'modelo', 'leida_en', 'progreso',
                                    'error', 'actualizado_en'])
-        sesion.agregar_mensaje(AGENTE, _texto_lectura(datos, leido['modo'], leido.get('segunda')),
+        sesion.agregar_mensaje(AGENTE, _texto_lectura(datos, leido['modo'], leido.get('segunda'),
+                                                      leido.get('verificadas')),
                                tipo='lectura', uso=uso, aprendido=aprendido,
-                               lecturas=len(leido['lecturas']), segunda=leido.get('segunda'))
+                               lecturas=len(leido['lecturas']), segunda=leido.get('segunda'),
+                               verificadas=leido.get('verificadas'))
     except Exception as exc:
         mensaje = str(exc) if isinstance(exc, ErrorCarga) else f'{type(exc).__name__}: {exc}'
         logger.exception('carga_factura: falló la lectura de la sesión %s', sesion_id)
@@ -233,17 +238,18 @@ def leer_en_segundo_plano(sesion_id):
 
 
 _TEXTO_SEGUNDA = {
-    'no hizo falta': 'La primera lectura cuadró completa, así que no hizo falta la segunda.',
+    'no hizo falta': 'La primera lectura cuadró completa, así que no hizo falta verificar nada.',
     'por dudas': 'La primera lectura dejó dudas, así que hice una segunda y las comparé.',
-    'siempre': 'Hice dos lecturas independientes y las comparé.',
+    'verificación': 'La primera lectura dejó dudas en {n} línea(s): las volví a mirar con zoom y comparé.',
+    'siempre': 'Hice dos lecturas completas independientes y las comparé.',
 }
 
 
-def _texto_lectura(facturas, modo, segunda=None):
+def _texto_lectura(facturas, modo, segunda=None, verificadas=None):
     partes = [f'Leí el PDF ({"escaneo" if modo == "escaneo" else "PDF con texto"}) y encontré '
               f'{len(facturas)} factura(s):']
     if _TEXTO_SEGUNDA.get(segunda):
-        partes[0] += ' ' + _TEXTO_SEGUNDA[segunda]
+        partes[0] += ' ' + _TEXTO_SEGUNDA[segunda].format(n=verificadas or '?')
     for d in facturas:
         lineas = d['lineas']
         unidades = sum(sum(l['tallas'].values()) for l in lineas)
@@ -1015,13 +1021,20 @@ def investigar_en_segundo_plano(sesion_id, pares, user_id):
             marca = str(linea.get('marca') or data.get('marca') or '')
             avisar(f'Buscando en internet {k} de {len(pares)}: {articulo}…')
             hallazgo = {'idx': idx, 'n': n, 'articulo': articulo, 'ok': False, 'aplicado': []}
-            try:
-                r = busqueda.investigar_articulo(marca, articulo, linea.get('descripcion'), catalogo)
-            except Exception as exc:
-                logger.exception('carga_factura: falló la búsqueda de %s (sesión %s)', articulo, sesion_id)
-                hallazgo['detalle'] = str(exc)
-                hallazgos.append(hallazgo)
-                continue
+            # Ya buscado hace poco para esta marca + código: se reutiliza lo
+            # aprendido (cada búsqueda web cuesta aparte y da lo mismo).
+            previo = _hallazgo_previo(marca, articulo)
+            if previo is not None:
+                r = previo
+                hallazgo['reusado'] = previo['_fecha']
+            else:
+                try:
+                    r = busqueda.investigar_articulo(marca, articulo, linea.get('descripcion'), catalogo)
+                except Exception as exc:
+                    logger.exception('carga_factura: falló la búsqueda de %s (sesión %s)', articulo, sesion_id)
+                    hallazgo['detalle'] = str(exc)
+                    hallazgos.append(hallazgo)
+                    continue
             hallazgo.update(ok=r['encontrado'], nombre=r['nombre'], que_es=r['que_es'],
                             color=r['color_primario'], colores_vistos=r['colores_vistos'],
                             fuente_url=r['fuente_url'], confianza=r['confianza'])
@@ -1047,10 +1060,11 @@ def investigar_en_segundo_plano(sesion_id, pares, user_id):
                 data['lineas'] = lineas
                 _guardar_factura(sesion_id, idx, data)
                 por_factura[idx] = por_factura.get(idx, 0) + 1
-                try:
-                    _aprender_de_internet(marca, articulo, linea, r)
-                except Exception:
-                    logger.exception('carga_factura: no se pudo guardar lo aprendido de internet')
+                if previo is None:
+                    try:
+                        _aprender_de_internet(marca, articulo, linea, r)
+                    except Exception:
+                        logger.exception('carga_factura: no se pudo guardar lo aprendido de internet')
             hallazgos.append(hallazgo)
         uso = _sumar_uso(sesion_id, 'busqueda', svc_lectura.uso_actual())
         sesion = CargaFacturaPdf.objects.get(id=sesion_id)
@@ -1069,6 +1083,30 @@ def investigar_en_segundo_plano(sesion_id, pares, user_id):
         CargaFacturaPdf.objects.filter(id=sesion_id).update(
             estado='LEIDA', progreso='', actualizado_en=timezone.now())
         _cerrar_conexion()
+
+
+# Lo buscado en internet hace menos de esto se reutiliza sin volver a buscar.
+DIAS_VIGENCIA_BUSQUEDA = 90
+
+
+def _hallazgo_previo(marca, articulo):
+    """Resultado guardado de una búsqueda anterior del mismo marca + código
+    (con el formato de busqueda.investigar_articulo, más `_fecha`), o None si
+    no hay o ya venció."""
+    clave = clave_marca(marca)
+    if not clave or not articulo:
+        return None
+    fila = ProductoAprendido.objects.filter(marca=clave, articulo=normalizar_articulo(articulo)).first()
+    if fila is None or not (fila.nombre_internet or fila.color_internet):
+        return None
+    if timezone.now() - fila.actualizado_en > timedelta(days=DIAS_VIGENCIA_BUSQUEDA):
+        return None
+    return {
+        'encontrado': True, 'nombre': fila.nombre_internet, 'que_es': fila.que_es,
+        'color_primario': fila.color_internet, 'colores_vistos': '', 'genero': '',
+        'categoria': '', 'fuente_url': fila.fuente_url, 'confianza': 'media',
+        '_fecha': fila.actualizado_en.date().isoformat(),
+    }
 
 
 def _aprender_de_internet(marca, articulo, linea, r):
@@ -1096,6 +1134,8 @@ def _texto_busqueda(hallazgos):
             partes.append(f'• {h["articulo"]}: no lo encontré' + (f' ({h["detalle"]})' if h.get('detalle') else '') + '.')
             continue
         texto = f'• {h["articulo"]}: {h.get("nombre") or "encontrado"}'
+        if h.get('reusado'):
+            texto += f' (ya lo había buscado el {h["reusado"]}: reutilizado, sin costo)'
         if h.get('que_es'):
             texto += f' — {h["que_es"]}'
         if h.get('color'):

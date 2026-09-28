@@ -22,7 +22,10 @@ from .facturas import ErrorCarga
 logger = logging.getLogger('app')
 
 MODELO_BUSQUEDA = os.environ.get('CARGA_FACTURA_MODELO_BUSQUEDA', 'claude-sonnet-5')
-MAX_BUSQUEDAS_POR_ARTICULO = 4
+# Cada búsqueda cuesta aparte (US$10 por mil): con 3 alcanza para «código +
+# marca», «código sin sufijo de color» y «descripción»; lo encontrado queda
+# aprendido y no se vuelve a buscar (web.investigar_en_segundo_plano).
+MAX_BUSQUEDAS_POR_ARTICULO = 3
 _MAX_VUELTAS = 4          # continuaciones si la API pausa el turno (pause_turn)
 _HERRAMIENTA = {'type': 'web_search_20260209', 'name': 'web_search',
                 'max_uses': MAX_BUSQUEDAS_POR_ARTICULO}
@@ -100,7 +103,7 @@ def investigar_articulo(marca, articulo, descripcion, catalogo):
         try:
             respuesta = svc_lectura._pedir(
                 cliente, modelo=MODELO_BUSQUEDA, max_tokens=6000, tools=[_HERRAMIENTA],
-                messages=mensajes,
+                messages=mensajes, cachear=False,
                 output_config=({'effort': 'medium', 'format': {'type': 'json_schema', 'schema': esquema}}
                                if con_formato else {'effort': 'medium'}))
         except anthropic.BadRequestError as exc:

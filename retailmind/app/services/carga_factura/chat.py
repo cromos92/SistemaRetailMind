@@ -30,9 +30,10 @@ _HISTORIAL = 8       # mensajes recientes que ve Claude
 _MAX_TEXTO = 2000
 
 _INSTRUCCIONES = """Eres el agente de carga de productos desde facturas de proveedor de una cadena de
-tiendas de calzado y ropa deportiva en Chile. La persona ya subió una factura; en el JSON de
-abajo van la VISTA PREVIA actual (qué haría el sistema con cada línea: estado, identidad,
-tallas, precios, avisos y errores), las listas del sistema y la conversación reciente.
+tiendas de calzado y ropa deportiva en Chile. La persona ya subió una factura. A continuación
+van las listas del sistema (listas_del_sistema); en el mensaje llegan la VISTA PREVIA actual
+(qué haría el sistema con cada línea: estado, identidad, tallas, precios, avisos y errores),
+lo leído en cargas anteriores y la conversación reciente.
 La persona te escribe para corregir datos, dar parámetros o preguntar.
 
 Responde en "respuesta" (español de Chile, tuteando, breve y concreto) y pon en "cambios"
@@ -174,30 +175,48 @@ def _esquema(catalogo):
 
 
 def _resumen_linea(p):
-    return {
+    """Lo que el agente necesita de una línea, sin repetir: antes iba además
+    el JSON completo de la línea y todas las tallas dos veces (cada línea
+    costaba ~1.200 tokens por turno)."""
+    r = {
         'n': p['n'], 'articulo': p['articulo'], 'descripcion': p['descripcion'],
         'estado': 'OMITIDA' if p['omitida'] else p['estado'], 'unidades': p['unidades'],
         'tallas': {t['factura']: t['cantidad'] for t in p['tallas']},
-        'tallas_como_quedan': [t['ficha'] for t in p['tallas']],
-        'tipo_talla': p['tipo_talla'], 'guia': p['guia'] and p['guia']['nombre'],
-        'costo': p['costo'], 'precio_lista': p.get('precio_lista'), 'descuento': p.get('descuento'),
-        'venta': p['precioventa'], 'fuente_venta': p['fuente_pv'],
-        'vigentes': p['vigentes'], 'opciones_existente': p['opciones'],
+        'guia': p['guia'] and p['guia']['nombre'],
+        'costo': p['costo'], 'venta': p['precioventa'], 'fuente_venta': p['fuente_pv'],
         'marca': p['marca'] and p['marca']['valor'], 'color': p['color'] and p['color']['valor'],
         'genero': p['genero'] and p['genero']['valor'],
         'categoria': p['categoria'] and p['categoria']['ruta'],
         'especialidades': p['especialidades'],
-        'ficha_destino': p['destino'] and (
-            f"#{p['destino']['id']} {p['destino']['sucursal']} «{p['destino']['descripcion']}» "
-            f"{p['destino']['marca']}/{p['destino']['color']}/{p['destino']['genero']}/{p['destino']['categoria']}"),
-        'fichas_candidatas': [
-            f"#{f['id']} {f['marca']}/{f['color']}/{f['genero']}/{f['categoria']} "
-            f"({f['tallas']} tallas, stock {f['stock']})" for f in p['candidatas']],
-        'errores': p['errores'], 'avisos': p['avisos'][:5],
-        'aprendido': p.get('aprendido') or [], 'venta_anterior': p.get('precio_aprendido'),
-        'que_es_segun_internet': p.get('que_es'),
-        'valores_actuales_json': {k: v for k, v in p['json'].items() if v not in (None, '', [])},
     }
+    renombradas = {t['factura']: t['ficha'] for t in p['tallas'] if t['ficha'] != t['factura']}
+    if renombradas:
+        r['tallas_como_quedan_en_la_ficha'] = renombradas
+    if p.get('precio_lista'):
+        r['precio_lista'], r['descuento'] = p['precio_lista'], p.get('descuento')
+    if p['vigentes'] is not None:
+        r['vigentes'] = p['vigentes']
+        r['opciones_existente'] = p['opciones']
+        r['opcion_sugerida'] = p.get('opcion_sugerida')
+    if p['destino']:
+        r['ficha_destino'] = (
+            f"#{p['destino']['id']} {p['destino']['sucursal']} «{p['destino']['descripcion']}» "
+            f"{p['destino']['marca']}/{p['destino']['color']}/{p['destino']['genero']}/{p['destino']['categoria']}")
+    if p['candidatas']:
+        r['fichas_candidatas'] = [
+            f"#{f['id']} {f['marca']}/{f['color']}/{f['genero']}/{f['categoria']} "
+            f"({f['tallas']} tallas, stock {f['stock']})" for f in p['candidatas']]
+    if p['errores']:
+        r['errores'] = p['errores']
+    if p['avisos']:
+        r['avisos'] = p['avisos'][:3]
+    if p.get('aprendido'):
+        r['aprendido'] = p['aprendido']
+    if p.get('precio_aprendido'):
+        r['venta_anterior'] = p['precio_aprendido']
+    if p.get('que_es'):
+        r['que_es_segun_internet'] = p['que_es']
+    return r
 
 
 def _resumen_factura(item):
@@ -228,17 +247,22 @@ def _preguntar(catalogo, previa, historial, texto, anteriores=None):
     """Una vuelta con Claude: dict {'respuesta', 'cambios', 'investigar', 'recordar'}
     según el esquema.
 
-    El pedido va en dos bloques: primero lo ESTABLE entre turnos (instrucciones
-    y listas del sistema), después lo que cambia (vista previa, historial,
-    mensaje). Así el prefijo se sirve desde la caché en cada turno del chat."""
+    Tres bloques ordenados por estabilidad, los dos primeros con su propio
+    cache_control: (1) system = instrucciones + listas del sistema (igual en
+    todos los turnos y sesiones); (2) la vista previa (cambia solo cuando se
+    aplica una corrección); (3) historial + mensaje (cambia siempre; sin
+    caché). Medido en prod antes de esto: cada turno escribía ~22k tokens a
+    caché y leía 0, porque el único breakpoint (el automático) caía al final
+    del bloque que cambia y nadie volvía a pedir ese prefijo."""
     cliente = svc_lectura._cliente()
     estable = {
         'listas_del_sistema': {k: catalogo[k] for k in ('marcas', 'colores', 'generos',
                                                           'categorias', 'especialidades', 'guias')},
         'tipos_de_talla': list(svc_web.TIPOS_TALLA),
     }
-    variable = {
-        'vista_previa': [_resumen_factura(i) for i in previa],
+    previa_json = json.dumps({'vista_previa': [_resumen_factura(i) for i in previa]},
+                             ensure_ascii=False, default=str)
+    turno = {
         'facturas_anteriores': anteriores or 'ninguna coincidencia con cargas anteriores',
         'conversacion_reciente': [
             {'quien': m.get('quien'), 'texto': _texto_historial(m)}
@@ -246,10 +270,12 @@ def _preguntar(catalogo, previa, historial, texto, anteriores=None):
         'mensaje_de_la_persona': texto,
     }
     respuesta = svc_lectura._pedir(
-        cliente, modelo=MODELO_CHAT, max_tokens=8000,
+        cliente, modelo=MODELO_CHAT, max_tokens=8000, cachear=False,
+        system=[{'type': 'text', 'text': _INSTRUCCIONES + '\n\n' + json.dumps(estable, ensure_ascii=False),
+                 'cache_control': svc_lectura.CACHE}],
         messages=[{'role': 'user', 'content': [
-            {'type': 'text', 'text': _INSTRUCCIONES + '\n\n' + json.dumps(estable, ensure_ascii=False)},
-            {'type': 'text', 'text': json.dumps(variable, ensure_ascii=False, default=str)}]}],
+            {'type': 'text', 'text': previa_json, 'cache_control': svc_lectura.CACHE},
+            {'type': 'text', 'text': json.dumps(turno, ensure_ascii=False, default=str)}]}],
         output_config={'effort': 'medium',
                        'format': {'type': 'json_schema', 'schema': _esquema(catalogo)}})
     return json.loads(svc_lectura._texto(respuesta))

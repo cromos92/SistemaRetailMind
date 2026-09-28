@@ -27,6 +27,7 @@
                         <div class="flex-grow-1">
                             <div class="fw-semibold me-text-sm me-title-color">Sincronización entre bodegas</div>
                             <div class="text-muted me-text-xs">Activo: cambios se aplican en todas las bodegas a la <strong>misma variante</strong> (mismo código, marca, color, género y categoría)</div>
+                            <div class="me-text-xs mt-1" id="editAlcanceVariante"></div>
                         </div>
                         <div class="form-check form-switch flex-shrink-0">
                             <input class="form-check-input me-switch-lg" type="checkbox" id="edit_propagar_sucursales" checked>
@@ -66,15 +67,16 @@
 
                         <!-- Info básica -->
                         <div class="row g-3">
-                            <div class="col-md-8">
+                            <div class="col-md-7">
                                 <label for="edit_articulo" class="form-label fw-semibold">
-                                    <i class="bi bi-box me-icon-muted me-1"></i>Nombre del Producto <span class="text-danger">*</span>
+                                    <i class="bi bi-upc-scan me-icon-muted me-1"></i>Código de artículo <span class="text-danger">*</span>
                                 </label>
-                                <input type="text" class="form-control" id="edit_articulo" placeholder="Ej: Zapatilla Nike Air Max">
+                                <input type="text" class="form-control" id="edit_articulo" placeholder="Ej: HQ6034-001" autocomplete="off" style="text-transform:uppercase">
+                                <div class="form-text me-text-xs">Identifica la variante en todas las bodegas. Si lo cambias, la ficha se renombra (los SKU y el historial no cambian).</div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-5">
                                 <label for="edit_categoria_id" class="form-label fw-semibold">
-                                    <i class="bi bi-folder me-icon-muted me-1"></i>Categoría
+                                    <i class="bi bi-folder me-icon-muted me-1"></i>Categoría <span class="text-muted fw-normal me-text-xs">(general › específica)</span>
                                 </label>
                                 <select class="form-select select2-edicion" id="edit_categoria_id">
                                     <option value="">Seleccionar categoría...</option>
@@ -131,6 +133,15 @@
                                         </select>
                                     </div>
                                 </div>
+                                <!-- Especialidades v1.2 (deporte / uso): propiedad de la variante, se
+                                     sincroniza en todas las bodegas igual que los demás atributos -->
+                                <div class="col-12" id="containerEspecialidadEdicion">
+                                    <label for="edit_especialidad_ids" class="form-label fw-semibold">
+                                        <i class="bi bi-tags me-icon-muted me-1"></i>Especialidades
+                                        <span class="text-muted fw-normal me-text-xs">(deporte / uso, puedes marcar varias)</span>
+                                    </label>
+                                    <select class="form-select form-select-sm" id="edit_especialidad_ids" multiple data-atributo="especialidad"></select>
+                                </div>
                             </div>
                         </div>
                         
@@ -167,6 +178,26 @@
                                         <span class="input-group-text">$</span>
                                         <input type="number" class="form-control" id="edit_precioSugerido" min="0" placeholder="0">
                                     </div>
+                                </div>
+                            </div>
+                            <!-- Margen / markup en vivo + markup rápido (misma barra que Crear Manual) -->
+                            <div class="precio-info-bar mt-2" id="editPrecioInfo">
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <span class="badge bg-light text-dark border precio-margen-badge" title="Margen = (Venta − Costo) / Venta">
+                                        Margen: <strong class="margen-pct-display">--</strong>
+                                    </span>
+                                    <span class="badge bg-light text-dark border precio-markup-badge" title="Markup = Venta / Costo">
+                                        Markup: <strong class="markup-display">--</strong>
+                                    </span>
+                                    <span class="text-muted me-text-xs">|</span>
+                                    <span class="me-text-xs" style="color:#666">Markup rápido:</span>
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-primary btn-markup-edicion py-0 px-2 me-text-xs" data-markup="1.8">×1.8</button>
+                                        <button type="button" class="btn btn-outline-primary btn-markup-edicion py-0 px-2 me-text-xs" data-markup="1.85">×1.85</button>
+                                        <button type="button" class="btn btn-outline-primary btn-markup-edicion py-0 px-2 me-text-xs" data-markup="2.0">×2.0</button>
+                                        <button type="button" class="btn btn-outline-primary btn-markup-edicion py-0 px-2 me-text-xs" data-markup="2.5">×2.5</button>
+                                    </div>
+                                    <span class="me-text-xs text-muted ms-auto" id="editPrecioCambio"></span>
                                 </div>
                             </div>
                         </div>

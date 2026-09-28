@@ -205,10 +205,10 @@
                         <datalist id="cfMarcas"></datalist>
                     </label>
                     <label class="cf-param"><span>Lecturas</span>
-                        <select id="cfLecturas" class="form-select form-select-sm" title="Una lectura; la segunda (de verificación) solo si la primera deja dudas. «2 siempre» = dos lecturas independientes comparadas">
-                            <option value="2">auto (2ª solo si hay dudas)</option>
-                            <option value="1">1 (rápida)</option>
-                            <option value="3">2 siempre</option>
+                        <select id="cfLecturas" class="form-select form-select-sm" title="auto: una lectura y, solo para las líneas que dejen dudas (no cuadran, precio a mano…), una verificación con zoom que reutiliza las páginas ya leídas. 1 = sin verificación. 2 completas = dos lecturas independientes que se comparan (cuesta el doble)">
+                            <option value="2">auto (verifica solo lo dudoso)</option>
+                            <option value="1">1 (rápida, sin verificar)</option>
+                            <option value="3">2 completas (cuesta el doble)</option>
                         </select>
                     </label>
                 </div>

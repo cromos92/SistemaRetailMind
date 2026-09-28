@@ -780,6 +780,8 @@ class TestAgenteCargaFactura(TestCase):
             return len(r['lecturas']), r['segunda'], una.call_count
 
         self.assertEqual(correr(limpia, 2), (1, 'no hizo falta', 1))
-        self.assertEqual(correr(dudosa, 2), (2, 'por dudas', 2))
+        # Con dudas ya no se relee todo: segunda mirada solo a esas líneas
+        # (ver test_carga_factura_tokens).
+        self.assertEqual(correr(dudosa, 2), (2, 'verificación', 2))
         self.assertEqual(correr(limpia, 3), (2, 'siempre', 2))
         self.assertEqual(correr(dudosa, 1), (1, 'no pedida', 1))
