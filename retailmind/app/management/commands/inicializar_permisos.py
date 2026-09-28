@@ -97,7 +97,7 @@ class Command(BaseCommand):
         opciones = [
             ('ticket_venta', 'Ticket de Venta', 'ticket_venta', 'mdi-receipt', 1),
             ('cambios_devoluciones', 'Cambios y Devoluciones', 'gestion_cambios_devoluciones', 'ri-exchange-line', 2),
-            ('devolucion_garantia', 'Devolucion por Garantia', 'modulo_devolucion_garantia', 'ri-refund-2-line', 3),
+            ('devolucion_garantia', 'Devolucion de Dinero', 'modulo_devolucion_garantia', 'ri-refund-2-line', 3),
             ('pos_dashboard', 'Generar Venta (POS)', 'pos_dashboard', 'ri-dashboard-3-line', 4),
             ('gestion_documentos_ventas', 'Consulta Documentos', 'gestion_ventas_documentos', 'ri-file-search-line', 5),
             ('cuadratura_caja', 'Cuadratura y Arqueo', 'cuadratura_caja', 'ri-calculator-line', 6),
@@ -318,7 +318,7 @@ class Command(BaseCommand):
             ('resumen_existencias', 'Resumen Existencias', 'ver_resumen_existencias', None, 'ri-pie-chart-line', 6),
             ('reporte_movimientos_sucursal', 'Inicial vs Restante', 'ver_reporte_movimientos_sucursal', None, 'ri-exchange-line', 7),
             # Reportes Compras
-            ('reporte_despachos_proveedor', 'Despachos por Proveedor', None, '/app/verReporteDespachosProveedor/', 'bi-truck', 8),
+            ('reporte_despachos_proveedor', 'Despachos por Proveedor', None, '/app/reportes/ingresos-proveedor/', 'bi-truck', 8),
             ('reporte_compras', 'Reporte de Compras', None, '/app/reportes/compras/', 'bi-bag', 9),
             ('reporte_rendimiento_proveedor', 'Rendimiento por Proveedor', None, '/app/reportes/rendimiento-proveedor/', 'bi-people', 10),
             # Diferencias de recepcion y mercaderia en transito. Los campos

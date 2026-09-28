@@ -69,15 +69,28 @@ METODOS_PAGO_TRANSBANK = {
 
 # Métodos de devolución que se imputan a un día de cuadratura (llevan
 # Dte_Detalle_Pago con fecha_pago). NO_AFECTA_CAJA queda fuera a propósito.
-METODOS_DG_CON_IMPUTACION = ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA', 'REBAJA_CREDITO')
+METODOS_DG_CON_IMPUTACION = ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA', 'REBAJA_CREDITO', 'MERCADO_PAGO')
 
 # Método de pago con el que se graba el Dte_Detalle_Pago de la NC. Es lo que
 # lee `_calcular_cuadratura_data` para saber de qué teórico descontar.
+# MERCADO_PAGO no está: copia el método MP_* del cobro original (ver
+# `_pago_nc_mercadopago`), porque de él depende el sub-bucket débito/crédito.
 METODO_PAGO_NC_POR_DG = {
     'EFECTIVO_CAJA': 'EFECTIVO',
     'TRANSFERENCIA_BANCARIA': 'TRANSFERENCIA',
     'REBAJA_CREDITO': 'CREDITO_EXTERNO',
 }
+
+# `Ticket.tipo_dte` del ticket que originó cada tipo de documento. El POS deja
+# en 'TICKET' el ticket de una boleta electrónica (visto en prod 28-09-2026:
+# ticket #12180 de PAO1 → BOL.E 413479), así que buscar solo por
+# BOLETA_ELECTRONICA no encontraba nunca la venta.
+TIPOS_TICKET_BOLETA = ['BOLETA_ELECTRONICA', 'BOLETA', 'TICKET']
+TIPOS_TICKET_FACTURA = ['FACTURA_ELECTRONICA', 'FACTURA_EXENTA']
+
+
+def _tipos_ticket_de(dte):
+    return TIPOS_TICKET_FACTURA if 'FACTURA' in (dte.tipo_documento or '').upper() else TIPOS_TICKET_BOLETA
 
 
 def condicion_pago_dte(dte):
@@ -132,9 +145,17 @@ def condicion_pago_dte(dte):
     }
 
 
-def metodo_devolucion_sugerido(dte):
-    """Método que la UI debe preseleccionar según cómo se vendió el documento."""
-    return 'REBAJA_CREDITO' if condicion_pago_dte(dte)['es_credito'] else 'TRANSFERENCIA_BANCARIA'
+def metodo_devolucion_sugerido(dte, mp=None):
+    """Método que la UI debe preseleccionar según cómo se vendió el documento:
+    a crédito → rebaja de crédito; cobrado con Mercado Pago (y con saldo por
+    devolver) → Mercado Pago, la plata vuelve por donde entró; si no,
+    transferencia."""
+    if condicion_pago_dte(dte)['es_credito']:
+        return 'REBAJA_CREDITO'
+    mp = mp if mp is not None else pago_mercadopago_dte(dte)
+    if mp['es_mp'] and mp['disponible'] > 0:
+        return 'MERCADO_PAGO'
+    return 'TRANSFERENCIA_BANCARIA'
 
 
 def pago_transbank_dte(dte):
@@ -174,15 +195,10 @@ def pago_transbank_dte(dte):
     if not metodos:
         return resultado
 
-    tipo_doc = (dte.tipo_documento or '').upper()
-    tipos_ticket = (
-        ['FACTURA_ELECTRONICA', 'FACTURA_EXENTA'] if 'FACTURA' in tipo_doc
-        else ['BOLETA_ELECTRONICA', 'BOLETA']
-    )
     ticket_ids = list(Ticket.objects.filter(
         sucursal_id=dte.sucursal_id,
         folio_dte=dte.numero_documento,
-        tipo_dte__in=tipos_ticket,
+        tipo_dte__in=_tipos_ticket_de(dte),
     ).values_list('id', flat=True))
     if not ticket_ids:
         return resultado
@@ -244,6 +260,311 @@ def _validar_metodo_vs_condicion_pago(dte, metodo_devolucion):
             f'{cond["estado_pago"].lower()}: no corresponde devolver efectivo de caja '
             f'(dejaría el arqueo del día con un faltante que nunca existió). '
             f'Use "Rebaja crédito del cliente" para descontar la cuenta por cobrar.'
+        )
+
+
+def validar_transbank_directa(dte):
+    """
+    La devolución DIRECTA no procede si el cobro con tarjeta tiene una
+    anulación PARCIAL por la máquina Transbank (la completa ya la bloquea
+    `_validar_cobro_transbank_no_anulado`). Esa anulación no rebaja el saldo de
+    NC del documento, así que devolver el total pagaría dos veces la parte ya
+    reversada a la tarjeta. En el flujo con aprobación el aprobador ve el monto
+    anulado en el preview; en la directa nadie lo revisa.
+    """
+    tbk = pago_transbank_dte(dte)
+    if tbk['monto_anulado_pos'] and not tbk['anulado_completo']:
+        raise DevolucionGarantiaError(
+            f'Esta venta ya tiene una anulación PARCIAL por la máquina Transbank '
+            f'(${int(tbk["monto_anulado_pos"]):,} de ${int(tbk["monto_tarjeta"]):,} cobrados '
+            f'con tarjeta). Envíe la devolución a aprobación para que el administrador '
+            f'descuente lo ya reversado.'
+        )
+
+
+# === COBRO CON MERCADO PAGO (Point / QR) ===
+# Una venta cobrada con Mercado Pago se devuelve desde Mercado Pago (app,
+# panel o la misma Point): la plata vuelve a la tarjeta/cuenta del cliente y
+# nunca sale de la caja. Registrarla como transferencia o efectivo descuadra
+# dos medios a la vez (caso PAO1 28-09-2026: NC 5155 como transferencia).
+
+# Etiqueta del medio cuando el pago no trae `tipo_tarjeta` (payment_type_id).
+_MEDIO_POR_METODO_MP = {'MP_POINT_DEBITO': 'DEBITO', 'MP_POINT_CREDITO': 'CREDITO'}
+
+
+def _es_metodo_mp(metodo):
+    """Mismo criterio que la cuadratura: todo método MP_* es Mercado Pago presencial."""
+    return (metodo or '').upper().startswith('MP_')
+
+
+def _medio_mp(metodo, tipo_tarjeta):
+    from app.services.mercadopago_service import etiqueta_medio_mp
+    if (tipo_tarjeta or '').strip():
+        return etiqueta_medio_mp(tipo_tarjeta)
+    return _MEDIO_POR_METODO_MP.get((metodo or '').upper(), 'MERCADO PAGO')
+
+
+def _transacciones_mp_venta(dte, pagos_mp):
+    """Cobros MP (`TransaccionMercadoPago` VENTA) de la venta original.
+
+    Primero por el voucher del pago del documento, que es el id del cobro (el
+    ULID de la Orders API, o el N° de MP si ya se completó): calza exacto
+    aunque no se encuentre el ticket. Además, por el ticket de ese folio en la
+    sucursal.
+    """
+    from app.models import Ticket, TransaccionMercadoPago
+
+    vouchers = {str(p.voucher).strip() for p in pagos_mp if (p.voucher or '').strip()}
+    filtro = Q()
+    if vouchers:
+        filtro |= Q(payment_id__in=vouchers) | Q(payment_id_mp__in=vouchers)
+    ticket_ids = list(Ticket.objects.filter(
+        sucursal_id=dte.sucursal_id, folio_dte=dte.numero_documento,
+        tipo_dte__in=_tipos_ticket_de(dte),
+    ).values_list('id', flat=True))
+    if ticket_ids:
+        filtro |= Q(ticket_id__in=ticket_ids)
+    if not filtro:
+        return []
+    return list(
+        TransaccionMercadoPago.objects.filter(filtro)
+        .filter(sucursal_id=dte.sucursal_id, tipo='VENTA', estado__in=('APROBADA', 'DEVUELTA'))
+        .select_related('config').distinct().order_by('-monto', 'id')
+    )
+
+
+def _monto_nc_mp_previas(dte):
+    """Lo ya devuelto por Mercado Pago con NC de devolución sobre este documento."""
+    return int(Dte_Detalle_Pago.objects.filter(
+        dte__documento_afectado=dte,
+        dte__tipo_documento='NOTA DE CREDITO',
+        dte__tipo_transaccion='DEVOLUCION',
+        dte__estado_dte__in=['EMITIDO', 'ACEPTADO'],
+        dte__descartado=False,
+        metodo_pago__startswith='MP_',
+    ).aggregate(total=Sum('monto'))['total'] or 0)
+
+
+def pago_mercadopago_dte(dte, consultar_api=False):
+    """
+    ¿El documento se cobró (total o parcialmente) con Mercado Pago presencial,
+    y cuánto de eso se puede todavía devolver por Mercado Pago?
+
+    Trae además el N° de operación de cada cobro — el que muestran la app y el
+    panel de Mercado Pago y el voucher de la Point — para que quien devuelve
+    encuentre el cobro y el número quede anotado en la NC. El sistema guarda
+    el id de la Orders API (`PAY01…`), que MP no reconoce en su panel; el
+    número real vive en `TransaccionMercadoPago.payment_id_mp`, que casi nunca
+    quedó lleno. Con `consultar_api` se completa preguntándole a MP (una
+    consulta por cobro, solo si falta).
+    """
+    from app.services.mercadopago_service import completar_numero_operacion
+
+    resultado = {
+        'es_mp': False, 'monto_mp': 0, 'metodo_pago': '', 'tipo_tarjeta': '', 'medio': '',
+        'operaciones': [], 'numero_operacion': '', 'monto_devuelto': 0, 'disponible': 0,
+    }
+    pagos_mp = [p for p in dte.dte_asociado.all() if _es_metodo_mp(p.metodo_pago)]
+    if not pagos_mp:
+        return resultado
+
+    principal = max(pagos_mp, key=lambda p: int(p.monto or 0))
+    monto_mp = sum(int(p.monto or 0) for p in pagos_mp)
+    devuelto = _monto_nc_mp_previas(dte)
+
+    operaciones = []
+    for trx in _transacciones_mp_venta(dte, pagos_mp):
+        numero = trx.payment_id_mp or (completar_numero_operacion(trx) if consultar_api else '')
+        operaciones.append({
+            'numero': numero or '',
+            'monto': int(trx.monto or 0),
+            'medio': _medio_mp('', trx.metodo_pago_mp),
+            'ultimos_4': trx.ultimos_4_digitos or '',
+            'fecha': timezone.localtime(trx.creado_en).strftime('%d/%m/%Y %H:%M') if trx.creado_en else '',
+            'estado': trx.estado,
+        })
+    if not operaciones:
+        # Cobro «MP manual» (sin transacción): el cajero digitó el N° en el
+        # voucher. Un voucher `PAY01…` es el id de Orders y no sirve para buscar.
+        for p in pagos_mp:
+            voucher = (p.voucher or '').strip()
+            if voucher and not voucher.upper().startswith('PAY'):
+                operaciones.append({
+                    'numero': voucher, 'monto': int(p.monto or 0),
+                    'medio': _medio_mp(p.metodo_pago, p.tipo_tarjeta),
+                    'ultimos_4': '', 'fecha': '', 'estado': '',
+                })
+
+    resultado.update({
+        'es_mp': True,
+        'monto_mp': monto_mp,
+        'metodo_pago': (principal.metodo_pago or '').upper(),
+        'tipo_tarjeta': principal.tipo_tarjeta or '',
+        'medio': _medio_mp(principal.metodo_pago, principal.tipo_tarjeta),
+        'operaciones': operaciones,
+        'numero_operacion': next((o['numero'] for o in operaciones if o['numero']), ''),
+        'monto_devuelto': devuelto,
+        'disponible': max(monto_mp - devuelto, 0),
+    })
+    return resultado
+
+
+def _validar_devolucion_mercadopago(dte, monto, mp=None):
+    """La devolución por Mercado Pago existe solo si la venta se cobró por ahí,
+    y no puede superar lo cobrado con MP menos lo ya devuelto con NC por esa
+    vía: el resto del documento se pagó con otro medio."""
+    mp = mp if mp is not None else pago_mercadopago_dte(dte)
+    if not mp['es_mp']:
+        raise DevolucionGarantiaError(
+            f'El documento #{dte.numero_documento} no se cobró con Mercado Pago: no hay '
+            f'cobro que devolver por esa vía. Use efectivo o transferencia.'
+        )
+    if int(monto) > mp['disponible']:
+        ya = (f' y ya se devolvieron ${mp["monto_devuelto"]:,} por esa vía'
+              if mp['monto_devuelto'] else '')
+        raise DevolucionGarantiaError(
+            f'Con Mercado Pago se cobraron ${mp["monto_mp"]:,} de este documento{ya}: '
+            f'por Mercado Pago se pueden devolver hasta ${mp["disponible"]:,} y la '
+            f'devolución es de ${int(monto):,}. El resto va por el medio con que se pagó.'
+        )
+    return mp
+
+
+def _numero_operacion_mp(numero, mp):
+    """N° de operación MP de la devolución: el que se indicó o el del cobro."""
+    numero = ''.join(str(numero or '').split())[:50] or mp['numero_operacion']
+    if not numero:
+        raise DevolucionGarantiaError(
+            'Indique el N° de operación de Mercado Pago (aparece en la app o el panel de '
+            'Mercado Pago y en el voucher de la Point): queda en la NC para ubicar la devolución.'
+        )
+    return numero
+
+
+def _datos_pago_nc_mercadopago(mp, numero_operacion, devolucion):
+    """Campos del Dte_Detalle_Pago de una NC devuelta por Mercado Pago.
+
+    Copia el MÉTODO y el medio (`tipo_tarjeta`) del cobro original: la
+    cuadratura resta la NC del bucket MP POS y, dentro, del sub-bucket
+    débito/crédito/otros con el mismo criterio con que sumó el cobro. El N° de
+    operación va al voucher: es lo que muestra y busca Consulta de Documentos.
+    """
+    return {
+        'metodo_pago': mp['metodo_pago'] or 'MP_POINT',
+        'tipo_tarjeta': mp['tipo_tarjeta'] or None,
+        'voucher': numero_operacion[:50],
+        'notas': f'Devuelto por Mercado Pago (app/panel/Point) - {devolucion.numero_operacion}',
+    }
+
+
+def _registrar_devolucion_en_libro_mp(*, dte, nc, monto, devolucion, usuario):
+    """Anota la devolución en el libro de cobros MP (`TransaccionMercadoPago`),
+    repartida sobre los cobros de la venta con saldo, el mayor primero. Si la
+    venta no tiene cobro registrado (MP manual antiguo) no hay nada que anotar.
+    """
+    from app.services import mercadopago_service as mp_service
+
+    pagos_mp = [p for p in dte.dte_asociado.all() if _es_metodo_mp(p.metodo_pago)]
+    restante = int(monto)
+    for trx in _transacciones_mp_venta(dte, pagos_mp):
+        if restante <= 0:
+            break
+        disponible = mp_service._disponible_trx(trx)
+        if disponible <= 0:
+            continue
+        tomar = min(restante, disponible)
+        mp_service.registrar_devolucion_externa(
+            trx, tomar,
+            referencia=f'{trx.external_reference}-NC{nc.id}',
+            detalle=f'Devuelto en MP - NC {nc.numero_documento} ({devolucion.numero_operacion})',
+            usuario=usuario,
+        )
+        restante -= tomar
+
+
+def mercadopago_de_devolucion(devolucion):
+    """Datos de Mercado Pago que muestran el comprobante y el detalle.
+
+    Aprobada por MP: el N° y el medio del pago de la NC (lo que quedó
+    registrado). Pendiente pedida por MP: el N° del cobro original, para que
+    quien la resuelva lo ubique. En otro caso, None.
+    """
+    if devolucion.metodo_devolucion == 'MERCADO_PAGO' and devolucion.nota_credito_id:
+        pago = next((p for p in devolucion.nota_credito.dte_asociado.all()
+                     if _es_metodo_mp(p.metodo_pago)), None)
+        if pago is not None:
+            return {'numero_operacion': pago.voucher or '',
+                    'medio': _medio_mp(pago.metodo_pago, pago.tipo_tarjeta),
+                    'devuelto': True}
+    if devolucion.estado == 'PENDIENTE' and devolucion.metodo_solicitado == 'MERCADO_PAGO':
+        mp = pago_mercadopago_dte(devolucion.dte_original)
+        return {'numero_operacion': mp['numero_operacion'], 'medio': mp['medio'], 'devuelto': False}
+    return None
+
+
+def _revertir_devolucion_en_libro_mp(nc):
+    """Deshace lo que `_registrar_devolucion_en_libro_mp` anotó para esta NC
+    (solo sus propias filas) y devuelve la venta a APROBADA si ya no queda
+    devuelta entera."""
+    from app.models import TransaccionMercadoPago
+
+    filas = list(TransaccionMercadoPago.objects.filter(
+        tipo='DEVOLUCION', external_reference__endswith=f'-NC{nc.id}',
+    ).select_related('transaccion_origen'))
+    for fila in filas:
+        venta = fila.transaccion_origen
+        fila.delete()
+        if venta is None or venta.estado != 'DEVUELTA':
+            continue
+        resto = sum(TransaccionMercadoPago.objects.filter(
+            transaccion_origen=venta, tipo='DEVOLUCION').values_list('monto', flat=True))
+        if resto < venta.monto:
+            TransaccionMercadoPago.objects.filter(pk=venta.pk).update(
+                estado='APROBADA', actualizado_en=timezone.now(),
+                estado_detalle=f'Devolución de la NC {nc.numero_documento} revertida'[:120],
+            )
+
+
+def validar_efectivo_directo(dte, sucursal, fecha=None):
+    """
+    Guardas extra del EFECTIVO en la devolución DIRECTA (firmada en el momento
+    con el código de un Administrador/Maestro).
+
+    En el flujo con aprobación el aprobador ve el preview de caja y elige la
+    fecha; en la directa no hay preview ni fecha (es hoy) y el cajero entrega
+    la plata al instante. Por eso acá se bloquea lo que allá solo se advierte:
+
+    - Venta a crédito (cualquier motivo de `condicion_pago_dte`) o con ALGUNA
+      parte pagada con un medio de crédito (boleta mixta efectivo + crédito
+      trabajador, que `es_credito` no marca): el cliente no puso esa plata en
+      la caja y la cuenta por cobrar seguiría viva.
+    - Arqueo de hoy ya cerrado: el efectivo sale de un cajón ya contado y
+      el arqueo guardado quedaría descuadrado.
+    """
+    from app.models import ArqueoCaja
+
+    cond = condicion_pago_dte(dte)
+    if cond['es_credito']:
+        raise DevolucionGarantiaError(
+            f'El documento #{dte.numero_documento} se vendió a crédito '
+            f'({"; ".join(cond["motivos"])}): no corresponde entregar efectivo de la '
+            f'caja. Use "Rebaja de crédito".'
+        )
+    if cond['monto_credito'] > 0:
+        raise DevolucionGarantiaError(
+            f'El documento #{dte.numero_documento} se pagó en parte a crédito '
+            f'(${int(cond["monto_credito"]):,} con {", ".join(cond["metodos_pago"])}): '
+            f'no corresponde entregar en efectivo lo que el cliente no pagó en la caja. '
+            f'Envíe la devolución a aprobación.'
+        )
+
+    fecha = fecha or timezone.localdate()
+    arqueo = ArqueoCaja.objects.filter(sucursal=sucursal, fecha_arqueo=fecha).first()
+    if arqueo and arqueo.estado != 'ABIERTO':
+        raise DevolucionGarantiaError(
+            f"La caja de hoy en {sucursal.alias} ya está '{arqueo.get_estado_display()}': "
+            f"entregar efectivo ahora descuadraría el arqueo. Devuelva por transferencia "
+            f"o envíe la devolución a aprobación (el administrador elige la fecha)."
         )
 
 
@@ -704,6 +1025,11 @@ def crear_solicitud_devolucion(*, dte_original, sucursal, receptor, motivo,
             f'de NC sobre este documento (${saldo["monto_restante"]:,}).'
         )
 
+    # Pedir la devolución por Mercado Pago solo tiene sentido si la venta se
+    # cobró por ahí (y por hasta lo cobrado): se avisa ya, no al aprobar.
+    if metodo_solicitado == 'MERCADO_PAGO':
+        _validar_devolucion_mercadopago(dte_original, monto_total)
+
     # === Número de operación ===
     # select_for_update() sobre el rango del prefijo: dos solicitudes
     # concurrentes de la misma sucursal/mes se serializan aquí para no calcular
@@ -781,12 +1107,16 @@ def crear_solicitud_devolucion(*, dte_original, sucursal, receptor, motivo,
 
 @transaction.atomic
 def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
-                       fecha_imputacion=None, observaciones=''):
+                       fecha_imputacion=None, observaciones='', numero_operacion_mp=''):
     """
     Aprueba una solicitud PENDIENTE: genera la NC 61 + TXT Acepta con el
     impacto en caja elegido por el aprobador. Re-valida disponibilidad bajo
     lock; si cambió, lanza DevolucionGarantiaError y la solicitud queda
     PENDIENTE (el aprobador decide rechazar o esperar).
+
+    `numero_operacion_mp`: solo para MERCADO_PAGO — N° de operación de Mercado
+    Pago de la devolución; si viene vacío se usa el del cobro original y, si el
+    sistema no lo conoce, se exige.
 
     Devuelve (devolucion, nc, contenido_txt_o_None, txt_warnings).
     """
@@ -871,6 +1201,13 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
             f'sobre este documento (${saldo["monto_restante"]:,}).'
         )
 
+    # Mercado Pago: la venta tiene que haberse cobrado por ahí (y por hasta lo
+    # cobrado), y el N° de operación queda en la NC para ubicar la devolución.
+    mp = numero_mp = None
+    if metodo_devolucion == 'MERCADO_PAGO':
+        mp = _validar_devolucion_mercadopago(dte_original, monto_con_iva_nc)
+        numero_mp = _numero_operacion_mp(numero_operacion_mp, mp)
+
     # Razón SII dinámica: '1' solo si la NC cubre el saldo REAL del documento
     # (monto_original - NC previas vivas) y no hay NC previas; si no '3'.
     # OJO: no comparar contra monto_restante, que además descuenta reservas de
@@ -897,7 +1234,7 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
     }])
 
     motivo_nc = (
-        f"Devolución por Garantía {devolucion.numero_operacion}. "
+        f"Devolución de dinero {devolucion.numero_operacion}. "
         f"Motivo: {devolucion.motivo or 'Garantía aprobada'}"
     )
     if lineas_monto and razon == '3':
@@ -986,9 +1323,19 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
     #   EFECTIVO       -> total_efectivo
     #   TRANSFERENCIA  -> total_transferencia
     #   CREDITO_EXTERNO-> total_credito_externo (rebaja de cuenta por cobrar)
+    #   MP_*           -> total_mercadopago_pos (mismo método del cobro)
     # NO_AFECTA_CAJA: sin Dte_Detalle_Pago (NC informativa que no resta teóricos).
     metodo_pago_nc = METODO_PAGO_NC_POR_DG.get(metodo_devolucion)
-    if metodo_pago_nc:
+    if metodo_devolucion == 'MERCADO_PAGO':
+        Dte_Detalle_Pago.objects.create(
+            dte=nc, monto=monto_con_iva_nc, fecha_pago=fecha_imp,
+            **_datos_pago_nc_mercadopago(mp, numero_mp, devolucion),
+        )
+        _registrar_devolucion_en_libro_mp(
+            dte=dte_original, nc=nc, monto=monto_con_iva_nc,
+            devolucion=devolucion, usuario=aprobador,
+        )
+    elif metodo_pago_nc:
         Dte_Detalle_Pago.objects.create(
             dte=nc, metodo_pago=metodo_pago_nc, monto=monto_con_iva_nc, fecha_pago=fecha_imp,
         )
@@ -1076,6 +1423,124 @@ def anular_solicitud(*, devolucion_id, usuario):
     return devolucion
 
 
+# Métodos entre los que se puede corregir una devolución ya aprobada: los que
+# sacan plata de un medio (llevan un único pago en la NC). REBAJA_CREDITO y
+# NO_AFECTA_CAJA cambian la naturaleza de la NC, no solo el medio.
+METODOS_CORREGIBLES = ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA', 'MERCADO_PAGO')
+
+
+@transaction.atomic
+def cambiar_metodo_devolucion(*, devolucion_id, usuario, metodo_nuevo,
+                              numero_operacion_mp='', motivo=''):
+    """
+    Corrige el medio por el que se DEVOLVIÓ la plata de una devolución ya
+    aprobada, cuando se registró uno y se pagó por otro (PAO1 28-09-2026:
+    aprobada como transferencia, devuelta por Mercado Pago). Con el mismo
+    método MERCADO_PAGO sirve para corregir solo el N° de operación.
+
+    No toca la NC tributaria (folio, montos, líneas, TXT: el medio de pago no
+    va al SII). Cambia el pago de la NC — que es lo que lee la cuadratura para
+    saber de qué medio restar —, el método guardado en la devolución, y deja la
+    corrección anotada en las observaciones. Conserva la fecha de imputación.
+    Si el arqueo de ese día ya se cerró, sus teóricos quedan desactualizados:
+    hay que recalcularlos (el comando `corregir_metodo_devolucion_dg` lo hace
+    con --recalcular-arqueo).
+
+    Devuelve un dict con el antes/después para informar.
+    """
+    devolucion = DevolucionGarantia.objects.select_for_update().select_related(
+        'dte_original', 'nota_credito', 'sucursal',
+    ).get(id=devolucion_id)
+    if devolucion.estado != 'NC_GENERADA' or not devolucion.nota_credito_id:
+        raise DevolucionGarantiaError(
+            'Solo se corrige el método de una devolución aprobada (con NC emitida).'
+        )
+    metodo_nuevo = str(metodo_nuevo or '').strip().upper()
+    if metodo_nuevo not in METODOS_CORREGIBLES:
+        raise DevolucionGarantiaError(
+            'El método nuevo debe ser Efectivo, Transferencia o Mercado Pago.'
+        )
+    anterior = devolucion.metodo_devolucion
+    if anterior not in METODOS_CORREGIBLES:
+        raise DevolucionGarantiaError(
+            f'La devolución quedó como «{devolucion.get_metodo_devolucion_display() or "sin método"}»: '
+            f'solo se corrige entre efectivo, transferencia y Mercado Pago.'
+        )
+    solo_numero = anterior == metodo_nuevo == 'MERCADO_PAGO'
+    if anterior == metodo_nuevo and not solo_numero:
+        raise DevolucionGarantiaError('La devolución ya está registrada con ese método.')
+
+    nc = devolucion.nota_credito
+    pagos = list(Dte_Detalle_Pago.objects.select_for_update().filter(dte=nc))
+    if len(pagos) != 1:
+        raise DevolucionGarantiaError(
+            f'La NC #{nc.numero_documento} tiene {len(pagos)} pagos registrados y se esperaba 1: '
+            f'corríjala a mano en Consulta de Documentos.'
+        )
+    pago = pagos[0]
+    monto = int(pago.monto or 0)
+    dte = devolucion.dte_original
+    antes = {'metodo_pago': pago.metodo_pago, 'tipo_tarjeta': pago.tipo_tarjeta or '',
+             'voucher': pago.voucher or ''}
+
+    if metodo_nuevo == 'MERCADO_PAGO':
+        mp = pago_mercadopago_dte(dte)
+        if not solo_numero:
+            _validar_devolucion_mercadopago(dte, monto, mp)
+        numero = _numero_operacion_mp(numero_operacion_mp, mp)
+        for campo, valor in _datos_pago_nc_mercadopago(mp, numero, devolucion).items():
+            setattr(pago, campo, valor)
+    else:
+        if metodo_nuevo == 'EFECTIVO_CAJA':
+            _validar_metodo_vs_condicion_pago(dte, 'EFECTIVO_CAJA')
+        numero = ''
+        pago.metodo_pago = METODO_PAGO_NC_POR_DG[metodo_nuevo]
+        pago.tipo_tarjeta = None
+        pago.voucher = None
+        pago.notas = None
+    pago.save(update_fields=['metodo_pago', 'tipo_tarjeta', 'voucher', 'notas'])
+
+    # Libro de cobros MP: la devolución entra o sale según el método.
+    if anterior == 'MERCADO_PAGO' and metodo_nuevo != 'MERCADO_PAGO':
+        _revertir_devolucion_en_libro_mp(nc)
+    elif metodo_nuevo == 'MERCADO_PAGO' and not solo_numero:
+        _registrar_devolucion_en_libro_mp(
+            dte=dte, nc=nc, monto=monto, devolucion=devolucion, usuario=usuario,
+        )
+
+    etiquetas = dict(METODO_DEVOLUCION_DG_CHOICES)
+    marca = (
+        f"[CORREGIDO {timezone.localtime():%d-%m-%Y %H:%M} por {usuario.username}: "
+        f"{etiquetas.get(anterior, anterior)} -> {etiquetas[metodo_nuevo]}"
+        + (f", N° operación MP {numero}" if numero else '')
+        + (f". {motivo.strip()}" if (motivo or '').strip() else '')
+        + ']'
+    )
+    devolucion.observaciones_aprobacion = f'{devolucion.observaciones_aprobacion or ""} {marca}'.strip()
+    devolucion.metodo_devolucion = metodo_nuevo
+    # Lo que "pidió el cliente" también: el comprobante y el detalle lo muestran.
+    devolucion.metodo_solicitado = metodo_nuevo
+    devolucion.save(update_fields=[
+        'observaciones_aprobacion', 'metodo_devolucion', 'metodo_solicitado', 'updated_at',
+    ])
+    logger.warning(
+        "Devolución %s (NC #%s): método corregido %s -> %s por %s",
+        devolucion.numero_operacion, nc.numero_documento, anterior, metodo_nuevo, usuario.username,
+    )
+    return {
+        'devolucion': devolucion,
+        'nc': nc,
+        'monto': monto,
+        'anterior': anterior,
+        'nuevo': metodo_nuevo,
+        'numero_operacion_mp': numero,
+        'pago_antes': antes,
+        'pago_despues': {'metodo_pago': pago.metodo_pago, 'tipo_tarjeta': pago.tipo_tarjeta or '',
+                         'voucher': pago.voucher or ''},
+        'fecha_imputacion': devolucion.fecha_imputacion_caja or pago.fecha_pago or nc.fecha_emision,
+    }
+
+
 def impacto_caja_preview(*, devolucion, metodo, fecha_imputacion=None):
     """
     Previsualiza (sin efectos) cómo impactará la NC en la cuadratura de caja
@@ -1144,6 +1609,24 @@ def impacto_caja_preview(*, devolucion, metodo, fecha_imputacion=None):
             f'no esta NC. Apruebe solo si se trata de una garantía.'
         )
 
+    # === COBRO CON MERCADO PAGO ===
+    # Solo se devuelve por MP lo que se cobró por MP (menos lo ya devuelto).
+    mp = pago_mercadopago_dte(devolucion.dte_original)
+    if metodo == 'MERCADO_PAGO':
+        if not mp['es_mp']:
+            bloqueado = True
+            advertencias.append(
+                'BLOQUEADO: la venta original no se cobró con Mercado Pago: no hay cobro que '
+                'devolver por esa vía. Use efectivo o transferencia.'
+            )
+        elif monto > mp['disponible']:
+            bloqueado = True
+            advertencias.append(
+                f'BLOQUEADO: con Mercado Pago se cobraron ${mp["monto_mp"]:,}'
+                + (f' y ya se devolvieron ${mp["monto_devuelto"]:,}' if mp['monto_devuelto'] else '')
+                + f': por esa vía se pueden devolver hasta ${mp["disponible"]:,}.'
+            )
+
     if afecta:
         fecha = fecha_imputacion or timezone.localdate()
         fecha_str = fecha.strftime('%Y-%m-%d')
@@ -1177,6 +1660,16 @@ def impacto_caja_preview(*, devolucion, metodo, fecha_imputacion=None):
                 f"Esta NC restará ${monto:,} de la transferencia teórica de "
                 f"{sucursal.alias} el {fecha_str}."
             )
+        elif metodo == 'MERCADO_PAGO':
+            numero = mp['numero_operacion']
+            descripcion = (
+                f"Esta NC restará ${monto:,} de Mercado Pago POS"
+                + (f" ({mp['medio']})" if mp['medio'] else '')
+                + f" de {sucursal.alias} el {fecha_str}; no toca el efectivo ni las "
+                f"transferencias. La plata se devuelve desde la app o el panel de Mercado "
+                f"Pago" + (f" (cobro N° {numero})" if numero else '')
+                + ": este sistema solo la registra."
+            )
         else:  # REBAJA_CREDITO
             descripcion = (
                 f"Esta NC rebajará ${monto:,} de la cuenta por cobrar del cliente. "
@@ -1209,7 +1702,8 @@ def impacto_caja_preview(*, devolucion, metodo, fecha_imputacion=None):
         'bloqueado': bloqueado,
         'condicion_pago': cond,
         'pago_transbank': tbk,
-        'metodo_sugerido': 'REBAJA_CREDITO' if cond['es_credito'] else 'TRANSFERENCIA_BANCARIA',
+        'pago_mercadopago': mp,
+        'metodo_sugerido': metodo_devolucion_sugerido(devolucion.dte_original, mp),
     }
 
 

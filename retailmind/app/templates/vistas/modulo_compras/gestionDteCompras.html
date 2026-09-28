@@ -1,4 +1,5 @@
 {% load static %}
+{% load permisos_tags %}
 <!-- /.modal -->
 {% include '../../layout/header.html' %}
 <!-- ========== App Menu ========== -->
@@ -1164,6 +1165,13 @@
                                     <i class="bi bi-receipt text-success me-2"></i>Importar DTEs
                                 </a>
                             </li>
+                            {% if request.user|puede_crear_en:'gestion_dte_compras' %}
+                            <li>
+                                <a class="dropdown-item" href="{% url 'ver_importar_xml_dte' %}">
+                                    <i class="bi bi-filetype-xml text-primary me-2"></i>Importar XML (SII)
+                                </a>
+                            </li>
+                            {% endif %}
                             <li><hr class="dropdown-divider"></li>
                             <li>
                                 <a class="dropdown-item" href="{% url 'descargar_formato_proveedores' %}">
@@ -1277,7 +1285,7 @@
                         </div>
                     </div>
                     <div class="col-xl-3 col-md-6 col-6">
-                        <div class="kpi-card kpi-card--al-dia card h-100" onclick="cargarDTEsSinFiltro()" title="Ver al día (+7 días)">
+                        <div class="kpi-card kpi-card--al-dia card h-100" onclick="filtrarPendientes()" title="Ver todos los pendientes (el listado aún no filtra solo los al día)">
                             <div class="card-body d-flex align-items-center gap-2">
                                 <div class="kpi-icon text-white">
                                     <i class="bi bi-check-circle-fill"></i>
@@ -1530,6 +1538,16 @@
                             </div>
                             <input type="hidden" id="estadoPago" value="Pendiente">
 
+                            <div class="col-12" id="divPorConcepto">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="porConcepto">
+                                    <label class="form-check-label" for="porConcepto">
+                                        Compra por concepto <small class="text-muted fw-normal">(gasto o servicio: sin productos ni stock)</small>
+                                    </label>
+                                </div>
+                                <div class="form-text">Déjalo sin marcar si la factura trae mercadería que se va a recepcionar.</div>
+                            </div>
+
                             <div class="col-12" id="avisoFolioDuplicado" style="display: none;"></div>
 
                             <div class="col-12" id="divMotivoRechazo" style="display: none;">
@@ -1550,14 +1568,6 @@
                                     <option value="">Sin documento base</option>
                                 </select>
                                 <div class="form-text">Cotización o guía que regulariza esta factura.</div>
-                            </div>
-
-                            <div class="col-12" id="divNotaCredito" style="display: none;">
-                                <label for="notaCreditoBase" class="form-label">Nota de Crédito a Corregir</label>
-                                <select id="notaCreditoBase" class="form-select select2">
-                                    <option value="">Selecciona una Nota de Crédito</option>
-                                </select>
-                                <div class="form-text">NC que deseas corregir con esta Nota de Débito.</div>
                             </div>
 
                             <div class="col-12" id="divAsociacionNC" style="display: none;">
@@ -1992,72 +2002,9 @@
         </div>
     </div>
 </div>
-<div class="modal fade rm-modal" id="modalNotasCredito" tabindex="-1" aria-labelledby="modalNotasCreditoLabel"
-    aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content rm-accent--red">
-            <form id="formNC">
-                <div class="rm-modal-header">
-                    <div class="d-flex align-items-center gap-3">
-                        <div class="rm-modal-icon rm-modal-icon--red">
-                            <i class="bi bi-file-earmark-minus"></i>
-                        </div>
-                        <div>
-                            <h5 class="rm-modal-title" id="modalNotasCreditoLabel">Notas de Crédito</h5>
-                            <p class="rm-modal-subtitle">Gestiona las NC asignadas</p>
-                        </div>
-                    </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-                </div>
-
-                <div class="rm-modal-body">
-                    <input type="hidden" id="ncDteId">
-
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-3">
-                            <label for="ncNumero" class="form-label">N° NC <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="ncNumero" placeholder="Ej: 450" required>
-                        </div>
-                        <div class="col-md-3">
-                            <label for="ncMonto" class="form-label">Monto <span class="text-danger">*</span></label>
-                            <div class="input-group">
-                                <span class="input-group-text">$</span>
-                                <input type="text" class="form-control input-money" id="ncMonto" inputmode="numeric" placeholder="0" required autocomplete="off">
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="ncMotivo" class="form-label">Motivo <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="ncMotivo" maxlength="100"
-                                placeholder="Motivo de la NC" required>
-                        </div>
-                        <div class="col-md-2 d-flex align-items-end">
-                            <button type="submit" class="btn btn-success w-100">
-                                <i class="bi bi-plus-lg me-1"></i>Agregar
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="table-responsive" style="border-radius: 10px; overflow: hidden; border: 1px solid #edf0f5;">
-                        <table class="table table-sm mb-0">
-                            <thead>
-                                <tr>
-                                    <th class="text-center py-3">N° NC</th>
-                                    <th class="monto py-3">Monto</th>
-                                    <th class="py-3">Motivo</th>
-                                    <th class="text-center py-3">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tablaNCBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="rm-modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+{# El modal #modalNotasCredito ("NC manual como pago", sin DTE detrás) se borró el #}
+{# 2026-09-26 (B16-09): nada lo abría desde nov-2025. Las NC se anexan con #}
+{# #modalAsociarNC (asociar_nc_existente). #}
 
 <!-- Modal Pago Masivo -->
 <div class="modal fade rm-modal" id="modalPagoMasivo" tabindex="-1" aria-labelledby="modalPagoMasivoLabel" aria-hidden="true">
@@ -2138,7 +2085,7 @@
                 </div>
                 <div class="rm-modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success">
+                    <button type="submit" class="btn btn-success" id="btnProcesarPagoMasivo">
                         <i class="bi bi-cash-stack me-1"></i>Procesar Pago Masivo
                     </button>
                 </div>
@@ -2623,6 +2570,11 @@
                                 <input type="number" min="1" step="1" id="emitidaManualMonto" class="form-control" placeholder="0">
                                 <div class="form-text">No puede exceder el saldo de la factura de compra.</div>
                             </div>
+                            <div class="col-md-6">
+                                <label for="emitidaManualTotal" class="form-label">Total de la factura emitida <small class="text-muted fw-normal">(opcional)</small></label>
+                                <input type="number" min="1" step="1" id="emitidaManualTotal" class="form-control" placeholder="0">
+                                <div class="form-text">Si lo indicas, no se deja aplicar más que ese total sumando todos sus usos.</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2900,6 +2852,67 @@
         Swal.fire('Sin permiso', `No tienes permiso para ${accion}. Pídeselo al Maestro.`, 'warning');
     }
 
+    // Escapa texto para insertarlo como HTML: nombres de proveedor, folios,
+    // motivos y búsquedas vienen de datos cargados por usuarios o por XML.
+    function escHtml(valor) {
+        return String(valor === null || valor === undefined ? '' : valor)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // Motivo de un rechazo del servidor para mostrarlo al usuario (como texto,
+    // no HTML). Las vistas responden 400/404/409 con {error: '...'}; el 403 del
+    // middleware de permisos trae error:true (booleano) y el texto en 'mensaje'.
+    // Antes esos rechazos se veían como «Error de conexión».
+    function mensajeErrorXhr(xhr, porDefecto) {
+        const res = xhr ? xhr.responseJSON : null;
+        if (res && typeof res.error === 'string' && res.error) return res.error;
+        if (res && typeof res.mensaje === 'string' && res.mensaje) return res.mensaje;
+        if (xhr && xhr.status === 0) return 'No hubo respuesta del servidor. Revisa la conexión y vuelve a intentarlo.';
+        return porDefecto;
+    }
+
+    // Swal.fire(titulo, X, icono) interpreta X como HTML: los mensajes que
+    // vienen del servidor (pueden citar folios o comprobantes escritos por el
+    // usuario) se muestran como texto.
+    function swalTexto(icono, titulo, mensaje) {
+        return Swal.fire({ icon: icono, title: titulo, text: mensaje });
+    }
+
+    // Fecha de HOY en hora local (YYYY-MM-DD). toISOString() entrega la fecha
+    // UTC: en Chile, desde las 20-21 h ya es «mañana» (B5-14).
+    function fechaLocalISO(d) {
+        d = d || new Date();
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    // estado_pago llega con varias grafías según quién lo escribió
+    // ('PAGADO'/'Pagado', 'PARCIAL'/'Parcial'/'Abonado', 'PENDIENTE'/'Pendiente'):
+    // compararlo SIEMPRE normalizado (B5-02 / B5-06).
+    function estadoPagoKey(valor) {
+        const k = (valor || '').toString().trim().toUpperCase();
+        return k === 'ABONADO' ? 'PARCIAL' : k;
+    }
+
+    // Saldo por pagar de una fila del listado. Manda el que calcula el servidor
+    // (dte.saldo = monto - TODOS los pagos, igual que procesar_pago_masivo);
+    // si la API aún no lo envía, monto - NC - compensaciones (B5-06).
+    function saldoFilaDte(dte) {
+        if (dte.saldo !== undefined && dte.saldo !== null && !isNaN(parseFloat(dte.saldo))) {
+            return parseFloat(dte.saldo);
+        }
+        return parseFloat(dte.monto_con_iva || 0) - parseFloat(dte.notas_credito || 0) - parseFloat(dte.compensaciones || 0);
+    }
+
+    // Incidencias que bloquean pagos: PENDIENTE + EN_GESTION (el servidor bloquea
+    // ambas). Si la API no trae incidencias_activas, solo las pendientes.
+    function incidenciasActivasDte(dte) {
+        if (dte.incidencias_activas !== undefined && dte.incidencias_activas !== null) {
+            return parseInt(dte.incidencias_activas, 10) || 0;
+        }
+        return parseInt(dte.incidencias_pendientes, 10) || 0;
+    }
+
     // Delegación global para botones de trazabilidad dentro de esta vista.
     $(document).on('click', '.btn-ver-trazabilidad', function () {
         const dteId = parseInt($(this).data('dte-id'), 10);
@@ -3036,6 +3049,11 @@
     let currentSearchDTE = '';
     let paginationInfoDTE = null;
 
+    // Inicio del universo de los KPI (fecha de EMISIÓN, 'desde' de la API). Los
+    // filtros rápidos de las tarjetas usan este mismo rango para que la lista
+    // cuente lo mismo que la tarjeta (B5-05). null hasta que responda la API.
+    let kpiDesdeISO = null;
+
     // Función para actualizar resumen de pendientes del año con KPIs de vencimiento
     function actualizarResumenPendientes() {
         $.ajax({
@@ -3060,7 +3078,16 @@
                     $('#montoAlDia').text('$' + response.monto_al_dia.toLocaleString('es-CL'));
                     
                     // Período
-                    $('#periodoActualBadge').text(`Año ${response.anio}`);
+                    // Los KPI cuentan los documentos EMITIDOS desde 'desde' (no
+                    // solo el año en curso); la lista puede estar filtrando por
+                    // fecha de recepción (B5-05).
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(response.desde || '')) {
+                        kpiDesdeISO = response.desde;
+                        const desdeTxt = kpiDesdeISO.split('-').reverse().join('-');
+                        $('#periodoActualBadge').text(`KPI desde ${desdeTxt} · por fecha de emisión`);
+                    } else {
+                        $('#periodoActualBadge').text(`KPI año ${response.anio} · por fecha de emisión`);
+                    }
                     
                     console.log('📊 KPIs de vencimiento:', response);
                 }
@@ -3088,7 +3115,7 @@
         const hoy = new Date();
         const primerDiaAnio = new Date(hoy.getFullYear(), 0, 1);
         const ultimoDiaAnio = new Date(hoy.getFullYear(), 11, 31);
-        const formato = date => date.toISOString().split('T')[0];
+        const formato = fechaLocalISO;  // fecha local, no UTC (B5-14)
 
         $('#fechaInicio').val(formato(primerDiaAnio));
         $('#fechaFin').val(formato(ultimoDiaAnio));
@@ -3100,67 +3127,55 @@
         cargarDTEs(1, '', '');
     }
 
-    function filtrarPendientes() {
+    // Rango de los filtros ligados a las tarjetas KPI: el MISMO universo que el
+    // KPI (emitidos desde kpiDesdeISO, por fecha de EMISIÓN). Antes era 01-01..31-12
+    // del año por fecha de recepción y la tarjeta «Vencidos» contaba facturas
+    // de 2025 que no aparecían al hacer clic (B5-05).
+    function aplicarRangoKpi() {
         const hoy = new Date();
-        const primerDiaAnio = new Date(hoy.getFullYear(), 0, 1);
-        const ultimoDiaAnio = new Date(hoy.getFullYear(), 11, 31);
-        const formato = date => date.toISOString().split('T')[0];
-        
-        $('#fechaInicio').val(formato(primerDiaAnio));
-        $('#fechaFin').val(formato(ultimoDiaAnio));
-        
+        const desde = kpiDesdeISO || fechaLocalISO(new Date(hoy.getFullYear(), 0, 1));
+        $('#fechaInicio').val(desde);
+        $('#fechaFin').val(fechaLocalISO(new Date(hoy.getFullYear(), 11, 31)));  // local, no UTC (B5-14)
+        $('#tipoFecha').val('emision');
+    }
+
+    // Tarjetas «Pendientes» y «Al Día». cargarDteCompra aún no tiene la rama
+    // filtro_vencimiento='al_dia' (pendiente en el servidor): mientras tanto
+    // «Al Día» abre todos los pendientes con su chip real, en vez de un chip
+    // «Al Día» sobre facturas vencidas.
+    function filtrarPendientes() {
+        aplicarRangoKpi();
         setActiveQuickFilter('qfPendientes');
         currentPageDTE = 1;
         currentSearchDTE = '';
         cargarDTEs(1, '', 'pendientes');
     }
-    
+
     function filtrarVencidos() {
-        const hoy = new Date();
-        const primerDiaAnio = new Date(hoy.getFullYear(), 0, 1);
-        const ultimoDiaAnio = new Date(hoy.getFullYear(), 11, 31);
-        const formato = date => date.toISOString().split('T')[0];
-        
-        $('#fechaInicio').val(formato(primerDiaAnio));
-        $('#fechaFin').val(formato(ultimoDiaAnio));
-        
+        aplicarRangoKpi();
         setActiveQuickFilter('qfVencidos');
         currentPageDTE = 1;
         currentSearchDTE = '';
         cargarDTEs(1, '', 'vencidos');
     }
-    
+
     function filtrarPorVencer() {
-        const hoy = new Date();
-        const primerDiaAnio = new Date(hoy.getFullYear(), 0, 1);
-        const ultimoDiaAnio = new Date(hoy.getFullYear(), 11, 31);
-        const formato = date => date.toISOString().split('T')[0];
-        
-        $('#fechaInicio').val(formato(primerDiaAnio));
-        $('#fechaFin').val(formato(ultimoDiaAnio));
-        
+        aplicarRangoKpi();
         setActiveQuickFilter('qfPorVencer');
         currentPageDTE = 1;
         currentSearchDTE = '';
         cargarDTEs(1, '', 'por_vencer');
     }
 
-    function cargarDTEsSinFiltro() {
-        currentPageDTE = 1;
-        currentSearchDTE = '';
-        filtroVencimientoActual = '';
-        setActiveQuickFilter(null);
-        cargarDTEs(1, '', '');
-    }
-
     function limpiarFiltrosRapidos() {
         const hoy = new Date();
         const dosMesesAtras = new Date(hoy.getFullYear(), hoy.getMonth() - 2, hoy.getDate());
-        const formato = date => date.toISOString().split('T')[0];
+        const formato = fechaLocalISO;  // fecha local, no UTC (B5-14)
         
         $('#fechaInicio').val(formato(dosMesesAtras));
         $('#fechaFin').val(formato(hoy));
-        
+        $('#tipoFecha').val('recepcion');  // vista inicial (los filtros KPI pasan a emisión)
+
         setActiveQuickFilter(null);
         currentPageDTE = 1;
         currentSearchDTE = '';
@@ -3174,7 +3189,7 @@
         // Establecer fecha_fin como hoy
         // Establecer fecha_inicio como 2 meses atrás
         const dosMesesAtras = new Date(hoy.getFullYear(), hoy.getMonth() - 2, hoy.getDate());
-        const formato = date => date.toISOString().split('T')[0];
+        const formato = fechaLocalISO;  // fecha local, no UTC (B5-14)
 
         $('#fechaInicio').val(formato(dosMesesAtras));  // Desde 2 meses atrás
         $('#fechaFin').val(formato(hoy));
@@ -3188,12 +3203,46 @@
             return;
         }
 
+        // ?buscar=… (enlaces desde el reporte de compras u otras pantallas):
+        // arranca con esa búsqueda y un rango amplio por fecha de emisión.
+        const buscarInicial = aplicarBusquedaDesdeUrl();
+
         // Cargar DTEs de los últimos 2 meses al iniciar con timeout
         setTimeout(function () {
             filtroVencimientoActual = '';
-            cargarDTEs(1, '', '');
+            cargarDTEs(1, buscarInicial, '');
         }, 1000); // Aumentar delay para asegurar que todo esté listo
+
+        // ?nuevo=1&folio=…: alta precargada desde la carga de factura por PDF.
+        abrirNuevoDteDesdeUrl();
     });
+
+    // Lee ?buscar= (folio, RUT o proveedor) y, opcionales, ?desde= / ?hasta=
+    // (YYYY-MM-DD) y ?tipo_fecha=emision|recepcion. Sin ?desde el rango parte el
+    // 1 de enero del año anterior por fecha de EMISIÓN: el enlace suele venir de
+    // una factura pendiente que no está en los «últimos 2 meses» por recepción.
+    // Devuelve la búsqueda ('' si no hay) y deja los filtros listos.
+    function aplicarBusquedaDesdeUrl() {
+        let params;
+        try { params = new URLSearchParams(window.location.search); } catch (err) { return ''; }
+        const buscar = (params.get('buscar') || '').trim().slice(0, 100);
+        if (!buscar) return '';
+
+        const esFecha = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
+        const hoy = new Date();
+        const desde = esFecha(params.get('desde'))
+            ? params.get('desde')
+            : fechaLocalISO(new Date(hoy.getFullYear() - 1, 0, 1));
+        const hasta = esFecha(params.get('hasta')) ? params.get('hasta') : fechaLocalISO(hoy);
+        const tipoFecha = params.get('tipo_fecha') === 'recepcion' ? 'recepcion' : 'emision';
+
+        $('#fechaInicio').val(desde);
+        $('#fechaFin').val(hasta);
+        $('#tipoFecha').val(tipoFecha);
+        $('#searchDTE').val(buscar);
+        currentSearchDTE = buscar;
+        return buscar;
+    }
 
     // Al buscar con el formulario
     $('#formBuscarDTE').on('submit', function (e) {
@@ -3237,12 +3286,20 @@
     });
 
     // Event listener para filtro de tipo de documento
+    // B5-12: el cambio de tipo CONSERVA el filtro rápido activo (vencidos,
+    // incidencias…) y su chip/«Quitar Filtro». Antes se ocultaba el chip pero la
+    // lista seguía filtrada por vencimiento sin ningún indicador visible.
     $('#filtroTipoDocumento').on('change', function () {
         const search = $('#searchDTE').val().trim();
         currentSearchDTE = search;
         currentPageDTE = 1;
-        setActiveQuickFilter(null);
-        cargarDTEs(1, search);
+        cargarDTEs(1, search, filtroVencimientoActual);
+    });
+
+    // B5-12: «Ver descartados» no tenía listener; solo se leía en la próxima búsqueda.
+    $('#toggleDescartados').on('change', function () {
+        currentPageDTE = 1;
+        cargarDTEs(1, currentSearchDTE, filtroVencimientoActual);
     });
 
     // Promesas de carga de selects (usadas por editarDTE para esperar)
@@ -3254,7 +3311,7 @@
         const isEditing = modal.data('dte-id') !== undefined && modal.data('dte-id') !== null;
         
         if (!isEditing) {
-            const hoy = new Date().toISOString().split('T')[0];
+            const hoy = fechaLocalISO();  // local, no UTC (B5-14)
             $('#fechaEmision').val(hoy);
             $('#fechaRecepcion').val(hoy);
             $('#estadoPago').val('Pendiente');
@@ -3326,6 +3383,26 @@
         }
     });
 
+    // B14-08: el flag es_por_concepto solo aplica a facturas y notas de débito
+    // (el servidor lo ignora para los demás tipos). Al ocultarlo se desmarca.
+    const TIPOS_POR_CONCEPTO = ['FACTURA ELECTRONICA', 'FACTURA EXENTA', 'NOTA DE DEBITO'];
+
+    function togglePorConcepto(tipo) {
+        if (TIPOS_POR_CONCEPTO.includes(tipo)) {
+            $('#divPorConcepto').show();
+        } else {
+            $('#divPorConcepto').hide();
+            $('#porConcepto').prop('checked', false);
+        }
+    }
+
+    // En edición el valor guardado solo se conoce si /app/obtenerDTE/ trae
+    // es_por_concepto. Si no lo trae, el campo se envía únicamente cuando el
+    // usuario lo cambia: así no se pisa un flag que no se mostró.
+    $(document).on('change', '#porConcepto', function () {
+        $(this).data('tocado', true);
+    });
+
     // Manejar cambio de tipo de documento
     $('#tipoDocumento').on('change', function () {
         const tipo = $(this).val();
@@ -3333,22 +3410,24 @@
         // Ocultar todos los divs específicos primero y quitar required
         $('#divDocumentoBase').slideUp(300);
         $('#documentoBase').removeAttr('required');
-        $('#divNotaCredito').slideUp(300);
-        $('#notaCreditoBase').removeAttr('required');
+
+        // «Compra por concepto» (gasto sin productos ni stock): solo facturas y ND.
+        togglePorConcepto(tipo);
 
         if (tipo === 'FACTURA ELECTRONICA') {
-            // Cargar documentos base disponibles
-            cargarDocumentosBase();
+            // Cargar documentos base disponibles. En edición se pasa el id del
+            // DTE: la respuesta sin dte_id excluye la guía/cotización actual y
+            // trae documento_padre_actual_id=null; si llegaba después que la de
+            // editarDTE vaciaba el select y al guardar se desanexaba (B5-11).
+            cargarDocumentosBase($('#modalNuevoDTE').data('dte-id'));
             $('#divDocumentoBase').slideDown(300);
             // No es requerido, es opcional
-        } else if (tipo === 'NOTA DE DEBITO') {
-            // Cargar notas de crédito disponibles
-            cargarNotasCreditoDisponibles();
-            $('#divNotaCredito').slideDown(300);
-            $('#notaCreditoBase').attr('required', true);
         } else {
+            // La Nota de Débito se guarda como cabecera, igual que los demás
+            // tipos: el selector "NC a corregir" pedía un endpoint que nunca
+            // existió (/app/obtener_ncs_para_nd/) y bloqueaba el guardado
+            // (B16-04). Enlazar ND→NC es una funcionalidad aparte.
             $('#documentoBase').val('').empty().append('<option value="">Sin documento base</option>');
-            $('#notaCreditoBase').val('').empty().append('<option value="">Selecciona una Nota de Crédito</option>');
         }
     });
 
@@ -3389,32 +3468,12 @@
         });
     }
 
-    function cargarNotasCreditoDisponibles() {
-        $.ajax({
-            url: '/app/obtener_ncs_para_nd/',
-            method: 'GET',
-            headers: { 'X-CSRFToken': getCookie('csrftoken') },
-            success: function (response) {
-                if (response.success) {
-                    const select = $('#notaCreditoBase');
-                    select.empty();
-                    select.append('<option value="">Selecciona una Nota de Crédito</option>');
-
-                    if (response.ncs && response.ncs.length > 0) {
-                        response.ncs.forEach(nc => {
-                            select.append(`<option value="${nc.id}">${nc.display}</option>`);
-                        });
-                    }
-                }
-            },
-            error: function () {
-                console.error('Error al cargar notas de crédito');
-            }
-        });
-    }
-
     // Variable para evitar múltiples llamadas simultáneas
     let cargandoDTEs = false;
+
+    // Filas de la página actual por id (lo que trajo cargarDteCompra). Editar
+    // DTE toma de aquí es_por_concepto cuando /app/obtenerDTE/ no lo envía.
+    let filasDtePorId = {};
 
     // Variable global para el filtro de vencimiento actual
     let filtroVencimientoActual = '';
@@ -3513,21 +3572,28 @@
                         $('.pagination-controls').show();
                     }
 
+                    filasDtePorId = {};
                     if (!data.items || data.items.length === 0) {
-                        tbody.append('<tr><td colspan="12" class="text-center text-muted">No se encontraron resultados' + (search ? ' con la búsqueda "' + search + '"' : '') + '</td></tr>');
+                        tbody.append('<tr><td colspan="12" class="text-center text-muted">No se encontraron resultados' + (search ? ' con la búsqueda "' + escHtml(search) + '"' : '') + '</td></tr>');
                     } else {
                         data.items.forEach(dte => {
+                            filasDtePorId[dte.id] = dte;
                             // Simplificar la lógica para evitar errores
                             // Verificar si es factura (código 33 o texto completo)
                             const esFacturaElectronica = dte.tipo === 'FACTURA ELECTRONICA' || dte.tipo === '33' || dte.tipo === 'FACTURA';
-                            const tieneEstadoValido = (dte.estado || '').toString().toUpperCase() !== 'RECHAZADO' && dte.estado_pago !== 'Pagado';
-                            const sinIncidencias = !dte.incidencias_pendientes || dte.incidencias_pendientes === 0;
+                            // estado_pago sin distinguir mayúsculas: el pago masivo y la NC
+                            // escriben 'PAGADO' y antes esas facturas seguían ofreciéndose
+                            // para Pago Masivo y el lote completo fallaba (B5-02 / B5-06).
+                            const estadoPagoFila = estadoPagoKey(dte.estado_pago);
+                            const estaPagada = estadoPagoFila === 'PAGADO';
+                            const tieneEstadoValido = (dte.estado || '').toString().toUpperCase() !== 'RECHAZADO' && !estaPagada;
+                            // Incidencias PENDIENTE + EN_GESTION: el servidor bloquea ambas.
+                            const sinIncidencias = incidenciasActivasDte(dte) === 0;
                             const documentoCompleto = !dte.requiere_factura || dte.tiene_factura_anexada;
+                            // Saldo que el servidor va a registrar (monto - todos los pagos).
+                            const saldoPendiente = saldoFilaDte(dte);
 
-                            const elegiblePagoMasivo = esFacturaElectronica && tieneEstadoValido && sinIncidencias && documentoCompleto;
-
-                            console.log(`DTE ${dte.numero_documento}: tipo='${dte.tipo}', elegible=${elegiblePagoMasivo}`);
-                            const saldoPendiente = parseFloat(dte.monto_con_iva || 0) - parseFloat(dte.notas_credito || 0);
+                            const elegiblePagoMasivo = esFacturaElectronica && tieneEstadoValido && sinIncidencias && documentoCompleto && saldoPendiente > 0;
 
                             // Info de NC asociada
                             let facturaAsociadaNumero = 'N/A';
@@ -3547,29 +3613,27 @@
                             // Las pagadas/abonadas también pueden incluirse para enviar el comprobante
                             // al proveedor después o al momento del pago.
                             const elegibleComprobante = esFacturaElectronica && (dte.estado || '').toString().toUpperCase() !== 'RECHAZADO' && !estaDescartado;
-                            const estaPagada = dte.estado_pago === 'Pagado';
-                            const mostrarCheckbox = !estaDescartado && (
-                                (elegiblePagoMasivo && saldoPendiente > 0) || elegibleComprobante
-                            );
+                            const mostrarCheckbox = !estaDescartado && (elegiblePagoMasivo || elegibleComprobante);
 
                             const fila = `
 <tr class="${clasesFilaExtra.join(' ')}">
     <td style="display: none;">${dte.id || ''}</td>
     <td>
         ${estaDescartado
-            ? `<span class="badge badge-descartado" title="Descartado: ${dte.motivo_descarte || 'Sin motivo'}">
+            ? `<span class="badge badge-descartado" title="Descartado: ${escHtml(dte.motivo_descarte || 'Sin motivo')}">
                 <i class="bi bi-trash"></i>
                </span>`
             : (mostrarCheckbox
                                     ? `<input type="checkbox" class="form-check-input checkbox-factura"
                       value="${dte.id}"
-                      data-proveedor="${dte.nombre}"
-                      data-proveedor-id="${dte.rut}"
+                      data-proveedor="${escHtml(dte.nombre)}"
+                      data-proveedor-id="${escHtml(dte.rut)}"
                       data-monto="${saldoPendiente}"
-                      data-numero="${dte.numero_documento}"
+                      data-saldo-exacto="${(dte.saldo !== undefined && dte.saldo !== null) ? '1' : '0'}"
+                      data-numero="${escHtml(dte.numero_documento)}"
                       data-pagado="${estaPagada ? '1' : '0'}"
-                      data-estado-pago="${(dte.estado_pago || '').toUpperCase()}"
-                      data-pago-masivo="${(elegiblePagoMasivo && saldoPendiente > 0) ? '1' : '0'}"
+                      data-estado-pago="${escHtml(estadoPagoFila)}"
+                      data-pago-masivo="${elegiblePagoMasivo ? '1' : '0'}"
                       onchange="actualizarSeleccionMasiva()">`
                                     : '')
                                 }
@@ -3604,8 +3668,9 @@
                                     )
                                     : ''
                                 }
+        ${chipIngresoDte(dte)}
         ${dte.comprobante_enviado_en
-                                    ? `<span class="dte-chip dte-chip--mail" title="Comprobante de pago enviado a ${dte.comprobante_enviado_a || ''} el ${dte.comprobante_enviado_en}"><i class="bi bi-envelope-check-fill"></i></span>`
+                                    ? `<span class="dte-chip dte-chip--mail" title="Comprobante de pago enviado a ${escHtml(dte.comprobante_enviado_a || '')} el ${escHtml(dte.comprobante_enviado_en)}"><i class="bi bi-envelope-check-fill"></i></span>`
                                     : ''}
         </div>
     </td>
@@ -3715,6 +3780,11 @@
                         });
                     }
 
+                    // Filas nuevas = selección vacía: los botones masivos no deben
+                    // quedar con el contador de la página anterior (B5-12).
+                    $('#selectAllFacturas').prop('checked', false);
+                    actualizarSeleccionMasiva();
+
                     hideGlobalLoader();
                     cargandoDTEs = false; // Liberar el flag
                 } catch (error) {
@@ -3743,77 +3813,47 @@
         });
     }
 
-    function eliminarDTE(id, forzar = false) {
+    function eliminarDTE(id) {
         if (!PUEDE_ELIMINAR_DTE_COMPRA) {
             avisoSinPermiso('eliminar documentos de compra');
             return;
         }
-        if (!forzar) {
-            Swal.fire({
-                title: '¿Eliminar DTE?',
-                text: 'Esta acción no se puede deshacer.',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#d33',
-                cancelButtonColor: '#6c757d',
-                confirmButtonText: 'Sí, eliminar',
-                cancelButtonText: 'Cancelar'
-            }).then(result => {
-                if (result.isConfirmed) {
-                    intentarEliminarDTE(id, false);
-                }
-            });
-        } else {
-            intentarEliminarDTE(id, true);
-        }
+        Swal.fire({
+            title: '¿Eliminar DTE?',
+            text: 'Esta acción no se puede deshacer.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then(result => {
+            if (result.isConfirmed) {
+                intentarEliminarDTE(id);
+            }
+        });
     }
-    
-    function intentarEliminarDTE(id, forzar) {
+
+    // El backend ya no hace borrado físico ni responde `puede_forzar` (B13-06 /
+    // B3-10): el diálogo "Forzar Eliminación" que colgaba de aquí se retiró.
+    function intentarEliminarDTE(id) {
         $.ajax({
             url: `/app/eliminarDTE/${id}/`,
             method: 'DELETE',
             contentType: 'application/json',
-            data: JSON.stringify({ forzar: forzar }),
+            data: JSON.stringify({}),
             headers: {
                 'X-CSRFToken': getCookie('csrftoken')
             },
             success: function (response) {
                 Swal.fire('Eliminado', response.message || 'El DTE fue eliminado correctamente.', 'success');
+                // cargarDTEs ya refresca los KPI en su success (B5-10: antes se
+                // pedían dos veces).
                 cargarDTEs(currentPageDTE, currentSearchDTE);
-                actualizarResumenPendientes();
             },
             error: function (xhr) {
                 const response = xhr.responseJSON;
-                
-                // Si hay datos relacionados y se puede forzar
-                if (response && response.puede_forzar) {
-                    const detalles = response.productos_count ? 
-                        `<br><br><small class="text-muted">El DTE tiene ${response.productos_count} producto(s) asociado(s)</small>` : '';
-                    
-                    Swal.fire({
-                        title: 'DTE con Datos Relacionados',
-                        html: `<p>${response.error}</p>${detalles}
-                               <hr>
-                               <p class="text-warning mb-0"><strong>⚠️ Datos de Prueba:</strong><br>
-                               ¿Deseas eliminarlo forzadamente?<br>
-                               <small>Esto eliminará el DTE y todos sus datos asociados.</small></p>`,
-                        icon: 'warning',
-                        showCancelButton: true,
-                        showDenyButton: true,
-                        confirmButtonColor: '#dc3545',
-                        denyButtonColor: '#6c757d',
-                        cancelButtonColor: '#6c757d',
-                        confirmButtonText: '🗑️ Forzar Eliminación',
-                        denyButtonText: 'Cancelar',
-                        cancelButtonText: 'Cancelar'
-                    }).then((result) => {
-                        if (result.isConfirmed) {
-                            eliminarDTE(id, true);
-                        }
-                    });
-                } else {
-                    Swal.fire('Error', response?.error || 'No se pudo eliminar el DTE.', 'error');
-                }
+                Swal.fire('Error', response?.error || 'No se pudo eliminar el DTE.', 'error');
             }
         });
     }
@@ -3825,7 +3865,15 @@
             success: function (dte) {
                 $('#modalNuevoDTELabel').text('Editar DTE Compra');
                 $('#formNuevoDTE button[type="submit"]').html('<i class="bi bi-save me-1"></i>Actualizar DTE');
-                
+
+                // B14-08: valor guardado de «por concepto». obtenerDTE puede no
+                // traerlo; la fila del listado (cargarDteCompra) sí.
+                const filaListado = filasDtePorId[dte.id];
+                if (typeof dte.es_por_concepto !== 'boolean' && filaListado
+                        && typeof filaListado.es_por_concepto === 'boolean') {
+                    dte.es_por_concepto = filaListado.es_por_concepto;
+                }
+
                 const empresaRecepcionId = dte.empresa_receptora_id ? String(dte.empresa_receptora_id) : '';
                 $('#modalNuevoDTE').data('empresa-recepcion-value', empresaRecepcionId);
                 $('#modalNuevoDTE').data('dte-id', dte.id);
@@ -3882,6 +3930,11 @@
                             const tipoDoc = dte.tipo_documento.toUpperCase();
                             $('#tipoDocumento').val(tipoDoc).trigger('change');
                         }
+
+                        // === Compra por concepto (B14-08) ===
+                        $('#porConcepto').removeData('tocado')
+                            .prop('checked', dte.es_por_concepto === true);
+                        togglePorConcepto((dte.tipo_documento || '').toUpperCase());
 
                         // === Estado DTE ===
                         if (dte.estado_dte) {
@@ -3949,8 +4002,8 @@
                             : '<span class="text-muted">Sin fecha</span>';
                         const fila = `
                         <tr data-id="${pago.id}">
-                            <td>${pago.metodo_pago}${infoCheque}</td>
-                            <td>${pago.voucher ?? '-'}</td>
+                            <td>${escHtml(pago.metodo_pago)}${infoCheque}</td>
+                            <td>${escHtml(pago.voucher ?? '-')}</td>
                             <td>$${parseFloat(pago.monto).toLocaleString()}</td>
                             <td>${fechaPagoTxt}</td>
                             <td>
@@ -4010,20 +4063,23 @@
         return estado === 'Aceptado' ? 'success' : estado === 'RECHAZADO' ? 'danger' : 'secondary';
     }
 
-    function pagoColor(pago) {
-        return pago === 'Pagado' ? 'success' : pago === 'Pendiente' ? 'warning text-dark' : 'secondary';
-    }
-
     // Render del badge de pago según estado (case-insensitive) + vencimiento
     function pagoBadge(estadoPago, diasRestantes) {
         const estado = (estadoPago || 'Pendiente').toString().trim();
-        const key = estado.toUpperCase();
+        // 'Abonado' (grafía antigua de registrarPagoDTE) = 'PARCIAL' (B5-04).
+        const key = estadoPagoKey(estado);
         const dias = parseInt(diasRestantes, 10);
 
         // Si está pendiente y los días de crédito ya pasaron, marcar como vencido
         if (key === 'PENDIENTE' && !isNaN(dias) && dias <= 0) {
             return `<span class="pago-badge pago-badge--vencido" title="Pago vencido">
                         <i class="bi bi-exclamation-octagon-fill"></i> Vencido
+                    </span>`;
+        }
+        // Abonada pero con el crédito vencido: el saldo también está vencido.
+        if (key === 'PARCIAL' && !isNaN(dias) && dias <= 0) {
+            return `<span class="pago-badge pago-badge--vencido" title="Pago parcial con saldo vencido">
+                        <i class="bi bi-exclamation-octagon-fill"></i> Parcial vencido
                     </span>`;
         }
         if (key === 'PAGADO') {
@@ -4046,7 +4102,35 @@
                         <i class="bi bi-clock-history"></i> Pendiente
                     </span>`;
         }
-        return `<span class="pago-badge pago-badge--default">${estado}</span>`;
+        return `<span class="pago-badge pago-badge--default">${escHtml(estado)}</span>`;
+    }
+
+    // B15-12: ¿la mercadería de esta factura/guía se ingresó? y enlace a su compra.
+    // Solo se dibuja si cargarDteCompra envía con_ingreso / recepcionado /
+    // compra_id / compra_nombre; mientras la API no los traiga, no muestra nada.
+    // Corte: antes del período nativo (datos migrados de Laravel) no hay
+    // recepciones ligadas al DTE, y marcarlo todo sería ruido.
+    const FECHA_INICIO_INGRESO_NATIVO = '2026-04-15';
+
+    function chipIngresoDte(dte) {
+        if (dte.con_ingreso === undefined || dte.con_ingreso === null) return '';
+        if (dte.tipo !== 'FACTURA ELECTRONICA' && dte.tipo !== 'GUIA') return '';
+        if (dte.es_por_concepto || dte.descartado) return '';
+        if (!dte.fecha_emision || dte.fecha_emision < FECHA_INICIO_INGRESO_NATIVO) return '';
+
+        let html = '';
+        if (!dte.con_ingreso) {
+            html += dte.recepcionado
+                ? '<span class="dte-chip dte-chip--warn" title="Tiene recepción registrada, pero todavía no se crean los productos ni se mueve stock.">'
+                    + '<i class="bi bi-box-seam"></i>Recepcionado, falta crear productos</span>'
+                : '<span class="dte-chip dte-chip--muted" title="No hay recepción ni movimiento de stock ligado a este documento. En servicios (transporte, viajes…) no marcados «por concepto» es normal.">'
+                    + '<i class="bi bi-box"></i>Sin ingreso registrado</span>';
+        }
+        if (dte.compra_id && dte.compra_nombre) {
+            html += '<a class="dte-chip dte-chip--link" href="/app/verGestionCompras/?buscar=' + encodeURIComponent(dte.compra_nombre)
+                + '" title="Ir a la compra ' + escHtml(dte.compra_nombre) + '"><i class="bi bi-cart"></i>Compra</a>';
+        }
+        return html;
     }
 
     // Construye el dropdown de acciones de una fila DTE
@@ -4056,7 +4140,10 @@
         const esNC = dte.tipo === 'NOTA DE CREDITO';
         const esFactura = dte.tipo === 'FACTURA ELECTRONICA';
         const rechazado = dte.estado === 'RECHAZADO';
-        const tieneIncPend = !!(dte.incidencias_pendientes && dte.incidencias_pendientes > 0);
+        // PENDIENTE + EN_GESTION: el servidor rechaza pagos y compensaciones con
+        // cualquiera de las dos (B5-06).
+        const incActivas = incidenciasActivasDte(dte);
+        const tieneIncPend = incActivas > 0;
         const necesitaFactura = dte.requiere_factura && !dte.tiene_factura_anexada;
 
         if (esNC) {
@@ -4083,12 +4170,12 @@
                     ? 'No disponible para DTEs rechazados'
                     : necesitaFactura
                         ? 'Requiere factura anexada antes de pagar'
-                        : 'Resuelve incidencias pendientes antes de pagar';
+                        : 'Resuelve las incidencias pendientes o en gestión antes de pagar';
                 items.push(`<li><span class="dropdown-item action-pagar disabled" title="${tip}">
                                 <i class="bi bi-cash-coin"></i> Pagar
                             </span></li>`);
             } else {
-                items.push(`<li><a class="dropdown-item action-pagar" href="#" onclick="abrirModalPago(${id}, ${dte.monto_con_iva || 0}, ${dte.incidencias_pendientes || 0}, ${dte.requiere_factura ? 'true' : 'false'}, ${dte.tiene_factura_anexada ? 'true' : 'false'}); return false;">
+                items.push(`<li><a class="dropdown-item action-pagar" href="#" onclick="abrirModalPago(${id}, ${dte.monto_con_iva || 0}, ${incActivas}, ${dte.requiere_factura ? 'true' : 'false'}, ${dte.tiene_factura_anexada ? 'true' : 'false'}); return false;">
                                 <i class="bi bi-cash-coin"></i> Pagar
                             </a></li>`);
             }
@@ -4265,7 +4352,9 @@
     function validarFormularioDTE(v) {
         limpiarErroresDTE();
         const errores = [];
-        const hoyISO = new Date().toISOString().split('T')[0];
+        // Fecha local: con toISOString() (UTC) de noche «mañana» pasaba la
+        // validación de emisión no futura (B5-14).
+        const hoyISO = fechaLocalISO();
 
         if (!v.receptor_id) errores.push(['#receptor', 'Selecciona el proveedor que emite el DTE.']);
         if (!v.empresaReceptoraId) errores.push(['#empresaReceptora', 'Selecciona la empresa que recibe el DTE.']);
@@ -4279,9 +4368,6 @@
         if (v.estadoDTE === 'RECHAZADO') {
             if (!v.motivoRechazo) errores.push(['#motivoRechazo', 'Indica el motivo del rechazo.']);
             else if (v.motivoRechazo.length > 100) errores.push(['#motivoRechazo', 'El motivo no puede superar los 100 caracteres.']);
-        }
-        if (v.tipoDocumento === 'NOTA DE DEBITO' && !v.notaCreditoBaseId) {
-            errores.push(['#notaCreditoBase', 'Selecciona la Nota de Crédito que corrige esta ND.']);
         }
         if (!v.monto || v.monto <= 0) errores.push(['#montoConIVA', 'Ingresa el monto total con IVA.']);
         else if (v.descuentoEquivalenteConIVA >= v.monto) {
@@ -4350,17 +4436,17 @@
                     const descartado = c.descartado
                         ? ' <span class="badge bg-secondary" style="font-size:0.72rem;">descartado</span>'
                         : '';
-                    const receptor = c.receptor ? ' &middot; recibido por ' + c.receptor : '';
+                    const receptor = c.receptor ? ' &middot; recibido por ' + escHtml(c.receptor) : '';
                     const mismoDia = c.mismo_dia ? ' <strong>(misma fecha)</strong>' : '';
                     // El listado sólo trae los DTE de la empresa en sesión: si el
                     // duplicado es de otra receptora, buscarlo ahí no lo encontrará.
                     const fueraDeListado = c.visible_en_listado
                         ? ''
                         : ' <span class="badge bg-light text-dark" style="font-size:0.72rem;">fuera de tu listado</span>';
-                    return '<li>' + c.tipo_documento + ' N&deg; ' + c.numero_documento +
-                        ' &middot; ' + c.fecha_emision + mismoDia +
+                    return '<li>' + escHtml(c.tipo_documento) + ' N&deg; ' + escHtml(c.numero_documento) +
+                        ' &middot; ' + escHtml(c.fecha_emision) + mismoDia +
                         ' &middot; ' + fmt(c.monto_con_iva) +
-                        ' &middot; ' + c.estado_pago + receptor + descartado + fueraDeListado + '</li>';
+                        ' &middot; ' + escHtml(c.estado_pago) + receptor + descartado + fueraDeListado + '</li>';
                 }).join('');
 
                 const tono = resp.bloqueante ? 'error' : 'warn';
@@ -4465,6 +4551,61 @@
         });
     });
 
+    // «Registrar esta factura» del agente de carga por PDF
+    // (services/carga_factura/web.py: datos_para_registrar) abre esta pantalla con
+    // ?nuevo=1&folio=…&rut=…&fecha=…&neto=…: se abre el alta con lo leído.
+    // El total con IVA NO se precarga (la lectura no lo trae): el neto queda de
+    // referencia junto al campo.
+    function normalizarRutComparable(valor) {
+        return String(valor || '').replace(/[^0-9kK]/g, '').toUpperCase().replace(/^0+/, '');
+    }
+
+    function abrirNuevoDteDesdeUrl() {
+        let params;
+        try { params = new URLSearchParams(window.location.search); } catch (err) { return; }
+        if (params.get('nuevo') !== '1') return;
+
+        const folio = (params.get('folio') || '').replace(/\D/g, '').slice(0, 12);
+        const fechaParam = params.get('fecha') || '';
+        const fecha = /^\d{4}-\d{2}-\d{2}$/.test(fechaParam) ? fechaParam : '';
+        const rut = normalizarRutComparable(params.get('rut'));
+        const neto = Math.round(parseFloat(params.get('neto')));
+
+        // Sin el querystring, recargar la página no vuelve a abrir el alta.
+        try { window.history.replaceState(null, '', window.location.pathname + window.location.hash); } catch (err) { /* sin History API */ }
+
+        const $modal = $('#modalNuevoDTE');
+        $modal.one('shown.bs.modal', function () {
+            if (folio) $('#numeroDocumento').val(folio).trigger('input');
+            if (fecha) $('#fechaEmision').val(fecha).trigger('change');
+            if (neto > 0) {
+                $('#hintNetoLeido').remove();
+                $('#montoConIVA').closest('.input-group').after(
+                    '<div class="rm-inline-note rm-inline-note--info mt-2" id="hintNetoLeido">' +
+                        '<i class="bi bi-info-circle"></i>' +
+                        '<span>Neto leído de la factura: <strong>$' + escHtml(neto.toLocaleString('es-CL')) + '</strong>. ' +
+                        'Ingresa el total con IVA que dice el documento.</span>' +
+                    '</div>'
+                );
+            }
+            if (!rut) return;
+            $.when(_promiseProveedores).done(function () {
+                // Después del select2('open') del handler de arriba (120 ms).
+                setTimeout(function () {
+                    const $opt = $('#receptor option').filter(function () {
+                        return normalizarRutComparable($(this).attr('data-rut')) === rut;
+                    }).first();
+                    if (!$opt.length) return;
+                    try { $('#receptor').select2('close'); } catch (err) { /* select2 no montado */ }
+                    $('#receptor').val($opt.val()).trigger('change');
+                    $('#montoConIVA').trigger('focus');
+                }, 200);
+            });
+        });
+        $modal.one('hidden.bs.modal', function () { $('#hintNetoLeido').remove(); });
+        $modal.modal('show');
+    }
+
     $(document).on('submit', '#formNuevoDTE', function (e) {
         e.preventDefault();
 
@@ -4484,7 +4625,6 @@
         const descuento_con_iva = $('#descuentoConIVA').is(':checked');
         const motivoRechazo = $('#motivoRechazo').val().trim();
         const documento_padre_id = $('#documentoBase').val();
-        const nota_credito_base_id = $('#notaCreditoBase').val();
         const empresaRecepcionSeleccion = obtenerEmpresaRecepcionSeleccionada();
 
         // Validación inline: marca el campo que falla y hace scroll hasta él, en vez
@@ -4496,7 +4636,6 @@
             numero: numero,
             estadoDTE: estadoDTE,
             motivoRechazo: motivoRechazo,
-            notaCreditoBaseId: nota_credito_base_id,
             monto: monto,
             // El descuento se ingresa neto o con IVA según el check: se lleva a bruto
             // para poder compararlo contra el total, que siempre es con IVA.
@@ -4523,8 +4662,7 @@
             descuento: descuento || 0,
             descuento_con_iva: descuento_con_iva,
             motivo_rechazo: estadoDTE === 'RECHAZADO' ? motivoRechazo : null,
-            documento_padre_id: documento_padre_id || null,
-            nota_credito_base_id: nota_credito_base_id || null
+            documento_padre_id: documento_padre_id || null
         };
         data.empresa_receptora_id = empresaRecepcionSeleccion.empresa_id;
         data.sucursal_receptora_id = empresaRecepcionSeleccion.sucursal_id;
@@ -4532,6 +4670,15 @@
         // Detectar si estamos editando o creando
         const dteId = $('#modalNuevoDTE').data('dte-id');
         const isEditing = dteId !== undefined && dteId !== null;
+
+        // B14-08: «por concepto» se envía al crear (sin marcar = mercadería) y,
+        // al editar, solo si se conoce el valor guardado o el usuario lo cambió
+        // (actualizarDteCompras solo toca el flag si la clave viene).
+        const $porConcepto = $('#porConcepto');
+        const dteDataEdicion = $('#modalNuevoDTE').data('dte-data') || {};
+        if (!isEditing || typeof dteDataEdicion.es_por_concepto === 'boolean' || $porConcepto.data('tocado')) {
+            data.por_concepto = TIPOS_POR_CONCEPTO.includes(tipoDocumento) && $porConcepto.is(':checked');
+        }
         const url = isEditing ? `/app/actualizarDteCompras/${dteId}/` : '/app/crearDteCompras/';
         const method = isEditing ? 'PUT' : 'POST';
         const mensajeExito = isEditing ? 'DTE actualizado' : 'DTE registrado';
@@ -4615,9 +4762,6 @@
         if ($('#documentoBase').hasClass('select2-hidden-accessible')) {
             $('#documentoBase').select2('destroy');
         }
-        if ($('#notaCreditoBase').hasClass('select2-hidden-accessible')) {
-            $('#notaCreditoBase').select2('destroy');
-        }
         if ($('#empresaReceptora').hasClass('select2-hidden-accessible')) {
             $('#empresaReceptora').select2('destroy');
         }
@@ -4649,15 +4793,14 @@
         $('#motivoRechazo').removeAttr('required');
         $('#estadoPago').val('Pendiente');
 
+        // «Por concepto»: el reset deja el tipo en Factura, que lo admite.
+        $('#porConcepto').prop('checked', false).removeData('tocado');
+        $('#divPorConcepto').show();
+
         // Limpiar documento base
         $('#divDocumentoBase').hide();
         $('#documentoBase').val('').empty().append('<option value="">Sin documento base</option>');
         $('#documentoBase').removeAttr('required');
-
-        // Limpiar nota de crédito base
-        $('#divNotaCredito').hide();
-        $('#notaCreditoBase').val('').empty().append('<option value="">Selecciona una Nota de Crédito</option>');
-        $('#notaCreditoBase').removeAttr('required');
 
         // Limpiar asociación NC
         $('#divAsociacionNC').hide();
@@ -4681,7 +4824,9 @@
     $('#modalAsociarNC').on('hidden.bs.modal', function () {
         // Restaurar valores por defecto
         $('#modalAsociarNCLabel').html('<i class="bi bi-link-45deg me-2"></i>Anexar NC a Factura');
-        $('.alert-info').html('<i class="bi bi-info-circle me-2"></i>Selecciona una Nota de Crédito para anexar a esta factura.');
+        // (B5-13) Aquí se reescribía TODO .alert-info de la página, lo que pisaba el
+        // aviso de proveedor de «Recepcionado/mes» y el recordatorio de cheque;
+        // el texto fijo del modal ya dice lo mismo.
         $('#btnAsociarNC').html('<i class="bi bi-link-45deg me-2"></i>Anexar NC Seleccionada');
 
         // Limpiar datos del modal
@@ -4710,7 +4855,9 @@
                 select.empty().append('<option value=""></option>');
 
                 data.forEach(emp => {
-                    select.append(`<option value="${emp.id}">${emp.nombre} (${emp.rut})</option>`);
+                    // Escapado (XSS: el nombre lo escribe cualquiera que importe
+                    // proveedores); data-rut lo usa el alta precargada desde la URL.
+                    select.append(`<option value="${escHtml(emp.id)}" data-rut="${escHtml(emp.rut)}">${escHtml(emp.nombre)} (${escHtml(emp.rut)})</option>`);
                 });
                 
                 select.select2({
@@ -4783,9 +4930,9 @@
                 empresasUnicas.forEach((empresa, id) => {
                     const btnText = empresa.nombre.length > 18 ? empresa.nombre.substring(0, 18) + '...' : empresa.nombre;
                     const btn = $(`<button type="button" class="btn btn-sm btn-outline-info empresa-receptora-shortcut" 
-                        data-value="${empresa.value}"
-                        title="${empresa.nombre}">
-                        <i class="bi bi-shop me-1"></i>${btnText}
+                        data-value="${escHtml(empresa.value)}"
+                        title="${escHtml(empresa.nombre)}">
+                        <i class="bi bi-shop me-1"></i>${escHtml(btnText)}
                     </button>`);
                     container.append(btn);
                 });
@@ -4839,10 +4986,12 @@
                 if (pagos && pagos.length > 0) {
                     let html = '<ul class="list-group list-group-flush">';
                     pagos.forEach(pago => {
-                        const fecha = pago.fecha_pago ? new Date(pago.fecha_pago).toLocaleDateString('es-CL') : 'Sin fecha';
+                        // 'YYYY-MM-DD' + T00:00:00 = medianoche LOCAL; sin eso se lee
+                        // como UTC y en Chile queda el día anterior (B5-14).
+                        const fecha = pago.fecha_pago ? new Date(pago.fecha_pago + 'T00:00:00').toLocaleDateString('es-CL') : 'Sin fecha';
                         const monto = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(pago.monto || 0);
                         html += `<li class="list-group-item d-flex justify-content-between align-items-center py-2">
-                            <span><i class="bi bi-cash me-2 text-success"></i>${pago.metodo_pago || 'N/A'}</span>
+                            <span><i class="bi bi-cash me-2 text-success"></i>${escHtml(pago.metodo_pago || 'N/A')} <small class="text-muted">${escHtml(fecha)}</small></span>
                             <span class="badge bg-success">${monto}</span>
                         </li>`;
                     });
@@ -4867,8 +5016,8 @@
                         const estadoClass = inc.estado === 'Resuelta' ? 'success' : (inc.estado === 'Pendiente' ? 'warning' : 'secondary');
                         html += `<li class="list-group-item py-2">
                             <div class="d-flex justify-content-between">
-                                <span class="text-truncate" style="max-width: 200px;">${inc.descripcion || 'Sin descripción'}</span>
-                                <span class="badge bg-${estadoClass}">${inc.estado || 'N/A'}</span>
+                                <span class="text-truncate" style="max-width: 200px;">${escHtml(inc.descripcion || 'Sin descripción')}</span>
+                                <span class="badge bg-${estadoClass}">${escHtml(inc.estado || 'N/A')}</span>
                             </div>
                         </li>`;
                     });
@@ -5006,11 +5155,13 @@
         // Resetear todos los campos
         $('#pagoEditId').val('');
         $('#pagoDteId').val(dteId);
-        $('#metodoPago').val('');
+        // trigger('change'): sin él, Select2 seguía mostrando el método del pago
+        // anterior con el valor real vacío (B5-12).
+        $('#metodoPago').val('').trigger('change');
         $('#voucher').val('');
         $('#montoPago').val('');
         $('#pagarTodo').prop('checked', false);
-        $('#fechaPago').val(new Date().toISOString().slice(0, 10));
+        $('#fechaPago').val(fechaLocalISO());
         $('#recordatorioCheque').hide();
 
         // Reset textos y etiquetas
@@ -5097,7 +5248,7 @@
                 }
                 $sel.empty().append('<option value="">Todos los proveedores</option>');
                 (data || []).forEach(emp => {
-                    $sel.append(`<option value="${emp.id}">${emp.nombre} (${emp.rut})</option>`);
+                    $sel.append(`<option value="${escHtml(emp.id)}">${escHtml(emp.nombre)} (${escHtml(emp.rut)})</option>`);
                 });
                 $sel.select2({
                     width: '100%',
@@ -5191,7 +5342,10 @@
             $tbody.html(`<tr><td colspan="10" class="text-center text-muted py-3">${msg}</td></tr>`);
         } else {
             facturas.forEach(f => {
-                const pagado = f.estado_pago === 'pagado';
+                // facturasPendientesPorMes calcula 'pagado'/'parcial'/'pendiente';
+                // se normaliza por si llega otra grafía (B3-02).
+                const estadoPagoMes = estadoPagoKey(f.estado_pago);
+                const pagado = estadoPagoMes === 'PAGADO';
                 const vencida = !pagado && f.dias_restantes !== null && f.dias_restantes <= 0;
                 const proxima = !pagado && f.dias_restantes !== null && f.dias_restantes > 0 && f.dias_restantes <= 7;
 
@@ -5199,7 +5353,7 @@
                 let pagoBadge;
                 if (pagado) {
                     pagoBadge = `<span class="pago-badge pago-badge--pagado"><i class="bi bi-check-circle-fill"></i> Pagado</span>`;
-                } else if (f.estado_pago === 'parcial') {
+                } else if (estadoPagoMes === 'PARCIAL') {
                     pagoBadge = `<span class="pago-badge pago-badge--parcial"><i class="bi bi-pie-chart-fill"></i> Parcial</span>`;
                 } else {
                     pagoBadge = `<span class="pago-badge pago-badge--pendiente"><i class="bi bi-clock-history"></i> Pendiente</span>`;
@@ -5225,11 +5379,11 @@
 
                 $tbody.append(`
                     <tr${rowStyle}>
-                        <td>${f.proveedor || '-'}</td>
-                        <td>${f.numero_documento || '-'}</td>
-                        <td><small>${f.tipo_documento || '-'}</small></td>
-                        <td>${f.fecha_emision || '-'}</td>
-                        <td>${f.fecha_recepcion || '-'}</td>
+                        <td>${escHtml(f.proveedor || '-')}</td>
+                        <td>${escHtml(f.numero_documento || '-')}</td>
+                        <td><small>${escHtml(f.tipo_documento || '-')}</small></td>
+                        <td>${escHtml(f.fecha_emision || '-')}</td>
+                        <td>${escHtml(f.fecha_recepcion || '-')}</td>
                         <td class="text-end">$${(f.monto_con_iva || 0).toLocaleString()}</td>
                         <td class="text-end text-muted">$${(f.abonado || 0).toLocaleString()}</td>
                         <td class="text-end fw-bold" style="color:#92400e;">$${(f.saldo || 0).toLocaleString()}</td>
@@ -5302,8 +5456,14 @@
         $alert.show();
     }
 
+    // Evita el doble envío del pago individual (doble clic / Enter repetido /
+    // Escape sobre el «Guardando…»). El servidor también lo bloquea.
+    let pagoIndividualEnCurso = false;
+
     $('#formPago').on('submit', function (e) {
         e.preventDefault();
+
+        if (pagoIndividualEnCurso) return;
 
         const pagoId = $('#pagoEditId').val();
         // Editar un pago existente requiere permiso; registrar uno nuevo no.
@@ -5338,105 +5498,143 @@
             monto,
             fecha_pago,
         };
+        // B3-07: al registrar, la pantalla declara que sabe confirmar un doble
+        // envío. Si el último pago del documento es idéntico (mismo método,
+        // monto y fecha, sin N° de comprobante) registrarPagoDTE responde 409
+        // {duplicado: true}; se pregunta y se reenvía con confirmar_duplicado=true
+        // (dos cuotas iguales el mismo día son legítimas).
+        if (!pagoId) data.confirmar_duplicado = false;
 
         const url = pagoId ? `/app/editarPago/${pagoId}/` : '/app/registrarPagoDTE/';
         const method = pagoId ? 'PUT' : 'POST';
+        const $btnPago = $('#formPago button[type="submit"]');
 
-        $.ajax({
-            url,
-            method,
-            contentType: 'application/json',
-            headers: { 'X-CSRFToken': getCookie('csrftoken') },
-            data: JSON.stringify(data),
-            beforeSend: function () {
-                Swal.fire({
-                    title: 'Guardando...',
-                    text: 'Por favor espera',
-                    allowOutsideClick: false,
-                    didOpen: () => Swal.showLoading()
-                });
-            },
-            success: function (response) {
-                // Cerrar el loading primero
-                Swal.close();
+        enviarPagoIndividual(data);
 
-                // Verificar si la respuesta indica éxito
-                if (response.success === true || response.mensaje) {
-                    // Pasos de limpieza/cierre comunes tras guardar el pago.
-                    const finalizarPago = () => {
-                        // Cerrar modal de pago
-                        const modalPago = bootstrap.Modal.getInstance(document.getElementById('modalPago'));
-                        if (modalPago) {
-                            modalPago.hide();
-                        } else {
-                            $('#modalPago').modal('hide');
-                        }
+        function enviarPagoIndividual(payload) {
+            pagoIndividualEnCurso = true;
+            $btnPago.prop('disabled', true);
 
-                        $('#formPago')[0].reset();
-                        $('#pagoEditId').val('');
+            $.ajax({
+                url,
+                method,
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                data: JSON.stringify(payload),
+                beforeSend: function () {
+                    Swal.fire({
+                        title: 'Guardando...',
+                        text: 'Por favor espera',
+                        allowOutsideClick: false,
+                        allowEscapeKey: false,
+                        didOpen: () => Swal.showLoading()
+                    });
+                },
+                complete: function () {
+                    pagoIndividualEnCurso = false;
+                    $btnPago.prop('disabled', false);
+                },
+                success: function (response) {
+                    // Cerrar el loading primero
+                    Swal.close();
 
-                        // Cerrar modal de detalle de pagos si está abierto
-                        const detalleModal = bootstrap.Modal.getInstance(document.getElementById('modalDetallePagos'));
-                        if (detalleModal) {
-                            detalleModal.hide();
-                        }
-
-                        // Limpiar cualquier modal residual
-                        setTimeout(limpiarModales, 300);
-
-                        // Recargar tabla principal de DTEs (IMPORTANTE para reflejar cambios)
-                        cargarDTEs(currentPageDTE, currentSearchDTE);
-                    };
-
-                    if (pagoId) {
-                        // Edición: confirmación rápida (sin comprobante).
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Pago actualizado',
-                            text: response.mensaje || response.message || 'Operación exitosa',
-                            timer: 2000,
-                            showConfirmButton: false
-                        }).then(finalizarPago);
-                    } else {
-                        // Registro: ofrecer descargar el comprobante de pago de la factura
-                        // (mismo PDF que el botón "Comprobante Pago" al seleccionar checkbox).
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Pago registrado',
-                            text: response.mensaje || response.message || 'Operación exitosa',
-                            showConfirmButton: true,
-                            confirmButtonText: '<i class="bi bi-filetype-pdf me-1"></i>Descargar comprobante',
-                            confirmButtonColor: '#0ab39c',
-                            showCancelButton: true,
-                            cancelButtonText: 'Cerrar'
-                        }).then((result) => {
-                            if (result.isConfirmed && dteId) {
-                                const params = $.param({ dte_ids: dteId });
-                                window.open(`/app/comprobantePagoDTE/?${params}`, '_blank');
+                    // Verificar si la respuesta indica éxito
+                    if (response.success === true || response.mensaje) {
+                        // Pasos de limpieza/cierre comunes tras guardar el pago.
+                        const finalizarPago = () => {
+                            // Cerrar modal de pago
+                            const modalPago = bootstrap.Modal.getInstance(document.getElementById('modalPago'));
+                            if (modalPago) {
+                                modalPago.hide();
+                            } else {
+                                $('#modalPago').modal('hide');
                             }
-                            finalizarPago();
+
+                            $('#formPago')[0].reset();
+                            $('#pagoEditId').val('');
+
+                            // Cerrar modal de detalle de pagos si está abierto
+                            const detalleModal = bootstrap.Modal.getInstance(document.getElementById('modalDetallePagos'));
+                            if (detalleModal) {
+                                detalleModal.hide();
+                            }
+
+                            // Limpiar cualquier modal residual
+                            setTimeout(limpiarModales, 300);
+
+                            // Recargar tabla principal de DTEs (IMPORTANTE para reflejar cambios)
+                            cargarDTEs(currentPageDTE, currentSearchDTE);
+                        };
+
+                        if (pagoId) {
+                            // Edición: confirmación rápida (sin comprobante).
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Pago actualizado',
+                                text: response.mensaje || response.message || 'Operación exitosa',
+                                timer: 2000,
+                                showConfirmButton: false
+                            }).then(finalizarPago);
+                        } else {
+                            // Registro: ofrecer descargar el comprobante de pago de la factura
+                            // (mismo PDF que el botón "Comprobante Pago" al seleccionar checkbox).
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Pago registrado',
+                                text: response.mensaje || response.message || 'Operación exitosa',
+                                showConfirmButton: true,
+                                confirmButtonText: '<i class="bi bi-filetype-pdf me-1"></i>Descargar comprobante',
+                                confirmButtonColor: '#0ab39c',
+                                showCancelButton: true,
+                                cancelButtonText: 'Cerrar'
+                            }).then((result) => {
+                                if (result.isConfirmed && dteId) {
+                                    const params = $.param({ dte_ids: dteId });
+                                    window.open(`/app/comprobantePagoDTE/?${params}`, '_blank');
+                                }
+                                finalizarPago();
+                            });
+                        }
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: response.error || 'Ocurrió un error inesperado.'
                         });
                     }
-                } else {
+                },
+                error: function (xhr) {
+                    // Cerrar el loading primero
+                    Swal.close();
+
+                    const res = xhr.responseJSON;
+                    if (xhr.status === 409 && res && res.duplicado === true && !payload.confirmar_duplicado) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: '¿Registrar otro pago igual?',
+                            text: (typeof res.error === 'string' && res.error)
+                                || 'Ya hay un pago idéntico registrado para este documento.',
+                            showCancelButton: true,
+                            confirmButtonText: 'Sí, es otro pago',
+                            cancelButtonText: 'No, cancelar',
+                            reverseButtons: true,
+                            focusCancel: true
+                        }).then(function (r) {
+                            if (r.isConfirmed) {
+                                enviarPagoIndividual(Object.assign({}, payload, { confirmar_duplicado: true }));
+                            }
+                        });
+                        return;
+                    }
+                    // 403 del middleware: error:true (booleano) y el texto en 'mensaje'.
                     Swal.fire({
                         icon: 'error',
-                        title: 'Error',
-                        text: response.error || 'Ocurrió un error inesperado.'
+                        title: 'Error al guardar',
+                        text: mensajeErrorXhr(xhr, 'Ocurrió un error al guardar el pago.')
                     });
                 }
-            },
-            error: function (xhr) {
-                // Cerrar el loading primero
-                Swal.close();
-
-                const res = xhr.responseJSON;
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error al guardar',
-                    text: res?.error || 'Ocurrió un error al guardar el pago.'
-                });
-            }
-        });
+            });
+        }
     });
 
     function eliminarPago(pagoId) {
@@ -5530,153 +5728,6 @@
                 });
             },
             error: () => Swal.fire('Error', 'No se pudo cargar el detalle del pago.', 'error')
-        });
-    }
-    function abrirModalNC(dteId) {
-        $('#ncDteId').val(dteId);
-        $('#ncNumero').val('');
-        $('#ncMonto').val('');
-        $('#ncMotivo').val('');
-        cargarNotasCredito(dteId);
-        const modal = new bootstrap.Modal(document.getElementById('modalNotasCredito'));
-        modal.show();
-    }
-    function cargarNotasCredito(dteId) {
-        $.get(`/app/notasCredito/${dteId}/`, function (data) {
-            const tbody = $('#tablaNCBody');
-            tbody.empty();
-
-            if (data.length === 0) {
-                tbody.append('<tr><td colspan="4" class="text-center">Sin notas de crédito asignadas.</td></tr>');
-            } else {
-                data.forEach(nc => {
-                    const motivo = nc.notas || '-';
-                    const fila = `
-                    <tr>
-                        <td class="text-center">${nc.voucher}</td>
-                        <td class="monto">$${parseFloat(nc.monto).toLocaleString()}</td>
-                        <td class="text-start">${motivo}</td>
-                        <td class="text-center">
-                            ${PUEDE_ELIMINAR_PAGOS_COMPRA ? `
-                            <button class="btn btn-sm btn-outline-danger" onclick="eliminarNotaCredito(${nc.id})">
-                                <i class="bi bi-trash"></i>
-                            </button>` : `
-                            <span class="d-inline-block" title="${TITULO_SIN_PERMISO}">
-                                <button class="btn btn-sm btn-outline-secondary" disabled>
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </span>`}
-                        </td>
-                    </tr>`;
-                    tbody.append(fila);
-                });
-            }
-        });
-    }
-    $('#formNC').on('submit', function (e) {
-        e.preventDefault();
-
-        // La NC se guarda como fila de pago: mismo permiso que editar pagos.
-        if (!PUEDE_EDITAR_PAGOS_COMPRA) {
-            avisoSinPermiso('editar pagos de documentos');
-            return;
-        }
-
-        const dteId = $('#ncDteId').val();
-        const numero = $('#ncNumero').val();
-        const monto = unformatMoney($('#ncMonto').val());
-        const motivo = $('#ncMotivo').val().trim();
-
-        if (!numero || isNaN(monto) || monto <= 0) {
-            Swal.fire('Datos inválidos', 'Completa los campos correctamente.', 'warning');
-            return;
-        }
-
-        if (!motivo || motivo.length === 0) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Motivo requerido',
-                text: 'Debes especificar el motivo de la nota de crédito.'
-            });
-            $('#ncMotivo').focus();
-            return;
-        }
-
-        if (motivo.length > 100) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Motivo muy largo',
-                text: 'El motivo no puede exceder 100 caracteres.'
-            });
-            $('#ncMotivo').focus();
-            return;
-        }
-
-        $.ajax({
-            url: '/app/agregarNC/',
-            method: 'POST',
-            contentType: 'application/json',
-            headers: { 'X-CSRFToken': getCookie('csrftoken') },
-            data: JSON.stringify({
-                dte_id: dteId,
-                metodo_pago: 'Nota de Crédito',
-                voucher: numero,
-                monto: monto,
-                notas: motivo
-            }),
-            success: (response) => {
-                if (response.success === false) {
-                    Swal.fire('Error', response.error || 'No se pudo agregar la NC.', 'error');
-                    return;
-                }
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Nota de crédito agregada',
-                    text: 'La NC se agregó correctamente.',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
-                cargarNotasCredito(dteId);
-                $('#ncNumero').val('');
-                $('#ncMonto').val('');
-                $('#ncMotivo').val('');
-                cargarDTEs(currentPageDTE, currentSearchDTE);
-            },
-            error: (xhr) => {
-                const response = xhr.responseJSON;
-                Swal.fire('Error', response?.error || 'No se pudo agregar la NC.', 'error');
-            }
-        });
-    });
-    function eliminarNotaCredito(id) {
-        if (!PUEDE_ELIMINAR_PAGOS_COMPRA) {
-            avisoSinPermiso('eliminar pagos de documentos');
-            return;
-        }
-        Swal.fire({
-            title: '¿Eliminar NC?',
-            text: 'Esta acción no se puede deshacer.',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Sí, eliminar',
-            cancelButtonText: 'Cancelar'
-        }).then(result => {
-            if (result.isConfirmed) {
-                $.ajax({
-                    url: `/app/eliminarNC/${id}/`,
-                    method: 'DELETE',
-                    headers: { 'X-CSRFToken': getCookie('csrftoken') },
-                    success: () => {
-                        const dteId = $('#ncDteId').val();
-                        cargarNotasCredito(dteId);
-                        cargarDTEs(currentPageDTE, currentSearchDTE);
-                        Swal.fire('Eliminado', 'La NC fue eliminada.', 'success');
-                    },
-                    error: (xhr) => {
-                        Swal.fire('Error', xhr.responseJSON?.error || 'No se pudo eliminar la NC.', 'error');
-                    }
-                });
-            }
         });
     }
 
@@ -5779,9 +5830,64 @@
         actualizarSeleccionMasiva();
     });
 
+    // B5-06: el total del modal debe ser lo que el servidor registrará (monto -
+    // TODOS los pagos, abonos en efectivo incluidos). Si la fila no trae el saldo
+    // calculado por el servidor (dte.saldo), se confirma por factura con
+    // /app/obtenerDetallePago/ (el mismo dato que usa el modal de pago individual)
+    // antes de mostrar el total que se va a transferir.
     function abrirModalPagoMasivo() {
         const checkboxes = $('.checkbox-factura:checked');
 
+        if (checkboxes.length === 0) {
+            Swal.fire('Error', 'No hay facturas seleccionadas', 'warning');
+            return;
+        }
+
+        const porConfirmar = checkboxes.filter(function () {
+            return $(this).attr('data-saldo-exacto') !== '1';
+        });
+        if (!porConfirmar.length) {
+            mostrarModalPagoMasivo();
+            return;
+        }
+
+        showGlobalLoader();
+        const sinSaldo = [];
+        const consultas = porConfirmar.map(function () {
+            const $cb = $(this);
+            return $.ajax({ url: `/app/obtenerDetallePago/${$cb.val()}/`, method: 'GET', dataType: 'json' })
+                .done(function (d) {
+                    const saldo = Math.round(parseFloat(d.total_dte || 0) - parseFloat(d.total_abonado || 0));
+                    // .data() cachea: actualizar atributo y caché.
+                    $cb.attr('data-monto', saldo).data('monto', saldo).attr('data-saldo-exacto', '1');
+                    if (!(saldo > 0)) sinSaldo.push($cb);
+                });
+        }).get();
+
+        $.when.apply($, consultas)
+            .done(function () {
+                hideGlobalLoader();
+                if (sinSaldo.length) {
+                    const folios = sinSaldo.map($cb => '#' + $cb.data('numero')).join(', ');
+                    sinSaldo.forEach($cb => $cb.prop('checked', false).attr('data-pago-masivo', '0'));
+                    actualizarSeleccionMasiva();
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Facturas sin saldo',
+                        text: `Se quitaron del lote porque ya no tienen saldo pendiente: ${folios}. Recarga la lista para ver su estado.`
+                    });
+                    if ($('.checkbox-factura:checked').length === 0) return;
+                }
+                mostrarModalPagoMasivo();
+            })
+            .fail(function () {
+                hideGlobalLoader();
+                Swal.fire('Error', 'No se pudo confirmar el saldo de las facturas seleccionadas. Intenta nuevamente.', 'error');
+            });
+    }
+
+    function mostrarModalPagoMasivo() {
+        const checkboxes = $('.checkbox-factura:checked');
         if (checkboxes.length === 0) {
             Swal.fire('Error', 'No hay facturas seleccionadas', 'warning');
             return;
@@ -5827,8 +5933,8 @@
         facturas.forEach(factura => {
             tbody.append(`
                 <tr>
-                    <td>#${factura.numero}</td>
-                    <td>${factura.proveedor}</td>
+                    <td>#${escHtml(factura.numero)}</td>
+                    <td>${escHtml(factura.proveedor)}</td>
                     <td>$${factura.monto.toLocaleString()}</td>
                     <td>
                         <button type="button" class="btn btn-sm btn-outline-danger" onclick="quitarFacturaSeleccion(${factura.id})">
@@ -5841,7 +5947,7 @@
 
         // Mostrar resumen
         $('#resumenFacturasSeleccionadas').html(`
-            <strong>${facturas.length} facturas</strong> del proveedor <strong>${facturas[0].proveedor}</strong><br>
+            <strong>${facturas.length} facturas</strong> del proveedor <strong>${escHtml(facturas[0].proveedor)}</strong><br>
             <strong>Total: $${totalMonto.toLocaleString()}</strong>
         `);
 
@@ -5869,16 +5975,30 @@
         }
     });
 
+    // Candado del lado del cliente contra el doble envío del lote (B5-02). El
+    // servidor además bloquea las facturas (select_for_update) y rechaza el
+    // segundo envío por saldo, pero aquí no se debe llegar a mandarlo.
+    let pagoMasivoEnCurso = false;
+
     // Al abrir el modal de pago masivo, pre-cargar la fecha del pago con hoy si está vacía.
     $('#modalPagoMasivo').on('show.bs.modal', function () {
         if (!$('#fechaPagoMasivo').val()) {
-            $('#fechaPagoMasivo').val(new Date().toISOString().slice(0, 10));
+            $('#fechaPagoMasivo').val(fechaLocalISO());
+        }
+        // Lote nuevo: el botón vuelve a estar disponible (queda deshabilitado
+        // tras un lote exitoso para que el mismo lote no se reenvíe).
+        if (!pagoMasivoEnCurso) {
+            $('#btnProcesarPagoMasivo').prop('disabled', false);
         }
     });
 
     // Procesar pago masivo
     $('#formPagoMasivo').on('submit', function (e) {
         e.preventDefault();
+
+        if (pagoMasivoEnCurso || $('#btnProcesarPagoMasivo').prop('disabled')) {
+            return;
+        }
 
         const checkboxes = $('.checkbox-factura:checked');
         const metodoPago = $('#metodoPagoMasivo').val();
@@ -5926,6 +6046,12 @@
     });
 
     function procesarPagoMasivo(facturas, metodoPago, voucher, observaciones, fechaPago) {
+        if (pagoMasivoEnCurso) return;
+        pagoMasivoEnCurso = true;
+        let loteRegistrado = false;
+        const $btn = $('#btnProcesarPagoMasivo');
+        $btn.prop('disabled', true);
+
         $.ajax({
             url: '/app/procesar_pago_masivo/',
             method: 'POST',
@@ -5938,8 +6064,27 @@
                 observaciones: observaciones,
                 fecha_pago: fechaPago
             }),
+            beforeSend: function () {
+                // Bloquea la pantalla mientras el servidor registra el lote:
+                // sin esto el modal seguía activo y se podía enviar de nuevo.
+                Swal.fire({
+                    title: 'Procesando pago masivo…',
+                    text: 'No cierres ni recargues la página.',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => Swal.showLoading()
+                });
+            },
+            complete: function () {
+                pagoMasivoEnCurso = false;
+                // Tras un lote registrado el botón queda deshabilitado hasta que
+                // se abra otro lote (show.bs.modal lo reactiva).
+                if (!loteRegistrado) $btn.prop('disabled', false);
+            },
             success: function (response) {
                 if (response.success) {
+                    loteRegistrado = true;
                     // IDs de las facturas pagadas, para el comprobante (mismo PDF que
                     // "Comprobante Pago"). Todas son del mismo proveedor (validado al abrir el modal).
                     const dteIds = facturas.map(f => f.id).join(',');
@@ -5975,11 +6120,28 @@
                         finalizarPagoMasivo();
                     });
                 } else {
-                    Swal.fire('Error', response.error || 'Error al procesar pago masivo', 'error');
+                    Swal.fire({ icon: 'error', title: 'No se pudo procesar el pago masivo', text: response.error || 'Error al procesar pago masivo' });
                 }
             },
-            error: function () {
-                Swal.fire('Error', 'Error de conexión al procesar pago masivo', 'error');
+            error: function (xhr, status) {
+                // Los rechazos del servidor (400: sin saldo, incidencias, otro
+                // proveedor…) traen el motivo en JSON: mostrarlo en vez de
+                // «Error de conexión», que invitaba a reintentar (B5-02).
+                const res = xhr.responseJSON;
+                let msg;
+                // El 403 del middleware de permisos trae error:true (booleano) y
+                // el texto en 'mensaje': sin el typeof, Swal mostraba «true».
+                if (res && typeof res.error === 'string' && res.error) {
+                    msg = res.error;
+                } else if (xhr.status === 403) {
+                    msg = (res && typeof res.mensaje === 'string' && res.mensaje)
+                        || 'No tienes permiso para registrar pagos de documentos de compra.';
+                } else if (status === 'timeout' || xhr.status === 0) {
+                    msg = 'No hubo respuesta del servidor. Antes de reintentar, recarga la lista y revisa si las facturas quedaron pagadas.';
+                } else {
+                    msg = 'Error al procesar el pago masivo. Recarga la lista y revisa el estado de las facturas antes de reintentar.';
+                }
+                Swal.fire({ icon: 'error', title: 'No se pudo procesar el pago masivo', text: msg });
             }
         });
     }
@@ -6002,7 +6164,7 @@
                             <div class="alert alert-success mb-2">
                                 <i class="bi bi-check-circle me-2"></i>
                                 <strong>Esta NC está enlazada a:</strong><br>
-                                Factura #${info.factura_numero} - ${info.factura_proveedor}<br>
+                                Factura #${escHtml(info.factura_numero)} - ${escHtml(info.factura_proveedor)}<br>
                                 <small class="text-muted">Monto: $${parseFloat(info.monto_nc).toLocaleString()}</small>
                             </div>
                         `);
@@ -6059,23 +6221,133 @@
                             cargarInfoAsociacionNC(ncId); // Recargar info
                             cargarDTEs(currentPageDTE, currentSearchDTE); // Actualizar tabla
                         } else {
-                            Swal.fire('Error', response.error || 'Error al desenlazar NC', 'error');
+                            swalTexto('error', 'Error', response.error || 'Error al desenlazar NC');
                         }
                     },
-                    error: function () {
-                        Swal.fire('Error', 'Error de conexión', 'error');
+                    error: function (xhr) {
+                        swalTexto('error', 'Error', mensajeErrorXhr(xhr, 'No se pudo desenlazar la nota de crédito.'));
                     }
                 });
             }
         });
     }
 
+    // «Enlazar a Factura» desde Editar NC (B5-07). Antes reutilizaba el modal
+    // de «Anexar NC a Factura» con el id de la NC como si fuera la factura: se
+    // listaban NC en vez de facturas y se podía aplicar una NC sobre otra NC.
+    // Ahora lista las facturas del MISMO proveedor con saldo y envía
+    // {nc_id, dte_id: factura}. El listado sale de /app/cargarDteCompra/
+    // (búsqueda por RUT, solo pendientes/parciales): /app/obtener_facturas_para_nc/
+    // se retiró por código muerto (B16-06). El servidor valida proveedor,
+    // saldo y estado de todas formas.
     function enlazarNCDesdeEditar(ncId) {
-        // Cerrar modal de editar y abrir modal de enlazar
+        const nc = $('#modalNuevoDTE').data('dte-data') || {};
+        const $optProv = $('#receptor option:selected');
+        const rutProveedor = String($optProv.attr('data-rut') || '');
+        const nombreProveedor = $optProv.text() || '';
+        const montoNC = Math.round(parseFloat(nc.monto_con_iva || 0));
+        const folioNC = nc.numero_documento || '';
+
         $('#modalNuevoDTE').modal('hide');
-        setTimeout(() => {
-            abrirModalAnexarNCaFactura(ncId);
-        }, 300);
+
+        if (!rutProveedor) {
+            Swal.fire('Sin proveedor', 'No se pudo identificar el proveedor de la nota de crédito. Recarga la página e inténtalo de nuevo.', 'warning');
+            return;
+        }
+
+        showGlobalLoader();
+        $.ajax({
+            url: '/app/cargarDteCompra/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({
+                fecha_inicio: '2000-01-01',
+                fecha_fin: fechaLocalISO(),
+                tipo_fecha: 'emision',
+                page: 1,
+                page_size: 100,
+                search: rutProveedor,
+                tipo_documento: 'FACTURA ELECTRONICA',
+                filtro_vencimiento: 'pendientes',
+                solo_incidencias: false,
+                incluir_descartados: false
+            }),
+            success: function (resp) {
+                hideGlobalLoader();
+                const rutNorm = normalizarRutComparable(rutProveedor);
+                const facturas = ((resp && resp.items) || []).filter(function (f) {
+                    return normalizarRutComparable(f.rut) === rutNorm
+                        && !f.descartado
+                        && (f.estado || '').toString().toUpperCase() !== 'RECHAZADO'
+                        && saldoFilaDte(f) > 0;
+                });
+                if (!facturas.length) {
+                    Swal.fire('Sin facturas', 'Este proveedor no tiene facturas con saldo pendiente a las que enlazar la nota de crédito.', 'info');
+                    return;
+                }
+                const opciones = new Map();
+                const saldos = {};
+                facturas.forEach(function (f) {
+                    const saldo = Math.round(saldoFilaDte(f));
+                    saldos[String(f.id)] = saldo;
+                    const fecha = (f.fecha_emision || '').split('-').reverse().join('-');
+                    const insuficiente = montoNC > 0 && montoNC > saldo + 1 ? ' · saldo menor que la NC' : '';
+                    opciones.set(String(f.id), escHtml(`Factura #${f.numero_documento} · ${fecha} · saldo $${saldo.toLocaleString('es-CL')}${insuficiente}`));
+                });
+                Swal.fire({
+                    title: `Enlazar NC #${escHtml(folioNC)} a una factura`,
+                    html: `<p class="small text-muted mb-0">${escHtml(nombreProveedor)}${montoNC > 0 ? ' · NC por <strong>$' + montoNC.toLocaleString('es-CL') + '</strong>' : ''}.<br>Facturas del mismo proveedor con saldo pendiente${(resp.pagination && resp.pagination.total_count > 100) ? ' (las 100 más recientes)' : ''}.</p>`,
+                    input: 'select',
+                    inputOptions: opciones,
+                    inputPlaceholder: 'Selecciona la factura',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="bi bi-link-45deg me-1"></i>Enlazar',
+                    cancelButtonText: 'Cancelar',
+                    inputValidator: function (valor) {
+                        if (!valor) return 'Selecciona una factura.';
+                        if (montoNC > 0 && montoNC > (saldos[valor] || 0) + 1) {
+                            return 'La nota de crédito supera el saldo de esa factura: elige una con saldo suficiente.';
+                        }
+                        return null;
+                    }
+                }).then(function (r) {
+                    if (r.isConfirmed && r.value) {
+                        asociarNCaFactura(ncId, r.value);
+                    }
+                });
+            },
+            error: function (xhr) {
+                hideGlobalLoader();
+                swalTexto('error', 'Error', mensajeErrorXhr(xhr, 'No se pudieron cargar las facturas del proveedor.'));
+            }
+        });
+    }
+
+    // POST /app/asociar_nc_existente/ {nc_id, dte_id}. Los rechazos por regla
+    // de negocio llegan como 200 {success:false, error} o 4xx con {error}.
+    function asociarNCaFactura(ncId, facturaId, alTerminar) {
+        return $.ajax({
+            url: '/app/asociar_nc_existente/',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            data: JSON.stringify({ nc_id: ncId, dte_id: facturaId }),
+            success: function (response) {
+                if (response.success) {
+                    swalTexto('success', 'Éxito', response.message || 'Nota de Crédito anexada correctamente');
+                    cargarDTEs(currentPageDTE, currentSearchDTE);
+                    if (typeof alTerminar === 'function') alTerminar(true);
+                } else {
+                    swalTexto('error', 'Error', response.error || 'No se pudo anexar la nota de crédito.');
+                    if (typeof alTerminar === 'function') alTerminar(false);
+                }
+            },
+            error: function (xhr) {
+                swalTexto('error', 'Error', mensajeErrorXhr(xhr, 'No se pudo anexar la nota de crédito.'));
+                if (typeof alTerminar === 'function') alTerminar(false);
+            }
+        });
     }
 
     // ========== ANEXAR NC A FACTURA ==========
@@ -6084,11 +6356,25 @@
         // Reutilizar el modal existente pero cambiar el contexto
         $('#asociarNCDteId').val(dteId); // Guardar el ID de la factura
         $('#modalAsociarNCLabel').html('<i class="bi bi-link-45deg me-2"></i>Anexar NC a esta Factura');
-        $('.alert-info').html('<i class="bi bi-info-circle me-2"></i>Selecciona una Nota de Crédito para anexar a esta factura.');
+        // (B5-13) Ya no se reescribe todo .alert-info: ver hidden.bs.modal de #modalAsociarNC.
+        $('#buscarNC').val('');
+        $('#btnAsociarNC').prop('disabled', true);
+        $('#tablaNCsDisponiblesBody').html('<tr><td colspan="6" class="text-center text-muted"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando notas de crédito...</td></tr>');
 
-        // Cargar NCs disponibles (comportamiento normal)
-        cargarNCsDisponibles();
-        cargarProveedoresParaFiltro();
+        // B5-07: solo NC del proveedor de la factura. /app/obtenerDTE/ devuelve
+        // el proveedor (emisor) en 'receptor_id'; con él se filtra el listado y
+        // se preselecciona #filtroProveedorNC (el usuario puede cambiarlo, y el
+        // servidor rechaza una NC de otro proveedor).
+        $.ajax({ url: `/app/obtenerDTE/${dteId}/`, method: 'GET', dataType: 'json' })
+            .done(function (factura) {
+                const proveedorId = factura && factura.receptor_id ? String(factura.receptor_id) : '';
+                cargarProveedoresParaFiltro(proveedorId);
+                cargarNCsDisponibles(proveedorId);
+            })
+            .fail(function () {
+                cargarProveedoresParaFiltro('');
+                cargarNCsDisponibles();
+            });
 
         // Cambiar el texto del botón
         $('#btnAsociarNC').html('<i class="bi bi-link-45deg me-2"></i>Anexar NC Seleccionada');
@@ -6102,14 +6388,8 @@
 
 
     // ========== ASOCIAR NC EXISTENTE ==========
-
-    function abrirModalAsociarNC(dteId) {
-        $('#asociarNCDteId').val(dteId);
-        cargarNCsDisponibles();
-        cargarProveedoresParaFiltro();
-        const modal = new bootstrap.Modal(document.getElementById('modalAsociarNC'));
-        modal.show();
-    }
+    // (Se abre con abrirModalAnexarNCaFactura; el duplicado abrirModalAsociarNC,
+    // sin llamadores, se borró el 2026-09-26 — B16-09.)
 
     function cargarNCsDisponibles(filtroProveedor = '', busqueda = '') {
         const tbody = $('#tablaNCsDisponiblesBody');
@@ -6134,11 +6414,11 @@
                                 <input type="radio" name="ncSeleccionada" value="${nc.id}" class="form-check-input" 
                                        onchange="habilitarBotonAsociar()">
                             </td>
-                            <td>${nc.numero_documento}</td>
-                            <td>${nc.proveedor}</td>
-                            <td>${nc.fecha_emision}</td>
+                            <td>${escHtml(nc.numero_documento)}</td>
+                            <td>${escHtml(nc.proveedor)}</td>
+                            <td>${escHtml(nc.fecha_emision)}</td>
                             <td>$${parseFloat(nc.monto_con_iva).toLocaleString()}</td>
-                            <td><span class="badge bg-${nc.estado === 'Aceptado' ? 'success' : 'warning'}">${nc.estado}</span></td>
+                            <td><span class="badge bg-${nc.estado === 'Aceptado' ? 'success' : 'warning'}">${escHtml(nc.estado)}</span></td>
                         </tr>`;
                         tbody.append(fila);
                     });
@@ -6152,18 +6432,33 @@
         });
     }
 
-    function cargarProveedoresParaFiltro() {
+    // preseleccion: id del proveedor de la factura (B5-07). Si no está en la
+    // lista de proveedores (ficha sin esProveedor) se agrega igual, para que el
+    // filtro mostrado coincida con el listado.
+    function cargarProveedoresParaFiltro(preseleccion) {
+        const select = $('#filtroProveedorNC');
+        const elegido = preseleccion ? String(preseleccion) : '';
+        select.empty().append('<option value="">Todos los proveedores</option>');
+        if (elegido) {
+            select.append(`<option value="${escHtml(elegido)}">Proveedor de la factura</option>`).val(elegido);
+        }
         $.ajax({
             url: '/app/empresas_proveedoras/',
             method: 'POST',
             contentType: 'application/json',
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
             success: function (data) {
-                const select = $('#filtroProveedorNC');
+                if (!Array.isArray(data)) return;
+                // Si el usuario ya cambió el filtro mientras cargaba, respetarlo.
+                const actual = select.val() || '';
                 select.empty().append('<option value="">Todos los proveedores</option>');
                 data.forEach(emp => {
-                    select.append(`<option value="${emp.id}">${emp.nombre}</option>`);
+                    select.append(`<option value="${escHtml(emp.id)}">${escHtml(emp.nombre)}</option>`);
                 });
+                if (actual && !select.find('option').filter(function () { return this.value === actual; }).length) {
+                    select.append(`<option value="${escHtml(actual)}">Proveedor de la factura</option>`);
+                }
+                select.val(actual);
             }
         });
     }
@@ -6195,26 +6490,14 @@
             return;
         }
 
-        $.ajax({
-            url: '/app/asociar_nc_existente/',
-            method: 'POST',
-            contentType: 'application/json',
-            headers: { 'X-CSRFToken': getCookie('csrftoken') },
-            data: JSON.stringify({
-                nc_id: ncId,
-                dte_id: dteId
-            }),
-            success: function (response) {
-                if (response.success) {
-                    Swal.fire('Éxito', 'Nota de Crédito anexada correctamente', 'success');
-                    $('#modalAsociarNC').modal('hide');
-                    cargarDTEs(currentPageDTE, currentSearchDTE);
-                } else {
-                    Swal.fire('Error', response.error || 'Error al anexar la NC', 'error');
-                }
-            },
-            error: function () {
-                Swal.fire('Error', 'Error de conexión al anexar la NC', 'error');
+        // Candado contra el doble clic mientras responde el servidor.
+        const $btn = $(this);
+        $btn.prop('disabled', true);
+        asociarNCaFactura(ncId, dteId, function (ok) {
+            if (ok) {
+                $('#modalAsociarNC').modal('hide');
+            } else {
+                $btn.prop('disabled', !$('input[name="ncSeleccionada"]:checked').length);
             }
         });
     });
@@ -6238,7 +6521,7 @@
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
             success: function (resp) {
                 if (!resp.success) {
-                    $('#asociacionesLoader').html('<span class="text-danger">' + (resp.error || 'Error al cargar asociaciones') + '</span>');
+                    $('#asociacionesLoader').html('<span class="text-danger">' + escHtml(resp.error || 'Error al cargar asociaciones') + '</span>');
                     return;
                 }
                 asociacionesDteEsFactura = !!(resp.dte && resp.dte.es_factura);
@@ -6266,8 +6549,8 @@
             cont.html(`
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 p-3" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;">
                     <div>
-                        <div class="fw-semibold"><i class="bi bi-paperclip me-1"></i>${dp.tipo} #${dp.numero}</div>
-                        <div class="small text-muted">${dp.proveedor} · ${dp.fecha} · $${parseFloat(dp.monto || 0).toLocaleString('es-CL')}</div>
+                        <div class="fw-semibold"><i class="bi bi-paperclip me-1"></i>${escHtml(dp.tipo)} #${escHtml(dp.numero)}</div>
+                        <div class="small text-muted">${escHtml(dp.proveedor)} · ${escHtml(dp.fecha)} · $${parseFloat(dp.monto || 0).toLocaleString('es-CL')}</div>
                     </div>
                     <div class="d-flex gap-2">
                         <button class="btn btn-sm btn-outline-primary" onclick="abrirModalAsociarCotizacion('${dteId}'); return false;"><i class="bi bi-pencil"></i> Cambiar</button>
@@ -6295,7 +6578,7 @@
                 const accion = nc.nc_id
                     ? `<button class="btn btn-sm btn-outline-danger" onclick="desasociarNCDesdeHub(${nc.nc_id}); return false;"><i class="bi bi-x-lg"></i> Desasociar</button>`
                     : '<span class="text-muted small" title="No se encontró la NC original para desvincular">No vinculable</span>';
-                html += `<tr><td>#${nc.numero}</td><td>${nc.proveedor || '-'}</td><td class="text-danger">-$${parseFloat(nc.monto || 0).toLocaleString('es-CL')}</td><td class="text-end">${accion}</td></tr>`;
+                html += `<tr><td>#${escHtml(nc.numero)}</td><td>${escHtml(nc.proveedor || '-')}</td><td class="text-danger">-$${parseFloat(nc.monto || 0).toLocaleString('es-CL')}</td><td class="text-end">${accion}</td></tr>`;
             });
             html += '</tbody></table></div>';
         }
@@ -6317,7 +6600,7 @@
                 const tipo = c.es_emitida
                     ? '<span class="badge bg-info-subtle text-info">Emitida</span>'
                     : '<span class="badge bg-secondary-subtle text-secondary">Mismo prov.</span>';
-                html += `<tr><td>#${c.numero}</td><td>${tipo}</td><td class="text-danger">-$${parseFloat(c.monto || 0).toLocaleString('es-CL')}</td><td>${c.fecha || '-'}</td><td class="text-end"><button class="btn btn-sm btn-outline-danger" onclick="desasociarCompensacionDesdeHub(${c.pago_id}, ${c.es_emitida ? 'true' : 'false'}); return false;"><i class="bi bi-x-lg"></i> Revertir</button></td></tr>`;
+                html += `<tr><td>#${escHtml(c.numero)}</td><td>${tipo}</td><td class="text-danger">-$${parseFloat(c.monto || 0).toLocaleString('es-CL')}</td><td>${escHtml(c.fecha || '-')}</td><td class="text-end"><button class="btn btn-sm btn-outline-danger" onclick="desasociarCompensacionDesdeHub(${parseInt(c.pago_id, 10) || 0}, ${c.es_emitida ? 'true' : 'false'}); return false;"><i class="bi bi-x-lg"></i> Revertir</button></td></tr>`;
             });
             html += '</tbody></table></div>';
         }
@@ -6343,9 +6626,9 @@
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
                 success: function (resp) {
                     if (resp.success) { cargarAsociaciones(facturaId); cargarDTEs(currentPageDTE, currentSearchDTE); }
-                    else { Swal.fire('Error', resp.error || 'No se pudo quitar la asociación', 'error'); }
+                    else { swalTexto('error', 'Error', resp.error || 'No se pudo quitar la asociación'); }
                 },
-                error: function () { Swal.fire('Error', 'Error de conexión', 'error'); }
+                error: function (xhr) { swalTexto('error', 'Error', mensajeErrorXhr(xhr, 'No se pudo quitar la asociación.')); }
             });
         });
     }
@@ -6364,9 +6647,9 @@
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
                 success: function (resp) {
                     if (resp.success) { cargarAsociaciones(dteId); cargarDTEs(currentPageDTE, currentSearchDTE); }
-                    else { Swal.fire('Error', resp.error || 'No se pudo desenlazar la NC', 'error'); }
+                    else { swalTexto('error', 'Error', resp.error || 'No se pudo desenlazar la NC'); }
                 },
-                error: function () { Swal.fire('Error', 'Error de conexión', 'error'); }
+                error: function (xhr) { swalTexto('error', 'Error', mensajeErrorXhr(xhr, 'No se pudo desenlazar la nota de crédito.')); }
             });
         });
     }
@@ -6388,9 +6671,9 @@
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
                 success: function (resp) {
                     if (resp.success) { cargarAsociaciones(dteId); cargarDTEs(currentPageDTE, currentSearchDTE); }
-                    else { Swal.fire('Error', resp.error || 'No se pudo revertir la compensación', 'error'); }
+                    else { swalTexto('error', 'Error', resp.error || 'No se pudo revertir la compensación'); }
                 },
-                error: function () { Swal.fire('Error', 'Error de conexión', 'error'); }
+                error: function (xhr) { swalTexto('error', 'Error', mensajeErrorXhr(xhr, 'No se pudo revertir la compensación.')); }
             });
         });
     }
@@ -6435,12 +6718,12 @@
                         const checked = doc.es_actual ? 'checked' : '';
                         const filtro = `${doc.tipo} ${doc.numero} ${doc.proveedor}`.toLowerCase();
                         tbody.append(`
-                            <tr class="fila-cotizacion-doc" data-buscar="${filtro}">
-                                <td><input type="radio" name="cotizacionSeleccionada" value="${doc.id}" class="form-check-input" ${checked} onchange="habilitarBotonAsociarCotizacion()"></td>
-                                <td>${doc.tipo}</td>
-                                <td>#${doc.numero}</td>
-                                <td>${doc.proveedor}</td>
-                                <td>${doc.fecha}</td>
+                            <tr class="fila-cotizacion-doc" data-buscar="${escHtml(filtro)}">
+                                <td><input type="radio" name="cotizacionSeleccionada" value="${escHtml(doc.id)}" class="form-check-input" ${checked} onchange="habilitarBotonAsociarCotizacion()"></td>
+                                <td>${escHtml(doc.tipo)}</td>
+                                <td>#${escHtml(doc.numero)}</td>
+                                <td>${escHtml(doc.proveedor)}</td>
+                                <td>${escHtml(doc.fecha)}</td>
                                 <td>$${parseFloat(doc.monto || 0).toLocaleString('es-CL')}</td>
                             </tr>`);
                     });
@@ -6466,6 +6749,8 @@
         const facturaId = $('#asociarCotizacionFacturaId').val();
         const docId = $('input[name="cotizacionSeleccionada"]:checked').val();
         if (!docId) { Swal.fire('Atención', 'Selecciona una cotización o guía.', 'warning'); return; }
+        const $btn = $(this);
+        $btn.prop('disabled', true);
         $.ajax({
             url: '/app/asociar_factura_cotizacion/', method: 'POST',
             contentType: 'application/json',
@@ -6477,10 +6762,12 @@
                     cargarDTEs(currentPageDTE, currentSearchDTE);
                     setTimeout(() => abrirModalAsociaciones(facturaId), 300);
                 } else {
-                    Swal.fire('Error', resp.error || 'No se pudo asociar el documento', 'error');
+                    swalTexto('error', 'Error', resp.error || 'No se pudo asociar el documento');
                 }
             },
-            error: function () { Swal.fire('Error', 'Error de conexión al asociar', 'error'); }
+            // 400/404: el servidor explica el motivo (antes «Error de conexión»).
+            error: function (xhr) { swalTexto('error', 'Error', mensajeErrorXhr(xhr, 'No se pudo asociar el documento.')); },
+            complete: function () { habilitarBotonAsociarCotizacion(); }
         });
     });
 
@@ -6519,6 +6806,11 @@
             </tr>`;
         });
         const t = p.totales || {};
+        // B3-14: con compensaciones la columna y el total de N/C se rotulan
+        // igual que el PDF («N/C o compensación N°» / «TOTAL N/C Y COMPENSACIONES»).
+        const hayComp = p.hay_compensaciones === true;
+        const thDocAplicado = hayComp ? 'N/C O<br>COMPENSACIÓN N°' : 'NOTA DE<br>CRÉDITO N°';
+        const totalDocAplicado = hayComp ? 'TOTAL N/C Y COMPENSACIONES' : 'TOTAL NOTA DE CRÉDITO';
 
         const piePartes = [e.nombre, e.rut ? 'Rut: ' + e.rut : '', e.direccion,
                            e.telefono ? 'Fono ' + e.telefono : '', e.email, e.ciudad]
@@ -6539,7 +6831,7 @@
                     <thead>
                         <tr>
                             <th ${th}>FACTURA</th><th ${th}>FECHA DE<br>EMISIÓN</th><th ${th}>MONTO</th>
-                            <th ${th}>NOTA DE<br>CRÉDITO N°</th><th ${th}>MONTO N/C</th>
+                            <th ${th}>${thDocAplicado}</th><th ${th}>MONTO N/C</th>
                             <th ${th}>TRANSF. Y/O<br>CHEQUE N°</th><th ${th}>MONTO</th><th ${th}>FECHA</th>
                         </tr>
                     </thead>
@@ -6550,7 +6842,7 @@
                         <td ${tdTot}>TOTAL FACTURA</td><td ${tdTotR}>${t.factura || ''}</td>
                     </tr>
                     <tr style="background:#FFF8E1;">
-                        <td ${tdTot}>TOTAL NOTA DE CRÉDITO</td><td ${tdTotR}>${t.nc || '$0'}</td>
+                        <td ${tdTot}>${totalDocAplicado}</td><td ${tdTotR}>${t.nc || '$0'}</td>
                     </tr>
                     <tr style="background:#E8F5E9;">
                         <td ${tdTot}>TOTAL A PAGAR</td><td ${tdTotR}>${t.pago || ''}</td>
@@ -6585,8 +6877,8 @@
             headers: { 'X-CSRFToken': getCookie('csrftoken') },
             success: function (resp) {
                 if (!resp.success) {
-                    $('#envioComprobantePreviewHtml').html('<div class="text-danger small">' + (resp.error || 'No se pudo cargar la vista previa') + '</div>');
-                    Swal.fire('Error', resp.error || 'No se pudieron cargar los datos', 'error');
+                    $('#envioComprobantePreviewHtml').html('<div class="text-danger small">' + escHtml(resp.error || 'No se pudo cargar la vista previa') + '</div>');
+                    swalTexto('error', 'Error', resp.error || 'No se pudieron cargar los datos');
                     return;
                 }
                 $('#envioComprobanteEmail').val(resp.email || '');
@@ -6601,12 +6893,14 @@
                     $('#envioComprobanteAvisoTxt').html('Esta factura no está marcada como <b>Pagada</b>. El comprobante de pago solo se envía cuando la factura está pagada.');
                 } else if (resp.enviado_en) {
                     $('#envioComprobanteAviso').show().css({ background: '#ecfdf5', border: '1px solid #bbf7d0', color: '#047857' });
-                    $('#envioComprobanteAvisoTxt').html(`Ya se envió el <b>${resp.enviado_en}</b> a <b>${resp.enviado_a || '-'}</b>. Puedes reenviarlo si lo necesitas.`);
+                    // enviado_a es el correo que escribió el usuario: va escapado.
+                    $('#envioComprobanteAvisoTxt').html(`Ya se envió el <b>${escHtml(resp.enviado_en)}</b> a <b>${escHtml(resp.enviado_a || '-')}</b>. Puedes reenviarlo si lo necesitas.`);
                 }
             },
-            error: function () {
-                $('#envioComprobantePreviewHtml').html('<div class="text-danger small">Error de conexión al cargar la vista previa.</div>');
-                Swal.fire('Error', 'Error de conexión al cargar los datos del comprobante', 'error');
+            error: function (xhr) {
+                const msg = mensajeErrorXhr(xhr, 'No se pudieron cargar los datos del comprobante.');
+                $('#envioComprobantePreviewHtml').html('<div class="text-danger small">' + escHtml(msg) + '</div>');
+                swalTexto('error', 'Error', msg);
             }
         });
 
@@ -6678,7 +6972,7 @@
         $('#envioMasivoAsunto').val('');
         $('#envioMasivoMensaje').val('');
         $('#envioMasivoAviso').hide();
-        $('#envioMasivoListaFacturas').html(numeros.join(', '));
+        $('#envioMasivoListaFacturas').text(numeros.join(', '));
         $('#envioMasivoSubtitulo').text(`${checkboxes.length} factura(s) seleccionada(s)`);
         $('#btnConfirmarEnvioMasivo').prop('disabled', false).html('<i class="bi bi-send me-1"></i>Enviar por correo');
         $('#envioMasivoPreviewHtml').html('<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando vista previa...</div>');
@@ -6802,8 +7096,8 @@
                         <tr>
                             <td><input type="radio" name="facturaCompensar" value="${f.id}" class="form-check-input"
                                        onchange="seleccionarFacturaCompensar(${f.id}, ${f.saldo_disponible})"></td>
-                            <td>${f.numero_documento}</td>
-                            <td>${f.fecha_emision}</td>
+                            <td>${escHtml(f.numero_documento)}</td>
+                            <td>${escHtml(f.fecha_emision)}</td>
                             <td>$${parseFloat(f.monto_con_iva).toLocaleString('es-CL')}</td>
                             <td>$${parseFloat(f.saldo_disponible).toLocaleString('es-CL')}</td>
                             <td style="max-width:150px;">
@@ -6863,19 +7157,17 @@
             data: JSON.stringify({ dte_id: dteId, factura_compensadora_id: facturaId, monto: monto }),
             success: function (response) {
                 if (response.success) {
-                    Swal.fire('Éxito', response.message || 'Factura compensada correctamente', 'success');
+                    swalTexto('success', 'Éxito', response.message || 'Factura compensada correctamente');
                     $('#modalCompensarFactura').modal('hide');
                     cargarDTEs(currentPageDTE, currentSearchDTE);
                 } else {
                     btn.prop('disabled', false);
-                    Swal.fire('Error', response.error || 'No se pudo compensar', 'error');
+                    swalTexto('error', 'Error', response.error || 'No se pudo compensar');
                 }
             },
             error: function (xhr) {
                 btn.prop('disabled', false);
-                let msg = 'Error de conexión al compensar';
-                try { msg = JSON.parse(xhr.responseText).error || msg; } catch (e) { }
-                Swal.fire('Error', msg, 'error');
+                swalTexto('error', 'Error', mensajeErrorXhr(xhr, 'No se pudo registrar la compensación.'));
             }
         });
     });
@@ -6894,6 +7186,7 @@
         $('#emitidaManualFecha').val('');
         $('#emitidaManualEmisor').val('');
         $('#emitidaManualMonto').val('').removeAttr('max');
+        $('#emitidaManualTotal').val('');
         // volver a la pestaña "Buscar en sistema"
         const tabSistema = document.getElementById('tab-emitida-sistema-btn');
         if (tabSistema) bootstrap.Tab.getOrCreateInstance(tabSistema).show();
@@ -6928,9 +7221,9 @@
                         <tr>
                             <td><input type="radio" name="documentoEmitidoCompensar" value="${f.id}" class="form-check-input"
                                        onchange="seleccionarDocumentoEmitido(${f.id}, ${f.saldo_disponible})"></td>
-                            <td>${f.numero_documento}</td>
-                            <td>${f.emisor || '-'}</td>
-                            <td>${f.fecha_emision}</td>
+                            <td>${escHtml(f.numero_documento)}</td>
+                            <td>${escHtml(f.emisor || '-')}</td>
+                            <td>${escHtml(f.fecha_emision)}</td>
                             <td>$${parseFloat(f.monto_con_iva).toLocaleString('es-CL')}</td>
                             <td>$${parseFloat(f.saldo_disponible).toLocaleString('es-CL')}</td>
                             <td style="max-width:150px;">
@@ -6980,11 +7273,19 @@
             if (monto > Math.round(compensarEmitidaSaldoObjetivoVal)) {
                 Swal.fire('Atención', 'El monto no puede exceder el saldo de la factura', 'warning'); return;
             }
+            const totalEmitida = parseInt($('#emitidaManualTotal').val(), 10);
+            if (totalEmitida > 0 && monto > totalEmitida) {
+                Swal.fire('Atención', 'El monto a aplicar no puede superar el total de la factura emitida', 'warning'); return;
+            }
             payload = {
                 dte_id: dteId, modo: 'manual', numero: numero, monto: monto,
                 fecha: $('#emitidaManualFecha').val() || '',
                 emisor_label: ($('#emitidaManualEmisor').val() || '').trim(),
+                // B5-08: la pantalla sabe confirmar el reuso del mismo número
+                // (409 requiere_confirmacion → Swal → reenvío con true).
+                confirmar_reuso: false,
             };
+            if (totalEmitida > 0) payload.monto_total_emitida = totalEmitida;
         } else {
             const docId = $('input[name="documentoEmitidoCompensar"]:checked').val();
             if (!docId) { Swal.fire('Atención', 'Selecciona una factura emitida', 'warning'); return; }
@@ -6993,6 +7294,11 @@
             payload = { dte_id: dteId, modo: 'existente', documento_emitido_id: docId, monto: monto };
         }
 
+        enviarCompensacionEmitida(payload, btn);
+    });
+
+    function enviarCompensacionEmitida(payload, btn) {
+        if (btn.prop('disabled')) return;  // doble clic mientras responde
         btn.prop('disabled', true);
         $.ajax({
             url: '/app/asociar_documento_emitido_compensacion/',
@@ -7003,21 +7309,46 @@
             success: function (response) {
                 btn.prop('disabled', false);
                 if (response.success) {
-                    Swal.fire('Éxito', response.message || 'Factura emitida compensada correctamente', 'success');
+                    // 'message' puede traer el aviso de reuso (folios y montos).
+                    swalTexto('success', 'Éxito', response.message || 'Factura emitida compensada correctamente');
                     $('#modalCompensarEmitida').modal('hide');
                     cargarDTEs(currentPageDTE, currentSearchDTE);
                 } else {
-                    Swal.fire('Error', response.error || 'No se pudo compensar', 'error');
+                    swalTexto('error', 'Error', response.error || 'No se pudo compensar');
                 }
             },
             error: function (xhr) {
                 btn.prop('disabled', false);
-                let msg = 'Error de conexión al compensar';
-                try { msg = JSON.parse(xhr.responseText).error || msg; } catch (e) { }
-                Swal.fire('Error', msg, 'error');
+                const res = xhr.responseJSON;
+                // B5-08: el mismo número de factura emitida ya se aplicó a otras
+                // compras de este proveedor. Repartirla es válido: se confirma
+                // mostrando cuánto lleva aplicado y dónde, y se reenvía.
+                if (xhr.status === 409 && res && res.requiere_confirmacion && !payload.confirmar_reuso) {
+                    const yaUsado = Math.round(parseFloat(res.ya_usado || 0));
+                    const folios = Array.isArray(res.folios) ? res.folios : [];
+                    const detalle = (yaUsado > 0 ? `Ya lleva <strong>$${yaUsado.toLocaleString('es-CL')}</strong> aplicados` : 'Ya se aplicó')
+                        + (folios.length ? ` en la(s) factura(s) <strong>${folios.map(f => '#' + escHtml(f)).join(', ')}</strong>` : '')
+                        + '.';
+                    Swal.fire({
+                        icon: 'warning',
+                        title: `¿Aplicar de nuevo la factura emitida #${escHtml(payload.numero)}?`,
+                        html: `<p class="mb-2">${detalle}</p><p class="small text-muted mb-0">${escHtml(typeof res.error === 'string' ? res.error : 'Verifica que la suma no supere su total.')}</p>`,
+                        showCancelButton: true,
+                        confirmButtonText: 'Sí, aplicar',
+                        cancelButtonText: 'Cancelar',
+                        reverseButtons: true,
+                        focusCancel: true
+                    }).then(function (r) {
+                        if (r.isConfirmed) {
+                            enviarCompensacionEmitida(Object.assign({}, payload, { confirmar_reuso: true }), btn);
+                        }
+                    });
+                    return;
+                }
+                swalTexto('error', 'Error', mensajeErrorXhr(xhr, 'No se pudo registrar la compensación.'));
             }
         });
-    });
+    }
 
     function compensarEmitidaDesdeHub(dteId) {
         $('#modalAsociaciones').modal('hide');
@@ -7052,10 +7383,10 @@
 
                     const fila = `
                     <tr>
-                        <td><span class="badge bg-info">${inc.tipo_display}</span></td>
-                        <td style="word-break: break-word;">${inc.descripcion}</td>
-                        <td><span class="badge bg-${estadoBadge}">${inc.estado_display}</span></td>
-                        <td><small>${inc.fecha_registro}</small></td>
+                        <td><span class="badge bg-info">${escHtml(inc.tipo_display)}</span></td>
+                        <td style="word-break: break-word;">${escHtml(inc.descripcion)}</td>
+                        <td><span class="badge bg-${estadoBadge}">${escHtml(inc.estado_display)}</span></td>
+                        <td><small>${escHtml(inc.fecha_registro)}</small></td>
                         <td>
                             <div class="btn-group btn-group-sm">
                                 ${inc.estado !== 'RESUELTO'
@@ -7231,15 +7562,21 @@
     }
 
     // Función para resaltar términos de búsqueda en DTE
+    // Devuelve HTML seguro: el texto (nombre de proveedor, folio…) se escapa y
+    // solo se envuelven en <span> las coincidencias de la búsqueda.
     function resaltarBusquedaDTE(texto, busqueda) {
-        if (!busqueda || !texto) return texto;
-
-        // Convertir a string si no lo es
+        if (texto === null || texto === undefined) return '';
         const textoStr = String(texto);
-        const busquedaStr = String(busqueda);
+        if (!busqueda || !textoStr) return escHtml(textoStr);
 
+        const busquedaStr = String(busqueda);
         const regex = new RegExp(`(${busquedaStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-        return textoStr.replace(regex, '<span class="search-highlight">$1</span>');
+        // split con grupo de captura: las coincidencias quedan en las posiciones impares.
+        return textoStr.split(regex).map(function (parte, i) {
+            return i % 2 === 1
+                ? '<span class="search-highlight">' + escHtml(parte) + '</span>'
+                : escHtml(parte);
+        }).join('');
     }
 
     // ========== GESTIÓN DE PROVEEDORES ==========
@@ -7289,16 +7626,16 @@
                                 <tr>
                                     <td>${resaltarBusquedaProveedores(proveedor.nombre, search)}</td>
                                     <td>${resaltarBusquedaProveedores(proveedor.rut, search)}</td>
-                                    <td>${proveedor.giro || '-'}</td>
-                                    <td>${proveedor.ciudad || '-'}</td>
-                                    <td><span class="badge bg-info">${proveedor.dtes_count}</span></td>
-                                    <td><span class="badge bg-primary">${proveedor.compras_count}</span></td>
+                                    <td>${escHtml(proveedor.giro || '-')}</td>
+                                    <td>${escHtml(proveedor.ciudad || '-')}</td>
+                                    <td><span class="badge bg-info">${parseInt(proveedor.dtes_count, 10) || 0}</span></td>
+                                    <td><span class="badge bg-primary">${parseInt(proveedor.compras_count, 10) || 0}</span></td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <button class="btn btn-outline-primary" onclick="editarProveedor(${proveedor.id})" title="Editar">
+                                            <button class="btn btn-outline-primary" onclick="editarProveedor(${parseInt(proveedor.id, 10) || 0})" title="Editar">
                                                 <i class="bi bi-pencil"></i>
                                             </button>
-                                            <button class="btn btn-outline-danger" onclick="eliminarProveedor(${proveedor.id})" title="Eliminar">
+                                            <button class="btn btn-outline-danger" onclick="eliminarProveedor(${parseInt(proveedor.id, 10) || 0})" title="Eliminar">
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         </div>
@@ -7309,23 +7646,23 @@
                         });
                     }
                 } else {
-                    Swal.fire('Error', response.error || 'Error al cargar proveedores', 'error');
+                    swalTexto('error', 'Error', response.error || 'Error al cargar proveedores');
                 }
                 hideGlobalLoader();
             },
-            error: function () {
+            error: function (xhr) {
                 hideGlobalLoader();
-                Swal.fire('Error', 'Error de conexión al cargar proveedores', 'error');
+                swalTexto('error', 'Error', mensajeErrorXhr(xhr, 'No se pudieron cargar los proveedores.'));
             }
         });
     }
 
+    // B11-07: nombre y RUT vienen de proveedores importados por CSV o creados
+    // a mano. Se escapa el texto y solo se envuelven las coincidencias en
+    // <span> (misma técnica que resaltarBusquedaDTE); sin búsqueda, texto
+    // escapado.
     function resaltarBusquedaProveedores(texto, busqueda) {
-        if (!busqueda || !texto) return texto;
-        const textoStr = String(texto);
-        const busquedaStr = String(busqueda);
-        const regex = new RegExp(`(${busquedaStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-        return textoStr.replace(regex, '<span class="search-highlight">$1</span>');
+        return resaltarBusquedaDTE(texto, busqueda);
     }
 
     // Eventos de paginación para proveedores
@@ -7475,8 +7812,9 @@
                     // Si hay múltiples errores separados por ' | ', mostrarlos en lista
                     if (response.error.includes(' | ')) {
                         const errores = response.error.split(' | ');
+                        // Los mensajes pueden citar lo que escribió el usuario: escapados.
                         mensajeError = '<ul style="text-align: left;">' +
-                            errores.map(error => `<li>${error}</li>`).join('') +
+                            errores.map(error => `<li>${escHtml(error)}</li>`).join('') +
                             '</ul>';
 
                         Swal.fire({
@@ -7486,10 +7824,10 @@
                             confirmButtonText: 'Entendido'
                         });
                     } else {
-                        Swal.fire('Error', response.error, 'error');
+                        swalTexto('error', 'Error', response.error);
                     }
                 } else {
-                    Swal.fire('Error', mensajeError, 'error');
+                    swalTexto('error', 'Error', mensajeErrorXhr(xhr, mensajeError));
                 }
             }
         });
@@ -7555,12 +7893,11 @@
                             cargarProveedores(currentPageProveedores, currentSearchProveedores);
                             cargarEmpresasReceptoras();
                         } else {
-                            Swal.fire('Error', response.error || 'Error al eliminar proveedor', 'error');
+                            swalTexto('error', 'Error', response.error || 'Error al eliminar proveedor');
                         }
                     },
                     error: function (xhr) {
-                        const response = xhr.responseJSON;
-                        Swal.fire('Error', response?.error || 'Error de conexión', 'error');
+                        swalTexto('error', 'Error', mensajeErrorXhr(xhr, 'No se pudo eliminar el proveedor.'));
                     }
                 });
             }
@@ -7579,6 +7916,8 @@
     $('#modalPago').on('hidden.bs.modal', function () {
         limpiarModales();
         $('#formPago')[0].reset();
+        // reset() no avisa a Select2: sincronizar el método visible (B5-12).
+        $('#metodoPago').val('').trigger('change');
         $('#pagoEditId').val('');
         $('#pagoDteId').val('');
     });

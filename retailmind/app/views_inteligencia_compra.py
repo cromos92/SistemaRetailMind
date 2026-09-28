@@ -34,6 +34,7 @@ from .constants_kardex import (
     REF_SALDO_INICIAL_SINTETICO,
 )
 from .decorators import requiere_permiso
+from .services import indicadores
 from .models import (
     AtributoOpcion, CampanaLiquidacionProducto, Categoria, Compras_Producto,
     EmpresaUser, LoteProducto, Movimientos_Producto, Producto, Producto_Talla,
@@ -316,7 +317,7 @@ def obtener_inteligencia_compra(request):
             v = (va.get(a, {}) or {}).get('u') or 0
             i = aa.get(a, 0)
             sellthrough.append({'anio': a, 'vendido': v, 'ingresado': i,
-                                'str': round(100.0 * v / i, 1) if i else None})
+                                'str': indicadores.sell_through_ingresado(v, i)})
 
         # -------- 6. velocidad 90d + montos TTM (una pasada 455d) --------
         # Las 4 ventanas (90d, LY 455→365d y los montos TTM del bloque 9) son
@@ -383,8 +384,9 @@ def obtener_inteligencia_compra(request):
 
         # -------- 8. recomendación --------
         forward = fc['forward_annual']
-        mensual = forward / 12 if forward else 0
-        cobertura = round(stock_tiendas / mensual, 1) if mensual else None
+        # Cobertura sobre PRONÓSTICO (glosario 'cobertura_meses_pronostico'):
+        # stock tiendas ÷ (forward ÷ 12). Mismo resultado que el inline anterior.
+        cobertura = indicadores.cobertura_meses(stock_tiendas, forward)
         season = forward / 2  # ~6 meses
         gross_need = max(0, season - stock_tiendas)
         newness = round(season * 0.25)
@@ -447,7 +449,7 @@ def obtener_inteligencia_compra(request):
             margen_pct, margen_src, margen_anual = None, None, 0
         rotacion = round(12.0 / cobertura, 2) if cobertura else None
         wos = round(cobertura * 4.345, 1) if cobertura else None
-        gmroi = round(margen_anual / inv_costo, 2) if inv_costo else None
+        gmroi = indicadores.gmroi(margen_anual, inv_costo)
 
         # -------- 10. dead stock / antigüedad (SKUs con stock sin venta reciente) --------
         skus_total = fin['n'] or 0
@@ -506,6 +508,46 @@ def obtener_inteligencia_compra(request):
         liquidacion = {'skus': dead180_n, 'unidades': dead180_u, 'valor_costo': dead180_costo,
                        'tallas_sobre': tallas_sobre, 'texto': liq_texto}
 
+        # -------- 14. ya pedido en OC abiertas (DATO INFORMATIVO) --------
+        # 'comprar' no mira las OC, así que el comprador podía duplicar lo ya
+        # pedido. Se informa lo pedido en OC ACTIVA de la marca que todavía no
+        # tiene recepción registrada contra la OC (Σ stock − Σ stockArribado),
+        # con la fecha y temporada de cada OC. NO se resta de 'comprar': la
+        # mercadería que entra por Compra Manual no se liga a la OC, así que
+        # este pendiente puede estar inflado (hallazgos B15-02 / B15-07).
+        en_oc_abiertas = {'unidades': 0, 'ocs': []}
+        try:
+            from .models import Compras_Producto_Talla, Productos_Recepcionados
+            filtro_oc = {'compra_producto__compras__estado': 'ACTIVA',
+                         'compra_producto__atributo1__iexact': marca.valor}
+            recibido_oc = {
+                r['compra_producto_talla__compra_producto__compras_id']: r['u'] or 0
+                for r in (Productos_Recepcionados.objects
+                          .filter(**{f'compra_producto_talla__{k}': v for k, v in filtro_oc.items()})
+                          .values('compra_producto_talla__compra_producto__compras_id')
+                          .annotate(u=Sum('stockArribado')))
+            }
+            for r in (Compras_Producto_Talla.objects.filter(**filtro_oc)
+                      .values('compra_producto__compras_id', 'compra_producto__compras__nombre',
+                              'compra_producto__compras__fecha', 'compra_producto__compras__temporada')
+                      .annotate(u=Sum('stock'))
+                      .order_by('compra_producto__compras__fecha')):
+                oc_id = r['compra_producto__compras_id']
+                pendiente = max(0, (r['u'] or 0) - recibido_oc.get(oc_id, 0))
+                if not pendiente:
+                    continue
+                fecha_oc = r['compra_producto__compras__fecha']
+                en_oc_abiertas['ocs'].append({
+                    'id': oc_id,
+                    'nombre': r['compra_producto__compras__nombre'] or '',
+                    'fecha': fecha_oc.strftime('%Y-%m-%d') if fecha_oc else None,
+                    'temporada': r['compra_producto__compras__temporada'] or '',
+                    'pendiente': pendiente,
+                })
+                en_oc_abiertas['unidades'] += pendiente
+        except Exception:
+            logger.warning('OC abiertas no disponibles para marca %s', marca_id, exc_info=True)
+
         data = {
             'marca': marca.valor,
             'scope': 'Todas las tiendas' if not tienda_especifica else
@@ -527,10 +569,14 @@ def obtener_inteligencia_compra(request):
             'salud': {
                 'skus_total': skus_total, 'dead90_n': dead90_n, 'dead180_n': dead180_n,
                 'dead180_u': dead180_u, 'dead180_costo': dead180_costo,
-                'pct_dead180': round(100.0 * dead180_n / skus_total, 1) if skus_total else None,
+                'pct_dead180': indicadores.dead_stock_pct(dead180_n, skus_total),
                 'abc': abc, 'lead_time': lead,
             },
             'liquidacion': liquidacion,
+            # Ventana/base de cada indicador (glosario app/services/indicadores.py),
+            # para que el consumidor sepa contra qué se divide.
+            'ventanas': {'velocidad_dias': 90, 'ttm_dias': 365, 'dead_dias': 180,
+                         'cobertura_base': 'pronostico_12m'},
             'ventas_anual': ventas_anual,
             'ventas_por_tienda': ventas_por_tienda,
             'distribucion_bodega': distribucion_bodega,
@@ -543,13 +589,15 @@ def obtener_inteligencia_compra(request):
                 'veredicto': veredicto, 'comprar': comprar, 'cobertura_meses': cobertura,
                 'ttm': fc['ttm'], 'yoy': fc['yoy'], 'lead_dias': lead['dias'],
                 'curva_compra': curva_compra, 'evitar_tallas': evitar, 'asignacion': asignacion,
+                # Informativo, NO descontado de 'comprar' (ver bloque 14).
+                'en_oc_abiertas': en_oc_abiertas,
             },
         }
         return JsonResponse({'success': True, 'data': data})
 
-    except Exception as e:
+    except Exception:
         logger.exception('Error en inteligencia de compra')
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        return JsonResponse({'success': False, 'error': 'No se pudo calcular la inteligencia de compra.'}, status=500)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -733,11 +781,14 @@ def _fila_liquidacion(ir, t, dd):
     dead_costo = dd.get('dead_costo') or 0
     dead_skus = dd.get('dead_skus') or 0
 
-    rotacion = round(u / stock, 2) if stock else None
-    cobertura = round(stock / (u / 12.0), 1) if (u and stock) else None
+    # Fórmulas del glosario (app/services/indicadores.py), ventana TTM 365 d
+    # y dead stock 180 d; mismos resultados que la aritmética inline anterior.
+    # Fila solo-bodega (stock tiendas 0) y margen sin dato siguen en None (—).
+    rotacion = indicadores.rotacion(u, stock)
+    cobertura = indicadores.cobertura_meses(stock, u) if stock else None
     margen = (venta - costo) if (venta > 0 and 0 < costo < venta) else None
-    gmroi = round(margen / valor_costo, 2) if (margen and valor_costo) else None
-    pct_dead = round(100.0 * dead_skus / skus, 1) if skus else 0
+    gmroi = indicadores.gmroi(margen, valor_costo) if margen else None
+    pct_dead = indicadores.dead_stock_pct(dead_skus, skus, sin_datos=0)
 
     if stock == 0 and stock_cd > 0:
         accion = 'Traspasar'
@@ -955,6 +1006,8 @@ def obtener_plan_liquidacion(request):
             'categorias': filas_cat,
             'especialidades': filas_esp,
             'sucursales': filas_suc,
+            # Ventanas de cada indicador (glosario app/services/indicadores.py).
+            'ventanas': {'ttm_dias': 365, 'dead_dias': 180, 'cobertura_base': 'ttm_365d'},
             'filtros_aplicados': {
                 'categoria_id': ctx['categoria_id'], 'marca_id': ctx['marca_id'],
                 'especialidad_id': ctx['especialidad_id'],

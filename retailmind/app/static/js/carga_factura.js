@@ -98,7 +98,8 @@
     }
 
     function avisar(titulo, texto, icono) {
-        if (window.Swal) Swal.fire(titulo, texto, icono || 'error');
+        // text, no html: los errores del servidor pueden citar lo leído del PDF.
+        if (window.Swal) Swal.fire({ title: titulo, text: texto, icon: icono || 'error' });
         else alert(titulo + ': ' + texto);
     }
 
@@ -147,7 +148,7 @@
             ['bi-file-earmark-pdf', 'Archivo', esc(e.archivo) + (e.bytes ? ' <small>(' + kb(e.bytes) + ')</small>' : '')],
             ['bi-shop', 'Bodega', esc(e.bodega)],
             ['bi-tag', 'Marca', e.marca ? esc(e.marca) : '<span class="cf-muted">la detecta el lector</span>'],
-            ['bi-arrow-repeat', 'Lecturas', esc(e.lecturas) + (Number(e.lecturas) > 1 ? ' (se comparan entre sí)' : ' (rápida)')],
+            ['bi-arrow-repeat', 'Lecturas', ({ 1: '1 (rápida)', 2: 'auto: la segunda solo si hay dudas', 3: '2 siempre (se comparan)' })[Number(e.lecturas)] || esc(e.lecturas)],
         ];
         if (e.indicaciones) filas.push(['bi-chat-left-text', 'Indicaciones', esc(e.indicaciones)]);
         return '<div class="cf-envio"><div class="cf-envio-titulo"><i class="bi bi-cloud-arrow-up me-1"></i>Factura enviada a leer</div>' +
@@ -173,6 +174,40 @@
         return h;
     }
 
+    /** Tokens y búsquedas que consumió un paso (lectura, chat, búsqueda). */
+    function htmlUso(u) {
+        if (!u || !u.llamadas) return '';
+        const k = n => (n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : String(n || 0));
+        return '<div class="cf-uso"><i class="bi bi-cpu me-1"></i>' + u.llamadas + ' llamada(s) · ' +
+            k((u.entrada || 0) + (u.cache_leida || 0)) + ' tokens de entrada' +
+            (u.cache_leida ? ' (' + k(u.cache_leida) + ' desde caché)' : '') +
+            ' · ' + k(u.salida || 0) + ' de salida' +
+            (u.busquedas ? ' · ' + u.busquedas + ' búsqueda(s) web' : '') + '</div>';
+    }
+
+    /** Lo que quedó (o venía) aprendido: chips moradas. */
+    function htmlAprendido(lista, titulo) {
+        if (!lista || !lista.length) return '';
+        return '<div class="cf-aplicado"><div class="cf-aplicado-titulo"><i class="bi bi-mortarboard me-1"></i>' +
+            esc(titulo || 'Aprendido para la próxima factura') + '</div>' +
+            lista.map(c => '<span class="cf-chip aprendido">' + esc(c) + '</span>').join(' ') + '</div>';
+    }
+
+    /** Resultado de una búsqueda en internet, artículo por artículo. */
+    function htmlHallazgos(m) {
+        if (!m.hallazgos || !m.hallazgos.length) return '';
+        return '<div class="cf-aplicado">' + m.hallazgos.map(h =>
+            '<div class="cf-hallazgo">' +
+            (h.ok ? '<i class="bi bi-check2-circle text-success me-1"></i>' : '<i class="bi bi-x-circle text-muted me-1"></i>') +
+            '<b>' + esc(h.articulo) + '</b>' + (h.nombre ? ' · ' + esc(h.nombre) : '') +
+            (h.que_es ? ' <span class="cf-muted">' + esc(h.que_es) + '</span>' : '') +
+            (h.color ? ' <span class="cf-chip internet">' + esc(h.color) + (h.colores_vistos ? ' (' + esc(h.colores_vistos) + ')' : '') + '</span>' : '') +
+            (h.aplicado && h.aplicado.length ? ' <span class="cf-chip nueva">aplicado: ' + esc(h.aplicado.join(', ')) + '</span>' : '') +
+            (/^https?:\/\//i.test(h.fuente_url || '') ? ' <a href="' + esc(h.fuente_url) + '" target="_blank" rel="noopener" class="cf-muted">fuente</a>' : '') +
+            (h.detalle ? ' <span class="cf-nota error">' + esc(h.detalle) + '</span>' : '') +
+            '</div>').join('') + '</div>';
+    }
+
     function mensaje(m) {
         const texto = esc(m.texto);
         let div;
@@ -184,18 +219,24 @@
                 div = burbuja('usuario', '<div class="cf-etiqueta"><i class="bi bi-chat-left-text me-1"></i>Indicaciones para la lectura</div>' + texto);
                 break;
             case 'lectura':
-                div = evento('bi-file-earmark-check', 'Lectura terminada', texto, 'cf-evento-ok');
+                div = evento('bi-file-earmark-check', 'Lectura terminada',
+                    texto + htmlAprendido(m.aprendido, 'Ya venía aprendido de cargas anteriores') + htmlUso(m.uso), 'cf-evento-ok');
                 break;
             case 'carga':
                 div = m.quien === 'usuario'
                     ? evento('bi-box-arrow-in-down', 'Orden de carga', texto)
-                    : evento('bi-check-circle', 'Carga terminada', texto, 'cf-evento-ok');
+                    : evento('bi-check-circle', 'Carga terminada', texto + htmlAprendido(m.aprendido), 'cf-evento-ok');
+                break;
+            case 'busqueda':
+                div = m.quien === 'usuario'
+                    ? evento('bi-globe', 'Búsqueda en internet pedida', texto)
+                    : evento('bi-globe', 'Búsqueda en internet', texto + htmlHallazgos(m) + htmlUso(m.uso), 'cf-evento-ok');
                 break;
             case 'error':
-                div = evento('bi-exclamation-octagon', 'Problema', texto, 'cf-evento-error');
+                div = evento('bi-exclamation-octagon', 'Problema', texto + htmlHallazgos(m), 'cf-evento-error');
                 break;
             default:
-                div = burbuja(m.quien, texto + (m.quien === 'agente' ? htmlCambios(m) : ''));
+                div = burbuja(m.quien, texto + (m.quien === 'agente' ? htmlCambios(m) + htmlAprendido(m.aprendido, 'Recordaré') : ''));
         }
         const h = div.querySelector('.cf-hora');
         if (h) h.textContent = hora(m.fecha);
@@ -263,6 +304,7 @@
     const ESTADOS = {
         LEYENDO: ['Leyendo el PDF…', 'cf-pill-run'],
         CARGANDO: ['Cargando productos…', 'cf-pill-run'],
+        BUSCANDO: ['Buscando en internet…', 'cf-pill-run'],
         LEIDA: ['Vista previa lista', 'cf-pill-ok'],
         CERRADA: ['Cerrada', 'cf-pill-muted'],
         ERROR: ['Error de lectura', 'cf-pill-error'],
@@ -285,9 +327,12 @@
         pill.innerHTML = (clase === 'cf-pill-run' ? '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>' : '') + esc(texto);
     }
 
+    function enProceso(estado) {
+        return estado === 'LEYENDO' || estado === 'CARGANDO' || estado === 'BUSCANDO';
+    }
+
     function ocupado() {
-        return st.enviando || st.hablando ||
-            !!(st.resumen && (st.resumen.estado === 'LEYENDO' || st.resumen.estado === 'CARGANDO'));
+        return st.enviando || st.hablando || !!(st.resumen && enProceso(st.resumen.estado));
     }
 
     /** Habilita lo que corresponde y explica, debajo de la caja, qué pasa al apretar. */
@@ -308,6 +353,7 @@
             $texto.placeholder = st.enviando ? 'Subiendo el PDF…'
                 : st.hablando ? 'Pensando…'
                 : (st.resumen && st.resumen.estado === 'CARGANDO') ? 'Cargando… espera a que termine'
+                : (st.resumen && st.resumen.estado === 'BUSCANDO') ? 'Buscando en internet… espera a que termine'
                 : 'Leyendo el PDF… espera a que termine';
             ayuda = st.hablando ? 'Estoy ajustando la vista previa con lo que escribiste.'
                 : 'Sigo trabajando en el servidor. Puedes cerrar esta ventana y volver después: la carga queda guardada.';
@@ -543,11 +589,13 @@
         st.mensajesVistos = mensajes.length;
 
         const estado = data.sesion.estado;
-        if (estado === 'LEYENDO' || estado === 'CARGANDO') {
-            setTyping(data.sesion.progreso || (estado === 'LEYENDO' ? 'Leyendo el PDF…' : 'Cargando…'),
+        if (enProceso(estado)) {
+            setTyping(data.sesion.progreso || (estado === 'LEYENDO' ? 'Leyendo el PDF…' : estado === 'BUSCANDO' ? 'Buscando en internet…' : 'Cargando…'),
                 estado === 'LEYENDO'
                     ? 'Puedes cerrar esta ventana: sigo en el servidor y aquí queda todo guardado.'
-                    : 'Escribiendo stock, lotes, DTE y compra…');
+                    : estado === 'BUSCANDO'
+                        ? 'Unos 15 segundos por artículo. Lo encontrado queda aprendido para la próxima factura.'
+                        : 'Escribiendo stock, lotes, DTE y compra…');
         }
         const terminoAlgo = st.estadoPrevio && st.estadoPrevio !== estado && estado === 'LEIDA';
         if ((inicial || terminoAlgo) && (estado === 'LEIDA' || estado === 'CERRADA' || estado === 'CARGANDO')) {
@@ -559,7 +607,7 @@
             if ($r) $r.click();
         }
         st.estadoPrevio = estado;
-        if (estado === 'LEYENDO' || estado === 'CARGANDO') {
+        if (enProceso(estado)) {
             st.timer = setTimeout(() => refrescar(false), INTERVALO_MS);
         }
     }
@@ -587,7 +635,7 @@
             st.previas[item.idx] = item;
             pintarPrevia(item);
         });
-        if (st.resumen && (st.resumen.estado === 'LEYENDO' || st.resumen.estado === 'CARGANDO')) {
+        if (st.resumen && enProceso(st.resumen.estado)) {
             setTyping(st.resumen.progreso || '…');
         }
     }
@@ -639,11 +687,24 @@
             '<div title="Tipo de talla y guías por género (se cambian por el chat)">Tallas <strong>' + esc(item.tipo_talla || 'CL') + '</strong>' +
             (item.guias_talla && Object.keys(item.guias_talla).length ? ' · guías: ' + esc(Object.entries(item.guias_talla).map(([g, n]) => g + '→' + n).join(', ')) : ' · sin guías') + '</div>' +
             (item.descuento_global ? '<div>Descuento global <strong>' + esc(item.descuento_global) + '</strong> (ya en los costos)</div>' : '') +
+            '<div title="Reglas de la marca: las de código y lo aprendido en cargas anteriores">Perfil <strong>' + esc(item.perfil || 'genérico') + '</strong>' +
+            (item.identidad_color === false ? ' · el código lleva el color' : ' · color aparte del código') + '</div>' +
             '<div class="ms-auto">' + estadoBadge(item.estado) + '</div>' +
             '</div><div class="cf-card-body">';
 
         if (item.error) {
             h += '<p class="cf-nota error mb-2"><i class="bi bi-exclamation-triangle me-1"></i>' + esc(item.error) + '</p>';
+            if (item.registrar_dte) {
+                // La factura no está registrada: se abre Gestión Documentos Compras
+                // en otra pestaña con lo leído (esta sesión queda guardada).
+                const r = item.registrar_dte;
+                h += '<div class="d-flex flex-wrap gap-2 align-items-center mb-2">' +
+                    '<a class="btn btn-sm btn-primary" target="_blank" rel="noopener" href="' + esc(r.url) + '">' +
+                    '<i class="bi bi-receipt me-1"></i>Registrar esta factura</a>' +
+                    '<span class="cf-muted small">Leído: folio ' + esc(r.folio || '—') + ' · RUT ' + esc(r.rut || '—') +
+                    (r.proveedor ? ' (' + esc(r.proveedor) + ')' : '') + ' · emitida ' + esc(r.fecha || '—') +
+                    ' · neto $' + fmt(r.neto) + '. Cuando esté registrada, aprieta «Volver a calcular».</span></div>';
+            }
             h += '<div class="d-flex flex-wrap gap-2 align-items-center mb-2">' +
                 '<span class="small">Folio <input class="form-control form-control-sm d-inline-block" style="width:110px" data-campo="folio" value="' + esc(item.folio || '') + '"' + dis + '></span>' +
                 '<span class="small">RUT proveedor <input class="form-control form-control-sm d-inline-block" style="width:130px" data-campo="proveedor_rut" value="' + esc(item.proveedor_rut || '') + '"' + dis + '></span>' +
@@ -678,6 +739,7 @@
         if (item.fuente) h += '<span class="cf-muted">' + esc(item.fuente) + '</span>';
         h += '<span class="ms-auto d-flex gap-2">';
         if (!bloqueada) {
+            h += '<button type="button" class="btn btn-outline-secondary btn-sm" data-accion="investigar" title="Averigua en internet qué es cada artículo y su color predominante (las líneas sin color)"><i class="bi bi-globe me-1"></i>Buscar en internet</button>';
             h += '<button type="button" class="btn btn-outline-primary btn-sm" data-accion="recalcular"><i class="bi bi-arrow-repeat me-1"></i>Volver a calcular</button>';
             const puede = !item.error && item.totales && !item.totales.bloqueantes && item.totales.a_cargar > 0 && st.resumen && st.resumen.estado === 'LEIDA';
             const txt = item.error ? 'Cargar' : 'Cargar ' + (item.totales ? item.totales.a_cargar : 0) + ' línea(s) en ' + esc(suc);
@@ -710,6 +772,10 @@
             h += '<div class="cf-muted mt-1">existe en ' + esc(p.referencia.sucursal) + ' (#' + p.referencia.id + ') como ' +
                 esc([p.referencia.marca, p.referencia.color, p.referencia.genero, p.referencia.categoria].filter(Boolean).join(' / ')) + ': se crea igual</div>';
         }
+        if (p.aprendido && p.aprendido.length) {
+            h += '<div class="mt-1"><span class="cf-chip aprendido" title="Viene de cargas anteriores o de internet">aprendido: ' + esc(p.aprendido.join(', ')) + '</span></div>';
+        }
+        if (p.que_es) h += '<div class="cf-muted" title="Según internet"><i class="bi bi-globe me-1"></i>' + esc(p.que_es) + '</div>';
         h += '</td>';
         h += '<td><input class="form-control" style="min-width:170px" data-campo="descripcion" value="' + esc(j.descripcion || p.descripcion) + '"' + dis + '></td>';
         // Tallas
@@ -729,7 +795,8 @@
         const sentido = p.vigentes ? (p.precioventa < p.vigentes.precioventa ? ' <b class="text-danger">BAJA</b>' : p.precioventa > p.vigentes.precioventa ? ' <span class="text-success">sube</span>' : ' igual') : '';
         h += '<td><input class="form-control text-end" data-campo="precioventa" value="' + esc(j.precioventa == null ? '' : j.precioventa) + '" placeholder="' + esc(p.precioventa) + '"' + dis + '>' +
             '<div class="cf-muted">' + (j.precioventa ? esc(p.fuente_pv) : 'regla: $' + fmt(p.precioventa)) +
-            (p.vigentes ? '<br>vigente $' + fmt(p.vigentes.precioventa) + sentido : '') + '</div></td>';
+            (p.vigentes ? '<br>vigente $' + fmt(p.vigentes.precioventa) + sentido : '') +
+            (p.precio_aprendido && !p.vigentes ? '<br><span title="Con qué precio se cargó la última vez este código">última carga $' + fmt(p.precio_aprendido) + '</span>' : '') + '</div></td>';
         // Identidad
         if (p.destino) {
             h += '<td><div class="cf-muted">la ficha manda:<br>' + esc([p.genero && p.genero.valor, p.categoria && p.categoria.nombre, p.color && p.color.valor].filter(Boolean).join(' · ')) + '</div>' +
@@ -873,13 +940,75 @@
         await refrescar(false);
     }
 
+    /** Botón «Buscar en internet» de una factura: qué es cada artículo y su color. */
+    async function investigar(idx) {
+        const item = st.previas[idx];
+        if (!item || !st.sesion) return;
+        const defecto = String(item.color || '').toUpperCase();
+        const sinColor = (item.planes || []).filter(p => !p.omitida && p.estado !== 'YA_CARGADO' &&
+            (!p.json || !p.json.color || String(p.json.color).toUpperCase() === defecto));
+        const todas = (item.planes || []).filter(p => !p.omitida && p.estado !== 'YA_CARGADO');
+        const n = (sinColor.length ? sinColor : todas).map(p => p.n);
+        if (!n.length) { avisar('Buscar en internet', 'No hay líneas pendientes en esta factura.', 'info'); return; }
+        const ok = await Swal.fire({
+            title: 'Buscar en internet',
+            html: (sinColor.length ? sinColor.length + ' línea(s) sin color' : 'Todas las líneas ya tienen color: se buscan las ' + n.length + ' igual') +
+                '. Averiguo qué es cada artículo y su color predominante, y lo dejo aprendido para la próxima factura.' +
+                '<br><small>Unos 15 segundos por artículo; cada búsqueda tiene costo.</small>',
+            icon: 'question', showCancelButton: true, confirmButtonText: 'Buscar', cancelButtonText: 'Cancelar',
+        });
+        if (!ok.isConfirmed) return;
+        try {
+            await api(st.sesion + '/investigar/', { method: 'POST', json: { idx: idx, n: n } });
+        } catch (e) {
+            avisar('Buscar en internet', e.message);
+            return;
+        }
+        detenerSondeo();
+        st.estadoPrevio = 'BUSCANDO';
+        await refrescar(false);
+    }
+
     // --------------------------------------------------------------- eventos
+
+    /**
+     * Cierre robusto. Igual que el modal Crear Manual de esta página: hide() se
+     * pierde en silencio si Bootstrap quedó a medias de una transición (un Swal
+     * encima, un backdrop borrado por los limpiadores globales…) y el modal
+     * queda pegado. Se intenta el cierre normal y a los 400 ms se VERIFICA: si
+     * sigue visible se fuerza a mano y se limpian backdrop y body.
+     */
+    function cerrar() {
+        const el = document.getElementById('modalCargaFactura');
+        if (!el) return;
+        detenerSondeo();
+        try { bootstrap.Modal.getOrCreateInstance(el).hide(); } catch (e) { /* sin instancia */ }
+        setTimeout(function () {
+            if (el.classList.contains('show')) {
+                try { bootstrap.Modal.getOrCreateInstance(el).dispose(); } catch (e) { /* ya sin instancia */ }
+                el.classList.remove('show');
+                el.style.display = 'none';
+                el.setAttribute('aria-hidden', 'true');
+                el.removeAttribute('aria-modal');
+            }
+            if (!document.querySelector('.modal.show')) {
+                document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+                document.body.classList.remove('modal-open');
+                document.body.style.paddingRight = '';
+                document.body.style.overflow = '';
+                document.documentElement.style.overflow = '';
+            }
+        }, 400);
+    }
 
     function abrir() {
         const el = document.getElementById('modalCargaFactura');
         if (!el) return;
+        if (el.classList.contains('show')) return;   // ya abierto: no reiniciar la transición
+        // Si quedó una instancia a medias (transición colgada), se descarta y se crea limpia.
+        try { const previa = bootstrap.Modal.getInstance(el); if (previa && !el.classList.contains('show')) previa.dispose(); } catch (e) { /* nada */ }
         if (typeof window.mostrarModal === 'function') window.mostrarModal('#modalCargaFactura');
-        else bootstrap.Modal.getOrCreateInstance(el).show();
+        else bootstrap.Modal.getOrCreateInstance(el, { backdrop: true, keyboard: true }).show();
         if (!st.sesion && !$chat().children.length) bienvenida();
         pintarEstado();
         actualizarComposer();
@@ -895,6 +1024,11 @@
         if (!modal) return;
         modal.addEventListener('hidden.bs.modal', detenerSondeo);
         modal.addEventListener('shown.bs.modal', function () { if (st.sesion) { detenerSondeo(); refrescar(false); } });
+        // La X y Escape pasan por el cierre robusto (data-bs-dismiss queda como primer intento).
+        modal.querySelectorAll('.btn-close, [data-bs-dismiss="modal"]').forEach(b => b.addEventListener('click', cerrar));
+        modal.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') cerrar(); });
+        // Clic en el fondo oscuro (fuera del diálogo).
+        modal.addEventListener('mousedown', function (ev) { if (ev.target === modal) cerrar(); });
 
         document.getElementById('cfBtnAdjuntar').addEventListener('click', () => document.getElementById('cfArchivo').click());
         document.getElementById('cfArchivo').addEventListener('change', mostrarArchivo);
@@ -931,6 +1065,8 @@
                 planificar([leerCorrecciones(idx)], idx);
             } else if (a.dataset.accion === 'cargar') {
                 cargar(idx);
+            } else if (a.dataset.accion === 'investigar') {
+                investigar(idx);
             }
         });
     });

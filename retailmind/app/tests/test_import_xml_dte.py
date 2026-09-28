@@ -642,7 +642,10 @@ class TestAnalizarXmlDte(_BaseXmlDteTest):
         self.assertEqual(resp.status_code, 200)
         self.assertTemplateUsed(
             resp, 'vistas/modulo_compras/importacion_xml_dte.html')
-        self.assertContains(resp, 'No se mueve stock')
+        # El aviso es el contrato del módulo; la auditoría visual lo dejó en
+        # minúscula dentro de la frase («…; no se mueve stock (…)»), así que se
+        # compara sin mayúsculas.
+        self.assertIn('no se mueve stock', resp.content.decode('utf-8').lower())
 
     def test_documento_limpio_es_confirmable(self):
         doc = self._primer_documento()

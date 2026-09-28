@@ -561,7 +561,8 @@
 
         <div class="kpi-grid animate-fadein">
             <!-- Total Productos -->
-            <div class="kpi-card kpi-primary">
+            <div class="kpi-card kpi-primary"
+                 title="Artículos y SKUs (talla) del universo filtrado: sucursal, categoría y estado de stock elegidos, sin productos excluidos de analítica.">
                 <div class="kpi-icon"><i class="bi bi-box-seam"></i></div>
                 <div class="kpi-value" id="kpiTotalProductos">0</div>
                 <div class="kpi-label">Total Productos</div>
@@ -569,7 +570,8 @@
             </div>
 
             <!-- Valor Inventario (Costo) -->
-            <div class="kpi-card kpi-info">
+            <div class="kpi-card kpi-info"
+                 title="Σ cantidad disponible × costo unitario de los lotes FIFO activos, del MISMO universo (sucursal/categoría/estado) que el valor a venta.">
                 <div class="kpi-icon"><i class="bi bi-cash-stack"></i></div>
                 <div class="kpi-value" id="kpiValorCosto">$0</div>
                 <div class="kpi-label">Valor Inventario (Costo)</div>
@@ -577,7 +579,8 @@
             </div>
 
             <!-- Valor Inventario (Venta) -->
-            <div class="kpi-card kpi-success">
+            <div class="kpi-card kpi-success"
+                 title="Σ stock actual × precio de venta de cada SKU del universo filtrado.">
                 <div class="kpi-icon"><i class="bi bi-currency-dollar"></i></div>
                 <div class="kpi-value" id="kpiValorVenta">$0</div>
                 <div class="kpi-label">Valor Inventario (Venta)</div>
@@ -585,7 +588,8 @@
             </div>
 
             <!-- Margen Bruto Potencial -->
-            <div class="kpi-card kpi-purple">
+            <div class="kpi-card kpi-purple"
+                 title="Valor a venta − costo FIFO, ambos del mismo universo. El % es margen ÷ costo FIFO.">
                 <div class="kpi-icon"><i class="bi bi-graph-up-arrow"></i></div>
                 <div class="kpi-value" id="kpiMargenPotencial">$0</div>
                 <div class="kpi-label">Margen Potencial</div>
@@ -595,7 +599,8 @@
             </div>
 
             <!-- Productos con Stock -->
-            <div class="kpi-card kpi-teal">
+            <div class="kpi-card kpi-teal"
+                 title="SKUs con stock > 0 del universo filtrado; 'agotados' son los SKUs con stock 0 del mismo universo.">
                 <div class="kpi-icon"><i class="bi bi-check-circle"></i></div>
                 <div class="kpi-value" id="kpiConStock">0</div>
                 <div class="kpi-label">Con Stock</div>
@@ -603,7 +608,8 @@
             </div>
 
             <!-- Índice de Rotación -->
-            <div class="kpi-card kpi-warning">
+            <div class="kpi-card kpi-warning"
+                 title="Unidades vendidas en el período ÷ stock actual, ambos del mismo universo. Ventas = tickets PAGADOS por fecha real (created_at), sin cambios/devoluciones.">
                 <div class="kpi-icon"><i class="bi bi-arrow-repeat"></i></div>
                 <div class="kpi-value" id="kpiRotacion">0.0</div>
                 <div class="kpi-label">Índice Rotación</div>
@@ -611,7 +617,8 @@
             </div>
 
             <!-- Días de Cobertura -->
-            <div class="kpi-card kpi-info">
+            <div class="kpi-card kpi-info"
+                 title="Stock actual ÷ unidades vendidas por día en el período (tope 999 cuando no hay ventas).">
                 <div class="kpi-icon"><i class="bi bi-calendar3"></i></div>
                 <div class="kpi-value" id="kpiDiasCobertura">0</div>
                 <div class="kpi-label">Días Cobertura</div>
@@ -619,7 +626,8 @@
             </div>
 
             <!-- Velocidad de Venta -->
-            <div class="kpi-card kpi-success">
+            <div class="kpi-card kpi-success"
+                 title="Unidades vendidas en el período ÷ días del período. Tickets PAGADOS por fecha real (created_at), sin cambios/devoluciones ni productos excluidos de analítica.">
                 <div class="kpi-icon"><i class="bi bi-speedometer2"></i></div>
                 <div class="kpi-value" id="kpiVelocidadVenta">0</div>
                 <div class="kpi-label">Unid/Día Vendidas</div>
@@ -732,9 +740,10 @@
             <div class="col-lg-4">
                 <div class="chart-card h-100">
                     <div class="chart-header">
-                        <h5 class="chart-title">
+                        <h5 class="chart-title"
+                            title="SKUs rankeados por INGRESOS de venta de los últimos 90 días (tickets PAGADOS, sin cambios/devoluciones). A = los que acumulan el 80 % de los ingresos, B = hasta el 95 %, C = el resto. Universo: SKUs con stock o con venta; con stock y sin venta = C. Ya no se clasifica por valor de stock.">
                             <i class="bi bi-bar-chart-steps"></i>
-                            Clasificación ABC
+                            ABC por ventas (90 d)
                         </h5>
                     </div>
                     <div class="chart-body">
@@ -742,24 +751,25 @@
                             <canvas id="chartABC"></canvas>
                         </div>
                         <div class="mt-3">
-                            <div class="stats-mini">
+                            <div class="stats-mini" title="SKUs que, ordenados de mayor a menor venta, acumulan el 80 % de los ingresos de 90 días">
                                 <span class="stats-mini-label">
-                                    <span class="badge bg-success me-1">A</span> Alto Valor (80%)
+                                    <span class="badge bg-success me-1">A</span> Top ventas (80 % ingresos)
                                 </span>
                                 <span class="stats-mini-value" id="abcA">0</span>
                             </div>
-                            <div class="stats-mini">
+                            <div class="stats-mini" title="SKUs que aportan el siguiente 15 % de los ingresos (del 80 % al 95 % acumulado)">
                                 <span class="stats-mini-label">
-                                    <span class="badge bg-warning me-1">B</span> Medio Valor (15%)
+                                    <span class="badge bg-warning me-1">B</span> Siguiente 15 % ingresos
                                 </span>
                                 <span class="stats-mini-value" id="abcB">0</span>
                             </div>
-                            <div class="stats-mini">
+                            <div class="stats-mini" title="Último 5 % de los ingresos más todos los SKUs con stock que no vendieron nada en 90 días">
                                 <span class="stats-mini-label">
-                                    <span class="badge bg-secondary me-1">C</span> Bajo Valor (5%)
+                                    <span class="badge bg-secondary me-1">C</span> Resto / sin venta
                                 </span>
                                 <span class="stats-mini-value" id="abcC">0</span>
                             </div>
+                            <small class="text-muted d-block mt-2" id="abcMeta">ABC por ventas de los últimos 90 días</small>
                         </div>
                     </div>
                 </div>
@@ -867,7 +877,7 @@
                                 <h3 class="text-danger" id="stockMuertoCount">0</h3>
                                 <small class="text-muted">Productos</small>
                             </div>
-                            <div class="col-6">
+                            <div class="col-6" title="Σ stock × precio de venta de los SKUs con stock y sin ningún movimiento de kardex en 90 días, dentro del universo filtrado">
                                 <h3 class="text-danger" id="stockMuertoValor">$0</h3>
                                 <small class="text-muted">Valor Inmovilizado</small>
                             </div>
@@ -920,9 +930,11 @@
             <div class="col-lg-7">
                 <div class="chart-card">
                     <div class="chart-header">
-                        <h5 class="chart-title">
+                        <h5 class="chart-title"
+                            title="Comparativa de toda la red a partir de los lotes FIFO activos (cantidad disponible × costo / × precio). Respeta categoría y estado de stock, pero no el filtro de sucursal: es para comparar sucursales.">
                             <i class="bi bi-bar-chart-fill"></i>
                             Valor de Inventario por Sucursal
+                            <small class="text-muted fw-normal">(toda la red)</small>
                         </h5>
                     </div>
                     <div class="chart-body">
@@ -993,8 +1005,8 @@
                                 <th class="text-end">Costo</th>
                                 <th class="text-end">Precio</th>
                                 <th class="text-end">Margen</th>
-                                <th class="text-end">Ventas (30d)</th>
-                                <th class="text-center">Rotación</th>
+                                <th class="text-end" title="Unidades vendidas en el período elegido (tickets PAGADOS, sin cambios/devoluciones)">Ventas (<span id="thVentasPeriodo">30</span> d)</th>
+                                <th class="text-center" title="Unidades vendidas en el período ÷ stock actual del SKU">Rotación</th>
                                 <th class="text-center">Acciones</th>
                             </tr>
                         </thead>
@@ -1020,6 +1032,10 @@
 
 let dashboardData = {};
 let charts = {};
+// Sucursal de la sesión: se preselecciona SOLO en la primera carga (el
+// usuario de tienda entra viendo su tienda). "Todas" ('') es sin filtro; antes
+// la API convertía '' en la sucursal de la sesión y la pantalla mentía.
+let sucursalInicial = '{{ sucursal_inicial }}';
 
 $(document).ready(function() {
     console.log('🚀 Inicializando Dashboard de Productos Mejorado...');
@@ -1042,11 +1058,11 @@ function cargarDashboard() {
     
     const params = {
         categoria: $('#filtroCategoria').val() || '',
-        sucursal: $('#filtroSucursal').val() || '',
+        sucursal: $('#filtroSucursal').val() || sucursalInicial || '',
         estado_stock: $('#filtroEstadoStock').val() || '',
         periodo: $('#filtroPeriodo').val() || '30'
     };
-    
+
     $.ajax({
         url: '/app/dashboard_productos_mejorado_api/',
         method: 'GET',
@@ -1055,6 +1071,8 @@ function cargarDashboard() {
             if (response.success) {
                 dashboardData = response;
                 actualizarKPIs(response.kpis);
+                actualizarAbcMeta(response.abc_meta);
+                $('#thVentasPeriodo').text(params.periodo);
                 actualizarGraficos(response);
                 actualizarTablas(response);
                 actualizarAlertas(response.alertas);
@@ -1118,6 +1136,24 @@ function actualizarKPIs(kpis) {
     const stockMuertoPct = kpis.stock_muerto_porcentaje || 0;
     $('#progressStockMuerto').css('width', Math.min(stockMuertoPct, 100) + '%');
     $('#stockMuertoPorcentaje').text(stockMuertoPct.toFixed(1) + '% del inventario');
+}
+
+// Pie de la tarjeta ABC: de dónde salen los números (ventas de 90 d).
+function actualizarAbcMeta(meta) {
+    if (!meta) return;
+    const partes = [
+        formatNumber(meta.skus_con_venta || 0) + ' SKUs con venta en ' + (meta.dias || 90) + ' d',
+        formatNumber(meta.sin_venta_con_stock || 0) + ' con stock sin venta (C)',
+        'ingresos ' + formatMoney(meta.ingresos_total || 0)
+    ];
+    $('#abcMeta').text(partes.join(' · '));
+}
+
+// Badge A/B/C para las tablas ('-' = SKU sin stock ni venta, fuera del universo ABC).
+function abcBadge(letra) {
+    if (!letra || letra === '-') return '';
+    const cls = letra === 'A' ? 'bg-success' : letra === 'B' ? 'bg-warning text-dark' : 'bg-secondary';
+    return `<span class="badge ${cls} ms-1" title="ABC por ventas (90 d)">${letra}</span>`;
 }
 
 // Actualizar Gráficos
@@ -1257,7 +1293,7 @@ function actualizarChartABC(abc) {
     charts.abc = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: ['A (80%)', 'B (15%)', 'C (5%)'],
+            labels: ['A (80 % ingresos 90 d)', 'B (siguiente 15 %)', 'C (resto / sin venta)'],
             datasets: [{
                 data: [abc.a || 0, abc.b || 0, abc.c || 0],
                 backgroundColor: ['#0ab39c', '#ffbe0b', '#6c757d'],
@@ -1329,6 +1365,14 @@ function actualizarTablas(data) {
     actualizarTablaProductos(data.productos || []);
 }
 
+// Códigos, SKUs, categorías y sucursales son datos de usuario: se escapan
+// antes de meterlos en el HTML de las tablas.
+function escHtml(v) {
+    return String(v == null ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function actualizarTablaTopVendidos(productos) {
     const tbody = $('#tbodyTopVendidos');
     tbody.empty();
@@ -1345,10 +1389,10 @@ function actualizarTablaTopVendidos(productos) {
             <tr>
                 <td><span class="badge bg-primary">#${i + 1}</span></td>
                 <td>
-                    <strong>${p.nombre || '-'}</strong>
-                    <br><small class="text-muted">${p.categoria || ''}</small>
+                    <strong>${escHtml(p.nombre || '-')}</strong>
+                    <br><small class="text-muted">${escHtml(p.categoria || '')}</small>
                 </td>
-                <td><small class="text-muted">${p.sku || '-'}</small></td>
+                <td><small class="text-muted">${escHtml(p.sku || '-')}</small>${abcBadge(p.abc)}</td>
                 <td class="text-end">${formatNumber(p.ventas || 0)} u.</td>
                 <td class="text-end">${formatMoney(p.ingresos || 0)}</td>
                 <td class="text-end">${formatNumber(p.stock || 0)}</td>
@@ -1375,8 +1419,8 @@ function actualizarTablaBajoStock(productos) {
         tbody.append(`
             <tr>
                 <td>
-                    <strong>${p.nombre || '-'}</strong>
-                    <br><small class="text-muted">${p.sku || ''}</small>
+                    <strong>${escHtml(p.nombre || '-')}</strong>
+                    <br><small class="text-muted">${escHtml(p.sku || '')}</small>
                 </td>
                 <td class="text-end"><span class="badge bg-danger">${p.stock || 0}</span></td>
                 <td class="text-end">${(p.venta_dia || 0).toFixed(1)}</td>
@@ -1399,8 +1443,8 @@ function actualizarTablaLentaRotacion(productos) {
         tbody.append(`
             <tr>
                 <td>
-                    <strong>${p.nombre || '-'}</strong>
-                    <br><small class="text-muted">${p.sku || ''}</small>
+                    <strong>${escHtml(p.nombre || '-')}</strong>
+                    <br><small class="text-muted">${escHtml(p.sku || '')}</small>
                 </td>
                 <td class="text-end">${formatNumber(p.stock || 0)}</td>
                 <td class="text-end">${formatMoney(p.valor || 0)}</td>
@@ -1425,8 +1469,8 @@ function actualizarTablaTraspasos(traspasos) {
         tbody.append(`
             <tr>
                 <td>
-                    <strong>${t.origen || '-'}</strong>
-                    <br><small>→ ${t.destino || '-'}</small>
+                    <strong>${escHtml(t.origen || '-')}</strong>
+                    <br><small>→ ${escHtml(t.destino || '-')}</small>
                 </td>
                 <td class="text-end">${formatNumber(t.unidades || 0)}</td>
                 <td><span class="badge ${estadoClass}">${t.estado || '-'}</span></td>
@@ -1455,26 +1499,30 @@ function actualizarTablaProductos(productos) {
         tbody.append(`
             <tr>
                 <td>
-                    <strong>${p.nombre || '-'}</strong>
-                    <br><small class="text-muted">${p.sku || ''}</small>
+                    <strong>${escHtml(p.nombre || '-')}</strong>
+                    <br><small class="text-muted">${escHtml(p.sku || '')}</small>${abcBadge(p.abc)}
                 </td>
-                <td><span class="badge bg-secondary">${p.categoria || '-'}</span></td>
+                <td><span class="badge bg-secondary">${escHtml(p.categoria || '-')}</span></td>
                 <td class="text-end">
                     <span class="badge-stock ${stockClass}">${formatNumber(p.stock || 0)}</span>
                 </td>
                 <td class="text-end">${formatMoney(p.costo || 0)}</td>
                 <td class="text-end">${formatMoney(p.precio || 0)}</td>
                 <td class="text-end ${p.margen >= 30 ? 'text-success' : 'text-warning'}">${(p.margen || 0).toFixed(1)}%</td>
-                <td class="text-end">${formatNumber(p.ventas_30d || 0)}</td>
+                <td class="text-end">${formatNumber(p.ventas_periodo || 0)}</td>
                 <td class="text-center ${rotacionClass}">${(p.rotacion || 0).toFixed(2)}</td>
                 <td class="text-center">
                     <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-primary btn-sm" onclick="verDetalle(${p.id})" title="Ver">
-                            <i class="bi bi-eye"></i>
-                        </button>
-                        <button class="btn btn-outline-warning btn-sm" onclick="editarProducto(${p.id})" title="Editar">
-                            <i class="bi bi-pencil"></i>
-                        </button>
+                        <a class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener"
+                           href="/app/trazabilidad-producto/?sku=${encodeURIComponent(p.sku || '')}&pt=${encodeURIComponent(p.id || '')}"
+                           title="Trazabilidad del SKU (kardex, ventas, traspasos)">
+                            <i class="bi bi-diagram-3"></i>
+                        </a>
+                        <a class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener"
+                           href="/app/lotes_producto/${p.id}/"
+                           title="Lotes FIFO del SKU">
+                            <i class="bi bi-layers"></i>
+                        </a>
                     </div>
                 </td>
             </tr>
@@ -1527,7 +1575,7 @@ function cargarFiltros(filtros) {
         const current = select.val();
         select.find('option:not(:first)').remove();
         filtros.categorias.forEach(c => {
-            select.append(`<option value="${c.id}">${c.nombre}</option>`);
+            select.append(`<option value="${escHtml(c.id)}">${escHtml(c.nombre)}</option>`);
         });
         select.val(current);
     }
@@ -1537,9 +1585,15 @@ function cargarFiltros(filtros) {
         const current = select.val();
         select.find('option:not(:first)').remove();
         filtros.sucursales.forEach(s => {
-            select.append(`<option value="${s.id}">${s.nombre}</option>`);
+            select.append(`<option value="${escHtml(s.id)}">${escHtml(s.nombre)}</option>`);
         });
         select.val(current);
+        // Primera carga: reflejar la sucursal de la sesión que ya se consultó y
+        // no volver a usarla (desde aquí manda el select; '' = Todas).
+        if (sucursalInicial) {
+            select.val(sucursalInicial);
+            sucursalInicial = '';
+        }
     }
 }
 
@@ -1584,10 +1638,11 @@ function actualizarDashboard() {
     cargarDashboard();
 }
 
-// El boton "Exportar" de la cabecera baja el CATALOGO COMPLETO, sin ninguno de
-// los filtros de la pantalla y sin distinguir empresa ni sucursal. Antes se
-// descargaba de golpe; ahora se dice que es y se ofrece primero la version
-// filtrada (misma que el boton Excel de la tabla).
+// Ambas opciones van a exportar_dashboard_productos, que usa EXACTAMENTE el
+// universo y las reglas de la API (misma sucursal, categoría, estado de stock
+// y período). "Catálogo completo" = sin los filtros de la pantalla: todos los
+// SKU de las sucursales que el usuario puede ver, SIN los productos marcados
+// "excluir de analítica" (el export los deja fuera, igual que la API).
 function exportarReporte() {
     var filtros = [];
     var cat = $('#filtroCategoria option:selected').text().trim();
@@ -1598,6 +1653,12 @@ function exportarReporte() {
     if ($('#filtroSucursal').val()) filtros.push('Sucursal: ' + suc);
     if ($('#filtroEstadoStock').val()) filtros.push('Estado stock: ' + est);
     filtros.push('Período ventas: ' + per);
+    var nSkus = (dashboardData.kpis || {}).total_skus;
+    if (nSkus !== undefined) filtros.push(formatNumber(nSkus) + ' SKUs (una fila por SKU)');
+    // Con la pantalla sin filtros (Todas + 30 días) las dos opciones bajan el
+    // MISMO archivo: no se ofrece un segundo botón que haga lo mismo.
+    var hayFiltros = !!($('#filtroCategoria').val() || $('#filtroSucursal').val()
+        || $('#filtroEstadoStock').val() || ($('#filtroPeriodo').val() || '30') !== '30');
 
     if (typeof Swal === 'undefined') { exportarTabla(); return; }
 
@@ -1607,14 +1668,19 @@ function exportarReporte() {
         html: '<div style="text-align:left;font-size:.9rem;">'
             + '<p class="mb-2"><b>Con los filtros de la pantalla</b> (recomendado):</p>'
             + '<ul class="mb-3" style="padding-left:1.1rem;">'
-            + filtros.map(function(f) { return '<li>' + f + '</li>'; }).join('')
+            + filtros.map(function(f) { return '<li>' + escHtml(f) + '</li>'; }).join('')
             + '</ul>'
-            + '<p class="mb-1" style="color:#b45309;"><b>Catálogo completo:</b> baja TODOS los SKU del sistema '
-            + '(todas las empresas y sucursales, con y sin stock), sin ningún filtro. '
-            + 'Es un archivo muy grande y no corresponde a lo que estás viendo.</p>'
+            + '<p class="mb-2 text-muted">Para un archivo más chico, filtra antes por <b>Estado Stock</b> '
+            + '(por ejemplo, sin los agotados).</p>'
+            + (hayFiltros
+                ? '<p class="mb-1" style="color:#b45309;"><b>Catálogo completo:</b> baja todos los SKU de '
+                  + 'las sucursales que puedes ver, con y sin stock, sin los filtros de la pantalla '
+                  + '(período de ventas 30 días). No incluye los productos marcados como '
+                  + '"excluir de analítica" (bolsas, envíos, etc.). Es un archivo muy grande.</p>'
+                : '')
             + '</div>',
         showCancelButton: true,
-        showDenyButton: true,
+        showDenyButton: hayFiltros,
         confirmButtonText: '<i class="bi bi-funnel"></i> Con filtros',
         denyButtonText: '<i class="bi bi-database-down"></i> Catálogo completo',
         cancelButtonText: 'Cancelar',
@@ -1629,6 +1695,9 @@ function exportarReporte() {
     });
 }
 
+// Mismos nombres de parámetro que la API: antes iba a exportar_productos_filtrado,
+// que espera otros (categoría por NOMBRE, 'stock' en vez de 'estado_stock') y
+// devolvía un archivo que no correspondía a la pantalla.
 function exportarTabla() {
     const params = new URLSearchParams({
         categoria: $('#filtroCategoria').val() || '',
@@ -1636,16 +1705,15 @@ function exportarTabla() {
         estado_stock: $('#filtroEstadoStock').val() || '',
         periodo: $('#filtroPeriodo').val() || '30'
     });
-    window.open(`/app/exportar_productos_filtrado/?${params}`, '_blank');
+    window.open(`/app/exportar_dashboard_productos/?${params}`, '_blank');
 }
 
-function verDetalle(id) {
-    window.open(`/app/ver_detalle_producto/${id}/`, '_blank');
-}
-
-function editarProducto(id) {
-    window.open(`/app/editar_producto/${id}/`, '_blank');
-}
+// Los botones Ver/Editar apuntaban a /app/ver_detalle_producto/<id>/ y
+// /app/editar_producto/<id>/, rutas que no existen (404). Ahora la tabla enlaza
+// a Trazabilidad (?sku=&pt=<id de la talla>: el SKU se repite en cada sucursal
+// y `pt` identifica la copia de ESTA fila) y a Lotes FIFO (lotes_producto/<id>/).
+// No hay pantalla de edición que acepte un producto por GET (verGestionProducto
+// no lee parámetros), así que no se ofrece "Editar".
 
 function showLoader() {
     if (typeof showGlobalLoader === 'function') {

@@ -42,6 +42,7 @@ CATALOGO = {
         'permisos': {
             'puede_ver': 'Entrar a Recepción Documentos y DTEs en Limbo, verlas en el menú y consultar listados, solicitudes y problemas.',
             'puede_crear': 'Recepcionar en la pestaña Por recibir (botón Recepcionar, total o con problemas) y confirmar la devolución física al origen.',
+            'puede_editar': 'Como emisor: Rehabilitar un traspaso rechazado y Corregir la recepción (vuelven a mover stock del origen).',
             'puede_aprobar': 'Usar Por resolver y Emitidos: Rechazar Recepción, Llegó todo, Cancelar, Ajustar, Cambiar talla, decidir solicitudes y sobrantes.',
             'puede_exportar': 'Descargar el PDF de la tabla Por resolver (botón PDF).',
         },
@@ -183,8 +184,8 @@ CATALOGO = {
         'ruta': '',
         'resumen': 'Acciones sobre los pagos ya registrados de un documento de compra en Gestión Documentos Compras.',
         'permisos': {
-            'puede_editar': 'Editar un pago existente (lápiz) y agregar una Nota de Crédito como pago en Gestión Documentos Compras.',
-            'puede_eliminar': 'Eliminar un pago o una NC registrada como pago (papelera) en Gestión Documentos Compras.',
+            'puede_editar': 'Editar un pago existente (lápiz) en Gestión Documentos Compras.',
+            'puede_eliminar': 'Eliminar un pago, incluidas las filas de NC (papelera), en Gestión Documentos Compras.',
         },
         'depende_de': ['gestion_dte_compras'],
         'notas': 'Registrar un pago nuevo con Pagar no depende de esto. Por defecto solo el Maestro.',

@@ -7,31 +7,7 @@
     <div class="container-fluid">
 
 <style>
-:root {
-    /* NEXO Design System */
-    --nexo-primary: #0066FF;
-    --nexo-primary-dark: #0052CC;
-    --nexo-primary-light: #E6F0FF;
-    --nexo-secondary: #1A1A2E;
-    --nexo-accent: #00D4AA;
-    --nexo-success: #00D4AA;
-    --nexo-warning: #FFB020;
-    --nexo-error: #FF4D4D;
-    --nexo-gray-900: #1A1A2E;
-    --nexo-gray-700: #4A4A5A;
-    --nexo-gray-500: #8A8A9A;
-    --nexo-gray-300: #D1D1D9;
-    --nexo-gray-100: #F5F5F7;
-    --nexo-white: #FFFFFF;
-    --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
-    --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
-    --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
-    --nexo-radius-sm: 4px;
-    --nexo-radius-md: 8px;
-    --nexo-radius-lg: 12px;
-    --nexo-transition-fast: 150ms ease;
-    --nexo-transition-normal: 250ms ease;
-}
+/* Variables --nexo-*: vienen de nexo-design-system.css (layout/header.html) */
 
 /* ========== CONTENEDOR PRINCIPAL ========== */
 .nexo-resumen-container {
@@ -964,6 +940,8 @@
         <p>Inventario consolidado por sucursal o categoría</p>
     </div>
 
+    {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='existencias' activo='resumen' %}
+
     <div class="nexo-controls">
         <div class="nexo-control-group">
             <label>Agrupar por:</label>
@@ -1162,11 +1140,21 @@ document.addEventListener('DOMContentLoaded', function() {
     cargarExclusionesDesdeStorage();
     actualizarUIExclusiones();
 
-    cargarMarcas();
+    const pMarcas = cargarMarcas();
     cargarCategorias();
     cargarSucursalesParaModal();
     verificarDisponibilidadHistorico();
-    cargarResumen();
+    // Marca de la URL (tira de reportes o enlace guardado): la primera consulta
+    // espera a que el combo tenga sus opciones para salir ya filtrada.
+    const urlMarca = window.FiltrosReporte ? (FiltrosReporte.leer().marca_id || '') : '';
+    if (urlMarca) {
+        pMarcas.then(() => {
+            FiltrosReporte.ponerValor('#filtro-marca', urlMarca);
+            cargarResumen();
+        });
+    } else {
+        cargarResumen();
+    }
 
     // Listener de búsqueda con debounce dentro del modal
     const inputBusqueda = document.getElementById('modal-busqueda-input');
@@ -1283,6 +1271,10 @@ async function cargarResumen() {
     const marcaId = document.getElementById('filtro-marca').value;
     const categoriaId = document.getElementById('filtro-categoria').value;
     const fechaCorte = document.getElementById('filtro-fecha').value;
+
+    // Estado compartido en la URL ('' = todas las marcas). La fecha de corte y
+    // la categoría son propias de este reporte: no van.
+    if (window.FiltrosReporte) FiltrosReporte.reflejar({ marca_id: marcaId });
 
     // Bloquear boton y mostrar estado de carga
     btnGenerar.disabled = true;

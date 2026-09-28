@@ -339,17 +339,22 @@ def calcular_clasificacion_abc_xyz(temporada=None, anio=None, sucursal_id=None):
             ventas_corregidas=demanda_corr,
         ))
 
-    temporadas_usadas = set(c.temporada for c in clasificaciones)
-    anios_usados = set(c.anio for c in clasificaciones)
     # Borrar solo los pares (temporada, anio) exactos generados en este run,
-    # no el producto cartesiano de todos los valores.
-    pares_abc = set(zip(temporadas_usadas, anios_usados))
+    # no el producto cartesiano de todos los valores. Antes se hacía
+    # zip(set(temporadas), set(anios)): el orden de un set es arbitrario, así
+    # que con varias temporadas/años se emparejaban al azar, quedaban filas
+    # viejas sin borrar y el bulk_create chocaba con el unique_together
+    # (articulo, temporada, anio) o dejaba ABC obsoletas mezcladas.
+    pares_abc = {(c.temporada, c.anio) for c in clasificaciones}
     filtro_del = Q()
     for temp, anio in pares_abc:
         filtro_del |= Q(temporada=temp, anio=anio)
-    if filtro_del:
-        ClasificacionABC.objects.filter(filtro_del).delete()
-    ClasificacionABC.objects.bulk_create(clasificaciones, batch_size=500)
+    # Borrado + alta atómicos: si el alta falla no se pierde la clasificación.
+    from django.db import transaction
+    with transaction.atomic():
+        if filtro_del:
+            ClasificacionABC.objects.filter(filtro_del).delete()
+        ClasificacionABC.objects.bulk_create(clasificaciones, batch_size=500)
 
     logger.info("Clasificación ABC-XYZ: %d productos clasificados", len(clasificaciones))
     return len(clasificaciones)
@@ -991,6 +996,12 @@ def generar_sugerencias_compra(temporada=None, anio=None):
             unidades_sugeridas = int(float(total_predicho) * float(pct))
             stock_actual = max(0, pt.stock or 0)
 
+            # OJO (B15-07): hoy este tránsito da 0 SIEMPRE. Las líneas de OC
+            # ACTIVA tienen producto_talla NULL y las pocas vinculadas llevan
+            # unidades_recibidas = stock. No se "arregla" restando el pendiente
+            # de la OC por nombre: ese pendiente está inflado (la mercadería de
+            # Compra Manual no se liga a la OC) y la predicción pediría de menos.
+            # Se deja así hasta resolver el vínculo recepción→OC (B15-02).
             transito = Compras_Producto_Talla.objects.filter(
                 compra_producto__compras__estado='ACTIVA',
                 producto_talla=pt,
@@ -1135,6 +1146,8 @@ def evaluar_alertas_velocidad(producto_ids=None):
         if urgencia == 'BAJA':
             continue
 
+        # OJO (B15-07): tránsito 0 siempre hoy (OC sin SKU vinculado); ver la
+        # nota en generar_sugerencias_compra. Pendiente de B15-02.
         transito = Compras_Producto_Talla.objects.filter(
             compra_producto__compras__estado='ACTIVA',
             producto_talla__producto=producto,
@@ -1399,6 +1412,8 @@ def enriquecer_sugerencias_con_reorden(temporada=None, anio=None):
             unidades_talle = int(float(unidades_necesarias) * float(pct))
             stock_actual = max(0, pt.stock or 0)
 
+            # OJO (B15-07): tránsito 0 siempre hoy (OC sin SKU vinculado); ver la
+            # nota en generar_sugerencias_compra. Pendiente de B15-02.
             transito = Compras_Producto_Talla.objects.filter(
                 compra_producto__compras__estado='ACTIVA',
                 producto_talla=pt,

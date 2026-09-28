@@ -12,18 +12,20 @@ CATALOGO = {
         'permisos': {
             'puede_ver': 'Entrar a la pantalla y verla en el menú (cubre también la función Salida de stock).',
             'puede_editar': 'Guardar la ficha editada, aplicar la Edición masiva, hacer Salida de stock y editar atributos de líneas de compra.',
+            'puede_crear': 'Crear productos (manual, desde recepción o cargando una factura PDF) y sumar stock desde el ingreso manual.',
+            'puede_eliminar': 'Eliminar un producto de todas las sucursales y revertir a pendiente un producto creado desde recepción.',
         },
         'depende_de': [],
-        'notas': 'Solo desde las sucursales EDEL, GILD, IMP y PA00. Crear producto (manual o desde recepción), '
-                 'ajustar/eliminar una talla y Excluir de analítica no revisan permiso: basta estar logueado. '
-                 'puede_crear y puede_eliminar no se usan.',
+        'notas': 'Solo desde las sucursales EDEL, GILD, IMP y PA00. Ajustar/eliminar una talla y Excluir de analítica '
+                 'no revisan permiso: basta estar logueado. Crear y ajustar lotes FIFO (/app/crear_lote_manual/, '
+                 '/app/ajustar_lote/) exige puede_ver de esta pantalla.',
     },
     'edicion_rapida_precios': {
         'pantalla': 'Gestión de Precios',
         'ruta': '/app/gestion-precios/edicion-rapida/',
         'resumen': 'Buscar productos y cambiar su precio de venta al vuelo, con recomendaciones e historial.',
         'permisos': {
-            'puede_ver': 'Entrar a la pantalla y verla en el menú (también por la ruta antigua /app/edicion-rapida-precios/).',
+            'puede_ver': 'Entrar a la pantalla y verla en el menú.',
             'puede_editar': 'Guardar el precio nuevo en la pantalla y corregir precio o recategorizar desde la app móvil NEXO Staff.',
         },
         'depende_de': [],
@@ -161,6 +163,8 @@ CATALOGO = {
         'permisos': {
             'puede_ver': 'Entrar a la pantalla, verla en el menú y verificar si un documento está duplicado.',
             'puede_crear': 'Importar facturas de proveedor desde XML del SII (/app/compras/importar-xml-dte/: analizar y confirmar).',
+            'puede_editar': 'Editar los datos de un proveedor desde el modal de proveedores (Guardar).',
+            'puede_eliminar': 'Eliminar un proveedor desde el modal de proveedores.',
         },
         'depende_de': ['dte_compras_pagos', 'dte_compras_eliminar'],
         'notas': 'Crear/editar el documento a mano, Pagar, notas de crédito e incidencias no revisan este permiso. '
@@ -172,11 +176,13 @@ CATALOGO = {
         'ruta': '/app/prediccion/',
         'resumen': 'Dashboard de predicción: sugerencias de compra, clasificación, alertas de velocidad y quiebre.',
         'permisos': {
-            'puede_ver': 'Entrar a la pantalla y verla en el menú.',
+            'puede_ver': 'Entrar a la pantalla, verla en el menú y consultar sus datos (/app/api/prediccion/).',
+            'puede_aprobar': 'Aprobar sugerencias de compra (solo las de la sucursal que se está viendo).',
+            'puede_editar': 'Cambiar la configuración del motor de predicción (umbrales y buffer: es GLOBAL, afecta a todas las sucursales).',
         },
         'depende_de': [],
-        'notas': 'Los datos y acciones (/app/api/prediccion/: aprobar sugerencia, recalcular, configuración) no están '
-                 'cubiertos: cualquier logueado.',
+        'notas': 'Recalcular desde la pantalla no ejecuta nada: devuelve el comando batch a correr. '
+                 'Aprobar una sugerencia no genera orden de compra; solo la saca del listado.',
     },
 
     # ------------------------------------------------------------------

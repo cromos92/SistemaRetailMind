@@ -306,7 +306,16 @@ class AjusteTraspasoPostRecepcionTest(TestCase):
         dte.fecha_recepcion = tz.localdate()
         dte.save(update_fields=['estado_dte', 'fecha_recepcion'])
 
-    def test_post_recepcion_descuenta_destino_y_reingresa_origen(self):
+    def test_post_recepcion_con_devolucion_crea_pendientes_sin_mover_stock(self):
+        """Semántica vigente del default (devolver_stock=True): la NC/ajuste
+        post-recepción NO mueve stock en el acto. Crea el par
+        DEVOLUCION_NC_PENDIENTE_DESPACHO (egreso destino + ingreso origen) en
+        PENDIENTE sobre el documento HIJO y marca requiere_devolucion_fisica;
+        el stock se mueve recién cuando el receptor confirma el despacho
+        (services/limbo_dte.completar_movimientos_pendientes).
+
+        Este test antes afirmaba la semántica inmediata antigua (origen +3 /
+        destino -3 al emitir), que el endpoint ya no tiene."""
         dte, dp = _crear_traspaso(
             self.sucursal_origen, self.sucursal_destino,
             self.talla_origen, cantidad=5,
@@ -334,34 +343,44 @@ class AjusteTraspasoPostRecepcionTest(TestCase):
         self.assertTrue(data['success'])
         self.assertTrue(data['es_post_recepcion'])
 
-        # Origen suma 3, destino resta 3.
+        # El stock NO se mueve todavía en ninguna de las dos sucursales.
         self.talla_origen.refresh_from_db()
         self.talla_destino.refresh_from_db()
-        self.assertEqual(self.talla_origen.stock, stock_origen_antes + 3)
-        self.assertEqual(self.talla_destino.stock, stock_destino_antes - 3)
+        self.assertEqual(self.talla_origen.stock, stock_origen_antes)
+        self.assertEqual(self.talla_destino.stock, stock_destino_antes)
 
         # dp no se modifica (DTE original preservado).
         dp.refresh_from_db()
         self.assertEqual(dp.stock, 5)
 
-        # Movimientos DEVOLUCION_NC_POST_RECEPCION creados (1 EGRESO destino, 1 INGRESO origen).
-        movs = Movimientos_Producto.objects.filter(
-            dte=dte, concepto='DEVOLUCION_NC_POST_RECEPCION',
-        )
-        self.assertEqual(movs.count(), 2)
-        egreso = movs.filter(tipo_movimiento='EGRESO').first()
-        ingreso = movs.filter(tipo_movimiento='INGRESO').first()
-        self.assertIsNotNone(egreso)
-        self.assertIsNotNone(ingreso)
-        self.assertEqual(abs(egreso.cantidad), 3)
-        self.assertEqual(ingreso.cantidad, 3)
-
-        # Doc hijo creado.
+        # Doc hijo creado, con devolución física pendiente.
         hijo = Dte.objects.filter(documento_afectado=dte).first()
         self.assertIsNotNone(hijo)
         self.assertEqual(hijo.tipo_documento, 'AJUSTE TRASPASO POST')
+        self.assertTrue(hijo.requiere_devolucion_fisica)
 
-    def test_post_recepcion_bloqueada_si_stock_destino_insuficiente(self):
+        # Par PENDIENTE sobre el HIJO (1 EGRESO destino, 1 INGRESO origen).
+        movs = Movimientos_Producto.objects.filter(
+            dte=hijo, concepto='DEVOLUCION_NC_PENDIENTE_DESPACHO',
+        )
+        self.assertEqual(movs.count(), 2)
+        self.assertEqual(set(movs.values_list('estado', flat=True)), {'PENDIENTE'})
+        egreso = movs.filter(tipo_movimiento='EGRESO').first()
+        ingreso = movs.filter(tipo_movimiento='INGRESO').first()
+        self.assertEqual(egreso.ProductoTalla_id, self.talla_destino.id)
+        self.assertEqual(ingreso.ProductoTalla_id, self.talla_origen.id)
+        self.assertEqual(abs(egreso.cantidad), 3)
+        self.assertEqual(ingreso.cantidad, 3)
+        # Nada COMPLETADO todavía: el kardex no cuenta la devolución.
+        self.assertFalse(
+            Movimientos_Producto.objects.filter(
+                dte__in=[dte, hijo], concepto='DEVOLUCION_NC_POST_RECEPCION',
+            ).exists()
+        )
+
+    def test_post_recepcion_sin_devolucion_bloqueada_si_stock_destino_insuficiente(self):
+        """Con devolver_stock=False (absorber en destino) el egreso es
+        inmediato, así que ahí sí se valida el stock del destino."""
         dte, dp = _crear_traspaso(
             self.sucursal_origen, self.sucursal_destino,
             self.talla_origen, cantidad=5,
@@ -377,6 +396,7 @@ class AjusteTraspasoPostRecepcionTest(TestCase):
                     'dte_id': dte.id,
                     'ajustes': [{'dte_producto_id': dp.id, 'nueva_cantidad': 0}],
                     'motivo': 'Intento devolver 5 pero destino sólo tiene 1',
+                    'devolver_stock': False,
                 }),
                 content_type='application/json',
             )
@@ -504,7 +524,10 @@ class TrazabilidadApiTest(TestCase):
             motivo_nc='Test NC',
         )
 
-        resp = self.client.get(f'/app/api/dte/{dte.id}/trazabilidad/')
+        # R2V3: la trazabilidad exige puede_ver en alguna de las pantallas que
+        # la abren (gestion_dte / recepcion_dte / gestion_dte_compras).
+        with _patch_permiso_helper():
+            resp = self.client.get(f'/app/api/dte/{dte.id}/trazabilidad/')
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertTrue(data['success'])
@@ -1121,6 +1144,13 @@ class EliminarProductoBloqueosTest(TestCase):
         session['idSucursalActual'] = self.sucursal_origen.id
         session['idEmpresaActual'] = self.empresa.id
         session.save()
+
+        # El middleware de permisos mapea /app/eliminar_producto_todas_sucursales/
+        # a 'gestion_producto'. Estos tests prueban los BLOQUEOS del endpoint,
+        # no el permiso de pantalla: se concede igual que en el resto del archivo.
+        patcher = _patch_permiso_aprobar()
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def _post_eliminar(self, producto_id):
         return self.client.post(

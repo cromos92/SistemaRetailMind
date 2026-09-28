@@ -88,10 +88,6 @@ de incluirlo: productosProblemas (array), tabActual (string).
                     <i class="bi bi-info-circle me-2"></i>
                     <strong>Regularización con NC:</strong> Se generará <strong>1 sola Nota de Crédito</strong> con las líneas de todos los productos seleccionados.
                 </div>
-                <div class="alert alert-warning mb-4" id="alertaGuia" style="display:none;">
-                    <i class="bi bi-exclamation-triangle me-2"></i>
-                    <strong>Regularización sin NC:</strong> Las guías NO generan Nota de Crédito (sin valor monetario). Regulariza cada producto con "Ajuste Interno".
-                </div>
 
                 <div class="card mb-4">
                     <div class="card-header bg-light">
@@ -226,36 +222,10 @@ de incluirlo: productosProblemas (array), tabActual (string).
                     <div class="collapse mb-2" id="leyendaOpcionesRegularizar">
                         <div class="card border-0 reg-leyenda-card">
                             <div class="card-body py-2">
-                                <div class="row g-2">
-                                    <div class="col-md-6">
-                                        <div class="reg-leyenda-item reg-leyenda-nc">
-                                            <strong class="d-block">Nota de Crédito</strong>
-                                            Corrige el documento y devuelve el stock a la bodega de origen.
-                                            Solo aplica a facturas (las guías no llevan NC).
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="reg-leyenda-item reg-leyenda-cambio">
-                                            <strong class="d-block">Producto de cambio</strong>
-                                            El emisor despacha un reemplazo. Genera un documento nuevo que
-                                            tendrás que recepcionar igual que cualquier traspaso.
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="reg-leyenda-item reg-leyenda-ajuste">
-                                            <strong class="d-block">Ajuste interno (guías)</strong>
-                                            Sin documento tributario: la diferencia vuelve al stock del origen
-                                            y la línea se cierra.
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="reg-leyenda-item reg-leyenda-encontrada">
-                                            <strong class="d-block">Mercadería encontrada</strong>
-                                            Apareció después. Se ingresa a tu stock y la línea se cierra sin
-                                            afectar al origen.
-                                        </div>
-                                    </div>
-                                </div>
+                                <!-- Lo llena _renderLeyendaRegularizar() con las opciones
+                                     que el modal muestra para esta línea (receptor entre
+                                     empresas, emisor o regularización directa). -->
+                                <div class="row g-2" id="leyendaOpcionesItems"></div>
                             </div>
                         </div>
                     </div>
@@ -321,8 +291,16 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                         <td class="text-muted">Precio Unit.:</td>
                                         <td>$<span id="ncPreviewPrecioUnit">0</span></td>
                                     </tr>
+                                    <tr>
+                                        <td class="text-muted">Neto:</td>
+                                        <td>$<span id="ncPreviewNeto">0</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">IVA (19%):</td>
+                                        <td>$<span id="ncPreviewIva">0</span></td>
+                                    </tr>
                                     <tr class="border-top">
-                                        <td class="text-muted"><strong>Monto Total NC:</strong></td>
+                                        <td class="text-muted"><strong>Total NC (con IVA):</strong></td>
                                         <td><strong class="text-danger">$<span id="ncPreviewTotal">0</span></strong></td>
                                     </tr>
                                 </table>
@@ -393,7 +371,15 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                         <td>$<span id="ncEjecutarPreviewPrecioUnit">0</span></td>
                                     </tr>
                                     <tr>
-                                        <td class="text-muted"><strong>Monto Total NC:</strong></td>
+                                        <td class="text-muted">Neto:</td>
+                                        <td>$<span id="ncEjecutarPreviewNeto">0</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-muted">IVA (19%):</td>
+                                        <td>$<span id="ncEjecutarPreviewIva">0</span></td>
+                                    </tr>
+                                    <tr class="border-top">
+                                        <td class="text-muted"><strong>Total NC (con IVA):</strong></td>
                                         <td class="text-danger fw-bold">$<span id="ncEjecutarPreviewTotal">0</span></td>
                                     </tr>
                                 </table>
@@ -478,73 +464,6 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                     <li><i class="bi bi-check-circle text-success me-1"></i>Nuevo DTE (Guía/Factura según original) con el producto de cambio</li>
                                     <li><i class="bi bi-check-circle text-success me-1"></i>Descuento de stock de tu sucursal</li>
                                     <li class="text-muted"><small><i class="bi bi-info-circle"></i> NC solo si el documento original es FACTURA</small></li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- ========== PANELES PARA GUÍAS (Sin NC) ========== -->
-                
-                <!-- Panel Ajuste Interno (Solo para Guías) -->
-                <div id="panelAjusteInterno" class="regularizacion-panel" style="display:none;">
-                    <div class="card">
-                        <div class="card-body">
-                            <h6 class="card-title">
-                                <i class="bi bi-arrow-return-left"></i> Ajuste Interno - Devolución de Stock
-                            </h6>
-                            <div class="alert alert-info mb-3">
-                                <i class="bi bi-info-circle me-2"></i>
-                                <strong>Solo devuelve el stock al emisor.</strong><br>
-                                No se genera Nota de Crédito (las guías no tienen valor monetario).
-                            </div>
-                            
-                            <!-- Información del producto -->
-                            <div class="card mb-3">
-                                <div class="card-body py-2">
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="small text-muted">Producto:</div>
-                                            <p class="mb-0"><strong id="ajusteInternoProducto">-</strong></p>
-                                            <small class="text-muted">SKU: <span id="ajusteInternoSKU">-</span></small>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="small text-muted">Cantidad con Problema:</div>
-                                            <p class="mb-0"><strong class="text-danger" id="ajusteInternoCantidad">0</strong> unidades</p>
-                                            <small class="text-muted">Tipo: <span id="ajusteInternoTipo">-</span></small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Cantidad a devolver -->
-                            <div class="mb-3">
-                                <label for="cantidadAjusteInterno" class="form-label">
-                                    <i class="bi bi-arrow-left"></i> Cantidad a Devolver al Stock <span class="text-danger">*</span>
-                                </label>
-                                <input type="number" class="form-control" id="cantidadAjusteInterno" required aria-required="true" 
-                                       min="1" value="1" step="1">
-                                <small class="text-muted">Máximo: <span id="maxCantidadAjuste">0</span> unidades</small>
-                            </div>
-                            
-                            <!-- Observaciones -->
-                            <div class="mb-3">
-                                <label for="observacionesAjusteInterno" class="form-label">
-                                    <i class="bi bi-chat-left-text"></i> Observaciones <span class="text-danger">*</span>
-                                </label>
-                                <textarea class="form-control" id="observacionesAjusteInterno" rows="2" 
-                                          placeholder="Describe el motivo del ajuste (ej: Productos no llegaron, productos dañados...)" required aria-required="true"></textarea>
-                            </div>
-                            
-                            <!-- Preview del ajuste -->
-                            <div class="alert alert-light border">
-                                <h6 class="alert-heading">
-                                    <i class="bi bi-eye"></i> Vista Previa del Ajuste
-                                </h6>
-                                <ul class="list-unstyled mb-0 small">
-                                    <li><i class="bi bi-check-circle text-success me-1"></i>Se devolverán <strong><span id="previewCantidadAjuste">0</span></strong> unidades al stock del emisor</li>
-                                    <li><i class="bi bi-check-circle text-success me-1"></i>El estado del producto se marcará como "Regularizado"</li>
-                                    <li><i class="bi bi-info-circle text-muted me-1"></i>No se genera Nota de Crédito (guías sin valor monetario)</li>
                                 </ul>
                             </div>
                         </div>
@@ -670,105 +589,6 @@ de incluirlo: productosProblemas (array), tabActual (string).
                     </div>
                 </div>
                 
-                <!-- Panel Cambio de Producto (Solo para Guías) -->
-                <div id="panelCambioProductoGuia" class="regularizacion-panel" style="display:none;">
-                    <div class="card">
-                        <div class="card-body">
-                            <h6 class="card-title">
-                                <i class="bi bi-arrow-left-right"></i> Cambio de Producto
-                            </h6>
-                            <div class="alert alert-primary mb-3">
-                                <i class="bi bi-info-circle me-2"></i>
-                                <strong>Envía un producto de reemplazo.</strong><br>
-                                Se generará una nueva Guía de Despacho con el producto correcto.
-                            </div>
-                            
-                            <!-- Producto original con problema -->
-                            <div class="card mb-3 border-danger">
-                                <div class="card-header bg-danger bg-opacity-10">
-                                    <h6 class="mb-0"><i class="bi bi-x-circle"></i> Producto con Problema</h6>
-                                </div>
-                                <div class="card-body py-2">
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="small text-muted">Producto:</div>
-                                            <p class="mb-0"><strong id="cambioGuiaProductoOriginal">-</strong></p>
-                                            <small class="text-muted">SKU: <span id="cambioGuiaSKUOriginal">-</span></small>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="small text-muted">Cantidad Problema:</div>
-                                            <p class="mb-0"><strong class="text-danger" id="cambioGuiaCantidadProblema">0</strong> unidades</p>
-                                            <small class="text-muted">Tipo: <span id="cambioGuiaTipoProblema">-</span></small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Buscador de productos de reemplazo -->
-                            <div class="mb-3">
-                                <label for="buscarProductoCambioGuia" class="form-label">
-                                    <i class="bi bi-search"></i> Buscar Producto de Reemplazo
-                                </label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="buscarProductoCambioGuia" 
-                                           placeholder="SKU, nombre del producto..."
-                                           onkeyup="if(event.key === 'Enter') buscarProductosParaCambioGuia()">
-                                    <button class="btn btn-primary" type="button" onclick="buscarProductosParaCambioGuia()">
-                                        <i class="bi bi-search"></i> Buscar
-                                    </button>
-                                </div>
-                                <small class="text-muted">
-                                    <i class="bi bi-lightbulb"></i> Solo se mostrarán productos con stock disponible
-                                </small>
-                            </div>
-                            
-                            <!-- Resultados de búsqueda -->
-                            <div id="resultadosProductosCambioGuia" class="border rounded p-2 mb-3 reg-resultados">
-                                <p class="text-muted text-center my-3">
-                                    <i class="bi bi-search"></i><br>
-                                    Escribe para buscar productos en tu inventario...
-                                </p>
-                            </div>
-                            
-                            <!-- Producto seleccionado -->
-                            <input type="hidden" id="productoCambioGuiaId">
-                            <div id="productoCambioGuiaSeleccionado" class="mb-3"></div>
-                            
-                            <!-- Cantidad a enviar -->
-                            <div class="mb-3" id="contenedorCantidadCambioGuia" style="display:none;">
-                                <label for="cantidadCambioGuia" class="form-label">
-                                    <i class="bi bi-123"></i> Cantidad a Enviar <span class="text-danger">*</span>
-                                </label>
-                                <input type="number" class="form-control" id="cantidadCambioGuia" required aria-required="true" 
-                                       min="1" value="1" step="1">
-                                <small class="text-muted">Máximo: <span id="stockDisponibleCambioGuia">0</span> unidades disponibles</small>
-                            </div>
-                            
-                            <!-- Observaciones -->
-                            <div class="mb-3">
-                                <label for="observacionesCambioGuia" class="form-label">
-                                    <i class="bi bi-chat-left-text"></i> Observaciones del Cambio <span class="text-danger">*</span>
-                                </label>
-                                <textarea class="form-control" id="observacionesCambioGuia" rows="2" 
-                                          placeholder="Ej: Producto de cambio por daños en recepción..." required aria-required="true"></textarea>
-                            </div>
-                            
-                            <!-- Preview del cambio -->
-                            <div class="alert alert-light border" id="previewCambioGuia" style="display:none;">
-                                <h6 class="alert-heading">
-                                    <i class="bi bi-eye"></i> Vista Previa del Cambio
-                                </h6>
-                                <ul class="list-unstyled mb-0 small">
-                                    <li><i class="bi bi-check-circle text-success me-1"></i>Se generará nueva Guía de Despacho con el producto de reemplazo</li>
-                                    <li><i class="bi bi-check-circle text-success me-1"></i>Se descontará <strong><span id="previewCantidadCambioGuia">0</span></strong> unidades de tu stock</li>
-                                    <li><i class="bi bi-check-circle text-success me-1"></i>El producto original se marcará como "Regularizado"</li>
-                                    <li><i class="bi bi-info-circle text-muted me-1"></i>La nueva guía no tiene valor monetario</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
                 <!-- Panel Ajustar Cantidad -->
                 <div id="panelAjustar" class="regularizacion-panel" style="display:none;">
                     <div class="card bg-light">
@@ -825,41 +645,10 @@ de incluirlo: productosProblemas (array), tabActual (string).
 
                 <!-- Panel Cambiar Producto -->
                 <div id="panelCambiarProducto" class="regularizacion-panel" style="display:none;">
-                    
-                    <!-- Opción A: Cambio Directo (Traspaso Interno) -->
-                    <div id="opcionCambioDirecto" style="display:none;">
-                        <div class="card bg-light">
-                            <div class="card-body">
-                                <h6 class="card-title">
-                                    <i class="bi bi-arrow-left-right"></i> Cambiar por otro Producto
-                                </h6>
-                                <p class="small text-muted">El proveedor envió un producto diferente. El stock se actualizará inmediatamente.</p>
-                                <div class="mb-3">
-                                    <label for="buscarNuevoProducto" class="form-label">Buscar Producto por SKU o Nombre</label>
-                                    <div class="input-group">
-                                        <input type="text" class="form-control" id="buscarNuevoProducto" 
-                                               placeholder="Ej: NIKE, ZAP-42..." 
-                                               onkeyup="if(event.key === 'Enter') buscarProductosReemplazo()">
-                                        <button class="btn btn-primary" type="button" onclick="buscarProductosReemplazo()">
-                                            <i class="bi bi-search"></i> Buscar
-                                        </button>
-                                    </div>
-                                    <small class="text-muted">Escribe al menos 2 caracteres y presiona Enter o click en Buscar</small>
-                                </div>
-                                <div id="resultadosProductos" class="border rounded p-2 reg-resultados">
-                                    <p class="text-muted text-center my-3">
-                                        <i class="bi bi-search"></i><br>
-                                        Escribe para buscar productos...
-                                    </p>
-                                </div>
-                                <input type="hidden" id="nuevoProductoId">
-                                <input type="hidden" id="nuevoProductoTallaId">
-                                <div id="productoSeleccionado" class="mt-2"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Opción B: Solicitar Cambio (Entre Empresas) -->
+                    {# La opción "Cambio Directo (traspaso interno)" se retiró (2026-09-26): #}
+                    {# regularizar_producto_api la rechaza siempre y su radio va deshabilitado. #}
+
+                    <!-- Solicitar Cambio (Entre Empresas) -->
                     <div id="opcionSolicitarCambio" style="display:none;">
                         <div class="card">
                             <div class="card-body">
@@ -962,7 +751,7 @@ de incluirlo: productosProblemas (array), tabActual (string).
                                                 <td>$<span id="previewNCPrecio">0</span></td>
                                             </tr>
                                             <tr class="border-top">
-                                                <td class="text-muted"><strong>Monto NC:</strong></td>
+                                                <td class="text-muted"><strong>Monto NC (con IVA):</strong></td>
                                                 <td><strong class="text-danger">$<span id="previewNCMonto">0</span></strong></td>
                                             </tr>
                                         </table>
@@ -1014,9 +803,16 @@ de incluirlo: productosProblemas (array), tabActual (string).
 
                 <!-- Observaciones -->
                 <div class="mt-3">
+                    <!-- Historial de la línea en solo lectura. Antes se precargaba en
+                         el textarea y el servidor lo volvía a anexar: se duplicaba en
+                         cada regularización (B10-06). Se llena con textContent. -->
+                    <details id="regObservacionesHistorialWrap" class="mb-2 d-none">
+                        <summary class="text-muted small reg-clickable">Historial de observaciones de esta línea</summary>
+                        <pre id="regObservacionesHistorial" class="bg-light border rounded p-2 mt-1 small mb-0 reg-historial-obs"></pre>
+                    </details>
                     <label for="regObservaciones" class="form-label">Observaciones</label>
                     <textarea class="form-control" id="regObservaciones" rows="3"
-                              placeholder="Detalles de la regularización..."></textarea>
+                              placeholder="Nota nueva para esta regularización (el historial se conserva aparte)..."></textarea>
                 </div>
             </div>
             <div class="modal-footer">
@@ -1043,6 +839,196 @@ function _puedeEmitirNcTraspaso() {
     return {{ puede_emitir_nc_traspaso|yesno:"true,false" }};
 }
 const _MSG_SIN_PERMISO_NC_TRASPASO = 'No tienes permiso para emitir Notas de Crédito de traspasos internos. Pídeselo al Maestro.';
+
+// ===== Helpers compartidos del modal =====
+
+/** Texto seguro para interpolar en innerHTML / html de Swal. */
+function _escReg(valor) {
+    return String(valor ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/** Pesos chilenos sin decimales, con separador de miles es-CL. */
+function _clpReg(n) {
+    return Math.round(Number(n) || 0).toLocaleString('es-CL');
+}
+
+/**
+ * Montos de la NC tal como los calcula el servidor (calcular_montos_nc en
+ * views_modulo_documentos.py). `subtotal` es Σ cantidad × precio de línea del
+ * DTE original. Ese precio viene NETO en facturas y traspasos y CON IVA en
+ * boletas: la vista previa antes mostraba el neto como "Monto Total NC" (19 %
+ * menos que la NC real). `base` ('NETO'|'BRUTO') es opcional: si el backend
+ * la envía por DTE (base_precio), manda sobre la deducción por tipo.
+ * Puede diferir en $1 del documento por redondeo.
+ */
+function montoNcPreview(subtotal, tipoDoc, base) {
+    const sub = Number(subtotal) || 0;
+    let b = String(base || '').toUpperCase();
+    if (b !== 'NETO' && b !== 'BRUTO') {
+        b = String(tipoDoc || '').toUpperCase().includes('BOLETA') ? 'BRUTO' : 'NETO';
+    }
+    let neto, total;
+    if (b === 'BRUTO') {
+        total = Math.round(sub);
+        neto = Math.round(total / 1.19);
+    } else {
+        neto = Math.round(sub);
+        total = Math.round(sub * 1.19);
+    }
+    return { neto, iva: total - neto, total, base: b };
+}
+
+/**
+ * montoNcPreview para `cantidad` unidades de una línea de productosProblemas.
+ * Si el backend envía el monto real de la línea del DTE (monto_item_linea, con
+ * descuentos) y su cantidad (cantidad_linea), se prorratea igual que
+ * monto_real_linea_dte; si no, cantidad × precio_unitario (fallback del servidor).
+ */
+function _subtotalNcLinea(p, cantidad) {
+    const cant = Number(cantidad) || 0;
+    const montoItem = Math.trunc(Number(p && p.monto_item_linea) || 0);
+    if (montoItem > 0 && cant > 0) {
+        const cantLinea = Math.trunc(Number(p && p.cantidad_linea) || 0) || cant;
+        return cant >= cantLinea ? montoItem : Math.round(montoItem * (cant / cantLinea));
+    }
+    return cant * Number((p && p.precio_unitario) || 0);
+}
+
+function _montoNcLinea(p, cantidad) {
+    return montoNcPreview(_subtotalNcLinea(p, cantidad), p && p.tipo_documento, p && p.base_precio);
+}
+
+/** "Neto $X + IVA $Y" para mostrar bajo el total de una NC. */
+function _detalleNcTexto(m) {
+    return `Neto $${_clpReg(m.neto)} + IVA $${_clpReg(m.iva)}`;
+}
+
+/** true si la línea viene de una Guía de Despacho (no lleva NC). */
+function _esGuiaReg(p) {
+    const t = String((p && (p.tipo_documento || p.tipo_documento_display)) || '')
+        .toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    return t.includes('GUIA');
+}
+
+/**
+ * ¿Emisor y receptor del DTE son la misma empresa? Usa `misma_empresa` si el
+ * backend lo envía; si no, compara los nombres de emisor y receptor. null
+ * cuando no se puede saber.
+ */
+function _esMismaEmpresaReg(p) {
+    if (p && typeof p.misma_empresa === 'boolean') return p.misma_empresa;
+    const e = String((p && p.emisor) || '').trim().toUpperCase();
+    const r = String((p && p.receptor) || '').trim().toUpperCase();
+    if (!e || !r || e === '-' || r === '-') return null;
+    return e === r;
+}
+
+/**
+ * Fecha 'YYYY-MM-DD' (DateField) → 'DD-MM-YYYY' sin pasar por Date:
+ * new Date('2026-05-11') se interpreta como medianoche UTC y en Chile se
+ * muestra el día anterior.
+ */
+function fmtFechaISO(s) {
+    if (!s) return '-';
+    const txt = String(s).trim();
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(txt);
+    if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+    // 'dd/mm/aaaa' (algunas APIs de traspaso): new Date() la leería como mm/dd.
+    const dmy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(txt);
+    if (dmy) return `${dmy[1].padStart(2, '0')}-${dmy[2].padStart(2, '0')}-${dmy[3]}`;
+    const d = new Date(txt);
+    return isNaN(d.getTime()) ? txt : d.toLocaleDateString('es-CL');
+}
+
+/**
+ * Mensaje de error de una respuesta JSON. @requiere_permiso y el middleware
+ * de permisos responden {error: true, mensaje: '...'}: mostrar data.error
+ * dejaba el Swal vacío (o con 'true').
+ */
+function _msgErrorReg(data, porDefecto) {
+    if (data && typeof data.error === 'string' && data.error) return data.error;
+    if (data && typeof data.mensaje === 'string' && data.mensaje) return data.mensaje;
+    return porDefecto || 'Error al procesar';
+}
+
+/** response.json() que no se rompe con un 403/500 o un login en HTML. */
+function _jsonRespuestaReg(r) {
+    return r.json().catch(() => ({
+        success: false,
+        error: r.status === 403
+            ? 'No tienes permiso para realizar esta acción en la sucursal activa.'
+            : (r.redirected || r.status === 401)
+                ? 'Tu sesión expiró. Recarga la página e inicia sesión de nuevo.'
+                : `El servidor respondió de forma inesperada (HTTP ${r.status}). No se confirmó la operación.`,
+    }));
+}
+
+/**
+ * ¿El servidor emite NC para este documento? Misma lista que usa
+ * regularizar_producto_api: solo facturas y boletas. En una guía "Regularizar
+ * con NC" solo devuelve el stock, aunque se marque "Sí, generar NC".
+ */
+function _admiteNcReg(p) {
+    const t = String((p && p.tipo_documento) || '').trim().toUpperCase();
+    return ['FACTURA ELECTRONICA', 'FACTURA', 'BOLETA ELECTRONICA', 'BOLETA'].includes(t);
+}
+
+// Leyenda "¿Qué hace cada opción?": una por cada juego de botones del modal.
+// [clase de color, opción, qué hace]. Textos fijos (sin datos del usuario).
+const _LEYENDA_REGULARIZAR = {
+    SOLICITUD: [
+        ['reg-leyenda-nc', 'Solicitar Nota de Crédito',
+            'Pides al emisor que emita la NC por lo que no llegó o llegó dañado. No cambia nada hasta que el emisor la apruebe y la emita.'],
+        ['reg-leyenda-cambio', 'Solicitar cambio de producto',
+            'Pides un reemplazo del stock del emisor. Al aprobarla, el emisor emite la NC (si es factura) y un documento nuevo que tendrás que recepcionar.'],
+    ],
+    EMISOR: [
+        ['reg-leyenda-nc', 'Emitir Nota de Crédito',
+            'Se emite ahora la NC por lo que no se entregó o llegó dañado. Las unidades que nunca llegaron vuelven a tu stock; las dañadas se acreditan pero quedan en la tienda.'],
+        ['reg-leyenda-cambio', 'Enviar producto de cambio',
+            'Emite la NC por el producto original y una guía nueva con el reemplazo, que se descuenta de tu stock. El receptor debe recepcionar esa guía.'],
+    ],
+    DIRECTO: [
+        ['reg-leyenda-encontrada', 'Mercadería encontrada',
+            'Las unidades aparecieron en el destino: entran a su stock y el faltante baja. Si no queda faltante, la línea se cierra.'],
+        ['reg-leyenda-nc', 'Regularizar (con o sin NC)',
+            'Cierra la diferencia: lo que nunca llegó vuelve al stock del origen. Puedes emitir NC (solo facturas y boletas) o cerrar sin NC; las guías siempre van sin NC.'],
+        ['reg-leyenda-ajuste', 'Ajustar cantidad',
+            'Corrige al alza lo recibido (llegó más de lo registrado): la diferencia entra al stock del destino.'],
+        ['reg-leyenda-cambio', 'Cambiar producto (no disponible)',
+            'El cambio directo de producto está deshabilitado. Regulariza la diferencia y envía el reemplazo en un traspaso nuevo.'],
+    ],
+    // Rama directa con un documento entre empresas (quien regulariza no es ni
+    // el emisor ni el receptor): el servidor rechaza "Ajustar cantidad".
+    DIRECTO_EMPRESAS: [
+        ['reg-leyenda-encontrada', 'Mercadería encontrada',
+            'Las unidades aparecieron en el destino: entran a su stock y el faltante baja. Si no queda faltante, la línea se cierra.'],
+        ['reg-leyenda-nc', 'Regularizar (con o sin NC)',
+            'Cierra la diferencia: lo que nunca llegó vuelve al stock del origen. Puedes emitir NC (solo facturas y boletas) o cerrar sin NC.'],
+        ['reg-leyenda-ajuste', 'Ajustar cantidad (no disponible)',
+            'Entre empresas distintas no se ajusta lo recibido directamente: usa Mercadería encontrada o Regularizar.'],
+        ['reg-leyenda-cambio', 'Cambiar producto (no disponible)',
+            'El cambio directo de producto está deshabilitado. Regulariza la diferencia y envía el reemplazo en un traspaso nuevo.'],
+    ],
+};
+
+const _MSG_AJUSTAR_ENTRE_EMPRESAS =
+    '"Ajustar cantidad" no está disponible para documentos entre empresas distintas. Usa "Mercadería encontrada" o "Regularizar".';
+
+function _renderLeyendaRegularizar(caso) {
+    const cont = document.getElementById('leyendaOpcionesItems');
+    if (!cont) return;
+    const items = _LEYENDA_REGULARIZAR[caso] || _LEYENDA_REGULARIZAR.DIRECTO;
+    cont.innerHTML = items.map(([clase, titulo, texto]) => `
+        <div class="col-md-6">
+            <div class="reg-leyenda-item ${clase}">
+                <strong class="d-block">${titulo}</strong>
+                ${texto}
+            </div>
+        </div>`).join('');
+}
 
 // ===== Regularización masiva por DTE (1 NC con N líneas) =====
 /**
@@ -1089,7 +1075,7 @@ function abrirModalRegularizarDTE(key) {
             title: 'No permitido para Guías',
             html: `<div class="text-start">
                 <div class="alert alert-danger"><strong>No se puede emitir NC para Guías de Despacho.</strong></div>
-                <p>Las guías no tienen valor monetario. Regulariza cada producto individualmente con <strong>Ajuste Interno</strong> o <strong>Cambio</strong>.</p>
+                <p>Las guías no tienen valor monetario. Regulariza cada producto con el botón <strong>Regularizar (sin NC)</strong> de su fila: el stock vuelve a la bodega de origen.</p>
             </div>`,
             icon: 'error',
             width: '640px',
@@ -1107,21 +1093,20 @@ function abrirModalRegularizarDTE(key) {
     $('#dteTipoDocumento').text(tipoDocumento);
     $('#subtituloModal').text('Generar Nota de Crédito por productos con problemas');
     $('#alertaFactura').show();
-    $('#alertaGuia').hide();
 
     let totalUnidades = 0;
-    let montoNeto = 0;
+    let sumaLineas = 0;  // Σ cantidad × precio de línea (neto en facturas, con IVA en boletas)
     const filas = pendientes.map(prod => {
         const cantAcred = (prod.cantidad_faltante || 0) + (prod.cantidad_danada || 0);
         const precio = Number(prod.precio_unitario || 0);
-        const subtotal = cantAcred * precio;
+        const subtotal = _subtotalNcLinea(prod, cantAcred);
         totalUnidades += cantAcred;
-        montoNeto += subtotal;
+        sumaLineas += subtotal;
         return `
             <tr data-producto-id="${prod.id}">
-                <td><strong>${prod.producto_nombre || '-'}</strong></td>
-                <td><code>${prod.sku || '-'}</code></td>
-                <td class="text-center"><span class="badge bg-light text-dark border">${prod.talla || '-'}</span></td>
+                <td><strong>${_escReg(prod.producto_nombre || '-')}</strong></td>
+                <td><code>${_escReg(prod.sku || '-')}</code></td>
+                <td class="text-center"><span class="badge bg-light text-dark border">${_escReg(prod.talla || '-')}</span></td>
                 <td class="text-center">${prod.cantidad_esperada || 0}</td>
                 <td class="text-center text-success">${prod.cantidad_recibida || 0}</td>
                 <td class="text-center text-danger">${prod.cantidad_faltante || 0}</td>
@@ -1133,13 +1118,13 @@ function abrirModalRegularizarDTE(key) {
     }).join('');
     $('#tbodyProductosDTE').html(filas);
 
-    const iva = montoNeto * 0.19;
-    const totalConIVA = montoNeto + iva;
+    // Mismo cálculo que el servidor: en boletas el precio de línea ya trae IVA.
+    const montosNc = montoNcPreview(sumaLineas, pendientes[0].tipo_documento, pendientes[0].base_precio);
     $('#ncTotalProductos').text(pendientes.length);
     $('#ncTotalUnidades').text(totalUnidades);
-    $('#ncMontoNeto').text(Math.round(montoNeto).toLocaleString('es-CL'));
-    $('#ncIVA').text(Math.round(iva).toLocaleString('es-CL'));
-    $('#ncTotal').text(Math.round(totalConIVA).toLocaleString('es-CL'));
+    $('#ncMontoNeto').text(_clpReg(montosNc.neto));
+    $('#ncIVA').text(_clpReg(montosNc.iva));
+    $('#ncTotal').text(_clpReg(montosNc.total));
     $('#motivoNCMasiva').val('');
 
     new bootstrap.Modal(document.getElementById('modalRegularizarDTE')).show();
@@ -1161,11 +1146,11 @@ function procesarRegularizacionDTE(dteNumero, productosDTE, dteId) {
     Swal.fire({
         title: '¿Generar Nota de Crédito?',
         html: `<div class="text-start">
-            <p>Se generará <strong>1 Nota de Crédito</strong> por ${tipoDocumento} #${dteNumero}</p>
+            <p>Se generará <strong>1 Nota de Crédito</strong> por ${_escReg(tipoDocumento)} #${_escReg(dteNumero)}</p>
             <div class="alert alert-success mb-2">
                 <strong>${productosDTE.length}</strong> producto(s) incluidos<br>
                 <strong>${totalUnidades}</strong> unidades totales<br>
-                <strong>$${totalNC}</strong> monto total NC
+                <strong>$${_escReg(totalNC)}</strong> monto total NC (con IVA)
             </div>
             <div class="alert alert-info mb-0">
                 <i class="bi bi-arrow-return-left me-2"></i>El stock se devolverá a la bodega origen automáticamente.
@@ -1191,27 +1176,65 @@ function procesarRegularizacionDTE(dteNumero, productosDTE, dteId) {
             credentials: 'same-origin',
             body: JSON.stringify({ dte_numero: dteNumero, dte_id: dteId || null, productos_ids: productosIds, motivo }),
         })
-            .then(r => r.json())
+            .then(_jsonRespuestaReg)
             .then(data => {
                 if (!data.success) {
-                    Swal.fire('Error', data.error || 'Error al procesar.', 'error');
+                    // El 409 de líneas bloqueadas trae una lista con saltos de línea.
+                    Swal.fire('Error', _escReg(_msgErrorReg(data, 'Error al procesar.')).replace(/\n/g, '<br>'), 'error');
                     return;
                 }
-                const montoFmt = (data.monto_total || 0).toLocaleString('es-CL');
-                const txtBtn = data.archivo_txt_url
-                    ? `<div class="text-center mt-3"><a href="${data.archivo_txt_url}" download class="btn btn-primary"><i class="bi bi-download me-2"></i>Descargar TXT para Acepta</a></div>`
+                const montoFmt = _clpReg(data.monto_total);
+                // TXT: el endpoint autenticado lo regenera desde la BD (sirve aunque
+                // el archivo de /media/ no exista tras un deploy), pero responde 403
+                // si la empresa activa no es la emisora de la NC: el DESTINO del
+                // traspaso y el Maestro con alcance "todas" también pueden correr la
+                // NC masiva. Por eso el endpoint es el botón principal solo para el
+                // emisor; los demás usan el archivo recién generado en /media/.
+                const soyEmisorNc = !!(productosDTE[0] && productosDTE[0].soy_emisor);
+                const urlTxtEndpoint = data.txt_acepta_url
+                    || (data.nc_id ? `/app/dte/${encodeURIComponent(data.nc_id)}/txt-acepta/` : '');
+                const urlTxtArchivo = data.archivo_txt_url || '';
+                const urlTxtPrincipal = (soyEmisorNc && urlTxtEndpoint) ? urlTxtEndpoint : urlTxtArchivo;
+                const urlTxtAlterna = (soyEmisorNc && urlTxtEndpoint && urlTxtArchivo) ? urlTxtArchivo : '';
+                let txtBtn = '';
+                if (urlTxtPrincipal) {
+                    txtBtn = `<div class="text-center mt-3">
+                        <a href="${_escReg(urlTxtPrincipal)}" download class="btn btn-primary"><i class="bi bi-download me-2"></i>Descargar TXT para Acepta</a>
+                        ${urlTxtAlterna ? `<div class="small mt-2"><a href="${_escReg(urlTxtAlterna)}" download class="text-muted">¿No descarga? Usa el archivo generado</a></div>` : ''}
+                    </div>`;
+                }
+                // La NC ya quedó emitida aunque falle el TXT: avisarlo para que no
+                // quede sin enviar a Acepta/SII. Solo se promete el botón a quien
+                // realmente puede usarlo (el emisor).
+                let comoObtenerTxt;
+                if (soyEmisorNc && urlTxtEndpoint) {
+                    comoObtenerTxt = ' Descárgalo con el botón: se reconstruye desde la NC guardada.';
+                } else if (soyEmisorNc) {
+                    comoObtenerTxt = ' Descárgalo desde el detalle de la NC.';
+                } else {
+                    const emisorNc = (productosDTE[0] && productosDTE[0].emisor && productosDTE[0].emisor !== '-')
+                        ? productosDTE[0].emisor : 'la empresa emisora';
+                    comoObtenerTxt = ` Debe descargarlo ${_escReg(emisorNc)}, con esa empresa activa, desde el detalle del documento regularizado (descarga junto a la NC #${_escReg(data.numero_nc)}): se reconstruye desde la NC guardada.`;
+                }
+                const avisoTxt = data.txt_generado === false
+                    ? `<div class="alert alert-warning mb-0 mt-2">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>La NC se emitió, pero su TXT para Acepta no se generó.</strong><br>
+                        ${_escReg(data.error_txt || 'No se pudo generar el archivo TXT.')}
+                        ${comoObtenerTxt}
+                       </div>`
                     : '';
                 Swal.fire({
-                    icon: 'success',
+                    icon: data.txt_generado === false ? 'warning' : 'success',
                     title: 'NC Generada',
                     html: `<div class="text-start">
-                        <p>${data.message || ''}</p>
+                        <p>${_escReg(data.message || '')}</p>
                         <div class="alert alert-success">
-                            <strong>NC #${data.numero_nc}</strong><br>
+                            <strong>NC #${_escReg(data.numero_nc)}</strong><br>
                             Monto: $${montoFmt}<br>
-                            Unidades: ${data.total_unidades}<br>
+                            Unidades: ${_escReg(data.total_unidades)}<br>
                             Stock devuelto a bodega origen
-                        </div>${txtBtn}
+                        </div>${avisoTxt}${txtBtn}
                     </div>`,
                     width: '640px',
                 });
@@ -1231,22 +1254,67 @@ function procesarRegularizacionDTE(dteNumero, productosDTE, dteId) {
 
 // Descarga programática del TXT Acepta de una NC ya creada. Acepta el
 // objeto `data` de la respuesta JSON: usa `txt_acepta_url` (preferido) o
-// arma la URL desde `nc_id`. Si ninguna está, no hace nada.
+// arma la URL desde `nc_id`. Devuelve una promesa {ok, status}.
+// Va por fetch y no con un <a> directo: el endpoint responde 403 (JSON) si la
+// empresa activa no es la emisora de la NC (Maestro con alcance "todas" que
+// regulariza un documento ajeno), y un <a> sin `download` navegaba a ese JSON
+// y se perdía la página.
 function descargarTxtAcepta(data) {
-    if (!data) return;
-    const url = data.txt_acepta_url || (data.nc_id ? `/app/dte/${data.nc_id}/txt-acepta/` : null);
-    if (!url) return;
-    try {
-        const a = document.createElement('a');
-        a.href = url;
-        a.style.display = 'none';
-        // Sin target=_blank: descarga directa, header del backend trae
-        // Content-Disposition: attachment con el filename correcto.
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    } catch (e) {
-        console.warn('No se pudo descargar el TXT Acepta:', e);
+    if (!data) return Promise.resolve({ ok: false, status: 0 });
+    const url = data.txt_acepta_url
+        || (data.nc_id ? `/app/dte/${encodeURIComponent(data.nc_id)}/txt-acepta/` : null);
+    if (!url) return Promise.resolve({ ok: false, status: 0 });
+    return fetch(url, { credentials: 'same-origin' })
+        .then(r => {
+            const tipo = r.headers.get('Content-Type') || '';
+            if (!r.ok || r.redirected || !tipo.startsWith('text/plain')) {
+                return { ok: false, status: r.redirected ? 401 : r.status };
+            }
+            const cd = r.headers.get('Content-Disposition') || '';
+            const m = /filename="?([^";]+)"?/i.exec(cd);
+            const nombre = m ? m[1] : `NC_61_${data.numero_nc || data.nc_id}.txt`;
+            return r.blob().then(blob => {
+                const href = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = href;
+                a.download = nombre;
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(href), 2000);
+                return { ok: true, status: r.status };
+            });
+        })
+        .catch(e => {
+            console.warn('No se pudo descargar el TXT Acepta:', e);
+            return { ok: false, status: 0 };
+        });
+}
+
+// Si la descarga automática del TXT falla, reemplaza el aviso "se descarga
+// automáticamente" del Swal de éxito (si sigue abierto) por uno honesto.
+function _avisarTxtNoDescargadoReg(data, res) {
+    const motivo = res && res.status === 403
+        ? 'tu empresa activa no es la emisora de la NC'
+        : res && res.status === 401
+            ? 'tu sesión expiró'
+            : 'no se pudo generar o descargar el archivo';
+    const html = `<i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>No se descargó el TXT Acepta de la NC #${_escReg(data && data.numero_nc)}</strong> (${motivo}).
+        La NC sí quedó emitida: descarga su TXT desde el detalle del documento regularizado, con la empresa emisora activa.`;
+    const cont = (typeof Swal !== 'undefined' && Swal.isVisible()) ? Swal.getHtmlContainer() : null;
+    const aviso = cont ? cont.querySelector('.reg-aviso-txt') : null;
+    if (aviso) {
+        aviso.className = 'alert alert-warning mb-2 reg-aviso-txt';
+        aviso.innerHTML = html;
+    } else if (cont) {
+        const div = document.createElement('div');
+        div.className = 'alert alert-warning mt-2 mb-0 text-start reg-aviso-txt';
+        div.innerHTML = html;
+        cont.appendChild(div);
+    } else if (typeof Swal !== 'undefined') {
+        Swal.fire({ icon: 'warning', title: 'TXT Acepta no descargado', html });
     }
 }
 
@@ -1263,7 +1331,7 @@ function abrirModalRegularizar(productoId) {
         const obs = (p.observaciones || '').trim();
         const obsHtml = obs
             ? `<details class="mt-2"><summary class="text-muted small reg-clickable">Historial de observaciones</summary>
-                  <pre class="bg-light border rounded p-2 mt-1 small mb-0 reg-historial-obs">${obs.replace(/</g,'&lt;')}</pre>
+                  <pre class="bg-light border rounded p-2 mt-1 small mb-0 reg-historial-obs">${_escReg(obs)}</pre>
                </details>`
             : '';
 
@@ -1273,13 +1341,13 @@ function abrirModalRegularizar(productoId) {
                 <div class="card-body py-2 px-3">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
-                            <div class="fw-bold text-success"><i class="bi bi-receipt-cutoff me-1"></i>Nota de Crédito #${p.nc_numero}</div>
-                            ${p.nc_fecha ? `<small class="text-muted"><i class="bi bi-calendar me-1"></i>${p.nc_fecha}</small>` : ''}
-                            ${p.nc_motivo ? `<div class="small text-muted mt-1"><em>${p.nc_motivo}</em></div>` : ''}
+                            <div class="fw-bold text-success"><i class="bi bi-receipt-cutoff me-1"></i>Nota de Crédito #${_escReg(p.nc_numero)}</div>
+                            ${p.nc_fecha ? `<small class="text-muted"><i class="bi bi-calendar me-1"></i>${_escReg(fmtFechaISO(p.nc_fecha))}</small>` : ''}
+                            ${p.nc_motivo ? `<div class="small text-muted mt-1"><em>${_escReg(p.nc_motivo)}</em></div>` : ''}
                         </div>
                         <div class="text-end">
                             ${p.nc_monto ? `<div class="fw-bold text-success">${fmtCLP(p.nc_monto)}</div>` : ''}
-                            ${p.nc_id ? `<a href="/app/dte/${p.nc_id}/txt-acepta/" class="btn btn-outline-success btn-sm mt-1" title="Descargar TXT Acepta">
+                            ${p.nc_id ? `<a href="/app/dte/${encodeURIComponent(p.nc_id)}/txt-acepta/" class="btn btn-outline-success btn-sm mt-1" title="Descargar TXT Acepta">
                                 <i class="bi bi-download me-1"></i>TXT Acepta
                             </a>` : ''}
                         </div>
@@ -1291,7 +1359,7 @@ function abrirModalRegularizar(productoId) {
         const cambioBlock = p.dte_cambio_numero ? `
             <div class="alert alert-info py-2 px-3 mb-2 small">
                 <i class="bi bi-box-seam me-1"></i>
-                Se envió un DTE de cambio: <strong>#${p.dte_cambio_numero}</strong>.
+                Se envió un DTE de cambio: <strong>#${_escReg(p.dte_cambio_numero)}</strong>.
             </div>` : '';
 
         Swal.fire({
@@ -1303,12 +1371,12 @@ function abrirModalRegularizar(productoId) {
                         <div class="card-body py-2 px-3">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
-                                    <div class="fw-bold">${p.producto_nombre || p.sku || '-'}</div>
-                                    <small class="text-muted">SKU ${p.sku || '-'} · Talla ${p.talla || '-'}</small>
+                                    <div class="fw-bold">${_escReg(p.producto_nombre || p.sku || '-')}</div>
+                                    <small class="text-muted">SKU ${_escReg(p.sku || '-')} · Talla ${_escReg(p.talla || '-')}</small>
                                 </div>
                                 <div class="text-end">
                                     <small class="text-muted">DTE</small>
-                                    <div class="fw-semibold">#${p.dte_numero || '-'}</div>
+                                    <div class="fw-semibold">#${_escReg(p.dte_numero || '-')}</div>
                                 </div>
                             </div>
                             <div class="row text-center mt-2 g-1">
@@ -1325,8 +1393,8 @@ function abrirModalRegularizar(productoId) {
 
                     <!-- Metadatos -->
                     <div class="row small mb-2">
-                        ${p.fecha_regularizacion ? `<div class="col-6"><i class="bi bi-clock me-1"></i><strong>Fecha:</strong> ${p.fecha_regularizacion}</div>` : ''}
-                        ${p.regularizado_por ? `<div class="col-6"><i class="bi bi-person me-1"></i><strong>Por:</strong> ${p.regularizado_por}</div>` : ''}
+                        ${p.fecha_regularizacion ? `<div class="col-6"><i class="bi bi-clock me-1"></i><strong>Fecha:</strong> ${_escReg(p.fecha_regularizacion)}</div>` : ''}
+                        ${p.regularizado_por ? `<div class="col-6"><i class="bi bi-person me-1"></i><strong>Por:</strong> ${_escReg(p.regularizado_por)}</div>` : ''}
                     </div>
 
                     <div class="alert alert-secondary py-2 px-3 mb-0 small">
@@ -1351,6 +1419,14 @@ function abrirModalRegularizar(productoId) {
             }
         });
         return;
+    }
+
+    // El éxito de la regularización anterior cierra el modal sin restaurar el
+    // botón: sin esto la línea siguiente abría con el spinner "Procesando...".
+    // El disabled lo fijan el input de #ajustarCantidad y mostrarPanelRegularizacion.
+    const _btnGuardarReg = document.querySelector('#modalRegularizar .btn-success');
+    if (_btnGuardarReg) {
+        _btnGuardarReg.innerHTML = '<i class="bi bi-check-circle"></i> Guardar Regularización';
     }
 
     // Llenar datos
@@ -1381,15 +1457,7 @@ function abrirModalRegularizar(productoId) {
     window.requiereSolicitud = productoSeleccionado.requiere_nc || false;
     window.soyEmisor = productoSeleccionado.soy_emisor || false;
     window.soyReceptor = productoSeleccionado.soy_receptor || false;
-    
-    // DEBUG: Ver qué valores llegan
-    console.log('🔍 DEBUG Regularización:');
-    console.log('  - requiere_nc:', productoSeleccionado.requiere_nc);
-    console.log('  - soy_emisor:', productoSeleccionado.soy_emisor);
-    console.log('  - soy_receptor:', productoSeleccionado.soy_receptor);
-    console.log('  - emisor:', productoSeleccionado.emisor);
-    console.log('  - sucursal_origen:', productoSeleccionado.sucursal_origen);
-    
+
     // Generar botones según tipo de traspaso Y ROL
     const botonesContainer = document.getElementById('botonesRegularizacion');
     
@@ -1399,7 +1467,7 @@ function abrirModalRegularizar(productoId) {
         iconoTipo.className = 'bi bi-building-fill-exclamation fs-3 me-3 text-warning';
         tituloTipo.textContent = 'Traspaso Entre Empresas';
         descripcionTipo.innerHTML = `
-            <strong>Emisor:</strong> ${productoSeleccionado.emisor || 'N/A'} (${productoSeleccionado.sucursal_origen || 'N/A'})<br>
+            <strong>Emisor:</strong> ${_escReg(productoSeleccionado.emisor || 'N/A')} (${_escReg(productoSeleccionado.sucursal_origen || 'N/A')})<br>
             <span class="d-block mt-2 pt-2 border-top">
                 <i class="bi bi-info-circle me-2"></i>
                 <strong>Debes solicitar una solución al emisor.</strong><br>
@@ -1461,33 +1529,76 @@ function abrirModalRegularizar(productoId) {
             </label>
         `;
     } else {
-        alertTipo.className = 'alert alert-success mb-3';
-        iconoTipo.className = 'bi bi-pencil-fill fs-3 me-3 text-success';
-        tituloTipo.textContent = 'Traspaso Interno';
-        descripcionTipo.textContent = 'Misma empresa. Puedes regularizar directamente sin solicitudes.';
-        
+        // Regularización directa, sin solicitudes. Cae acá más que el traspaso
+        // interno: toda guía (requiere_nota_credito_check es False para GUIA,
+        // aunque sea entre empresas), la compra a proveedor y la sucursal que no
+        // es emisora ni receptora. El texto depende de cuál es el caso.
+        const p = productoSeleccionado;
+        const _misma = _esMismaEmpresaReg(p);
+        const _destino = p.sucursal_destino && p.sucursal_destino !== '-' ? ` (${_escReg(p.sucursal_destino)})` : '';
+        const _partes = `<strong>Emisor:</strong> ${_escReg(p.emisor || 'N/A')} (${_escReg(p.sucursal_origen || 'N/A')})
+            &rarr; <strong>Receptor:</strong> ${_escReg(p.receptor || 'N/A')}${_destino}`;
+        if (_misma === true) {
+            alertTipo.className = 'alert alert-success mb-3';
+            iconoTipo.className = 'bi bi-pencil-fill fs-3 me-3 text-success';
+            tituloTipo.textContent = 'Traspaso interno — misma empresa';
+            descripcionTipo.innerHTML = `${_partes}<br>Puedes regularizar directamente, sin solicitudes.`;
+        } else if (_esGuiaReg(p)) {
+            alertTipo.className = 'alert alert-info mb-3';
+            iconoTipo.className = 'bi bi-truck fs-3 me-3 text-info';
+            tituloTipo.textContent = 'Guía de despacho (sin Nota de Crédito)';
+            descripcionTipo.innerHTML = `${_partes}<br>Las guías no llevan Nota de Crédito: la regularización ajusta el stock directamente, sin solicitudes.`;
+        } else if (p.requiere_nc) {
+            alertTipo.className = 'alert alert-info mb-3';
+            iconoTipo.className = 'bi bi-building fs-3 me-3 text-info';
+            tituloTipo.textContent = 'Documento entre empresas';
+            descripcionTipo.innerHTML = `${_partes}<br>Tu sucursal activa no es la emisora ni la receptora de este documento: Mercadería encontrada y Regularizar se aplican directamente, sin solicitudes. Ajustar cantidad no está disponible entre empresas.`;
+        } else {
+            alertTipo.className = 'alert alert-info mb-3';
+            iconoTipo.className = 'bi bi-pencil-fill fs-3 me-3 text-info';
+            tituloTipo.textContent = 'Regularización directa';
+            descripcionTipo.innerHTML = `${_partes}<br>Este documento no requiere solicitud al emisor: puedes regularizar directamente.`;
+        }
+
+        // El emisor que pulsó "Emitir NC" parte en "Regularizar con NC":
+        // "Mercadería Encontrada" es del receptor e ingresa stock al destino.
+        const _preNC = p.soy_emisor ? ' checked' : '';
+        const _preEncontrada = p.soy_emisor ? '' : ' checked';
+        // "Cambiar Producto" directo: el servidor lo rechaza siempre (cambio
+        // directo deshabilitado en regularizar_producto_api); queda visible pero
+        // deshabilitado, y la leyenda explica por qué. "Ajustar cantidad" entre
+        // empresas (requiere_nc) también lo rechaza siempre: mismo trato.
+        const _ajusteOk = !p.requiere_nc;
+        const _attrAjuste = _ajusteOk ? '' : ' disabled';
+        const _titleAjuste = _ajusteOk ? '' : ` title="${_escReg(_MSG_AJUSTAR_ENTRE_EMPRESAS)}"`;
         botonesContainer.innerHTML = `
-            <input type="radio" class="btn-check" name="tipoRegularizacion" id="regMercaderiaEncontrada" value="MERCADERIA_ENCONTRADA" checked>
+            <input type="radio" class="btn-check" name="tipoRegularizacion" id="regMercaderiaEncontrada" value="MERCADERIA_ENCONTRADA"${_preEncontrada}>
             <label class="btn btn-outline-success" for="regMercaderiaEncontrada">
                 <i class="bi bi-check-circle"></i> Mercadería Encontrada
             </label>
-            
-            <input type="radio" class="btn-check" name="tipoRegularizacion" id="regConNC" value="REGULARIZAR_CON_NC">
+
+            <input type="radio" class="btn-check" name="tipoRegularizacion" id="regConNC" value="REGULARIZAR_CON_NC"${_preNC}>
             <label class="btn btn-outline-warning" for="regConNC">
-                <i class="bi bi-file-earmark-text"></i> Regularizar con NC
+                <i class="bi bi-file-earmark-text"></i> Regularizar${_admiteNcReg(p) ? ' con NC' : ' (sin NC)'}
             </label>
-            
-            <input type="radio" class="btn-check" name="tipoRegularizacion" id="regAjustar" value="AJUSTAR">
-            <label class="btn btn-outline-primary" for="regAjustar">
+
+            <input type="radio" class="btn-check" name="tipoRegularizacion" id="regAjustar" value="AJUSTAR"${_attrAjuste}>
+            <label class="btn btn-outline-primary" for="regAjustar"${_titleAjuste}>
                 <i class="bi bi-pencil"></i> Ajustar Cantidad
             </label>
-            
-            <input type="radio" class="btn-check" name="tipoRegularizacion" id="regCambiarProducto" value="CAMBIAR_PRODUCTO">
-            <label class="btn btn-outline-primary" for="regCambiarProducto">
+
+            <input type="radio" class="btn-check" name="tipoRegularizacion" id="regCambiarProducto" value="CAMBIAR_PRODUCTO" disabled>
+            <label class="btn btn-outline-primary" for="regCambiarProducto" title="No disponible: el cambio directo de producto está deshabilitado">
                 <i class="bi bi-arrow-left-right"></i> Cambiar Producto
             </label>
         `;
     }
+    _renderLeyendaRegularizar(
+        productoSeleccionado.requiere_nc && productoSeleccionado.soy_receptor ? 'SOLICITUD'
+            : productoSeleccionado.requiere_nc && productoSeleccionado.soy_emisor ? 'EMISOR'
+            : productoSeleccionado.requiere_nc ? 'DIRECTO_EMPRESAS'
+            : 'DIRECTO'
+    );
     
     // Configurar panel de ajuste de cantidad
     const cantidadFaltante = productoSeleccionado.cantidad_faltante || 0;
@@ -1554,12 +1665,16 @@ function abrirModalRegularizar(productoId) {
     
     // Valores por defecto
     document.getElementById('nuevaCantidadTotal').textContent = cantidadRecibida;
-    document.getElementById('regObservaciones').value = productoSeleccionado.observaciones || '';
-    
-    // Resetear y mostrar panel inicial según tipo
-    const tipoInicial = productoSeleccionado.requiere_nc 
-        ? (productoSeleccionado.soy_emisor ? 'EMITIR_NC' : 'SOLICITAR_NC')
-        : 'MERCADERIA_ENCONTRADA';
+    // El textarea es para una nota NUEVA: el servidor anexa lo que se envía al
+    // historial de la línea. El historial se muestra aparte, de solo lectura.
+    document.getElementById('regObservaciones').value = '';
+    const _histObs = String(productoSeleccionado.observaciones || '').trim();
+    const _wrapHistObs = document.getElementById('regObservacionesHistorialWrap');
+    if (_wrapHistObs) {
+        document.getElementById('regObservacionesHistorial').textContent = _histObs;
+        _wrapHistObs.open = false;
+        _wrapHistObs.classList.toggle('d-none', !_histObs);
+    }
     
     // Agregar event listeners a los radio buttons
     setTimeout(() => {
@@ -1569,8 +1684,10 @@ function abrirModalRegularizar(productoId) {
             });
         });
         
-        // Seleccionar el primero habilitado (las opciones de NC sin permiso vienen disabled)
-        const primerRadio = document.querySelector('input[name="tipoRegularizacion"]:not(:disabled)');
+        // Respetar la opción preseleccionada (checked) si está habilitada; si no,
+        // el primero habilitado (las opciones de NC sin permiso vienen disabled).
+        const primerRadio = document.querySelector('input[name="tipoRegularizacion"]:checked:not(:disabled)')
+            || document.querySelector('input[name="tipoRegularizacion"]:not(:disabled)');
         if (primerRadio) {
             primerRadio.checked = true;
             mostrarPanelRegularizacion(primerRadio.value);
@@ -1593,8 +1710,9 @@ function mostrarPanelRegularizacion(tipo) {
         if (productoSeleccionado) {
             const cantidadProblema = productoSeleccionado.cantidad_faltante || productoSeleccionado.cantidad_danada || 0;
             const precioUnitario = productoSeleccionado.precio_unitario || 0;
-            const montoTotal = cantidadProblema * precioUnitario;
-            
+            // Neto / IVA / total como los calculará el servidor (calcular_montos_nc).
+            const montosNc = _montoNcLinea(productoSeleccionado, cantidadProblema);
+
             document.getElementById('ncProducto').textContent = `${productoSeleccionado.sku} - ${productoSeleccionado.producto_nombre}`;
             document.getElementById('ncCantidad').textContent = cantidadProblema;
             
@@ -1608,8 +1726,11 @@ function mostrarPanelRegularizacion(tipo) {
             // Llenar preview de NC
             document.getElementById('ncPreviewProducto').textContent = productoSeleccionado.producto_nombre;
             document.getElementById('ncPreviewCantidad').textContent = cantidadProblema;
-            document.getElementById('ncPreviewPrecioUnit').textContent = Number(precioUnitario).toLocaleString('es-CL');
-            document.getElementById('ncPreviewTotal').textContent = Number(montoTotal).toLocaleString('es-CL');
+            document.getElementById('ncPreviewPrecioUnit').textContent =
+                `${Number(precioUnitario).toLocaleString('es-CL')} ${montosNc.base === 'BRUTO' ? '(con IVA)' : '(neto)'}`;
+            document.getElementById('ncPreviewNeto').textContent = _clpReg(montosNc.neto);
+            document.getElementById('ncPreviewIva').textContent = _clpReg(montosNc.iva);
+            document.getElementById('ncPreviewTotal').textContent = _clpReg(montosNc.total);
         }
         
     } else if (tipo === 'EMITIR_NC') {
@@ -1624,13 +1745,19 @@ function mostrarPanelRegularizacion(tipo) {
         
         // Llenar información del DTE y producto
         if (productoSeleccionado) {
-            const cantidadProblema = productoSeleccionado.cantidad_faltante || productoSeleccionado.cantidad_danada || 0;
+            // La NC cubre TODO lo que está en disputa: faltante + dañada (el
+            // mismo tope que valida el servidor). Antes se tomaba
+            // `faltante || dañada` y la línea se cerraba sin acreditar lo dañado (B8-05).
+            const cantFaltanteNc = Number(productoSeleccionado.cantidad_faltante) || 0;
+            const cantDanadaNc = Number(productoSeleccionado.cantidad_danada) || 0;
+            const cantidadProblema = cantFaltanteNc + cantDanadaNc;
             const precioUnitario = productoSeleccionado.precio_unitario || 0;
-            const montoTotal = cantidadProblema * precioUnitario;
-            
-            // Información del DTE
+            // Neto / IVA / total como los calculará el servidor (calcular_montos_nc).
+            const montosNc = _montoNcLinea(productoSeleccionado, cantidadProblema);
+
+            // Información del DTE (fecha sin pasar por Date: evita el día anterior)
             document.getElementById('ncDteNumero').textContent = productoSeleccionado.dte_numero || '-';
-            document.getElementById('ncDteFecha').textContent = productoSeleccionado.dte_fecha ? new Date(productoSeleccionado.dte_fecha).toLocaleDateString('es-CL') : '-';
+            document.getElementById('ncDteFecha').textContent = fmtFechaISO(productoSeleccionado.dte_fecha);
             document.getElementById('ncReceptor').textContent = productoSeleccionado.receptor || '-';
             
             // Información del producto
@@ -1638,17 +1765,21 @@ function mostrarPanelRegularizacion(tipo) {
             document.getElementById('ncEjecutarCantidad').textContent = cantidadProblema;
             
             let tipoProblema = 'Problema';
-            if (productoSeleccionado.estado === 'FALTANTE') tipoProblema = 'FALTANTE';
+            if (cantFaltanteNc > 0 && cantDanadaNc > 0) tipoProblema = `FALTANTE (${cantFaltanteNc}) + DAÑADO (${cantDanadaNc})`;
+            else if (productoSeleccionado.estado === 'FALTANTE') tipoProblema = 'FALTANTE';
             else if (productoSeleccionado.estado === 'RECEPCIONADO_DANADO') tipoProblema = 'DAÑADO';
             else if (productoSeleccionado.estado === 'RECEPCIONADO_PARCIAL') tipoProblema = 'PARCIAL';
-            
+
             document.getElementById('ncEjecutarTipoProblema').textContent = tipoProblema;
             
             // Preview de NC
             document.getElementById('ncEjecutarPreviewProducto').textContent = productoSeleccionado.producto_nombre;
             document.getElementById('ncEjecutarPreviewCantidad').textContent = `${cantidadProblema} unidades`;
-            document.getElementById('ncEjecutarPreviewPrecioUnit').textContent = Number(precioUnitario).toLocaleString('es-CL');
-            document.getElementById('ncEjecutarPreviewTotal').textContent = Number(montoTotal).toLocaleString('es-CL');
+            document.getElementById('ncEjecutarPreviewPrecioUnit').textContent =
+                `${Number(precioUnitario).toLocaleString('es-CL')} ${montosNc.base === 'BRUTO' ? '(con IVA)' : '(neto)'}`;
+            document.getElementById('ncEjecutarPreviewNeto').textContent = _clpReg(montosNc.neto);
+            document.getElementById('ncEjecutarPreviewIva').textContent = _clpReg(montosNc.iva);
+            document.getElementById('ncEjecutarPreviewTotal').textContent = _clpReg(montosNc.total);
         }
         
     } else if (tipo === 'ENVIAR_CAMBIO') {
@@ -1679,56 +1810,72 @@ function mostrarPanelRegularizacion(tipo) {
         }
     } else if (tipo === 'REGULARIZAR_CON_NC') {
         document.getElementById('panelRegularizarConNC').style.display = 'block';
+        // La NC solo sale en facturas y boletas: en una guía el servidor solo
+        // devuelve el stock aunque se marque "Sí, generar NC".
+        const _admiteNc = _admiteNcReg(productoSeleccionado);
+        const _sinNcTxt = _admiteNc
+            ? '0 (sin NC)'
+            : (_esGuiaReg(productoSeleccionado) ? '0 (las guías no llevan NC)' : '0 (este documento no admite NC)');
+        let _conNcTxt = _sinNcTxt;
         if (productoSeleccionado) {
             const cantidadProblema = (productoSeleccionado.cantidad_faltante || 0) + (productoSeleccionado.cantidad_danada || 0);
             const precioUnit = productoSeleccionado.precio_unitario || 0;
+            // Mismo cálculo que el servidor (calcular_montos_nc): antes se
+            // multiplicaba siempre por 1,19, también con precios de boleta con IVA.
+            const montosNc = _montoNcLinea(productoSeleccionado, cantidadProblema);
+            _conNcTxt = `${_clpReg(montosNc.total)} (${_detalleNcTexto(montosNc)})`;
             document.getElementById('ncDecisionProducto').textContent = productoSeleccionado.producto_nombre;
             document.getElementById('ncDecisionCantidad').textContent = cantidadProblema;
             document.getElementById('ncDecisionPrecio').textContent = Number(precioUnit).toLocaleString('es-CL');
             document.getElementById('previewNCDecisionCantidad').textContent = cantidadProblema;
-            document.getElementById('previewNCDecisionMonto').textContent = Number(cantidadProblema * precioUnit * 1.19).toLocaleString('es-CL');
-            
+
             document.querySelectorAll('input[name="decisionNC"]').forEach(r => {
                 r.onchange = function() {
                     const hacerNC = this.value === 'true';
-                    document.getElementById('previewNCDecisionMonto').textContent = hacerNC ? Number(cantidadProblema * precioUnit * 1.19).toLocaleString('es-CL') : '0 (sin NC)';
+                    document.getElementById('previewNCDecisionMonto').textContent = hacerNC ? _conNcTxt : _sinNcTxt;
                 };
             });
         }
-        // Sin permiso de NC de traspaso solo queda "devolver stock sin NC".
+        // Sin permiso de NC de traspaso, o en guías, solo queda "devolver stock sin NC".
         const _ncOk = _puedeEmitirNcTraspaso();
+        const _siNcPosible = _ncOk && _admiteNc;
         const radioSiNC = document.querySelector('input[name="decisionNC"][value="true"]');
         const radioNoNC = document.querySelector('input[name="decisionNC"][value="false"]');
         if (radioSiNC && radioNoNC) {
-            radioSiNC.disabled = !_ncOk;
+            radioSiNC.disabled = !_siNcPosible;
             const labelSiNC = radioSiNC.closest('label');
             if (labelSiNC) {
-                labelSiNC.classList.toggle('disabled', !_ncOk);
-                labelSiNC.title = _ncOk ? '' : 'Sin permiso para emitir Notas de Crédito';
+                labelSiNC.classList.toggle('disabled', !_siNcPosible);
+                labelSiNC.title = !_admiteNc
+                    ? (_esGuiaReg(productoSeleccionado) ? 'Las guías no llevan Nota de Crédito' : 'Este tipo de documento no admite Nota de Crédito')
+                    : (_ncOk ? '' : 'Sin permiso para emitir Notas de Crédito');
             }
-            if (!_ncOk) {
+            // Valor por defecto POR LÍNEA: "Sí" si se puede emitir NC, "No" si no.
+            // Sin esto, una guía dejaba marcado "sin NC" para la factura
+            // siguiente. Para la misma línea se respeta lo que eligió el usuario.
+            const _lineaId = String((productoSeleccionado && productoSeleccionado.id) || '');
+            if (radioSiNC.dataset.lineaId !== _lineaId) {
+                radioSiNC.dataset.lineaId = _lineaId;
+                radioSiNC.checked = _siNcPosible;
+                radioNoNC.checked = !_siNcPosible;
+            } else if (!_siNcPosible) {
                 radioNoNC.checked = true;
-                document.getElementById('previewNCDecisionMonto').textContent = '0 (sin NC)';
             }
+            document.getElementById('previewNCDecisionMonto').textContent = radioSiNC.checked ? _conNcTxt : _sinNcTxt;
         }
     } else if (tipo === 'AJUSTAR') {
         document.getElementById('panelAjustar').style.display = 'block';
     } else if (tipo === 'CAMBIAR_PRODUCTO') {
         document.getElementById('panelCambiarProducto').style.display = 'block';
-        
-        // Detectar si requiere solicitud (entre empresas)
+
+        // Solo existe como SOLICITUD entre empresas (window.requiereSolicitud):
+        // el cambio DIRECTO interno se retiró (su radio va deshabilitado y
+        // regularizar_producto_api lo rechaza).
+        document.getElementById('opcionSolicitarCambio').style.display = window.requiereSolicitud ? 'block' : 'none';
         if (window.requiereSolicitud) {
-            // Mostrar opción de SOLICITUD
-            document.getElementById('opcionCambioDirecto').style.display = 'none';
-            document.getElementById('opcionSolicitarCambio').style.display = 'block';
-            
             // Llenar datos del emisor
             document.getElementById('nombreEmisorSolicitud').textContent = window.dteEmisor || 'Emisor';
             document.getElementById('sucursalEmisorSolicitud').textContent = window.sucursalEmisor || 'Sucursal';
-        } else {
-            // Mostrar opción de cambio DIRECTO (interno)
-            document.getElementById('opcionCambioDirecto').style.display = 'block';
-            document.getElementById('opcionSolicitarCambio').style.display = 'none';
         }
     }
 }
@@ -1765,7 +1912,7 @@ function buscarProductosEmisor() {
                 contenedor.innerHTML = `
                     <p class="text-danger text-center my-3">
                         <i class="bi bi-x-circle"></i><br>
-                        ${data.error || 'Error al buscar productos'}
+                        ${_escReg(_msgErrorReg(data, 'Error al buscar productos'))}
                     </p>
                 `;
                 return;
@@ -1781,31 +1928,42 @@ function buscarProductosEmisor() {
                 return;
             }
             
-            // Mostrar resultados
+            // Mostrar resultados. Son productos de OTRA empresa (el emisor): todo
+            // texto va escapado y el click se enlaza por índice, sin meter los
+            // datos en un onclick inline (un nombre con comillas lo rompía y un
+            // nombre con HTML se ejecutaba en la sesión del receptor).
+            const productos = data.productos;
             let html = '<div class="list-group list-group-flush">';
-            data.productos.forEach(prod => {
-                const stockClass = prod.stock > 10 ? 'success' : (prod.stock > 0 ? 'warning' : 'danger');
-                const stockIcon = prod.stock > 0 ? '✓' : '✗';
-                
+            productos.forEach((prod, idx) => {
+                const stock = Number(prod.stock) || 0;
+                const stockClass = stock > 10 ? 'success' : (stock > 0 ? 'warning' : 'danger');
+                const stockIcon = stock > 0 ? '✓' : '✗';
+
                 html += `
-                    <button type="button" class="list-group-item list-group-item-action" 
-                            onclick="seleccionarProductoSolicitud(${prod.id}, '${prod.sku}', '${prod.nombre.replace(/'/g, "\\'")}', '${prod.talla}', ${prod.stock}, ${prod.precio})">
+                    <button type="button" class="list-group-item list-group-item-action" data-idx-producto-emisor="${idx}">
                         <div class="d-flex justify-content-between align-items-start">
                             <div>
-                                <strong>${prod.nombre}</strong><br>
-                                <small class="text-muted">SKU: ${prod.sku} | Talla: <span class="badge bg-light text-dark border reg-badge-talla">${prod.talla}</span></small><br>
+                                <strong>${_escReg(prod.nombre)}</strong><br>
+                                <small class="text-muted">SKU: ${_escReg(prod.sku)} | Talla: <span class="badge bg-light text-dark border reg-badge-talla">${_escReg(prod.talla)}</span></small><br>
                                 <small class="text-info">Precio: $${Number(prod.precio).toLocaleString('es-CL')}</small>
                             </div>
                             <div class="text-end">
-                                <span class="badge bg-${stockClass}">${stockIcon} Stock: ${prod.stock}</span>
+                                <span class="badge bg-${stockClass}">${stockIcon} Stock: ${_escReg(prod.stock)}</span>
                             </div>
                         </div>
                     </button>
                 `;
             });
             html += '</div>';
-            
+
             contenedor.innerHTML = html;
+            contenedor.querySelectorAll('[data-idx-producto-emisor]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const prod = productos[Number(btn.getAttribute('data-idx-producto-emisor'))];
+                    if (!prod) return;
+                    seleccionarProductoSolicitud(prod.id, prod.sku, prod.nombre, prod.talla, prod.stock, prod.precio);
+                });
+            });
         })
         .catch(error => {
             console.error('Error:', error);
@@ -1821,8 +1979,8 @@ function buscarProductosEmisor() {
 function seleccionarProductoSolicitud(id, sku, nombre, talla, stock, precio) {
     // Guardar selección
     document.getElementById('productoSolicitudId').value = id;
-    
-    // Mostrar producto seleccionado
+
+    // Mostrar producto seleccionado (datos del inventario del emisor: escapados)
     const contenedor = document.getElementById('productoSolicitudSeleccionado');
     contenedor.innerHTML = `
         <div class="alert alert-success">
@@ -1830,8 +1988,8 @@ function seleccionarProductoSolicitud(id, sku, nombre, talla, stock, precio) {
                 <div>
                     <i class="bi bi-check-circle-fill me-2"></i>
                     <strong>Producto Seleccionado:</strong><br>
-                    <span class="ms-4">${nombre}</span><br>
-                    <small class="text-muted ms-4">SKU: ${sku} | Talla: ${talla} | Stock disponible: ${stock}</small><br>
+                    <span class="ms-4">${_escReg(nombre)}</span><br>
+                    <small class="text-muted ms-4">SKU: ${_escReg(sku)} | Talla: ${_escReg(talla)} | Stock disponible: ${_escReg(stock)}</small><br>
                     <small class="text-info ms-4">Precio: $${Number(precio).toLocaleString('es-CL')}</small>
                 </div>
                 <button type="button" class="btn btn-sm btn-outline-danger" onclick="limpiarSeleccionSolicitud()" title="Quitar selección" aria-label="Quitar selección">
@@ -1857,8 +2015,11 @@ function actualizarPreviewDocumentos(sku, nombre, talla, precio) {
     // Preview NC (por producto original)
     document.getElementById('previewNCProducto').textContent = `${productoSeleccionado.sku} - ${productoSeleccionado.producto_nombre}`;
     document.getElementById('previewNCCantidad').textContent = cantidadProblema;
-    document.getElementById('previewNCPrecio').textContent = Number(precioOriginal).toLocaleString('es-CL');
-    document.getElementById('previewNCMonto').textContent = Number(cantidadProblema * precioOriginal).toLocaleString('es-CL');
+    // Total con IVA, como la NC real (calcular_montos_nc); antes se mostraba el neto.
+    const montosNc = _montoNcLinea(productoSeleccionado, cantidadProblema);
+    document.getElementById('previewNCPrecio').textContent =
+        `${Number(precioOriginal).toLocaleString('es-CL')} ${montosNc.base === 'BRUTO' ? '(con IVA)' : '(neto)'}`;
+    document.getElementById('previewNCMonto').textContent = `${_clpReg(montosNc.total)} (${_detalleNcTexto(montosNc)})`;
     
     // Preview DTE nuevo (con producto de cambio)
     document.getElementById('previewDTEDestino').textContent = 'Tu sucursal';
@@ -1971,17 +2132,29 @@ function buscarProductosParaEnvio() {
         </div>
     `;
     
-    // Buscar en el inventario de la sucursal actual (emisor)
-    fetch('/app/buscar_productos_bodega/?q=' + encodeURIComponent(query))
+    // Inventario de la sucursal EMISORA del traspaso, derivada en el servidor
+    // de la línea (recepcion_id). Antes se consultaba /app/buscar_productos_bodega/
+    // con ?q=, que ignora ese parámetro y devuelve Productos (no tallas): la
+    // búsqueda siempre fallaba (B10-02).
+    const recepcionId = productoSeleccionado ? productoSeleccionado.id : '';
+    fetch(`/app/dte/buscar_productos_emisor/?query=${encodeURIComponent(query)}&recepcion_id=${encodeURIComponent(recepcionId)}`, {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    })
         .then(response => response.json())
         .then(data => {
-            if (data.success && data.productos && data.productos.length > 0) {
+            if (data && data.success && data.productos && data.productos.length > 0) {
                 mostrarResultadosProductosEnvioCambio(data.productos);
             } else {
+                // 400 (consulta corta) / 403 (no eres parte del traspaso, o
+                // {error: true, mensaje} del decorador): el servidor explica el
+                // motivo; con success y lista vacía, simplemente no hay.
+                const sinResultados = 'No se encontraron productos con stock disponible';
+                const motivo = (data && !data.success) ? _msgErrorReg(data, sinResultados) : sinResultados;
                 contenedor.innerHTML = `
                     <p class="text-muted text-center my-3">
                         <i class="bi bi-inbox"></i><br>
-                        No se encontraron productos con stock disponible
+                        ${_escReg(motivo)}
                     </p>
                 `;
             }
@@ -2010,23 +2183,30 @@ function mostrarResultadosProductosEnvioCambio(productos) {
         return;
     }
     
-    contenedor.innerHTML = productos.map(prod => `
-        <div class="card mb-2 reg-resultado-item" 
-             onclick="seleccionarProductoEnvioCambio(${prod.id}, '${prod.sku}', '${prod.nombre.replace(/'/g, "\\'")}', ${prod.stock})">
+    // Texto escapado y click por índice (sin datos en un onclick inline: un
+    // nombre con comillas rompía el atributo y uno con HTML se ejecutaba).
+    contenedor.innerHTML = productos.map((prod, idx) => `
+        <div class="card mb-2 reg-resultado-item" data-idx-producto-envio="${idx}">
             <div class="card-body p-2">
                 <div class="row align-items-center">
                     <div class="col">
-                        <strong>${prod.sku}</strong> - ${prod.nombre}<br>
-                        <small class="text-muted">Talla: <span class="badge bg-light text-dark border reg-badge-talla">${prod.talla || 'N/A'}</span></small>
+                        <strong>${_escReg(prod.sku)}</strong> - ${_escReg(prod.nombre)}<br>
+                        <small class="text-muted">Talla: <span class="badge bg-light text-dark border reg-badge-talla">${_escReg(prod.talla || 'N/A')}</span></small>
                     </div>
                     <div class="col-auto text-end">
-                        <span class="badge bg-info">${prod.stock} en stock</span><br>
+                        <span class="badge bg-info">${_escReg(prod.stock)} en stock</span><br>
                         <small class="text-success">$${Number(prod.precio).toLocaleString('es-CL')}</small>
                     </div>
                 </div>
             </div>
         </div>
     `).join('');
+    contenedor.querySelectorAll('[data-idx-producto-envio]').forEach(card => {
+        card.addEventListener('click', () => {
+            const prod = productos[Number(card.getAttribute('data-idx-producto-envio'))];
+            if (prod) seleccionarProductoEnvioCambio(prod.id, prod.sku, prod.nombre, prod.stock);
+        });
+    });
 }
 
 function seleccionarProductoEnvioCambio(id, sku, nombre, stock) {
@@ -2034,8 +2214,8 @@ function seleccionarProductoEnvioCambio(id, sku, nombre, stock) {
     document.getElementById('productoEnvioCambioSeleccionado').innerHTML = `
         <div class="alert alert-success">
             <i class="bi bi-check-circle me-2"></i>
-            <strong>Seleccionado:</strong> ${sku} - ${nombre}<br>
-            <small>Stock disponible: ${stock} unidades</small>
+            <strong>Seleccionado:</strong> ${_escReg(sku)} - ${_escReg(nombre)}<br>
+            <small>Stock disponible: ${_escReg(stock)} unidades</small>
         </div>
     `;
     
@@ -2056,113 +2236,13 @@ function seleccionarProductoEnvioCambio(id, sku, nombre, stock) {
     }
 }
 
-function buscarProductosReemplazo() {
-    const query = document.getElementById('buscarNuevoProducto').value.trim();
-    const contenedor = document.getElementById('resultadosProductos');
-    
-    if (!query || query.length < 2) {
-        contenedor.innerHTML = `
-            <p class="text-warning text-center my-3">
-                <i class="bi bi-exclamation-circle"></i><br>
-                Escribe al menos 2 caracteres para buscar
-            </p>
-        `;
-        return;
-    }
-    
-    // Mostrar loading
-    contenedor.innerHTML = `
-        <div class="text-center my-3">
-            <div class="spinner-border spinner-border-sm text-primary"></div>
-            <p class="text-muted mt-2">Buscando productos...</p>
-        </div>
-    `;
-    
-    // Usar endpoint de búsqueda de productos de bodega
-    fetch('/app/buscar_productos_bodega/?q=' + encodeURIComponent(query))
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.productos) {
-                mostrarResultadosProductos(data.productos);
-            } else {
-                contenedor.innerHTML = `
-                    <p class="text-muted text-center my-3">
-                        <i class="bi bi-inbox"></i><br>
-                        No se encontraron productos
-                    </p>
-                `;
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            contenedor.innerHTML = `
-                <p class="text-danger text-center my-3">
-                    <i class="bi bi-exclamation-triangle"></i><br>
-                    Error al buscar productos
-                </p>
-            `;
-        });
-}
-
-function mostrarResultadosProductos(productos) {
-    const contenedor = document.getElementById('resultadosProductos');
-    
-    if (!productos || productos.length === 0) {
-        contenedor.innerHTML = `
-            <p class="text-muted text-center my-3">
-                <i class="bi bi-inbox"></i><br>
-                No se encontraron productos
-            </p>
-        `;
-        return;
-    }
-    
-    contenedor.innerHTML = productos.map(prod => `
-        <div class="border-bottom p-2 reg-resultado-item"
-             onclick="seleccionarNuevoProducto(${prod.talla_id}, '${escapeHtml(prod.articulo)}', '${escapeHtml(prod.sku)}', '${escapeHtml(prod.talla)}', ${prod.stock})">
-            <div class="d-flex justify-content-between align-items-start">
-                <div>
-                    <strong>${escapeHtml(prod.articulo)}</strong><br>
-                    <small class="text-muted">
-                        <i class="bi bi-upc"></i> SKU: <code>${escapeHtml(prod.sku)}</code> | 
-                        <i class="bi bi-tag"></i> Talla: <span class="badge bg-light text-dark border reg-badge-talla">${escapeHtml(prod.talla)}</span>
-                    </small>
-                </div>
-                <div class="text-end">
-                    <span class="badge ${prod.stock > 0 ? 'bg-success' : 'bg-danger'}">
-                        <i class="bi bi-box"></i> ${prod.stock}
-                    </span>
-                </div>
-            </div>
-        </div>
-    `).join('');
-}
-
+// escapeHtml la usa también recepcion_dte.html (~230 llamadas): no borrar.
+// (buscarProductosReemplazo / mostrarResultadosProductos /
+// seleccionarNuevoProducto, del cambio directo retirado, se borraron.)
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
-}
-
-function seleccionarNuevoProducto(tallaId, nombre, sku, talla, stock) {
-    document.getElementById('nuevoProductoTallaId').value = tallaId;
-    document.getElementById('nuevoProductoId').value = tallaId;  // Por compatibilidad
-    
-    document.getElementById('productoSeleccionado').innerHTML = `
-        <div class="alert alert-success">
-            <div class="d-flex align-items-center">
-                <i class="bi bi-check-circle-fill fs-4 me-3"></i>
-                <div>
-                    <strong>Producto seleccionado:</strong><br>
-                    <small>${nombre} (${sku} - ${talla})</small><br>
-                    <small class="text-muted">Stock disponible: ${stock}</small>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Limpiar búsqueda
-    document.getElementById('resultadosProductos').innerHTML = '';
 }
 
 function guardarRegularizacion() {
@@ -2219,9 +2299,17 @@ function guardarRegularizacion() {
             return;
         }
         
-        const cantidadProblema = productoSeleccionado.cantidad_faltante || 
-                                productoSeleccionado.cantidad_danada || 0;
-        
+        // faltante + dañada: el servidor acepta de 1 a ese tope y devuelve al
+        // origen solo el faltante (lo dañado no vuelve como stock vendible).
+        const cantidadProblema = (Number(productoSeleccionado.cantidad_faltante) || 0)
+            + (Number(productoSeleccionado.cantidad_danada) || 0);
+        if (cantidadProblema < 1) {
+            Swal.fire('Sin unidades que acreditar',
+                'Esta línea no tiene faltante ni dañado: si llegaron unidades de más, decide el destino (Resolver sobrante).',
+                'info');
+            return;
+        }
+
         // Datos para emitir NC
         data.motivo_nc = motivoNC;
         data.cantidad_nc = cantidadProblema;
@@ -2287,11 +2375,17 @@ function guardarRegularizacion() {
         data.cantidad_nc = cantidadProblema;
         
     } else if (tipo === 'AJUSTAR') {
+        // Entre empresas el servidor rechaza siempre "Ajustar cantidad"
+        // (regularizar_producto_api): no se envía ni se promete una NC.
+        if (productoSeleccionado.requiere_nc) {
+            Swal.fire('No disponible', _MSG_AJUSTAR_ENTRE_EMPRESAS, 'warning');
+            return;
+        }
         const inputCantidad = document.getElementById('ajustarCantidad');
         const cantidadAdicional = parseInt(inputCantidad.value);
         const cantidadFaltante = productoSeleccionado.cantidad_faltante || 0;
         const cantidadRecibida = productoSeleccionado.cantidad_recibida || 0;
-        
+
         // Validación 1: Debe ser un número válido
         if (isNaN(cantidadAdicional) || inputCantidad.value === '') {
             Swal.fire({
@@ -2380,16 +2474,9 @@ function guardarRegularizacion() {
             data.justificacion = justificacion;
             
         } else {
-            // FLUJO DIRECTO (interno)
-            const nuevoProductoId = document.getElementById('nuevoProductoTallaId').value;
-            
-            if (!nuevoProductoId) {
-                Swal.fire('Error', 'Debes buscar y seleccionar un producto', 'warning');
-                return;
-            }
-            
-            data.es_solicitud = false;
-            data.nuevo_producto_id = parseInt(nuevoProductoId);
+            // El cambio DIRECTO (interno) se retiró: el servidor lo rechaza.
+            Swal.fire('No disponible', 'El cambio directo de producto está deshabilitado. Regulariza la diferencia y envía el reemplazo en un traspaso nuevo.', 'info');
+            return;
         }
     }
     
@@ -2403,25 +2490,30 @@ function guardarRegularizacion() {
         
         if (data.tipo_solucion === 'NOTA_CREDITO') {
             // Solicitud de NC
+            const montosSol = _montoNcLinea(productoSeleccionado, data.cantidad_solicitud);
             mensajeConfirmacion = `
                 <div class="text-start">
                     <p><strong>Se creará una SOLICITUD de Nota de Crédito:</strong></p>
                     <div class="alert alert-warning mb-2">
                         <i class="bi bi-file-earmark-text me-2"></i>
-                        El emisor (<strong>${window.dteEmisor}</strong>) deberá aprobar y emitir la NC formal.
+                        El emisor (<strong>${_escReg(window.dteEmisor)}</strong>) deberá aprobar y emitir la NC formal.
                     </div>
                     <table class="table table-sm">
                         <tr>
                             <th>Producto:</th>
-                            <td>${productoSeleccionado.producto_nombre}</td>
+                            <td>${_escReg(productoSeleccionado.producto_nombre)}</td>
                         </tr>
                         <tr>
                             <th>Cantidad:</th>
-                            <td><strong>${data.cantidad_solicitud}</strong> unidades</td>
+                            <td><strong>${_escReg(data.cantidad_solicitud)}</strong> unidades</td>
+                        </tr>
+                        <tr>
+                            <th>Monto NC estimado:</th>
+                            <td class="text-danger fw-bold">$${_clpReg(montosSol.total)} <small class="text-muted fw-normal">(${_detalleNcTexto(montosSol)})</small></td>
                         </tr>
                         <tr>
                             <th>Motivo:</th>
-                            <td><small>${data.justificacion}</small></td>
+                            <td><small>${_escReg(data.justificacion)}</small></td>
                         </tr>
                     </table>
                 </div>
@@ -2430,24 +2522,25 @@ function guardarRegularizacion() {
             // Solicitud de cambio de producto
             const cantidadSol = data.cantidad_solicitud || 0;
             const precioOriginal = productoSeleccionado.precio_unitario || 0;
-            const montoNC = cantidadSol * precioOriginal;
-            
+            // Total con IVA como la NC real (antes se mostraba el neto).
+            const montosNcSol = _montoNcLinea(productoSeleccionado, cantidadSol);
+
             mensajeConfirmacion = `
                 <div class="text-start">
                     <p><strong>Se creará una SOLICITUD de cambio de producto:</strong></p>
                     <div class="alert alert-info mb-2">
                         <i class="bi bi-info-circle me-2"></i>
-                        El emisor (<strong>${window.dteEmisor}</strong>) deberá aprobar tu solicitud.
+                        El emisor (<strong>${_escReg(window.dteEmisor)}</strong>) deberá aprobar tu solicitud.
                     </div>
-                    
+
                     <p class="small mb-1"><strong>Documentos que se generarán al aprobar:</strong></p>
                     <div class="row">
                         <div class="col-6">
                             <div class="card bg-light mb-2">
                                 <div class="card-body p-2">
                                     <small class="text-muted"><span class="badge rounded-pill bg-secondary me-1">1</span>NC por original:</small><br>
-                                    <strong class="text-danger">$${Number(montoNC).toLocaleString('es-CL')}</strong>
-                                    <br><small>(${cantidadSol} × $${Number(precioOriginal).toLocaleString('es-CL')})</small>
+                                    <strong class="text-danger">$${_clpReg(montosNcSol.total)}</strong>
+                                    <br><small>(${cantidadSol} × $${Number(precioOriginal).toLocaleString('es-CL')}${montosNcSol.base === 'NETO' ? ' + IVA' : ', IVA incluido'})</small>
                                 </div>
                             </div>
                         </div>
@@ -2468,9 +2561,9 @@ function guardarRegularizacion() {
         // Emisor ejecuta NC directamente
         tituloConfirmacion = 'Emitir Nota de Crédito';
         const cantidadNC = data.cantidad_nc || 0;
-        const precioUnit = productoSeleccionado.precio_unitario || 0;
-        const montoTotal = cantidadNC * precioUnit;
-        
+        // Total con IVA, igual al que devolverá el servidor (antes: el neto).
+        const montosNc = _montoNcLinea(productoSeleccionado, cantidadNC);
+
         mensajeConfirmacion = `
             <div class="text-start">
                 <p><strong>Se generará automáticamente una Nota de Crédito:</strong></p>
@@ -2481,27 +2574,27 @@ function guardarRegularizacion() {
                 <table class="table table-sm">
                     <tr>
                         <th>DTE Original:</th>
-                        <td>#${productoSeleccionado.dte_numero}</td>
+                        <td>#${_escReg(productoSeleccionado.dte_numero)}</td>
                     </tr>
                     <tr>
                         <th>Receptor:</th>
-                        <td>${productoSeleccionado.receptor || '-'}</td>
+                        <td>${_escReg(productoSeleccionado.receptor || '-')}</td>
                     </tr>
                     <tr>
                         <th>Producto:</th>
-                        <td>${productoSeleccionado.producto_nombre}</td>
+                        <td>${_escReg(productoSeleccionado.producto_nombre)}</td>
                     </tr>
                     <tr>
                         <th>Cantidad:</th>
-                        <td><strong>${cantidadNC}</strong> unidades</td>
+                        <td><strong>${_escReg(cantidadNC)}</strong> unidades</td>
                     </tr>
                     <tr>
-                        <th>Monto NC:</th>
-                        <td class="text-danger fw-bold">$${Number(montoTotal).toLocaleString('es-CL')}</td>
+                        <th>Monto NC (con IVA):</th>
+                        <td class="text-danger fw-bold">$${_clpReg(montosNc.total)} <small class="text-muted fw-normal">(${_detalleNcTexto(montosNc)})</small></td>
                     </tr>
                     <tr>
                         <th>Motivo:</th>
-                        <td><small>${data.motivo_nc}</small></td>
+                        <td><small>${_escReg(data.motivo_nc)}</small></td>
                     </tr>
                 </table>
             </div>
@@ -2526,31 +2619,20 @@ function guardarRegularizacion() {
                 <table class="table table-sm">
                     <tr>
                         <th>Cantidad:</th>
-                        <td><strong>${data.cantidad_envio}</strong> unidades</td>
+                        <td><strong>${_escReg(data.cantidad_envio)}</strong> unidades</td>
                     </tr>
                     <tr>
                         <th>Motivo:</th>
-                        <td><small>${data.motivo_envio}</small></td>
+                        <td><small>${_escReg(data.motivo_envio)}</small></td>
                     </tr>
                 </table>
             </div>
         `;
-        
-    } else if (productoSeleccionado.requiere_nc && tipo === 'AJUSTAR') {
-        const faltante = productoSeleccionado.cantidad_faltante || 0;
-        if (faltante > 0) {
-            mensajeConfirmacion = `
-                <p>Se generará automáticamente una <strong>Nota de Crédito</strong> por:</p>
-                <ul class="text-start">
-                    <li>Cantidad: ${faltante} unidades</li>
-                    <li>Producto: ${productoSeleccionado.producto_nombre}</li>
-                    <li>Motivo: Productos faltantes en recepción</li>
-                </ul>
-                <p class="text-warning small"><i class="bi bi-exclamation-triangle me-1"></i>Cumple normativa SII (empresas diferentes)</p>
-            `;
-        }
+
     }
-    
+    // (AJUSTAR entre empresas ya no llega acá: se corta arriba, porque el
+    // servidor lo rechaza y la confirmación prometía una NC que no se emitía.)
+
     Swal.fire({
         title: tituloConfirmacion,
         html: mensajeConfirmacion,
@@ -2576,14 +2658,25 @@ function guardarRegularizacion() {
             },
             body: JSON.stringify(data)
         })
-        .then(response => response.json())
+        .then(_jsonRespuestaReg)
         .then(data => {
             if (data.success) {
                 // Si la respuesta incluye txt_acepta_url (NC creada en el
-                // flujo), descargamos el TXT Acepta automáticamente.
-                if (data.txt_acepta_url) {
-                    descargarTxtAcepta(data);
-                }
+                // flujo), descargamos el TXT Acepta automáticamente. Si falla
+                // (403: la empresa activa no es la emisora de la NC), se avisa
+                // en el Swal de éxito en vez de prometer una descarga que no hubo.
+                const _descargaTxt = data.txt_acepta_url ? descargarTxtAcepta(data) : null;
+                const _avisoTxtAuto = `
+                    <div class="alert alert-info mb-2 reg-aviso-txt">
+                        <i class="bi bi-file-earmark-arrow-down me-2"></i>
+                        El TXT Acepta se descarga automáticamente. Súbelo a tu proveedor de facturación electrónica.
+                    </div>`;
+                const _btnDocumento = data.documento_url ? `
+                    <div class="text-center mt-3">
+                        <a href="${_escReg(data.documento_url)}" target="_blank" class="btn btn-primary btn-lg">
+                            <i class="bi bi-printer-fill"></i> Imprimir Documento de Regularización
+                        </a>
+                    </div>` : '';
                 let mensaje = '';
                 let icono = 'success';
                 let titulo = '¡Completado!';
@@ -2594,7 +2687,7 @@ function guardarRegularizacion() {
                     titulo = 'Solicitud Creada';
                     mensaje = `
                         <div class="text-start">
-                            <p>Solicitud <strong>#${data.numero_solicitud}</strong> creada correctamente.</p>
+                            <p>Solicitud <strong>#${_escReg(data.numero_solicitud)}</strong> creada correctamente.</p>
                             <div class="alert alert-warning">
                                 <i class="bi bi-clock-history me-2"></i>
                                 <strong>Estado:</strong> Pendiente de revisión por el emisor
@@ -2605,71 +2698,101 @@ function guardarRegularizacion() {
                         </div>
                     `;
                 } else if (data.tipo === 'NC_GENERADA') {
-                    // NC generada directamente por emisor (TXT Acepta ya se descargó arriba).
+                    // NC generada directamente por emisor (el TXT Acepta se descarga arriba).
                     titulo = 'Nota de Crédito Generada';
                     mensaje = `
                         <div class="text-start">
-                            <p class="mb-3">Se ha generado la Nota de Crédito <strong>#${data.numero_nc}</strong></p>
+                            <p class="mb-3">Se ha generado la Nota de Crédito <strong>#${_escReg(data.numero_nc)}</strong></p>
                             <div class="alert alert-success mb-2">
                                 <i class="bi bi-check-circle me-2"></i>
                                 <strong>Monto NC:</strong> $${Number(data.monto_nc).toLocaleString('es-CL')}
                             </div>
-                            <div class="alert alert-info mb-2">
-                                <i class="bi bi-file-earmark-arrow-down me-2"></i>
-                                El TXT Acepta se descargó automáticamente. Súbelo a tu proveedor de facturación electrónica.
-                            </div>
-                            ${data.documento_url ? `
-                                <div class="text-center mt-3">
-                                    <a href="${data.documento_url}" target="_blank" class="btn btn-primary btn-lg">
-                                        <i class="bi bi-printer-fill"></i> Imprimir Documento de Regularización
-                                    </a>
-                                </div>
-                            ` : ''}
+                            ${data.txt_acepta_url ? _avisoTxtAuto : ''}
+                            ${_btnDocumento}
                         </div>
                     `;
                 } else if (data.tipo === 'CAMBIO_ENVIADO') {
-                    // Producto de cambio enviado (TXT Acepta de la NC ya se descargó arriba).
+                    // Producto de cambio enviado (el TXT Acepta de la NC se descarga arriba).
                     titulo = 'Producto de Cambio Enviado';
                     mensaje = `
                         <div class="text-start">
                             <p class="mb-2">Se han generado los siguientes documentos:</p>
                             <ul class="list-unstyled mb-3">
-                                <li><i class="bi bi-check-circle text-success me-1"></i>Nota de Crédito <strong>#${data.numero_nc}</strong></li>
-                                <li><i class="bi bi-check-circle text-success me-1"></i>DTE de Cambio <strong>#${data.numero_dte_cambio}</strong></li>
+                                <li><i class="bi bi-check-circle text-success me-1"></i>Nota de Crédito <strong>#${_escReg(data.numero_nc)}</strong></li>
+                                <li><i class="bi bi-check-circle text-success me-1"></i>DTE de Cambio <strong>#${_escReg(data.numero_dte_cambio)}</strong></li>
                             </ul>
                             <div class="alert alert-info mb-2">
                                 <i class="bi bi-box-seam me-2"></i>
-                                <strong>Producto enviado:</strong> ${data.producto_cambio}
+                                <strong>Producto enviado:</strong> ${_escReg(data.producto_cambio)}
                             </div>
                             <div class="alert alert-warning mb-2">
                                 <i class="bi bi-exclamation-triangle me-2"></i>
-                                <strong>IMPORTANTE:</strong> El receptor debe recepcionar el DTE #${data.numero_dte_cambio} para que ingrese a su inventario.
+                                <strong>IMPORTANTE:</strong> El receptor debe recepcionar el DTE #${_escReg(data.numero_dte_cambio)} para que ingrese a su inventario.
                             </div>
-                            ${data.documento_url ? `
-                                <div class="text-center mt-3">
-                                    <a href="${data.documento_url}" target="_blank" class="btn btn-primary btn-lg">
-                                        <i class="bi bi-printer-fill"></i> Imprimir Documento de Regularización
-                                    </a>
-                                </div>
-                            ` : ''}
+                            ${data.txt_acepta_url ? _avisoTxtAuto : ''}
+                            ${_btnDocumento}
                         </div>
                     `;
+                } else if (data.tipo === 'REGULARIZAR_CON_NC' && data.nc_generada) {
+                    // "Regularizar con NC" con NC emitida (el TXT Acepta se descarga arriba).
+                    titulo = 'Nota de Crédito Generada';
+                    mensaje = `
+                        <div class="text-start">
+                            <p class="mb-3">${_escReg(data.message || 'Regularización completada.')}</p>
+                            <div class="alert alert-success mb-2">
+                                <i class="bi bi-check-circle me-2"></i>
+                                <strong>Nota de Crédito #${_escReg(data.numero_nc)}</strong><br>
+                                <strong>Monto NC:</strong> $${_clpReg(data.monto_nc)}
+                            </div>
+                            ${data.txt_acepta_url ? _avisoTxtAuto : ''}
+                        </div>
+                    `;
+                } else if (data.tipo === 'MERCADERIA_ENCONTRADA') {
+                    // Puede quedar faltante: no decir "regularizado" si la línea sigue
+                    // abierta. El número sale del SERVIDOR (faltante_restante o, mientras
+                    // no lo mande, el "Faltante restante: N" de su alerta), nunca de la
+                    // lista cacheada: otro usuario pudo haber ingresado parte antes.
+                    let restante = null;
+                    if (typeof data.faltante_restante === 'number') {
+                        restante = data.faltante_restante;
+                    } else {
+                        const m = /Faltante restante:\s*(\d+)/i.exec(String(data.alerta || ''));
+                        if (m) restante = parseInt(m[1], 10);
+                    }
+                    if (restante === null) {
+                        titulo = 'Mercadería encontrada';
+                    } else if (restante > 0) {
+                        icono = 'info';
+                        titulo = `Faltante actualizado (quedan ${restante})`;
+                    } else {
+                        titulo = 'Mercadería encontrada: línea regularizada';
+                    }
+                    mensaje = _escReg(data.alerta || data.message || 'Mercadería ingresada.');
+                } else if (data.estado_nuevo && String(data.estado_nuevo).toUpperCase() !== 'REGULARIZADO') {
+                    // Ajuste parcial: la línea sigue pendiente (el message genérico
+                    // del backend dice "regularizado", por eso no se usa acá).
+                    icono = 'info';
+                    titulo = 'Cantidad actualizada';
+                    mensaje = 'Se guardó el ajuste de cantidad.<br><small class="text-muted">La línea sigue pendiente por la diferencia que falta.</small>';
                 } else {
-                    // Regularización normal (traspaso interno)
-                    mensaje = 'Producto regularizado correctamente';
+                    // Resto de casos: el texto del backend dice qué se hizo.
+                    mensaje = _escReg(data.alerta || data.message || 'Producto regularizado correctamente');
                 }
-                
+
                 Swal.fire({
                     icon: icono,
                     title: titulo,
                     html: mensaje,
                     confirmButtonText: 'Entendido'
                 });
-                
+                if (_descargaTxt) {
+                    _descargaTxt.then(res => { if (!res.ok) _avisarTxtNoDescargadoReg(data, res); });
+                }
+
                 bootstrap.Modal.getInstance(document.getElementById('modalRegularizar')).hide();
                 notificarRegularizacionCompleta();
             } else {
-                Swal.fire('Error', data.error || 'Error al procesar', 'error');
+                Swal.fire('Error', _escReg(_msgErrorReg(data, 'Error al procesar')).replace(/\n/g, '<br>'), 'error');
                 btnGuardar.disabled = false;
                 btnGuardar.innerHTML = '<i class="bi bi-check-circle"></i> Guardar Regularización';
             }
@@ -2683,478 +2806,9 @@ function guardarRegularizacion() {
     });
 }
 
-function obtenerClaseEstado(estado) {
-    const clases = {
-        'FALTANTE': 'bg-danger',
-        'RECEPCIONADO_PARCIAL': 'bg-warning',
-        'RECEPCIONADO_DANADO': 'bg-dark',
-        'EN_REGULARIZACION': 'bg-info',
-        'EN_SOLICITUD_REGULARIZACION': 'bg-primary',
-        'REGULARIZADO': 'bg-success'
-    };
-    return clases[estado] || 'bg-secondary';
-}
-
-function formatearFecha(fecha) {
-    if (!fecha) return '-';
-    return new Date(fecha).toLocaleDateString('es-CL');
-}
-
-function actualizarListado() {
-    cargarProductosProblemas();
-}
-
-function mostrarError(mensaje) {
-    Swal.fire('Error', mensaje, 'error');
-}
-
-// ========== FUNCIONES PARA REGULARIZACIÓN DE GUÍAS ==========
-
-/**
- * Muestra opciones de regularización para guías (sin NC)
- */
-function mostrarOpcionesRegularizacionGuia(dteNumero) {
-    const productosDTE = productosProblemas.filter(p => String(p.dte_numero) === String(dteNumero));
-
-    if (!productosDTE.length) {
-        Swal.fire('Error', 'No se encontraron productos para esta guia', 'error');
-        return;
-    }
-
-    const pendientes = productosDTE.filter(p => p.estado !== 'REGULARIZADO');
-    const regularizados = productosDTE.filter(p => p.estado === 'REGULARIZADO');
-
-    if (pendientes.length === 0) {
-        Swal.fire({
-            icon: 'success',
-            title: 'Ya regularizado',
-            html: `Todos los productos del DTE #${dteNumero} ya fueron regularizados (${regularizados.length}/${productosDTE.length}).`
-        });
-        return;
-    }
-
-    // Construir lista de productos pendientes
-    let htmlProductos = '';
-    if (regularizados.length > 0) {
-        htmlProductos += `<div class="alert alert-success py-2 mb-2 small">
-            <i class="bi bi-check-circle me-1"></i>${regularizados.length} producto(s) ya regularizado(s)
-        </div>`;
-    }
-    htmlProductos += '<div class="list-group mb-3">';
-    pendientes.forEach(prod => {
-        const cantidadProblema = (prod.cantidad_faltante || 0) + (prod.cantidad_danada || 0);
-        const esSobrante = (prod.cantidad_sobrante || 0) > 0;
-        htmlProductos += `
-            <div class="list-group-item list-group-item-action reg-clickable" onclick="${esSobrante ? `Swal.close(); decidirSobrante(${prod.id})` : `abrirModalRegularizacionIndividualGuia(${prod.id})`}">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <h6 class="mb-1">${prod.producto_nombre}</h6>
-                        <small class="text-muted">SKU: ${prod.sku} | Talla: <span class="badge bg-light text-dark border reg-badge-talla">${prod.talla}</span></small>
-                    </div>
-                    <div class="text-end">
-                        ${esSobrante ?
-                            `<span class="badge bg-info">+${prod.cantidad_sobrante} sobrante</span>` :
-                            `<span class="badge bg-danger">${cantidadProblema} unidades</span>`
-                        }<br>
-                        ${getEstadoBadge(prod.estado)}
-                    </div>
-                </div>
-            </div>
-        `;
-    });
-    htmlProductos += '</div>';
-    
-    Swal.fire({
-        title: `Regularizar Guía #${dteNumero}`,
-        html: `
-            <div class="text-start">
-                <div class="alert alert-info">
-                    <i class="bi bi-info-circle me-2"></i>
-                    <strong>Regularización por producto</strong><br>
-                    Selecciona el producto que deseas regularizar:
-                </div>
-                ${htmlProductos}
-            </div>
-        `,
-        showConfirmButton: false,
-        showCancelButton: true,
-        cancelButtonText: 'Cerrar',
-        width: '640px',
-        customClass: {
-            container: 'swal-on-top'
-        }
-    });
-}
-
-/**
- * Abre el modal de regularización individual para un producto de guía
- */
-function abrirModalRegularizacionIndividualGuia(recepcionId) {
-    const producto = productosProblemas.find(p => p.id === recepcionId);
-    
-    if (!producto) {
-        Swal.fire('Error', 'Producto no encontrado', 'error');
-        return;
-    }
-    
-    // Cerrar SweetAlert
-    Swal.close();
-    
-    // Guardar producto seleccionado
-    productoSeleccionado = producto;
-    
-    // Calcular cantidad problema
-    const cantidadProblema = (producto.cantidad_faltante || 0) + (producto.cantidad_danada || 0);
-    
-    // Llenar información del modal
-    $('#modalRegularizar').find('.modal-title').html('<i class="bi bi-gear me-2"></i> Regularizar Producto (Guía)');
-    $('#regProductoNombre').text(producto.producto_nombre);
-    $('#regProductoSKU').text(producto.sku);
-    $('#regProductoTalla').text(producto.talla);
-    $('#regPrecioUnitario').text('0'); // Guías sin precio
-    $('#regDTE').text(producto.dte_numero);
-    $('#regEsperado').text(producto.cantidad_esperada);
-    $('#regRecibido').text(producto.cantidad_recibida);
-    $('#regFaltante').text(producto.cantidad_faltante || 0);
-    
-    // Mostrar alerta específica para guías
-    $('#alertTipoRegularizacion')
-        .removeClass('alert-info alert-warning')
-        .addClass('alert-info');
-    $('#iconoTipoReg').html('<i class="bi bi-truck"></i>');
-    $('#tituloTipoReg').text('Guía de Despacho (Sin valor monetario)');
-    $('#descripcionTipoReg').text('No se genera Nota de Crédito. Puedes devolver stock o enviar producto de reemplazo.');
-    
-    // Mostrar botones de regularización para guías
-    $('#botonesRegularizacion').html(`
-        <button type="button" class="btn btn-outline-info" onclick="mostrarPanelAjusteInterno()">
-            <i class="bi bi-arrow-return-left me-1"></i> Ajuste Interno
-        </button>
-        <button type="button" class="btn btn-outline-primary" onclick="mostrarPanelCambioProductoGuia()">
-            <i class="bi bi-arrow-left-right me-1"></i> Cambio de Producto
-        </button>
-    `);
-    
-    // Ocultar todos los paneles
-    $('.regularizacion-panel').hide();
-    
-    // Abrir modal
-    $('#modalRegularizar').modal('show');
-}
-
-/**
- * Muestra el panel de ajuste interno
- */
-function mostrarPanelAjusteInterno() {
-    // Ocultar todos los paneles
-    $('.regularizacion-panel').hide();
-    
-    // Mostrar panel de ajuste interno
-    $('#panelAjusteInterno').show();
-    
-    // Llenar datos
-    const cantidadProblema = (productoSeleccionado.cantidad_faltante || 0) + (productoSeleccionado.cantidad_danada || 0);
-    $('#ajusteInternoProducto').text(productoSeleccionado.producto_nombre);
-    $('#ajusteInternoSKU').text(productoSeleccionado.sku);
-    $('#ajusteInternoCantidad').text(cantidadProblema);
-    $('#ajusteInternoTipo').text(productoSeleccionado.estado);
-    $('#cantidadAjusteInterno').attr('max', cantidadProblema).val(cantidadProblema);
-    $('#maxCantidadAjuste').text(cantidadProblema);
-    $('#previewCantidadAjuste').text(cantidadProblema);
-    
-    // Actualizar botón de guardar
-    $('#modalRegularizar .modal-footer').html(`
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-            <i class="bi bi-x-circle"></i> Cancelar
-        </button>
-        <button type="button" class="btn btn-info" onclick="procesarAjusteInterno()">
-            <i class="bi bi-check-circle"></i> Procesar Ajuste
-        </button>
-    `);
-    
-    // Actualizar preview cuando cambie cantidad
-    $('#cantidadAjusteInterno').off('input').on('input', function() {
-        $('#previewCantidadAjuste').text($(this).val());
-    });
-}
-
-/**
- * Procesa el ajuste interno (devolución de stock)
- */
-function procesarAjusteInterno() {
-    const cantidad = parseInt($('#cantidadAjusteInterno').val());
-    const observaciones = $('#observacionesAjusteInterno').val().trim();
-    
-    // Validaciones
-    if (!observaciones) {
-        Swal.fire('Error', 'Debes ingresar observaciones', 'error');
-        return;
-    }
-    
-    if (cantidad <= 0 || cantidad > parseInt($('#maxCantidadAjuste').text())) {
-        Swal.fire('Error', 'Cantidad inválida', 'error');
-        return;
-    }
-    
-    // Confirmar
-    Swal.fire({
-        title: '¿Confirmar ajuste interno?',
-        html: `
-            <div class="text-start">
-                <p><strong>Se devolverán ${cantidad} unidades al stock del emisor</strong></p>
-                <ul>
-                    <li>Producto: ${productoSeleccionado.producto_nombre}</li>
-                    <li>Observaciones: ${observaciones}</li>
-                </ul>
-                <div class="alert alert-info">
-                    No se genera Nota de Crédito (guía sin valor monetario)
-                </div>
-            </div>
-        `,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, procesar',
-        cancelButtonText: 'Cancelar',
-        customClass: { confirmButton: 'btn btn-info', cancelButton: 'btn btn-secondary' },
-        buttonsStyling: false
-    }).then(result => {
-        if (!result.isConfirmed) return;
-        
-        // Mostrar loader
-        const btnProcesar = $('#modalRegularizar .btn-info');
-        btnProcesar.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Procesando...');
-        
-        // Enviar petición
-        fetch('{% url "procesar_ajuste_interno_individual" %}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            body: JSON.stringify({
-                recepcion_id: productoSeleccionado.id,
-                cantidad: cantidad,
-                observaciones: observaciones
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                $('#modalRegularizar').modal('hide');
-                Swal.fire('¡Éxito!', data.message, 'success');
-                notificarRegularizacionCompleta();
-            } else {
-                Swal.fire('Error', data.error, 'error');
-                btnProcesar.prop('disabled', false).html('<i class="bi bi-check-circle"></i> Procesar Ajuste');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            Swal.fire('Error', 'Error de conexión', 'error');
-            btnProcesar.prop('disabled', false).html('<i class="bi bi-check-circle"></i> Procesar Ajuste');
-        });
-    });
-}
-
-/**
- * Muestra el panel de cambio de producto para guías
- */
-function mostrarPanelCambioProductoGuia() {
-    // Ocultar todos los paneles
-    $('.regularizacion-panel').hide();
-    
-    // Mostrar panel de cambio
-    $('#panelCambioProductoGuia').show();
-    
-    // Llenar datos del producto original
-    const cantidadProblema = (productoSeleccionado.cantidad_faltante || 0) + (productoSeleccionado.cantidad_danada || 0);
-    $('#cambioGuiaProductoOriginal').text(productoSeleccionado.producto_nombre);
-    $('#cambioGuiaSKUOriginal').text(productoSeleccionado.sku);
-    $('#cambioGuiaCantidadProblema').text(cantidadProblema);
-    $('#cambioGuiaTipoProblema').text(productoSeleccionado.estado);
-    
-    // Limpiar selección previa
-    $('#productoCambioGuiaId').val('');
-    $('#productoCambioGuiaSeleccionado').empty();
-    $('#contenedorCantidadCambioGuia').hide();
-    $('#previewCambioGuia').hide();
-    $('#resultadosProductosCambioGuia').html(`
-        <p class="text-muted text-center my-3">
-            <i class="bi bi-search"></i><br>
-            Escribe para buscar productos en tu inventario...
-        </p>
-    `);
-    
-    // Actualizar botón de guardar
-    $('#modalRegularizar .modal-footer').html(`
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-            <i class="bi bi-x-circle"></i> Cancelar
-        </button>
-        <button type="button" class="btn btn-primary" onclick="procesarCambioProductoGuia()" id="btnProcesarCambioGuia" disabled>
-            <i class="bi bi-check-circle"></i> Enviar Producto de Cambio
-        </button>
-    `);
-}
-
-/**
- * Busca productos para cambio en guías
- */
-function buscarProductosParaCambioGuia() {
-    const busqueda = $('#buscarProductoCambioGuia').val().trim();
-    
-    if (busqueda.length < 2) {
-        Swal.fire('Aviso', 'Ingresa al menos 2 caracteres', 'info');
-        return;
-    }
-    
-    $('#resultadosProductosCambioGuia').html('<div class="text-center py-3"><div class="spinner-border spinner-border-sm"></div> Buscando...</div>');
-    
-    fetch(`{% url "buscar_productos_emisor" %}?buscar=${busqueda}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.productos.length > 0) {
-                let html = '';
-                data.productos.forEach(prod => {
-                    html += `
-                        <div class="border-bottom p-2 reg-resultado-item" onclick="seleccionarProductoCambioGuia(${prod.id}, '${prod.sku}', '${prod.nombre}', '${prod.talla}', ${prod.stock})">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <strong>${prod.nombre}</strong><br>
-                                    <small class="text-muted">SKU: ${prod.sku} | Talla: <span class="badge bg-light text-dark border reg-badge-talla">${prod.talla}</span></small>
-                                </div>
-                                <div class="text-end">
-                                    <span class="badge bg-success">${prod.stock} unid.</span>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
-                $('#resultadosProductosCambioGuia').html(html);
-            } else {
-                $('#resultadosProductosCambioGuia').html('<p class="text-center text-muted py-3">No se encontraron productos</p>');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            $('#resultadosProductosCambioGuia').html('<p class="text-center text-danger py-3">Error al buscar</p>');
-        });
-}
-
-/**
- * Selecciona un producto de cambio para guía
- */
-function seleccionarProductoCambioGuia(id, sku, nombre, talla, stock) {
-    $('#productoCambioGuiaId').val(id);
-    $('#stockDisponibleCambioGuia').text(stock);
-    $('#cantidadCambioGuia').attr('max', stock).val(Math.min(stock, (productoSeleccionado.cantidad_faltante || 0) + (productoSeleccionado.cantidad_danada || 0)));
-    
-    $('#productoCambioGuiaSeleccionado').html(`
-        <div class="card border-success">
-            <div class="card-header bg-success bg-opacity-10">
-                <h6 class="mb-0"><i class="bi bi-check-circle"></i> Producto Seleccionado</h6>
-            </div>
-            <div class="card-body py-2">
-                <strong>${nombre}</strong><br>
-                <small class="text-muted">SKU: ${sku} | Talla: ${talla}</small><br>
-                <span class="badge bg-success">${stock} unidades disponibles</span>
-            </div>
-        </div>
-    `);
-    
-    $('#contenedorCantidadCambioGuia').show();
-    $('#previewCambioGuia').show();
-    $('#btnProcesarCambioGuia').prop('disabled', false);
-    
-    // Actualizar preview cuando cambie cantidad
-    $('#cantidadCambioGuia').off('input').on('input', function() {
-        $('#previewCantidadCambioGuia').text($(this).val());
-    });
-    
-    $('#previewCantidadCambioGuia').text($('#cantidadCambioGuia').val());
-}
-
-/**
- * Procesa el cambio de producto para guía
- */
-function procesarCambioProductoGuia() {
-    const productoCambioId = $('#productoCambioGuiaId').val();
-    const cantidad = parseInt($('#cantidadCambioGuia').val());
-    const observaciones = $('#observacionesCambioGuia').val().trim();
-    
-    // Validaciones
-    if (!productoCambioId) {
-        Swal.fire('Error', 'Debes seleccionar un producto de cambio', 'error');
-        return;
-    }
-    
-    if (!observaciones) {
-        Swal.fire('Error', 'Debes ingresar observaciones', 'error');
-        return;
-    }
-    
-    if (cantidad <= 0 || cantidad > parseInt($('#stockDisponibleCambioGuia').text())) {
-        Swal.fire('Error', 'Cantidad inválida', 'error');
-        return;
-    }
-    
-    // Confirmar
-    Swal.fire({
-        title: '¿Confirmar cambio de producto?',
-        html: `
-            <div class="text-start">
-                <p><strong>Se generará una nueva Guía de Despacho</strong></p>
-                <ul>
-                    <li>Cantidad: ${cantidad} unidades</li>
-                    <li>Observaciones: ${observaciones}</li>
-                </ul>
-                <div class="alert alert-info">
-                    Se descontará el stock de tu sucursal
-                </div>
-            </div>
-        `,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, enviar',
-        cancelButtonText: 'Cancelar',
-        customClass: { confirmButton: 'btn btn-primary', cancelButton: 'btn btn-secondary' },
-        buttonsStyling: false
-    }).then(result => {
-        if (!result.isConfirmed) return;
-        
-        // Mostrar loader
-        const btnProcesar = $('#btnProcesarCambioGuia');
-        btnProcesar.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Procesando...');
-        
-        // Enviar petición
-        fetch('{% url "procesar_cambio_producto_individual" %}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            body: JSON.stringify({
-                recepcion_id: productoSeleccionado.id,
-                producto_cambio_id: productoCambioId,
-                cantidad: cantidad,
-                observaciones: observaciones
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                $('#modalRegularizar').modal('hide');
-                Swal.fire('¡Éxito!', data.message, 'success');
-                notificarRegularizacionCompleta();
-            } else {
-                Swal.fire('Error', data.error, 'error');
-                btnProcesar.prop('disabled', false).html('<i class="bi bi-check-circle"></i> Enviar Producto de Cambio');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            Swal.fire('Error', 'Error de conexión', 'error');
-            btnProcesar.prop('disabled', false).html('<i class="bi bi-check-circle"></i> Enviar Producto de Cambio');
-        });
-    });
-}
+// El bloque de regularización individual de GUÍAS (Ajuste Interno / Cambio de
+// Producto de guía, sus paneles y 4 helpers sin uso) se borró el 2026-09-26
+// (auditoría B8-14 / B10-08): no tenía llamadores y sus dos endpoints fallaban
+// al 100 %. Una guía con faltante se regulariza con «Regularizar (sin NC)»,
+// que devuelve el stock al origen.
 </script>

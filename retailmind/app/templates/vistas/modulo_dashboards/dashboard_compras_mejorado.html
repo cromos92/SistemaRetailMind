@@ -548,8 +548,12 @@
                         </h1>
                         <p>Análisis integral para la toma de decisiones en gestión de compras</p>
                     </div>
-                    <div class="d-flex gap-2 mt-3 mt-md-0">
-                        <button class="btn btn-light" onclick="exportarDashboard()">
+                    <div class="d-flex gap-2 mt-3 mt-md-0 flex-wrap">
+                        <a class="btn btn-light" href="{% url 'ver_reporte_compras' %}"
+                           title="Reporte de compras: detalle por período, proveedor, recepciones y pagos">
+                            <i class="bi bi-file-earmark-bar-graph me-1"></i>Ver reporte de compras
+                        </a>
+                        <button class="btn btn-light" onclick="exportarDashboard()" title="Excel con los mismos filtros de la pantalla">
                             <i class="bi bi-download me-1"></i>Exportar
                         </button>
                         <button class="btn btn-warning text-dark" onclick="actualizarDashboard()">
@@ -565,17 +569,33 @@
                     <div class="col-md-2">
                         <label class="form-label"><i class="bi bi-calendar3 me-1"></i>Año</label>
                         <!-- Opciones generadas por JS: año actual hacia atrás (antes
-                             estaba hardcodeado 2023-2025 y el año corriente no existía) -->
-                        <select class="form-select" id="filtroAnio"></select>
+                             estaba hardcodeado 2023-2025 y el año corriente no existía).
+                             Solo aplica con Período = "Año completo": los otros presets
+                             van anclados a hoy y el rango personalizado trae sus fechas. -->
+                        <select class="form-select" id="filtroAnio" title="Solo aplica con Período = Año completo"></select>
                     </div>
                     <div class="col-md-2">
                         <label class="form-label"><i class="bi bi-calendar-range me-1"></i>Período</label>
-                        <select class="form-select" id="filtroPeriodo">
-                            <option value="anual" selected>Año Completo</option>
-                            <option value="trimestre">Último Trimestre</option>
-                            <option value="mes">Último Mes</option>
-                            <option value="semana">Última Semana</option>
+                        <!-- Rango de fechas de la OC. La API lo aplica a TODAS las secciones
+                             (compras, kardex, ventas, lotes, facturas por concepto) y compara
+                             contra el mismo rango un año antes. -->
+                        <select class="form-select" id="filtroPeriodo"
+                                title="Rango de fecha de la orden de compra. Se aplica a todas las secciones; la comparación es el mismo rango un año antes.">
+                            <option value="anual" selected>Año completo</option>
+                            <option value="trimestre">Últimos 90 días</option>
+                            <option value="mes">Últimos 30 días</option>
+                            <option value="semana">Últimos 7 días</option>
+                            <option value="personalizado">Rango de fechas…</option>
                         </select>
+                    </div>
+                    <div class="col-md-3" id="rangoPersonalizado" style="display:none;">
+                        <label class="form-label"><i class="bi bi-calendar-event me-1"></i>Desde / Hasta</label>
+                        <div class="d-flex gap-2">
+                            <!-- min fijo y max (31-dic del año próximo) puesto por JS: la API
+                                 acota al mismo rango y no se consulta con un año a medio teclear. -->
+                            <input type="date" class="form-control" id="fechaDesde" min="2000-01-01" title="Fecha de OC desde (inclusive)">
+                            <input type="date" class="form-control" id="fechaHasta" min="2000-01-01" title="Fecha de OC hasta (inclusive)">
+                        </div>
                     </div>
                     <div class="col-md-2">
                         <label class="form-label"><i class="bi bi-snow me-1"></i>Temporada</label>
@@ -593,48 +613,58 @@
                             <option value="">Todos los proveedores</option>
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <button class="btn btn-primary w-100" onclick="aplicarFiltros()">
                             <i class="bi bi-funnel me-1"></i>Aplicar Filtros
                         </button>
                     </div>
+                </div>
+                <!-- Rango realmente aplicado, tal como lo devuelve la API (fuente de verdad) -->
+                <div class="mt-2 small text-muted" id="textoPeriodoAplicado">
+                    <i class="bi bi-info-circle me-1"></i>Cargando período…
                 </div>
             </div>
 
             <!-- KPIs Principales -->
             <div class="kpi-grid animate-fadein animate-fadein-delay-1">
                 <!-- Total Compras -->
-                <div class="kpi-card kpi-primary">
+                <!-- Qué mide cada cifra: las compras del período son OC reales + ingresos
+                     de stock sin OC ("Compra Manual", se registran ya recibidos). No son
+                     facturas: documentos, pagos y deuda están en el Reporte de Compras. -->
+                <div class="kpi-card kpi-primary" title="Número de compras con fecha dentro del período, sin eliminadas ni canceladas: órdenes de compra (OC) + ingresos de stock sin OC ('Compra Manual'). No son facturas: esas están en el Reporte de Compras. La tendencia compara con el mismo rango del año anterior y los mismos filtros.">
                     <div class="kpi-icon"><i class="bi bi-cart-check"></i></div>
                     <div class="kpi-value" id="kpiTotalCompras">0</div>
                     <div class="kpi-label">Total Compras</div>
                     <div class="kpi-trend neutral" id="trendCompras">
                         <i class="bi bi-dash"></i> 0% vs año anterior
                     </div>
+                    <small class="text-muted d-block mt-1" id="subtextOrigenCompras"></small>
                 </div>
 
                 <!-- Inversión Total -->
-                <div class="kpi-card kpi-success">
+                <div class="kpi-card kpi-success" title="Inversión = Σ unidades × costo neto (sin IVA) de las compras del período: lo ORDENADO en OC + lo ingresado sin OC ('Compra Manual'). No es lo facturado, lo pagado ni la deuda con proveedores: eso está en el Reporte de Compras.">
                     <div class="kpi-icon"><i class="bi bi-currency-dollar"></i></div>
                     <div class="kpi-value" id="kpiInversion">$0</div>
                     <div class="kpi-label">Inversión Total</div>
                     <div class="kpi-trend neutral" id="trendInversion">
                         <i class="bi bi-dash"></i> 0% vs año anterior
                     </div>
+                    <small class="text-muted d-block mt-1" id="subtextOrigenInversion"></small>
                 </div>
 
                 <!-- Cumplimiento General -->
-                <div class="kpi-card kpi-info">
+                <div class="kpi-card kpi-info" title="Cumplimiento = unidades recepcionadas ÷ unidades pedidas × 100 de todas las compras del período. Los ingresos sin OC ('Compra Manual') se registran ya recibidos (≈100% por construcción): el cumplimiento de proveedores es el de 'Solo OC'.">
                     <div class="kpi-icon"><i class="bi bi-clipboard-check"></i></div>
                     <div class="kpi-value" id="kpiCumplimiento">0%</div>
                     <div class="kpi-label">Cumplimiento Recepciones</div>
                     <div class="progress-enhanced mt-2">
                         <div class="progress-bar-enhanced progress-bar-info" id="progressCumplimiento" style="width: 0%"></div>
                     </div>
+                    <small class="text-muted d-block mt-1" id="subtextCumplimientoOC"></small>
                 </div>
 
                 <!-- Markup de lista (NO es ROI: mide lo ordenado, no lo vendido) -->
-                <div class="kpi-card kpi-warning" title="Precio de lista sugerido (sin IVA) contra el costo de lo ORDENADO. Es un margen teorico de catalogo, no un retorno realizado: no considera ventas, descuentos ni liquidaciones.">
+                <div class="kpi-card kpi-warning" title="Markup de lista (teórico) = (precio de lista ÷ 1,19 − costo neto) ÷ costo neto × 100, sobre lo ORDENADO. No mide venta real: no considera ventas, descuentos ni liquidaciones. Tendencia en puntos vs el mismo rango del año anterior.">
                     <div class="kpi-icon"><i class="bi bi-graph-up-arrow"></i></div>
                     <div class="kpi-value" id="kpiROI">0%</div>
                     <div class="kpi-label">Markup de Lista (teórico)</div>
@@ -644,7 +674,7 @@
                 </div>
 
                 <!-- Unidades Esperadas -->
-                <div class="kpi-card kpi-purple">
+                <div class="kpi-card kpi-purple" title="Σ unidades de las compras del período: las pedidas en OC + las ingresadas sin OC ('Compra Manual', entran ya recibidas). Debajo, cuántas ya fueron recepcionadas. El desglose OC / sin OC está en Total Compras e Inversión.">
                     <div class="kpi-icon"><i class="bi bi-box-seam"></i></div>
                     <div class="kpi-value" id="kpiUnidadesEsperadas">0</div>
                     <div class="kpi-label">Unidades Esperadas</div>
@@ -652,7 +682,7 @@
                 </div>
 
                 <!-- Margen Esperado -->
-                <div class="kpi-card kpi-danger">
+                <div class="kpi-card kpi-danger" title="Margen esperado = valor de lista neto de IVA (Σ unidades × precio sugerido ÷ 1,19) − inversión. Teórico: supone vender todo lo ordenado a precio de lista.">
                     <div class="kpi-icon"><i class="bi bi-piggy-bank"></i></div>
                     <div class="kpi-value" id="kpiMargen">$0</div>
                     <div class="kpi-label">Margen Esperado</div>
@@ -660,7 +690,7 @@
                 </div>
 
                 <!-- Compras no inventariables (por concepto) -->
-                <div class="kpi-card kpi-info" title="Facturas de compra registradas solo como cabecera (por concepto): sin productos ni ingreso de stock. Antes eran invisibles en este dashboard.">
+                <div class="kpi-card kpi-info" title="Σ monto con IVA de las facturas de compra registradas solo como cabecera (por concepto) con fecha de emisión en el período: sin productos ni ingreso de stock, por eso no entran en Inversión.">
                     <div class="kpi-icon"><i class="bi bi-receipt"></i></div>
                     <div class="kpi-value" id="kpiComprasConcepto">$0</div>
                     <div class="kpi-label">Compras no inventariables</div>
@@ -678,10 +708,9 @@
                                 <i class="bi bi-graph-up"></i>
                                 Evolución de Compras vs Ventas
                             </h5>
-                            <div class="btn-group btn-group-sm">
-                                <button class="btn btn-outline-primary active" onclick="cambiarVistaEvolucion('mensual')">Mensual</button>
-                                <button class="btn btn-outline-primary" onclick="cambiarVistaEvolucion('semanal')">Semanal</button>
-                            </div>
+                            <!-- El toggle Mensual/Semanal se quitó: "Semanal" era un TODO
+                                 sin datos detrás (la API solo entrega meses). -->
+                            <span class="badge badge-info" title="Inversión = OC del período con los filtros de temporada/proveedor. Ventas = tickets pagados de TODAS las tiendas (no dependen del proveedor ni la temporada).">Mensual · ventas de toda la red</span>
                         </div>
                         <div class="chart-body">
                             <div class="chart-container">
@@ -842,6 +871,7 @@
                                 <i class="bi bi-arrow-left-right"></i>
                                 Comparativa Anual
                             </h5>
+                            <span class="badge badge-info" id="badgeComparativa" title="Inversión mes a mes del período elegido contra el mismo rango un año antes (mismos filtros de temporada/proveedor).">vs año anterior</span>
                         </div>
                         <div class="chart-body">
                             <div class="chart-container-sm">
@@ -858,10 +888,11 @@
                 <div class="col-lg-6">
                     <div class="chart-card animate-fadein animate-fadein-delay-3">
                         <div class="chart-header">
-                            <h5 class="chart-title">
+                            <h5 class="chart-title" title="Por temporada de las OC del período: (precio de lista con IVA − costo neto) ÷ costo neto × 100. Aquí NO se descuenta el IVA, por eso sale ~19 puntos sobre el KPI de markup. Teórico: no mide venta real.">
                                 <i class="bi bi-percent"></i>
-                                ROI por Temporada
+                                Markup de lista por Temporada
                             </h5>
+                            <span class="badge badge-warning">teórico</span>
                         </div>
                         <div class="chart-body">
                             <div class="chart-container-sm">
@@ -870,7 +901,7 @@
                             <div id="avisoSinTemporada" class="text-center text-muted py-4" style="display:none;">
                                 <i class="bi bi-calendar-x fs-3 d-block mb-2"></i>
                                 Las compras de este período no tienen temporada asignada,
-                                por eso no se puede desglosar el ROI por temporada.
+                                por eso no se puede desglosar el markup por temporada.
                             </div>
                         </div>
                     </div>
@@ -895,7 +926,7 @@
             <!-- KPIs de Distribución -->
             <div class="kpi-grid animate-fadein">
                 <!-- Unidades Compradas -->
-                <div class="kpi-card kpi-purple">
+                <div class="kpi-card kpi-purple" title="Unidades recepcionadas de proveedores en las OC del período (misma cifra que 'recepcionadas' del KPI Unidades Esperadas).">
                     <div class="kpi-icon"><i class="bi bi-box-arrow-in-down"></i></div>
                     <div class="kpi-value" id="kpiUnidadesCompradas">0</div>
                     <div class="kpi-label">Unidades Compradas</div>
@@ -903,7 +934,7 @@
                 </div>
 
                 <!-- Unidades Despachadas -->
-                <div class="kpi-card kpi-info">
+                <div class="kpi-card kpi-info" title="Σ |cantidad| de los traspasos de salida COMPLETADOS del kardex con origen en un centro de distribución y fecha dentro del período (no cuenta traspasos tienda↔tienda).">
                     <div class="kpi-icon"><i class="bi bi-truck"></i></div>
                     <div class="kpi-value" id="kpiUnidadesDespachadas">0</div>
                     <div class="kpi-label">Unidades Despachadas</div>
@@ -911,19 +942,19 @@
                 </div>
 
                 <!-- Stock en CD -->
-                <div class="kpi-card kpi-warning">
+                <div class="kpi-card kpi-warning" title="Stock actual (hoy) de los productos cuya sucursal es un centro de distribución. Es una foto de hoy: no depende del período elegido.">
                     <div class="kpi-icon"><i class="bi bi-house-door"></i></div>
                     <div class="kpi-value" id="kpiStockCD">0</div>
                     <div class="kpi-label">Stock en Centro Dist.</div>
                     <small class="text-muted">Unidades en bodega hoy</small>
                 </div>
 
-                <!-- Despachado vs comprado en el año -->
-                <div class="kpi-card kpi-success">
+                <!-- Despachado vs comprado en el período -->
+                <div class="kpi-card kpi-success" title="Unidades despachadas ÷ unidades compradas (recepcionadas) del período × 100. Puede superar 100% cuando se despacha stock comprado en períodos anteriores.">
                     <div class="kpi-icon"><i class="bi bi-speedometer2"></i></div>
                     <div class="kpi-value" id="kpiEficienciaDistribucion">0%</div>
                     <div class="kpi-label">Despachado vs Comprado</div>
-                    <small class="text-muted">Puede superar 100%: se despacha stock de años anteriores</small>
+                    <small class="text-muted">Puede superar 100%: se despacha stock de períodos anteriores</small>
                     <div class="progress-enhanced mt-2">
                         <div class="progress-bar-enhanced progress-bar-success" id="progressDistribucion" style="width: 0%"></div>
                     </div>
@@ -936,10 +967,11 @@
                 <div class="col-lg-8">
                     <div class="chart-card animate-fadein">
                         <div class="chart-header">
-                            <h5 class="chart-title">
+                            <h5 class="chart-title" title="Por mes del período: inversión de TODAS las OC (sin filtro de proveedor/temporada, porque despachos y ventas no admiten ese filtro), costo de los traspasos de salida completados y ventas pagadas de toda la red.">
                                 <i class="bi bi-arrow-right-circle"></i>
                                 Flujo: Compras → Despachos → Ventas (Mensual)
                             </h5>
+                            <span class="badge badge-info" title="Esta serie de compras no se filtra por proveedor ni temporada">sin filtro de proveedor</span>
                         </div>
                         <div class="chart-body">
                             <div class="chart-container">
@@ -961,6 +993,11 @@
                         <div class="chart-body">
                             <div class="chart-container-sm">
                                 <canvas id="chartDespachosSucursal"></canvas>
+                            </div>
+                            <!-- Sin datos: mensaje, no una dona con un 100% inventado -->
+                            <div id="avisoSinDespachos" class="text-center text-muted py-4" style="display:none;">
+                                <i class="bi bi-truck fs-3 d-block mb-2"></i>
+                                No hay traspasos de salida en el período.
                             </div>
                         </div>
                     </div>
@@ -1018,7 +1055,7 @@
             <!-- KPIs de Márgenes CD -->
             <div class="kpi-grid animate-fadein mt-3">
                 <!-- Margen Total CD -->
-                <div class="kpi-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                <div class="kpi-card" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);" title="Σ sobreprecio × unidades de los traspasos EN TRÁNSITO/RECIBIDOS del período con origen en un centro de distribución (si no hay traspasos, se toma del kardex de salidas).">
                     <div class="kpi-icon"><i class="bi bi-cash-stack text-white"></i></div>
                     <div class="kpi-value text-white" id="kpiMargenTotalCD">$0</div>
                     <div class="kpi-label text-white-50">Margen Total CD</div>
@@ -1026,7 +1063,7 @@
                 </div>
 
                 <!-- Margen Promedio % -->
-                <div class="kpi-card" style="background: linear-gradient(135deg, #17a2b8 0%, #6610f2 100%);">
+                <div class="kpi-card" style="background: linear-gradient(135deg, #17a2b8 0%, #6610f2 100%);" title="Sobreprecio total ÷ costo proveedor total × 100 de esos mismos despachos del período.">
                     <div class="kpi-icon"><i class="bi bi-percent text-white"></i></div>
                     <div class="kpi-value text-white" id="kpiMargenPromedioPct">0%</div>
                     <div class="kpi-label text-white-50">Margen Promedio %</div>
@@ -1034,7 +1071,7 @@
                 </div>
 
                 <!-- Costo Proveedor Total -->
-                <div class="kpi-card" style="background: linear-gradient(135deg, #6c757d 0%, #495057 100%);">
+                <div class="kpi-card" style="background: linear-gradient(135deg, #6c757d 0%, #495057 100%);" title="Σ costo proveedor × unidades de lo despachado por los centros de distribución en el período.">
                     <div class="kpi-icon"><i class="bi bi-bag text-white"></i></div>
                     <div class="kpi-value text-white" id="kpiCostoProveedorTotal">$0</div>
                     <div class="kpi-label text-white-50">Costo Proveedor</div>
@@ -1042,7 +1079,7 @@
                 </div>
 
                 <!-- Costo Destino Total -->
-                <div class="kpi-card" style="background: linear-gradient(135deg, #fd7e14 0%, #e83e8c 100%);">
+                <div class="kpi-card" style="background: linear-gradient(135deg, #fd7e14 0%, #e83e8c 100%);" title="Costo proveedor + sobreprecio: lo que pagan las sucursales vendedoras por lo despachado en el período.">
                     <div class="kpi-icon"><i class="bi bi-receipt text-white"></i></div>
                     <div class="kpi-value text-white" id="kpiCostoDestinoTotal">$0</div>
                     <div class="kpi-label text-white-50">Costo Sucursales</div>
@@ -1086,7 +1123,7 @@
                 <div class="col-lg-5">
                     <div class="chart-card animate-fadein">
                         <div class="chart-header">
-                            <h5 class="chart-title">
+                            <h5 class="chart-title" title="Costo promedio por unidad de los lotes ingresados en el período en cada sucursal vendedora: costo proveedor vs sobreprecio del CD.">
                                 <i class="bi bi-arrow-left-right"></i>
                                 Comparativa de Costos
                             </h5>
@@ -1094,6 +1131,10 @@
                         <div class="chart-body">
                             <div class="chart-container-sm">
                                 <canvas id="chartComparativaCostos"></canvas>
+                            </div>
+                            <div id="avisoSinComparativaCostos" class="text-center text-muted py-4" style="display:none;">
+                                <i class="bi bi-arrow-left-right fs-3 d-block mb-2"></i>
+                                Sin lotes ingresados en sucursales vendedoras en el período.
                             </div>
                         </div>
                     </div>
@@ -1228,11 +1269,14 @@
             <!-- Tabla de Rendimiento Detallado -->
             <div class="chart-card animate-fadein animate-fadein-delay-3">
                 <div class="chart-header">
-                    <h5 class="chart-title">
+                    <h5 class="chart-title" title="Las 20 OC más recientes del período. Markup = (precio de lista con IVA − costo neto) ÷ costo neto × 100, teórico. Cumplimiento = recibidas ÷ pedidas.">
                         <i class="bi bi-table"></i>
                         Rendimiento Detallado por Compra
+                        <span class="badge badge-info ms-2">20 más recientes</span>
                     </h5>
-                    <button class="btn btn-sm btn-outline-primary" onclick="exportarTabla()">
+                    <!-- Antes este botón solo abría un aviso ("use el otro botón"); ahora
+                         exporta el Excel, que incluye esta tabla como hoja "Rendimiento". -->
+                    <button class="btn btn-sm btn-outline-primary" onclick="exportarDashboard()" title="Excel con todas las secciones, incluida esta tabla">
                         <i class="bi bi-file-earmark-excel me-1"></i>Exportar
                     </button>
                 </div>
@@ -1246,8 +1290,8 @@
                                     <th>Temporada</th>
                                     <th>Inversión</th>
                                     <th style="width: 150px">Cumplimiento</th>
-                                    <th>ROI</th>
-                                    <th>Unidades</th>
+                                    <th title="Markup de lista teórico (PVP con IVA vs costo neto)">Markup lista</th>
+                                    <th title="Pedidas / recibidas">Unidades</th>
                                     <th>Estado</th>
                                 </tr>
                             </thead>
@@ -1297,14 +1341,88 @@ $(document).ready(function() {
     for (let a = anioActual; a >= 2023; a--) {
         selAnio.append(`<option value="${a}"${a === anioActual ? ' selected' : ''}>${a}</option>`);
     }
+    // Mismo tope que acota la API (31-dic del año próximo); el min va en el HTML.
+    $('#fechaDesde, #fechaHasta').attr('max', (anioActual + 1) + '-12-31');
     cargarProveedores();
     cargarDatosDashboard();
-    
+
     // Eventos
-    $('#filtroAnio, #filtroPeriodo, #filtroTemporada, #filtroProveedor').on('change', function() {
+    $('#filtroAnio, #filtroTemporada, #filtroProveedor').on('change', function() {
         cargarDatosDashboard();
     });
+    // Período: "Año completo" usa el selector de año; los presets de N días van
+    // anclados a hoy (el año no aplica) y "Rango de fechas…" muestra desde/hasta.
+    $('#filtroPeriodo').on('change', function() {
+        sincronizarControlesPeriodo();
+        if (this.value === 'personalizado' && !(rangoPersonalizadoValido())) {
+            return;   // espera a que el usuario complete ambas fechas
+        }
+        cargarDatosDashboard();
+    });
+    $('#fechaDesde, #fechaHasta').on('change', function() {
+        if (rangoPersonalizadoValido()) cargarDatosDashboard();
+    });
+    sincronizarControlesPeriodo();
 });
+
+function sincronizarControlesPeriodo() {
+    const periodo = $('#filtroPeriodo').val();
+    $('#rangoPersonalizado').toggle(periodo === 'personalizado');
+    $('#filtroAnio').prop('disabled', periodo !== 'anual');
+}
+
+function rangoPersonalizadoValido() {
+    const desde = $('#fechaDesde')[0];
+    const hasta = $('#fechaHasta')[0];
+    // checkValidity respeta min/max: mientras el año está a medio teclear
+    // (0002, 0020, 0202…) no se lanza la consulta.
+    return !!(desde && hasta && desde.value && hasta.value &&
+              desde.checkValidity() && hasta.checkValidity());
+}
+
+// Parámetros de filtro tal como los entiende la API (pantalla y Excel usan los mismos)
+function parametrosFiltro() {
+    const params = {
+        anio: $('#filtroAnio').val(),
+        periodo: $('#filtroPeriodo').val(),
+        temporada: $('#filtroTemporada').val(),
+        proveedor: $('#filtroProveedor').val()
+    };
+    if (params.periodo === 'personalizado') {
+        params.fecha_desde = $('#fechaDesde').val();
+        params.fecha_hasta = $('#fechaHasta').val();
+    }
+    return params;
+}
+
+// Muestra el rango que la API aplicó de verdad (fuente de verdad, no lo que
+// cree la pantalla) y la base de comparación.
+function actualizarPeriodoAplicado(filtros) {
+    if (!filtros) return;
+    const partes = [];
+    if (filtros.etiqueta) partes.push('<strong>' + filtros.etiqueta + '</strong>');
+    if (filtros.fecha_desde && filtros.fecha_hasta && filtros.periodo === 'anual') {
+        partes.push('OC del ' + formatFechaISO(filtros.fecha_desde) + ' al ' + formatFechaISO(filtros.fecha_hasta));
+    }
+    if (filtros.fecha_desde_anterior && filtros.fecha_hasta_anterior) {
+        partes.push('comparado con ' + formatFechaISO(filtros.fecha_desde_anterior) + ' al ' + formatFechaISO(filtros.fecha_hasta_anterior));
+    } else if (filtros.comparable === false) {
+        // Un rango de más de un año se solaparía con su propio "año anterior"
+        partes.push('sin comparación con el año anterior (el rango supera un año)');
+    }
+    $('#textoPeriodoAplicado').html('<i class="bi bi-info-circle me-1"></i>' + partes.join(' · '));
+    // Si la API cayó a "anual" (rango personalizado incompleto) se refleja en el selector
+    if (filtros.periodo && $('#filtroPeriodo').val() !== filtros.periodo) {
+        $('#filtroPeriodo').val(filtros.periodo);
+        sincronizarControlesPeriodo();
+    }
+}
+
+function formatFechaISO(iso) {
+    // 'YYYY-MM-DD' -> 'DD-MM-YYYY' sin pasar por Date (evita el corrimiento de zona horaria)
+    const p = String(iso).split('-');
+    return p.length === 3 ? p[2] + '-' + p[1] + '-' + p[0] : iso;
+}
 
 // Cargar lista de proveedores
 function cargarProveedores() {
@@ -1313,7 +1431,7 @@ function cargarProveedores() {
         select.find('option:not(:first)').remove();
         if (data && data.length > 0) {
             data.forEach(function(empresa) {
-                select.append(`<option value="${empresa.id}">${empresa.nombre}</option>`);
+                select.append(`<option value="${escHtml(empresa.id)}">${escHtml(empresa.nombre)}</option>`);
             });
         }
     }).fail(function() {
@@ -1334,14 +1452,9 @@ function actualizarDashboard() {
 // Cargar datos del dashboard
 function cargarDatosDashboard() {
     showLoader();
-    
-    const params = {
-        anio: $('#filtroAnio').val(),
-        periodo: $('#filtroPeriodo').val(),
-        temporada: $('#filtroTemporada').val(),
-        proveedor: $('#filtroProveedor').val()
-    };
-    
+
+    const params = parametrosFiltro();
+
     // Cancela la petición en curso: cambiar de filtro rápido dejaba varias
     // corriendo y el loader se cerraba/abría según cuál terminara última.
     if (peticionEnCurso) {
@@ -1357,6 +1470,7 @@ function cargarDatosDashboard() {
         timeout: 60000,
         success: function(data) {
             dashboardData = data;
+            actualizarPeriodoAplicado(data.filtros_aplicados);
             actualizarKPIs(data);
             actualizarGraficos(data);
             actualizarTablas(data);
@@ -1399,7 +1513,7 @@ function actualizarCategoriaMarca(cm) {
     } else {
         bodyCat.html(cm.categorias.map(c => `
             <tr>
-                <td><strong>${c.categoria}</strong>${c.padre ? ' <small class="text-muted">' + c.padre + '</small>' : ''}</td>
+                <td><strong>${escHtml(c.categoria)}</strong>${c.padre ? ' <small class="text-muted">' + escHtml(c.padre) + '</small>' : ''}</td>
                 <td class="text-end">${formatNumber(c.unidades)}</td>
                 <td class="text-end"><strong>${formatMoney(c.inversion)}</strong></td>
                 <td class="text-end">${c.participacion}%</td>
@@ -1414,7 +1528,7 @@ function actualizarCategoriaMarca(cm) {
             const stColor = st >= 20 ? '#0ab39c' : (st >= 10 ? '#fd7e14' : '#dc3545');
             return `
             <tr>
-                <td><strong>${m.marca}</strong></td>
+                <td><strong>${escHtml(m.marca)}</strong></td>
                 <td class="text-end">${formatMoney(m.inversion)}</td>
                 <td class="text-end">${formatNumber(m.stock_actual)}</td>
                 <td class="text-end">${formatNumber(m.venta_90d)}</td>
@@ -1427,27 +1541,51 @@ function actualizarCategoriaMarca(cm) {
 // Actualizar KPIs
 function actualizarKPIs(data) {
     const metricas = data.metricas || {};
-    
+    const filtros = data.filtros_aplicados || {};
+    // "vs 2025" para año completo, "vs 2025 al 26-09" para el año en curso,
+    // "vs mismo período 2025" para ventanas de N días
+    const cmp = filtros.etiqueta_comparacion || 'vs año anterior';
+    // Tendencia null = sin base: el año anterior no tiene datos con estos
+    // filtros, o el rango supera un año y no se compara (antes se veía "0%").
+    const sinBase = filtros.comparable === false ? cmp : 'sin base de comparación';
+
+    // Qué mide cada cifra: OC reales vs ingresos sin OC ("Compra Manual")
+    const origen = metricas.origen || {};
+    const oc = origen.oc || {};
+    const manual = origen.manual || {};
+
     // Total Compras
     $('#kpiTotalCompras').text(formatNumber(metricas.total_compras || 0));
-    actualizarTrend('#trendCompras', metricas.trend_compras || 0, 'vs año anterior');
-    
+    actualizarTrend('#trendCompras', metricas.trend_compras, cmp, '%', sinBase);
+    $('#subtextOrigenCompras').text(
+        formatNumber(oc.compras || 0) + ' OC · ' + formatNumber(manual.compras || 0) + ' ingresos sin OC');
+
     // Inversión
     $('#kpiInversion').text(formatMoney(metricas.inversion_total || 0));
-    actualizarTrend('#trendInversion', metricas.trend_inversion || 0, 'vs año anterior');
-    
+    actualizarTrend('#trendInversion', metricas.trend_inversion, cmp, '%', sinBase);
+    $('#subtextOrigenInversion').text(
+        'OC ' + formatMoney(oc.inversion || 0) + ' · sin OC ' + formatMoney(manual.inversion || 0));
+
     // Cumplimiento
     const cumplimiento = metricas.cumplimiento_general || 0;
     $('#kpiCumplimiento').text(cumplimiento + '%');
     $('#progressCumplimiento').css('width', cumplimiento + '%');
     $('#progressCumplimiento')
         .removeClass('progress-bar-success progress-bar-warning progress-bar-danger')
-        .addClass(cumplimiento >= 90 ? 'progress-bar-success' : 
+        .addClass(cumplimiento >= 90 ? 'progress-bar-success' :
                   cumplimiento >= 70 ? 'progress-bar-warning' : 'progress-bar-danger');
-    
+    // Los ingresos sin OC entran ya recibidos: el cumplimiento de proveedores es el de las OC
+    $('#subtextCumplimientoOC').text(
+        (oc.cumplimiento !== null && oc.cumplimiento !== undefined)
+            ? 'Solo OC: ' + oc.cumplimiento + '% (' + formatNumber(oc.unidades_recepcionadas || 0) +
+              ' de ' + formatNumber(oc.unidades_esperadas || 0) + ' u)'
+            : ((manual.unidades_esperadas || 0) > 0
+                ? 'Sin OC en el período: solo ingresos manuales (entran ya recibidos)'
+                : 'Sin OC en el período'));
+
     // ROI
     $('#kpiROI').text(formatNumber(metricas.roi_promedio || 0) + '%');
-    actualizarTrend('#trendROI', metricas.trend_roi || 0, 'pts vs año anterior');
+    actualizarTrend('#trendROI', metricas.trend_roi, cmp, ' pts', sinBase);
     
     // Unidades
     $('#kpiUnidadesEsperadas').text(formatNumber(metricas.unidades_esperadas || 0));
@@ -1506,18 +1644,31 @@ function actualizarKPIs(data) {
     crearGraficoComparativaCostos(data.comparativa_costos || []);
 }
 
-// Actualizar indicadores de tendencia
-function actualizarTrend(selector, valor, sufijo) {
+// Actualizar indicadores de tendencia. `unidad`: '%' o ' pts' (el markup se
+// compara en puntos: antes decía "+1.3% pts"). `valor` null = sin base de
+// comparación: se muestra `textoSinBase` en vez de un "0%" que se lee "estable".
+function actualizarTrend(selector, valor, sufijo, unidad, textoSinBase) {
     const $trend = $(selector);
-    $trend.removeClass('up down neutral');
-    
-    if (valor > 0) {
-        $trend.addClass('up').html(`<i class="bi bi-arrow-up"></i> +${valor}% ${sufijo}`);
+    unidad = unidad || '%';
+    $trend.removeClass('up down neutral').empty();
+
+    let clase, icono, texto;
+    if (valor === null || valor === undefined) {
+        clase = 'neutral'; icono = 'bi-dash';
+        texto = textoSinBase || 'sin base de comparación';
+    } else if (valor > 0) {
+        clase = 'up'; icono = 'bi-arrow-up';
+        texto = '+' + valor + unidad + ' ' + sufijo;
     } else if (valor < 0) {
-        $trend.addClass('down').html(`<i class="bi bi-arrow-down"></i> ${valor}% ${sufijo}`);
+        clase = 'down'; icono = 'bi-arrow-down';
+        texto = valor + unidad + ' ' + sufijo;
     } else {
-        $trend.addClass('neutral').html(`<i class="bi bi-dash"></i> 0% ${sufijo}`);
+        clase = 'neutral'; icono = 'bi-dash';
+        texto = '0' + unidad + ' ' + sufijo;
     }
+    $trend.addClass(clase)
+        .append($('<i>').addClass('bi ' + icono))
+        .append(document.createTextNode(' ' + texto));
 }
 
 // Actualizar gráficos
@@ -1556,7 +1707,8 @@ function crearGraficoEvolucion(datos) {
                     pointHoverRadius: 8
                 },
                 {
-                    label: 'Ventas Relacionadas',
+                    // Son los tickets pagados de TODA la red, no ventas de estas compras
+                    label: 'Ventas (todas las tiendas)',
                     data: datos.map(d => d.ventas || 0),
                     borderColor: COLORS.success,
                     backgroundColor: hexToRgba(COLORS.success, 0.1),
@@ -1726,27 +1878,43 @@ function crearGraficoComparativaAnual(datos) {
     const ctx = document.getElementById('chartComparativaAnual').getContext('2d');
     
     if (charts.comparativaAnual) charts.comparativaAnual.destroy();
-    
-    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-    
+
+    // Meses y rótulos vienen de la API: para "año completo" son Ene..Dic; para
+    // una ventana de N días, solo los meses que toca (con año si cruza el 1 de enero).
+    const meses = datos.meses || ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const etiquetaActual = datos.etiqueta_actual || 'Año Actual';
+    const etiquetaAnterior = datos.etiqueta_anterior || 'Año Anterior';
+    // Rango de más de un año: la API no compara (se solaparía consigo mismo)
+    const sinComparacion = datos.comparable === false;
+    $('#badgeComparativa').text(sinComparacion
+        ? etiquetaActual + ' · sin comparación (rango mayor a 1 año)'
+        : etiquetaActual + ' vs ' + etiquetaAnterior);
+
+    const datasets = [
+        {
+            label: etiquetaActual,
+            data: datos.actual || Array(meses.length).fill(0),
+            backgroundColor: COLORS.primary,
+            borderRadius: 4
+        }
+    ];
+    if (!sinComparacion) {
+        // Rango en curso (año actual o personalizado con fin futuro): la serie
+        // anterior llega solo hasta el mes actual (se compara hasta el mismo
+        // día del año anterior).
+        datasets.push({
+            label: etiquetaAnterior,
+            data: datos.anterior || Array(meses.length).fill(0),
+            backgroundColor: '#94a3b8',
+            borderRadius: 4
+        });
+    }
+
     charts.comparativaAnual = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: meses,
-            datasets: [
-                {
-                    label: 'Año Actual',
-                    data: datos.actual || Array(12).fill(0),
-                    backgroundColor: COLORS.primary,
-                    borderRadius: 4
-                },
-                {
-                    label: 'Año Anterior',
-                    data: datos.anterior || Array(12).fill(0),
-                    backgroundColor: '#94a3b8',
-                    borderRadius: 4
-                }
-            ]
+            datasets: datasets
         },
         options: {
             responsive: true,
@@ -1787,21 +1955,30 @@ function crearGraficoComparativaAnual(datos) {
     // Actualizar resumen comparativa
     const totalActual = (datos.actual || []).reduce((a, b) => a + b, 0);
     const totalAnterior = (datos.anterior || []).reduce((a, b) => a + b, 0);
-    const variacion = totalAnterior > 0 ? (((totalActual - totalAnterior) / totalAnterior) * 100).toFixed(1) : 0;
-    
+    // Sin base (el año anterior no tiene compras con estos filtros) o rango no
+    // comparable: se dice, igual que las tarjetas KPI, en vez de un "+0%" verde
+    // que se lee "estable".
+    let variacionHtml;
+    if (sinComparacion || totalAnterior <= 0) {
+        variacionHtml = `<span class="metric-compare-value text-muted">${sinComparacion ? 'sin comparación' : 'sin base de comparación'}</span>`;
+    } else {
+        const variacion = ((totalActual - totalAnterior) / totalAnterior) * 100;
+        variacionHtml = `<span class="metric-compare-value ${variacion >= 0 ? 'text-success' : 'text-danger'}">
+                    ${variacion > 0 ? '+' : ''}${variacion.toFixed(1)}%
+                </span>`;
+    }
+
     $('#resumenComparativa').html(`
         <div class="col-6">
             <div class="metric-compare">
-                <span class="metric-compare-label">Año Actual</span>
+                <span class="metric-compare-label">${etiquetaActual}</span>
                 <span class="metric-compare-value">${formatMoney(totalActual)}</span>
             </div>
         </div>
         <div class="col-6">
             <div class="metric-compare">
                 <span class="metric-compare-label">Variación</span>
-                <span class="metric-compare-value ${variacion >= 0 ? 'text-success' : 'text-danger'}">
-                    ${variacion >= 0 ? '+' : ''}${variacion}%
-                </span>
+                ${variacionHtml}
             </div>
         </div>
     `);
@@ -2030,31 +2207,12 @@ function crearGraficoDespachosSucursal(datos) {
     if (!ctx) return;
     
     if (charts.despachosSucursal) charts.despachosSucursal.destroy();
-    
-    // Si no hay datos, mostrar mensaje
-    if (!datos || datos.length === 0) {
-        // Crear gráfico vacío con mensaje
-        charts.despachosSucursal = new Chart(ctx.getContext('2d'), {
-            type: 'doughnut',
-            data: {
-                labels: ['Sin datos de despachos'],
-                datasets: [{
-                    data: [100],
-                    backgroundColor: ['#e2e8f0']
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                }
-            }
-        });
-        return;
-    }
+
+    // Sin datos: mensaje. Antes se dibujaba una dona con un "100" inventado.
+    const hayDatos = Array.isArray(datos) && datos.length > 0;
+    $(ctx).closest('.chart-container-sm').toggle(hayDatos);
+    $('#avisoSinDespachos').toggle(!hayDatos);
+    if (!hayDatos) return;
     
     const colores = [
         '#6f42c1', '#e83e8c', '#fd7e14', '#20c997', '#17a2b8',
@@ -2135,8 +2293,8 @@ function actualizarTablaMargenesSucursal(datos) {
         
         tbody.append(`
             <tr>
-                <td class="fw-semibold">${item.sucursal || 'Sin nombre'}</td>
-                <td><span class="badge badge-purple">${item.empresa || '-'}</span></td>
+                <td class="fw-semibold">${escHtml(item.sucursal || 'Sin nombre')}</td>
+                <td><span class="badge badge-purple">${escHtml(item.empresa || '-')}</span></td>
                 <td class="text-end">${formatNumber(item.unidades || 0)}</td>
                 <td class="text-end">${formatMoney(item.costo_proveedor_total || 0)}</td>
                 <td class="text-end text-success fw-bold">${formatMoney(item.sobreprecio_total || 0)}</td>
@@ -2172,7 +2330,7 @@ function actualizarTablaRentabilidadCD(datos) {
         
         tbody.append(`
             <tr>
-                <td class="fw-semibold">${cd.sucursal || 'Sin nombre'}</td>
+                <td class="fw-semibold">${escHtml(cd.sucursal || 'Sin nombre')}</td>
                 <td class="text-end">${formatMoney(cd.inversion_proveedores || 0)}</td>
                 <td class="text-end">${formatMoney(cd.costo_despachado || 0)}</td>
                 <td class="text-end text-success fw-bold">${formatMoney(cd.sobreprecio_generado || 0)}</td>
@@ -2210,7 +2368,7 @@ function actualizarTablaRentabilidadVendedoras(datos) {
 
         tbody.append(`
             <tr>
-                <td class="fw-semibold">${suc.sucursal || 'Sin nombre'}</td>
+                <td class="fw-semibold">${escHtml(suc.sucursal || 'Sin nombre')}</td>
                 <td class="text-end fw-bold">${formatMoney(suc.ventas_total || 0)}</td>
                 <td class="text-end ${sinCosto ? 'text-muted' : ''}" ${sinCosto ? titleSD : ''}>${sinCosto ? 's/d' : formatMoney(suc.costo_ventas || 0)}</td>
                 <td class="text-end ${sinCosto ? 'text-muted' : 'text-success'}" ${sinCosto ? titleSD : ''}>${sinCosto ? 's/d' : formatMoney(suc.margen_bruto || 0)}</td>
@@ -2226,27 +2384,12 @@ function crearGraficoComparativaCostos(datos) {
     if (!ctx) return;
     
     if (charts.comparativaCostos) charts.comparativaCostos.destroy();
-    
-    if (!datos || datos.length === 0) {
-        charts.comparativaCostos = new Chart(ctx.getContext('2d'), {
-            type: 'bar',
-            data: {
-                labels: ['Sin datos'],
-                datasets: [{
-                    data: [0],
-                    backgroundColor: ['#e2e8f0']
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
-                }
-            }
-        });
-        return;
-    }
+
+    // Sin sucursales con lotes en el período: mensaje, no una barra "Sin datos" en 0.
+    const hayDatos = Array.isArray(datos) && datos.some(d => (d.unidades_recibidas || 0) > 0);
+    $(ctx).closest('.chart-container-sm').toggle(hayDatos);
+    $('#avisoSinComparativaCostos').toggle(!hayDatos);
+    if (!hayDatos) return;
     
     charts.comparativaCostos = new Chart(ctx.getContext('2d'), {
         type: 'bar',
@@ -2348,8 +2491,8 @@ function actualizarTablaSucursalesDestino(datos) {
 
         tbody.append(`
             <tr>
-                <td class="fw-semibold">${suc.sucursal || 'Sin nombre'}</td>
-                <td><span class="badge badge-purple">${suc.empresa || '-'}</span></td>
+                <td class="fw-semibold">${escHtml(suc.sucursal || 'Sin nombre')}</td>
+                <td><span class="badge badge-purple">${escHtml(suc.empresa || '-')}</span></td>
                 <td class="text-end">${formatNumber(suc.despachado || 0)}</td>
                 <td class="text-end">${formatNumber(suc.vendido || 0)}</td>
                 <td>
@@ -2385,7 +2528,7 @@ function actualizarTablaTopProveedores(datos) {
         tbody.append(`
             <tr>
                 <td><div class="ranking-badge ${rankingClass}">${i + 1}</div></td>
-                <td class="fw-semibold">${prov.proveedor}</td>
+                <td class="fw-semibold">${escHtml(prov.proveedor)}</td>
                 <td class="text-end fw-bold">${formatMoney(prov.inversion)}</td>
                 <td class="text-end">${prov.total_compras || 0}</td>
                 <td class="text-center">
@@ -2412,8 +2555,8 @@ function actualizarTablaTopProductos(datos) {
         tbody.append(`
             <tr>
                 <td><div class="ranking-badge ${rankingClass}">${i + 1}</div></td>
-                <td class="fw-semibold">${truncateText(prod.nombre, 25)}</td>
-                <td><span class="badge badge-info">${prod.marca || '-'}</span></td>
+                <td class="fw-semibold">${escHtml(truncateText(prod.nombre, 25))}</td>
+                <td><span class="badge badge-info">${escHtml(prod.marca || '-')}</span></td>
                 <td class="text-end">${formatNumber(prod.unidades)}</td>
                 <td class="text-end fw-bold">${formatMoney(prod.inversion)}</td>
             </tr>
@@ -2446,9 +2589,9 @@ function actualizarTablaRendimiento(datos) {
         
         tbody.append(`
             <tr>
-                <td class="fw-semibold">${item.nombre}</td>
-                <td>${item.proveedor}</td>
-                <td><span class="badge badge-info">${item.temporada || 'N/A'}</span></td>
+                <td class="fw-semibold">${escHtml(item.nombre)}</td>
+                <td>${escHtml(item.proveedor)}</td>
+                <td><span class="badge badge-info">${escHtml(item.temporada || 'N/A')}</span></td>
                 <td class="fw-bold">${formatMoney(item.inversion || 0)}</td>
                 <td>
                     <div class="d-flex align-items-center gap-2">
@@ -2500,8 +2643,8 @@ function actualizarAlertas(data) {
                     <i class="bi bi-${iconos[alerta.tipo] || 'info-circle'}"></i>
                 </div>
                 <div class="alert-content">
-                    <h6>${alerta.titulo || 'Alerta'}</h6>
-                    <p>${alerta.mensaje}</p>
+                    <h6>${escHtml(alerta.titulo || 'Alerta')}</h6>
+                    <p>${escHtml(alerta.mensaje)}</p>
                 </div>
             </div>
         `);
@@ -2514,51 +2657,21 @@ function actualizarInsights(data) {
     const contenedor = $('#contenedorInsights');
     contenedor.empty();
     
+    // Solo lo que entrega la API: las tarjetas "por defecto" que antes se
+    // fabricaban aquí (ticket promedio, cumplimiento, "ROI") viven ahora en
+    // generar_insights_compras_mejorado, con el mismo disparador.
     if (insights.length === 0) {
-        // Generar insights por defecto basados en los datos
-        const metricas = data.metricas || {};
-        
-        const insightsDefault = [];
-        
-        if (metricas.cumplimiento_general < 80) {
-            insightsDefault.push({
-                titulo: 'Mejorar Cumplimiento',
-                descripcion: `El cumplimiento actual (${metricas.cumplimiento_general}%) está por debajo del objetivo. Revisar procesos de recepción.`,
-                valor: metricas.cumplimiento_general + '%',
-                icono: 'bi-clipboard-check',
-                color: 'warning'
-            });
-        }
-        
-        if (metricas.roi_promedio > 20) {
-            insightsDefault.push({
-                titulo: 'Excelente ROI',
-                descripcion: 'El retorno sobre la inversión es muy positivo. Mantener estrategia de precios.',
-                valor: metricas.roi_promedio + '%',
-                icono: 'bi-graph-up-arrow',
-                color: 'success'
-            });
-        }
-        
-        if (metricas.total_compras > 0) {
-            const ticketPromedio = metricas.inversion_total / metricas.total_compras;
-            insightsDefault.push({
-                titulo: 'Ticket Promedio',
-                descripcion: 'Inversión promedio por orden de compra en el período seleccionado.',
-                valor: formatMoney(ticketPromedio),
-                icono: 'bi-receipt',
-                color: 'info'
-            });
-        }
-        
-        insightsDefault.forEach(insight => {
-            agregarInsightCard(contenedor, insight);
-        });
-    } else {
-        insights.forEach(insight => {
-            agregarInsightCard(contenedor, insight);
-        });
+        contenedor.html(`
+            <div class="col-12 text-center py-4 text-muted">
+                <i class="bi bi-lightbulb fs-1"></i>
+                <p class="mt-2 mb-0">Sin insights para el período seleccionado</p>
+            </div>
+        `);
+        return;
     }
+    insights.forEach(insight => {
+        agregarInsightCard(contenedor, insight);
+    });
 }
 
 function agregarInsightCard(contenedor, insight) {
@@ -2572,9 +2685,9 @@ function agregarInsightCard(contenedor, insight) {
     contenedor.append(`
         <div class="col-lg-4 col-md-6 mb-3">
             <div class="insight-card" style="background: ${bgColors[insight.color] || bgColors.info}">
-                <h4><i class="bi ${insight.icono}"></i> ${insight.titulo}</h4>
-                <div class="insight-value">${insight.valor}</div>
-                <p>${insight.descripcion}</p>
+                <h4><i class="bi ${escHtml(insight.icono)}"></i> ${escHtml(insight.titulo)}</h4>
+                <div class="insight-value">${escHtml(insight.valor)}</div>
+                <p>${escHtml(insight.descripcion)}</p>
             </div>
         </div>
     `);
@@ -2596,6 +2709,14 @@ function formatMoneyShort(value) {
 
 function formatNumber(value) {
     return Math.round(value || 0).toLocaleString('es-CL');
+}
+
+// Escapa texto de usuario (nombres de proveedor/compra/marca/sucursal,
+// temporadas) antes de insertarlo como HTML.
+function escHtml(valor) {
+    return String(valor === null || valor === undefined ? '' : valor)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function truncateText(text, maxLength) {
@@ -2632,27 +2753,10 @@ function hideLoader() {
 
 // Exportar dashboard
 function exportarDashboard() {
-    // Mismos filtros que la pantalla (incluye periodo — el export usa el API nuevo)
-    const params = new URLSearchParams({
-        anio: $('#filtroAnio').val(),
-        periodo: $('#filtroPeriodo').val(),
-        temporada: $('#filtroTemporada').val(),
-        proveedor: $('#filtroProveedor').val()
-    });
+    // Mismos filtros que la pantalla (incluye periodo y rango personalizado —
+    // el export usa la misma API)
+    const params = new URLSearchParams(parametrosFiltro());
     window.open('/app/exportar_dashboard_compras/?' + params, '_blank');
-}
-
-function exportarTabla() {
-    Swal.fire({
-        icon: 'info',
-        title: 'Exportar Datos',
-        text: 'Utilice el botón "Exportar" del dashboard para descargar todos los datos en Excel.'
-    });
-}
-
-function cambiarVistaEvolucion(vista) {
-    // TODO: Implementar cambio de vista semanal/mensual
-    console.log('Cambiar a vista:', vista);
 }
 </script>
 

@@ -103,6 +103,17 @@ def puede_devolver_mercadopago(usuario, sucursal_id=None):
     return PermisoRol.tiene_permiso(usuario, CODIGO_DEVOLUCION_MP, 'puede_crear', sucursal_id=sucursal_id)
 
 
+# Versión de las tablas de permisos en este proceso. Cualquier save/delete de
+# OpcionMenu, PermisoRol, PermisoUsuario o PermisoSucursal la sube, y la caché
+# por request de PermisoRol.tiene_permiso se descarta si quedó atrás (p. ej.
+# una vista que guarda permisos y vuelve a consultar en la misma request).
+_VERSION_PERMISOS = [0]
+
+
+def invalidar_cache_permisos(*args, **kwargs):
+    _VERSION_PERMISOS[0] += 1
+
+
 class ModuloSistema(models.Model):
     """
     Módulos principales del sistema (Dashboard, Ventas, Documentos, etc.)
@@ -293,9 +304,26 @@ class PermisoRol(models.Model):
 
         Returns:
             bool: True si tiene permiso, False en caso contrario
+
+        Caché por request: si `usuario` trae el dict `ATRIBUTO_CACHE_REQUEST`
+        (lo pone PermisosMenuMiddleware en request.user al inicio de cada
+        request), las filas de (opción, sucursal) se leen UNA vez y cada
+        tipo_permiso se evalúa en memoria con la misma regla de abajo. Antes
+        cada llamada repetía 4 consultas: Recepción DTE hacía 8 chequeos sobre
+        casi la misma opción (32 consultas). Sin ese atributo (tests que llaman
+        directo, comandos, JWT) se consulta como siempre.
         """
         if es_maestro(usuario):
             return True
+        cache = getattr(usuario, cls.ATRIBUTO_CACHE_REQUEST, None)
+        if type(cache) is dict:
+            if cache.get('_version') != _VERSION_PERMISOS[0]:
+                cache.clear()
+                cache['_version'] = _VERSION_PERMISOS[0]
+            clave = (codigo_opcion, str(sucursal_id) if sucursal_id else None)
+            if clave not in cache:
+                cache[clave] = cls._filas_permiso(usuario, codigo_opcion, sucursal_id)
+            return cls._evaluar_filas_permiso(cache[clave], tipo_permiso, sucursal_id)
         try:
             opcion = OpcionMenu.objects.get(codigo=codigo_opcion, activo=True)
 
@@ -354,7 +382,53 @@ class PermisoRol(models.Model):
             return True
         except OpcionMenu.DoesNotExist:
             return False
-    
+
+    # Nombre del atributo (dict) que PermisosMenuMiddleware pone en
+    # request.user para memoizar las filas de permisos durante UNA request.
+    ATRIBUTO_CACHE_REQUEST = '_permisos_filas_request'
+
+    @classmethod
+    def _filas_permiso(cls, usuario, codigo_opcion, sucursal_id):
+        """Las filas que decide tiene_permiso para (opción, sucursal):
+        (PermisoUsuario, PermisoRol, PermisoSucursal), o None si la opción no
+        existe o está inactiva (fail-closed)."""
+        try:
+            opcion = OpcionMenu.objects.get(codigo=codigo_opcion, activo=True)
+        except OpcionMenu.DoesNotExist:
+            return None
+        permiso_usuario = PermisoUsuario.objects.filter(usuario=usuario, opcion_menu=opcion).first()
+        permiso_rol = cls.objects.filter(rol=usuario.rol, opcion_menu=opcion).first()
+        permiso_sucursal = None
+        if sucursal_id:
+            permiso_sucursal = PermisoSucursal.objects.filter(
+                sucursal_id=sucursal_id, opcion_menu=opcion
+            ).first()
+        return (permiso_usuario, permiso_rol, permiso_sucursal)
+
+    @staticmethod
+    def _evaluar_filas_permiso(filas, tipo_permiso, sucursal_id):
+        """Misma regla que tiene_permiso, sobre filas ya leídas."""
+        if filas is None:
+            return False
+        permiso_usuario, permiso_rol, permiso_sucursal = filas
+        tipo_permiso_sucursal = 'habilitado' if tipo_permiso == 'puede_ver' else tipo_permiso
+
+        def sucursal_permite():
+            if sucursal_id and permiso_sucursal:
+                return bool(getattr(permiso_sucursal, tipo_permiso_sucursal, True))
+            return True
+
+        # 1. Override por usuario
+        if permiso_usuario:
+            override_valor = getattr(permiso_usuario, tipo_permiso, None)
+            if override_valor is not None:
+                return bool(override_valor) and sucursal_permite()
+        # 2. Rol
+        if not (permiso_rol and getattr(permiso_rol, tipo_permiso, False)):
+            return False
+        # 3. Sucursal
+        return sucursal_permite()
+
     @classmethod
     def opciones_disponibles_para_usuario(cls, usuario):
         """
@@ -1053,3 +1127,14 @@ class RegistroAutorizacion(models.Model):
     
     def __str__(self):
         return f"{self.get_tipo_operacion_display()} - {self.fecha_hora.strftime('%d/%m/%Y %H:%M')} - {self.usuario_solicitante}"
+
+
+# Invalida la caché por request de PermisoRol.tiene_permiso ante cualquier
+# escritura en las tablas de permisos (ver _VERSION_PERMISOS).
+from django.db.models.signals import post_delete, post_save  # noqa: E402
+
+for _modelo_permiso in (OpcionMenu, PermisoRol, PermisoUsuario, PermisoSucursal):
+    post_save.connect(invalidar_cache_permisos, sender=_modelo_permiso,
+                      dispatch_uid=f'invalidar_cache_permisos_save_{_modelo_permiso.__name__}')
+    post_delete.connect(invalidar_cache_permisos, sender=_modelo_permiso,
+                        dispatch_uid=f'invalidar_cache_permisos_delete_{_modelo_permiso.__name__}')

@@ -19,6 +19,8 @@
             </div>
         </div>
 
+        {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='ventas' activo='comparativo' %}
+
         <!-- Filtros -->
         <div class="row mb-3">
             <div class="col-12">
@@ -99,7 +101,7 @@
             <div class="col-6 col-md-3">
                 <div class="card kpi-card border-0 shadow-sm h-100">
                     <div class="card-body py-3">
-                        <div class="kpi-label"><i class="ri-money-dollar-circle-line text-primary"></i>
+                        <div class="kpi-label" title="Ventas brutas del período menos notas de crédito de venta, comparadas con el período anterior equivalente"><i class="ri-money-dollar-circle-line text-primary"></i>
                             <span id="kpiVentasLabel">Ventas Netas</span>
                         </div>
                         <div class="kpi-main" id="kpiVentasActual">$0</div>
@@ -111,7 +113,7 @@
             <div class="col-6 col-md-3">
                 <div class="card kpi-card border-0 shadow-sm h-100">
                     <div class="card-body py-3">
-                        <div class="kpi-label"><i class="ri-global-line text-info"></i> % Internet</div>
+                        <div class="kpi-label" title="Ventas del canal ECOMMERCE ÷ ventas brutas del período"><i class="ri-global-line text-info"></i> % Internet</div>
                         <div class="kpi-main" id="kpiInternetActual">0%</div>
                         <div class="kpi-sub">Anterior: <span id="kpiInternetAnterior">0%</span></div>
                         <div class="kpi-var" id="kpiInternetVar"></div>
@@ -121,7 +123,7 @@
             <div class="col-6 col-md-3">
                 <div class="card kpi-card border-0 shadow-sm h-100">
                     <div class="card-body py-3">
-                        <div class="kpi-label"><i class="ri-calculator-line text-success"></i> Ticket Promedio</div>
+                        <div class="kpi-label" title="Ventas netas ÷ documentos del período"><i class="ri-calculator-line text-success"></i> Ticket Promedio</div>
                         <div class="kpi-main" id="kpiTicketActual">$0</div>
                         <div class="kpi-sub">Anterior: <span id="kpiTicketAnterior">$0</span></div>
                         <div class="kpi-var" id="kpiTicketVar"></div>
@@ -131,7 +133,7 @@
             <div class="col-6 col-md-3">
                 <div class="card kpi-card border-0 shadow-sm h-100">
                     <div class="card-body py-3">
-                        <div class="kpi-label"><i class="ri-file-list-3-line text-warning"></i> Documentos</div>
+                        <div class="kpi-label" title="Documentos de venta emitidos en el período (misma base que Ventas Netas)"><i class="ri-file-list-3-line text-warning"></i> Documentos</div>
                         <div class="kpi-main" id="kpiDocsActual">0</div>
                         <div class="kpi-sub">Anterior: <span id="kpiDocsAnterior">0</span></div>
                         <div class="kpi-var" id="kpiDocsVar"></div>
@@ -152,7 +154,7 @@
             <div class="col-6 col-md-3">
                 <div class="card kpi-card border-0 shadow-sm h-100">
                     <div class="card-body py-3">
-                        <div class="kpi-label"><i class="ri-shopping-bag-line text-secondary"></i> Unidades Vendidas</div>
+                        <div class="kpi-label" title="Suma de unidades de los documentos de venta del período"><i class="ri-shopping-bag-line text-secondary"></i> Unidades Vendidas</div>
                         <div class="kpi-main" id="kpiUnidadesActual">0</div>
                         <div class="kpi-sub">Anterior: <span id="kpiUnidadesAnterior">0</span></div>
                         <div class="kpi-var" id="kpiUnidadesVar"></div>
@@ -162,7 +164,7 @@
             <div class="col-6 col-md-3">
                 <div class="card kpi-card border-0 shadow-sm h-100">
                     <div class="card-body py-3">
-                        <div class="kpi-label"><i class="ri-trophy-line text-primary"></i> Top Sucursal (crecimiento)</div>
+                        <div class="kpi-label" title="Sucursal con mayor variación % de ventas netas vs. el período anterior (solo sucursales con venta en el período actual)"><i class="ri-trophy-line text-primary"></i> Top Sucursal (crecimiento)</div>
                         <div class="kpi-main fs-5" id="kpiTopSucursal">-</div>
                         <div class="kpi-sub" id="kpiTopSucursalVar">&nbsp;</div>
                     </div>
@@ -171,7 +173,7 @@
             <div class="col-6 col-md-3">
                 <div class="card kpi-card border-0 shadow-sm h-100">
                     <div class="card-body py-3">
-                        <div class="kpi-label"><i class="ri-user-star-line text-primary"></i> Top Vendedor (crecimiento)</div>
+                        <div class="kpi-label" title="Vendedor con mayor variación % de ventas netas vs. el período anterior"><i class="ri-user-star-line text-primary"></i> Top Vendedor (crecimiento)</div>
                         <div class="kpi-main fs-5" id="kpiTopVendedor">-</div>
                         <div class="kpi-sub" id="kpiTopVendedorVar">&nbsp;</div>
                     </div>
@@ -509,14 +511,60 @@
         document.getElementById('descripcionQueMide').textContent = info.desc;
     }
 
+    // ── Filtros compartidos por URL (tira de reportes / enlace guardado) ──
+    // Fechas en hora local del navegador (Chile), no en UTC.
+    const pad2 = n => String(n).padStart(2, '0');
+    const isoLocal = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+    // Período de la URL → tipo de comparación. El mes en curso (hasta hoy o
+    // completo) queda en el MTD por defecto: compararlo completo contra el mes
+    // pasado da la caída falsa ya documentada. El año en curso → YTD, el año
+    // pasado completo → anio_full; cualquier otro período → rango personalizado.
+    function flujoDesdeUrl(f) {
+        const c = FiltrosReporte.completar(f);
+        let fi = c.fecha_inicio, ff = c.fecha_fin;
+        if (!fi && c.anio) { fi = c.anio + '-01-01'; ff = c.anio + '-12-31'; }
+        if (!fi || !ff) return null;
+        const hoy = isoLocal(new Date());
+        const anio = hoy.slice(0, 4), anioAnt = String(Number(anio) - 1);
+        if (fi === hoy.slice(0, 7) + '-01' && ff.slice(0, 7) === hoy.slice(0, 7) && ff >= hoy) return { flujo: 'mes_mtd' };
+        if (fi === anio + '-01-01' && ff.slice(0, 4) === anio && ff >= hoy) return { flujo: 'anio_ytd' };
+        if (fi === anioAnt + '-01-01' && ff === anioAnt + '-12-31') return { flujo: 'anio_full' };
+        return { flujo: 'custom', fi: fi, ff: ff };
+    }
+
+    // Período actual consultado → claves canónicas: un mes calendario (o el mes
+    // en curso hasta hoy) va como `mes`; cualquier otro tramo, como rango.
+    function periodoCanonico(fi, ff) {
+        if (fi && ff && fi.slice(8) === '01' && fi.slice(0, 7) === ff.slice(0, 7)) {
+            const mes = FiltrosReporte.completar({ mes: fi.slice(0, 7) });
+            if (ff === mes.fecha_fin || ff === isoLocal(new Date())) return { mes: mes.mes };
+        }
+        return { fecha_inicio: fi, fecha_fin: ff };
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         // Activar tooltips de Bootstrap si están disponibles
         if (window.bootstrap && bootstrap.Tooltip) {
             document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
         }
 
+        // Período de la URL: se aplica antes de la primera consulta. La sucursal,
+        // cuando llegan sus opciones (si no está entre ellas, se ignora).
+        const filtrosUrl = window.FiltrosReporte ? FiltrosReporte.leer() : {};
+        const flujoUrl = window.FiltrosReporte ? flujoDesdeUrl(filtrosUrl) : null;
+        if (flujoUrl && FiltrosReporte.ponerValor('#tipoFlujo', flujoUrl.flujo) && flujoUrl.flujo === 'custom') {
+            document.getElementById('fechaInicio').value = flujoUrl.fi;
+            document.getElementById('fechaFin').value = flujoUrl.ff;
+            document.getElementById('contFechaInicio').classList.remove('d-none');
+            document.getElementById('contFechaFin').classList.remove('d-none');
+        }
+
         actualizarDescripcion(document.getElementById('tipoFlujo').value);
-        cargarSucursales().then(() => consultar());
+        cargarSucursales().then(() => {
+            if (filtrosUrl.sucursal_id) FiltrosReporte.ponerValor('#filtroSucursal', filtrosUrl.sucursal_id);
+            consultar();
+        });
 
         document.getElementById('btnConsultar').addEventListener('click', consultar);
         document.getElementById('filtroSucursal').addEventListener('change', consultar);
@@ -588,6 +636,14 @@
                 if (!data.success) {
                     Swal.fire({ icon: 'error', title: 'Error', text: data.error || 'Error al cargar datos' });
                     return;
+                }
+                // URL: el período ACTUAL que resolvió el backend (también en los
+                // presets) y la sucursal pedida. El tipo de comparación no es
+                // canónico y no se escribe.
+                if (window.FiltrosReporte && data.periodo && data.periodo.actual) {
+                    const estadoUrl = periodoCanonico(data.periodo.actual.inicio, data.periodo.actual.fin);
+                    estadoUrl.sucursal_id = sucursal;
+                    FiltrosReporte.reflejar(estadoUrl);
                 }
                 renderPeriodo(data.periodo);
                 renderKPIs(data.kpis);

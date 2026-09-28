@@ -770,3 +770,72 @@ class AnularFacturaDteTest(TestCase):
         self.assertTrue(data['success'])
         linea = data['lineas'][0]
         self.assertEqual(int(linea['precio_unitario']), 800)
+
+
+@override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)
+class DetalleNotasCreditoDiaTest(TestCase):
+    """`_detalle_notas_credito_dia`: la lista de NC que muestran el Resumen y la
+    térmica. Caso real NICK2 22-09-2026: una NC de ANULACION vale $0 en el cuadre
+    y desaparecía de la pantalla y del papel."""
+
+    def setUp(self):
+        self.env = setup_entorno_completo()
+        self.hoy = timezone.localdate()
+
+    def _ticket_pagado(self, correlativo, folio_dte, monto):
+        from app.models import Ticket
+        return Ticket.objects.create(
+            vendedor=self.env['vendedor'], sucursal=self.env['sucursal'],
+            correlativo=correlativo, estado='PAGADO', subTotal=monto, descuento=0,
+            total=monto, responsable='test', folio_dte=folio_dte,
+        )
+
+    def _detalle(self):
+        from app.views_modulo_ventas import _detalle_notas_credito_dia
+        return _detalle_notas_credito_dia(self.env['sucursal'], self.hoy)
+
+    def test_anulacion_total_de_venta_del_dia_avisa_ticket_que_sigue_sumando(self):
+        boleta = _crear_boleta(self.env, numero=288804, monto_con_iva=Decimal('1077280'))
+        self._ticket_pagado(186878, 288804, 1077280)
+        _crear_nc_directa(self.env, numero=3641, monto_con_iva=1077280,
+                          tipo_transaccion='ANULACION', metodo_pago_nc=None,
+                          documento_afectado=boleta)
+
+        (fila,) = self._detalle()
+        self.assertEqual(fila['tipo'], 'ANULACION')
+        self.assertEqual(fila['monto'], 1077280)
+        self.assertIsNone(fila['resta_de'])
+        self.assertEqual(fila['doc_afectado'], 'BOL.E 288804')
+        self.assertEqual(fila['ticket_sigue_sumando'], 186878)
+        # El detalle es solo de lectura: la ANULACION sigue sin restar.
+        c = _calcular_cuadratura_data(self.env['sucursal'], self.hoy.strftime('%Y-%m-%d'))
+        self.assertEqual(int(c['total_notas_credito']), 0)
+        self.assertEqual(c['cantidad_notas_credito'], 1)
+
+    def test_anulacion_parcial_no_avisa(self):
+        boleta = _crear_boleta(self.env, numero=500, monto_con_iva=Decimal('95690'))
+        self._ticket_pagado(700, 500, 95690)
+        _crear_nc_directa(self.env, numero=10, monto_con_iva=89990,
+                          tipo_transaccion='ANULACION', metodo_pago_nc=None,
+                          documento_afectado=boleta)
+        (fila,) = self._detalle()
+        self.assertIsNone(fila['ticket_sigue_sumando'])
+
+    def test_devolucion_en_efectivo_informa_medio_que_resta(self):
+        boleta = _crear_boleta(self.env, numero=501, monto_con_iva=Decimal('74990'))
+        _crear_nc_directa(self.env, numero=11, monto_con_iva=74990,
+                          tipo_transaccion='DEVOLUCION', metodo_pago_nc='EFECTIVO',
+                          documento_afectado=boleta)
+        (fila,) = self._detalle()
+        self.assertEqual(fila['tipo'], 'DEVOLUCION')
+        self.assertEqual(fila['resta_de'], 'EFECTIVO')
+        self.assertIsNone(fila['ticket_sigue_sumando'])
+
+    def test_devolucion_imputada_a_otro_dia_no_aparece_hoy(self):
+        from datetime import timedelta
+        boleta = _crear_boleta(self.env, numero=502, monto_con_iva=Decimal('10000'))
+        _crear_nc_directa(self.env, numero=12, monto_con_iva=10000,
+                          tipo_transaccion='DEVOLUCION', metodo_pago_nc='EFECTIVO',
+                          documento_afectado=boleta,
+                          fecha_pago_nc=self.hoy - timedelta(days=1))
+        self.assertEqual(self._detalle(), [])

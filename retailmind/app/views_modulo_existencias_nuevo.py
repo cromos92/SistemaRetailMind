@@ -1642,12 +1642,29 @@ def api_trazabilidad_producto(request):
             return _sin_acceso('Ese SKU pertenece a una empresa a la que no tienes acceso.')
         return JsonResponse({'success': False, 'error': f'SKU {sku} no encontrado.'}, status=404)
     producto_talla = None
-    if _n_sku > 1:
+    _seleccion = 'unico'
+    # A3-02: el dashboard de productos (y cualquier deep-link) manda `pt`, el
+    # id del Producto_Talla de la fila. Se respeta ANTES del fallback por la
+    # sucursal de la sesión: con el SKU repetido en varias bodegas (99,8 % de
+    # los SKU con stock) el botón abría la copia de la sesión, con otro stock y
+    # otra historia. `_qs_pt` ya está acotado por SKU y por las bodegas del
+    # usuario, así que un `pt` ajeno o inválido no amplía el alcance: cae al
+    # comportamiento anterior.
+    _pt_raw = (request.GET.get('pt') or '').strip()
+    if _pt_raw.isascii() and _pt_raw.isdigit() and len(_pt_raw) <= 18:
+        producto_talla = _qs_pt.filter(id=int(_pt_raw)).first()
+        if producto_talla is not None:
+            _seleccion = 'pt'
+    if producto_talla is None and _n_sku > 1:
         _suc_id = request.session.get('idSucursalActual')
         if _suc_id:
             producto_talla = _qs_pt.filter(producto__sucursal_id=_suc_id).first()
+            if producto_talla is not None:
+                _seleccion = 'sesion'
     if producto_talla is None:
         producto_talla = _qs_pt.first()
+        if _n_sku > 1:
+            _seleccion = 'primera'
 
     producto = producto_talla.producto
 
@@ -1668,6 +1685,11 @@ def api_trazabilidad_producto(request):
         'fecha_creacion': producto.fecha_creacion.strftime('%d/%m/%Y %H:%M') if producto.fecha_creacion else '-',
         'sku_duplicado': _n_sku > 1,
         'sku_ocurrencias': _n_sku,
+        # A3-02: qué copia del SKU se muestra y por qué ('pt' = la fila pedida,
+        # 'sesion' = la de la sucursal activa, 'primera' = ninguna de las dos,
+        # 'unico' = el SKU no está repetido).
+        'producto_talla_id': producto_talla.id,
+        'seleccion': _seleccion,
     }
 
     # --- Movimientos (kardex del SKU, con saldo acumulado) ---
@@ -2851,8 +2873,18 @@ def api_sumar_stock_rapido(request):
 
     Solo toca tallas existentes: para una talla nueva está el botón "Sumar", que
     reabre Crear Manual con el código precargado y pide costo/precio/guía.
+
+    Ingresa stock: exige `gestion_producto`/puede_crear y, si se liga a un
+    DTE, que sea una compra vigente emitida a la empresa de la sesión (CC-03).
     """
-    from .views import registrar_movimiento_producto
+    from .views import (
+        registrar_movimiento_producto, _sin_permiso_producto,
+        _error_dte_compra_para_ingreso,
+    )
+
+    sin_permiso = _sin_permiso_producto(request, 'puede_crear')
+    if sin_permiso:
+        return sin_permiso
 
     try:
         data = json.loads(request.body or '{}')
@@ -2873,6 +2905,13 @@ def api_sumar_stock_rapido(request):
     producto, err = _producto_en_alcance(request, producto_id)
     if err:
         return err
+    if producto.sucursal_id != sucursal_id:
+        # El movimiento se registra en la sucursal activa: sumar a la ficha de
+        # otra bodega dejaba el stock en una y el kardex en otra (CC-03).
+        return JsonResponse(
+            {'success': False,
+             'error': 'Ese producto no es de la sucursal activa: cámbiate a su sucursal para sumarle stock.'},
+            status=400)
 
     dte = None
     if vincular_dte and dte_id:
@@ -2884,6 +2923,14 @@ def api_sumar_stock_rapido(request):
                 {'success': False,
                  'error': 'El DTE no tiene emisor: no se puede registrar la compra. '
                           'Desmarca "vincular al documento" o corrige el DTE.'}, status=400)
+        error_dte = _error_dte_compra_para_ingreso(
+            dte, Sucursal.objects.filter(id=sucursal_id).values_list('empresa_id', flat=True).first())
+        if error_dte:
+            logger.warning(
+                "Suma rápida rechazada: dte_id=%s sucursal_id=%s usuario=%s motivo=%s",
+                dte.id, sucursal_id, request.user.username, error_dte,
+            )
+            return JsonResponse({'success': False, 'error': error_dte}, status=400)
 
     # Normalizar líneas: solo tallas de ESTE producto y cantidades > 0.
     tallas_validas = {pt.id: pt for pt in Producto_Talla.objects.filter(producto=producto)}
@@ -3043,7 +3090,14 @@ def api_preview_reasignar_dte(request):
 
     nuevo_dte = None
     if nuevo_dte_id:
+        from .views import _error_dte_compra_para_ingreso
         nuevo_dte, error = _dte_destino_valido(nuevo_dte_id)
+        if not error:
+            # Mismo criterio que el POST: la vista previa no debe ofrecer una
+            # factura que luego se rechazará (CC-03).
+            error = _error_dte_compra_para_ingreso(
+                nuevo_dte,
+                Sucursal.objects.filter(id=sucursal_id).values_list('empresa_id', flat=True).first())
         if error:
             return JsonResponse({'success': False, 'error': error}, status=400)
         if dte_origen and int(nuevo_dte_id) == dte_origen.id:
@@ -3122,8 +3176,18 @@ def api_reasignar_dte_ingreso(request):
     línea de compra es exclusiva de este ingreso— la compra manual del proveedor
     correcto. El stock NO se toca: las unidades ya están en bodega, lo que
     estaba mal era el documento que las respalda.
+
+    Exige `gestion_producto`/puede_editar y que el DTE destino sea una compra
+    emitida a la empresa de la sesión (CC-03).
     """
-    from .views import obtener_siguiente_correlativo
+    from .views import (
+        obtener_siguiente_correlativo, _sin_permiso_producto,
+        _error_dte_compra_para_ingreso,
+    )
+
+    sin_permiso = _sin_permiso_producto(request, 'puede_editar')
+    if sin_permiso:
+        return sin_permiso
 
     try:
         data = json.loads(request.body or '{}')
@@ -3149,6 +3213,10 @@ def api_reasignar_dte_ingreso(request):
         return err
 
     nuevo_dte, error = _dte_destino_valido(nuevo_dte_id)
+    if not error:
+        error = _error_dte_compra_para_ingreso(
+            nuevo_dte,
+            Sucursal.objects.filter(id=sucursal_id).values_list('empresa_id', flat=True).first())
     if error:
         return JsonResponse({'success': False, 'error': error}, status=400)
 

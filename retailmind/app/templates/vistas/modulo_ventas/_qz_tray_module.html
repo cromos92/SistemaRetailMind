@@ -559,12 +559,13 @@ function _generarEscPosRetiroEcommerce(td) {
     return c;
 }
 
-/* ── Generar comandos ESC/POS — modo DEVOLUCION POR GARANTIA ── */
+/* ── Generar comandos ESC/POS — modo DEVOLUCION DE DINERO (DEVOLUCION_GARANTIA) ── */
 function _generarEscPosDevolucionGarantia(td) {
     const suc  = td.sucursal || {};
     const cli  = td.cliente  || {};
     const dte  = td.dte      || {};
     const tr   = td.transferencia;
+    const mp   = td.mercadopago;
     const prod = td.productos || [];
 
     const empNombre = String(suc.empresa    || 'MI EMPRESA');
@@ -604,7 +605,7 @@ function _generarEscPosDevolucionGarantia(td) {
     // Banner (doble tamaño, 2 líneas para que quepa en 80mm)
     c.push(_EP.CENTER, _EP.DBL_ON, _EP.BOLD_ON);
     c.push('DEVOLUCION' + _N);
-    c.push('POR GARANTIA' + _N);
+    c.push('DE DINERO' + _N);
     c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
     c.push(_sep('-'));
 
@@ -631,7 +632,27 @@ function _generarEscPosDevolucionGarantia(td) {
     if (td.solicitante) c.push(_row('Solicita:',  String(td.solicitante)));
     if (cli.nombre)     c.push(_row('Cliente:',   String(cli.nombre)));
     if (cli.rut)        c.push(_row('RUT:',       String(cli.rut)));
+    if (cli.email) {
+        // Un correo largo no se corta: si no cabe al lado de la etiqueta, va
+        // debajo, partido en tramos de 48 columnas.
+        const correo = String(cli.email);
+        if (('Correo: ' + correo).length <= _COLS) c.push(_row('Correo:', correo));
+        else {
+            c.push('Correo:' + _N);
+            for (let i = 0; i < correo.length; i += _COLS) c.push(correo.substring(i, i + _COLS) + _N);
+        }
+    }
     if (td.metodo_solicitado_display) c.push(_row('Devolucion:', String(td.metodo_solicitado_display)));
+
+    // Mercado Pago: N° de operación para ubicar la devolución en MP.
+    if (mp) {
+        c.push(_sep('-'));
+        c.push(_EP.BOLD_ON); c.push('MERCADO PAGO' + _N); c.push(_EP.BOLD_OFF);
+        if (mp.numero_operacion) c.push(_row(mp.devuelto ? 'N\xB0 operacion:' : 'N\xB0 cobro:', String(mp.numero_operacion)));
+        if (mp.medio)            c.push(_row('Medio:', String(mp.medio)));
+        c.push((mp.devuelto ? 'Devuelto a la tarjeta/cuenta MP del cliente'
+                            : 'Se devolvera por Mercado Pago al aprobarse').substring(0, _COLS) + _N);
+    }
 
     // Datos bancarios (solo si pidió transferencia)
     if (tr) {

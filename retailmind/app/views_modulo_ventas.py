@@ -49,7 +49,10 @@ from .utils_ventas import (
     ONLY_DTE_PAGO,
     ONLY_TICKET_PRODUCTO_POS,
 )
-from .utils_permisos import obtener_configuracion_rango_arqueo, obtener_sucursales_usuario
+from .utils_permisos import (
+    obtener_configuracion_rango_arqueo, obtener_sucursales_usuario,
+    usuario_puede_ver_todas_sucursales,
+)
 from .decorators import requiere_rol
 
 # Caching del módulo ventas (Redis / LocMem, ver app.cache_utils)
@@ -63,6 +66,11 @@ from .services.transbank_sdk_service import (
 from .services.inventario_service import (
     ingresar as ingresar_inventario,
     egresar as egresar_inventario,
+)
+from .services.codigo_autorizacion_service import (
+    CodigoAutorizacionError,
+    consumir_codigo,
+    validar_codigo_supervisor,
 )
 
 from .models import (
@@ -79,7 +87,7 @@ from .models import (
     METODO_DEVOLUCION_NC_CHOICES,
     CodigoAutorizacionDinamico, RegistroAutorizacion, PermisoTemporalCambio,
     PermisoRol,
-    rol_efectivo, es_rol_administrador, puede_emitir_nota_credito,
+    rol_efectivo, es_rol_administrador, es_maestro, puede_emitir_nota_credito,
 )
 
 
@@ -210,6 +218,66 @@ def _bloquear_y_validar_inventario_cambio(detalles, sucursal_id, reversion=False
             )
 
     return productos
+
+
+def _unidades_ya_cambiadas(ids_lineas, estados, excluir_cambio_id=None):
+    """{ticket_producto_id: unidades de esa línea ya tomadas por OTROS cambios}.
+
+    La cantidad de un cambio se validaba solo contra la cantidad vendida en la
+    línea, así que una línea de 1 unidad aceptaba dos cambios: reingresaba la
+    talla devuelta dos veces y entregaba dos productos (L 17 → 19, M 18 → 16).
+    """
+    if not ids_lineas:
+        return {}
+    qs = CambioDevolucionDetalle.objects.filter(
+        producto_original_id__in=ids_lineas,
+        cambio_devolucion__estado__in=estados,
+    )
+    if excluir_cambio_id:
+        qs = qs.exclude(cambio_devolucion_id=excluir_cambio_id)
+    return {
+        row['producto_original_id']: int(row['total'] or 0)
+        for row in qs.values('producto_original_id').annotate(total=Sum('cantidad_original'))
+    }
+
+
+def _validar_unidades_libres_cambio(detalles, cambio_id):
+    """Al ejecutar un cambio: sus unidades no pueden estar ya cambiadas.
+
+    Bloquea las líneas del ticket con select_for_update para serializar dos
+    aprobaciones simultáneas de cambios distintos sobre la misma línea (el lock
+    del cambio no alcanza: son filas distintas). Solo cuentan los cambios que
+    ya movieron stock; dos solicitudes pendientes sobre la misma unidad las
+    resuelve esta validación al aprobar la segunda.
+    """
+    pedidas = {}
+    for detalle in detalles:
+        if detalle.producto_original_id and (detalle.cantidad_original or 0) > 0:
+            pedidas[detalle.producto_original_id] = (
+                pedidas.get(detalle.producto_original_id, 0) + detalle.cantidad_original
+            )
+    if not pedidas:
+        return
+    lineas = {
+        linea.id: linea for linea in
+        Ticket_Productos.objects.select_for_update(of=('self',))
+        .select_related('ProductoTalla').filter(id__in=pedidas).order_by('id')
+    }
+    ya_cambiadas = _unidades_ya_cambiadas(
+        list(pedidas), ESTADOS_CAMBIO_CON_TICKET_NUEVO, excluir_cambio_id=cambio_id,
+    )
+    for linea_id, cantidad in pedidas.items():
+        linea = lineas.get(linea_id)
+        if linea is None:
+            continue
+        libres = max(0, int(linea.stock or 0) - ya_cambiadas.get(linea_id, 0))
+        if cantidad > libres:
+            sku = linea.ProductoTalla.sku if linea.ProductoTalla_id else f'línea {linea_id}'
+            raise ConflictoInventarioCambio(
+                f'El SKU {sku} ya fue cambiado en otra operación: quedan {libres} '
+                f'de {linea.stock} unidad(es) sin cambiar y este cambio pide {cantidad}.',
+                codigo='UNIDAD_YA_CAMBIADA',
+            )
 
 
 def _usuario_es_administrador_activo(usuario):
@@ -1482,11 +1550,9 @@ def crear_ticket(request):
 def crear_ticket_venta(request):
     """Crear ticket de venta al público.
 
-    OJO (deuda conocida, no corregida aquí): esta ruta descuenta el stock DOS
-    veces — llama a `consumir_stock_fifo()`, que ya descuenta, y después a
-    `registrar_movimiento_producto()`, que vuelve a descontar. Hay 3 tests que
-    fallan por esto desde antes. No se toca en este cambio para no mezclar el
-    arreglo de autenticación con un cambio de comportamiento de stock.
+    No está enrutada: `/crear_ticket_venta/` apunta a `views.crear_ticket_venta`,
+    cuyo doble descuento (consumir_stock_fifo + registrar_movimiento_producto)
+    se corrigió el 28-09-2026.
     """
     try:
         data = json.loads(request.body)
@@ -4741,7 +4807,14 @@ def registrar_pagos_ticket(request, correlativo):
                     tp_orphan.delete()
 
         # Recalcular totales del ticket — authoritative server-side calc
-        todas_lineas = list(ticket.ticket_productos.all())
+        # Consulta fresca: `ticket.ticket_productos.all()` devuelve el caché del
+        # prefetch de la carga del ticket, que no ve las líneas creadas,
+        # cambiadas o borradas en este mismo request. Con ese caché una "Nueva
+        # venta" armada en la caja quedaba con total 0 (y la validación de
+        # pagos no corría) y una bolsa agregada no sumaba al total.
+        todas_lineas = list(
+            Ticket_Productos.objects.filter(idTicket=ticket).select_related('ProductoTalla')
+        )
         nuevo_descuento_prod = sum((tp.descuento_unitario or 0) * tp.stock for tp in todas_lineas)
 
         # Recalculate each line's subtotal so we never trust a faulty
@@ -5479,7 +5552,18 @@ def registrar_pagos_ticket(request, correlativo):
         # ya consumido (la carrera original, pero con más daño).
         hubo_consumo = False
 
-        for tp in ticket.ticket_productos.all():
+        # Consulta fresca, NO `ticket.ticket_productos.all()`: ese es el caché
+        # del prefetch de la carga del ticket y no ve lo que la caja cambió en
+        # este mismo POST. Con el caché, lo agregado en la caja (bolsas, un
+        # segundo producto, una "Nueva venta") se cobraba sin descontar, una
+        # cantidad subida de 1 a 2 descontaba 1 y una línea quitada se
+        # descontaba igual.
+        lineas_a_descontar = (
+            Ticket_Productos.objects.filter(idTicket=ticket)
+            .select_related('ProductoTalla__producto')
+            .order_by('id')
+        )
+        for tp in lineas_a_descontar:
             # Ya salió del inventario con la guía de despacho de la cotización.
             if tp.despachado_por_guia:
                 logger.debug(
@@ -7395,40 +7479,30 @@ def anular_documento_venta(request):
                         'error': 'El ticket ya está anulado'
                     })
                 
-                # Anular ticket
+                # Un ticket PAGADO ya descontó stock al cobrarse. Anularlo por
+                # acá lo dejaba ANULADO con el stock afuera (la rama que
+                # "devolvía" nunca corría: leía el estado después de pisarlo).
+                # La devolución de una venta va por Eliminar documento o por
+                # Nota de Crédito, que reingresan con lote y respetan cambios.
+                if documento.estado == 'PAGADO':
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            f'El ticket #{documento.correlativo} está pagado y ya '
+                            'descontó stock. Para dejarlo sin efecto use «Eliminar» '
+                            'sobre su documento o emita una Nota de Crédito: esos '
+                            'caminos devuelven el stock.'
+                        ),
+                        'error_tipo': 'DOCUMENTO_CON_STOCK',
+                    }, status=400)
+
+                # Anular ticket (PENDIENTE: no movió stock)
                 documento.estado = 'ANULADO'
                 documento.save()
 
                 # El cupón vuelve al cliente: la venta que lo consumió ya no existe.
                 _liberar_cupon_de_venta(documento, 'anulación de documento de venta')
 
-                # Devolver stock si estaba pagado
-                # ⚠️ RAMA MUERTA (bug pre-existente, NO corregido acá A PROPÓSITO):
-                # el estado se pisa con 'ANULADO' tres líneas más arriba, así que
-                # esta condición nunca es True y este endpoint jamás devolvió
-                # stock. Habilitarla cambia el inventario de forma retroactiva y
-                # exige verificar antes que no duplique con las otras rutas de
-                # anulación (eliminar_documento_venta / anular_factura_dte).
-                if documento.estado == 'PAGADO':
-                    for tp in documento.ticket_productos.all():
-                        if tp.ProductoTalla is None:
-                            continue  # Sin stock que devolver para ítems manuales
-                        # Crear movimiento de devolución de stock
-                        # ✅ Usar DTE si está disponible, si no usar correlativo del ticket
-                        referencia = f'ANULACION_DTE_{documento.folio_dte}' if documento.folio_dte else f'ANULACION_TICKET_{documento.correlativo}'
-                        Movimientos_Producto.objects.create(
-                            ticket=documento,
-                            ProductoTalla=tp.ProductoTalla,
-                            cantidad=tp.stock,  # Cantidad positiva para devolver
-                            costo=tp.ProductoTalla.producto.costo if tp.ProductoTalla.producto else 0,
-                            precio=tp.precio,
-                            concepto='DEVOLUCION_CLIENTE',
-                            tipo_movimiento='INGRESO',
-                            responsable=request.user.username,
-                            observaciones=f'Anulación ticket #{documento.correlativo}',
-                            referencia_externa=referencia
-                        )
-                
             else:  # DTE
                 documento = get_object_or_404(Dte, id=documento_id)
                 
@@ -7437,7 +7511,22 @@ def anular_documento_venta(request):
                         'success': False,
                         'error': 'El documento ya está anulado'
                     })
-                
+
+                # Un documento con productos movió stock (venta, factura, NC,
+                # guía). Marcarlo ANULADO por acá no lo revierte: quedaba el
+                # inventario descuadrado. Se usa Eliminar o Nota de Crédito.
+                if documento.dte_productos.filter(productoTalla__isnull=False).exists():
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            f'{documento.tipo_documento} #{documento.numero_documento} '
+                            'tiene productos que movieron stock. Para dejarlo sin '
+                            'efecto use «Eliminar» o emita una Nota de Crédito: '
+                            'esos caminos corrigen el inventario.'
+                        ),
+                        'error_tipo': 'DOCUMENTO_CON_STOCK',
+                    }, status=400)
+
                 documento.estado_dte = 'ANULADO'
                 documento.save()
 
@@ -7520,8 +7609,10 @@ def eliminar_documento_venta(request):
 
     Restricción: permiso `dte_eliminar_documento.puede_eliminar` (sin bypass
     por rol; el Maestro pasa por `tiene_permiso`).
-    El soft delete deja el DTE en BD para auditoría / reversión manual con
-    `restaurar_dte`.
+    El soft delete deja el DTE en BD para auditoría. No existe reversión
+    automática (el endpoint `restaurar_dte` se retiró el 2026-09-26): revertirlo
+    exige deshacer a mano los movimientos DEVOLUCION_CLIENTE
+    (referencia_externa='ELIMINACION_DTE_<numero>') y el ticket ANULADO.
 
     Body esperado::
 
@@ -7675,6 +7766,8 @@ def eliminar_documento_venta(request):
 
             stock_devuelto = []  # [{sku, cantidad}, ...]
             movimientos_creados = 0
+            avisos_stock = []
+            stock_omitido_motivo = None
 
             if dte.tipo_documento == 'NOTA DE CREDITO':
                 # Una NC ya devolvió el stock vendido a bodega al emitirse
@@ -7688,39 +7781,60 @@ def eliminar_documento_venta(request):
             elif ticket_vinculado:
                 # Caso 1: el stock fue descontado al pagar el ticket; lo
                 # devolvemos por las líneas del ticket (mismas SKUs / cant.).
-                productos_ticket = (
-                    Ticket_Productos.objects
-                    .filter(idTicket=ticket_vinculado)
-                    .select_related('ProductoTalla', 'ProductoTalla__producto')
-                )
-                for tp in productos_ticket:
-                    if tp.ProductoTalla is None or not tp.stock:
-                        continue
-                    pt = tp.ProductoTalla
-                    pt.stock = (pt.stock or 0) + int(tp.stock)
-                    pt.save(update_fields=['stock'])
-
-                    Movimientos_Producto.objects.create(
-                        ticket=ticket_vinculado,
-                        ProductoTalla=pt,
-                        sucursal_destino=ticket_vinculado.sucursal,
-                        cantidad=int(tp.stock),
-                        costo=(
-                            pt.producto.costo if pt.producto else 0
-                        ),
-                        precio=int(tp.precio or 0),
-                        concepto='DEVOLUCION_CLIENTE',
-                        tipo_movimiento='INGRESO',
-                        estado='COMPLETADO',
-                        responsable=responsable,
-                        observaciones=obs_base,
-                        referencia_externa=referencia,
+                #
+                # Por `ReingresoVenta`: repone el lote FIFO (antes solo subía
+                # el stock plano), descuenta lo que una NC sobre este DTE ya
+                # devolvió y, si una unidad se cambió en Cambios y
+                # Devoluciones, reingresa lo que el cliente se llevó en su
+                # lugar (la talla vendida ya había vuelto con el cambio).
+                # No se reingresa:
+                # - lo que salió con la guía de despacho de una cotización
+                #   (`despachado_por_guia`): el cobro no lo descontó;
+                # - un ticket de cambio (modulo_origen CAMBIO_DEVOLUCION): el
+                #   stock lo movió la aprobación del cambio, no el cobro; se
+                #   deshace con «Revertir cambio».
+                from .services.reingreso_devolucion import ReingresoVenta
+                if ticket_vinculado.modulo_origen == 'CAMBIO_DEVOLUCION':
+                    stock_omitido_motivo = (
+                        'ticket de un cambio: su stock se mueve al aprobar o '
+                        'revertir el cambio'
                     )
-                    movimientos_creados += 1
-                    stock_devuelto.append({
-                        'sku': getattr(pt, 'sku', '') or '',
-                        'cantidad': int(tp.stock),
-                    })
+                else:
+                    reingreso = ReingresoVenta(dte, tickets=[ticket_vinculado])
+                    vendidas_por_talla = {}
+                    productos_ticket = (
+                        Ticket_Productos.objects
+                        .filter(idTicket=ticket_vinculado)
+                        .select_related('ProductoTalla', 'ProductoTalla__producto')
+                        .order_by('id')
+                    )
+                    for tp in productos_ticket:
+                        if tp.ProductoTalla is None or not tp.stock or tp.despachado_por_guia:
+                            continue
+                        fila = vendidas_por_talla.setdefault(tp.ProductoTalla_id, {
+                            'unidades': 0,
+                            'costo': (tp.ProductoTalla.producto.costo
+                                      if tp.ProductoTalla.producto else 0),
+                            'precio': int(tp.precio or 0),
+                        })
+                        fila['unidades'] += int(tp.stock)
+
+                    for talla_id, fila in vendidas_por_talla.items():
+                        reingreso.reingresar(
+                            talla_id,
+                            reingreso.pendientes(talla_id, fila['unidades']),
+                            'DEVOLUCION_CLIENTE', responsable,
+                            ticket_movimiento=ticket_vinculado,
+                            sucursal_destino=ticket_vinculado.sucursal,
+                            costo_unitario=fila['costo'],
+                            precio_unitario=fila['precio'],
+                            observaciones=obs_base,
+                            referencia_externa=referencia,
+                        )
+                    for r in reingreso.resumen['reingresos']:
+                        movimientos_creados += 1
+                        stock_devuelto.append({'sku': r['sku'] or '', 'cantidad': r['cantidad']})
+                    avisos_stock = reingreso.avisos()
 
                 # Anular ticket: lo saca de la cuadratura
                 # (Ticket queries filtran por estado='PAGADO').
@@ -7734,40 +7848,35 @@ def eliminar_documento_venta(request):
                         ticket_vinculado, 'eliminación de documento desde cuadratura')
             else:
                 # Caso 2: DTE sin ticket vinculado (factura emitida directa,
-                # NC, etc.). Devolvemos por Dte_Productos.
+                # NC, etc.). Devolvemos por Dte_Productos: `dp.stock` ya
+                # descuenta lo que devolvieron las NC por línea. Con lote FIFO.
+                from .services.reingreso_devolucion import ReingresoVenta
+                reingreso = ReingresoVenta(dte)
                 productos_dte = (
                     Dte_Productos.objects
                     .filter(dte=dte)
                     .select_related('productoTalla', 'productoTalla__producto')
+                    .order_by('id')
                 )
                 for dp in productos_dte:
-                    pt = dp.productoTalla
-                    if pt is None or not dp.stock:
+                    if dp.productoTalla_id is None or not dp.stock:
                         # Líneas manuales / sin SKU: nada que devolver.
                         continue
-                    pt.stock = (pt.stock or 0) + int(dp.stock)
-                    pt.save(update_fields=['stock'])
-
-                    Movimientos_Producto.objects.create(
-                        dte=dte,
-                        ProductoTalla=pt,
+                    reingreso.reingresar(
+                        dp.productoTalla_id, int(dp.stock),
+                        'DEVOLUCION_CLIENTE', responsable,
+                        dte_movimiento=dte,
                         sucursal_destino=dte.sucursal,
-                        cantidad=int(dp.stock),
-                        costo=int(dp.costo or 0),
-                        sobreprecio=int(dp.sobreprecio or 0),
-                        precio=int(dp.precio or 0),
-                        concepto='DEVOLUCION_CLIENTE',
-                        tipo_movimiento='INGRESO',
-                        estado='COMPLETADO',
-                        responsable=responsable,
+                        costo_unitario=int(dp.costo or 0),
+                        sobreprecio_unitario=int(dp.sobreprecio or 0),
+                        precio_unitario=int(dp.precio or 0),
                         observaciones=obs_base,
                         referencia_externa=referencia,
                     )
+                for r in reingreso.resumen['reingresos']:
                     movimientos_creados += 1
-                    stock_devuelto.append({
-                        'sku': getattr(pt, 'sku', '') or '',
-                        'cantidad': int(dp.stock),
-                    })
+                    stock_devuelto.append({'sku': r['sku'] or '', 'cantidad': r['cantidad']})
+                avisos_stock = reingreso.avisos()
 
             # Soft delete del DTE: lo saca del listado y de la cuadratura.
             # `estado_dte='ANULADO'` reforzaría el filtro existente en otros
@@ -7825,6 +7934,10 @@ def eliminar_documento_venta(request):
                 f' Cotización(es) {", ".join(cotizaciones_afectadas)} quedaron sin '
                 f'documento: reabrirlas para poder facturar de nuevo.'
             )
+        if stock_omitido_motivo:
+            mensaje += f' Sin devolución de stock: {stock_omitido_motivo}.'
+        if avisos_stock:
+            mensaje += ' ' + ' '.join(avisos_stock)
 
         return JsonResponse({
             'success': True,
@@ -7838,6 +7951,7 @@ def eliminar_documento_venta(request):
             'ticket_id': ticket_vinculado.id if ticket_vinculado else None,
             'movimientos_creados': movimientos_creados,
             'stock_devuelto': stock_devuelto,
+            'avisos_stock': avisos_stock,
             'cotizaciones_afectadas': cotizaciones_afectadas,
             'requiere_reapertura_cotizacion': bool(cotizaciones_afectadas),
             'arqueos_resincronizados': arqueos_resincronizados,
@@ -9881,6 +9995,7 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
     # salen NETOS de su NC (ver las restas de más abajo).
     cuadratura_data['total_transferencia_bruta'] = cuadratura_data['total_transferencia']
     cuadratura_data['total_credito_externo_bruto'] = cuadratura_data['total_credito_externo']
+    cuadratura_data['total_mercadopago_pos_bruto'] = cuadratura_data['total_mercadopago_pos']
 
     # NC en efectivo resta del efectivo teórico de caja
     cuadratura_data['total_efectivo'] -= cuadratura_data['total_nc_efectivo']
@@ -9923,6 +10038,110 @@ def _calcular_cuadratura_data(sucursal, fecha_str):
     )
 
     return cuadratura_data
+
+
+_ABREV_TIPO_DTE_NC = {
+    'BOLETA ELECTRONICA': 'BOL.E',
+    'BOLETA PAPEL': 'BOL.P',
+    'FACTURA ELECTRONICA': 'FAC',
+    'FACTURA EXENTA': 'FAC.EX',
+    'NOTA DE CREDITO': 'NC',
+    'NOTA DE DEBITO': 'ND',
+}
+
+
+def _detalle_notas_credito_dia(sucursal, fecha_obj):
+    """NC que el Resumen de Caja cuenta ese día, una por fila (pantalla y térmica).
+
+    Solo lectura y SOLO para mostrar: no cambia ningún total. Usa el mismo
+    criterio que `_calcular_cuadratura_data`: ANULACION por `fecha_emision`,
+    DEVOLUCION por fecha de efecto (`fecha_pago` del reembolso, o
+    `fecha_emision` si no tiene).
+
+    Existe porque una NC de ANULACION vale $0 en el cuadre (es informativa):
+    la fila "NOTAS CRÉDITO" quedaba en $0, el Resumen la escondía con el resto
+    de las filas en cero y la térmica no la imprimía. La NC "desaparecía".
+
+    `ticket_sigue_sumando`: correlativo del ticket PAGADO de ESTE día cuyo
+    documento la NC anula entero. Como la ANULACION no resta, esa venta sigue
+    dentro del VENTA TOTAL; si además se re-emitió (boleta → factura con los
+    mismos pagos, caso NICK2 22-09-2026) el cuadre la cuenta dos veces.
+    """
+    from django.db.models import Q
+
+    ncs = (
+        Dte.objects.filter(
+            sucursal=sucursal,
+            tipo_documento='NOTA DE CREDITO',
+            tipo_transaccion__in=['DEVOLUCION', 'ANULACION'],
+            estado_dte__in=['EMITIDO', 'ACEPTADO'],
+            descartado=False,
+        )
+        .filter(
+            Q(tipo_transaccion='ANULACION', fecha_emision=fecha_obj)
+            | Q(tipo_transaccion='DEVOLUCION', dte_asociado__fecha_pago=fecha_obj)
+            | Q(tipo_transaccion='DEVOLUCION', dte_asociado__fecha_pago__isnull=True,
+                fecha_emision=fecha_obj)
+        )
+        .distinct()
+        .select_related('documento_afectado')
+        .prefetch_related('dte_asociado')
+        .order_by('hora', 'id')
+    )
+
+    tickets_pagados_dia = dict(
+        Ticket.objects.filter(
+            sucursal=sucursal, fecha=fecha_obj, estado='PAGADO', folio_dte__isnull=False,
+        ).values_list('folio_dte', 'correlativo')
+    )
+
+    filas = []
+    for nc in ncs:
+        pagos_nc = list(nc.dte_asociado.all())
+        metodos = [(p.metodo_pago or '').upper() for p in pagos_nc]
+        resta_de = None
+        if nc.tipo_transaccion == 'DEVOLUCION':
+            fecha_efecto = next(
+                (p.fecha_pago for p in pagos_nc if p.fecha_pago), None
+            ) or nc.fecha_emision
+            if fecha_efecto != fecha_obj:
+                continue
+            # Misma precedencia que el bloque `ncs_devolucion` del cuadre.
+            if 'EFECTIVO' in metodos:
+                resta_de = 'EFECTIVO'
+            elif 'TRANSFERENCIA' in metodos:
+                resta_de = 'TRANSFERENCIA'
+            elif any(m.startswith('MP_') for m in metodos):
+                resta_de = 'MERCADO PAGO'
+            elif any(m in _METODOS_PAGO_CREDITO_NC for m in metodos):
+                resta_de = 'CTA. POR COBRAR'
+
+        doc = nc.documento_afectado
+        doc_txt = None
+        ticket_sigue = None
+        if doc is not None:
+            doc_txt = '%s %s' % (
+                _ABREV_TIPO_DTE_NC.get(doc.tipo_documento, doc.tipo_documento or 'DOC'),
+                doc.numero_documento,
+            )
+            anula_entero = (nc.monto_con_iva or 0) >= (doc.monto_con_iva or 0)
+            if (nc.tipo_transaccion == 'ANULACION' and anula_entero
+                    and doc.sucursal_id == sucursal.id
+                    and doc.tipo_documento in ('BOLETA ELECTRONICA', 'BOLETA PAPEL',
+                                               'FACTURA ELECTRONICA', 'FACTURA EXENTA')):
+                ticket_sigue = tickets_pagados_dia.get(doc.numero_documento)
+
+        filas.append({
+            'id': nc.id,
+            'folio': nc.numero_documento,
+            'tipo': nc.tipo_transaccion,
+            'monto': int(nc.monto_con_iva or 0),
+            'resta_de': resta_de,
+            'doc_afectado': doc_txt,
+            'doc_afectado_fecha': doc.fecha_emision.isoformat() if doc is not None and doc.fecha_emision else None,
+            'ticket_sigue_sumando': ticket_sigue,
+        })
+    return filas
 
 
 # Mapeo campo de ArqueoCaja ← key del dict devuelto por
@@ -10266,6 +10485,17 @@ def generar_cuadratura_caja(request):
                 sucursal.id, fecha_date)
         except Exception:
             logger.exception('generar_cuadratura_caja: no se pudo calcular la alerta MP '
+                             '(sucursal %s, fecha %s)', sucursal_id, fecha_cuadratura)
+
+        # Detalle de NC del día (incluidas las de ANULACION, que valen $0 en el
+        # cuadre y por eso no se veían). Mismo criterio que la alerta MP: si
+        # falla se omite, el Resumen no puede caerse por esto.
+        try:
+            fecha_date = datetime.strptime(fecha_cuadratura, '%Y-%m-%d').date()
+            cuadratura_data['notas_credito_detalle'] = _detalle_notas_credito_dia(
+                sucursal, fecha_date)
+        except Exception:
+            logger.exception('generar_cuadratura_caja: no se pudo armar el detalle de NC '
                              '(sucursal %s, fecha %s)', sucursal_id, fecha_cuadratura)
 
         return JsonResponse({
@@ -16403,6 +16633,24 @@ def probar_conexion_pos(request):
         })
 
 
+def _log_pago_tbk_sin_cierre(ticket, transaccion):
+    """Pago Transbank registrado desde una pantalla técnica sobre un ticket.
+
+    Estas pantallas marcaban el ticket PAGADO sin pasar por el cobro del POS:
+    la venta quedaba cerrada sin descontar stock ni emitir DTE, y el POS
+    rechazaba después cobrarla ("ya fue pagado"). Ahora el pago queda
+    registrado en el ticket y el cierre se hace desde el POS.
+    """
+    if ticket is None:
+        return
+    if ticket.saldo_por_pagar <= 0:
+        logger.warning(
+            "Pago TBK desde pantalla tecnica cubre el ticket=%s (id=%s) transaccion=%s: "
+            "queda PENDIENTE hasta cerrarlo en el POS (stock + DTE)",
+            ticket.correlativo, ticket.id, transaccion.id,
+        )
+
+
 @login_required
 @require_POST
 @csrf_exempt
@@ -16567,10 +16815,12 @@ def iniciar_venta_pos(request):
                 transaccion.detalle_pago = detalle_pago
                 transaccion.save()
                 
-                # Actualizar estado del ticket si está completamente pagado
-                if ticket.saldo_por_pagar <= 0:
-                    ticket.estado = 'PAGADO'
-                    ticket.save()
+                # El ticket NO se marca PAGADO acá: el cierre de la venta
+                # (descuento de stock + DTE) lo hace el cobro del POS
+                # (`registrar_pagos_ticket`). Marcarlo desde esta pantalla
+                # técnica dejaba la venta PAGADA sin rebajar stock y el POS
+                # ya no la dejaba cobrar.
+                _log_pago_tbk_sin_cierre(ticket, transaccion)
             
             return JsonResponse({
                 'success': True,
@@ -16712,10 +16962,10 @@ def guardar_venta_pos(request):
             
             transaccion.detalle_pago = detalle_pago
             transaccion.save()
-            
-            if ticket.saldo_por_pagar <= 0:
-                ticket.estado = 'PAGADO'
-                ticket.save()
+
+            # Sin marcar PAGADO: el cierre lo hace el cobro del POS (ver
+            # _log_pago_tbk_sin_cierre).
+            _log_pago_tbk_sin_cierre(ticket, transaccion)
         
         return JsonResponse({
             'success': True,
@@ -16850,10 +17100,9 @@ def completar_transaccion_pos(request):
             transaccion.detalle_pago = detalle_pago
             transaccion.save()
             
-            # Actualizar estado del ticket si está completamente pagado
-            if transaccion.ticket.saldo_por_pagar <= 0:
-                transaccion.ticket.estado = 'PAGADO'
-                transaccion.ticket.save()
+            # Sin marcar PAGADO: el cierre lo hace el cobro del POS (ver
+            # _log_pago_tbk_sin_cierre).
+            _log_pago_tbk_sin_cierre(transaccion.ticket, transaccion)
         
         return JsonResponse({
             'success': True,
@@ -17878,8 +18127,8 @@ def crear_cambio_devolucion(request):
 
         # Fuera de plazo NO bloquea la creación. La solicitud nace igual, marcada
         # como excepción (`es_fuera_de_plazo` + tipo FUERA_PLAZO), y la firma del
-        # administrador se pide UNA sola vez al aprobarla desde el historial, con
-        # su PIN de autorización.
+        # Administrador o Maestro se pide UNA sola vez al aprobarla desde el
+        # historial, con su código de la barra superior.
         #
         # Antes se exigía acá el código dinámico de la navbar y otro código al
         # aprobar: dos firmas de un solo uso para la misma operación. En la
@@ -18011,7 +18260,19 @@ def crear_cambio_devolucion(request):
             monto_nuevo_total = 0
             monto_original_real = 0  # Recalcular para asegurar consistencia
             productos_procesados = set()  # Para evitar duplicar devoluciones
-            
+
+            # Unidades de cada línea ya tomadas por otros cambios vigentes
+            # (incluye solicitudes aún sin aprobar). Validar solo contra lo
+            # vendido dejaba cambiar dos veces la misma unidad.
+            _ids_lineas_pedidas = [
+                item.get('ticket_producto_id') for item in productos_cambio
+                if item.get('ticket_producto_id')
+            ]
+            _ya_cambiadas = _unidades_ya_cambiadas(
+                _ids_lineas_pedidas, ESTADOS_CAMBIO_VIGENTES, excluir_cambio_id=cambio.id,
+            )
+            _pedidas_por_linea = {}
+
             for item in productos_cambio:
                 # Buscar producto original en el ticket
                 try:
@@ -18032,7 +18293,20 @@ def crear_cambio_devolucion(request):
                 if not es_producto_adicional:
                     if cantidad_cambio <= 0 or cantidad_cambio > ticket_producto.stock:
                         raise ValidationError(f'Cantidad inválida para {ticket_producto.ProductoTalla.producto.articulo}')
-                    
+
+                    _pedidas_por_linea[ticket_producto.id] = (
+                        _pedidas_por_linea.get(ticket_producto.id, 0) + cantidad_cambio
+                    )
+                    _libres = max(0, ticket_producto.stock - _ya_cambiadas.get(ticket_producto.id, 0))
+                    if _pedidas_por_linea[ticket_producto.id] > _libres:
+                        raise ValidationError(
+                            f'{ticket_producto.ProductoTalla.producto.articulo} '
+                            f'(SKU {ticket_producto.ProductoTalla.sku}) ya tiene '
+                            f'{_ya_cambiadas.get(ticket_producto.id, 0)} de '
+                            f'{ticket_producto.stock} unidad(es) en otro cambio: quedan '
+                            f'{_libres} para cambiar.'
+                        )
+
                     # Solo sumar al monto original si no hemos procesado este producto ya
                     producto_key = f"{ticket_producto.id}_{cantidad_cambio}"
                     if producto_key not in productos_procesados:
@@ -18144,11 +18418,11 @@ def crear_cambio_devolucion(request):
             'cambio_id': cambio.id,
             'numero_operacion': cambio.numero_operacion,
             'diferencia_monto': float(cambio.diferencia_monto),
-            # El frontend avisa que la solicitud quedó esperando el PIN de un
-            # administrador en vez de dar por cerrada la operación.
+            # El frontend avisa que la solicitud quedó esperando el código de un
+            # Administrador o Maestro en vez de dar por cerrada la operación.
             'es_fuera_de_plazo': fuera_de_plazo,
             'dias_fuera_de_plazo': dias_fuera,
-            'requiere_pin_admin': fuera_de_plazo,
+            'requiere_codigo_admin': fuera_de_plazo,
         })
         
     except json.JSONDecodeError:
@@ -18157,9 +18431,10 @@ def crear_cambio_devolucion(request):
             'error': 'Datos JSON inválidos'
         })
     except ValidationError as e:
+        # `str(e)` de un ValidationError sale como "['mensaje']".
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': ' '.join(getattr(e, 'messages', None) or [str(e)])
         })
     except Exception as e:
         return JsonResponse({
@@ -19057,10 +19332,6 @@ def ajustar_diferencia_cobro(request):
 
 
 # ========== DESCUENTO SOBRE LA DIFERENCIA DE UN TICKET DE CAMBIO ==========
-# Tope de intentos con PIN incorrecto antes de bloquear al cajero.
-MAX_INTENTOS_PIN_DESCUENTO = 5
-VENTANA_INTENTOS_PIN_MINUTOS = 15
-
 
 def _clp(monto):
     """Formatea pesos chilenos con punto de miles, sin decimales."""
@@ -19072,7 +19343,8 @@ def _clp(monto):
 def aplicar_descuento_diferencia_cambio(request):
     """
     Rebaja la diferencia a cobrar de un ticket de CAMBIO_DEVOLUCION desde el POS,
-    autorizada con el PIN de un administrador (`Usuario.pin_autorizacion`).
+    autorizada con el código de la barra superior de un Administrador o Maestro
+    (un solo uso; reemplaza al PIN fijo de Mi Perfil desde el 25-09-2026).
 
     Es el UNICO descuento admitido en un ticket de cambio. El descuento por linea
     y el global siguen bloqueados a proposito: las lineas ya no son editables (el
@@ -19087,8 +19359,8 @@ def aplicar_descuento_diferencia_cambio(request):
 
     Diferencia con `ajustar_diferencia_cobro`: alli opera un administrador
     logueado desde el modulo de Cambios y Devoluciones; aca opera el cajero en la
-    caja y la autorizacion la aporta el PIN del administrador, sin que este tenga
-    que iniciar sesion en el POS.
+    caja y la autorizacion la aporta el codigo del administrador, sin que este
+    tenga que iniciar sesion en el POS.
     """
     try:
         data = json.loads(request.body or '{}')
@@ -19097,7 +19369,9 @@ def aplicar_descuento_diferencia_cambio(request):
 
     correlativo = data.get('correlativo')
     tipo = str(data.get('tipo') or 'PORCENTAJE').upper()
-    pin = str(data.get('pin') or '').strip()
+    # `pin`: nombre del campo en el JS anterior (una caja con la página abierta
+    # desde antes del cambio sigue funcionando con el código de la barra).
+    codigo = str(data.get('codigo_autorizacion') or data.get('pin') or '').strip()
     motivo = str(data.get('motivo') or '').strip()
 
     if not correlativo:
@@ -19112,13 +19386,6 @@ def aplicar_descuento_diferencia_cambio(request):
         return JsonResponse({
             'success': False,
             'error': 'Debe indicar una justificación (mínimo 5 caracteres) para el descuento'
-        }, status=400)
-
-    if not re.fullmatch(r'\d{6}', pin):
-        return JsonResponse({
-            'success': False,
-            'error': 'El PIN de autorización debe tener 6 dígitos',
-            'error_tipo': 'PIN_FORMATO',
         }, status=400)
 
     try:
@@ -19137,50 +19404,22 @@ def aplicar_descuento_diferencia_cambio(request):
     if not sucursal_id:
         return JsonResponse({'success': False, 'error': 'No hay sucursal activa en la sesión'}, status=400)
 
-    # Anti brute-force del PIN, acotado a esta operación: un código de
-    # autorización fallido en otro flujo no debe bloquear la caja, ni al revés.
-    desde = timezone.now() - timedelta(minutes=VENTANA_INTENTOS_PIN_MINUTOS)
-    intentos_fallidos = RegistroAutorizacion.objects.filter(
-        usuario_solicitante=request.user,
-        tipo_operacion='DESCUENTO_ESPECIAL',
-        exitoso=False,
-        fecha_hora__gte=desde,
-    ).count()
-    if intentos_fallidos >= MAX_INTENTOS_PIN_DESCUENTO:
-        return JsonResponse({
-            'success': False,
-            'error': (f'Demasiados intentos con PIN incorrecto. '
-                      f'Intente nuevamente en {VENTANA_INTENTOS_PIN_MINUTOS} minutos.'),
-            'error_tipo': 'PIN_BLOQUEADO',
-        }, status=429)
-
-    admin_autorizador = User.buscar_admin_por_pin(pin)
-    if admin_autorizador is None:
-        RegistroAutorizacion.objects.create(
-            usuario_solicitante=request.user,
+    # Código de un Administrador o Maestro. El freno de fuerza bruta va acotado
+    # a esta operación: un código fallido en otro flujo no bloquea la caja.
+    try:
+        codigo_obj, admin_autorizador = validar_codigo_supervisor(
+            usuario=request.user,
+            codigo=codigo,
             tipo_operacion='DESCUENTO_ESPECIAL',
-            descripcion=(f'PIN incorrecto al intentar descontar la diferencia '
-                         f'del ticket de cambio #{correlativo}'),
-            ip_origen=request.META.get('REMOTE_ADDR'),
-            exitoso=False,
-            sucursal_solicitante_id=sucursal_id,
-            datos_adicionales={
-                'correlativo': correlativo,
-                'tipo': tipo,
-                'motivo': motivo,
-                'intentos_previos': intentos_fallidos,
-            },
+            ip=request.META.get('REMOTE_ADDR'),
+            sucursal=Sucursal.objects.filter(id=sucursal_id).first(),
+            descripcion=f'Descuento a la diferencia del ticket de cambio #{correlativo}',
+            datos={'correlativo': correlativo, 'tipo': tipo, 'motivo': motivo},
         )
-        logger.warning(
-            "PIN de administrador incorrecto para descuento de cambio ticket=%s usuario=%s intentos_previos=%s",
-            correlativo, request.user.username, intentos_fallidos,
-        )
-        return JsonResponse({
-            'success': False,
-            'error': 'PIN de administrador incorrecto, o ese administrador no tiene PIN configurado.',
-            'error_tipo': 'PIN_INVALIDO',
-            'intentos_restantes': max(0, MAX_INTENTOS_PIN_DESCUENTO - intentos_fallidos - 1),
-        }, status=403)
+    except CodigoAutorizacionError as e:
+        respuesta = e.as_json()
+        respuesta['error_tipo'] = e.code
+        return JsonResponse(respuesta, status=e.status)
 
     try:
         with transaction.atomic():
@@ -19259,6 +19498,15 @@ def aplicar_descuento_diferencia_cambio(request):
 
             nuevo_total = total_actual - rebaja
 
+            # Recién acá se quema el código: si el ticket no pasaba las
+            # validaciones de arriba, el administrador no tiene que dar otro.
+            try:
+                codigo_obj = consumir_codigo(codigo_obj)
+            except CodigoAutorizacionError as e:
+                respuesta = e.as_json()
+                respuesta['error_tipo'] = e.code
+                return JsonResponse(respuesta, status=e.status)
+
             # Línea manual negativa: respalda la rebaja para que la suma de
             # líneas siga cuadrando con `ticket.total` al emitir el DTE.
             Ticket_Productos.objects.create(
@@ -19278,7 +19526,7 @@ def aplicar_descuento_diferencia_cambio(request):
 
             nota = (
                 f'[DESCUENTO DIFERENCIA] {_clp(total_actual)} -> {_clp(nuevo_total)} '
-                f'({etiqueta}) por {request.user.username}, autorizado con PIN de '
+                f'({etiqueta}) por {request.user.username}, autorizado con código de '
                 f'{admin_autorizador.username}. Motivo: {motivo}'
             )
             ticket.total = nuevo_total
@@ -19317,7 +19565,7 @@ def aplicar_descuento_diferencia_cambio(request):
                     descripcion=(
                         f'Descuento en caja sobre la diferencia: {_clp(total_actual)} -> '
                         f'{_clp(nuevo_total)} ({etiqueta}) aplicado por {request.user.username} '
-                        f'con PIN de {admin_autorizador.username}. Motivo: {motivo}'
+                        f'con código de {admin_autorizador.username}. Motivo: {motivo}'
                     ),
                     datos_adicionales={
                         'origen': 'POS_DESCUENTO_PIN',
@@ -19339,6 +19587,11 @@ def aplicar_descuento_diferencia_cambio(request):
                     ticket.correlativo,
                 )
 
+            # `codigo_usado` queda NULL a propósito: `registrar_pagos_ticket`
+            # busca DESCUENTO_ESPECIAL + codigo_usado__codigo para subir el tope
+            # del descuento por LÍNEA, y este código (ya quemado) serviría de
+            # autorización reutilizable en ventas posteriores. El código queda
+            # auditado en `datos_adicionales.codigo_autorizacion_id`.
             RegistroAutorizacion.objects.create(
                 usuario_solicitante=request.user,
                 usuario_autorizador=admin_autorizador,
@@ -19360,6 +19613,7 @@ def aplicar_descuento_diferencia_cambio(request):
                     'monto_rebajado': rebaja,
                     'monto_nuevo': nuevo_total,
                     'motivo': motivo,
+                    'codigo_autorizacion_id': codigo_obj.id,
                 },
             )
 
@@ -19396,21 +19650,18 @@ def aprobar_cambio_generar_ticket(request):
         cambio_id = data.get('cambio_id')
         vendedor_id = data.get('vendedor_id')
         observaciones = data.get('observaciones', '')
-        # Dos credenciales posibles, ambas de 6 dígitos:
-        #  - `pin_admin`: PIN de autorización de un ADMINISTRADOR (el de Mi perfil,
-        #    el mismo del descuento a la diferencia en POS). Es la vía para los
-        #    cambios FUERA DE PLAZO: la excepción se firma acá, una sola vez,
-        #    porque crear la solicitud ya no pide nada.
-        #  - `codigo_autorizacion`: código dinámico de un solo uso de la barra
-        #    superior, para los cambios normales (admin o jefe de local).
+        # Única credencial: el código dinámico de un solo uso de la barra
+        # superior. En un cambio normal vale el de un administrador o jefe de
+        # local; en uno FUERA DE PLAZO (la excepción se firma acá, una sola vez,
+        # porque crear la solicitud no pide nada) debe ser de un Administrador o
+        # Maestro. El PIN fijo de Mi Perfil se eliminó el 25-09-2026.
         credencial = str(data.get('codigo_autorizacion') or '').strip()
-        pin_admin = str(data.get('pin_admin') or '').strip()
 
-        if not cambio_id or not vendedor_id or not (credencial or pin_admin):
+        if not cambio_id or not vendedor_id or not credencial:
             return JsonResponse({
                 'success': False,
                 'code': 'AUTH_CODE_REQUIRED',
-                'error': 'ID de cambio, vendedor y credencial de autorización requeridos'
+                'error': 'ID de cambio, vendedor y código de autorización requeridos'
             }, status=400)
 
         # Obtener cambio
@@ -19443,91 +19694,26 @@ def aprobar_cambio_generar_ticket(request):
         autorizacion_previa = _autorizacion_fuera_plazo_previa(cambio)
         requiere_admin = cambio.es_fuera_de_plazo and autorizacion_previa is None
 
-        codigo_obj = None
-        usuario_autorizador = None
         metodo_autorizacion = 'código dinámico de la barra superior'
 
-        if pin_admin:
-            # PIN de administrador: no es de un solo uso, así que necesita su
-            # propio freno de fuerza bruta, acotado a esta operación (mismo
-            # criterio que el descuento a la diferencia en POS).
-            if not re.fullmatch(r'\d{6}', pin_admin):
-                return JsonResponse({
-                    'success': False,
-                    'code': 'PIN_FORMATO',
-                    'error': 'El PIN de administrador debe tener 6 dígitos',
-                }, status=400)
-
-            desde = timezone.now() - timedelta(minutes=VENTANA_INTENTOS_PIN_MINUTOS)
-            intentos_fallidos = RegistroAutorizacion.objects.filter(
-                usuario_solicitante=request.user,
+        # Código de un solo uso: se valida acá (freno de fuerza bruta incluido) y
+        # se quema más abajo, bajo lock, dentro de la transacción del cambio.
+        try:
+            codigo_obj, usuario_autorizador = validar_codigo_supervisor(
+                usuario=request.user,
+                codigo=credencial,
                 tipo_operacion='APROBACION_CAMBIO',
-                exitoso=False,
-                fecha_hora__gte=desde,
-            ).count()
-            if intentos_fallidos >= MAX_INTENTOS_PIN_DESCUENTO:
-                return JsonResponse({
-                    'success': False,
-                    'code': 'PIN_BLOQUEADO',
-                    'error': (f'Demasiados intentos con PIN incorrecto. '
-                              f'Intente nuevamente en {VENTANA_INTENTOS_PIN_MINUTOS} minutos.'),
-                }, status=429)
+                exige_admin=False,  # el rol exigido depende del plazo (abajo)
+                ip=request.META.get('REMOTE_ADDR'),
+                sucursal=cambio.sucursal,
+                cambio=cambio,
+                descripcion=f'Aprobación del cambio {cambio.numero_operacion}',
+                datos={'cambio_id': cambio.id},
+            )
+        except CodigoAutorizacionError as e:
+            return JsonResponse(e.as_json(), status=e.status)
 
-            usuario_autorizador = User.buscar_admin_por_pin(pin_admin)
-            if not _usuario_es_administrador_activo(usuario_autorizador):
-                RegistroAutorizacion.objects.create(
-                    usuario_solicitante=request.user,
-                    usuario_autorizador=usuario_autorizador,
-                    tipo_operacion='APROBACION_CAMBIO',
-                    descripcion=(f'PIN incorrecto al intentar aprobar el cambio '
-                                 f'{cambio.numero_operacion}'),
-                    ip_origen=request.META.get('REMOTE_ADDR'),
-                    exitoso=False,
-                    cambio_devolucion=cambio,
-                    sucursal_solicitante=cambio.sucursal,
-                    datos_adicionales={
-                        'cambio_id': cambio.id,
-                        'intentos_previos': intentos_fallidos,
-                        'motivo': ('PIN sin coincidencia' if usuario_autorizador is None
-                                   else 'El PIN no es de un administrador activo'),
-                    },
-                )
-                logger.warning(
-                    "PIN de administrador rechazado al aprobar cambio=%s usuario=%s intentos_previos=%s",
-                    cambio.id, request.user.username, intentos_fallidos,
-                )
-                return JsonResponse({
-                    'success': False,
-                    'code': 'PIN_INVALIDO',
-                    'error': ('PIN de administrador incorrecto, o ese administrador no '
-                              'tiene PIN configurado en Mi perfil.'),
-                    'intentos_restantes': max(0, MAX_INTENTOS_PIN_DESCUENTO - intentos_fallidos - 1),
-                }, status=403)
-
-            metodo_autorizacion = 'PIN de administrador'
-        else:
-            # Código dinámico de la barra superior (un solo uso).
-            es_valido_codigo, mensaje_codigo, codigo_obj = \
-                CodigoAutorizacionDinamico.validar_codigo(credencial)
-            usuario_autorizador = codigo_obj.generado_por if (es_valido_codigo and codigo_obj) else None
-
-            if not es_valido_codigo or not usuario_autorizador:
-                return JsonResponse({
-                    'success': False,
-                    'code': 'INVALID_AUTH_CODE',
-                    'error': mensaje_codigo or 'Código de autorización inválido',
-                }, status=403)
-
-            if not (usuario_autorizador.is_active and getattr(usuario_autorizador, 'es_activo', True)):
-                codigo_obj = None
-                return JsonResponse({
-                    'success': False,
-                    'code': 'INVALID_AUTH_CODE',
-                    'error': 'El código no pertenece a un usuario activo',
-                }, status=403)
-
-        # Casos especiales (fuera de plazo) → SOLO un ADMINISTRADOR (su PIN, o su
-        # código dinámico para las solicitudes viejas que aún lo usan).
+        # Casos especiales (fuera de plazo) → SOLO un ADMINISTRADOR o MAESTRO.
         # Cambios normales (dentro de plazo) → código de admin o de jefe de local.
         if requiere_admin and not _usuario_es_administrador_activo(usuario_autorizador):
             return JsonResponse({
@@ -19535,7 +19721,7 @@ def aprobar_cambio_generar_ticket(request):
                 'code': 'ADMIN_REQUIRED',
                 'error': (
                     'Este cambio está FUERA DE PLAZO: para aprobarlo se necesita el '
-                    'PIN de autorización de un ADMINISTRADOR.'
+                    'código de la barra superior de un ADMINISTRADOR o MAESTRO.'
                 ),
             }, status=403)
 
@@ -19559,8 +19745,9 @@ def aprobar_cambio_generar_ticket(request):
         es_cross_company = asignacion_autorizador is None
         if es_cross_company:
             # La excepción de plazo sigue amarrada a la empresa: solo un
-            # administrador de la MISMA empresa puede firmarla.
-            if requiere_admin:
+            # administrador de la MISMA empresa puede firmarla. El Maestro no
+            # tiene ese límite (acceso a todo, aunque no esté asignado a ella).
+            if requiere_admin and not es_maestro(usuario_autorizador):
                 return JsonResponse({
                     'success': False,
                     'code': 'CROSS_COMPANY_AUTH',
@@ -19619,6 +19806,7 @@ def aprobar_cambio_generar_ticket(request):
             detalles_bloqueados = list(
                 cambio.detalles.select_for_update().order_by('id')
             )
+            _validar_unidades_libres_cambio(detalles_bloqueados, cambio.id)
             productos_bloqueados = _bloquear_y_validar_inventario_cambio(
                 detalles_bloqueados,
                 cambio.sucursal_id,
@@ -19627,16 +19815,10 @@ def aprobar_cambio_generar_ticket(request):
 
             # Todo código dinámico es de un solo uso: se consume aquí, sea de
             # administrador o de jefe de local.
-            if codigo_obj is not None:
-                codigo_obj = CodigoAutorizacionDinamico.objects.select_for_update().get(id=codigo_obj.id)
-                if not codigo_obj.es_valido():
-                    return JsonResponse({
-                        'success': False,
-                        'code': 'AUTH_CODE_ALREADY_USED',
-                        'error': 'El código fue utilizado o venció antes de ejecutar el cambio',
-                    }, status=409)
-                codigo_obj.usado = True
-                codigo_obj.save(update_fields=['usado'])
+            try:
+                codigo_obj = consumir_codigo(codigo_obj)
+            except CodigoAutorizacionError as e:
+                return JsonResponse(e.as_json(), status=e.status)
 
             _autorizador_nombre = (
                 usuario_autorizador.get_full_name() or usuario_autorizador.username
@@ -21196,7 +21378,7 @@ def dashboard_ventas_mejorado(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('ind_globales_v2', timeout=60)
+@cache_ventas_json('ind_globales_v3', timeout=60, vary_on_session=True)
 def obtener_indicadores_globales_ventas(request):
     """
     API para obtener indicadores globales de ventas
@@ -21294,6 +21476,50 @@ def obtener_indicadores_globales_ventas(request):
         cantidad_cambios = cambios_qs.count()
         ratio_cambios = (cantidad_cambios / cantidad_ventas * 100) if cantidad_ventas > 0 else 0
 
+        # Notas de crédito de VENTA emitidas en el período. Misma regla que los
+        # reportes (`_queryset_ncs_venta`: tipo_transaccion de venta, no
+        # descartadas) y, como en caja, sólo EMITIDO/ACEPTADO (una NC anulada no
+        # resta). Van APARTE de `ventas_totales`: esa base la comparten los otros
+        # 13 endpoints del tablero y el Excel, y restarla sólo acá haría que la
+        # tarjeta no cuadre con evolución, vendedores ni tiendas. La tarjeta
+        # muestra "neto de NC" como sublínea.
+        #
+        # Sólo restan las NC cuya venta afectada está en la MISMA base que la
+        # tarjeta (A2-01): un Ticket PAGADO, que no sea de cambio/devolución,
+        # con ese folio en la sucursal del documento afectado. Quedan fuera las
+        # NC sobre facturas de TRASPASO entre empresas (no son venta a público)
+        # y las de boletas sin ticket (legacy pre-POS / ecommerce): nunca
+        # sumaron a "Ventas Totales", restarlas dejaba el neto subestimado y
+        # hasta negativo (abr-2026 EDEL: −$3,6 MM). El cruce no mira el tipo de
+        # documento: los tickets con folio de boleta guardan tipo_dte='TICKET'.
+        # Con estado ANULADO/PENDIENTE o filtro de método de pago el neteo no
+        # es comparable: se devuelve None (el front muestra «—»).
+        nc_monto, nc_cantidad = None, None
+        if estado in ('', 'PAGADO') and not metodo_pago:
+            from .views_modulo_reportes import _queryset_ncs_venta
+            nc_qs = _scope_suc_emp(
+                _queryset_ncs_venta(fecha_inicio, fecha_fin, estados=('EMITIDO', 'ACEPTADO')),
+                request, sucursal_id,
+            ).exclude(
+                documento_afectado__tipo_transaccion='TRASPASO',
+            ).filter(Exists(
+                Ticket.objects.filter(
+                    folio_dte=OuterRef('documento_afectado__numero_documento'),
+                    sucursal_id=OuterRef('documento_afectado__sucursal_id'),
+                    estado='PAGADO',
+                ).exclude(modulo_origen=MODULO_ORIGEN_NO_VENTA)
+            ))
+            if vendedor_id:
+                # NC sin vendedor propio → vendedor de la venta original (misma
+                # imputación que el reporte de ventas por vendedor).
+                nc_qs = nc_qs.filter(
+                    Q(vendedor_id=vendedor_id)
+                    | Q(vendedor__isnull=True, documento_afectado__vendedor_id=vendedor_id)
+                )
+            nc_agg = nc_qs.aggregate(monto=Sum('monto_con_iva'), cantidad=Count('id'))
+            nc_monto = float(nc_agg['monto'] or 0)
+            nc_cantidad = nc_agg['cantidad'] or 0
+
         # Descuentos aplicados en el periodo
         desc_agg = Ticket_Productos.objects.filter(idTicket__in=queryset).aggregate(
             descuento_total=Sum(
@@ -21357,6 +21583,12 @@ def obtener_indicadores_globales_ventas(request):
             'ventas_totales': float(ventas_totales),
             'cantidad_ventas': cantidad_ventas,
             'ticket_promedio': float(ticket_promedio),
+            # NC de venta del período sobre tickets de la base (aparte, ver
+            # arriba) y venta neta de NC. None = no se calculó (estado distinto
+            # de PAGADO o filtro de método de pago).
+            'nc_monto': nc_monto,
+            'nc_cantidad': nc_cantidad,
+            'ventas_netas': (float(ventas_totales) - nc_monto) if nc_monto is not None else None,
             'cantidad_cambios': cantidad_cambios,
             'ratio_cambios': float(ratio_cambios),
             'crecimiento_ventas': float(crecimiento_ventas),
@@ -21374,16 +21606,17 @@ def obtener_indicadores_globales_ventas(request):
             }
         })
         
-    except Exception as e:
+    except Exception:
+        logger.exception('Error al obtener indicadores globales de ventas')
         return JsonResponse({
             'success': False,
-            'error': f'Error al obtener indicadores globales: {str(e)}'
+            'error': 'Error al obtener indicadores globales'
         }, status=500)
 
 
 @require_GET
 @login_required
-@cache_ventas_json('ventas_vendedor_v2', timeout=60)
+@cache_ventas_json('ventas_vendedor_v2', timeout=60, vary_on_session=True)
 def obtener_ventas_por_vendedor(request):
     """
     API para obtener ventas por vendedor con métricas individuales
@@ -21543,14 +21776,19 @@ def obtener_sucursales_dashboard(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('ventas_sucursal_v2', timeout=60)
+@cache_ventas_json('ventas_sucursal_v3', timeout=60, vary_on_session=True)
 def obtener_ventas_por_sucursal(request):
     """
     API para obtener análisis comparativo de ventas por sucursal.
 
     Misma base de venta que el resto del dashboard (created_at, PAGADO por
     defecto, sin cambios/devoluciones). NO aplica el filtro de sucursal a
-    propósito: esta sección compara tiendas entre sí (igual que mix-por-sucursal).
+    propósito (compara tiendas entre sí), pero sí el ALCANCE del usuario: sólo
+    compara las tiendas que puede ver (`_alcance_sucursales_dashboard`), igual
+    que mix-por-sucursal. Antes un jefe de local leía por URL la venta de todas
+    las tiendas, incluidas las de otras empresas (A2-03). La caché varía por
+    usuario para no servir la respuesta de uno a otro con distinto alcance.
+    Ninguna pantalla lo consume hoy (candidato a retiro, ver pendientes D).
     """
     try:
         # Validar fechas
@@ -21564,6 +21802,9 @@ def obtener_ventas_por_sucursal(request):
 
         queryset = _tickets_venta_periodo(
             request, fecha_inicio, fecha_fin, aplicar_scope=False)
+        alcance = _alcance_sucursales_dashboard(request)
+        if alcance is not None:
+            queryset = queryset.filter(sucursal_id__in=alcance)
 
         # Consultar ventas por sucursal
         ventas_sucursal = queryset.values(
@@ -21593,16 +21834,17 @@ def obtener_ventas_por_sucursal(request):
             'sucursales': sucursales_data
         })
         
-    except Exception as e:
+    except Exception:
+        logger.exception('Error al obtener ventas por sucursal (dashboard)')
         return JsonResponse({
             'success': False,
-            'error': f'Error al obtener ventas por sucursal: {str(e)}'
+            'error': 'Error al obtener ventas por sucursal'
         }, status=500)
 
 
 @require_GET
 @login_required
-@cache_ventas_json('ventas_metodo_pago_v2', timeout=60)
+@cache_ventas_json('ventas_metodo_pago_v2', timeout=60, vary_on_session=True)
 def obtener_ventas_por_metodo_pago(request):
     """
     API para obtener distribución de ventas por método de pago.
@@ -21675,7 +21917,7 @@ def obtener_ventas_por_metodo_pago(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('analisis_cambios_v2', timeout=120)
+@cache_ventas_json('analisis_cambios_v2', timeout=120, vary_on_session=True)
 def obtener_analisis_cambios_devoluciones(request):
     """
     API para obtener análisis de cambios y devoluciones
@@ -22195,7 +22437,7 @@ def exportar_cambios_devoluciones(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('estado_cuadraturas', timeout=120)
+@cache_ventas_json('estado_cuadraturas_v2', timeout=120, vary_on_session=True)
 def obtener_estado_cuadraturas(request):
     """
     API para obtener estado de cuadraturas de caja
@@ -22255,10 +22497,50 @@ def obtener_estado_cuadraturas(request):
             else:
                 con_diferencias += 1
         
-        # Cuadraturas pendientes (días sin cuadratura)
-        dias_periodo = (fecha_fin - fecha_inicio).days + 1
-        pendientes = max(0, dias_periodo - total_cuadraturas)
-        
+        # Cuadraturas pendientes = pares (tienda, día) con venta POS y sin
+        # arqueo, hasta AYER (el arqueo de hoy se hace al cierre). Mismo
+        # criterio por pares que Revisión Arqueos (A2-07). Antes era
+        # "días del período − arqueos de TODAS las tiendas": con 2+ tiendas
+        # siempre daba 0 y con una tienda contaba días sin venta.
+        # Venta: tickets PAGADOS (fijo, sin depender del filtro Estado), sin
+        # cambios/devoluciones ni ecommerce, con el mismo alcance que los
+        # arqueos (_tickets_venta_periodo → _scope_suc_emp).
+        hasta = min(fecha_fin, timezone.localdate() - timedelta(days=1))
+        if hasta >= fecha_inicio:
+            pares_venta = set(
+                _tickets_venta_periodo(
+                    request, fecha_inicio, hasta,
+                    aplicar_estado=False, sucursal_id=sucursal_id,
+                ).filter(estado='PAGADO')
+                .exclude(modulo_origen='ECOMMERCE')
+                # Sin order_by() el Meta.ordering de Ticket (fecha, hora)
+                # entra al SELECT DISTINCT y trae una fila por ticket.
+                .order_by()
+                .annotate(dia=TruncDate('created_at'))
+                .values_list('sucursal_id', 'dia')
+                .distinct()
+            )
+            pares_arqueo = set(
+                queryset.filter(fecha_arqueo__lte=hasta)
+                .values_list('sucursal_id', 'fecha_arqueo')
+            )
+        else:
+            pares_venta, pares_arqueo = set(), set()
+        pares_pendientes = sorted(pares_venta - pares_arqueo,
+                                  key=lambda p: (p[1], p[0] or 0), reverse=True)
+        pendientes = len(pares_pendientes)
+        pendientes_detalle = []
+        if pares_pendientes:
+            alias_suc = dict(Sucursal.objects.filter(
+                id__in={p[0] for p in pares_pendientes[:10]}
+            ).values_list('id', 'alias'))
+            pendientes_detalle = [
+                {'sucursal_id': suc_id,
+                 'sucursal': alias_suc.get(suc_id) or f'Sucursal {suc_id}',
+                 'fecha': dia.strftime('%d/%m/%Y') if dia else ''}
+                for suc_id, dia in pares_pendientes[:10]
+            ]
+
         # Calcular diferencia total y promedio
         diferencia_total = sum(c['diferencia'] for c in cuadraturas_con_datos)
         promedio_diferencia = diferencia_total / len(cuadraturas_con_datos) if cuadraturas_con_datos else 0
@@ -22268,21 +22550,25 @@ def obtener_estado_cuadraturas(request):
             'exitosas': exitosas,
             'con_diferencias': con_diferencias,
             'pendientes': pendientes,
+            # Hasta 10 pares (tienda, día) con venta y sin arqueo, más recientes primero
+            'pendientes_detalle': pendientes_detalle,
+            'pendientes_hasta': hasta.strftime('%d/%m/%Y'),
             'total': total_cuadraturas,
             'diferencia_total': float(diferencia_total),
             'promedio_diferencia': float(promedio_diferencia)
         })
-        
-    except Exception as e:
+
+    except Exception:
+        logger.exception('Error al obtener estado de cuadraturas (dashboard ventas)')
         return JsonResponse({
             'success': False,
-            'error': f'Error al obtener estado de cuadraturas: {str(e)}'
+            'error': 'Error al obtener estado de cuadraturas'
         }, status=500)
 
 
 @require_GET
 @login_required
-@cache_ventas_json('prod_mas_vendidos_v3', timeout=120)
+@cache_ventas_json('prod_mas_vendidos_v3', timeout=120, vary_on_session=True)
 def obtener_productos_mas_vendidos(request):
     """Top de productos vendidos agrupado por MODELO (articulo), enriquecido con
     marca / categoría Padre › Hija / género / especialidad(es).
@@ -22410,25 +22696,59 @@ def _rango_periodo(request):
     return fecha_inicio, fecha_fin
 
 
+def _alcance_sucursales_dashboard(request):
+    """Sucursales que el usuario puede mirar en el dashboard de ventas.
+
+    Devuelve ``None`` cuando ve todo (Maestro / Administrador / Jefe o flag
+    `puede_ver_todas_sucursales`: no se acota nada y el SQL no engorda) y, si
+    no, la lista de ids. Mismo universo que el dropdown de sucursales
+    (`obtener_sucursales_dashboard`) y que el comparativo por tienda:
+    `obtener_sucursales_usuario`. Se memoriza en el request: un endpoint llama
+    a `_scope_suc_emp` hasta 4 veces y cada resolución cuesta 2 consultas.
+    """
+    memo = getattr(request, '_alcance_suc_dashboard', '__sin_resolver__')
+    if memo != '__sin_resolver__':
+        return memo
+    if usuario_puede_ver_todas_sucursales(request.user):
+        memo = None
+    else:
+        memo = list(obtener_sucursales_usuario(request.user).values_list('id', flat=True))
+    request._alcance_suc_dashboard = memo
+    return memo
+
+
 def _scope_suc_emp(qs, request, sucursal_id=None, campo_empresa='sucursal__empresa_id'):
     """Filtra un queryset (con FK a Sucursal) por sucursal específica o, si no hay
     sucursal, por empresa (empresa_id). Así el filtro Empresa del dashboard acota
     todos los endpoints sin romper el filtro de sucursal existente.
 
     · Con sucursal_id  → una tienda (empresa se ignora, la tienda ya la implica).
+      Si el usuario no puede ver esa tienda, queryset vacío.
     · Sin sucursal pero con empresa_id → todas las tiendas de esa empresa.
-    · Sin ninguno → sin filtro (todas las visibles).
+    · Sin ninguno → todas las tiendas VISIBLES del usuario. Antes "visibles" era
+      sólo una intención: no se aplicaba ningún alcance y un jefe de local con
+      una tienda asignada veía (y listaba en el filtro de vendedor) las ventas
+      de toda la cadena. Los endpoints cacheados que pasan por acá deben usar
+      `vary_on_session=True` para que la respuesta de un usuario no se sirva
+      a otro con distinto alcance.
 
     `campo_empresa` permite el caso de líneas (ej. 'idTicket__sucursal__empresa_id'
-    o 'producto__sucursal__empresa_id')."""
+    o 'producto__sucursal__empresa_id'); el campo de sucursal se deriva de él
+    ('sucursal__empresa_id' → 'sucursal_id')."""
+    sufijo = '__empresa_id'
+    campo_suc = (campo_empresa[:-len(sufijo)] if campo_empresa.endswith(sufijo) else 'sucursal') + '_id'
+    alcance = _alcance_sucursales_dashboard(request)
     if sucursal_id is None:
         sucursal_id = request.GET.get('sucursal_id')
     if sucursal_id:
-        # el campo de sucursal directa depende del queryset; asumimos 'sucursal_id'
-        return qs.filter(sucursal_id=sucursal_id)
+        if alcance is not None and str(sucursal_id) not in {str(i) for i in alcance}:
+            return qs.none()
+        return qs.filter(**{campo_suc: sucursal_id})
     empresa_id = request.GET.get('empresa_id')
     if empresa_id:
-        return qs.filter(**{campo_empresa: empresa_id})
+        qs = qs.filter(**{campo_empresa: empresa_id})
+    if alcance is not None:
+        qs = qs.filter(**{campo_suc + '__in': alcance})
     return qs
 
 
@@ -22594,12 +22914,12 @@ def obtener_indicador_compra_categoria(request):
         stock_qs = (Producto_Talla.objects
                     .filter(producto__categoria__padre__isnull=False)
                     .exclude(producto__excluir_de_analitica=True))
-        if sucursal_id:
-            stock_qs = stock_qs.filter(producto__sucursal_id=sucursal_id)
-        else:
-            empresa_id = request.GET.get('empresa_id')
-            if empresa_id:
-                stock_qs = stock_qs.filter(producto__sucursal__empresa_id=empresa_id)
+        # Mismo alcance que las ventas (A2-02): sucursal/empresa del filtro y,
+        # sin filtro, sólo las tiendas visibles del usuario.
+        stock_qs = _scope_suc_emp(
+            stock_qs, request, sucursal_id,
+            campo_empresa='producto__sucursal__empresa_id')
+        if not sucursal_id:
             stock_qs = stock_qs.exclude(producto__sucursal__es_centro_distribucion=True)
         stock_agg = (stock_qs.values(
                          'producto__categoria_id',
@@ -22665,8 +22985,9 @@ def obtener_indicador_compra_categoria(request):
         for x in indicadores:
             x.pop('_orden', None)
         return JsonResponse({'success': True, 'dias': dias, 'indicadores': indicadores})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': f'Error indicador de compra: {str(e)}'}, status=500)
+    except Exception:
+        logger.exception('Error al obtener indicador de compra (dashboard ventas)')
+        return JsonResponse({'success': False, 'error': 'Error al obtener indicador de compra'}, status=500)
 
 
 @require_GET
@@ -22824,7 +23145,7 @@ def obtener_mix_por_sucursal(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('tendencias_ventas_v2', timeout=120)
+@cache_ventas_json('tendencias_ventas_v2', timeout=120, vary_on_session=True)
 def obtener_tendencias_ventas(request):
     """
     API para obtener tendencias de ventas
@@ -22899,7 +23220,7 @@ def obtener_tendencias_ventas(request):
 
 @require_GET
 @login_required
-@cache_ventas_json('ind_avanzados_v2', timeout=120)
+@cache_ventas_json('ind_avanzados_v3', timeout=120, vary_on_session=True)
 def obtener_indicadores_avanzados_ventas(request):
     """
     API para obtener indicadores avanzados de retail con datos reales.
@@ -22985,13 +23306,13 @@ def obtener_indicadores_avanzados_ventas(request):
                 fecha_inicio, fecha_fin, unidades_vendidas,
             )
 
-        stock_filter = {}
-        if sucursal_id:
-            stock_filter['producto__sucursal_id'] = sucursal_id
-        elif request.GET.get('empresa_id'):
-            stock_filter['producto__sucursal__empresa_id'] = request.GET.get('empresa_id')
-        stock_actual = Producto_Talla.objects.filter(
-            stock__gt=0, **stock_filter
+        # Stock del MISMO alcance que las ventas (A2-02): sucursal/empresa del
+        # filtro y, sin filtro, sólo las tiendas visibles del usuario. Antes un
+        # jefe de local veía la venta de su tienda contra el stock de toda la
+        # cadena (sell-through 0,31% en vez de 3,68%).
+        stock_actual = _scope_suc_emp(
+            Producto_Talla.objects.filter(stock__gt=0),
+            request, sucursal_id, campo_empresa='producto__sucursal__empresa_id',
         ).aggregate(
             total_unidades=Sum('stock'),
         )
@@ -23052,17 +23373,17 @@ def obtener_indicadores_avanzados_ventas(request):
             ),
         })
 
-    except Exception as e:
-        logger.error('Error al obtener indicadores avanzados: %s', e)
+    except Exception:
+        logger.exception('Error al obtener indicadores avanzados')
         return JsonResponse({
             'success': False,
-            'error': f'Error al obtener indicadores avanzados: {str(e)}'
+            'error': 'Error al obtener indicadores avanzados'
         }, status=500)
 
 
 @require_GET
 @login_required
-@cache_ventas_json('estado_operacional_v2', timeout=60)
+@cache_ventas_json('estado_operacional_v4', timeout=60, vary_on_session=True)
 def obtener_estado_operacional_ventas(request):
     """
     API para obtener el estado operacional completo del modulo de ventas.
@@ -23129,10 +23450,11 @@ def obtener_estado_operacional_ventas(request):
             fecha_inicio__date__gte=fecha_inicio,
             fecha_inicio__date__lte=fecha_fin
         )
-        if sucursal_id:
-            pos_qs = pos_qs.filter(configuracion_pos__sucursal_id=sucursal_id)
-        elif request.GET.get('empresa_id'):
-            pos_qs = pos_qs.filter(configuracion_pos__sucursal__empresa_id=request.GET.get('empresa_id'))
+        # Mismo alcance que los tickets (A2-02): sin filtro, sólo las tiendas
+        # visibles del usuario (antes el jefe de local veía el POS de la cadena).
+        pos_qs = _scope_suc_emp(
+            pos_qs, request, sucursal_id,
+            campo_empresa='configuracion_pos__sucursal__empresa_id')
 
         pos_por_estado = list(
             pos_qs.values('estado').annotate(
@@ -23191,8 +23513,10 @@ def obtener_estado_operacional_ventas(request):
             fecha_deposito__gte=fecha_inicio,
             fecha_deposito__lte=fecha_fin
         )
-        if sucursal_id:
-            depositos_qs = depositos_qs.filter(arqueo__sucursal_id=sucursal_id)
+        # Alcance del usuario + filtro Empresa, que antes no se aplicaba (A2-02).
+        depositos_qs = _scope_suc_emp(
+            depositos_qs, request, sucursal_id,
+            campo_empresa='arqueo__sucursal__empresa_id')
 
         depositos_verificados = depositos_qs.filter(verificado=True).count()
         depositos_pendientes = depositos_qs.filter(verificado=False).count()
@@ -23203,17 +23527,42 @@ def obtener_estado_operacional_ventas(request):
             depositos_qs.filter(verificado=False).aggregate(t=Sum('monto'))['t'] or 0
         )
 
-        # --- DTEs pendientes ---
-        dtes_pendientes = Dte.objects.filter(
-            estado_dte='EMITIDO',
-            tipo_transaccion='TRASPASO'
-        ).count()
-
-        # --- Regularizaciones pendientes ---
+        # --- DTEs pendientes y regularizaciones pendientes ---
+        # Foto actual (no usan el período), pero con el MISMO alcance que el
+        # resto del panel (A2-02): antes eran conteos de toda la cadena y un
+        # jefe de local veía «N regularizaciones pendientes» de otras tiendas.
+        # Cada caso involucra DOS tiendas y cuenta si CUALQUIERA cae en el
+        # alcance/filtros (misma regla que el home y la Recepción de DTE):
+        #   · Traspaso EMITIDO: origen `Dte.sucursal`; destino en su movimiento
+        #     TRASPASO_SALIDA (la cabecera no guarda la tienda destino).
+        #   · Regularización: tienda solicitante (receptora) o emisora.
+        # Sin alcance ni filtros (Maestro/Administrador en «Todas») el SQL no
+        # cambia: el conteo global de siempre.
         from .models import Solicitud_Regularizacion
-        regularizaciones_pendientes = Solicitud_Regularizacion.objects.filter(
-            estado__in=['PENDIENTE', 'EN_REVISION']
-        ).count()
+        dtes_pend_qs = Dte.objects.filter(estado_dte='EMITIDO', tipo_transaccion='TRASPASO')
+        regs_pend_qs = Solicitud_Regularizacion.objects.filter(
+            estado__in=['PENDIENTE', 'EN_REVISION'])
+        if (sucursal_id or request.GET.get('empresa_id')
+                or _alcance_sucursales_dashboard(request) is not None):
+            dtes_origen = _scope_suc_emp(dtes_pend_qs, request, sucursal_id)
+            movs_destino = _scope_suc_emp(
+                Movimientos_Producto.objects.filter(
+                    concepto='TRASPASO_SALIDA', dte__in=dtes_pend_qs),
+                request, sucursal_id, campo_empresa='sucursal_destino__empresa_id')
+            dtes_pend_qs = dtes_pend_qs.filter(
+                Q(pk__in=dtes_origen.values('pk'))
+                | Q(pk__in=movs_destino.values('dte_id')))
+            regs_solicitante = _scope_suc_emp(
+                regs_pend_qs, request, sucursal_id,
+                campo_empresa='sucursal_solicitante__empresa_id')
+            regs_emisora = _scope_suc_emp(
+                regs_pend_qs, request, sucursal_id,
+                campo_empresa='sucursal_emisora__empresa_id')
+            regs_pend_qs = regs_pend_qs.filter(
+                Q(pk__in=regs_solicitante.values('pk'))
+                | Q(pk__in=regs_emisora.values('pk')))
+        dtes_pendientes = dtes_pend_qs.count()
+        regularizaciones_pendientes = regs_pend_qs.count()
 
         return JsonResponse({
             'success': True,
@@ -23255,10 +23604,11 @@ def obtener_estado_operacional_ventas(request):
             'regularizaciones_pendientes': regularizaciones_pendientes,
         })
 
-    except Exception as e:
+    except Exception:
+        logger.exception('Error al obtener estado operacional de ventas')
         return JsonResponse({
             'success': False,
-            'error': f'Error al obtener estado operacional: {str(e)}'
+            'error': 'Error al obtener estado operacional'
         }, status=500)
 
 

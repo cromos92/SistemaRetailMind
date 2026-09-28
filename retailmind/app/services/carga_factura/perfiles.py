@@ -12,7 +12,7 @@ Para sumar una marca: crear su Perfil y agregarlo a PERFILES (clave = nombre
 canónico de la marca, ver clave_marca()).
 """
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 
 
@@ -58,6 +58,9 @@ class Perfil:
     referencia_guias: dict = field(default_factory=dict)
     # Pistas para leer las facturas de la marca (van al pedido de lectura del PDF).
     pistas_lectura: str = ''
+    # True cuando parte de los valores vienen de lo aprendido en cargas
+    # anteriores (PerfilCargaMarca), no solo del código.
+    aprendido: bool = False
 
 
 # Copiadas de las guías NIKE HOMBRE / MUJER / INFANTIL de la BD (mayo 2026),
@@ -133,5 +136,44 @@ PERFILES = {clave_marca(p.marca): p for p in (NIKE,)}
 
 
 def perfil_para(marca):
-    """Perfil de la marca (por nombre canónico) o DEFECTO si no tiene."""
-    return PERFILES.get(clave_marca(marca), DEFECTO)
+    """Perfil de la marca: el de código (por nombre canónico) o DEFECTO, y
+    encima lo aprendido en cargas anteriores (PerfilCargaMarca, ver
+    web.aprender_de_carga). El JSON de la factura y las opciones de la corrida
+    siguen mandando sobre ambos."""
+    base = PERFILES.get(clave_marca(marca), DEFECTO)
+    cambios = _perfil_aprendido(marca, base)
+    return replace(base, **cambios) if cambios else base
+
+
+def _perfil_aprendido(marca, base):
+    """Campos del perfil que pisa lo guardado en la BD para esta marca ({} si nada)."""
+    clave = clave_marca(marca)
+    if not clave:
+        return {}
+    try:
+        from app.models import PerfilCargaMarca
+        fila = PerfilCargaMarca.objects.filter(marca=clave).first()
+    except Exception:   # sin BD o tabla aún no migrada: se sigue con el perfil de código
+        return {}
+    if fila is None:
+        return {}
+    cambios = {'aprendido': True}
+    if not base.marca:
+        cambios['marca'] = (fila.nombre or str(marca)).strip().upper()
+    if fila.tipo_talla:
+        cambios['tipo_talla'] = fila.tipo_talla.upper()
+    if fila.guias_talla:
+        cambios['guias'] = {str(k).upper(): v for k, v in fila.guias_talla.items() if v}
+    if fila.identidad_color is not None:
+        cambios['identidad_color'] = fila.identidad_color
+    if fila.color_defecto:
+        cambios['color_defecto'] = fila.color_defecto.strip().upper()
+    if fila.umbral_costo:
+        cambios['umbral_costo'] = int(fila.umbral_costo)
+    if fila.factor_bajo:
+        cambios['factor_bajo'] = Decimal(fila.factor_bajo)
+    if fila.factor_alto:
+        cambios['factor_alto'] = Decimal(fila.factor_alto)
+    if fila.pistas_lectura.strip():
+        cambios['pistas_lectura'] = (base.pistas_lectura + '\n' + fila.pistas_lectura.strip()).strip()
+    return cambios

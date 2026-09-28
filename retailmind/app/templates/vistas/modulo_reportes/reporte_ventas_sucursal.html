@@ -39,6 +39,8 @@
             </div>
         </div>
 
+        {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='ventas' activo='sucursal' %}
+
         <!-- Filtros -->
         <div class="row mb-4">
             <div class="col-12">
@@ -155,7 +157,7 @@
                                 </div>
                             </div>
                             <div class="flex-grow-1 ms-3">
-                                <p class="text-uppercase fw-medium text-muted text-truncate fs-6">Total Documentos</p>
+                                <p class="text-uppercase fw-medium text-muted text-truncate fs-6" title="Documentos de venta con vendedor asignado; excluye la fila Sin vendedor">Total Documentos</p>
                                 <h3 class="fs-3 fw-bold mb-0" id="totalDocumentos">
                                     <span class="counter-value">0</span>
                                 </h3>
@@ -176,7 +178,7 @@
                                 </div>
                             </div>
                             <div class="flex-grow-1 ms-3">
-                                <p class="text-uppercase fw-medium text-muted text-truncate fs-6">Ticket Promedio</p>
+                                <p class="text-uppercase fw-medium text-muted text-truncate fs-6" title="Ventas atribuidas a vendedores ÷ documentos con vendedor asignado">Ticket Promedio</p>
                                 <h3 class="fs-3 fw-bold mb-0" id="ticketPromedio">
                                     <span class="counter-value">$0</span>
                                 </h3>
@@ -197,7 +199,7 @@
                                 </div>
                             </div>
                             <div class="flex-grow-1 ms-3">
-                                <p class="text-uppercase fw-medium text-muted text-truncate fs-6">Top Vendedor</p>
+                                <p class="text-uppercase fw-medium text-muted text-truncate fs-6" title="Primer vendedor del ranking; excluye la fila Sin vendedor">Top Vendedor</p>
                                 <h3 class="fs-6 fw-bold mb-0" id="topVendedor">
                                     <span>-</span>
                                 </h3>
@@ -476,7 +478,7 @@
                     <div class="col-md-2">
                         <div class="card border-0 shadow-sm h-100">
                             <div class="card-body py-2 px-3">
-                                <div class="text-uppercase text-muted small">Empresas</div>
+                                <div class="text-uppercase text-muted small" title="Empresas con ventas en el período de comisiones">Empresas</div>
                                 <div class="fs-4 fw-bold text-secondary" id="kpiComCantEmpresas">0</div>
                             </div>
                         </div>
@@ -484,7 +486,7 @@
                     <div class="col-md-2">
                         <div class="card border-0 shadow-sm h-100">
                             <div class="card-body py-2 px-3">
-                                <div class="text-uppercase text-muted small">Vendedores</div>
+                                <div class="text-uppercase text-muted small" title="Vendedores con ventas en el período; excluye la fila Sin vendedor asignado">Vendedores</div>
                                 <div class="fs-4 fw-bold text-primary" id="kpiComCantVendedores">0</div>
                             </div>
                         </div>
@@ -504,7 +506,7 @@
                     <div class="col-md-2">
                         <div class="card border-0 shadow-sm h-100">
                             <div class="card-body py-2 px-3">
-                                <div class="text-uppercase text-muted small">Ventas netas s/IVA</div>
+                                <div class="text-uppercase text-muted small" title="Suma de las ventas netas sin IVA de los subtotales por sucursal">Ventas netas s/IVA</div>
                                 <div class="fs-4 fw-bold text-dark" id="kpiComVentasNetas">$0</div>
                             </div>
                         </div>
@@ -512,7 +514,7 @@
                     <div class="col-md-2">
                         <div class="card border-0 shadow-sm h-100">
                             <div class="card-body py-2 px-3">
-                                <div class="text-uppercase text-muted small">Devoluciones (NC)</div>
+                                <div class="text-uppercase text-muted small" title="Notas de crédito del período imputadas a los vendedores">Devoluciones (NC)</div>
                                 <div class="fs-4 fw-bold text-danger" id="kpiComDevoluciones">$0</div>
                             </div>
                         </div>
@@ -520,7 +522,7 @@
                     <div class="col-md-2">
                         <div class="card border-0 shadow-sm h-100">
                             <div class="card-body py-2 px-3">
-                                <div class="text-uppercase text-muted small">Total Comisiones</div>
+                                <div class="text-uppercase text-muted small" title="Suma de la comisión calculada a cada vendedor">Total Comisiones</div>
                                 <div class="fs-4 fw-bold text-success" id="kpiComTotalComisiones">$0</div>
                             </div>
                         </div>
@@ -601,6 +603,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const sucursalActivaNombre = '{{ sucursal_activa_nombre|default:"" }}';
     const esSuperuser = {{ puede_ver_todas_sucursales|yesno:"true,false" }};
 
+    // Filtros que llegan en la URL (tira de reportes o enlace guardado).
+    // El período se aplica más abajo y la sucursal al llegar sus opciones,
+    // ambos antes de la primera carga de datos.
+    const filtrosUrl = window.FiltrosReporte ? FiltrosReporte.leer() : {};
+
     // Cargar sucursales primero; vendedores y datos se cargan desde dentro de cargarSucursales()
     cargarSucursales();
 
@@ -661,6 +668,32 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // Período de la URL: un día → "Por Fecha", un rango (o un año) → "Por Rango",
+    // un mes → "Por Mes". El change nativo solo muestra/oculta los campos.
+    if (window.FiltrosReporte) {
+        let tipoUrl = null;
+        if (filtrosUrl.fecha_inicio && filtrosUrl.fecha_fin) {
+            if (filtrosUrl.fecha_inicio === filtrosUrl.fecha_fin) {
+                tipoUrl = 'fecha';
+                FiltrosReporte.ponerValor('#filtroFecha', filtrosUrl.fecha_inicio);
+            } else {
+                tipoUrl = 'rango';
+                FiltrosReporte.ponerValor('#filtroFechaInicio', filtrosUrl.fecha_inicio);
+                FiltrosReporte.ponerValor('#filtroFechaFin', filtrosUrl.fecha_fin);
+            }
+        } else if (filtrosUrl.mes) {
+            tipoUrl = 'mes';
+            FiltrosReporte.ponerValor('#filtroMes', filtrosUrl.mes);
+        } else if (filtrosUrl.anio) {
+            tipoUrl = 'rango';
+            FiltrosReporte.ponerValor('#filtroFechaInicio', filtrosUrl.anio + '-01-01');
+            FiltrosReporte.ponerValor('#filtroFechaFin', filtrosUrl.anio + '-12-31');
+        }
+        if (tipoUrl && FiltrosReporte.ponerValor('#tipoFiltroFecha', tipoUrl)) {
+            document.getElementById('tipoFiltroFecha').dispatchEvent(new Event('change'));
+        }
+    }
+
     // Función para cargar sucursales
     function cargarSucursales() {
         fetch('/app/api/reportes/sucursales/')
@@ -704,7 +737,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         console.warn('No hay sucursales disponibles');
                     }
-                    
+
+                    // Sucursal de la URL: solo si está entre las opciones (si no, se ignora)
+                    if (window.FiltrosReporte && filtrosUrl.sucursal_id) {
+                        FiltrosReporte.ponerValor(selectSucursal, filtrosUrl.sucursal_id);
+                    }
+
                     // Cargar vendedores filtrados por sucursal activa, luego cargar datos
                     cargarVendedores();
                     cargarDatos();
@@ -787,6 +825,16 @@ document.addEventListener('DOMContentLoaded', function() {
             const fechaInicio = document.getElementById('filtroFechaInicio').value;
             const fechaFin = document.getElementById('filtroFechaFin').value;
             parametrosFecha = { fecha_inicio: fechaInicio, fecha_fin: fechaFin };
+        }
+
+        // Deja en la URL el período y la sucursal consultados (nombres canónicos;
+        // un día se escribe como rango de un día). El vendedor es propio del reporte.
+        if (window.FiltrosReporte) {
+            const estadoUrl = tipoFiltro === 'mes' ? { mes: parametrosFecha.mes }
+                : tipoFiltro === 'fecha' ? { fecha_inicio: parametrosFecha.fecha, fecha_fin: parametrosFecha.fecha }
+                : { fecha_inicio: parametrosFecha.fecha_inicio, fecha_fin: parametrosFecha.fecha_fin };
+            estadoUrl.sucursal_id = sucursal;
+            FiltrosReporte.reflejar(estadoUrl);
         }
 
         console.log('=== cargarDatos() ===');

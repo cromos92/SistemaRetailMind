@@ -26,6 +26,8 @@
         </div>
     </div>
 
+    {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='ventas' activo='documentos' %}
+
     <!-- ── BARRA DE FILTROS ────────────────────────── -->
     <div class="card border-0 shadow-sm mb-3">
         <div class="card-body py-2 px-3">
@@ -131,32 +133,32 @@
     <div class="kpi-bar mb-3 no-print" id="kpisResumen">
         <div class="kpi-item kpi-brutas">
             <i class="ri-stack-line kpi-ico"></i>
-            <div><div class="kpi-lbl">Ventas Brutas</div><div class="kpi-val" id="kpiBrutas">$0</div></div>
+            <div><div class="kpi-lbl" title="Suma del monto de los documentos de venta listados (ya con descuento aplicado)">Ventas Brutas</div><div class="kpi-val" id="kpiBrutas">$0</div></div>
         </div>
         <div class="kpi-sep"></div>
         <div class="kpi-item kpi-efectivo">
             <i class="ri-money-dollar-circle-line kpi-ico"></i>
-            <div><div class="kpi-lbl">Efectivo</div><div class="kpi-val" id="kpiEfectivo">$0</div></div>
+            <div><div class="kpi-lbl" title="Documentos pagados en efectivo; si el documento no tiene ticket ni detalle de pago se asume efectivo">Efectivo</div><div class="kpi-val" id="kpiEfectivo">$0</div></div>
         </div>
         <div class="kpi-sep"></div>
         <div class="kpi-item kpi-debito">
             <i class="ri-bank-card-line kpi-ico"></i>
-            <div><div class="kpi-lbl">TBK Débito</div><div class="kpi-val" id="kpiDebito">$0</div></div>
+            <div><div class="kpi-lbl" title="Documentos pagados con tarjeta cuyo tipo es débito (o tarjeta sin tipo informado)">TBK Débito</div><div class="kpi-val" id="kpiDebito">$0</div></div>
         </div>
         <div class="kpi-sep"></div>
         <div class="kpi-item kpi-credito">
             <i class="ri-bank-card-2-line kpi-ico"></i>
-            <div><div class="kpi-lbl">TBK Crédito</div><div class="kpi-val" id="kpiCredito">$0</div></div>
+            <div><div class="kpi-lbl" title="Documentos pagados con tarjeta cuyo tipo no es débito">TBK Crédito</div><div class="kpi-val" id="kpiCredito">$0</div></div>
         </div>
         <div class="kpi-sep"></div>
         <div class="kpi-item kpi-otros">
             <i class="ri-more-line kpi-ico"></i>
-            <div><div class="kpi-lbl">Otros</div><div class="kpi-val" id="kpiOtros">$0</div></div>
+            <div><div class="kpi-lbl" title="Tarjeta comercial + convenio + venta internet + transferencia + crédito trabajador + otros medios">Otros</div><div class="kpi-val" id="kpiOtros">$0</div></div>
         </div>
         <div class="kpi-sep"></div>
         <div class="kpi-item kpi-descuento">
             <i class="ri-price-tag-3-line kpi-ico"></i>
-            <div><div class="kpi-lbl">Descuentos</div><div class="kpi-val" id="kpiDescuentos">$0</div></div>
+            <div><div class="kpi-lbl" title="Suma de descuentos registrados en los documentos; informativo, ya vienen aplicados en Ventas Brutas">Descuentos</div><div class="kpi-val" id="kpiDescuentos">$0</div></div>
         </div>
         <div class="kpi-sep"></div>
         <div class="kpi-item kpi-nc" title="Este listado solo trae documentos de venta; las notas de crédito se emiten con otro tipo de transacción y NO entran aquí. Para la venta neta de devoluciones usa Reporte de Ventas o Comparativo.">
@@ -328,6 +330,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const hoy = new Date().toISOString().split('T')[0];
     document.getElementById('filtroFechaDesde').value = hoy;
     document.getElementById('filtroFechaHasta').value = hoy;
+
+    // Filtros de la URL (tira de reportes o enlace guardado), con nombres
+    // canónicos: fecha_inicio/fecha_fin ↔ Desde/Hasta; un mes se toma como su
+    // rango y un año como ene-dic. La sucursal se aplica al llegar sus opciones.
+    const filtrosUrl = window.FiltrosReporte ? FiltrosReporte.leer() : {};
+    if (window.FiltrosReporte) {
+        const c = FiltrosReporte.completar(filtrosUrl);
+        let desde = c.fecha_inicio;
+        let hasta = c.fecha_fin;
+        if (!desde && c.anio) { desde = c.anio + '-01-01'; hasta = c.anio + '-12-31'; }
+        if (desde && hasta) {
+            FiltrosReporte.ponerValor('#filtroFechaDesde', desde);
+            FiltrosReporte.ponerValor('#filtroFechaHasta', hasta);
+        }
+    }
     actualizarLblPeriodo();
 
     cargarSucursales();
@@ -412,6 +429,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             selectSucursal.options[0].selected = true;
                         }
                     }
+                    // Sucursal de la URL: solo si está entre las opciones (si no, se ignora)
+                    if (window.FiltrosReporte && filtrosUrl.sucursal_id) {
+                        FiltrosReporte.ponerValor(selectSucursal, filtrosUrl.sucursal_id);
+                    }
                 }
             })
             .catch(() => console.warn('No se pudieron cargar las sucursales'))
@@ -437,6 +458,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (metodoPago)  url += `metodo_pago=${metodoPago}&`;
         if (sucursalId)  url += `sucursal_id=${sucursalId}&`;
         url += `page=${paginaActualDocs}&per_page=100&`;
+
+        // Deja en la URL el período y la sucursal consultados con nombres
+        // canónicos (fecha_desde → fecha_inicio; "all" = Todas → sin sucursal).
+        if (window.FiltrosReporte) {
+            FiltrosReporte.reflejar({
+                fecha_inicio: fechaDesde,
+                fecha_fin: fechaHasta,
+                sucursal_id: sucursalId === 'all' ? '' : sucursalId
+            });
+        }
 
         setLoading(true);
         actualizarLblPeriodo();

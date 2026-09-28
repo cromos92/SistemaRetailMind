@@ -434,6 +434,24 @@
     .qp-opcion .qp-lista.no-puede { color: var(--nexo-gray-700); }
     .qp-opcion .qp-lista.no-puede li::marker { color: #CC3D3D; }
     .qp-sin-acceso { font-size: 0.8rem; color: var(--nexo-gray-700); }
+    /* Pestaña «Menú que ve»: el menú lateral real, con lo que NO ve atenuado */
+    .qp-tabs .nav-link { font-size: 0.85rem; padding: 6px 12px; border-radius: 999px; }
+    .qp-tabs .nav-link.active { background: var(--nexo-primary); }
+    .qp-menu-nota { font-size: 0.8rem; color: var(--nexo-gray-700); }
+    .qp-menu-resumen { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.8rem; margin: 6px 0 10px; }
+    .qp-menu-resumen b { font-weight: 700; }
+    .qp-menu-lista { list-style: none; margin: 0; padding: 0; }
+    .qp-menu-lista .qp-menu-lista { padding-left: 22px; border-left: 1px dashed var(--nexo-gray-300); margin-left: 9px; }
+    .qp-menu-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px; font-size: 0.85rem; }
+    .qp-menu-item i { width: 18px; text-align: center; color: var(--nexo-primary); }
+    .qp-menu-lista.nivel-0 > li > .qp-menu-item { font-weight: 600; }
+    .qp-menu-item .qp-menu-n { margin-left: auto; font-size: 0.72rem; color: var(--nexo-gray-700); }
+    li.qp-oculto > .qp-menu-item { color: var(--nexo-gray-700); text-decoration: line-through; opacity: .6; }
+    li.qp-oculto > .qp-menu-item i { color: var(--nexo-gray-700); }
+    li.qp-oculto > .qp-menu-item::after { content: 'no lo ve'; margin-left: auto; font-size: 0.7rem; text-decoration: none; background: var(--nexo-gray-100); border-radius: 999px; padding: 1px 8px; }
+    li.qp-oculto > .qp-menu-item .qp-menu-n { display: none; }
+    .qp-menu.sin-ocultos li.qp-oculto { display: none; }
+    .qp-menu-cargando { text-align: center; padding: 30px 0; color: var(--nexo-gray-700); }
     .solo-lectura .permiso-item { cursor: default; }
 
     .empty-state { text-align: center; padding: 48px 16px; color: var(--nexo-gray-500); }
@@ -612,7 +630,7 @@
                         <h5><i class="ri-settings-3-line me-2 text-primary"></i><span id="tituloRol">Selecciona un rol</span></h5>
                         <div class="d-flex flex-wrap gap-2">
                             <button class="btn btn-nexo-success" id="btnGuardarRol" disabled><i class="ri-save-line me-1"></i>Guardar cambios</button>
-                            <button class="btn btn-nexo-outline" id="btnQuePuedeRol" disabled><i class="ri-list-check-2 me-1"></i>¿Qué puede hacer?</button>
+                            <button class="btn btn-nexo-outline" id="btnQuePuedeRol" disabled title="El menú tal como lo ve este rol y qué puede hacer en cada pantalla"><i class="ri-eye-line me-1"></i>Ver como este rol</button>
                             <button class="btn btn-nexo-outline" id="btnCopiarRol" disabled><i class="ri-file-copy-line me-1"></i>Copiar de otro rol</button>
                             <div class="btn-group">
                                 <button type="button" class="btn btn-nexo-outline dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
@@ -787,7 +805,7 @@
                             </div>
                         </div>
                         <div class="col-lg-3 text-lg-end">
-                            <button class="btn btn-nexo-outline" id="btnQuePuedeUsuario" disabled><i class="ri-list-check-2 me-1"></i>¿Qué puede hacer?</button>
+                            <button class="btn btn-nexo-outline" id="btnQuePuedeUsuario" disabled title="El menú tal como lo ve este usuario (en la sucursal simulada) y qué puede hacer en cada pantalla"><i class="ri-eye-line me-1"></i>Ver como este usuario</button>
                             <button class="btn btn-nexo-success" id="btnGuardarUsuario" disabled><i class="ri-save-line me-1"></i>Guardar</button>
                             <button class="btn btn-nexo-outline" id="btnLimpiarUsuario" disabled><i class="ri-delete-bin-line me-1"></i>Quitar todos</button>
                         </div>
@@ -867,15 +885,31 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
-                    <span class="small text-muted" id="quePuedeSubtitulo"></span>
-                    <div class="ms-auto d-flex gap-1" data-filtros="quepuede">
-                        <button type="button" class="filtro-chip activo" data-filtro="todo">Todo</button>
-                        <button type="button" class="filtro-chip" data-filtro="puede">Solo lo que puede</button>
-                        <button type="button" class="filtro-chip" data-filtro="nopuede">Solo lo que no puede</button>
+                <ul class="nav nav-pills qp-tabs mb-3" id="quePuedeTabs">
+                    <li class="nav-item"><button type="button" class="nav-link active" data-qp-tab="menu"><i class="ri-menu-2-line me-1"></i>Menú que ve</button></li>
+                    <li class="nav-item"><button type="button" class="nav-link" data-qp-tab="detalle"><i class="ri-list-check-2 me-1"></i>Qué puede hacer en cada pantalla</button></li>
+                </ul>
+                <div id="quePuedeMenu">
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <span class="qp-menu-nota" id="quePuedeMenuNota"></span>
+                        <label class="ms-auto small d-flex align-items-center gap-1 mb-0">
+                            <input type="checkbox" class="form-check-input mt-0" id="chkMenuOcultos" checked> mostrar lo que no ve (tachado)
+                        </label>
                     </div>
+                    <div class="qp-menu-resumen" id="quePuedeMenuResumen"></div>
+                    <div class="qp-menu" id="quePuedeMenuArbol"></div>
                 </div>
-                <div id="quePuedeContenido"></div>
+                <div id="quePuedeDetalle" class="d-none">
+                    <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                        <span class="small text-muted" id="quePuedeSubtitulo"></span>
+                        <div class="ms-auto d-flex gap-1" data-filtros="quepuede">
+                            <button type="button" class="filtro-chip activo" data-filtro="todo">Todo</button>
+                            <button type="button" class="filtro-chip" data-filtro="puede">Solo lo que puede</button>
+                            <button type="button" class="filtro-chip" data-filtro="nopuede">Solo lo que no puede</button>
+                        </div>
+                    </div>
+                    <div id="quePuedeContenido"></div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-nexo-outline" id="btnCopiarQuePuede"><i class="ri-file-copy-line me-1"></i>Copiar como texto</button>
@@ -1340,13 +1374,100 @@
         });
         return { puede, noPuede };
     }
-    function abrirQuePuede(titulo, subtitulo, modulos, flagsDe) {
-        quePuedeDatos = { titulo, modulos, flagsDe };
+    function abrirQuePuede(titulo, subtitulo, modulos, flagsDe, previa) {
+        quePuedeDatos = { titulo, modulos, flagsDe, previa };
         document.getElementById('quePuedeTitulo').textContent = titulo;
         document.getElementById('quePuedeSubtitulo').textContent = subtitulo;
         document.querySelectorAll('[data-filtros="quepuede"] .filtro-chip').forEach(c => c.classList.toggle('activo', c.dataset.filtro === 'todo'));
         pintarQuePuede('todo');
+        mostrarTabQuePuede('menu');
+        cargarMenuPrevia();
         bootstrap.Modal.getOrCreateInstance(document.getElementById('modalQuePuede')).show();
+    }
+
+    // ---- Pestaña «Menú que ve»: el menú lateral REAL renderizado para ese rol/usuario,
+    // ---- comparado con el del Maestro (lo que falta se muestra tachado).
+    let menuMaestro = null;   // árbol del Maestro: se pide una sola vez por página
+
+    function mostrarTabQuePuede(tab) {
+        document.querySelectorAll('#quePuedeTabs [data-qp-tab]').forEach(b => b.classList.toggle('active', b.dataset.qpTab === tab));
+        document.getElementById('quePuedeMenu').classList.toggle('d-none', tab !== 'menu');
+        document.getElementById('quePuedeDetalle').classList.toggle('d-none', tab !== 'detalle');
+    }
+    document.getElementById('quePuedeTabs').addEventListener('click', e => {
+        const b = e.target.closest('[data-qp-tab]');
+        if (b) mostrarTabQuePuede(b.dataset.qpTab);
+    });
+    document.getElementById('chkMenuOcultos').addEventListener('change', e => {
+        document.getElementById('quePuedeMenuArbol').classList.toggle('sin-ocultos', !e.target.checked);
+    });
+
+    /** <ul id="navbar-nav"> del menú → [{texto, icono, hijos}] (sin badges ni contadores). */
+    function arbolDesdeMenu(ul) {
+        const items = [];
+        if (!ul) return items;
+        ul.querySelectorAll(':scope > li').forEach(li => {
+            const link = li.querySelector(':scope > a');
+            if (!link) return;
+            const copia = link.cloneNode(true);
+            copia.querySelectorAll('.badge, .badge-pill, sup').forEach(x => x.remove());
+            const texto = copia.textContent.replace(/\s+/g, ' ').trim();
+            if (!texto) return;
+            const icono = link.querySelector('i');
+            const sub = li.querySelector(':scope > .menu-dropdown > ul, :scope > div > ul, :scope > ul');
+            items.push({ texto, icono: icono ? icono.className : '', hijos: arbolDesdeMenu(sub) });
+        });
+        return items;
+    }
+
+    async function pedirArbolMenu(params) {
+        const data = await api('/app/permisos/vista-previa-menu/?' + new URLSearchParams(params).toString());
+        const doc = new DOMParser().parseFromString(data.html, 'text/html');
+        return { arbol: arbolDesdeMenu(doc.getElementById('navbar-nav')), etiqueta: data.etiqueta, sucursal: data.sucursal };
+    }
+
+    function contarArbol(items) {
+        return items.reduce((n, it) => n + 1 + contarArbol(it.hijos), 0);
+    }
+
+    /** Pinta el árbol de referencia (Maestro) marcando lo que el perfil NO ve. */
+    function htmlArbolComparado(referencia, visibles, nivel) {
+        const porTexto = new Map(visibles.map(v => [v.texto, v]));
+        return '<ul class="qp-menu-lista nivel-' + nivel + '">' + referencia.map(it => {
+            const v = porTexto.get(it.texto);
+            const hijos = it.hijos.length ? htmlArbolComparado(it.hijos, v ? v.hijos : [], nivel + 1) : '';
+            const nVisibles = v ? contarArbol(v.hijos) : 0;
+            return '<li class="' + (v ? '' : 'qp-oculto') + '"><div class="qp-menu-item">' +
+                '<i class="' + esc(it.icono || 'ri-subtract-line') + '"></i><span>' + esc(it.texto) + '</span>' +
+                (it.hijos.length ? '<span class="qp-menu-n">' + nVisibles + '/' + contarArbol(it.hijos) + '</span>' : '') +
+                '</div>' + hijos + '</li>';
+        }).join('') + '</ul>';
+    }
+
+    async function cargarMenuPrevia() {
+        const cont = document.getElementById('quePuedeMenuArbol');
+        const nota = document.getElementById('quePuedeMenuNota');
+        const resumen = document.getElementById('quePuedeMenuResumen');
+        const previa = quePuedeDatos && quePuedeDatos.previa;
+        resumen.innerHTML = '';
+        if (!previa) { cont.innerHTML = ''; nota.textContent = ''; return; }
+        cont.innerHTML = '<div class="qp-menu-cargando"><span class="spinner-border spinner-border-sm me-2"></span>Armando el menú tal como lo ve…</div>';
+        nota.textContent = 'Es la barra lateral real, con lo que está GUARDADO' +
+            (previa.usuario_id ? (previa.sucursal_id && previa.sucursal_id !== '0' ? ' y la sucursal simulada' : ', sin restricción de sucursal') : ' (por rol, sin permisos individuales ni sucursal)') +
+            '. Si acabas de cambiar casilleros, guarda primero.';
+        try {
+            if (!menuMaestro) menuMaestro = (await pedirArbolMenu({ rol: 'maestro' })).arbol;
+            const { arbol, etiqueta } = await pedirArbolMenu(previa);
+            const total = contarArbol(menuMaestro), ve = contarArbol(arbol);
+            resumen.innerHTML = `<span><b>${ve}</b> de ${total} entradas del menú</span>` +
+                `<span class="text-danger"><b>${total - ve}</b> que no ve</span>` +
+                `<span class="text-muted">Menú de ${esc(etiqueta)}</span>`;
+            cont.innerHTML = htmlArbolComparado(menuMaestro, arbol, 0) ||
+                '<div class="empty-state"><h5>El menú quedaría vacío</h5></div>';
+            cont.classList.toggle('sin-ocultos', !document.getElementById('chkMenuOcultos').checked);
+        } catch (e) {
+            cont.innerHTML = `<div class="aviso-info"><i class="ri-error-warning-line"></i><div>No pude armar el menú: ${esc(e.message)}</div></div>`;
+        }
     }
     function pintarQuePuede(filtro) {
         if (!quePuedeDatos) return;
@@ -1555,10 +1676,11 @@
     });
     document.getElementById('btnQuePuedeRol').addEventListener('click', () => {
         if (!estadoRol.rol) return;
-        abrirQuePuede(`¿Qué puede hacer el rol ${estadoRol.nombre}?`,
+        abrirQuePuede(`Cómo lo ve el rol ${estadoRol.nombre}`,
             'Según los casilleros marcados ahora (incluye cambios sin guardar). No considera restricciones por sucursal.',
             estadoRol.modulos,
-            op => { const row = contRol.querySelector(`.opcion-row[data-opcion-id="${op.id}"]`); return row ? flagsDeFila(row) : {}; });
+            op => { const row = contRol.querySelector(`.opcion-row[data-opcion-id="${op.id}"]`); return row ? flagsDeFila(row) : {}; },
+            { rol: estadoRol.rol });
     });
     contRol.addEventListener('click', e => {
         const btn = e.target.closest('[data-mod-accion]');
@@ -2213,10 +2335,11 @@
         const d = estadoUsr.datos;
         const sel = document.getElementById('sucursalSimulada');
         const textoSuc = sel && sel.value !== '0' ? `en la sucursal ${sel.options[sel.selectedIndex].text}` : 'sin restricciones de sucursal';
-        abrirQuePuede(`¿Qué puede hacer ${d.usuario.nombre}?`,
+        abrirQuePuede(`Cómo lo ve ${d.usuario.nombre}`,
             `Permiso efectivo (rol ${d.usuario.rol_display} + permisos propios) ${textoSuc}. Incluye cambios sin guardar.`,
             d.modulos,
-            op => { const f = {}; TIPOS.forEach(t => { f[t] = efectivoDe(op, t, op.overrides[t], d.usuario.es_maestro)[0]; }); return f; });
+            op => { const f = {}; TIPOS.forEach(t => { f[t] = efectivoDe(op, t, op.overrides[t], d.usuario.es_maestro)[0]; }); return f; },
+            { usuario_id: d.usuario.id, sucursal_id: sel && sel.value !== '0' ? sel.value : '' });
     });
 
     async function guardarUsuario() {

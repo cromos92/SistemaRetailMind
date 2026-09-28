@@ -4,34 +4,7 @@
 {% include 'layout/menu.html' %}
 
 <style>
-    /* ========== NEXO DESIGN SYSTEM - VARIABLES ========== */
-    :root {
-        --nexo-primary: #0066FF;
-        --nexo-primary-dark: #0052CC;
-        --nexo-primary-light: #E6F0FF;
-        --nexo-secondary: #1A1A2E;
-        --nexo-accent: #00D4AA;
-        --nexo-success: #00D4AA;
-        --nexo-warning: #FFB020;
-        --nexo-error: #FF4D4D;
-        --nexo-info: #0066FF;
-        --nexo-gray-900: #1A1A2E;
-        --nexo-gray-700: #4A4A5A;
-        --nexo-gray-500: #8A8A9A;
-        --nexo-gray-300: #D1D1D9;
-        --nexo-gray-100: #F5F5F7;
-        --nexo-white: #FFFFFF;
-        --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
-        --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
-        --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
-        --nexo-shadow-xl: 0 20px 25px rgba(26, 26, 46, 0.15);
-        --nexo-radius-sm: 4px;
-        --nexo-radius-md: 8px;
-        --nexo-radius-lg: 12px;
-        --nexo-radius-xl: 16px;
-        --nexo-transition-fast: 150ms ease;
-        --nexo-transition-normal: 250ms ease;
-    }
+    /* Variables --nexo-*: vienen de nexo-design-system.css (layout/header.html) */
 
     /* ========== RESET & BASE ========== */
     .nexo-page-wrapper {
@@ -785,6 +758,8 @@
             </div>
         </div>
 
+        {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='existencias' activo='existencias' %}
+
         <!-- ========== FILTERS BAR ========== -->
         <div class="nexo-filters-bar">
             <div class="nexo-filter-group">
@@ -950,12 +925,21 @@
         stock_bajo_umbral: 30                                     // Unidades
     };
 
+    // Sucursal que llega en la URL (tira de reportes o enlace guardado). El combo
+    // se llena con la primera respuesta, así que esa consulta la usa directo y
+    // luego se marca en el combo. Solo ids numéricos ('' = Todas).
+    let __urlSucursalPendiente = '';
+
     // ========== INICIALIZACIÓN ==========
     document.addEventListener('DOMContentLoaded', function() {
         actualizarFecha();
         configurarEventos();
         renderizarKPIsPlaceholder();
         renderizarIndicadoresPlaceholder();
+        if (window.FiltrosReporte) {
+            const f = FiltrosReporte.leer();
+            if (/^\d+$/.test(f.sucursal_id || '')) __urlSucursalPendiente = f.sucursal_id;
+        }
         cargarDatos();
     });
 
@@ -1106,20 +1090,24 @@
             // Construir URL con parámetros de filtro y paginación
             const params = new URLSearchParams();
             
-            const sucursalId = document.getElementById('filtro-sucursal').value;
+            // Mientras el combo no tiene opciones, vale la sucursal pendiente de la URL
+            const sucursalId = document.getElementById('filtro-sucursal').value || __urlSucursalPendiente;
             const categoriaId = document.getElementById('filtro-categoria').value;
             const estadoStock = document.getElementById('filtro-stock').value;
             const busqueda = document.getElementById('filtro-busqueda').value.trim();
-            
+
             if (sucursalId) params.append('sucursal_id', sucursalId);
             if (categoriaId) params.append('categoria_id', categoriaId);
             if (estadoStock) params.append('estado_stock', estadoStock);
             if (busqueda) params.append('busqueda', busqueda);
-            
+
             // Parámetros de paginación
             params.append('pagina', paginacion.pagina_actual);
             params.append('por_pagina', paginacion.por_pagina);
-            
+
+            // Estado compartido en la URL ('' = Todas); categoría, stock y búsqueda son propios
+            if (window.FiltrosReporte) FiltrosReporte.reflejar({ sucursal_id: sucursalId });
+
             const url = `/app/api/obtener-existencias/?${params.toString()}`;
             console.log('Cargando datos desde:', url);
             
@@ -1160,7 +1148,18 @@
                 cargarFiltrosSucursales(data.sucursales || []);
                 cargarFiltrosCategorias(data.categorias || []);
             }
-            
+
+            // Sucursal de la URL: marcarla en el combo. Si no está entre las
+            // opciones (sin acceso), se descarta y se consulta de nuevo con "Todas".
+            if (__urlSucursalPendiente) {
+                const pendiente = __urlSucursalPendiente;
+                __urlSucursalPendiente = '';
+                if (!FiltrosReporte.ponerValor('#filtro-sucursal', pendiente)) {
+                    cargarDatos(true);
+                    return;
+                }
+            }
+
             // Como los filtros ya se aplicaron en el servidor, solo procesar datos
             procesarDatos();
             

@@ -1,4 +1,4 @@
-{% load static %}
+{% load static indicadores_tags %}
 
 {% include '../../layout/header.html' %}
 {% include '../../layout/menu.html' %}
@@ -8,11 +8,10 @@
 <div class="container-fluid">
 
 <style>
+    /* El resto de --nexo-* viene de nexo-design-system.css; aquí solo lo que
+       difiere (error y sombra más suaves) o no existe allá (radius). */
     :root {
-        --nexo-primary:#0066FF; --nexo-primary-dark:#0052CC; --nexo-primary-light:#E6F0FF;
-        --nexo-secondary:#1A1A2E; --nexo-accent:#00D4AA; --nexo-warning:#FFB020; --nexo-error:#f06548;
-        --nexo-gray-700:#4A4A5A; --nexo-gray-500:#8A8A9A; --nexo-gray-300:#D1D1D9; --nexo-gray-100:#F5F5F7;
-        --nexo-shadow-md:0 4px 6px rgba(26,26,46,.08); --nexo-radius:12px;
+        --nexo-error:#f06548; --nexo-shadow-md:0 4px 6px rgba(26,26,46,.08); --nexo-radius:12px;
     }
     .pl-wrap { background:var(--nexo-gray-100); min-height:calc(100vh - 70px); padding-bottom:40px; }
     .pl-header { background:var(--nexo-secondary); color:#fff; padding:26px 34px; position:relative; overflow:hidden; border-radius:0 0 18px 18px; }
@@ -81,6 +80,8 @@
         </div>
     </div>
     <div class="pl-body">
+
+        {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='existencias' activo='liquidacion' %}
 
         <!-- Barra de filtros global -->
         <div class="pl-toolbar">
@@ -204,7 +205,17 @@ const CREAR_CAMPANA_API = "{% url 'crear_campana_liquidacion' %}";
 const PL_IMPORT_API = "{% url 'importar_seleccion_liquidacion' %}";
 const PL_PRINT_URL = "{% url 'imprimir_plan_liquidacion' %}";
 
-document.addEventListener('DOMContentLoaded', () => { cargarPlan(); });
+document.addEventListener('DOMContentLoaded', () => {
+    // Filtros de la URL (tira de reportes o enlace guardado). Los combos se llenan
+    // con la primera respuesta, así que esa consulta ya los usa y al llegar las
+    // opciones se marcan (o se descartan si no están). Solo ids numéricos ('' = Todas).
+    if (window.FiltrosReporte) {
+        const f = FiltrosReporte.leer();
+        if (/^\d+$/.test(f.sucursal_id || '')) PL_F.sucursal_id = f.sucursal_id;
+        if (/^\d+$/.test(f.marca_id || '')) PL_F.marca_id = f.marca_id;
+    }
+    cargarPlan();
+});
 
 function qsFiltros(extra) {
     const p = new URLSearchParams();
@@ -216,6 +227,8 @@ function qsFiltros(extra) {
 function cargarPlan() {
     document.getElementById('pl-loading').style.display = 'block';
     const p = qsFiltros(opcionesCargadas ? {} : { con_opciones: '1' });
+    // Estado compartido en la URL ('' = Todas); categoría, especialidad y CD son propios
+    if (window.FiltrosReporte) FiltrosReporte.reflejar({ sucursal_id: PL_F.sucursal_id, marca_id: PL_F.marca_id });
     fetch(PL_API + '?' + p.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(r => r.json())
         .then(res => {
@@ -223,7 +236,22 @@ function cargarPlan() {
             const cont = document.getElementById('pl-results');
             if (!res.success) { cont.innerHTML = '<div class="pl-alert">Error: ' + esc(res.error || '') + '</div>'; cont.style.display = 'block'; return; }
             PL_RES = res.data;
-            if (res.data.opciones && !opcionesCargadas) { poblarFiltros(res.data.opciones); opcionesCargadas = true; }
+            if (res.data.opciones && !opcionesCargadas) {
+                poblarFiltros(res.data.opciones); opcionesCargadas = true;
+                // Filtros que vinieron en la URL: marcarlos en los combos. Si alguno
+                // no está entre las opciones (sin acceso), se descarta y se reconsulta.
+                if (window.FiltrosReporte && (PL_F.sucursal_id || PL_F.marca_id)) {
+                    let descartado = false;
+                    if (PL_F.sucursal_id) {
+                        if (FiltrosReporte.ponerValor('#f-sucursal', PL_F.sucursal_id)) avisoBodegaSeleccionada();
+                        else { PL_F.sucursal_id = ''; descartado = true; }
+                    }
+                    if (PL_F.marca_id && !FiltrosReporte.ponerValor('#f-marca', PL_F.marca_id)) {
+                        PL_F.marca_id = ''; descartado = true;
+                    }
+                    if (descartado) { cargarPlan(); return; }
+                }
+            }
             renderPlan(res.data);
             cont.style.display = 'block';
             document.getElementById('pl-det-wrap').style.display = 'block';
@@ -278,11 +306,11 @@ function renderPlan(d) {
     <div class="pl-kpis" style="${cd ? 'grid-template-columns:repeat(7,1fr);' : ''}">
         <div class="pl-kpi"><div class="lbl">Capital en tiendas</div><div class="val">${moneyM(t.valor_costo)}</div><div class="sub">a costo · ${fmt(t.stock_u)} pares</div></div>
         ${kpiCD}
-        <div class="pl-kpi"><div class="lbl">Capital inmovilizado 180d</div><div class="val red">${moneyM(t.dead_costo)}</div><div class="sub">${t.dead_pct_valor}% del inventario tiendas</div></div>
-        <div class="pl-kpi"><div class="lbl">Pares muertos</div><div class="val red">${fmt(t.dead_u)}</div><div class="sub">sin venta 180 días</div></div>
+        <div class="pl-kpi" title="{% definicion 'dead_stock' 180 %} Aquí: valor a costo de esos SKU-talla en tiendas."><div class="lbl">Capital inmovilizado 180 d (sin venta)</div><div class="val red">${moneyM(t.dead_costo)}</div><div class="sub">${t.dead_pct_valor}% del inventario tiendas a costo</div></div>
+        <div class="pl-kpi" title="{% definicion 'dead_stock' 180 %} Aquí: unidades de esos SKU-talla en tiendas."><div class="lbl">Pares muertos (sin venta 180 d)</div><div class="val red">${fmt(t.dead_u)}</div><div class="sub">sin ninguna venta en 180 días</div></div>
         <div class="pl-kpi"><div class="lbl">Marcas analizadas</div><div class="val">${fmt(t.marcas)}</div><div class="sub">con stock en alcance</div></div>
-        <div class="pl-kpi"><div class="lbl">Marcas a liquidar</div><div class="val red">${fmt(t.n_liquidar)}</div><div class="sub">GMROI &lt;1 + sobre-stock</div></div>
-        <div class="pl-kpi"><div class="lbl">Marcas a reponer</div><div class="val green">${fmt(t.n_reponer)}</div><div class="sub">GMROI ≥3 + cobertura sana</div></div>
+        <div class="pl-kpi" title="Regla: GMROI (365 d) menor que 1 y cobertura TTM mayor que 12 meses. Las marcas sin ventas en 12 meses no entran aquí: se clasifican como Depurar (≥70 % de SKU sin venta en 180 d)."><div class="lbl">Marcas a liquidar</div><div class="val red">${fmt(t.n_liquidar)}</div><div class="sub">GMROI (365 d) &lt;1 + cobertura &gt;12 m</div></div>
+        <div class="pl-kpi" title="Regla: GMROI (365 d) de 3 o más y cobertura TTM menor que 6 meses."><div class="lbl">Marcas a reponer</div><div class="val green">${fmt(t.n_reponer)}</div><div class="sub">GMROI (365 d) ≥3 + cobertura &lt;6 m</div></div>
     </div>
 
     <div class="pl-alert">
@@ -330,10 +358,10 @@ function renderPlan(d) {
                     ${cd ? '<th onclick="sortBy(\'stock_cd\')">Stock CD</th>' : ''}
                     <th onclick="sortBy('valor_costo')">Valor $ costo</th>
                     ${cd ? '<th onclick="sortBy(\'valor_cd\')">Valor $ CD</th>' : ''}
-                    <th onclick="sortBy('gmroi')" title="Calculado con precio de venta y costo de LISTA del kardex, no con lo efectivamente cobrado ni el costo FIFO. Sirve para ordenar/comparar, no como rentabilidad real.">GMROI*</th>
-                    <th onclick="sortBy('rotacion')">Rotación</th>
-                    <th onclick="sortBy('cobertura')" title="Meses de cobertura: stock tiendas ÷ (venta TTM ÷ 12) — se divide por la venta REAL de los últimos 12 meses, no por pronóstico.">Cob. (m)</th>
-                    <th onclick="sortBy('dead_costo')">Inmovil. $</th>
+                    <th onclick="sortBy('gmroi')" title="{% definicion 'gmroi' 365 %} Calculado con precio de venta y costo de LISTA del kardex, no con lo efectivamente cobrado ni el costo FIFO. Sirve para ordenar/comparar, no como rentabilidad real.">GMROI* (365 d)</th>
+                    <th onclick="sortBy('rotacion')" title="{% definicion 'rotacion' 365 %}">Rotación (365 d)</th>
+                    <th onclick="sortBy('cobertura')" title="{% definicion 'cobertura_meses_ttm' 365 %} Se divide por la venta REAL de los últimos 12 meses, no por pronóstico: Inteligencia de Compra divide por el pronóstico y da otra cifra para la misma marca.">Cob. (m · 365 d)</th>
+                    <th onclick="sortBy('dead_costo')" title="{% definicion 'dead_stock' 180 %} Aquí: valor a costo de esos SKU-talla en tiendas.">Inmovil. $ (180 d)</th>
                     <th onclick="sortBy('pct_dead')">% dead</th>
                     <th class="txt" onclick="sortBy('accion')">Acción</th>
                 </tr></thead>

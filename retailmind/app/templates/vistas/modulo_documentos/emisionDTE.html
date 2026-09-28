@@ -5692,7 +5692,12 @@ function generarResumenDespacho() {
     `;
 }
 
-function procesarEmision() {
+// Evita un segundo POST mientras el primero sigue en vuelo (doble clic).
+let _emisionDteEnCurso = false;
+
+function procesarEmision(confirmarDuplicado) {
+    if (_emisionDteEnCurso) return;
+    _emisionDteEnCurso = true;
     showLoading();
     
     const detalleProductos = [];
@@ -5732,7 +5737,11 @@ function procesarEmision() {
         observaciones: observaciones,
         detalle_productos: detalleProductos,
         forma_pago: $('#formaPago').val(),          // 'Contado' o 'Credito'
-        dias_credito: parseInt($('#diasCredito').val()) || 0
+        dias_credito: parseInt($('#diasCredito').val()) || 0,
+        // El servidor rechaza (409) un DTE idéntico emitido hace minutos
+        // (doble clic o reintento tras "Error de conexión"): solo pasa si el
+        // usuario confirma que quiere otro igual.
+        confirmar_duplicado: !!confirmarDuplicado
     };
     
     if (selectedMethod === 'interno') {
@@ -5781,6 +5790,9 @@ function procesarEmision() {
             'X-CSRFToken': getCookie('csrftoken')
         },
         data: JSON.stringify(data),
+        complete: function() {
+            _emisionDteEnCurso = false;
+        },
         success: function(response) {
             hideLoading();
 
@@ -5843,9 +5855,43 @@ function procesarEmision() {
                 });
             }
         },
-        error: function() {
+        error: function(xhr) {
             hideLoading();
-            Swal.fire('Error', 'Error de conexión al emitir DTE', 'error');
+            const r = (xhr && xhr.responseJSON) || {};
+            if (xhr && xhr.status === 409 && r.duplicado) {
+                // Ya existe un DTE idéntico recién emitido: no volver a
+                // emitir (descontaría el stock otra vez) salvo confirmación.
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Este documento ya se emitió',
+                    html: `<p class="mb-2">${r.error || ''}</p>`
+                        + '<p class="small text-muted mb-0">Suele pasar por un doble clic o al reintentar después de un error de conexión.</p>',
+                    showDenyButton: true,
+                    showCancelButton: true,
+                    confirmButtonText: `<i class="bi bi-file-earmark-check me-1"></i>Usar el N° ${r.numero_documento}`,
+                    denyButtonText: '<i class="bi bi-plus-circle me-1"></i>Emitir otro igual',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#28a745',
+                    denyButtonColor: '#dc3545'
+                }).then((res) => {
+                    if (res.isConfirmed) {
+                        if (selectedConcept === 'factura' || selectedConcept === 'guia') {
+                            descargarTXTAcepta(r.dte_id, selectedConcept, r.numero_documento, {
+                                lineasEsperadas,
+                                unidadesEsperadas,
+                                lineasCreadas: r.lineas_creadas,
+                                unidades: r.unidades,
+                            });
+                        } else {
+                            location.reload();
+                        }
+                    } else if (res.isDenied) {
+                        procesarEmision(true);
+                    }
+                });
+                return;
+            }
+            Swal.fire('Error', r.error || 'Error de conexión al emitir DTE', 'error');
         }
     });
 }

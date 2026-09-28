@@ -2538,6 +2538,104 @@ def reembolsar(transaccion, monto=None, usuario=None):
     return devolucion
 
 
+def registrar_devolucion_externa(transaccion, monto, referencia, detalle='', usuario=None):
+    """Deja registrada una devolución hecha FUERA del sistema (en la app, el
+    panel o la máquina Point de Mercado Pago) sobre una venta MP local.
+
+    Mismo efecto contable que `reembolsar` (fila DEVOLUCION vinculada; la venta
+    pasa a DEVUELTA si quedó devuelta entera) pero sin llamar a la API: la
+    plata ya volvió al cliente. Sin esto la venta seguía APROBADA entera, el
+    control del cierre MP la marcaba «sin confirmar» (MP la reporta refunded)
+    y la devolución por API de gestión-DTE la creía todavía devolvible.
+
+    `referencia` debe ser única y estable (la usa como external_reference):
+    registrar dos veces lo mismo devuelve la fila existente.
+    """
+    monto = int(monto)
+    if monto <= 0:
+        raise MercadoPagoError('Monto de devolución inválido.')
+    referencia = str(referencia)[:80]
+    existente = TransaccionMercadoPago.objects.filter(external_reference=referencia).first()
+    if existente is not None:
+        return existente
+    devolucion = TransaccionMercadoPago.objects.create(
+        config=transaccion.config,
+        sucursal_id=transaccion.sucursal_id,
+        ticket=transaccion.ticket,
+        correlativo_ticket=transaccion.correlativo_ticket,
+        tipo='DEVOLUCION',
+        canal=transaccion.canal,
+        transaccion_origen=transaccion,
+        external_reference=referencia,
+        order_id=transaccion.order_id,
+        monto=monto,
+        estado='DEVUELTA',
+        estado_detalle=(detalle or 'Devuelto fuera del sistema')[:120],
+        metodo_pago_mp=transaccion.metodo_pago_mp,
+        consumida=True,
+        usuario=usuario if getattr(usuario, 'is_authenticated', False) else None,
+    )
+    # Consulta fresca (no `transaccion.devoluciones.all()`): si el llamador
+    # hizo prefetch, la caché no incluiría la fila recién creada.
+    total_devuelto = sum(TransaccionMercadoPago.objects.filter(
+        transaccion_origen=transaccion, tipo='DEVOLUCION',
+    ).values_list('monto', flat=True))
+    if transaccion.estado == 'APROBADA' and total_devuelto >= transaccion.monto:
+        _aplicar_estado(transaccion, 'DEVUELTA', detalle='Devolución total (fuera del sistema)')
+    logger.info("MP: devolución externa %s por $%s sobre %s",
+                referencia, monto, transaccion.external_reference)
+    return devolucion
+
+
+def completar_numero_operacion(transaccion, guardar=True, timeout=6):
+    """N° de operación del panel/app de Mercado Pago de un cobro ya registrado.
+
+    El POS guarda el id de la Orders API (ULID `PAY01…`), que el panel de MP no
+    encuentra; el número (`177422093000`) solo llega por el aviso de pagos o por
+    `payments/search`, y en producción casi nunca quedó guardado. Si falta, se
+    busca UNA vez por external_reference y (con `guardar`) se rellenan los
+    campos vacíos, igual que `backfill_payment_id_mp`.
+
+    Nunca lanza: lo usan pantallas de consulta. Sin credenciales, sin red o sin
+    resultado devuelve ''. No cuenta para el circuit breaker de los cobros.
+    """
+    if transaccion.payment_id_mp:
+        return transaccion.payment_id_mp
+    ref = str(transaccion.external_reference or '')
+    if not ref or ref.startswith(('MANUAL-', 'ASOC-')):
+        return ''
+    try:
+        resp = _request(transaccion.config, 'GET', '/v1/payments/search',
+                        params={'external_reference': ref, 'limit': 10},
+                        timeout=timeout, cuenta_breaker=False)
+        data = _json_o_error(resp, f'payments/search {ref}')
+    except Exception as e:  # noqa: BLE001 — consulta de apoyo, nunca bloquea
+        logger.warning("MP: no se pudo buscar el N° de operación de %s: %s", ref, e)
+        return ''
+    for pago in data.get('results') or []:
+        id_mp = str(pago.get('id') or '')
+        if not id_mp.isdigit() or str(pago.get('external_reference') or '') != ref:
+            continue
+        if str(pago.get('status') or '') not in (
+                'approved', 'refunded', 'partially_refunded', 'charged_back'):
+            continue
+        if guardar:
+            campos = {'payment_id_mp': id_mp[:40], 'actualizado_en': timezone.now()}
+            aut = str(pago.get('authorization_code') or '')
+            if aut and not transaccion.codigo_autorizacion:
+                campos['codigo_autorizacion'] = aut[:30]
+            last4 = str((pago.get('card') or {}).get('last_four_digits') or '')
+            if last4 and not transaccion.ultimos_4_digitos:
+                campos['ultimos_4_digitos'] = last4[:4]
+            # Solo si sigue vacío: el aviso de pagos pudo llenarlo entretanto.
+            TransaccionMercadoPago.objects.filter(
+                pk=transaccion.pk, payment_id_mp='').update(**campos)
+            for campo, valor in campos.items():
+                setattr(transaccion, campo, valor)
+        return id_mp
+    return ''
+
+
 def reembolsar_pagos_de_ticket(ticket, usuario=None):
     """Devuelve TODOS los cobros MP aprobados/consumidos de un ticket (para
     anulación de ticket). Devuelve lista de devoluciones; lanza MercadoPagoError

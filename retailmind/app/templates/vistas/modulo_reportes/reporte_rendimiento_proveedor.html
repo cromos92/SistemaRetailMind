@@ -84,6 +84,8 @@
                 </div>
 
                 <div class="card-body">
+                    {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='compras' activo='rendimiento' %}
+
                     <!-- Filtros -->
                     <div class="row g-2 mb-3 align-items-end">
                         <div class="col-auto">
@@ -118,14 +120,14 @@
 
                     <!-- KPIs -->
                     <div class="row g-2 mb-4" id="kpisContainer">
-                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value" id="kpiProveedores">-</div><div class="rp-kpi-label">Proveedores</div></div></div>
-                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value" id="kpiComprados">-</div><div class="rp-kpi-label">Comprados</div></div></div>
-                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value" id="kpiRecepcionados">-</div><div class="rp-kpi-label">Recepcionados</div></div></div>
+                        <div class="col"><div class="rp-kpi-card" title="Proveedores con órdenes de compra en el período"><div class="rp-kpi-value" id="kpiProveedores">-</div><div class="rp-kpi-label">Proveedores</div></div></div>
+                        <div class="col"><div class="rp-kpi-card" title="Suma de unidades de las órdenes de compra del período"><div class="rp-kpi-value" id="kpiComprados">-</div><div class="rp-kpi-label">Comprados</div></div></div>
+                        <div class="col"><div class="rp-kpi-card" title="Unidades recepcionadas en el período de esas compras"><div class="rp-kpi-value" id="kpiRecepcionados">-</div><div class="rp-kpi-label">Recepcionados</div></div></div>
                         <div class="col"><div class="rp-kpi-card rp-estimado" title="Sólo la venta asignada a un proveedor: ver el panel de cobertura de atribucion"><div class="rp-kpi-value" id="kpiVendidos">-</div><div class="rp-kpi-label">Vendidos Publico*</div></div></div>
-                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value text-success" id="kpiPctRecep">-</div><div class="rp-kpi-label">% Recepcion</div></div></div>
+                        <div class="col"><div class="rp-kpi-card" title="Recepcionados ÷ Comprados × 100"><div class="rp-kpi-value text-success" id="kpiPctRecep">-</div><div class="rp-kpi-label">% Recepcion</div></div></div>
                         <div class="col"><div class="rp-kpi-card rp-estimado" title="Sólo la venta asignada a un proveedor: ver el panel de cobertura de atribucion"><div class="rp-kpi-value text-info" id="kpiPctVenta">-</div><div class="rp-kpi-label">% Venta*</div></div></div>
-                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value" id="kpiInversion">-</div><div class="rp-kpi-label">Inversion</div></div></div>
-                        <div class="col"><div class="rp-kpi-card"><div class="rp-kpi-value text-warning" id="kpiNoInv">-</div><div class="rp-kpi-label">Concepto/Sin recep.</div></div></div>
+                        <div class="col"><div class="rp-kpi-card" title="Suma de costo × unidades de las órdenes de compra"><div class="rp-kpi-value" id="kpiInversion">-</div><div class="rp-kpi-label">Inversion</div></div></div>
+                        <div class="col"><div class="rp-kpi-card" title="Monto de compras por concepto o sin detalle inventariable (no entran a unidades)"><div class="rp-kpi-value text-warning" id="kpiNoInv">-</div><div class="rp-kpi-label">Concepto/Sin recep.</div></div></div>
                         <div class="col"><div class="rp-kpi-card rp-estimado" title="Sólo la venta asignada a un proveedor: ver el panel de cobertura de atribucion"><div class="rp-kpi-value text-success" id="kpiMargen">-</div><div class="rp-kpi-label">Margen*</div></div></div>
                     </div>
 
@@ -227,6 +229,13 @@ $(document).ready(function() {
         $('#filtroAnio').append(`<option value="${y}" ${y === anioActual ? 'selected' : ''}>${y}</option>`);
     }
 
+    // Filtros que llegan en la URL (tira de reportes / enlace guardado): un mes
+    // se aplica como rango Desde/Hasta y aporta su año.
+    const urlF = window.FiltrosReporte ? FiltrosReporte.completar(FiltrosReporte.leer()) : {};
+    if (urlF.anio) FiltrosReporte.ponerValor('#filtroAnio', urlF.anio);
+    if (urlF.fecha_inicio) FiltrosReporte.ponerValor('#filtroDesde', urlF.fecha_inicio);
+    if (urlF.fecha_fin) FiltrosReporte.ponerValor('#filtroHasta', urlF.fecha_fin);
+
     // Cargar proveedores
     $.get('/app/empresas_proveedoras/', function(res) {
         const provs = res.empresas || res || [];
@@ -236,7 +245,7 @@ $(document).ready(function() {
     });
 
     // Cargar sucursales
-    $.get('/app/api/sucursales/listar/', function(res) {
+    const listaSucursales = $.get('/app/api/sucursales/listar/', function(res) {
         const sucs = res.sucursales || res || [];
         sucs.forEach(s => {
             $('#filtroSucursal').append(`<option value="${s.id}">${s.alias || s.nombre}</option>`);
@@ -257,8 +266,16 @@ $(document).ready(function() {
         window.location.href = `/app/api/exportar-rendimiento-proveedor-excel/?${params}`;
     });
 
-    // Carga inicial
-    cargarDatos();
+    // Carga inicial. Con sucursal en la URL se espera su lista (llegue o no)
+    // para elegirla y consultar una sola vez.
+    if (urlF.sucursal_id) {
+        listaSucursales.always(function() {
+            FiltrosReporte.ponerValor('#filtroSucursal', urlF.sucursal_id);
+            cargarDatos();
+        });
+    } else {
+        cargarDatos();
+    }
 });
 
 function buildParams() {
@@ -275,6 +292,19 @@ function fmt(n) { return Math.round(n).toLocaleString('es-CL'); }
 function fmtMoney(n) { return '$' + fmt(n); }
 
 function cargarDatos() {
+    // URL: el rango si hay fechas (con su año solo si difiere), si no el año; y la sucursal.
+    if (window.FiltrosReporte) {
+        const anio = $('#filtroAnio').val(), desde = $('#filtroDesde').val(), hasta = $('#filtroHasta').val();
+        const estado = { sucursal_id: $('#filtroSucursal').val() || '' };
+        if (desde || hasta) {
+            estado.fecha_inicio = desde || null;
+            estado.fecha_fin = hasta || null;
+            if (anio !== (desde || hasta).slice(0, 4)) estado.anio = anio;
+        } else {
+            estado.anio = anio;
+        }
+        FiltrosReporte.reflejar(estado);
+    }
     $('#rpLoader').show();
     $('#tbodyRendimiento').html('<tr><td colspan="12" class="text-center py-4"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</td></tr>');
 

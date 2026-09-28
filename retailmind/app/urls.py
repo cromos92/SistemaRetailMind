@@ -476,6 +476,7 @@ from .views_permisos import (
     # Gestión de permisos por rol
     gestion_permisos,
     obtener_permisos_rol,
+    vista_previa_menu,
     guardar_permiso,
     guardar_permisos_masivos,
     copiar_permisos_rol,
@@ -620,8 +621,6 @@ urlpatterns = [
      path('dashboard/api/ventas-tiempo-real/', views_dashboard_home.api_dashboard_ventas_tiempo_real, name='api_dashboard_ventas_tiempo_real'),
      path('dashboard/api/stock-alertas/', views_dashboard_home.api_dashboard_stock_alertas, name='api_dashboard_stock_alertas'),
      
-     # Dashboard antiguo (backup)
-     path('home-legacy/', views.verHome, name='verHomeLegacy'),
      path('ruta_a_check_session/', views_dashboard_home.dashboard_home, name='check_session'),
      path('verResetPassword/', views.ver_resetPassword, name='verResetPassword'),
      path('verResetPasswordSuccess/', views.verResetPasswordSuccess, name='verResetPasswordSuccess'),
@@ -639,10 +638,11 @@ urlpatterns = [
     path('verDashboardCompras/', views_modulo_compras.verDashboardCompras, name='verDashboardCompras'),
     path('verDashboardComprasMejorado/', views_modulo_compras.verDashboardComprasMejorado, name='verDashboardComprasMejorado'),
     path('dashboard_compras_mejorado_api/', views_modulo_compras.dashboard_compras_mejorado_api, name='dashboard_compras_mejorado_api'),
-    path('diagnostico_datos_compras/', views_modulo_compras.diagnostico_datos_compras, name='diagnostico_datos_compras'),
-    path('verDiagnosticoCompras/', views_modulo_compras.verDiagnosticoCompras, name='verDiagnosticoCompras'),
-     path('obtenerDetalleComprasPorParametros/', views.obtenerDetalleComprasPorParametros, name='obtenerDetalleComprasPorParametros'),
-     
+    # Retiradas el 2026-09-26 (auditoría B10-09/B16-07, B1-15/B16-06): la
+    # pantalla huérfana 'verDiagnosticoCompras/' + su API
+    # 'diagnostico_datos_compras/' (spinner eterno, conteos globales) y
+    # 'obtenerDetalleComprasPorParametros/' (devolvía True: 500 siempre).
+
      # === IMPORTACIÓN DE PROVEEDORES Y DTEs ===
      path('importacion-proveedores/', views_modulo_compras.ver_importacion_proveedores, name='ver_importacion_proveedores'),
      path('api/importar-proveedores/', views_modulo_compras.importar_proveedores_csv, name='importar_proveedores_csv'),
@@ -681,7 +681,6 @@ urlpatterns = [
      path('importar_csv_compra/', views.importar_csv_compra, name='importar_csv_compra'),
      path('compra/recepcionar/', views.recepcionar_compra, name='recepcionar_compra'),
      path('verGestionDteCompras/', views.verGestionDteCompras, name='verGestionDteCompras'),
-     path('obtener_dte_compras/', views_modulo_compras.obtener_dte_compras, name='obtener_dte_compras'),
      path('api/resumen-pendientes-anio/', views_modulo_compras.obtener_resumen_pendientes_anio, name='obtener_resumen_pendientes_anio'),
      path('crearDteCompras/', views.crearDteCompras, name='crearDteCompras'),
      path('actualizarDteCompras/<int:dte_id>/', views.actualizarDteCompras, name='actualizarDteCompras'),
@@ -699,12 +698,13 @@ urlpatterns = [
      path('eliminarPago/<int:pago_id>/', views.eliminarPago, name='eliminarPago'),
      path('detallePago/<int:pago_id>/', views.detallePago, name='detallePago'),
      path('editarPago/<int:pago_id>/', views.editarPago, name='editarPago'),
-     path('notasCredito/<int:dte_id>/', views.notasCredito, name='notasCredito'),
-     path('agregarNC/', views.agregarNotaCredito, name='agregarNotaCredito'),
-     path('eliminarNC/<int:nc_id>/', views.eliminarNotaCredito, name='eliminarNotaCredito'),
+     # 'notasCredito/<id>/', 'agregarNC/' y 'eliminarNC/<id>/' ("NC manual como
+     # pago", sin DTE detrás) se retiraron el 2026-09-26 (B16-09): la UI no los
+     # alcanzaba desde nov-2025. Las NC se anexan con 'asociar_nc_existente/'.
      path('obtenerDTE/<int:dte_id>/', views.obtener_dte, name='obtener_dte'),
      path('eliminarDTE/<int:dte_id>/', views.eliminar_dte, name='eliminar_dte'),
-     path('restaurarDTE/<int:dte_id>/', views.restaurar_dte, name='restaurar_dte'),
+     # 'restaurarDTE/<id>/' se retiró el 2026-09-26 (B16-03): sin llamador en la
+     # UI. Des-descartar un documento es una corrección manual de datos.
      
      # Incidencias DTE
      path('incidencias/<int:dte_id>/', views.listar_incidencias, name='listar_incidencias'),
@@ -715,7 +715,7 @@ urlpatterns = [
      # Documentos Base y Notas de Crédito
      path('obtener_documentos_base/', views.obtener_documentos_base, name='obtener_documentos_base'),
      path('obtener_ncs_disponibles/', views.obtener_ncs_disponibles, name='obtener_ncs_disponibles'),
-     path('obtener_facturas_para_nc/', views.obtener_facturas_para_nc, name='obtener_facturas_para_nc'),
+     # 'obtener_facturas_para_nc/' se retiró el 2026-09-26 (B16-06): sin consumidor.
      path('obtener_info_asociacion_nc/<int:nc_id>/', views.obtener_info_asociacion_nc, name='obtener_info_asociacion_nc'),
      path('desasociar_nc/<int:nc_id>/', views.desasociar_nc, name='desasociar_nc'),
      path('asociar_nc_existente/', views.asociar_nc_existente, name='asociar_nc_existente'),
@@ -729,7 +729,8 @@ urlpatterns = [
      path('obtener_facturas_compensar_disponibles/', views_modulo_compras.obtener_facturas_compensar_disponibles, name='obtener_facturas_compensar_disponibles'),
      path('asociar_factura_compensacion/', views_modulo_compras.asociar_factura_compensacion, name='asociar_factura_compensacion'),
      path('desasociar_factura_compensacion/<int:pago_id>/', views_modulo_compras.desasociar_factura_compensacion, name='desasociar_factura_compensacion'),
-     path('obtener_info_compensacion/<int:dte_id>/', views_modulo_compras.obtener_info_compensacion, name='obtener_info_compensacion'),
+     # 'obtener_info_compensacion/<id>/' se retiró el 2026-09-26 (B16-06): sin
+     # consumidor y solo contaba METODO_COMPENSACION (no la variante EMITIDA).
 
      # Compensación con factura EMITIDA a este proveedor (cuando no se puede cargar una NC)
      path('obtener_documentos_emitidos_compensar_disponibles/', views_modulo_compras.obtener_documentos_emitidos_compensar_disponibles, name='obtener_documentos_emitidos_compensar_disponibles'),
@@ -738,22 +739,27 @@ urlpatterns = [
 
      path('procesar_pago_masivo/', views.procesar_pago_masivo, name='procesar_pago_masivo'),
      path('guardar_recepcion/', views.guardar_recepcion, name='guardar_recepcion'),
-     path('actualizar_sucursal_recepciones/', views.actualizar_sucursal_recepciones, name='actualizar_sucursal_recepciones'),
+     # 'actualizar_sucursal_recepciones/' se retiró el 2026-09-26 (pedido F1/SEC):
+     # su único llamador era el modo "sucursal por selección" de
+     # gestionCompras.html, cuyos botones ya no existían.
      path('agregar_producto_manual/', views.agregar_producto_manual_a_compra, name='agregar_producto_manual'),
      path('eliminar_producto_compra/', views.eliminar_producto_compra, name='eliminar_producto_compra'),
-     path('limpiar_productos_compra/', views.limpiar_productos_compra, name='limpiar_productos_compra'),
+     # 'limpiar_productos_compra/' se retiró el 2026-09-26 (B2-07, pedido V1B/SEC):
+     # sin consumidor en la UI.
      # Distribución por guía de tallas / curvas
      path('api/curvas-distribucion/', views.listar_curvas_distribucion, name='listar_curvas_distribucion'),
      path('api/curvas-distribucion/guardar/', views.guardar_curva_distribucion, name='guardar_curva_distribucion'),
-     path('api/curvas-distribucion/eliminar/', views.eliminar_curva_distribucion, name='eliminar_curva_distribucion'),
+     # 'api/curvas-distribucion/eliminar/' y 'productos_recepcionados/' se
+     # retiraron el 2026-09-26 (B16-06, B2-13): sin consumidor; la segunda
+     # respondía 500 siempre.
      path('api/distribuir-tallas-compra-producto/', views.distribuir_tallas_compra_producto, name='distribuir_tallas_compra_producto'),
-     path('productos_recepcionados/', views.productos_recepcionados, name='productos_recepcionados'),
      path('productos_para_crear/', views.obtener_productos_para_crear, name='productos_para_crear'),
      path('detalle_producto_para_crear/<int:producto_id>/', views.detalle_producto_para_crear, name='detalle_producto_para_crear'),
      path('opciones_atributo/', views.opciones_atributo, name='opciones_atributo'),
      path('opcion_atributo_crear/', views.opcion_atributo_crear, name='opcion_atributo_crear'),
      path('guardar_margenes_usuario/', views.guardar_margenes_usuario, name='guardar_margenes_usuario'),
-     path('ajustar_margenes/', views.ajustar_margenes, name='ajustar_margenes'),
+     # 'ajustar_margenes/' (predecesor sin uso de guardar_margenes_usuario) se
+     # retiró el 2026-09-26 (B16-06).
      path('margenes_usuario/', views.margenes_usuario, name='margenes_usuario'),
      path('categorias_existentes/', views.categorias_existentes, name='categorias_existentes'),
      path('categoria_guardar/', views.categoria_guardar, name='categoria_guardar'),
@@ -845,7 +851,11 @@ urlpatterns = [
      path('facturas_pendientes/', views.facturas_pendientes, name='facturas_pendientes'),
      path('reporte_despachos_por_proveedor/', views.reporte_despachos_por_proveedor, name='reporte_despachos_por_proveedor'),
      path('obtener_proveedores_para_reporte/', views.obtener_proveedores_para_reporte, name='obtener_proveedores_para_reporte'),
-     path('verReporteDespachosProveedor/', views.verReporteDespachosProveedor, name='verReporteDespachosProveedor'),
+     # Ingresos por Proveedor vive con el resto de los reportes (sep-2026). El
+     # nombre de URL se conserva (menú, tira de familia); la ruta vieja redirige
+     # con sus filtros para no romper favoritos ni la OpcionMenu ya creada en BD.
+     path('reportes/ingresos-proveedor/', views.verReporteDespachosProveedor, name='verReporteDespachosProveedor'),
+     path('verReporteDespachosProveedor/', RedirectView.as_view(pattern_name='verReporteDespachosProveedor', query_string=True, permanent=False)),
      
      # ========== URLs PARA CREACIÓN MANUAL DE PRODUCTOS ==========
     path('proveedores/', views.obtener_proveedores, name='obtener_proveedores'),
@@ -884,10 +894,10 @@ urlpatterns = [
     path('dashboard_productos/', views.dashboard_productos_mejorado, name='dashboard_productos'),  # Redirige al mejorado
     path('dashboard_productos_mejorado/', views.dashboard_productos_mejorado, name='dashboard_productos_mejorado'),
     path('dashboard_productos_mejorado_api/', views.dashboard_productos_mejorado_api, name='dashboard_productos_mejorado_api'),
-    path('obtener_datos_dashboard_productos/', views.obtener_datos_dashboard_productos, name='obtener_datos_dashboard_productos'),
-    path('filtrar_productos_dashboard/', views.filtrar_productos_dashboard, name='filtrar_productos_dashboard'),
     path('exportar_dashboard_productos/', views.exportar_dashboard_productos, name='exportar_dashboard_productos'),
-    path('exportar_productos_filtrado/', views.exportar_productos_filtrado, name='exportar_productos_filtrado'),
+    # 'exportar_productos_filtrado/' se retiró el 2026-09-26 (A3-05): sin
+    # consumidor (el botón de la tabla usa exportar_dashboard_productos) y
+    # bajaba todo el holding (34 MB) en memoria.
 
     # === URLs PARA GESTIÓN DE VENDEDORES ===
     path('gestion_vendedores/', views.gestion_vendedores, name='gestion_vendedores'),
@@ -914,7 +924,9 @@ urlpatterns = [
     path('dte/obtener_productos_problema/', views.obtener_productos_problema_dte_api, name='obtener_productos_problema_dte_api'),
     path('dte/corregir_recepcion_emisor/', views.corregir_recepcion_emisor_api, name='corregir_recepcion_emisor_api'),
     path('dte/cancelar_traspaso/', views.cancelar_dte_traspaso_api, name='cancelar_dte_traspaso_api'),
-    path('dte/editar_traspaso/', views.editar_dte_traspaso_api, name='editar_dte_traspaso_api'),
+    # 'dte/editar_traspaso/' se retiró (B16-01/B7-08): no tenía llamador y
+    # borraba el kardex del traspaso sin control de rol. La edición legítima
+    # va por dte/ajustar_emitido/ y dte/cambiar_talla/.
     path('dte/reasignar_destino_traspaso/', views.reasignar_destino_traspaso_api, name='reasignar_destino_traspaso_api'),
     path('dte/emitidos_pendientes/', views.emitidos_pendientes_api, name='emitidos_pendientes_api'),
     path('dte/emitidos_recepcionados/', views.emitidos_recepcionados_api, name='emitidos_recepcionados_api'),
@@ -936,8 +948,9 @@ urlpatterns = [
     path('dte/exportar_productos_regularizar_pdf/', views.exportar_productos_regularizar_pdf, name='exportar_productos_regularizar_pdf'),
     path('dte/obtener_solicitudes_recibidas/', views.obtener_solicitudes_recibidas, name='obtener_solicitudes_recibidas'),
     path('dte/documento-regularizacion/<int:recepcion_id>/', views.documento_regularizacion, name='documento_regularizacion'),
-    path('dte/ajuste_interno_individual/', views.procesar_ajuste_interno_individual, name='procesar_ajuste_interno_individual'),
-    path('dte/cambio_producto_individual/', views.procesar_cambio_producto_individual, name='procesar_cambio_producto_individual'),
+    # 'dte/ajuste_interno_individual/' y 'dte/cambio_producto_individual/'
+    # (regularización individual de guías) se retiraron el 2026-09-26
+    # (B8-14 / B10-08): sin llamador vivo y fallaban al 100 % con 500.
     path('dte/obtener_solicitud_producto/<int:producto_id>/', views.obtener_solicitud_producto, name='obtener_solicitud_producto'),
     path('dte/decidir_solicitud/', views.decidir_solicitud_api, name='decidir_solicitud_api'),
     path('dte/buscar_productos_emisor/', views.buscar_productos_emisor, name='buscar_productos_emisor'),
@@ -946,7 +959,8 @@ urlpatterns = [
     path('dte/regularizar_dte_masivo/', views.regularizar_dte_masivo, name='regularizar_dte_masivo'),
     path('dte/anular_regularizacion_dte/', views.anular_regularizacion_dte, name='anular_regularizacion_dte'),
     path('dte/cancelar_regularizacion/', views.cancelar_regularizacion_producto, name='cancelar_regularizacion_producto'),
-    path('dte/obtener_dtes_con_problemas/', views.obtener_dtes_con_problemas, name='obtener_dtes_con_problemas'),
+    # 'dte/obtener_dtes_con_problemas/' se retiró el 2026-09-26 (B8-14 / B16-10):
+    # sin consumidor y sin filtrar por la sucursal que leía.
     path('dte/obtener_detalle_dte_recepcionado/', views.obtener_detalle_dte_recepcionado, name='obtener_detalle_dte_recepcionado'),
     path('dte/<int:dte_id>/audit/', views.dte_audit_api, name='dte_audit_api'),
     path('dte/<int:dte_id>/documentos-vinculados/', views_modulo_compras.dte_documentos_vinculados_api, name='dte_documentos_vinculados_api'),
@@ -1472,6 +1486,7 @@ urlpatterns = [
     path('carga-factura/<int:sesion_id>/planificar/', views_modulo_carga_factura.api_carga_factura_planificar, name='api_carga_factura_planificar'),
     path('carga-factura/<int:sesion_id>/cargar/', views_modulo_carga_factura.api_carga_factura_cargar, name='api_carga_factura_cargar'),
     path('carga-factura/<int:sesion_id>/conversar/', views_modulo_carga_factura.api_carga_factura_conversar, name='api_carga_factura_conversar'),
+    path('carga-factura/<int:sesion_id>/investigar/', views_modulo_carga_factura.api_carga_factura_investigar, name='api_carga_factura_investigar'),
     path('carga-factura/<int:sesion_id>/cerrar/', views_modulo_carga_factura.api_carga_factura_cerrar, name='api_carga_factura_cerrar'),
 
     # ========== DESPACHO A TODAS SUCURSALES ==========
@@ -1744,6 +1759,7 @@ urlpatterns = [
     
     # APIs de permisos por rol
     path('permisos/obtener-permisos-rol/', obtener_permisos_rol, name='obtener_permisos_rol'),
+    path('permisos/vista-previa-menu/', vista_previa_menu, name='vista_previa_menu'),
     path('permisos/guardar-permiso/', guardar_permiso, name='guardar_permiso'),
     path('permisos/guardar-permisos-masivos/', guardar_permisos_masivos, name='guardar_permisos_masivos'),
     path('permisos/copiar-permisos-rol/', copiar_permisos_rol, name='copiar_permisos_rol'),

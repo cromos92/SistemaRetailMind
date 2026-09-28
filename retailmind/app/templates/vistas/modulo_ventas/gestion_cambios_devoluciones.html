@@ -4765,15 +4765,15 @@ function generarBotonesAccion(cambio) {
     let botones = [];
     const acciones = cambio.acciones_permitidas || {};
 
-    // Un cambio fuera de plazo se crea sin pedir nada: la firma del administrador
-    // (su PIN) se pide acá, al aprobarlo. Se avisa en el botón para que el
-    // vendedor sepa que necesita al administrador antes de abrir el modal.
-    const _pidePinAdmin = cambio.es_fuera_de_plazo && !cambio.excepcion_plazo_ya_autorizada;
+    // Un cambio fuera de plazo se crea sin pedir nada: la firma del Administrador
+    // o Maestro (su código de la barra superior) se pide acá, al aprobarlo. Se
+    // avisa en el botón para que el vendedor sepa que lo necesita antes de abrir el modal.
+    const _pideCodigoAdmin = cambio.es_fuera_de_plazo && !cambio.excepcion_plazo_ya_autorizada;
 
     if (cambio.estado === 'SOLICITADO') {
         botones.push(`
-            <button class="btn btn-success btn-sm px-2" onclick='aprobarCambioConDatos(${cambio.id}, "${cambio.tipo_operacion}", ${cambio.monto_original}, ${cambio.monto_nuevo})' title='${_pidePinAdmin ? 'Fuera de plazo: requiere el PIN de un administrador' : 'Aprobar y ejecutar'}'>
-                <i class="ri-check-double-line me-1"></i>Aprobar y Ejecutar${_pidePinAdmin ? ' <i class="ri-shield-keyhole-line"></i>' : ''}
+            <button class="btn btn-success btn-sm px-2" onclick='aprobarCambioConDatos(${cambio.id}, "${cambio.tipo_operacion}", ${cambio.monto_original}, ${cambio.monto_nuevo})' title='${_pideCodigoAdmin ? 'Fuera de plazo: requiere el código de un Administrador o Maestro' : 'Aprobar y ejecutar'}'>
+                <i class="ri-check-double-line me-1"></i>Aprobar y Ejecutar${_pideCodigoAdmin ? ' <i class="ri-shield-keyhole-line"></i>' : ''}
             </button>
         `);
         if (acciones.puede_solicitar_cancelar) {
@@ -5323,8 +5323,8 @@ function buscarDocumentoParaCambio(event) {
                                     <strong>Puede registrar la solicitud igual.</strong>
                                     Quedará marcada como <strong>fuera de plazo</strong> y en estado
                                     <em>Solicitado</em>: no mueve stock ni cobra nada hasta que un
-                                    <strong>Administrador la apruebe con su PIN</strong> desde el
-                                    Historial de Cambios.
+                                    <strong>Administrador o Maestro la apruebe con el código de su barra superior</strong>
+                                    desde el Historial de Cambios.
                                 </div>
                             `,
                             confirmButtonText: 'Continuar y registrar solicitud',
@@ -7316,14 +7316,14 @@ function enviarSolicitudCambio(datos) {
 
             if (response.success) {
                 // Fuera de plazo: la solicitud se crea igual; la firma del
-                // administrador se pide UNA sola vez, al aprobarla (PIN).
-                const _avisoPlazo = response.requiere_pin_admin
+                // Administrador o Maestro se pide UNA sola vez, al aprobarla.
+                const _avisoPlazo = response.requiere_codigo_admin
                     ? `<div class="alert alert-warning py-2 mb-0 text-start small">
                            <i class="ri-shield-keyhole-line me-1"></i>
                            <strong>Fuera de plazo (${response.dias_fuera_de_plazo || 0} día(s)).</strong>
                            Queda en <em>Solicitado</em>: para ejecutarla, un
-                           <strong>Administrador</strong> debe aprobarla con su
-                           <strong>PIN</strong> desde el Historial de Cambios.
+                           <strong>Administrador o Maestro</strong> debe aprobarla con su
+                           <strong>código de la barra superior</strong> desde el Historial de Cambios.
                        </div>`
                     : '';
                 Swal.fire({
@@ -7403,7 +7403,8 @@ function confirmarRecambioCondonado(datos, resp) {
 // NOTA: la creación fuera de plazo ya no pide credencial (antes existía acá
 // `solicitarAutorizacionSupervisor`, que pedía el código dinámico de un
 // administrador). La solicitud se crea igual, marcada fuera de plazo, y la
-// firma del administrador se pide UNA sola vez al aprobarla, con su PIN.
+// firma del Administrador o Maestro se pide UNA sola vez al aprobarla, con el
+// código de su barra superior.
 
 // ========== ACCIONES DE CAMBIOS ==========
 
@@ -7507,7 +7508,7 @@ function mostrarDetalleCambio(data) {
         alertasHtml += `<div class="alert alert-warning py-1 px-2 mb-1" style="font-size:0.78rem;">
             <i class="ri-timer-flash-line me-1"></i> <strong>Fuera de plazo</strong> (${cambio.dias_fuera_de_plazo} días después del límite)
             ${cambio.autorizado_por_usuario ? ` · Autorizado por: <strong>${cambio.autorizado_por_usuario}</strong>` : ''}
-            ${_pendienteAdmin ? ' · <strong>Pendiente</strong>: se aprueba con el <strong>PIN de un administrador</strong>' : ''}
+            ${_pendienteAdmin ? ' · <strong>Pendiente</strong>: se aprueba con el <strong>código de un Administrador o Maestro</strong>' : ''}
         </div>`;
     }
     if (cambio.es_autorizacion_cross_branch) {
@@ -7847,20 +7848,18 @@ function mostrarDetalleCambio(data) {
     $('#modalDetalleCambio').modal('show');
 }
 
-// Ajusta la etiqueta/ayuda del campo de autorización según el tipo de cambio:
-//  - fuera de plazo SIN autorizar    → PIN de autorización de un ADMINISTRADOR
+// Ajusta la etiqueta/ayuda del campo de autorización según el tipo de cambio.
+// Siempre es el código dinámico de la barra superior; cambia de quién debe ser:
+//  - fuera de plazo SIN autorizar    → de un ADMINISTRADOR o MAESTRO
 //  - fuera de plazo YA autorizado    → solicitudes viejas, firmadas al crear; basta el código normal
-//  - dentro de plazo                 → código dinámico de administrador o jefe de local
-//
-// `requiereModoPinAdmin` deja registrado qué se está pidiendo para que el envío
-// mande la credencial en el campo correcto (`pin_admin` vs `codigo_autorizacion`).
-var requiereModoPinAdmin = false;
+//  - dentro de plazo                 → de un administrador o jefe de local
+var requiereCodigoAdmin = false;
 
 function aplicarModoAutorizacionAprobacion(fueraDePlazo, yaAutorizado, autorizadoPor) {
     const $label = $('#label-autorizacion-aprobacion');
     const $hint = $('#hint-autorizacion-aprobacion');
     const $input = $('#input-codigo-autorizacion-aprobacion');
-    requiereModoPinAdmin = !!(fueraDePlazo && !yaAutorizado);
+    requiereCodigoAdmin = !!(fueraDePlazo && !yaAutorizado);
     if (fueraDePlazo && yaAutorizado) {
         const _quien = autorizadoPor ? ` por <strong>${autorizadoPor}</strong>` : '';
         $label.html('<i class="ri-shield-check-line text-success me-1"></i>Código de autorización (barra superior)');
@@ -7869,11 +7868,11 @@ function aplicarModoAutorizacionAprobacion(fueraDePlazo, yaAutorizado, autorizad
              .removeClass('text-danger text-muted').addClass('text-success');
         $input.attr('placeholder', '6 dígitos');
     } else if (fueraDePlazo) {
-        $label.html('<i class="ri-shield-keyhole-line text-danger me-1"></i>PIN de ADMINISTRADOR');
-        $hint.html('Cambio <strong>fuera de plazo</strong>: lo autoriza un <strong>administrador</strong> '
-                 + 'con el <strong>PIN de 6 dígitos de su perfil</strong> (no es el código de la barra superior).')
+        $label.html('<i class="ri-shield-keyhole-line text-danger me-1"></i>Código de ADMINISTRADOR o MAESTRO (barra superior)');
+        $hint.html('Cambio <strong>fuera de plazo</strong>: lo autoriza un <strong>Administrador o Maestro</strong> '
+                 + 'con el <strong>código de 6 dígitos de su barra superior</strong> (un solo uso).')
              .removeClass('text-muted text-success').addClass('text-danger');
-        $input.attr('placeholder', 'PIN admin');
+        $input.attr('placeholder', '6 dígitos');
     } else {
         $label.html('<i class="ri-shield-keyhole-line text-primary me-1"></i>Código de autorización (barra superior)');
         $hint.html('Cambio dentro de plazo: código de la barra de un <strong>administrador o jefe de local</strong>.')
@@ -8311,9 +8310,7 @@ function actualizarCodigoAutorizacionAprobacion(input) {
     input.value = input.value.replace(/\D/g, '').slice(0, 6);
     autorizacionValidada = /^\d{6}$/.test(input.value);
     $('#texto-autorizacion-validada').text(
-        (typeof requiereModoPinAdmin !== 'undefined' && requiereModoPinAdmin)
-            ? 'PIN completo; se validará al ejecutar'
-            : 'Código completo; se validará al ejecutar'
+        'Código completo; se validará al ejecutar'
     );
     $('#info-autorizacion-validada').toggle(autorizacionValidada);
     $('#info-autorizacion-error').hide();
@@ -8325,8 +8322,8 @@ function validarCodigoAutorizacionAprobacion() {
     actualizarCodigoAutorizacionAprobacion(input);
     if (!autorizacionValidada) {
         mostrarError(
-            (typeof requiereModoPinAdmin !== 'undefined' && requiereModoPinAdmin)
-                ? 'Ingrese los 6 dígitos del PIN de un administrador'
+            requiereCodigoAdmin
+                ? 'Ingrese los 6 dígitos del código de un Administrador o Maestro'
                 : 'Ingrese los 6 dígitos del código de la barra superior'
         );
         input.focus();
@@ -8470,15 +8467,14 @@ function confirmarAprobacionYGenerarTicket() {
         mostrarError('Debe validar un vendedor antes de aprobar');
         return;
     }
-    // Fuera de plazo sin firma previa → PIN de administrador; el resto sigue con
-    // el código dinámico de la barra. Ambos son 6 dígitos, pero viajan en campos
-    // distintos porque el backend los valida de forma distinta (el código se quema).
-    const _requierePinAdmin = (typeof requiereModoPinAdmin !== 'undefined' && requiereModoPinAdmin)
+    // Siempre el código de la barra; fuera de plazo sin firma previa debe ser de
+    // un Administrador o Maestro (el backend lo exige, acá solo cambia el aviso).
+    const _requiereCodigoAdmin = requiereCodigoAdmin
         || !!(cambioActual && cambioActual.fuera_de_plazo && !cambioActual.excepcion_plazo_ya_autorizada);
 
     if (!/^\d{6}$/.test(codigoAutorizacion)) {
-        const _msg = _requierePinAdmin
-            ? 'Ingrese los 6 dígitos del PIN de autorización de un ADMINISTRADOR'
+        const _msg = _requiereCodigoAdmin
+            ? 'Ingrese los 6 dígitos del código de un ADMINISTRADOR o MAESTRO (barra superior)'
             : 'Ingrese los 6 dígitos del código de autorización de la barra superior';
         mostrarError(_msg);
         $('#input-codigo-autorizacion-aprobacion').focus();
@@ -8491,13 +8487,9 @@ function confirmarAprobacionYGenerarTicket() {
                 cambio_id: cambioActual.id,
                 vendedor_id: vendedorId,
                 observaciones: observaciones,
-                generar_ticket: true
+                generar_ticket: true,
+                codigo_autorizacion: codigoAutorizacion
             };
-            if (_requierePinAdmin) {
-                datos.pin_admin = codigoAutorizacion;
-            } else {
-                datos.codigo_autorizacion = codigoAutorizacion;
-            }
             
             $.ajax({
                 url: '/app/ventas/api/aprobar-cambio-generar-ticket/',
@@ -8573,9 +8565,9 @@ function confirmarAprobacionYGenerarTicket() {
                     ocultarLoading();
                     const _resp = xhr.responseJSON || {};
                     let mensaje = _resp.error || 'No se pudo conectar con el servidor';
-                    // El PIN no es de un solo uso: avisar cuántos intentos quedan
-                    // antes del bloqueo temporal.
-                    if (_resp.code === 'PIN_INVALIDO' && typeof _resp.intentos_restantes === 'number') {
+                    // Código equivocado: avisar cuántos intentos quedan antes del
+                    // bloqueo temporal (5 fallidos en 15 min).
+                    if (typeof _resp.intentos_restantes === 'number') {
                         mensaje += ` Le quedan ${_resp.intentos_restantes} intento(s).`;
                     }
                     autorizacionValidada = false;

@@ -578,29 +578,31 @@
         </div>
     </div>
 
+    {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='logistica' activo='despachos' %}
+
     <!-- ========== KPI ROW ========== -->
     <div class="nexo-kpi-row" id="kpi-row">
         <div class="nexo-kpi-card kpi-primary">
             <div class="nexo-kpi-icon icon-primary"><i class="ri-price-tag-3-line"></i></div>
-            <div class="nexo-kpi-label">Artículos Despachados</div>
+            <div class="nexo-kpi-label" title="Artículos distintos con traspasos de salida en el período">Artículos Despachados</div>
             <div class="nexo-kpi-value" id="kpi-articulos">-</div>
             <div class="nexo-kpi-sub" id="kpi-proveedores">&nbsp;</div>
         </div>
         <div class="nexo-kpi-card kpi-primary">
             <div class="nexo-kpi-icon icon-primary"><i class="ri-truck-line"></i></div>
-            <div class="nexo-kpi-label">Unidades Despachadas</div>
+            <div class="nexo-kpi-label" title="Suma de unidades de los traspasos de salida (kardex)">Unidades Despachadas</div>
             <div class="nexo-kpi-value" id="kpi-despachado">-</div>
             <div class="nexo-kpi-sub" id="kpi-tiendas">&nbsp;</div>
         </div>
         <div class="nexo-kpi-card kpi-success">
             <div class="nexo-kpi-icon icon-success"><i class="ri-money-dollar-circle-line"></i></div>
-            <div class="nexo-kpi-label">Valor Despachado (costo)</div>
+            <div class="nexo-kpi-label" title="Suma de cantidad × costo de las unidades despachadas">Valor Despachado (costo)</div>
             <div class="nexo-kpi-value" id="kpi-valor">-</div>
             <div class="nexo-kpi-sub" id="kpi-valor-sub">&nbsp;</div>
         </div>
         <div class="nexo-kpi-card kpi-success">
             <div class="nexo-kpi-icon icon-success"><i class="ri-inbox-archive-line"></i></div>
-            <div class="nexo-kpi-label">Recibido en Destino</div>
+            <div class="nexo-kpi-label" title="Unidades ingresadas por traspaso en las tiendas destino, atribuidas al proveedor vía el artículo">Recibido en Destino</div>
             <div class="nexo-kpi-value" id="kpi-recibido">-</div>
             <div class="nexo-kpi-sub">unidades confirmadas</div>
         </div>
@@ -616,7 +618,7 @@
         </div>
         <div class="nexo-kpi-card kpi-error">
             <div class="nexo-kpi-icon icon-error"><i class="ri-time-line"></i></div>
-            <div class="nexo-kpi-label">Pendiente por Recibir</div>
+            <div class="nexo-kpi-label" title="Despachado − Recibido (mínimo 0)">Pendiente por Recibir</div>
             <div class="nexo-kpi-value" id="kpi-pendiente">-</div>
             <div class="nexo-kpi-sub">aún no confirmado</div>
         </div>
@@ -711,6 +713,15 @@ let registrosPorPagina = 50;
 
 // ========== INICIALIZACIÓN ==========
 document.addEventListener('DOMContentLoaded', function() {
+    // Período que trae la URL (tira de reportes o enlace guardado); `mes` da el rango
+    // del mes. La sucursal compartida NO se aplica: aquí el select es la tienda DESTINO.
+    if (window.FiltrosReporte) {
+        const f = FiltrosReporte.completar(FiltrosReporte.leer());
+        if (f.fecha_inicio && f.fecha_fin) {
+            FiltrosReporte.ponerValor('#filtro-fecha-desde', f.fecha_inicio);
+            FiltrosReporte.ponerValor('#filtro-fecha-hasta', f.fecha_fin);
+        }
+    }
     cargarProveedoresSelect2();
     cargarReporte();   // carga automática con la semana actual
 });
@@ -762,6 +773,10 @@ async function cargarReporte() {
     const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
     const tiendaId = document.getElementById('filtro-tienda').value;
     const proveedorId = $('#filtro-proveedor').val();
+    // Solo el período va a la URL; sucursal_id/marca_id que traiga se conservan.
+    if (window.FiltrosReporte) {
+        FiltrosReporte.reflejar({ fecha_inicio: fechaDesde, fecha_fin: fechaHasta });
+    }
 
     btnBuscar.disabled = true;
     btnBuscar.innerHTML = '<i class="ri-loader-4-line spin"></i> Consultando...';

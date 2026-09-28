@@ -129,6 +129,17 @@
 /* Nota al pie de una KPI card */
 .home-kpi-note { font-size:.65rem; color:var(--nexo-gray-500); margin-top:.3rem; }
 
+/* Comparaciones de Ventas Hoy (parcial) vs ayer / hace 7 dias: reusa el chip
+   .home-kpi-trend (up/down/stable) que ya pinta la variacion del mes */
+.home-kpi-compare { display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.45rem; }
+.home-kpi-trend .lbl { font-weight:500; opacity:.85; margin-left:.15rem; white-space:nowrap; }
+.home-kpi-label .parcial { text-transform:none; letter-spacing:0; font-weight:400; color:var(--nexo-gray-500); }
+
+/* Hora de calculo de los bloques cacheados (inventario, compras, caja, etc.) */
+.home-cache-note { font-size:.72rem; color:var(--nexo-gray-500); display:flex; align-items:center; gap:.3rem; }
+.home-cache-note a { color:var(--nexo-primary); font-weight:600; text-decoration:none; }
+.home-cache-note a:hover { text-decoration:underline; }
+
 /* Pulse animation for live indicator */
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
 .live-dot { width:7px; height:7px; background:var(--nexo-accent); border-radius:50%; animation:pulse 2s ease-in-out infinite; display:inline-block; }
@@ -197,6 +208,15 @@
                 {{ sucursal_actual.alias }}
             </div>
             {% endif %}
+            {% if bloques_calculados_en %}
+            <!-- Bloques caros (stock/quiebres, operaciones, top productos, salud de
+                 inventario, facturas de proveedor) cacheados por sucursal/dia -->
+            <div class="home-cache-note" title="En vivo: ventas de hoy, caja, precios, DTEs, compras por recepcionar, requerimientos y cambios pendientes. Foto de cada {{ bloques_cache_minutos }} min: quiebres y stock (incluida su alerta), operaciones (traspasos, ajustes, regularizaciones, por cobrar), top productos, salud de inventario y facturas de proveedor">
+                <i class="ri-database-2-line"></i>
+                Inventario y operaciones actualizados a las {{ bloques_calculados_en|date:"H:i" }}
+                &middot; <a href="?refrescar=1">recalcular</a>
+            </div>
+            {% endif %}
             <!-- En vivo: se refresca con las APIs ligeras, sin recalcular las ~45
                  consultas del tablero completo -->
             <div class="home-live" id="homeLive" title="Ventas de hoy consultadas en vivo; el resto del tablero es del ultimo calculo completo">
@@ -215,13 +235,26 @@
         <div class="home-kpi kpi-ventas">
             <div class="home-kpi-top">
                 <div class="home-kpi-icon ventas"><i class="ri-shopping-cart-2-line"></i></div>
-                <div class="home-kpi-trend {{ ventas.tendencia }}">
+                <div class="home-kpi-trend {{ ventas.tendencia }}" title="Ventas del mes en curso vs. mes pasado completo (${{ ventas.mes_pasado|floatformat:0|intcomma }})">
                     {% if ventas.tendencia == 'up' %}<i class="ri-arrow-up-line"></i>{% elif ventas.tendencia == 'down' %}<i class="ri-arrow-down-line"></i>{% else %}<i class="ri-subtract-line"></i>{% endif %}
-                    {{ ventas.variacion_mes }}%
+                    {{ ventas.variacion_mes }}% <span class="lbl">mes</span>
                 </div>
             </div>
             <div class="home-kpi-val">${{ ventas.hoy|floatformat:0|intcomma }}</div>
-            <div class="home-kpi-label">Ventas Hoy</div>
+            <div class="home-kpi-label">Ventas Hoy <span class="parcial">(parcial, hasta ahora)</span></div>
+            <!-- Hoy (parcial) contra ayer y el mismo dia de la semana pasada HASTA LA MISMA
+                 HORA (el dia completo va en el tooltip). Sin base (a esa hora no hubo ventas)
+                 se muestra "s/d" en vez de un +100% falso. -->
+            <div class="home-kpi-compare" title="Hoy hasta las {{ ventas.hora_corte }} contra ayer y el mismo dia de la semana pasada hasta la misma hora">
+                <span class="home-kpi-trend {{ ventas.tendencia_ayer }}" title="Ayer hasta las {{ ventas.hora_corte }}: ${{ ventas.ayer|floatformat:0|intcomma }} en {{ ventas.tickets_ayer|default:0 }} tickets (dia completo: ${{ ventas.ayer_dia_completo|default:0|floatformat:0|intcomma }})">
+                    {% if ventas.variacion_ayer is None %}<i class="ri-subtract-line"></i> s/d{% else %}{% if ventas.tendencia_ayer == 'up' %}<i class="ri-arrow-up-line"></i>{% elif ventas.tendencia_ayer == 'down' %}<i class="ri-arrow-down-line"></i>{% else %}<i class="ri-subtract-line"></i>{% endif %}{{ ventas.variacion_ayer }}%{% endif %}
+                    <span class="lbl">vs ayer a esta hora</span>
+                </span>
+                <span class="home-kpi-trend {{ ventas.tendencia_7d }}" title="{{ ventas.fecha_hace_7_dias|date:'l d/m' }} hasta las {{ ventas.hora_corte }}: ${{ ventas.hace_7_dias|floatformat:0|intcomma }} en {{ ventas.tickets_hace_7_dias|default:0 }} tickets (dia completo: ${{ ventas.hace_7_dias_dia_completo|default:0|floatformat:0|intcomma }})">
+                    {% if ventas.variacion_7d is None %}<i class="ri-subtract-line"></i> s/d{% else %}{% if ventas.tendencia_7d == 'up' %}<i class="ri-arrow-up-line"></i>{% elif ventas.tendencia_7d == 'down' %}<i class="ri-arrow-down-line"></i>{% else %}<i class="ri-subtract-line"></i>{% endif %}{{ ventas.variacion_7d }}%{% endif %}
+                    <span class="lbl">vs sem. pasada a esta hora</span>
+                </span>
+            </div>
             <div class="home-kpi-footer">
                 <div class="home-kpi-stat"><div class="home-kpi-sv" id="kpiTicketsHoy">{{ ventas.tickets_hoy|intcomma }}</div><div class="home-kpi-sl">Tickets</div></div>
                 <div class="home-kpi-stat"><div class="home-kpi-sv">{{ ventas.unidades_hoy|intcomma }}</div><div class="home-kpi-sl">Unidades</div></div>
@@ -279,6 +312,10 @@
         </div>
     </div>
 
+    <!-- Permiso del Dashboard FIFO: se resuelve aqui (nivel superior) porque lo usan
+         el enlace de la tarjeta "Stock >180 dias" y el boton de "Ir a Dashboards" -->
+    {% puede_ver_opcion_tag 'dashboard_fifo' as puede_dash_fifo %}
+
     <!-- ===== Salud de Inventario (ejecutivo) ===== -->
     {% if salud_inventario %}
     <div class="home-kpi-grid" style="grid-template-columns:repeat(3,1fr);">
@@ -305,6 +342,9 @@
             <div class="home-kpi-label">Stock &gt;180 d&iacute;as</div>
             <div class="home-kpi-footer">
                 <div class="home-kpi-stat"><div class="home-kpi-sv">{{ salud_inventario.stock_viejo_unidades|intcomma }}</div><div class="home-kpi-sl">Unidades viejas</div></div>
+                {% if puede_dash_fifo and sucursal_actual %}
+                <div class="home-kpi-stat"><a href="{% url 'dashboard_fifo' %}" class="home-panel-link" title="Dashboard FIFO / Lotes: valor del stock envejecido por antiguedad">Ver capital inmovilizado <i class="ri-arrow-right-line"></i></a></div>
+                {% endif %}
             </div>
         </div>
 
@@ -544,6 +584,14 @@
                     <span class="home-panel-stat-label"><i class="ri-money-dollar-box-line"></i> Monto por Cobrar</span>
                     <span class="home-panel-stat-val" style="color:var(--nexo-primary);">${{ operaciones.monto_por_cobrar|floatformat:0|intcomma }}</span>
                 </div>
+                {% if pagos_proveedor %}
+                <!-- Facturas de proveedor impagas (mismo universo que Gestion Documentos Compras);
+                     solo con permiso gestion_dte_compras (se resuelve en la vista) -->
+                <div class="home-panel-stat" title="Facturas de proveedor impagas con saldo: vencidas / vencen en los proximos {{ pagos_proveedor.dias_aviso }} dias (foto de {{ bloques_cache_minutos }} min)">
+                    <span class="home-panel-stat-label"><i class="ri-bill-line"></i> <a href="{% url 'verGestionDteCompras' %}" class="home-panel-link">Fact. proveedor vencidas / por vencer</a></span>
+                    <span class="home-panel-stat-val {% if pagos_proveedor.vencidas %}danger{% elif pagos_proveedor.por_vencer %}warning{% endif %}">{{ pagos_proveedor.vencidas|intcomma }} / {{ pagos_proveedor.por_vencer|intcomma }}</span>
+                </div>
+                {% endif %}
                 <div class="home-panel-stat">
                     <span class="home-panel-stat-label"><i class="ri-line-chart-line"></i> Ventas Mes</span>
                     <span class="home-panel-stat-val success">${{ ventas.mes|floatformat:0|intcomma }}</span>
@@ -685,7 +733,7 @@
     {% puede_ver_opcion_tag 'dashboard_ventas' as puede_dash_ventas %}
     {% puede_ver_opcion_tag 'dashboard_productos' as puede_dash_productos %}
     {% puede_ver_opcion_tag 'dashboard_compras_estrategico' as puede_dash_compras %}
-    {% puede_ver_opcion_tag 'dashboard_fifo' as puede_dash_fifo %}
+    {# puede_dash_fifo se resuelve antes de "Salud de Inventario" #}
     {% puede_ver_opcion_tag 'dashboard_documentos' as puede_dash_documentos %}
     {% puede_ver_opcion_tag 'dashboard_despachos' as puede_dash_despachos %}
     {% puede_ver_opcion_tag 'dashboard_requerimientos' as puede_dash_requerimientos %}
@@ -853,12 +901,25 @@ function renderChartVentasHora(datos) {
     var $chip = document.getElementById('homeLive');
     var $txt  = document.getElementById('homeLiveTexto');
     var $btn  = document.getElementById('refreshBtn');
-    // Linea base para detectar movimiento: se toma de la PRIMERA respuesta de la
-    // API, no del valor renderizado. La API cuenta los tickets de otra forma que
-    // el tablero (filtra por Ticket.fecha, que es auto_now, y no excluye los
-    // tickets de cambio), asi que comparar contra el render daria diferencias
-    // falsas. Comparando contra si misma, la variacion si es real.
-    var ticketsBase = null;
+
+    // ?refrescar=1 fuerza el recalculo completo del tablero en el servidor. Una
+    // vez servido se quita de la URL: si quedaba pegado, cada F5, restaurar la
+    // pestana o volver atras recalculaba todo otra vez (~1 s y ~45 consultas).
+    try {
+        var urlActual = new URL(location.href);
+        if (urlActual.searchParams.get('refrescar') === '1') {
+            urlActual.searchParams.delete('refrescar');
+            history.replaceState(history.state, '', urlActual.pathname + urlActual.search + urlActual.hash);
+        }
+    } catch (e) { /* navegador sin URL/history: se deja la URL como esta */ }
+
+    // Linea base para detectar ventas nuevas = el numero PINTADO en la tarjeta.
+    // La API (/dashboard/api/ventas-tiempo-real/) usa la misma base que
+    // calcular_kpis_ventas: created_at de hoy, PAGADO, sin CAMBIO_DEVOLUCION y
+    // la sucursal de la sesion. Tomarla de la primera respuesta de la API dejaba
+    // fuera las ventas que entraban entre el render y el primer latido.
+    // En la rama de error del servidor no hay conteo: null -> se usa la API.
+    var ticketsBase = {% if error %}null{% else %}{{ ventas.tickets_hoy|default:0|stringformat:"d" }}{% endif %};
 
     function money(n) { return '$' + Math.round(n || 0).toLocaleString('es-CL'); }
     function num(n) { return (n || 0).toLocaleString('es-CL'); }
@@ -899,7 +960,18 @@ function renderChartVentasHora(datos) {
             b.id = 'homeRecalcular';
             b.className = 'home-recalcular';
             b.innerHTML = '<i class="ri-refresh-line"></i> ' + nuevos + ' venta' + (nuevos === 1 ? '' : 's') + ' nueva' + (nuevos === 1 ? '' : 's') + ': recalcular tablero';
-            b.onclick = function() { location.reload(); };
+            // ?refrescar=1 salta el cache de 5 min de los bloques lentos (top
+            // productos, stock...); un reload a secas los traeria del cache.
+            // Se conservan los demas parametros de la URL.
+            b.onclick = function() {
+                try {
+                    var u = new URL(location.href);
+                    u.searchParams.set('refrescar', '1');
+                    location.href = u.toString();
+                } catch (e) {
+                    location.href = location.pathname + '?refrescar=1';
+                }
+            };
             $chip.parentNode.insertBefore(b, $btn);
         } else {
             $chip.classList.remove('is-stale');

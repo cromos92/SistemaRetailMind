@@ -33,7 +33,7 @@ CATALOGO = {
             'puede_ver': 'Entrar al Dashboard Productos (clásico y mejorado), verlo en menú y portada, cargar datos y exportar.',
         },
         'depende_de': [],
-        'notas': 'Exportar (CSV/Excel y /app/exportar_productos_filtrado/) va con puede_ver, no con puede_exportar.',
+        'notas': 'Exportar CSV (/app/exportar_dashboard_productos/) va con puede_ver, no con puede_exportar.',
     },
     'dashboard_fifo': {
         'pantalla': 'Dashboard FIFO / Lotes',
@@ -310,12 +310,12 @@ CATALOGO = {
     'mi_perfil': {
         'pantalla': 'Mi Perfil',
         'ruta': '/users/mi-perfil/',
-        'resumen': 'Datos personales, foto, clave, PIN de autorización y sesiones activas del usuario.',
+        'resumen': 'Datos personales, foto, clave y sesiones activas del usuario.',
         'permisos': {
             'puede_ver': 'Entrar a Mi Perfil (/users/mi-perfil/).',
         },
         'depende_de': [],
-        'notas': 'El enlace "Mi Perfil" del menú de usuario se muestra siempre. Cambiar clave, PIN, foto y '
+        'notas': 'El enlace "Mi Perfil" del menú de usuario se muestra siempre. Cambiar clave, foto y '
                  'sesiones tienen URL propia y no revisan este permiso.',
     },
     'ajuste_stock_rapido': {

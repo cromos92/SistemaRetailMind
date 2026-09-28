@@ -728,8 +728,13 @@ tr.fila-SIN_MATCH td:first-child { box-shadow: inset 4px 0 0 var(--rm-danger), i
         return valor;
     }
 
+    // Escapa para texto Y para atributos: los datos del XML del proveedor
+    // (NmbItem, TpoCodigo, razón social…) se pintan dentro de title="…" y
+    // value="…"; sin las comillas un «"» cerraría el atributo (B11-07).
     function esc(txt) {
-        return $('<div>').text(txt === null || txt === undefined ? '' : txt).html();
+        return String(txt === null || txt === undefined ? '' : txt)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     function money(valor) {
@@ -817,7 +822,8 @@ tr.fila-SIN_MATCH td:first-child { box-shadow: inset 4px 0 0 var(--rm-danger), i
         }).done(function (resp) {
             Swal.close();
             if (!resp.success) {
-                Swal.fire('Error', resp.error || 'No se pudo analizar', 'error');
+                // text (no html): el mensaje del servidor puede citar datos del XML.
+                Swal.fire({ title: 'Error', text: resp.error || 'No se pudo analizar', icon: 'error' });
                 return;
             }
             renderDocumentos(resp.archivos);
@@ -825,7 +831,7 @@ tr.fila-SIN_MATCH td:first-child { box-shadow: inset 4px 0 0 var(--rm-danger), i
             Swal.close();
             var msg = (xhr.responseJSON && (xhr.responseJSON.error || xhr.responseJSON.mensaje)) ||
                       'Error al analizar los archivos';
-            Swal.fire('Error', msg, 'error');
+            Swal.fire({ title: 'Error', text: msg, icon: 'error' });
         });
     }
 

@@ -162,3 +162,23 @@ def setup_entorno_completo():
         'correlativo': correlativo,
         'lote': lote,
     }
+
+
+def otorgar_ver_pantalla(rol, *codigos, **flags):
+    """Da al `rol` el permiso de pantalla (`puede_ver`, más los `flags` que se
+    pidan) sobre cada código de OpcionMenu, creándolo si la BD de test no lo
+    tiene. `middleware_permisos` exige `puede_ver` del código de la pantalla
+    también en sus APIs (auditoría 2026-09): sin esto el test recibe 403/302
+    antes de llegar a la vista."""
+    from app.models import ModuloSistema, OpcionMenu, PermisoRol
+    modulo, _ = ModuloSistema.objects.get_or_create(
+        codigo='tests_pantallas', defaults={'nombre': 'Tests'})
+    valores = {'puede_ver': True}
+    valores.update(flags)
+    for codigo in codigos:
+        opcion, _ = OpcionMenu.objects.get_or_create(
+            codigo=codigo, defaults={'modulo': modulo, 'nombre': codigo, 'activo': True})
+        if not opcion.activo:
+            opcion.activo = True
+            opcion.save(update_fields=['activo'])
+        PermisoRol.objects.update_or_create(rol=rol, opcion_menu=opcion, defaults=valores)

@@ -126,6 +126,8 @@
 
     <div class="container-fluid">
 
+      {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='compras' activo='origen' %}
+
       <!-- ===== FILTROS ===== -->
       <div class="origen-filters mb-4">
         <div class="row g-2 align-items-end">
@@ -153,7 +155,7 @@
         <div class="col-sm-6 col-xl-2">
           <div class="kpi-origen" style="--kc:#0066FF;--kc-bg:#E6F0FF;">
             <div class="ki-icon"><i class="ri-box-3-line"></i></div>
-            <div class="ki-label">SKU creados</div>
+            <div class="ki-label" title="Variantes (SKU) cuyo primer ingreso al kardex ocurrió en el año">SKU creados</div>
             <div class="ki-val" id="kpiSkus">—</div>
             <div class="ki-sub">variantes únicas en el año</div>
           </div>
@@ -161,7 +163,7 @@
         <div class="col-sm-6 col-xl-2">
           <div class="kpi-origen" style="--kc:#00D4AA;--kc-bg:#E0FAF4;">
             <div class="ki-icon"><i class="ri-stack-line"></i></div>
-            <div class="ki-label">Unidades de alta</div>
+            <div class="ki-label" title="Suma de unidades del primer ingreso de cada SKU">Unidades de alta</div>
             <div class="ki-val" id="kpiUds">—</div>
             <div class="ki-sub">del primer ingreso por SKU</div>
           </div>
@@ -169,7 +171,7 @@
         <div class="col-sm-6 col-xl-2">
           <div class="kpi-origen" style="--kc:#FFB020;--kc-bg:#FFF4E0;">
             <div class="ki-icon"><i class="ri-money-dollar-circle-line"></i></div>
-            <div class="ki-label">Inversión en altas</div>
+            <div class="ki-label" title="Suma de costo × unidades del primer ingreso">Inversión en altas</div>
             <div class="ki-val" id="kpiCosto">—</div>
             <div class="ki-sub">costo × unidades del alta</div>
           </div>
@@ -177,7 +179,7 @@
         <div class="col-sm-6 col-xl-2">
           <div class="kpi-origen" style="--kc:#6f42c1;--kc-bg:#F2EDFC;">
             <div class="ki-icon"><i class="ri-price-tag-3-line"></i></div>
-            <div class="ki-label">Costo prom / SKU</div>
+            <div class="ki-label" title="Inversión en altas ÷ SKU creados">Costo prom / SKU</div>
             <div class="ki-val" id="kpiCostoSku">—</div>
             <div class="ki-sub">inversión media por variante</div>
           </div>
@@ -193,7 +195,7 @@
         <div class="col-sm-6 col-xl-2">
           <div class="kpi-origen" id="kpiIrregCard" style="--kc:#FFB020;--kc-bg:#FFF4E0;">
             <div class="ki-icon"><i class="ri-error-warning-line"></i></div>
-            <div class="ki-label">Ajustes / correcciones</div>
+            <div class="ki-label" title="SKU cuyo primer ingreso fue un ajuste o corrección ÷ SKU creados × 100">Ajustes / correcciones</div>
             <div class="ki-val" id="kpiIrreg">—</div>
             <div class="ki-sub">ajustes, devoluciones, reversas</div>
           </div>
@@ -331,17 +333,47 @@
     const $estado  = document.getElementById('ppoEstado');
     const $alertas = document.getElementById('alertasSection');
 
+    /* ── Filtros de la URL (tira de reportes / enlace guardado) ── */
+    const FR = window.FiltrosReporte;
+    const urlF = FR ? FR.completar(FR.leer()) : {};
+    // El select de año se llena con la 1ª respuesta: hasta entonces manda el año de la URL.
+    const anioUrl = urlF.anio || '';
+
+    // sucursal_id ↔ `sucursal` de la API. El año solo se escribe si difiere del
+    // que ya implica la URL: un mes/rango de ese mismo año se conserva para la tira.
+    function reflejarUrl(anio) {
+        if (!FR) return;
+        const estado = { sucursal_id: $suc.value || '' };
+        if (anio && String(anio) !== (FR.completar(FR.leer()).anio || '')) estado.anio = String(anio);
+        FR.reflejar(estado);
+    }
+
     /* ── Carga ── */
     function cargar() {
         const params = new URLSearchParams();
-        if ($anio.value)   params.set('anio', $anio.value);
+        const anio = $anio.value || anioUrl;
+        if (anio)          params.set('anio', anio);
         if ($suc.value)    params.set('sucursal', $suc.value);
+        reflejarUrl(anio);
         $estado.textContent = 'Cargando…';
         document.getElementById('origenBody').innerHTML =
             '<tr><td colspan="6"><div class="origen-loading"><i class="ri-loader-4-line spin"></i> Cargando…</div></td></tr>';
         fetch('/app/api/reportes/productos-origen/?' + params.toString())
             .then(r => r.json())
-            .then(render)
+            .then(data => {
+                render(data);
+                if (!data || !data.success) return;
+                if (!anio) {
+                    // Sin año pedido, el que decide el backend recién se conoce aquí.
+                    reflejarUrl(data.anio);
+                } else if (!Array.from($anio.options).some(o => o.value === String(data.anio))) {
+                    // Año de la URL fuera de los disponibles: el select muestra el consultado, no el primero.
+                    const opt = document.createElement('option');
+                    opt.value = opt.textContent = String(data.anio);
+                    $anio.appendChild(opt);
+                    $anio.value = String(data.anio);
+                }
+            })
             .catch(() => {
                 $estado.textContent = 'Error al cargar datos';
                 // Sin esto la tabla se quedaba con el "Cargando…" para siempre
@@ -567,7 +599,7 @@
     }
 
     /* ── Sucursales ── */
-    fetch('/app/api/reportes/sucursales/')
+    const listaSucursales = fetch('/app/api/reportes/sucursales/')
         .then(r => r.json())
         .then(d => {
             const lista = (d && (d.sucursales || d.data)) || [];
@@ -585,7 +617,13 @@
     $anio.addEventListener('change', cargar);
     $suc.addEventListener('change', cargar);
 
-    cargar();
+    // Con sucursal en la URL se espera su lista (llegue o no) para elegirla y
+    // consultar una sola vez; una sucursal fuera de alcance queda en «Todas».
+    if (urlF.sucursal_id) {
+        listaSucursales.then(() => { FR.ponerValor($suc, urlF.sucursal_id); cargar(); });
+    } else {
+        cargar();
+    }
 })();
 </script>
 

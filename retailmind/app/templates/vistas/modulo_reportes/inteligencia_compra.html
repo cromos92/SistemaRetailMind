@@ -1,4 +1,4 @@
-{% load static %}
+{% load static indicadores_tags %}
 
 {% include '../../layout/header.html' %}
 {% include '../../layout/menu.html' %}
@@ -8,11 +8,9 @@
 <div class="container-fluid">
 
 <style>
+    /* El resto de --nexo-* viene de nexo-design-system.css (mismos valores).
+       Quedan solo los que allí difieren (shadow-md: .1) o no existen (radius). */
     :root {
-        --nexo-primary: #0066FF; --nexo-primary-dark: #0052CC; --nexo-primary-light: #E6F0FF;
-        --nexo-secondary: #1A1A2E; --nexo-accent: #00D4AA; --nexo-warning: #FFB020;
-        --nexo-error: #FF4D4D; --nexo-gray-700: #4A4A5A; --nexo-gray-500: #8A8A9A;
-        --nexo-gray-300: #D1D1D9; --nexo-gray-100: #F5F5F7; --nexo-white: #fff;
         --nexo-shadow-md: 0 4px 6px rgba(26,26,46,.08); --nexo-radius: 12px;
     }
     .ic-wrap { background: var(--nexo-gray-100); min-height: calc(100vh - 70px); padding-bottom: 40px; }
@@ -90,6 +88,8 @@
         </div>
     </div>
 
+    {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='compras' activo='inteligencia' %}
+
     <div class="ic-controls">
         <div class="ic-field">
             <label>Marca</label>
@@ -146,6 +146,16 @@ document.getElementById('ic-analizar').addEventListener('click', cargarInteligen
 document.getElementById('ic-print').addEventListener('click', () => window.print());
 document.getElementById('ic-marca').addEventListener('keydown', e => { if (e.key === 'Enter') cargarInteligencia(); });
 
+// Marca y tienda que llegan en la URL (tira de reportes / enlace guardado). Solo
+// preselecciona: el análisis sigue esperando «Analizar». Va antes del aviso y de
+// Select2 para que ambos tomen el valor al inicializarse.
+(function () {
+    if (!window.FiltrosReporte) return;
+    const f = FiltrosReporte.leer();
+    FiltrosReporte.ponerValor('#ic-marca', f.marca_id);
+    FiltrosReporte.ponerValor('#ic-sucursal', f.sucursal_id);
+})();
+
 // Aviso del sell-through al acotar a una tienda (ver comentario en el markup).
 (function () {
     const sel = document.getElementById('ic-sucursal');
@@ -171,6 +181,8 @@ function cargarInteligencia() {
     const marca = document.getElementById('ic-marca').value;
     const suc = document.getElementById('ic-sucursal').value;
     if (!marca) { alert('Selecciona una marca primero.'); return; }
+    // URL: marca y tienda consultadas («todas» = sin sucursal_id); el período no aplica aquí y se conserva.
+    if (window.FiltrosReporte) FiltrosReporte.reflejar({ marca_id: marca, sucursal_id: suc === 'todas' ? '' : suc });
     document.getElementById('ic-empty').style.display = 'none';
     document.getElementById('ic-results').style.display = 'none';
     document.getElementById('ic-loading').style.display = 'block';
@@ -191,6 +203,42 @@ function cargarInteligencia() {
             document.getElementById('ic-empty').style.display = 'block';
             alert('Error de red: ' + err);
         });
+}
+
+function icEsc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+
+// B15-07 paso 3: lo ya pedido en OC ACTIVA de la marca sin recepción
+// registrada. Es un dato INFORMATIVO junto a «Comprar ≈»: no se resta, porque
+// lo que entra por Crear Manual no se liga a la OC y el pendiente puede estar
+// inflado (B15-02).
+function htmlOcAbiertas(oc) {
+    if (!oc || !(Number(oc.unidades) > 0)) return '';
+    const ocs = Array.isArray(oc.ocs) ? oc.ocs : [];
+    const fechaCL = (f) => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(f || '');
+        return m ? `${m[3]}-${m[2]}-${m[1]}` : (f || '');
+    };
+    const filas = ocs.map(o => `<tr>
+            <td>#${icEsc(o.id)}${o.nombre ? ' · ' + icEsc(o.nombre) : ''}</td>
+            <td>${icEsc(fechaCL(o.fecha)) || '—'}</td>
+            <td>${icEsc(o.temporada) || '—'}</td>
+            <td class="num">${fmt(o.pendiente)}</td></tr>`).join('');
+    return `<div style="margin-top:10px; padding-top:8px; border-top:1px dashed var(--nexo-gray-300); font-size:.85rem; color:var(--nexo-gray-700);">
+        <i class="ri-file-list-3-line" style="color:var(--nexo-primary);"></i>
+        Ya pedido en OC abiertas (sin recepción registrada): <b>${fmt(oc.unidades)} u</b>
+        <span style="color:var(--nexo-gray-500); font-size:.78rem;"> · informativo, no se descuenta de «Comprar ≈»</span>
+        ${ocs.length ? `<details style="margin-top:6px;">
+            <summary style="cursor:pointer; font-size:.8rem; color:var(--nexo-primary); font-weight:700;">Ver ${ocs.length} OC</summary>
+            <table class="ic-table" style="margin-top:6px; max-width:640px;">
+                <thead><tr><th>OC</th><th>Fecha</th><th>Temporada</th><th class="num">Pendiente (u)</th></tr></thead>
+                <tbody>${filas}</tbody>
+            </table>
+        </details>` : ''}
+    </div>`;
 }
 
 function render(d) {
@@ -221,21 +269,22 @@ function render(d) {
         <div class="ic-kpi"><div class="lbl">Stock en tiendas</div><div class="val">${fmt(k.stock_tiendas)}</div><div class="sub">pares en piso</div></div>
         <div class="ic-kpi" title="Venta neta de los últimos 90 días ÷ 90 (resta devoluciones/NC)."><div class="lbl">Velocidad 90 días</div><div class="val">${fmt(k.vel_dia)}<small style="font-size:.8rem;">/día</small></div><div class="sub ${yoyCls}">${k.vel_yoy != null ? (k.vel_yoy > 0 ? '+' : '') + k.vel_yoy + '% YoY' : ''}</div></div>
         <div class="ic-kpi"><div class="lbl">Pronóstico 12 meses</div><div class="val">${fmt(k.pronostico_12m)}</div><div class="sub">pares proyectados</div></div>
-        <div class="ic-kpi" title="Meses de cobertura = stock en tiendas ÷ (pronóstico 12m ÷ 12). Se divide por el PRONÓSTICO mensual, no por la venta histórica: con tendencia a la baja la cobertura sale mayor que contra el trailing."><div class="lbl">Cobertura</div><div class="val">${cob != null ? cob : '—'}<small style="font-size:.8rem;"> m</small></div><div class="sub">stock ÷ pronóstico 12m</div></div>
+        <div class="ic-kpi" title="{% definicion 'cobertura_meses_pronostico' %} Se divide por el PRONÓSTICO mensual, no por la venta histórica: con tendencia a la baja sale MAYOR que la cobertura TTM (365 d) del Plan de Liquidación para la misma marca."><div class="lbl">Cobertura (pronóstico 12 m)</div><div class="val">${cob != null ? cob : '—'}<small style="font-size:.8rem;"> m</small></div><div class="sub">stock tiendas ÷ (pronóstico 12 m ÷ 12)</div></div>
     </div>
 
     <div class="ic-kpis">
         <div class="ic-kpi"><div class="lbl">Valor inventario (costo)</div><div class="val" style="font-size:1.2rem;">${money(fn.inv_costo)}</div><div class="sub">${money(fn.inv_precio)} a precio</div></div>
-        <div class="ic-kpi" title="Calculado con el precio de venta y el costo de LISTA registrados en el movimiento, no con lo efectivamente cobrado ni el costo FIFO. Con descuentos o campañas activas queda sobreestimado."><div class="lbl">Margen bruto <i class="ri-error-warning-line" style="color:#FFB020"></i></div><div class="val">${fn.margen_pct != null ? fn.margen_pct + '%' : '—'}</div><div class="sub">a precio de lista</div></div>
-        <div class="ic-kpi"><div class="lbl">Rotación</div><div class="val">${fn.rotacion != null ? fn.rotacion + 'x' : '—'}</div><div class="sub">vueltas/año</div></div>
-        <div class="ic-kpi"><div class="lbl">Semanas de stock</div><div class="val">${fn.wos != null ? fn.wos : '—'}</div><div class="sub">WOS</div></div>
-        <div class="ic-kpi" title="Derivado del margen a precio de lista: úsalo para comparar entre marcas, no como rentabilidad real."><div class="lbl">GMROI <i class="ri-error-warning-line" style="color:#FFB020"></i></div><div class="val ${gmCls}">${fn.gmroi != null ? fn.gmroi : '—'}</div><div class="sub ${gmCls}">${fn.gmroi == null ? '' : (fn.gmroi >= 3 ? 'excelente' : (fn.gmroi >= 1 ? 'aceptable' : 'destruye capital'))}</div></div>
-        <div class="ic-kpi"><div class="lbl">Dead stock 180d</div><div class="val ${sal.pct_dead180 >= 50 ? 'down' : ''}">${sal.pct_dead180 != null ? sal.pct_dead180 + '%' : '—'}</div><div class="sub">${fmt(sal.dead180_n)} SKUs</div></div>
+        <div class="ic-kpi" title="{% definicion 'margen_teorico' 365 %} Calculado con el precio de venta y el costo de LISTA registrados en el movimiento (venta TTM 365 d), no con lo efectivamente cobrado ni el costo FIFO; si el kardex no trae costo, usa el margen de lista del inventario."><div class="lbl">Margen bruto ${fn.margen_src === 'lista' ? '(lista inventario)' : '(TTM 365 d)'} <i class="ri-error-warning-line" style="color:#FFB020"></i></div><div class="val">${fn.margen_pct != null ? fn.margen_pct + '%' : '—'}</div><div class="sub">a precio de lista</div></div>
+        <div class="ic-kpi" title="{% definicion 'rotacion_pronostico' %} El Plan de Liquidación usa la venta real TTM (365 d) ÷ stock, no el pronóstico."><div class="lbl">Rotación (pronóstico 12 m)</div><div class="val">${fn.rotacion != null ? fn.rotacion + 'x' : '—'}</div><div class="sub">vueltas/año = 12 ÷ cobertura</div></div>
+        <div class="ic-kpi" title="{% definicion 'wos' %}"><div class="lbl">Semanas de stock (pronóstico)</div><div class="val">${fn.wos != null ? fn.wos : '—'}</div><div class="sub">WOS = cobertura × 4,345</div></div>
+        <div class="ic-kpi" title="{% definicion 'gmroi' 365 %} Derivado del margen a precio de lista: úsalo para comparar entre marcas, no como rentabilidad real."><div class="lbl">GMROI (TTM 365 d) <i class="ri-error-warning-line" style="color:#FFB020"></i></div><div class="val ${gmCls}">${fn.gmroi != null ? fn.gmroi : '—'}</div><div class="sub ${gmCls}">${fn.gmroi == null ? '' : (fn.gmroi >= 3 ? 'excelente' : (fn.gmroi >= 1 ? 'aceptable' : 'destruye capital'))}</div></div>
+        <div class="ic-kpi" title="{% definicion 'dead_stock' 180 %}"><div class="lbl">Dead stock 180 d (sin venta)</div><div class="val ${sal.pct_dead180 >= 50 ? 'down' : ''}">${sal.pct_dead180 != null ? sal.pct_dead180 + '%' : '—'}</div><div class="sub">${fmt(sal.dead180_n)} SKU-talla sin venta en 180 d</div></div>
     </div>
 
     <div class="${vClass}">
         <div class="big"><i class="ri-lightbulb-flash-line"></i> ${d.marca} · ${d.scope} — Comprar ≈ ${fmt(r.comprar)} pares</div>
         <div style="margin-top:6px; color:var(--nexo-gray-700);">${r.veredicto}</div>
+        ${htmlOcAbiertas(r.en_oc_abiertas)}
     </div>
 
     <div class="ic-grid">
@@ -245,14 +294,14 @@ function render(d) {
         <div class="ic-card full"><h3><i class="ri-ruler-line"></i> Curva de tallas — venta % vs stock % <span style="font-weight:500; color:var(--nexo-gray-500); font-size:.8rem;">(gap positivo = falta stock)</span></h3><div id="ic-chart-curva"></div></div>
         <div class="ic-card"><h3><i class="ri-heart-pulse-line"></i> Salud &amp; antigüedad de inventario</h3>
             <table class="ic-table">
-                <tr><td>Dead stock 90 días</td><td class="num">${fmt(sal.dead90_n)} SKUs</td></tr>
-                <tr><td>Dead stock 180 días</td><td class="num">${fmt(sal.dead180_n)} / ${fmt(sal.skus_total)} (${sal.pct_dead180 != null ? sal.pct_dead180 : '—'}%)</td></tr>
-                <tr><td>Capital inmovilizado 180d</td><td class="num">${fmt(sal.dead180_u)} pares · ${money(sal.dead180_costo)}</td></tr>
+                <tr><td title="{% definicion 'dead_stock' 90 %}">Dead stock 90 días (sin venta)</td><td class="num">${fmt(sal.dead90_n)} SKU-talla</td></tr>
+                <tr><td title="{% definicion 'dead_stock' 180 %}">Dead stock 180 días (sin venta)</td><td class="num">${fmt(sal.dead180_n)} / ${fmt(sal.skus_total)} (${sal.pct_dead180 != null ? sal.pct_dead180 : '—'}%)</td></tr>
+                <tr><td title="Unidades y valor a costo de los SKU-talla en tiendas sin ninguna venta en los últimos 180 d (no es edad de lote).">Capital inmovilizado 180 d (sin venta)</td><td class="num">${fmt(sal.dead180_u)} pares · ${money(sal.dead180_costo)}</td></tr>
                 <tr><td>Lead time proveedor</td><td class="num">${sal.lead_time.dias} días ${sal.lead_time.proveedor ? '· ' + sal.lead_time.proveedor : '<span style="color:var(--nexo-gray-500);">(default)</span>'}</td></tr>
             </table>
             ${abcHtml}
         </div>
-        <div class="ic-card"><h3><i class="ri-recycle-line"></i> Sell-through anual <span style="font-weight:500; color:var(--nexo-gray-500); font-size:.78rem;">(venta neta ÷ ingresado sin la apertura de migración; &gt;100% = subvaluado por traspaso)</span></h3><div id="ic-chart-str"></div></div>
+        <div class="ic-card"><h3 title="{% definicion 'sell_through_ingresado' %}"><i class="ri-recycle-line"></i> Sell-through anual vs ingresado <span style="font-weight:500; color:var(--nexo-gray-500); font-size:.78rem;">(venta neta del año ÷ ingresado en el año, sin la apertura de migración; &gt;100% = subvaluado por traspaso)</span></h3><div id="ic-chart-str"></div></div>
         <div class="ic-card full"><h3><i class="ri-store-2-line"></i> Stock por sucursal</h3><div id="ic-stock-suc"></div></div>
     </div>
 

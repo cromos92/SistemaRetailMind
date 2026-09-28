@@ -172,27 +172,27 @@
 
 <!-- KPIs de despacho -->
 <div class="doc-kpi-grid" style="margin-bottom:16px;">
-    <div class="doc-kpi-card">
+    <div class="doc-kpi-card" title="Unidades de la pierna TRASPASO_SALIDA completada que salió de un centro de distribución hacia una sucursal destino en el período (fecha del movimiento). No suma la pierna de entrada (sería la misma unidad dos veces).">
         <div class="doc-kpi-top"><div class="doc-kpi-icon-box" style="background:var(--doc-primary-light);color:var(--doc-primary);"><i class="ri-box-3-line"></i></div></div>
         <div class="doc-kpi-value" id="despUnidades" style="color:var(--doc-primary);">-</div>
         <div class="doc-kpi-label">Unidades despachadas</div>
     </div>
-    <div class="doc-kpi-card">
+    <div class="doc-kpi-card" title="Unidades despachadas multiplicadas por el costo registrado en cada movimiento de salida.">
         <div class="doc-kpi-top"><div class="doc-kpi-icon-box" style="background:var(--doc-success-light);color:var(--doc-success);"><i class="ri-money-dollar-circle-line"></i></div></div>
         <div class="doc-kpi-value" id="despValor" style="color:var(--doc-success);">-</div>
         <div class="doc-kpi-label">Valorizado (a costo)</div>
     </div>
-    <div class="doc-kpi-card">
+    <div class="doc-kpi-card" title="DTEs de traspaso distintos detrás de esos movimientos de salida.">
         <div class="doc-kpi-top"><div class="doc-kpi-icon-box" style="background:var(--doc-info-light);color:var(--doc-info);"><i class="ri-file-list-3-line"></i></div></div>
         <div class="doc-kpi-value" id="despGuias" style="color:var(--doc-info);">-</div>
         <div class="doc-kpi-label">Guías de despacho</div>
     </div>
-    <div class="doc-kpi-card">
+    <div class="doc-kpi-card" title="Centros de distribución con al menos un despacho en el período.">
         <div class="doc-kpi-top"><div class="doc-kpi-icon-box" style="background:var(--doc-primary-light);color:var(--doc-primary);"><i class="ri-store-2-line"></i></div></div>
         <div class="doc-kpi-value" id="despCds">-</div>
         <div class="doc-kpi-label">CD activos</div>
     </div>
-    <div class="doc-kpi-card">
+    <div class="doc-kpi-card" title="Sucursales destino distintas que recibieron al menos un despacho en el período.">
         <div class="doc-kpi-top"><div class="doc-kpi-icon-box" style="background:var(--doc-warning-light);color:var(--doc-warning);"><i class="ri-map-pin-line"></i></div></div>
         <div class="doc-kpi-value" id="despDestinos">-</div>
         <div class="doc-kpi-label">Sucursales atendidas</div>
@@ -254,7 +254,7 @@
 <div class="row g-3 mb-4">
     <div class="col-md-6">
         <a href="/app/recepcion-dte/" class="text-decoration-none">
-            <div class="doc-kpi-card" style="border-left:5px solid var(--doc-primary);">
+            <div class="doc-kpi-card" style="border-left:5px solid var(--doc-primary);" title="Traspasos en estado EMITIDO (aún sin recepcionar). Sin filtro de fecha: muestra todo lo pendiente.">
                 <div class="doc-kpi-top">
                     <div class="doc-kpi-icon-box" style="background:var(--doc-primary-light);color:var(--doc-primary);"><i class="ri-inbox-archive-line"></i></div>
                     <i class="ri-arrow-right-line" style="color:var(--doc-primary);font-size:1.2rem;"></i>
@@ -266,7 +266,7 @@
     </div>
     <div class="col-md-6">
         <a href="/app/recepcion-dte/?vista=regularizar&tab=pendiente" class="text-decoration-none">
-            <div class="doc-kpi-card" style="border-left:5px solid var(--doc-warning);">
+            <div class="doc-kpi-card" style="border-left:5px solid var(--doc-warning);" title="Traspasos RECEPCIONADO_PARCIAL + EN_REGULARIZACION + RECHAZADO. Sin filtro de fecha: muestra todo lo pendiente.">
                 <div class="doc-kpi-top">
                     <div class="doc-kpi-icon-box" style="background:var(--doc-warning-light);color:var(--doc-warning);"><i class="ri-tools-line"></i></div>
                     <i class="ri-arrow-right-line" style="color:var(--doc-warning);font-size:1.2rem;"></i>
@@ -280,14 +280,14 @@
 
 <!-- KPIs -->
 <div class="doc-kpi-grid" id="kpiGrid">
-    <div class="doc-kpi-card">
+    <div class="doc-kpi-card" title="DTEs de traspaso no descartados emitidos en el período, con origen o destino en la sucursal activa (o de toda la empresa si marcas Todas las sucursales).">
         <div class="doc-kpi-top">
             <div class="doc-kpi-icon-box" style="background:var(--doc-primary-light);color:var(--doc-primary);"><i class="ri-truck-line"></i></div>
         </div>
         <div class="doc-kpi-value" id="kpiTraspasos">-</div>
         <div class="doc-kpi-label">Total Traspasos</div>
     </div>
-    <div class="doc-kpi-card">
+    <div class="doc-kpi-card" title="Líneas de recepción en estado RECEPCIONADO_OK sobre el total de líneas recepcionadas en el período (por fecha de recepción; las aún no recepcionadas entran por fecha de emisión).">
         <div class="doc-kpi-top">
             <div class="doc-kpi-icon-box" style="background:var(--doc-success-light);color:var(--doc-success);"><i class="ri-checkbox-circle-line"></i></div>
         </div>
@@ -295,21 +295,21 @@
         <div class="doc-kpi-label">Tasa de Exito (%)</div>
         <div class="doc-kpi-bar"><div class="doc-kpi-bar-fill" id="barTasaExito" style="width:0;background:var(--doc-success);"></div></div>
     </div>
-    <div class="doc-kpi-card">
+    <div class="doc-kpi-card" title="Promedio de días entre fecha de emisión y fecha de recepción de los traspasos del período que ya fueron recepcionados. El desglose por tienda está en Eficacia de despacho.">
         <div class="doc-kpi-top">
             <div class="doc-kpi-icon-box" style="background:var(--doc-warning-light);color:var(--doc-warning);"><i class="ri-time-line"></i></div>
         </div>
         <div class="doc-kpi-value" id="kpiDiasPromedio">-</div>
         <div class="doc-kpi-label">Dias Prom. Recepcion</div>
     </div>
-    <div class="doc-kpi-card">
+    <div class="doc-kpi-card" title="Líneas de recepción con un problema abierto: parcial, dañado, faltante, en regularización o sobrante pendiente.">
         <div class="doc-kpi-top">
             <div class="doc-kpi-icon-box" style="background:var(--doc-danger-light);color:var(--doc-danger);"><i class="ri-alert-line"></i></div>
         </div>
         <div class="doc-kpi-value" id="kpiPendientes">-</div>
         <div class="doc-kpi-label">Pendientes Regularizacion</div>
     </div>
-    <div class="doc-kpi-card">
+    <div class="doc-kpi-card" title="Líneas en RECEPCIONADO_SOBRANTE o SOBRANTE_PENDIENTE: llegó más de lo documentado y falta decidir si se acepta o se devuelve.">
         <div class="doc-kpi-top">
             <div class="doc-kpi-icon-box" style="background:var(--doc-info-light);color:var(--doc-info);"><i class="ri-add-circle-line"></i></div>
         </div>
@@ -327,6 +327,45 @@
     <div class="doc-pipeline-step" style="background:var(--doc-info-light);"><div class="step-value" style="color:var(--doc-info);" id="pipeSobrante">-</div><div class="step-label">Sobrante</div></div>
     <div class="doc-pipeline-step" style="background:var(--doc-danger-light);"><div class="step-value" style="color:var(--doc-danger);" id="pipeReg">-</div><div class="step-label">En Reg.</div></div>
     <div class="doc-pipeline-step"><div class="step-value" id="pipeRechazados">-</div><div class="step-label">Rechazados</div></div>
+</div>
+
+<!-- Eficacia de despacho: vendido a 30 d / despachado, por tienda destino -->
+<div class="doc-section-title"><i class="ri-shopping-bag-3-line"></i>Eficacia de despacho (vendido a 30 d / despachado, por tienda)</div>
+<div class="row">
+    <div class="col-lg-3">
+        <div class="doc-kpi-card" style="margin-bottom:24px;" title="Proxy por (tienda, SKU): unidades despachadas desde un CD a la tienda en el período (TRASPASO_SALIDA completado) y cuántas unidades del mismo SKU vendió esa tienda entre el primer despacho y 30 días después del último, topado en lo despachado. No existe vínculo unidad a unidad despacho → venta. Si parte de lo despachado salió hace menos de 30 días, la cifra es PARCIAL (en gris): esa ventana de venta sigue abierta.">
+            <div class="doc-kpi-top">
+                <div class="doc-kpi-icon-box" style="background:var(--doc-success-light);color:var(--doc-success);"><i class="ri-shopping-bag-3-line"></i></div>
+            </div>
+            <div class="doc-kpi-value" id="kpiEficacia" style="color:var(--doc-success);">-</div>
+            <div class="doc-kpi-label">Eficacia de despacho 30 d (global)</div>
+            <div class="doc-kpi-bar"><div class="doc-kpi-bar-fill" id="barEficacia" style="width:0;background:var(--doc-success);"></div></div>
+            <div class="doc-kpi-label" id="kpiEficaciaDetalle" style="margin-top:8px;font-size:.72rem;"></div>
+        </div>
+    </div>
+    <div class="col-lg-9">
+        <div class="doc-card">
+            <div class="doc-card-body">
+                <div class="doc-section-title"><i class="ri-store-3-line"></i>Por tienda destino</div>
+                <p style="font-size:.75rem;color:var(--doc-gray-500);margin-top:-8px;">Vendido a 30 d = unidades del mismo SKU vendidas en la tienda entre el primer despacho del período y 30 días después del último (tope: lo despachado). Solo despachos con origen en un CD, acotados a la sucursal activa (lo que ella envió o recibió); la zona superior cuenta por los CD de la empresa. * = parcial: parte de lo despachado salió hace menos de 30 días y su ventana sigue abierta. Días = promedio emisión → recepción de los traspasos del período ya recepcionados en esa tienda.</p>
+                <div class="table-responsive">
+                    <table class="tbl-despachos">
+                        <thead>
+                            <tr>
+                                <th>Tienda</th>
+                                <th class="text-center">Despachado (uds)</th>
+                                <th class="text-center">Vendido a 30 d</th>
+                                <th class="text-center">Eficacia</th>
+                                <th class="text-center">Días emisión → recepción</th>
+                                <th class="text-center">Traspasos recep.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tblEficacia"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="row">
@@ -534,6 +573,7 @@ function cargarDatos() {
         .then(r => r.json())
         .then(data => {
             renderKPIs(data.kpis);
+            renderEficacia(data.eficacia_por_tienda || [], data.kpis);
             renderPipeline(data.pipeline);
             renderSucursales(data.por_sucursal);
             renderTendencia(data.tendencia);
@@ -619,9 +659,10 @@ function renderSankey(arbol) {
     despSankeyChart.setOption({
         tooltip: {
             trigger: 'item', triggerOn: 'mousemove',
+            // El tooltip de ECharts se pinta como HTML: los alias se escapan.
             formatter: p => p.dataType === 'edge'
-                ? `${sinPrefijo(p.data.source)} → ${sinPrefijo(p.data.target)}<br><b>${fmtNumDesp(p.data.value)}</b> uds`
-                : sinPrefijo(p.name)
+                ? `${escEficacia(sinPrefijo(p.data.source))} → ${escEficacia(sinPrefijo(p.data.target))}<br><b>${fmtNumDesp(p.data.value)}</b> uds`
+                : escEficacia(sinPrefijo(p.name))
         },
         series: [{
             type: 'sankey', emphasis: { focus: 'adjacency' }, nodeAlign: 'justify', nodeGap: 10,
@@ -646,10 +687,10 @@ function renderMatriz(m) {
     let maxVal = 1;
     m.filas.forEach(o => m.cols.forEach(d => { maxVal = Math.max(maxVal, m.celdas[o][d] || 0); }));
     let h = '<thead><tr><th style="text-align:left;">CD ↓ / Suc →</th>';
-    m.cols.forEach(d => { h += `<th class="text-center">${d}</th>`; });
+    m.cols.forEach(d => { h += `<th class="text-center">${escEficacia(d)}</th>`; });
     h += '<th class="text-center">Total</th></tr></thead><tbody>';
     m.filas.forEach(o => {
-        h += `<tr><td style="font-weight:700;">${o}</td>`;
+        h += `<tr><td style="font-weight:700;">${escEficacia(o)}</td>`;
         m.cols.forEach(d => {
             const v = m.celdas[o][d] || 0;
             const alpha = v ? (0.12 + 0.55 * (v / maxVal)) : 0;
@@ -707,10 +748,10 @@ function renderDespDetalle(det) {
         return;
     }
     tb.innerHTML = det.map(r => `<tr>
-        <td style="font-weight:600;">${r.alias || '-'}</td>
+        <td style="font-weight:600;">${escEficacia(r.alias || '-')}</td>
         <td class="text-center">${fmtNumDesp(r.unidades)}</td>
         <td class="text-center">${fmtNumDesp(r.guias)}</td>
-        <td class="text-center">${r.ultimo || '-'}</td></tr>`).join('');
+        <td class="text-center">${escEficacia(r.ultimo || '-')}</td></tr>`).join('');
 }
 
 function renderKPIs(k) {
@@ -722,6 +763,68 @@ function renderKPIs(k) {
     document.getElementById('kpiSobrantes').textContent = k.total_sobrantes;
     document.getElementById('kpiPorRecibir').textContent = (k.por_recibir ?? '-');
     document.getElementById('kpiPorRegularizar').textContent = (k.por_regularizar ?? '-');
+}
+
+// Eficacia de despacho: KPI global + tabla por tienda destino (misma paleta de
+// umbrales que el resto de las tablas: verde / ámbar / rojo).
+function colorEficacia(pct) {
+    return pct >= 25 ? 'var(--doc-success)' : pct >= 10 ? 'var(--doc-warning)' : 'var(--doc-danger)';
+}
+
+// Escapa texto de la BD (alias, N° de documento, motivo de rechazo) antes de
+// insertarlo como HTML. Lo usan todas las tablas del dashboard, no solo Eficacia.
+function escEficacia(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch]));
+}
+
+function renderEficacia(rows, k) {
+    k = k || {};
+    const pct = k.eficacia_30d || 0;
+    // Parcial: hay unidades despachadas hace < 30 d cuya ventana de venta sigue
+    // abierta (el mes en curso siempre lo es). Color neutro, no rojo/ámbar.
+    const parcial = !!k.eficacia_parcial;
+    const color = parcial ? 'var(--doc-gray-500)' : colorEficacia(pct);
+    const kv = document.getElementById('kpiEficacia');
+    kv.textContent = pct + '%';
+    kv.style.color = color;
+    const bar = document.getElementById('barEficacia');
+    bar.style.width = Math.min(100, pct) + '%';
+    bar.style.background = color;
+    let detalle = fmtNumDesp(k.eficacia_vendido) + ' vendidas de ' + fmtNumDesp(k.eficacia_despachado) + ' despachadas';
+    if (parcial) {
+        detalle += '. Parcial: ' + fmtNumDesp(k.eficacia_uds_ventana_abierta) +
+            ' uds despachadas hace < 30 d, su ventana sigue abierta';
+    }
+    document.getElementById('kpiEficaciaDetalle').textContent = detalle;
+
+    const tbody = document.getElementById('tblEficacia');
+    if (!rows || !rows.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">Sin despachos con destino en el periodo</td></tr>';
+        return;
+    }
+    tbody.innerHTML = rows.map(t => {
+        const dias = (t.dias_recepcion === null || t.dias_recepcion === undefined) ? '-' : t.dias_recepcion;
+        // Sin despachos desde CD en el período: no hay eficacia que medir ('-').
+        const sinMedir = !t.despachado || t.eficacia === null || t.eficacia === undefined;
+        const abiertas = t.uds_ventana_abierta || 0;
+        const c = abiertas > 0 ? 'var(--doc-gray-500)' : colorEficacia(t.eficacia);
+        const celdaEficacia = sinMedir ? '<span class="text-muted">-</span>' : `
+                <span style="color:${c};font-weight:700;"${abiertas > 0 ? ` title="Parcial: ${fmtNumDesp(abiertas)} uds despachadas hace menos de 30 días, su ventana de venta sigue abierta"` : ''}>${t.eficacia}%${abiertas > 0 ? '*' : ''}</span>
+                <div style="width:60px;display:inline-block;vertical-align:middle;margin-left:6px;">
+                    <div style="height:4px;background:var(--doc-gray-100);border-radius:2px;">
+                        <div class="pct-bar" style="width:${Math.min(100, t.eficacia)}%;background:${c};"></div>
+                    </div>
+                </div>`;
+        return `<tr>
+            <td><strong>${escEficacia(t.tienda)}</strong></td>
+            <td class="text-center">${fmtNumDesp(t.despachado)}</td>
+            <td class="text-center">${fmtNumDesp(t.vendido_30d)}</td>
+            <td class="text-center">${celdaEficacia}
+            </td>
+            <td class="text-center">${dias}</td>
+            <td class="text-center">${t.traspasos_recepcionados || '-'}</td>
+        </tr>`;
+    }).join('');
 }
 
 function renderFlujo(data) {
@@ -736,8 +839,8 @@ function renderFlujo(data) {
             ? `<span class="badge bg-warning text-dark">${pr}</span>`
             : '<span class="text-muted">0</span>';
         return `<tr>
-            <td><strong>${f.origen}</strong></td>
-            <td><i class="ri-arrow-right-line text-muted me-1"></i>${f.destino}</td>
+            <td><strong>${escEficacia(f.origen)}</strong></td>
+            <td><i class="ri-arrow-right-line text-muted me-1"></i>${escEficacia(f.destino)}</td>
             <td class="text-center">${f.dtes}</td>
             <td class="text-center"><span style="color:var(--doc-success);font-weight:600;">${f.completos}</span></td>
             <td class="text-center">${prCell}</td>
@@ -754,7 +857,7 @@ function renderErroresOrigen(data) {
     tbody.innerHTML = data.map(e => {
         const tasaColor = e.tasa >= 20 ? 'var(--doc-danger)' : e.tasa >= 8 ? 'var(--doc-warning)' : 'var(--doc-gray-700)';
         return `<tr>
-            <td><strong>${e.origen}</strong> <small class="text-muted">de ${e.total}</small></td>
+            <td><strong>${escEficacia(e.origen)}</strong> <small class="text-muted">de ${e.total}</small></td>
             <td class="text-center"><span class="badge bg-danger">${e.errores}</span></td>
             <td class="text-center" style="color:${tasaColor};font-weight:700;">${e.tasa}%</td>
         </tr>`;
@@ -779,7 +882,7 @@ function renderSucursales(data) {
     tbody.innerHTML = data.map(s => {
         const pctColor = s.pct_ok >= 90 ? 'var(--doc-success)' : s.pct_ok >= 70 ? 'var(--doc-warning)' : 'var(--doc-danger)';
         return `<tr>
-            <td><strong>${s.sucursal}</strong></td>
+            <td><strong>${escEficacia(s.sucursal)}</strong></td>
             <td class="text-center">${s.total}</td>
             <td class="text-center">
                 <span style="color:${pctColor};font-weight:700;">${s.pct_ok}%</span>
@@ -836,9 +939,9 @@ function renderRegPendientes(data) {
     tbody.innerHTML = data.map(r => {
         const diasColor = r.dias_pendiente > 7 ? 'var(--doc-danger)' : r.dias_pendiente > 3 ? 'var(--doc-warning)' : 'var(--doc-gray-700)';
         return `<tr>
-            <td><strong>#${r.dte__numero_documento}</strong></td>
-            <td>${r.dte__sucursal__alias || '-'}</td>
-            <td>${r.dte__fecha_emision || '-'}</td>
+            <td><strong>#${escEficacia(r.dte__numero_documento)}</strong></td>
+            <td>${escEficacia(r.dte__sucursal__alias || '-')}</td>
+            <td>${escEficacia(r.dte__fecha_emision || '-')}</td>
             <td class="text-center"><span class="badge bg-warning text-dark">${r.productos_pendientes}</span></td>
             <td class="text-center" style="color:${diasColor};font-weight:700;">${r.dias_pendiente} dias</td>
             <td><a href="/app/recepcion-dte/?vista=regularizar&tab=pendiente" class="btn btn-sm btn-outline-primary"><i class="ri-tools-line me-1"></i>Regularizar</a></td>
@@ -904,12 +1007,12 @@ function renderIncompletosDetalle(data, filtro) {
         const url = ACCION_URL[d.estado_dte] || '#';
         const textoAccion = ACCION_TEXTO[d.estado_dte] || 'Ver';
         return `<tr>
-            <td><strong>#${d.numero_documento}</strong></td>
-            <td><span class="badge-estado badge-${d.estado_dte}">${d.estado_label}</span></td>
-            <td>${d.sucursal__alias || '-'}</td>
-            <td>${d.fecha_emision || '-'}</td>
+            <td><strong>#${escEficacia(d.numero_documento)}</strong></td>
+            <td><span class="badge-estado badge-${escEficacia(d.estado_dte)}">${escEficacia(d.estado_label)}</span></td>
+            <td>${escEficacia(d.sucursal__alias || '-')}</td>
+            <td>${escEficacia(d.fecha_emision || '-')}</td>
             <td class="text-center"><span class="dias-alerta ${diasClass}">${d.dias_pendiente} dias</span></td>
-            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${d.motivo_rechazo || ''}">${d.motivo_rechazo || '<span class="text-muted">-</span>'}</td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escEficacia(d.motivo_rechazo)}">${d.motivo_rechazo ? escEficacia(d.motivo_rechazo) : '<span class="text-muted">-</span>'}</td>
             <td><a href="${url}" class="btn btn-sm btn-outline-primary" style="font-size:.75rem;border-radius:6px;"><i class="ri-arrow-right-line me-1"></i>${textoAccion}</a></td>
         </tr>`;
     }).join('');

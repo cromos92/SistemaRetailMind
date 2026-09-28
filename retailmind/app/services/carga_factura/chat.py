@@ -12,6 +12,7 @@ desde aquí: para eso está el botón «Cargar» de la tarjeta.
 """
 import json
 import logging
+import os
 import re
 
 from app.models import CargaFacturaPdf
@@ -22,7 +23,10 @@ from .facturas import ErrorCarga
 
 logger = logging.getLogger('app')
 
-_HISTORIAL = 12      # mensajes recientes que ve Claude
+# Traducir un mensaje a correcciones es una tarea acotada: un modelo más
+# barato que el de la lectura alcanza (y responde más rápido).
+MODELO_CHAT = os.environ.get('CARGA_FACTURA_MODELO_CHAT', 'claude-sonnet-5')
+_HISTORIAL = 8       # mensajes recientes que ve Claude
 _MAX_TEXTO = 2000
 
 _INSTRUCCIONES = """Eres el agente de carga de productos desde facturas de proveedor de una cadena de
@@ -56,10 +60,21 @@ SOLO lo que la persona pidió, con valores EXACTOS de las listas. Reglas:
 - Si preguntan por otra factura o por un código ya cargado antes («¿a cuánto lo compré?», «¿en
   qué factura vino?»), responde con "facturas_anteriores": son lecturas ya hechas y guardadas
   de otras cargas; nunca hace falta volver a leer un PDF. Si ahí no hay nada, dilo.
+- Si la persona pide buscar o averiguar en internet qué es un artículo o su color («busca la
+  línea 3», «busca los colores de todas», «¿qué es el HQ6034-001?»), pon esas líneas en
+  "investigar" (idx de la factura y n de la línea; «todas» = las líneas sin color, que son
+  las que tienen color vacío o el color por defecto) y en "respuesta" di que lo vas a buscar.
+  NO inventes tú el color ni lo pongas en "cambios": lo averigua el sistema.
+- Si pide recordar algo para la próxima vez con esa marca («recuerda que en Chalada el color
+  va en la descripción», «acuérdate: las tallas de X son CL»), escribe la frase a recordar en
+  "recordar" además de aplicar el cambio de esta carga si corresponde.
+- "aprendido" en una línea son campos que vienen de cargas anteriores o de internet;
+  "venta_anterior" es con qué precio se cargó la última vez ese código (solo una referencia).
 - Todos los campos de un cambio van SIEMPRE, y los que NO cambian van vacíos: "" en textos y
   en los campos de lista de opciones, -1 en los numéricos, [] en las listas, y "" en "omitir"
-  y "renombrar_tallas" (que valen "si" o "no" solo cuando la persona lo pide). Nunca
-  rellenes un campo con un valor real que la persona no pidió."""
+  y "renombrar_tallas" (que valen "si" o "no" solo cuando la persona lo pide). "investigar"
+  va [] y "recordar" va "" si no se pidieron. Nunca rellenes un campo con un valor real que
+  la persona no pidió."""
 
 
 # La API compila el esquema a una gramática y tiene dos techos: 16 campos con
@@ -142,9 +157,17 @@ def _esquema(catalogo):
     }
     cambio['required'] = list(cambio['properties'])
     return {'type': 'object',
-            'properties': {'respuesta': {'type': 'string'},
-                           'cambios': {'type': 'array', 'items': cambio}},
-            'required': ['respuesta', 'cambios'], 'additionalProperties': False}
+            'properties': {
+                'respuesta': {'type': 'string'},
+                'cambios': {'type': 'array', 'items': cambio},
+                'investigar': _lista({
+                    'type': 'object',
+                    'properties': {'idx': {'type': 'integer'}, 'n': {'type': 'integer'}},
+                    'required': ['idx', 'n'], 'additionalProperties': False}),
+                'recordar': _texto(),
+            },
+            'required': ['respuesta', 'cambios', 'investigar', 'recordar'],
+            'additionalProperties': False}
 
 
 # ---------------------------------------------------------------- contexto
@@ -171,6 +194,8 @@ def _resumen_linea(p):
             f"#{f['id']} {f['marca']}/{f['color']}/{f['genero']}/{f['categoria']} "
             f"({f['tallas']} tallas, stock {f['stock']})" for f in p['candidatas']],
         'errores': p['errores'], 'avisos': p['avisos'][:5],
+        'aprendido': p.get('aprendido') or [], 'venta_anterior': p.get('precio_aprendido'),
+        'que_es_segun_internet': p.get('que_es'),
         'valores_actuales_json': {k: v for k, v in p['json'].items() if v not in (None, '', [])},
     }
 
@@ -200,12 +225,19 @@ def _texto_historial(m):
 
 
 def _preguntar(catalogo, previa, historial, texto, anteriores=None):
-    """Una vuelta con Claude: dict {'respuesta', 'cambios'} según el esquema."""
+    """Una vuelta con Claude: dict {'respuesta', 'cambios', 'investigar', 'recordar'}
+    según el esquema.
+
+    El pedido va en dos bloques: primero lo ESTABLE entre turnos (instrucciones
+    y listas del sistema), después lo que cambia (vista previa, historial,
+    mensaje). Así el prefijo se sirve desde la caché en cada turno del chat."""
     cliente = svc_lectura._cliente()
-    contexto = {
+    estable = {
         'listas_del_sistema': {k: catalogo[k] for k in ('marcas', 'colores', 'generos',
                                                           'categorias', 'especialidades', 'guias')},
         'tipos_de_talla': list(svc_web.TIPOS_TALLA),
+    }
+    variable = {
         'vista_previa': [_resumen_factura(i) for i in previa],
         'facturas_anteriores': anteriores or 'ninguna coincidencia con cargas anteriores',
         'conversacion_reciente': [
@@ -214,10 +246,10 @@ def _preguntar(catalogo, previa, historial, texto, anteriores=None):
         'mensaje_de_la_persona': texto,
     }
     respuesta = svc_lectura._pedir(
-        cliente, max_tokens=8000,
+        cliente, modelo=MODELO_CHAT, max_tokens=8000,
         messages=[{'role': 'user', 'content': [
-            {'type': 'text', 'text': _INSTRUCCIONES},
-            {'type': 'text', 'text': json.dumps(contexto, ensure_ascii=False, default=str)}]}],
+            {'type': 'text', 'text': _INSTRUCCIONES + '\n\n' + json.dumps(estable, ensure_ascii=False)},
+            {'type': 'text', 'text': json.dumps(variable, ensure_ascii=False, default=str)}]}],
         output_config={'effort': 'medium',
                        'format': {'type': 'json_schema', 'schema': _esquema(catalogo)}})
     return json.loads(svc_lectura._texto(respuesta))
@@ -463,6 +495,7 @@ def conversar(sesion, user, texto):
     except Exception:
         logger.exception('carga_factura: falló la búsqueda en cargas anteriores (sesión %s)', sesion.id)
         anteriores = {}
+    svc_lectura.uso_iniciar()
     try:
         salida = _preguntar(catalogo, previa, sesion.mensajes, texto, anteriores=anteriores)
     except ErrorCarga:
@@ -470,20 +503,42 @@ def conversar(sesion, user, texto):
     except Exception as exc:
         logger.exception('carga_factura: falló el chat de la sesión %s', sesion.id)
         raise ErrorCarga(f'No pude procesar el mensaje ({type(exc).__name__}: {exc}).')
+    uso = svc_web._sumar_uso(sesion.id, 'chat', svc_lectura.uso_actual())
     respuesta = str(salida.get('respuesta') or '').strip() or 'Listo.'
     cambios, rechazos = _a_correcciones(salida.get('cambios'), previa, catalogo)
     rechazos = list(dict.fromkeys(rechazos))
-    aplicados, fallo = [], ''
+    aplicados, fallo, aprendido = [], '', []
     if cambios:
         try:
             svc_web.aplicar_correcciones(sesion, cambios)
             aplicados = _describir(cambios, previa)
         except ErrorCarga as exc:
             fallo = str(exc)
+    # «Recuerda que…»: queda como pista del lector para esa marca.
+    recordar = str(salida.get('recordar') or '').strip()
+    if recordar:
+        marca = next((c.get('marca') for c in cambios if c.get('marca')), None) \
+            or next((i.get('marca') for i in previa if i.get('marca')), None)
+        try:
+            texto_rec = svc_web.recordar_para_marca(marca, recordar, user)
+            if texto_rec:
+                aprendido.append(texto_rec)
+        except Exception:
+            logger.exception('carga_factura: no se pudo guardar lo que pidieron recordar')
+    # Líneas para buscar en internet (corre en segundo plano; deja la sesión BUSCANDO).
+    pares = [(int(p.get('idx')), int(p.get('n'))) for p in salida.get('investigar') or []
+             if isinstance(p, dict) and isinstance(p.get('idx'), int) and isinstance(p.get('n'), int)]
     # El mensaje guardado lleva el texto limpio y los cambios aparte (la
     # pantalla los pinta como fichas); la respuesta de la API los lleva en texto.
     sesion.agregar_mensaje(svc_web.AGENTE, respuesta, tipo='chat',
-                           cambios=aplicados, rechazos=rechazos, fallo=fallo)
+                           cambios=aplicados, rechazos=rechazos, fallo=fallo,
+                           aprendido=aprendido, uso=uso)
+    investigando = 0
+    if pares:
+        try:
+            investigando = svc_web.iniciar_investigacion(sesion, pares, user)
+        except ErrorCarga as exc:
+            fallo = (fallo + ' ' if fallo else '') + str(exc)
     texto_api = respuesta
     if rechazos:
         texto_api += ('\n\nNo apliqué (no existe en el sistema; se crea en Gestión de Productos y '
@@ -492,5 +547,9 @@ def conversar(sesion, user, texto):
         texto_api += f'\n\nNo pude aplicar el cambio: {fallo}'
     if aplicados:
         texto_api += '\n\nApliqué: ' + '; '.join(aplicados) + '. La vista previa ya está recalculada.'
+    if aprendido:
+        texto_api += '\n\nRecordaré: ' + '; '.join(aprendido) + '.'
+    sesion.refresh_from_db()
     return {'respuesta': texto_api, 'cambios': aplicados, 'rechazos': rechazos,
+            'aprendido': aprendido, 'investigando': investigando,
             'facturas': svc_web.planificar(sesion, user)}

@@ -355,7 +355,7 @@
         <!-- KPIs PRINCIPALES -->
         <div class="doc-section-title"><i class="ri-dashboard-line"></i>Indicadores Clave</div>
         <div class="doc-kpi-grid">
-            <div class="doc-kpi-card dte">
+            <div class="doc-kpi-card dte" title="Documentos no descartados emitidos o recibidos por la empresa en el período (por fecha de emisión): facturas, boletas, NC, guías y traspasos. La flecha compara con el mes calendario anterior.">
                 <div class="doc-kpi-top">
                     <div class="doc-kpi-icon-box"><i class="ri-file-list-3-line"></i></div>
                     <div class="doc-kpi-trend" id="kpiVariacion"></div>
@@ -364,15 +364,15 @@
                 <div class="doc-kpi-label">Total Documentos</div>
                 <div class="doc-kpi-footer" id="kpiTotalFooter">--</div>
             </div>
-            <div class="doc-kpi-card monto">
+            <div class="doc-kpi-card monto" title="Suma del monto con IVA de los documentos del período, RESTANDO las notas de crédito (es_nota_credito o tipo NOTA DE CREDITO). El pie muestra el bruto (sin NC) y las NC por separado.">
                 <div class="doc-kpi-top">
                     <div class="doc-kpi-icon-box"><i class="ri-money-dollar-circle-line"></i></div>
                 </div>
                 <div class="doc-kpi-value" id="kpiMonto">--</div>
-                <div class="doc-kpi-label">Monto Facturado</div>
+                <div class="doc-kpi-label">Monto neto (facturado &minus; NC)</div>
                 <div class="doc-kpi-footer" id="kpiMontoFooter">--</div>
             </div>
-            <div class="doc-kpi-card pendientes">
+            <div class="doc-kpi-card pendientes" title="Documentos donde la empresa es receptora y siguen en estado EMITIDO (aún no recepcionados en el sistema).">
                 <div class="doc-kpi-top">
                     <div class="doc-kpi-icon-box"><i class="ri-inbox-unarchive-line"></i></div>
                 </div>
@@ -380,12 +380,12 @@
                 <div class="doc-kpi-label">Pendientes Recepción</div>
                 <div class="doc-kpi-footer">DTEs emitidos sin recepcionar</div>
             </div>
-            <div class="doc-kpi-card deuda">
+            <div class="doc-kpi-card deuda" title="Deuda a proveedores: facturas de COMPRA con estado_pago PENDIENTE (monto con IVA). No incluye notas de crédito de proveedores ni boletas de venta al público, que nacen PENDIENTE y se cobran en caja. Vencido = por pagar con fecha de vencimiento anterior a hoy.">
                 <div class="doc-kpi-top">
                     <div class="doc-kpi-icon-box"><i class="ri-bank-line"></i></div>
                 </div>
                 <div class="doc-kpi-value" id="kpiMontoPendiente">--</div>
-                <div class="doc-kpi-label" title="Facturas de compra impagas. No incluye boletas de venta al publico, que nacen PENDIENTE y se cobran en caja.">Por Pagar a Proveedores</div>
+                <div class="doc-kpi-label">Por Pagar a Proveedores</div>
                 <div class="doc-kpi-footer" id="kpiDeudaFooter">--</div>
             </div>
         </div>
@@ -393,77 +393,77 @@
         <!-- KPIs SECUNDARIOS -->
         <div class="doc-section-title"><i class="ri-bar-chart-grouped-line"></i>Detalle Operativo</div>
         <div class="doc-kpi-strip">
-            <div class="doc-kpi-mini mini-facturas">
+            <div class="doc-kpi-mini mini-facturas" title="FACTURA ELECTRONICA + FACTURA EXENTA emitidas en el período.">
                 <div class="doc-kpi-mini-icon"><i class="ri-file-text-line"></i></div>
                 <div class="doc-kpi-mini-text">
                     <div class="doc-kpi-mini-value" id="kpiFacturas">--</div>
                     <div class="doc-kpi-mini-label">Facturas</div>
                 </div>
             </div>
-            <div class="doc-kpi-mini mini-boletas">
+            <div class="doc-kpi-mini mini-boletas" title="BOLETA ELECTRONICA + BOLETA PAPEL emitidas en el período.">
                 <div class="doc-kpi-mini-icon"><i class="ri-receipt-line"></i></div>
                 <div class="doc-kpi-mini-text">
                     <div class="doc-kpi-mini-value" id="kpiBoletas">--</div>
                     <div class="doc-kpi-mini-label">Boletas</div>
                 </div>
             </div>
-            <div class="doc-kpi-mini mini-nc">
+            <div class="doc-kpi-mini mini-nc" title="Notas de crédito del período (tipo NOTA DE CREDITO o es_nota_credito), emitidas y recibidas de proveedores. Restan en el monto neto y en todos los listados por monto. Incluye las NC migradas del sistema anterior (tipo de transacción NOTA_CREDITO, hasta el 16-04-2026), que el Reporte de Documentos Emitidos todavía no descuenta: para períodos anteriores a esa fecha las NC de ambas pantallas pueden no coincidir.">
                 <div class="doc-kpi-mini-icon"><i class="ri-file-damage-line"></i></div>
                 <div class="doc-kpi-mini-text">
                     <div class="doc-kpi-mini-value" id="kpiNC">--</div>
                     <div class="doc-kpi-mini-label">Notas de Crédito</div>
                 </div>
             </div>
-            <div class="doc-kpi-mini mini-guias">
+            <div class="doc-kpi-mini mini-guias" title="Documentos tipo GUIA emitidos en el período.">
                 <div class="doc-kpi-mini-icon"><i class="ri-truck-line"></i></div>
                 <div class="doc-kpi-mini-text">
                     <div class="doc-kpi-mini-value" id="kpiGuias">--</div>
                     <div class="doc-kpi-mini-label">Guías Despacho</div>
                 </div>
             </div>
-            <div class="doc-kpi-mini mini-vencidos">
+            <div class="doc-kpi-mini mini-vencidos" title="Compras impagas (COMPRA con estado_pago PENDIENTE) cuya fecha de vencimiento ya pasó. No incluye notas de crédito de proveedores. Cantidad de documentos; el monto va en el pie de Por Pagar.">
                 <div class="doc-kpi-mini-icon"><i class="ri-alarm-warning-line"></i></div>
                 <div class="doc-kpi-mini-text">
                     <div class="doc-kpi-mini-value" id="kpiVencidos">--</div>
-                    <div class="doc-kpi-mini-label" title="Compras impagas cuya fecha de vencimiento ya paso">Compras Vencidas</div>
+                    <div class="doc-kpi-mini-label">Compras Vencidas</div>
                 </div>
             </div>
-            <div class="doc-kpi-mini mini-cobrar">
+            <div class="doc-kpi-mini mini-cobrar" title="Ventas a crédito (VENTA / VENTA_PUBLICO con diasCredito &gt; 0) con estado_pago PENDIENTE, monto con IVA.">
                 <div class="doc-kpi-mini-icon"><i class="ri-hand-coin-line"></i></div>
                 <div class="doc-kpi-mini-text">
                     <div class="doc-kpi-mini-value" id="kpiPorCobrar">--</div>
-                    <div class="doc-kpi-mini-label" title="Ventas a credito (diasCredito &gt; 0) aun sin pago">Por Cobrar</div>
+                    <div class="doc-kpi-mini-label">Por Cobrar</div>
                 </div>
             </div>
-            <div class="doc-kpi-mini mini-sii">
+            <div class="doc-kpi-mini mini-sii" title="Documentos del período con recepción INTERNA cerrada (estado_dte ACEPTADO o RECEPCIONADO_COMPLETO) sobre el total. Es el estado del sistema, NO el acuse del SII. Las boletas del POS quedan EMITIDO para siempre, por eso el porcentaje es bajo.">
                 <div class="doc-kpi-mini-icon"><i class="ri-inbox-archive-line"></i></div>
                 <div class="doc-kpi-mini-text">
                     <div class="doc-kpi-mini-value" id="kpiAceptados">--</div>
-                    <div class="doc-kpi-mini-label" title="Estado INTERNO de recepcion de mercaderia, no el acuse del SII. Las boletas del POS quedan EMITIDO para siempre, por eso el porcentaje es bajo.">% Recepcion Cerrada</div>
+                    <div class="doc-kpi-mini-label">% Recepcionados</div>
                 </div>
             </div>
-            <div class="doc-kpi-mini mini-ticket">
+            <div class="doc-kpi-mini mini-ticket" title="Monto bruto (sin NC) dividido por los documentos del período que no son NC.">
                 <div class="doc-kpi-mini-icon"><i class="ri-shopping-basket-2-line"></i></div>
                 <div class="doc-kpi-mini-text">
                     <div class="doc-kpi-mini-value" id="kpiTicketProm">--</div>
                     <div class="doc-kpi-mini-label">Ticket Promedio</div>
                 </div>
             </div>
-            <div class="doc-kpi-mini mini-incidencias">
+            <div class="doc-kpi-mini mini-incidencias" title="Incidencias de DTE abiertas (PENDIENTE o EN_GESTION) de la empresa. Sin filtro de fecha.">
                 <div class="doc-kpi-mini-icon"><i class="ri-error-warning-line"></i></div>
                 <div class="doc-kpi-mini-text">
                     <div class="doc-kpi-mini-value" id="kpiIncidencias">--</div>
                     <div class="doc-kpi-mini-label">Incidencias</div>
                 </div>
             </div>
-            <div class="doc-kpi-mini mini-credito">
+            <div class="doc-kpi-mini mini-credito" title="Promedio de diasCredito de todos los documentos del período.">
                 <div class="doc-kpi-mini-icon"><i class="ri-time-line"></i></div>
                 <div class="doc-kpi-mini-text">
                     <div class="doc-kpi-mini-value" id="kpiDiasCredito">--</div>
                     <div class="doc-kpi-mini-label">Días Crédito Prom.</div>
                 </div>
             </div>
-            <div class="doc-kpi-mini mini-tasanc">
+            <div class="doc-kpi-mini mini-tasanc" title="Notas de crédito del período dividido por facturas del período, en %.">
                 <div class="doc-kpi-mini-icon"><i class="ri-percent-line"></i></div>
                 <div class="doc-kpi-mini-text">
                     <div class="doc-kpi-mini-value" id="kpiTasaNC">--</div>
@@ -539,7 +539,7 @@
             <div class="col-lg-7">
                 <div class="doc-chart-card">
                     <div class="doc-chart-header">
-                        <h6><i class="ri-exchange-funds-line"></i>Compras vs Ventas vs Traspasos</h6>
+                        <h6 title="Montos con signo por mes. Compras van netas de las NC de proveedor; las NC emitidas (anulaciones, devoluciones y NC migradas) van en una barra negativa aparte, sin netear contra Ventas porque incluyen NC a empresas del grupo."><i class="ri-exchange-funds-line"></i>Compras vs Ventas vs Traspasos</h6>
                         <span class="doc-chart-badge" style="background:var(--doc-accent-light);color:var(--doc-accent);">Por Monto</span>
                     </div>
                     <div class="doc-chart-body"><div class="doc-chart-container"><canvas id="chartTransacciones"></canvas></div></div>
@@ -650,6 +650,7 @@ var TX_COLORS = {
     'VENTA':          PALETTE.success,
     'VENTA_PUBLICO':  PALETTE.info,
     'TRASPASO':       PALETTE.warning,
+    'NC_EMITIDA':     PALETTE.accent,
 };
 
 var TX_LABELS = {
@@ -657,6 +658,12 @@ var TX_LABELS = {
     'VENTA': 'Ventas',
     'VENTA_PUBLICO': 'Ventas Público',
     'TRASPASO': 'Traspasos',
+    // NC emitidas (NOTA_CREDITO / ANULACION / DEVOLUCION) juntas en una serie.
+    'NC_EMITIDA': 'NC emitidas',
+    // Códigos residuales (documentos que no son NC con esos tipos).
+    'NOTA_CREDITO': 'Notas de crédito',
+    'ANULACION': 'Anulaciones',
+    'DEVOLUCION': 'Devoluciones',
 };
 
 function initDates() {
@@ -666,11 +673,16 @@ function initDates() {
     document.getElementById('fechaFin').value = hoy.toISOString().split('T')[0];
 }
 
-function fmt(n) { return '$' + Math.round(n).toLocaleString('es-CL'); }
+// Las notas de crédito llegan con signo negativo desde la API: se pintan "−$1.234".
+function fmt(n) {
+    var s = n < 0 ? '−' : '';
+    return s + '$' + Math.round(Math.abs(n)).toLocaleString('es-CL');
+}
 function fmtShort(n) {
-    if (n >= 1000000) return '$' + (n / 1000000).toFixed(1) + 'M';
-    if (n >= 1000) return '$' + (n / 1000).toFixed(0) + 'K';
-    return '$' + Math.round(n).toLocaleString('es-CL');
+    var s = n < 0 ? '−' : '', a = Math.abs(n);
+    if (a >= 1000000) return s + '$' + (a / 1000000).toFixed(1) + 'M';
+    if (a >= 1000) return s + '$' + (a / 1000).toFixed(0) + 'K';
+    return s + '$' + Math.round(a).toLocaleString('es-CL');
 }
 
 function showLoading(v) { document.getElementById('docLoading').classList[v ? 'add' : 'remove']('active'); }
@@ -692,7 +704,10 @@ function cargarDatos() {
         $('#kpiMontoPendiente').text(fmt(k.monto_pendiente_pago));
 
         $('#kpiTotalFooter').html('Facturas: <b>' + k.facturas + '</b> &middot; Boletas: <b>' + k.boletas + '</b>');
-        $('#kpiMontoFooter').html('Ticket promedio: <b>' + fmt(k.ticket_promedio) + '</b>');
+        $('#kpiMontoFooter').html(
+            'Bruto: <b>' + fmt(k.monto_bruto || 0) + '</b> &middot; NC: <b style="color:var(--doc-danger)">' + fmt(-(k.monto_nc || 0)) + '</b>' +
+            ' &middot; Ticket prom.: <b>' + fmt(k.ticket_promedio) + '</b>'
+        );
         $('#kpiDeudaFooter').html(
             'Vencido: <b style="color:var(--doc-danger)">' + fmt(k.monto_vencido || 0) + '</b> (' + k.dtes_vencidos + ' docs)'
         );
@@ -753,7 +768,7 @@ function renderFlujo(f, origenes) {
     origenes.forEach(function(o) {
         var alias = o.sucursal__alias || 'Sin asignar';
         cdHtml += '<div class="doc-cd-card">' +
-            '<div class="doc-cd-name"><i class="ri-store-2-line me-1"></i>' + alias + ' <span style="font-weight:400;color:var(--doc-gray-500);font-size:.75rem;">(' + o.total + ' docs)</span></div>' +
+            '<div class="doc-cd-name"><i class="ri-store-2-line me-1"></i>' + escDoc(alias) + ' <span style="font-weight:400;color:var(--doc-gray-500);font-size:.75rem;">(' + o.total + ' docs)</span></div>' +
             '<div class="doc-cd-stats">' +
                 '<span class="doc-cd-stat pendiente">' + o.pendientes + ' pend.</span>' +
                 '<span class="doc-cd-stat ok">' + o.completados + ' OK</span>' +
@@ -763,6 +778,13 @@ function renderFlujo(f, origenes) {
             '</div>';
     });
     $('#flujoOrigenes').html(cdHtml);
+}
+
+// Escapa texto de la BD (nombre de proveedor, alias) antes de insertarlo como HTML.
+function escDoc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(ch) {
+        return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch];
+    });
 }
 
 function renderTabla(data) {
@@ -776,10 +798,11 @@ function renderTabla(data) {
     data.forEach(function(p) {
         var pct = p.pct_pendientes;
         var badgeCls = pct > 60 ? 'doc-badge-alert' : pct > 30 ? 'doc-badge-warn' : 'doc-badge-ok';
-        var barW = Math.round(p.monto / maxMonto * 100);
+        // El monto es neto (NC restan): un proveedor con más NC que facturas queda en negativo.
+        var barW = Math.max(0, Math.round(p.monto / maxMonto * 100));
         var barColor = pct > 60 ? 'var(--doc-danger)' : pct > 30 ? 'var(--doc-warning)' : 'var(--doc-success)';
         html += '<tr>' +
-            '<td><b>' + (p.emisor__nombre || '').substring(0, 28) + '</b></td>' +
+            '<td><b>' + escDoc((p.emisor__nombre || '').substring(0, 28)) + '</b></td>' +
             '<td>' + p.cantidad + '</td>' +
             '<td>' + fmt(p.monto) + '</td>' +
             '<td><span class="doc-badge ' + badgeCls + '">' + pct + '% pend.</span></td>' +
@@ -811,7 +834,7 @@ function renderCharts(data) {
                 order: 2,
             }, {
                 type: 'line',
-                label: 'Monto Facturado',
+                label: 'Monto neto (fact. − NC)',
                 data: data.evolucion.map(function(e) { return e.monto; }),
                 borderColor: PALETTE.accent,
                 backgroundColor: PALETTE.accentSoft,
@@ -895,9 +918,14 @@ function renderCharts(data) {
     charts.estadoPago = new Chart(document.getElementById('chartEstadoPago'), {
         type: 'doughnut',
         data: {
-            labels: estadosPago.map(function(e) { return e.estado_pago; }),
+            // El monto de cada estado va en la leyenda: un estado que quede en
+            // negativo (sus NC superan lo facturado) no puede dibujarse como arco,
+            // se topa en 0 y sin hover; así se sigue viendo ('PAGADO -$6,5M').
+            labels: estadosPago.map(function(e) { return (e.estado_pago || 'SIN ESTADO') + ' ' + fmtShort(e.monto); }),
             datasets: [{
-                data: estadosPago.map(function(e) { return e.monto; }),
+                // Montos netos (las NC restan). El centro suma los netos y cuadra
+                // con la tarjeta Monto; los arcos van topados en 0.
+                data: estadosPago.map(function(e) { return Math.max(0, e.monto); }),
                 backgroundColor: estadosPago.map(function(e) { return PAGO_COLORS[e.estado_pago] || PALETTE.gray; }),
                 borderWidth: 3,
                 borderColor: '#fff',
@@ -926,7 +954,7 @@ function renderCharts(data) {
             cutout: '65%',
             plugins: {
                 legend: { position: 'bottom', labels: { boxWidth: 10, font: defaultFont, padding: 12, usePointStyle: true, pointStyle: 'circle' } },
-                tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + fmt(ctx.raw) + ' (' + ctx.dataset.data.length + ')'; } } }
+                tooltip: { callbacks: { label: function(ctx) { var e = estadosPago[ctx.dataIndex] || {}; return (e.estado_pago || 'SIN ESTADO') + ': ' + fmt(e.monto || 0) + ' (' + (e.cantidad || 0) + ' docs)'; } } }
             }
         }
     });

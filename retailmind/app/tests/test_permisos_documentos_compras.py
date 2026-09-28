@@ -7,7 +7,8 @@ para él.
 Cubre:
 1. editarPago / eliminarPago (`dte_compras_pagos`): sin la fila → 403 y el
    Dte_Detalle_Pago queda intacto; con la fila → pasa; el Maestro pasa sin fila.
-2. agregarNC / eliminarNC: la NC es una fila de pago → mismo permiso.
+2. agregarNC / eliminarNC ("NC manual como pago") se retiraron (B16-09):
+   las rutas dan 404 y no escriben.
 3. eliminar_dte (`dte_compras_eliminar`): sin la fila → 403 y el DTE no se
    descarta; con ella → soft delete. Un DTE que NO es de compra exige
    `dte_eliminar_documento` aunque se tenga el de compras.
@@ -68,6 +69,11 @@ class _BasePermisosDocumentos(TestCase):
         _permiso('administracion', 'dte_compras_pagos', puede_ver=True, puede_editar=True, puede_eliminar=True)
         _permiso('administracion', 'dte_compras_eliminar', puede_ver=True, puede_eliminar=True)
         PermisoRol.objects.filter(rol='administracion', opcion_menu__codigo='dte_eliminar_documento').delete()
+        # El middleware exige ver la pantalla también en sus APIs (pagos, NC,
+        # eliminar DTE): sin esto responde su 403 genérico antes de que la
+        # vista aplique el permiso fino que estos tests verifican.
+        for rol in ('jefe_local', 'administracion', 'administrador'):
+            _permiso(rol, 'gestion_dte_compras', puede_ver=True)
 
         self.dte = self._dte(numero=5001)
         self.pago = Dte_Detalle_Pago.objects.create(
@@ -139,7 +145,8 @@ class PagosDocumentoCompraTest(_BasePermisosDocumentos):
         self.assertEqual(r.status_code, 200, r.content)
         self.assertFalse(Dte_Detalle_Pago.objects.filter(id=self.pago.id).exists())
         self.dte.refresh_from_db()
-        self.assertEqual(self.dte.estado_pago, 'Pendiente')
+        # Grafía canónica desde B3-02 (app/utils_estado_pago.py).
+        self.assertEqual(self.dte.estado_pago, 'PENDIENTE')
 
     def test_editar_sin_eliminar_no_permite_eliminar(self):
         _permiso('administracion', 'dte_compras_pagos', puede_ver=True, puede_editar=True, puede_eliminar=False)
@@ -168,30 +175,25 @@ class PagosDocumentoCompraTest(_BasePermisosDocumentos):
 
 
 class NotaCreditoComoPagoTest(_BasePermisosDocumentos):
-    def test_sin_permiso_no_agrega_ni_elimina_nc(self):
+    """B16-09 (unidad D, 2026-09-26): la vía "NC manual como pago"
+    (agregarNC / eliminarNC / notasCredito) se retiró; las NC se anexan con
+    asociar_nc_existente. Las rutas ya no existen y no escriben nada."""
+
+    def test_las_rutas_de_nc_manual_ya_no_existen(self):
         nc = Dte_Detalle_Pago.objects.create(dte=self.dte, metodo_pago='Nota de Crédito',
                                              voucher='NC-1', monto=1000, notas='x')
-        self._login(self.sin_permiso)
-        r = self._json('post', '/app/agregarNC/', {
-            'dte_id': self.dte.id, 'voucher': 'NC-2', 'monto': 500, 'notas': 'Devolución',
-        })
-        self.assertEqual(r.status_code, 403)
-        self.assertFalse(Dte_Detalle_Pago.objects.filter(voucher='NC-2').exists())
-
-        r = self._json('delete', f'/app/eliminarNC/{nc.id}/')
-        self.assertEqual(r.status_code, 403)
-        self.assertTrue(Dte_Detalle_Pago.objects.filter(id=nc.id).exists())
-
-    def test_con_permiso_agrega_y_elimina_nc(self):
         self._login(self.con_permiso)
         r = self._json('post', '/app/agregarNC/', {
             'dte_id': self.dte.id, 'voucher': 'NC-2', 'monto': 500, 'notas': 'Devolución',
         })
-        self.assertEqual(r.status_code, 200, r.content)
-        nc = Dte_Detalle_Pago.objects.get(voucher='NC-2')
+        self.assertEqual(r.status_code, 404)
+        self.assertFalse(Dte_Detalle_Pago.objects.filter(voucher='NC-2').exists())
+
         r = self._json('delete', f'/app/eliminarNC/{nc.id}/')
-        self.assertEqual(r.status_code, 200, r.content)
-        self.assertFalse(Dte_Detalle_Pago.objects.filter(id=nc.id).exists())
+        self.assertEqual(r.status_code, 404)
+        self.assertTrue(Dte_Detalle_Pago.objects.filter(id=nc.id).exists())
+
+        self.assertEqual(self.client.get(f'/app/notasCredito/{self.dte.id}/').status_code, 404)
 
 
 class EliminarDocumentoCompraTest(_BasePermisosDocumentos):

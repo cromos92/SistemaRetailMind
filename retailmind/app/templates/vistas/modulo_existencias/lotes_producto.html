@@ -644,7 +644,11 @@ function ajustarLote(loteId) {
                 $('#cantidadDisponible').val(lote.cantidad_disponible);
                 $('#modalAjustarLote').modal('show');
             }
+        } else {
+            alertaErrorLotes(mensajeErrorLotes(data, 'No se pudo cargar el lote.'));
         }
+    }).fail(function(xhr) {
+        alertaErrorLotes(mensajeErrorXhrLotes(xhr));
     });
 }
 
@@ -658,6 +662,25 @@ function verDetalleLote(loteId) {
 
 function verDte(dteId) {
     window.open('/app/gestion_dte_compras/?dte_id=' + dteId, '_blank');
+}
+
+// Mensaje legible de una respuesta de error (A3-01/ui). El 403 del middleware
+// de permisos trae {error: true, mensaje: '...'}; las vistas traen {error: '...'}.
+// Antes se leía solo .error y el usuario veía "true" o "Error inesperado".
+function mensajeErrorLotes(data, porDefecto) {
+    data = data || {};
+    if (data.mensaje) return String(data.mensaje);
+    if (typeof data.error === 'string' && data.error) return data.error;
+    return porDefecto || 'No tienes permiso para realizar esta acción.';
+}
+function mensajeErrorXhrLotes(xhr) {
+    const data = (xhr && xhr.responseJSON) || {};
+    if (xhr && xhr.status === 403) return mensajeErrorLotes(data, 'No tienes permiso para realizar esta acción.');
+    return mensajeErrorLotes(data, 'Error inesperado. Intenta nuevamente.');
+}
+function alertaErrorLotes(msg) {
+    // text (no html): el mensaje viene del servidor y no se interpreta como HTML
+    Swal.fire({ icon: 'error', title: 'Error', text: msg });
 }
 
 // Formulario crear lote
@@ -681,11 +704,11 @@ $('#formCrearLote').on('submit', function(e) {
                     location.reload();
                 });
             } else {
-                Swal.fire('Error', response.error, 'error');
+                alertaErrorLotes(mensajeErrorLotes(response, 'No se pudo crear el lote.'));
             }
         },
         error: function(xhr) {
-            Swal.fire('Error', xhr.responseJSON?.error || 'Error inesperado', 'error');
+            alertaErrorLotes(mensajeErrorXhrLotes(xhr));
         }
     });
 });
@@ -713,11 +736,11 @@ $('#formAjustarLote').on('submit', function(e) {
                     location.reload();
                 });
             } else {
-                Swal.fire('Error', response.error, 'error');
+                alertaErrorLotes(mensajeErrorLotes(response, 'No se pudo ajustar el lote.'));
             }
         },
         error: function(xhr) {
-            Swal.fire('Error', xhr.responseJSON?.error || 'Error inesperado', 'error');
+            alertaErrorLotes(mensajeErrorXhrLotes(xhr));
         }
     });
 });

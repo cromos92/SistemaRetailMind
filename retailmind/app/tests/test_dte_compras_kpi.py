@@ -36,6 +36,10 @@ class TestKpiPendientesDteCompra(TestCase):
             fecha_emision=self.hoy,
             fecha_vencimiento=self.hoy + timedelta(days=venc_offset_dias),
             tipo_transaccion='COMPRA',
+            # Campos NOT NULL sin default en Dte (el fixture fallaba con
+            # IntegerField NULL en bultos / diasCredito / unidades_productos).
+            responsable='test', diasCredito=max(venc_offset_dias, 0),
+            bultos=0, unidades_productos=0,
         )
 
     def _resumen(self):

@@ -194,24 +194,39 @@ def _datos_historicos_ventas(suc, es_cd):
     ventas_qs = Movimientos_Producto.objects.filter(
         q_mov_suc, concepto__in=CONCEPTOS_VENTA_ANALITICA,
     )
-    stats = ventas_qs.aggregate(
-        total=Count('id'), fecha_min=Min('fecha'), fecha_max=Max('fecha'),
+    # UN solo barrido de la tabla, agrupado por año y por origen (migrado o
+    # no): antes eran tres barridos completos (count+min/max, migradas, por
+    # año) de ~3,4 s cada uno: 10 de los 10,5 s que tardaba el resumen.
+    from django.db.models import Case, IntegerField, Value, When
+    filas = list(
+        ventas_qs.annotate(
+            yr=ExtractYear('fecha'),
+            mig=Case(When(referencia_externa__startswith='MIG:', then=Value(1)),
+                     default=Value(0), output_field=IntegerField()),
+        ).values('yr', 'mig')
+        .annotate(n=Count('id'), fecha_min=Min('fecha'), fecha_max=Max('fecha'))
+        .order_by('yr')
     )
-    migradas = ventas_qs.filter(referencia_externa__startswith='MIG:').count()
-    por_anio = list(
-        ventas_qs.annotate(yr=ExtractYear('fecha'))
-        .values('yr').annotate(n=Count('id')).order_by('yr')
-    )
+    total = sum(r['n'] for r in filas)
+    migradas = sum(r['n'] for r in filas if r['mig'])
+    fechas_min = [r['fecha_min'] for r in filas if r['fecha_min']]
+    fechas_max = [r['fecha_max'] for r in filas if r['fecha_max']]
+    por_anio = {}
+    for r in filas:
+        if r['yr']:
+            por_anio[str(r['yr'])] = por_anio.get(str(r['yr']), 0) + r['n']
 
     datos = {
-        'ventas_totales': stats['total'] or 0,
+        'ventas_totales': total,
         'ventas_migradas': migradas,
-        'ventas_nuevas': (stats['total'] or 0) - migradas,
-        'fecha_min': stats['fecha_min'].isoformat() if stats['fecha_min'] else None,
-        'fecha_max': stats['fecha_max'].isoformat() if stats['fecha_max'] else None,
-        'por_anio': {str(r['yr']): r['n'] for r in por_anio if r['yr']},
+        'ventas_nuevas': total - migradas,
+        'fecha_min': min(fechas_min).isoformat() if fechas_min else None,
+        'fecha_max': max(fechas_max).isoformat() if fechas_max else None,
+        'por_anio': por_anio,
     }
-    cache.set(clave, datos, 60 * 30)
+    # Es contexto que solo cambia con las ventas del día: 24 h bastan (y evita
+    # que cada worker lo recalcule cada media hora).
+    cache.set(clave, datos, 60 * 60 * 24)
     return datos
 
 
@@ -452,6 +467,14 @@ def api_prediccion_sugerencias(request):
     talla_ids = [s.articulo_talle_id for s in sugerencias]
     ventas_90, ventas_365 = _evidencia_ventas_por_talla(talla_ids)
 
+    # TRÁNSITO: solo es medible para las tallas que tienen alguna línea de OC
+    # ACTIVA vinculada a su Producto_Talla. Las líneas de OC se cargan sin
+    # SKU (producto_talla NULL en todas las ACTIVA) y solo se vinculan al
+    # crear el producto, con unidades_recibidas = stock: el tránsito salía 0
+    # SIEMPRE y la tabla lo mostraba como un dato medido. Sin vínculo se
+    # devuelve None ('s/d'): el tránsito NO se descuenta de 'A pedir hoy'.
+    # No se reconstruye desde el nombre de la OC mientras la recepción no
+    # quede ligada a las líneas de la OC (hallazgos B15-02 / B15-07).
     transito_hoy = {}
     if talla_ids:
         filas_transito = (
@@ -471,8 +494,8 @@ def api_prediccion_sugerencias(request):
         pt = s.articulo_talle
         prod = pt.producto
         stock_hoy = max(0, pt.stock or 0)
-        transito = transito_hoy.get(pt.id, 0)
-        a_pedir_hoy = max(0, (s.unidades_sugeridas or 0) - stock_hoy - transito)
+        transito = transito_hoy.get(pt.id)   # None = sin OC vinculada: s/d
+        a_pedir_hoy = max(0, (s.unidades_sugeridas or 0) - stock_hoy - (transito or 0))
 
         v90 = ventas_90.get(pt.id, 0)
         v365 = ventas_365.get(pt.id, 0)
@@ -510,6 +533,8 @@ def api_prediccion_sugerencias(request):
     return JsonResponse({
         'meta': _prediccion_meta_frescura(),
         'sugerencias': data,
+        # Cuántas filas tienen tránsito medible (OC vinculada al SKU).
+        'transito_medible': sum(1 for d in data if d['en_transito_hoy'] is not None),
     })
 
 
@@ -778,23 +803,46 @@ def api_prediccion_producto_detalle(request, producto_id):
 @login_required
 @require_POST
 def api_prediccion_aprobar_sugerencia(request):
+    """Marca sugerencias como revisadas/aprobadas.
+
+    OJO: aprobar NO genera una orden de compra ni ningún otro documento (hoy
+    nada lee `aprobada=True`); la sugerencia solo sale del listado. Qué debe
+    producir la aprobación es una decisión de negocio pendiente.
+
+    Alcance: solo se aprueban sugerencias de la vista actual (misma regla de
+    sucursal que el listado) y hace falta `puede_aprobar` sobre la pantalla;
+    antes cualquier id del sistema se aprobaba sin mirar sucursal ni permiso.
+    """
+    from .models import PermisoRol
     try:
+        if not PermisoRol.tiene_permiso(
+            request.user, 'prediccion_compras', 'puede_aprobar',
+            sucursal_id=request.session.get('idSucursalActual'),
+        ):
+            return JsonResponse({'error': 'No tienes permiso para aprobar sugerencias.'}, status=403)
+
         body = json.loads(request.body)
         ids = body.get('ids', [])
-        if not ids:
+        if not isinstance(ids, list) or not ids:
             return JsonResponse({'error': 'No se proporcionaron IDs'}, status=400)
+        try:
+            ids = [int(i) for i in ids]
+        except (TypeError, ValueError):
+            return JsonResponse({'error': 'IDs inválidos'}, status=400)
 
+        suc, es_cd = _get_sucursal_context(request)
+        q_suc = _q_sucursal_productos(suc, es_cd, prefix='articulo_talle__producto__')
         updated = SugerenciaCompra.objects.filter(
-            id__in=ids, aprobada=False,
+            q_suc, id__in=ids, aprobada=False,
         ).update(
             aprobada=True,
             fecha_aprobacion=timezone.localdate(),
             aprobada_por=request.user.username,
         )
         return JsonResponse({'aprobadas': updated})
-    except Exception as e:
+    except Exception:
         logger.exception("Error al aprobar sugerencias")
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': 'No se pudieron aprobar las sugerencias.'}, status=500)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -908,7 +956,9 @@ def api_prediccion_graficos(request):
 
     ventas_act = _ventas_por_cat(anio_actual)
     ventas_ant = _ventas_por_cat(anio_anterior)
-    categorias_all = sorted(set(list(ventas_act.keys()) + list(ventas_ant.keys())))
+    # Una categoría None (producto sin categoría) rompía el sorted() (TypeError).
+    categorias_all = sorted(set(list(ventas_act.keys()) + list(ventas_ant.keys())),
+                            key=lambda c: (c is None, c or ''))
     comparativa = [
         {
             'categoria': cat or 'Sin categoría',
@@ -973,28 +1023,77 @@ def api_prediccion_configuracion(request):
         })
 
     if request.method == 'POST':
+        # Son parámetros GLOBALES del motor (una sola fila para todo el
+        # holding): hace falta `puede_editar` sobre la pantalla, no solo verla.
+        from .models import PermisoRol
+        if not PermisoRol.tiene_permiso(
+            request.user, 'prediccion_compras', 'puede_editar',
+            sucursal_id=request.session.get('idSucursalActual'),
+        ):
+            return JsonResponse({'error': 'No tienes permiso para cambiar la configuración.'}, status=403)
         try:
             body = json.loads(request.body)
-            campos_int = [
-                'dias_historico_analisis', 'semanas_minimas_para_alerta',
-                'semanas_buffer_seguridad', 'velocidad_default_semanas',
-            ]
-            campos_decimal = [
-                'factor_seguridad_clase_a', 'factor_seguridad_clase_b',
-                'factor_seguridad_clase_c', 'umbral_cv_x', 'umbral_cv_y',
-                'umbral_ratio_velocidad_alta', 'umbral_ratio_velocidad_critica',
-                'umbral_quiebre_talle_critico', 'sellthrough_default',
-            ]
-            for campo in campos_int:
+            if not isinstance(body, dict):
+                return JsonResponse({'error': 'Formato inválido'}, status=400)
+            # Rangos admitidos (mín, máx). Antes se guardaba cualquier valor:
+            # un 0 o un negativo rompía el cálculo (divisiones, umbrales que
+            # nunca se cumplen) y un decimal > 99,99 reventaba al guardar.
+            campos_int = {
+                'dias_historico_analisis': (30, 3650),
+                'semanas_minimas_para_alerta': (1, 52),
+                'semanas_buffer_seguridad': (0, 26),
+                'velocidad_default_semanas': (1, 52),
+            }
+            campos_decimal = {
+                'factor_seguridad_clase_a': (Decimal('0.50'), Decimal('5.00')),
+                'factor_seguridad_clase_b': (Decimal('0.50'), Decimal('5.00')),
+                'factor_seguridad_clase_c': (Decimal('0.50'), Decimal('5.00')),
+                'umbral_cv_x': (Decimal('0.01'), Decimal('10.00')),
+                'umbral_cv_y': (Decimal('0.01'), Decimal('10.00')),
+                'umbral_ratio_velocidad_alta': (Decimal('0.01'), Decimal('5.00')),
+                'umbral_ratio_velocidad_critica': (Decimal('0.01'), Decimal('5.00')),
+                'umbral_quiebre_talle_critico': (Decimal('0.01'), Decimal('1.00')),
+                'sellthrough_default': (Decimal('0.01'), Decimal('1.00')),
+            }
+            errores = []
+            nuevos = {}
+            for campo, (minimo, maximo) in campos_int.items():
                 if campo in body:
-                    setattr(config, campo, int(body[campo]))
-            for campo in campos_decimal:
+                    try:
+                        valor = int(body[campo])
+                    except (TypeError, ValueError):
+                        errores.append(f'{campo}: debe ser un número entero')
+                        continue
+                    if not (minimo <= valor <= maximo):
+                        errores.append(f'{campo}: debe estar entre {minimo} y {maximo}')
+                        continue
+                    nuevos[campo] = valor
+            for campo, (minimo, maximo) in campos_decimal.items():
                 if campo in body:
-                    setattr(config, campo, Decimal(str(body[campo])))
+                    try:
+                        valor = Decimal(str(body[campo])).quantize(Decimal('0.01'))
+                    except Exception:
+                        errores.append(f'{campo}: debe ser un número')
+                        continue
+                    if not valor.is_finite() or not (minimo <= valor <= maximo):
+                        errores.append(f'{campo}: debe estar entre {minimo} y {maximo}')
+                        continue
+                    nuevos[campo] = valor
+            cv_x = nuevos.get('umbral_cv_x', config.umbral_cv_x)
+            cv_y = nuevos.get('umbral_cv_y', config.umbral_cv_y)
+            if Decimal(str(cv_x)) >= Decimal(str(cv_y)):
+                errores.append('umbral_cv_x debe ser menor que umbral_cv_y')
+            if errores:
+                return JsonResponse({'error': 'Valores fuera de rango', 'detalle': errores}, status=400)
+            for campo, valor in nuevos.items():
+                setattr(config, campo, valor)
             config.save()
             return JsonResponse({'ok': True})
-        except Exception as e:
-            return JsonResponse({'error': str(e)}, status=400)
+        except ValueError:
+            return JsonResponse({'error': 'Formato inválido'}, status=400)
+        except Exception:
+            logger.exception('Error al guardar la configuración de predicción')
+            return JsonResponse({'error': 'No se pudo guardar la configuración.'}, status=500)
 
     return JsonResponse({'error': 'Método no permitido'}, status=405)
 
@@ -1397,11 +1496,12 @@ def api_prediccion_analisis_marca(request):
             Q(categoria__iexact=canonical) | Q(categoria__icontains=canonical)
         )
 
-    marca_ids = list(
-        vh_base.exclude(marca__isnull=True)
-        .values_list('marca_id', flat=True)
-        .distinct()
-    )
+    # Las filas de velocidad se traen UNA vez y se agrupan por marca en
+    # Python (antes: una consulta por marca dentro del bucle).
+    vh_por_marca = defaultdict(list)
+    for fila_vh in vh_base.exclude(marca__isnull=True).select_related('marca').order_by('id'):
+        vh_por_marca[fila_vh.marca_id].append(fila_vh)
+    marca_ids = list(vh_por_marca)
     if not marca_ids:
         return JsonResponse(
             {'marcas': [], 'resumen': {}, 'categoria_filtro': canonical, 'temporada': temporada, 'anio': anio},
@@ -1446,10 +1546,41 @@ def api_prediccion_analisis_marca(request):
     )
     alertas_map = {r['articulo__atributo1_id']: r['n'] for r in alertas_raw}
 
+    # ── ABC y sugerencias agregadas por marca en UNA consulta cada una ──
+    # (antes eran dos aggregate() por marca dentro del bucle: con 143 marcas,
+    # 286 viajes a la base).
+    abc_map = {
+        r['articulo__atributo1_id']: r
+        for r in ClasificacionABC.objects.filter(
+            q_cat_abc, articulo__atributo1_id__in=marca_ids,
+            temporada=temporada, anio=anio,
+        ).values('articulo__atributo1_id').annotate(
+            n_a=Count('id', filter=Q(clasificacion_abc='A')),
+            n_b=Count('id', filter=Q(clasificacion_abc='B')),
+            n_c=Count('id', filter=Q(clasificacion_abc='C')),
+        )
+    }
+    sug_map = {
+        r['articulo_talle__producto__atributo1_id']: r
+        for r in SugerenciaCompra.objects.filter(
+            aprobada=False,
+            articulo_talle__producto__atributo1_id__in=marca_ids,
+        ).filter(
+            Q(prediccion__temporada=temporada, prediccion__anio=anio)
+            | Q(prediccion__isnull=True,
+                articulo_talle__producto__temporada__iexact=temporada,
+                articulo_talle__producto__anio_temporada=anio)
+        ).values('articulo_talle__producto__atributo1_id').annotate(
+            u_sugeridas=Sum('unidades_sugeridas'),
+            u_stock=Sum('stock_actual'),
+            u_pedir=Sum('unidades_a_pedir'),
+        )
+    }
+
     # ── Construir filas por marca ─────────────────────────────────
     filas = []
     for mid in marca_ids:
-        vh_rows = list(vh_base.filter(marca_id=mid).select_related('marca'))
+        vh_rows = vh_por_marca.get(mid) or []
         if not vh_rows:
             continue
         wv = _weighted_velocidad_rows(vh_rows)
@@ -1461,40 +1592,17 @@ def api_prediccion_analisis_marca(request):
         marca_nombre = vh_rows[0].marca.valor if vh_rows[0].marca else ''
         categorias = list({r.categoria for r in vh_rows if r.categoria})
 
-        # ABC aggregate
-        abc_agg = ClasificacionABC.objects.filter(
-            q_cat_abc,
-            articulo__atributo1_id=mid,
-            temporada=temporada,
-            anio=anio,
-        ).aggregate(
-            n_a=Count('id', filter=Q(clasificacion_abc='A')),
-            n_b=Count('id', filter=Q(clasificacion_abc='B')),
-            n_c=Count('id', filter=Q(clasificacion_abc='C')),
-        )
-        n_a = abc_agg['n_a'] or 0
-        n_b = abc_agg['n_b'] or 0
-        n_c = abc_agg['n_c'] or 0
+        abc_agg = abc_map.get(mid, {})
+        n_a = abc_agg.get('n_a') or 0
+        n_b = abc_agg.get('n_b') or 0
+        n_c = abc_agg.get('n_c') or 0
         n_tot = n_a + n_b + n_c
         factor_abc = (n_a * 1.0 + n_b * 0.7 + n_c * 0.3) / n_tot if n_tot else 1.0
 
-        # Sugerencias aggregate
-        sug_agg = SugerenciaCompra.objects.filter(
-            aprobada=False,
-            articulo_talle__producto__atributo1_id=mid,
-        ).filter(
-            Q(prediccion__temporada=temporada, prediccion__anio=anio)
-            | Q(prediccion__isnull=True,
-                articulo_talle__producto__temporada__iexact=temporada,
-                articulo_talle__producto__anio_temporada=anio)
-        ).aggregate(
-            u_sugeridas=Sum('unidades_sugeridas'),
-            u_stock=Sum('stock_actual'),
-            u_pedir=Sum('unidades_a_pedir'),
-        )
-        u_sugeridas = int(sug_agg['u_sugeridas'] or 0)
-        u_stock     = int(sug_agg['u_stock'] or 0)
-        u_pedir     = int(sug_agg['u_pedir'] or 0)
+        sug_agg = sug_map.get(mid, {})
+        u_sugeridas = int(sug_agg.get('u_sugeridas') or 0)
+        u_stock     = int(sug_agg.get('u_stock') or 0)
+        u_pedir     = int(sug_agg.get('u_pedir') or 0)
 
         # Ventas temporada actual y anterior desde Movimientos
         ventas_act = ventas_act_map.get(mid, 0)
@@ -1573,13 +1681,19 @@ def api_prediccion_analisis_proveedor(request):
     t_def, a_def = _prediccion_default_temporada_anio()
     temporada = request.GET.get('temporada', '').strip() or t_def
     anio_str  = request.GET.get('anio', '').strip()
-    anio      = int(anio_str) if anio_str else a_def
+    try:
+        anio = int(anio_str) if anio_str else a_def
+    except (TypeError, ValueError):
+        anio = a_def
 
     from .models.compras import Compras
 
     # ── OCs por empresa (query desde Compras, que tiene FK directa) ─
+    # Las OC guardan la temporada CON el año ('Verano 2026') y la predicción
+    # la usa sin él ('verano' + anio): con solo `temporada__iexact` el panel
+    # salía vacío con los parámetros por defecto. Se aceptan ambas formas.
     ocs_base = Compras.objects.filter(
-        temporada__iexact=temporada,
+        Q(temporada__iexact=temporada) | Q(temporada__iexact=f'{temporada} {anio}'),
         estado__in=['ACTIVA', 'COMPLETADA'],
     )
 
@@ -1600,20 +1714,39 @@ def api_prediccion_analisis_proveedor(request):
     # IDs de las OC de la temporada
     oc_ids = list(ocs_base.values_list('id', flat=True))
 
-    # ── Totales de stock y recibidas por empresa (desde Compras_Producto_Talla) ─
+    # ── Totales ordenados por empresa (desde Compras_Producto_Talla) ─
     stock_qs = (
         Compras_Producto_Talla.objects
         .filter(compra_producto__compras_id__in=oc_ids)
         .values('compra_producto__compras__empresa_id')
-        .annotate(u_ord=Sum('stock'), u_rec=Sum('unidades_recibidas'),
+        .annotate(u_ord=Sum('stock'),
                   num_prod=Count('producto_talla__producto_id', distinct=True))
     )
     stock_map = {r['compra_producto__compras__empresa_id']: r for r in stock_qs}
 
+    # ── Recibidas = lo RECEPCIONADO contra las líneas de la OC ─────
+    # `Compras_Producto_Talla.unidades_recibidas` solo lo escribe el flujo
+    # retroactivo (vale 0 en casi todas las líneas): "en tránsito" salía igual
+    # a todo lo ordenado. Se usa la misma fuente que el resto del sistema
+    # (Productos_Recepcionados.stockArribado). OJO: la mercadería que entra por
+    # Compra Manual no se liga a la OC, así que el tránsito puede seguir
+    # sobrestimado (hallazgo B15-02); es un dato informativo, no se resta.
+    from .models import Productos_Recepcionados
+    rec_map = {
+        r['compra_producto_talla__compra_producto__compras__empresa_id']: r['u']
+        for r in (
+            Productos_Recepcionados.objects
+            .filter(compra_producto_talla__compra_producto__compras_id__in=oc_ids)
+            .values('compra_producto_talla__compra_producto__compras__empresa_id')
+            .annotate(u=Sum('stockArribado'))
+        )
+    }
+
     # ── OC año anterior (misma temporada) ────────────────────────
     oc_ant_ids = list(
         Compras.objects
-        .filter(temporada__iexact=temporada, fecha__year=anio - 1,
+        .filter(Q(temporada__iexact=temporada, fecha__year=anio - 1)
+                | Q(temporada__iexact=f'{temporada} {anio - 1}'),
                 estado__in=['ACTIVA', 'COMPLETADA'])
         .values_list('id', flat=True)
     )
@@ -1633,7 +1766,7 @@ def api_prediccion_analisis_proveedor(request):
         enombre = row['empresa__nombre'] or f'Empresa #{eid}'
         st   = stock_map.get(eid, {})
         u_ord     = int(st.get('u_ord') or 0)
-        u_rec     = int(st.get('u_rec') or 0)
+        u_rec     = int(rec_map.get(eid) or 0)
         u_trans   = max(0, u_ord - u_rec)
         num_prod  = int(st.get('num_prod') or 0)
         ant       = int(ant_map.get(eid) or 0)

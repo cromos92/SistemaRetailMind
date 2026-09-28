@@ -268,25 +268,27 @@
     </div>
   </div>
 
+  {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='logistica' activo='transito' %}
+
   <div class="nexo-kpi-row">
     <div class="nexo-kpi-card kpi-primary">
       <div class="nexo-kpi-icon icon-primary"><i class="ri-file-list-3-line"></i></div>
       <div class="nexo-kpi-body">
-        <div class="nexo-kpi-label">Documentos</div>
+        <div class="nexo-kpi-label" title="Documentos de traspaso reconstruidos desde el kardex en el período">Documentos</div>
         <div class="nexo-kpi-value" id="kpi-docs">—</div>
       </div>
     </div>
     <div class="nexo-kpi-card kpi-primary">
       <div class="nexo-kpi-icon icon-primary"><i class="ri-inbox-unarchive-line"></i></div>
       <div class="nexo-kpi-body">
-        <div class="nexo-kpi-label">Unidades enviadas</div>
+        <div class="nexo-kpi-label" title="Suma de unidades enviadas de esos documentos">Unidades enviadas</div>
         <div class="nexo-kpi-value" id="kpi-enviadas">—</div>
       </div>
     </div>
     <div class="nexo-kpi-card kpi-success">
       <div class="nexo-kpi-icon icon-success"><i class="ri-inbox-archive-line"></i></div>
       <div class="nexo-kpi-body">
-        <div class="nexo-kpi-label">Unidades recibidas</div>
+        <div class="nexo-kpi-label" title="Suma de unidades ya recibidas en destino">Unidades recibidas</div>
         <div class="nexo-kpi-value" id="kpi-recibidas">—</div>
       </div>
     </div>
@@ -314,7 +316,7 @@
     <div class="nexo-kpi-card kpi-warning">
       <div class="nexo-kpi-icon icon-warning"><i class="ri-hourglass-line"></i></div>
       <div class="nexo-kpi-body">
-        <div class="nexo-kpi-label">Antigüedad máx.</div>
+        <div class="nexo-kpi-label" title="Días del documento SIN RECIBIR más antiguo">Antigüedad máx.</div>
         <div class="nexo-kpi-value" id="kpi-antiguedad">—</div>
       </div>
     </div>
@@ -482,6 +484,8 @@ function setSituacion(btn) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Sin período ni sucursal compartida (días, origen y destino son propios): no se
+  // usa FiltrosReporte y la URL conserva los filtros que traía para el siguiente reporte.
   ['f-dias', 'f-origen', 'f-destino'].forEach(id => {
     document.getElementById(id).addEventListener('change', () => cargar(1));
   });

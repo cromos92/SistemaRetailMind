@@ -486,6 +486,10 @@
     #modalResumenCaja .resumen-table tr.rc-efectivo-caja td.rc-neto-monto { color: var(--nexo-gray-900); }
 
     #modalResumenCaja .rc-aviso { font-size: .8125rem; padding: .4rem .6rem; margin: .35rem .15rem .1rem; }
+    /* Detalle de NC: folio + documento anulado arriba, efecto en caja abajo */
+    #modalResumenCaja .rc-nc-detalle { border-top: 2px solid var(--nexo-gray-300); }
+    #modalResumenCaja .rc-nc-detalle td.rc-sub-label { color: var(--nexo-gray-700); }
+    #modalResumenCaja .rc-nc-detalle .rc-nc-efecto { display: block; font-size: .75rem; font-weight: 500; color: var(--nexo-gray-500); }
     #modalResumenCaja .modal-footer .btn { min-height: 2.75rem; }
 
     /* Cabecera de grupo con subtotal (Transbank, Mercado Pago POS, ...) */
@@ -598,11 +602,45 @@
         .rc-alerta-mp-btn { margin-left: 1.9rem; }
     }
 
-    /* ========== MODAL DETALLE MÉTODOS DE PAGO ========== */
+    /* ========== MODAL DETALLE MÉTODOS DE PAGO ==========
+       Misma escala POS 15" que el Resumen de Caja (desde donde se abre): el
+       modal ocupa casi todo el ancho y el texto base va a 15px. Antes era
+       `modal-xl` (1140px) con celdas de 9-12px, y el N° de operación MP
+       (ULID de 29 caracteres) se partía en 3-4 líneas en una columna de 120px.
+       Los tamaños salen de clases `dp-*`, no de estilos inline en el JS, para
+       poder bajarlos de golpe en 1366x768. Todo con prefijo del id del modal:
+       pos-kiosk.css pisa `.table` con especificidad (0,2,2). */
+    #modalDetalleMetodosPago .modal-dialog { max-width: min(1600px, 96vw); }
+    #modalDetalleMetodosPago .modal-content { min-width: 0; }
+    #modalDetalleMetodosPago .modal-header .modal-title { font-size: 1.0625rem; }
+    #modalDetalleMetodosPago #detalleMetodosSubtitulo { font-size: .9rem !important; }
+    #modalDetalleMetodosPago .modal-body { padding: 1rem 1.25rem; }
+
+    /* Filtros */
+    #modalDetalleMetodosPago .dp-filtros .form-label {
+        font-size: .8125rem;
+        font-weight: 600;
+        color: var(--nexo-gray-700);
+    }
+    #modalDetalleMetodosPago .dp-filtros .form-select,
+    #modalDetalleMetodosPago .dp-filtros .form-control {
+        font-size: .9375rem;
+        min-height: 40px;
+    }
+    #modalDetalleMetodosPago .dp-contador {
+        font-size: .9375rem;
+        padding: .45rem .75rem;
+    }
+    #modalDetalleMetodosPago .dp-contador.dp-total {
+        font-size: 1.125rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* Tabla */
     #modalDetalleMetodosPago .tabla-detalle-pago th,
     #modalDetalleMetodosPago .tabla-detalle-pago td {
-        font-size: .78rem;
-        padding: .35rem .5rem;
+        font-size: .9375rem;
+        padding: .55rem .65rem;
         vertical-align: middle;
     }
     #modalDetalleMetodosPago .tabla-detalle-pago th {
@@ -610,32 +648,57 @@
         font-weight: 600;
         color: var(--nexo-gray-700);
         text-transform: uppercase;
-        font-size: .68rem;
+        font-size: .75rem;
         letter-spacing: .02em;
+        white-space: nowrap;
     }
+    #modalDetalleMetodosPago .tabla-detalle-pago td.dp-monto {
+        font-size: 1.0625rem;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    #modalDetalleMetodosPago .dp-sub { font-size: .8125rem; line-height: 1.3; }
+    #modalDetalleMetodosPago .dp-sub-xs { font-size: .75rem; line-height: 1.3; }
+    #modalDetalleMetodosPago .dp-badge { font-size: .8125rem; }
     #modalDetalleMetodosPago .badge-categoria {
-        font-size: .65rem;
-        padding: .2rem .45rem;
+        font-size: .8125rem;
+        padding: .3rem .55rem;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: .02em;
+        white-space: normal;
+        text-align: left;
+    }
+    /* Tarjeta/Voucher: medio arriba, N° de operación abajo en monoespaciada.
+       `break-all` para que el ULID de MP corte limpio en vez de desbordar. */
+    #modalDetalleMetodosPago .dp-voucher-medio { color: var(--nexo-gray-700); font-weight: 500; }
+    #modalDetalleMetodosPago .dp-voucher-op {
+        font-family: monospace;
+        font-size: .8125rem;
+        color: var(--nexo-gray-600);
+        word-break: break-all;
     }
     #modalDetalleMetodosPago .subtotales-metodo {
         background: var(--nexo-gray-100);
         border-left: 3px solid var(--nexo-primary);
-        padding: .4rem .6rem;
-        margin: .4rem 0;
+        padding: .6rem .85rem;
+        margin: .4rem 0 .75rem;
         border-radius: var(--nexo-radius-sm);
-        font-size: .78rem;
+        font-size: .9375rem;
+    }
+    #modalDetalleMetodosPago .subtotales-metodo .dp-subtotal-chip {
+        font-size: .875rem;
+        font-weight: 500;
+        padding: .4rem .65rem;
     }
     #modalDetalleMetodosPago .btn-editar-fecha {
-        padding: .15rem .4rem;
-        font-size: .72rem;
+        padding: .3rem .55rem;
+        font-size: .8125rem;
         line-height: 1.2;
     }
     #modalDetalleMetodosPago .dte-tag {
         font-family: monospace;
-        font-size: .72rem;
+        font-size: .875rem;
         color: var(--nexo-gray-700);
     }
     #modalDetalleMetodosPago .dte-tag .tipo {
@@ -644,6 +707,15 @@
     }
     #modalDetalleMetodosPago .fila-editando {
         background: #fff8e1 !important;
+    }
+    #modalDetalleMetodosPago .modal-footer small { font-size: .8125rem !important; }
+
+    /* 1366x768 y similares: un escalón abajo, igual que el Resumen de Caja */
+    @media (max-width: 1440px), (max-height: 800px) {
+        #modalDetalleMetodosPago .tabla-detalle-pago th,
+        #modalDetalleMetodosPago .tabla-detalle-pago td { font-size: .875rem; padding: .45rem .5rem; }
+        #modalDetalleMetodosPago .tabla-detalle-pago td.dp-monto { font-size: 1rem; }
+        #modalDetalleMetodosPago .dp-sub { font-size: .75rem; }
     }
 </style>
 
@@ -1669,6 +1741,11 @@
                                              (payment_type_id de MP). El filtro data-tipo-tarjeta usa los IDs
                                              exactos de MP para no pescar Transbank. -->
                                         <tr class="rc-grupo row-detalle" tabindex="0" data-grupo="mp_pos" data-categoria="tarjetas" data-metodos="MP_QR,MP_POINT,MP_POINT_DEBITO,MP_POINT_CREDITO" title="Ver detalle — Mercado Pago presencial (QR/Point), distinto del MP de Venta Internet"><td class="rc-grupo-label">Mercado Pago POS</td><td class="rc-grupo-monto"><span id="mercadopago_pos">$0</span></td></tr>
+                                        <!-- Devoluciones por Mercado Pago del día (NC con pago MP_*): el total
+                                             de arriba y el desglose ya vienen NETOS; estas dos filas dicen
+                                             de dónde sale (bruto − NC), igual que efectivo y transferencia. -->
+                                        <tr class="rc-nc-row" data-nc-for="mp_pos" data-grupo="mp_pos" style="display:none;"><td class="rc-label rc-c-muted">MP POS bruto</td><td class="rc-monto rc-c-muted"><span id="mercadopago_pos_bruto">$0</span></td></tr>
+                                        <tr class="rc-nc-row" data-nc-for="mp_pos" data-grupo="mp_pos" style="display:none;"><td class="rc-sub-label rc-c-info">− NC devuelta por Mercado Pago</td><td class="rc-sub-monto rc-c-info"><span id="nc_mercadopago_pos">$0</span></td></tr>
                                         <tr class="rc-item row-detalle mp-sub" tabindex="0" data-grupo="mp_pos" data-categoria="tarjetas" data-metodos="MP_POINT_DEBITO,MP_QR,MP_POINT" data-tipo-tarjeta="DEBIT_CARD,PREPAID_CARD" title="Ver detalle — Mercado Pago débito / prepago"><td class="rc-label">MP DÉBITO</td><td class="rc-monto"><span id="mercadopago_pos_debito">$0</span></td></tr>
                                         <tr class="rc-item row-detalle mp-sub" tabindex="0" data-grupo="mp_pos" data-categoria="tarjetas" data-metodos="MP_POINT_CREDITO,MP_QR,MP_POINT" data-tipo-tarjeta="CREDIT_CARD" title="Ver detalle — Mercado Pago crédito"><td class="rc-label">MP CRÉDITO</td><td class="rc-monto"><span id="mercadopago_pos_credito">$0</span></td></tr>
                                         <tr class="rc-item row-detalle mp-sub" tabindex="0" data-grupo="mp_pos" data-categoria="tarjetas" data-metodos="MP_QR,MP_POINT" data-tipo-tarjeta="ACCOUNT_MONEY,BANK_TRANSFER,MERCADO PAGO" title="Ver detalle — QR sin dato de medio, dinero en cuenta MP, transferencia MP"><td class="rc-label">MP QR / OTROS</td><td class="rc-monto"><span id="mercadopago_pos_otros">$0</span></td></tr>
@@ -1786,9 +1863,17 @@
                                         <tr class="rc-item" data-grupo="documentos" title="Monto total de las notas de crédito del día. Es un DOCUMENTO: su efecto sobre la caja ya está aplicado en los medios de pago."><td class="rc-label">NOTAS CRÉDITO <span class="rc-label-nota">(<span id="cantNotasCredito">0</span>)</span><span id="nota_credito" hidden>$0</span></td><td class="rc-monto"><span id="totalnotascredito">$0</span></td></tr>
                                         <tr class="rc-item" data-grupo="documentos"><td class="rc-sub-label">NC en efectivo</td><td class="rc-sub-monto rc-c-danger"><span id="totalncefectivo">$0</span></td></tr>
                                         <tr class="rc-item" data-grupo="documentos"><td class="rc-sub-label">NC por transferencia</td><td class="rc-sub-monto rc-c-info"><span id="totalnctransferencia">$0</span></td></tr>
+                                        <tr class="rc-item" data-grupo="documentos"><td class="rc-sub-label">NC por Mercado Pago</td><td class="rc-sub-monto rc-c-info"><span id="totalncmercadopago">$0</span></td></tr>
                                         <tr class="rc-vacio" style="display:none;"><td colspan="2">Sin documentos en el día</td></tr>
                                     </tbody>
                                 </table>
+                                <!-- Una fila por NC del día (`notas_credito_detalle`). Las de ANULACION
+                                     valen $0 en el cuadre y la fila de arriba sola no las mostraba. -->
+                                <table class="resumen-table rc-sin-grupos rc-nc-detalle" style="display:none;">
+                                    <colgroup><col><col class="rc-col-monto"></colgroup>
+                                    <tbody id="rcNcDetalle"></tbody>
+                                </table>
+                                <div id="rcNcAvisos"></div>
                             </div>
                         </div>
                     </div>
@@ -1825,10 +1910,10 @@
             <div class="modal-body p-3">
 
                 <!-- Filtros superiores -->
-                <div class="d-flex flex-wrap gap-2 align-items-end mb-3 pb-2" style="border-bottom:1px solid var(--nexo-gray-200);">
+                <div class="dp-filtros d-flex flex-wrap gap-3 align-items-end mb-3 pb-3" style="border-bottom:1px solid var(--nexo-gray-200);">
                     <div>
-                        <label class="form-label mb-1" style="font-size:.7rem;">Categoría</label>
-                        <select class="form-select form-select-sm" id="filtroCategoriaDetalle" style="width:160px;" onchange="recargarDetalleMetodosPago()">
+                        <label class="form-label mb-1">Categoría</label>
+                        <select class="form-select" id="filtroCategoriaDetalle" style="width:190px;" onchange="recargarDetalleMetodosPago()">
                             <option value="todo">Todos</option>
                             <option value="tarjetas">Tarjetas</option>
                             <option value="efectivo">Efectivo y Otros</option>
@@ -1836,18 +1921,18 @@
                         </select>
                     </div>
                     <div>
-                        <label class="form-label mb-1" style="font-size:.7rem;">Método específico</label>
-                        <select class="form-select form-select-sm" id="filtroMetodoDetalle" style="width:220px;" onchange="aplicarFiltrosDetalle()">
+                        <label class="form-label mb-1">Método específico</label>
+                        <select class="form-select" id="filtroMetodoDetalle" style="width:300px;" onchange="aplicarFiltrosDetalle()">
                             <option value="">Todos los métodos</option>
                         </select>
                     </div>
                     <div>
-                        <label class="form-label mb-1" style="font-size:.7rem;">Tipo tarjeta / marca</label>
-                        <input type="text" class="form-control form-control-sm" id="filtroTipoTarjetaDetalle" placeholder="ej: HITES, WALMART" style="width:180px;" oninput="aplicarFiltrosDetalle()">
+                        <label class="form-label mb-1">Tipo tarjeta / marca</label>
+                        <input type="text" class="form-control" id="filtroTipoTarjetaDetalle" placeholder="ej: HITES, WALMART" style="width:220px;" oninput="aplicarFiltrosDetalle()">
                     </div>
-                    <div class="ms-auto d-flex gap-2">
-                        <span class="badge bg-secondary" id="contadorItemsDetalle" style="font-size:.7rem;">0 ítems</span>
-                        <span class="badge bg-primary" id="totalItemsDetalle" style="font-size:.7rem;font-family:monospace;">$0</span>
+                    <div class="ms-auto d-flex gap-2 align-items-center">
+                        <span class="badge bg-secondary dp-contador" id="contadorItemsDetalle">0 ítems</span>
+                        <span class="badge bg-primary dp-contador dp-total" id="totalItemsDetalle">$0</span>
                     </div>
                 </div>
 
@@ -1859,15 +1944,15 @@
                     <table class="table table-sm tabla-detalle-pago mb-0">
                         <thead>
                             <tr>
-                                <th style="width:55px;">Hora</th>
-                                <th style="width:100px;">Documento</th>
-                                <th style="width:80px;">N°</th>
-                                <th>Cliente</th>
-                                <th style="width:140px;">Método</th>
-                                <th style="width:120px;">Tarjeta/Voucher</th>
-                                <th style="width:200px;">DTE Asociado</th>
-                                <th class="text-end" style="width:110px;">Monto</th>
-                                <th class="text-center" style="width:110px;">Acciones</th>
+                                <th style="width:70px;">Hora</th>
+                                <th style="width:120px;">Documento</th>
+                                <th style="width:100px;">N°</th>
+                                <th style="min-width:180px;">Cliente</th>
+                                <th style="width:170px;">Método</th>
+                                <th style="min-width:240px;">Tarjeta/Voucher</th>
+                                <th style="width:220px;">DTE Asociado</th>
+                                <th class="text-end" style="width:130px;">Monto</th>
+                                <th class="text-center" style="width:140px;">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="tablaDetalleMetodosPago">
@@ -4011,6 +4096,7 @@ function limpiarCamposCuadratura() {
     ['visa','debito','presto','hites','efectivo','efectivo_bruto','transferencia','transferencia_bruta',
      'nota_credito','nc_efectivo','nc_transferencia','nc_credito','convenio','credito_trabajador','credito_externo','credito_externo_bruto','giftcard',
      'mercadopago_pos','mercadopago_pos_debito','mercadopago_pos_credito','mercadopago_pos_otros','cheque','orden_compra',
+     'mercadopago_pos_bruto','nc_mercadopago_pos','totalncmercadopago',
      'falabella','paris','ripley','mercadolibre','mercadopago','klap',
      'ecommerce_webpay','ecommerce_mercadopago','ecommerce_otros','ecommerce_propio','mp_consolidado',
      'totalboletaelectronica','totalboletapapel','totalfactura','totalfacturaexenta','totalnotascredito','totalncefectivo','totalnctransferencia',
@@ -4024,7 +4110,55 @@ function limpiarCamposCuadratura() {
     $('#bloqueMpConsolidado').addClass('rc-kpi-vacio');
     $('.rc-nc-row').hide();
     $('#modalResumenCaja tr[data-nc-neto]').removeClass('rc-con-nc');
+    _ncDetalleDia = null;
+    _pintarDetalleNcResumen([]);
     aplicarVisibilidadResumen({ cargando: true });
+}
+
+// ---------- Notas de crédito del día (detalle) ----------
+// `notas_credito_detalle` del backend: una fila por NC con su efecto en caja.
+// Lo usan el Resumen y los dos papeles térmicos.
+var _ncDetalleDia = null;  // var: hoisted, limpiarCamposCuadratura puede correr antes
+
+function _textoEfectoNc(nc) {
+    if (nc.tipo === 'ANULACION') return 'Anulación: informativa, no resta de caja';
+    if (nc.resta_de) return `Devolución: resta de ${nc.resta_de}`;
+    return 'Devolución: sin medio de caja que descontar';
+}
+
+function _escHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, ch => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+function _pintarDetalleNcResumen(lista) {
+    const $tabla = $('#modalResumenCaja .rc-nc-detalle');
+    const $tbody = $('#rcNcDetalle').empty();
+    const $avisos = $('#rcNcAvisos').empty();
+    if (!lista.length) { $tabla.hide(); return; }
+    lista.forEach(nc => {
+        const resta = nc.tipo === 'DEVOLUCION' && nc.resta_de;
+        const doc = nc.doc_afectado
+            ? ` · ${nc.tipo === 'ANULACION' ? 'anula' : 'sobre'} ${_escHtml(nc.doc_afectado)}`
+            : '';
+        $tbody.append(`
+            <tr>
+                <td class="rc-sub-label">NC ${_escHtml(nc.folio)}${doc}
+                    <span class="rc-nc-efecto">${_escHtml(_textoEfectoNc(nc))}</span></td>
+                <td class="rc-sub-monto ${resta ? 'rc-c-danger' : 'rc-c-muted'}">${resta ? '-' : ''}${fmCLP(nc.monto)}</td>
+            </tr>`);
+        if (nc.ticket_sigue_sumando) {
+            $avisos.append(`
+                <div class="alert alert-warning rc-aviso mb-0">
+                    <i class="ri-error-warning-line me-1"></i>
+                    La NC ${_escHtml(nc.folio)} anula ${_escHtml(nc.doc_afectado)}, pero su ticket
+                    <strong>#${_escHtml(nc.ticket_sigue_sumando)}</strong> sigue PAGADO y suma
+                    ${fmCLP(nc.monto)} al VENTA TOTAL. Si la venta se volvió a emitir con los mismos
+                    pagos, el día la está contando dos veces.
+                </div>`);
+        }
+    });
+    $tabla.show();
 }
 
 // ---------- Filas en $0 (Resumen de Caja) ----------
@@ -4234,7 +4368,8 @@ function cargarDatosCuadratura(c, fechaConsultada) {
     // en vez de dejar al cajero adivinando si ya estaba aplicada.
     [['efectivo',      'total_nc_efectivo',      'nc_efectivo',      'total_efectivo_bruto',        'efectivo_bruto'],
      ['transferencia', 'total_nc_transferencia', 'nc_transferencia', 'total_transferencia_bruta',   'transferencia_bruta'],
-     ['credito',       'total_nc_credito',       'nc_credito',       'total_credito_externo_bruto', 'credito_externo_bruto']]
+     ['credito',       'total_nc_credito',       'nc_credito',       'total_credito_externo_bruto', 'credito_externo_bruto'],
+     ['mp_pos',        'total_nc_mercadopago_pos', 'nc_mercadopago_pos', 'total_mercadopago_pos_bruto', 'mercadopago_pos_bruto']]
         .forEach(([grupo, claveNc, idNc, claveBruto, idBruto]) => {
             const nc = Number(c[claveNc]) || 0;
             $('#' + idNc).text(nc ? '-' + fmCLP(nc) : '$0');
@@ -4293,8 +4428,17 @@ function cargarDatosCuadratura(c, fechaConsultada) {
     $('#totalboletapapel').text(fmCLP(bpDisplay));
     $('#totalfactura').text(fmCLP(facDisplay));
     $('#totalfacturaexenta').text(fmCLP(facExDisplay));
-    $('#totalnotascredito').text(fmCLP(c.total_notas_credito||0));
+    // NOTAS CRÉDITO es una fila de DOCUMENTOS (como boletas y facturas): monto
+    // emitido, incluidas las ANULACION. Con `total_notas_credito` (solo las que
+    // restan) una NC de anulación quedaba en $0 y el filtro de ceros la escondía.
+    _ncDetalleDia = Array.isArray(c.notas_credito_detalle) ? c.notas_credito_detalle : null;
+    const totalNcDocs = _ncDetalleDia
+        ? _ncDetalleDia.reduce((a, nc) => a + (Number(nc.monto) || 0), 0)
+        : (Number(c.total_notas_credito) || 0);
+    $('#totalnotascredito').text(fmCLP(totalNcDocs));
+    _pintarDetalleNcResumen(_ncDetalleDia || []);
     $('#totalncefectivo').text(fmCLP(c.total_nc_efectivo||0)); $('#totalnctransferencia').text(fmCLP(c.total_nc_transferencia||0));
+    $('#totalncmercadopago').text(fmCLP(c.total_nc_mercadopago_pos||0));
     // Contadores por tipo de documento
     $('#cantBoletaElectronica').text(c.cantidad_boletas_electronicas||0);
     $('#cantBoletaPapel').text(c.cantidad_boletas_papel||0);
@@ -4437,6 +4581,8 @@ async function imprimirResumenTermica() {
         nc_efectivo:$('#nc_efectivo').text(),
         nc_transferencia:$('#nc_transferencia').text(),
         nc_credito:$('#nc_credito').text(),
+        mercadopago_pos_bruto:$('#mercadopago_pos_bruto').text(),
+        nc_mercadopago_pos:$('#nc_mercadopago_pos').text(),
         boletas_electronicas:$('#totalboletaelectronica').text(),
         boletas_papel:$('#totalboletapapel').text(),
         facturas:$('#totalfactura').text(),
@@ -4447,6 +4593,7 @@ async function imprimirResumenTermica() {
         cant_facturas:$('#cantFactura').text(),
         cant_facturas_exentas:$('#cantFacturaExenta').text(),
         cant_notas_credito:$('#cantNotasCredito').text(),
+        nc_detalle: _ncDetalleDia || [],
         empresa:'{{ sucursal_actual.empresa.nombre|default:""|escapejs }}',
         sucursal:'{{ sucursal_actual.alias|escapejs }}' };
     if (typeof QZ_CONFIG !== 'undefined' && QZ_CONFIG.habilitado) {
@@ -4530,66 +4677,151 @@ function _filasVentaInternetTermica(d) {
     ].filter(([, v]) => v && v !== '$0');
 }
 
-/** Sub-bloque del ecommerce propio, sólo si vendió algo el día. */
+/**
+ * Ecommerce propio: va DENTRO del bloque "VENTA INTERNET" (prefijo ECOM.)
+ * para que el bloque cierre con el mismo total que el resumen general.
+ */
 function _filasEcommerceTermica(d) {
     return [
-        ['WEBPAY', d.ecommerce_webpay],
-        ['MERCADO PAGO', d.ecommerce_mercadopago],
-        ['OTROS / S-DEF.', d.ecommerce_otros],
-        ['= TOTAL ECOMMERCE', d.ecommerce_propio],
+        ['ECOM. WEBPAY', d.ecommerce_webpay],
+        ['ECOM. MERCADO PAGO', d.ecommerce_mercadopago],
+        ['ECOM. OTROS/S-DEF.', d.ecommerce_otros],
     ].filter(([, v]) => v && v !== '$0');
 }
 
-function _bloqueTablaTermica(titulo, filas) {
-    if (!filas.length) return '';
-    const cuerpo = filas.map(([n, v]) =>
-        `<tr><td class="metodo">${n}:</td><td class="monto">${v}</td></tr>`).join('');
-    return `<div class="seccion"><div class="subtitulo">${titulo}</div>
-        <table>${cuerpo}</table></div><div class="linea"></div>`;
+/**
+ * Tarjetas Transbank + Mercado Pago POS con su desglose. Si hubo devolución
+ * por Mercado Pago, mismo esquema que el efectivo: bruto, NC y neto.
+ */
+function _filasTarjetasTermica(d) {
+    const hayNcMp = d.nc_mercadopago_pos && d.nc_mercadopago_pos !== '$0';
+    const filasMp = hayNcMp
+        ? [['MERCADO PAGO POS BRUTO', d.mercadopago_pos_bruto],
+           ['  NC POR MERCADO PAGO', d.nc_mercadopago_pos],
+           ['= MERCADO PAGO POS NETO', d.mercadopago_pos || '$0']]
+        : [['MERCADO PAGO POS', d.mercadopago_pos]];
+    return [
+        ['VISA/MC/AMEX', d.visa],
+        ['REDCOMPRA DEBITO', d.debito],
+        ['PRESTO', d.presto],
+        ['HITES', d.hites],
+        ...filasMp,
+        ['  MP DEBITO', d.mp_debito],
+        ['  MP CREDITO', d.mp_credito],
+        ['  MP QR/OTROS', d.mp_otros],
+    ].filter(([t, v]) => (v && v !== '$0') || (hayNcMp && t.startsWith('= MERCADO PAGO')));
+}
+
+/**
+ * Documentos emitidos (referencia, NO suman: la plata ya está en los medios).
+ * Se imprime todo tipo con cantidad > 0 aunque su monto sea $0: antes la
+ * fila de NC se filtraba por monto y una NC de ANULACION no salía nunca.
+ */
+function _filasDocumentosTermica(d) {
+    const n = v => parseInt(v, 10) || 0;
+    return [
+        ['BOLETAS ELEC.', d.cant_boletas_electronicas, d.boletas_electronicas],
+        ['BOLETAS PAPEL', d.cant_boletas_papel, d.boletas_papel],
+        ['FACTURAS', d.cant_facturas, d.facturas],
+        ['FACT. EXENTAS', d.cant_facturas_exentas, d.facturas_exentas],
+        ['NOTAS CREDITO', d.cant_notas_credito, d.notas_credito],
+    ].filter(([, cant, v]) => n(cant) || (v && v !== '$0'))
+     .map(([t, cant, v]) => [`${t} (${n(cant)})`, v || '$0']);
+}
+
+function _sinTildes(s) {
+    return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+/**
+ * Una entrada por NC: folio + documento que toca, monto (negativo si resta de
+ * caja), una nota con su efecto y, si corresponde, el aviso de venta anulada
+ * que sigue sumando. Las notas son objetos ({nota} / {aviso}), no pares.
+ */
+function _filasNcTermica(d) {
+    const filas = [];
+    (d.nc_detalle || []).forEach(nc => {
+        const resta = nc.tipo === 'DEVOLUCION' && nc.resta_de;
+        const verbo = nc.tipo === 'ANULACION' ? 'ANULA' : 'DEVUELVE';
+        const doc = nc.doc_afectado ? ` ${verbo} ${nc.doc_afectado}` : '';
+        filas.push([`NC ${nc.folio}${doc}`, (resta ? '-' : '') + fmCLP(nc.monto)]);
+        filas.push({ nota: _sinTildes(_textoEfectoNc(nc)) });
+        if (nc.ticket_sigue_sumando) {
+            filas.push({ aviso: `! TICKET #${nc.ticket_sigue_sumando} SIGUE SUMANDO EN EL TOTAL` });
+            filas.push({ aviso: '  (posible venta contada dos veces)' });
+        }
+    });
+    return filas;
+}
+
+/**
+ * Modelo ÚNICO del papel: lo recorren el HTML del navegador y el ESC/POS de
+ * QZ, así los dos tickets no se desincronizan. Cada bloque de medios cierra
+ * con el mismo subtotal que el RESUMEN GENERAL, y el resumen suma al VENTA
+ * TOTAL. "EFECTIVO EN CAJA" ya NO va en el resumen general: está incluido en
+ * "EFECTIVO Y OTROS" y quien sumaba el papel contaba el efectivo dos veces.
+ */
+function _seccionesTermica(d) {
+    return [
+        { titulo: 'DETALLE TARJETAS', filas: _filasTarjetasTermica(d),
+          total: ['= TOTAL TARJETAS', d.sum_tarjetas] },
+        { titulo: 'EFECTIVO Y OTROS', filas: _filasEfectivoOtrosTermica(d),
+          total: ['= TOTAL EFECTIVO Y OTROS', d.sum_efectivo] },
+        { titulo: 'VENTA INTERNET', filas: [..._filasVentaInternetTermica(d), ..._filasEcommerceTermica(d)],
+          total: ['= TOTAL VENTA INTERNET', d.sum_internet] },
+        { titulo: 'DOCUMENTOS (REFERENCIA)', filas: _filasDocumentosTermica(d), total: null },
+        { titulo: 'NOTAS DE CREDITO DEL DIA', filas: _filasNcTermica(d), total: null },
+    ].filter(s => s.filas.length);
 }
 
 function generarContenidoTermica(d) {
+    const e = _escHtml;
+    const fila = f => {
+        if (Array.isArray(f)) return `<tr><td class="metodo">${e(f[0])}:</td><td class="monto">${e(f[1])}</td></tr>`;
+        if (f.aviso) return `<tr><td colspan="2" class="aviso">${e(f.aviso)}</td></tr>`;
+        return `<tr><td colspan="2" class="nota">${e(f.nota)}</td></tr>`;
+    };
+    const secciones = _seccionesTermica(d).map(s => `
+        <div class="seccion"><div class="subtitulo">${e(s.titulo)}</div>
+        <table>${s.filas.map(fila).join('')}
+        ${s.total ? `<tr class="fila-total"><td class="metodo">${e(s.total[0])}:</td><td class="monto">${e(s.total[1] || '$0')}</td></tr>` : ''}
+        </table></div><div class="linea"></div>`).join('');
+
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Resumen de Caja</title>
     <style>@media print{body{margin:0;padding:0;}.no-print{display:none!important;}}
-    body{font-family:'Courier New',monospace;font-size:11px;line-height:1.2;margin:0;padding:8px;width:280px;background:white;color:#1A1A2E;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-    .centro{text-align:center;margin:5px 0;}.derecha{text-align:right;}.linea{border-bottom:1px dashed #D1D1D9;margin:8px 0;height:1px;}.linea-doble{border-bottom:2px solid #1A1A2E;margin:8px 0;height:2px;}
-    .titulo{font-size:14px;font-weight:bold;margin:8px 0;text-transform:uppercase;letter-spacing:1px;color:#0066FF;}.subtitulo{font-size:12px;font-weight:bold;margin:6px 0 4px;text-transform:uppercase;color:#4A4A5A;}
-    .total{font-weight:bold;font-size:13px;background:#0066FF;color:white;padding:4px;margin:8px 0;}.seccion{margin:8px 0;}
-    table{width:100%;border-collapse:collapse;margin:4px 0;}td{padding:1px 2px;vertical-align:top;font-size:11px;}.metodo{width:65%;text-align:left;color:#4A4A5A;}.monto{width:35%;text-align:right;font-weight:bold;font-family:'Courier New',monospace;color:#1A1A2E;}
-    .resumen-principal{background:#E6F0FF;padding:6px;margin:8px 0;border:1px solid #0066FF;}.fecha-hora{font-size:9px;margin:4px 0;color:#8A8A9A;}
+    body{font-family:'Courier New',monospace;font-size:12px;line-height:1.25;margin:0;padding:8px;width:280px;background:white;color:#000;}
+    .centro{text-align:center;margin:4px 0;}.linea{border-bottom:1px dashed #000;margin:6px 0;height:1px;}.linea-doble{border-bottom:2px solid #000;margin:6px 0;height:2px;}
+    .titulo{font-size:16px;font-weight:bold;margin:6px 0;letter-spacing:1px;}.subtitulo{font-size:12px;font-weight:bold;margin:6px 0 3px;border-bottom:1px solid #000;}
+    .seccion{margin:6px 0;}table{width:100%;border-collapse:collapse;}td{padding:1px 0;vertical-align:top;font-size:12px;}
+    .metodo{text-align:left;}.monto{text-align:right;font-weight:bold;white-space:nowrap;padding-left:6px;}
+    .fila-total td{border-top:1px solid #000;font-weight:bold;padding-top:2px;}
+    .nota{font-size:10px;padding-left:10px;}.aviso{font-size:11px;font-weight:bold;padding-left:6px;}
+    .venta-total{border:2px solid #000;text-align:center;padding:5px 2px;margin:6px 0;}
+    .venta-total .lbl{font-size:12px;font-weight:bold;letter-spacing:1px;}.venta-total .val{font-size:22px;font-weight:bold;}
+    .efectivo-caja{border:1px dashed #000;padding:4px;margin:6px 0;}.efectivo-caja .nota{padding-left:0;}
+    .pie{font-size:10px;text-align:center;margin:3px 0;}
     @page{size:80mm auto;margin:0;}</style></head><body>
-    <div class="centro"><div class="titulo">RESUMEN DE CAJA</div>${d.empresa?`<div style="font-size:11px;font-weight:bold;color:#1A1A2E;">${d.empresa.toUpperCase()}</div>`:''}<div style="font-size:10px;color:#4A4A5A;">${d.sucursal||''}</div><div style="color:#4A4A5A;">${d.fecha}</div></div>
+    <div class="centro">${d.empresa ? `<div style="font-weight:bold;">${e(d.empresa.toUpperCase())}</div>` : ''}
+    <div style="font-weight:bold;">${e((d.sucursal || '').toUpperCase())}</div>
+    <div class="titulo">RESUMEN DE CAJA</div><div>${e(d.fecha)}</div></div>
     <div class="linea-doble"></div>
-    <div class="seccion resumen-principal"><div class="subtitulo centro">RESUMEN GENERAL</div>
-    <table><tr><td class="metodo">EFECTIVO EN CAJA:</td><td class="monto">${d.efectivo}</td></tr><tr><td class="metodo">TARJETAS:</td><td class="monto">${d.transbank}</td></tr>
-    <tr><td class="metodo">EFECTIVO Y OTROS:</td><td class="monto">${d.tarjetas_comerciales}</td></tr><tr><td class="metodo">VENTA INTERNET:</td><td class="monto">${d.venta_internet}</td></tr></table></div>
-    <div class="linea"></div>
-    <div class="seccion"><div class="subtitulo">DETALLE TARJETAS</div><table>
-    ${d.visa!=='$0'?`<tr><td class="metodo">VISA/MC/AMEX:</td><td class="monto">${d.visa}</td></tr>`:''}
-    ${d.debito!=='$0'?`<tr><td class="metodo">REDCOMPRA DEBITO:</td><td class="monto">${d.debito}</td></tr>`:''}
-    ${d.presto!=='$0'?`<tr><td class="metodo">PRESTO:</td><td class="monto">${d.presto}</td></tr>`:''}
-    ${d.hites!=='$0'?`<tr><td class="metodo">HITES:</td><td class="monto">${d.hites}</td></tr>`:''}
-    ${d.mercadopago_pos!=='$0'?`<tr><td class="metodo">MERCADO PAGO POS:</td><td class="monto">${d.mercadopago_pos}</td></tr>`:''}
-    ${d.mp_debito!=='$0'?`<tr><td class="metodo" style="padding-left:10px;">&#8627; MP DEBITO:</td><td class="monto">${d.mp_debito}</td></tr>`:''}
-    ${d.mp_credito!=='$0'?`<tr><td class="metodo" style="padding-left:10px;">&#8627; MP CREDITO:</td><td class="monto">${d.mp_credito}</td></tr>`:''}
-    ${d.mp_otros!=='$0'?`<tr><td class="metodo" style="padding-left:10px;">&#8627; MP QR/OTROS:</td><td class="monto">${d.mp_otros}</td></tr>`:''}
-    </table></div><div class="linea"></div>
-    ${_bloqueTablaTermica('EFECTIVO Y OTROS', _filasEfectivoOtrosTermica(d))}
-    ${_bloqueTablaTermica('VENTA INTERNET', _filasVentaInternetTermica(d))}
-    ${_bloqueTablaTermica('ECOMMERCE PROPIO', _filasEcommerceTermica(d))}
-    <div class="seccion"><div class="subtitulo">DOCUMENTOS</div><table>
-    ${d.boletas_electronicas!=='$0'?`<tr><td class="metodo">BOLETAS ELEC. (${d.cant_boletas_electronicas||0}):</td><td class="monto">${d.boletas_electronicas}</td></tr>`:''}
-    ${d.boletas_papel!=='$0'?`<tr><td class="metodo">BOLETAS PAPEL (${d.cant_boletas_papel||0}):</td><td class="monto">${d.boletas_papel}</td></tr>`:''}
-    ${d.facturas!=='$0'?`<tr><td class="metodo">FACTURAS (${d.cant_facturas||0}):</td><td class="monto">${d.facturas}</td></tr>`:''}
-    ${d.facturas_exentas!=='$0'?`<tr><td class="metodo">FACT. EXENTAS (${d.cant_facturas_exentas||0}):</td><td class="monto">${d.facturas_exentas}</td></tr>`:''}
-    ${d.notas_credito!=='$0'?`<tr><td class="metodo">NOTAS CREDITO (${d.cant_notas_credito||0}):</td><td class="monto">${d.notas_credito}</td></tr>`:''}
-    </table></div><div class="linea-doble"></div>
-    <div class="total centro">VENTA TOTAL: ${d.venta_total}</div><div class="linea-doble"></div>
-    ${d.mp_consolidado && d.mp_consolidado!=='$0' ? `<div class="seccion"><div class="subtitulo">TOTAL MERCADO PAGO: ${d.mp_consolidado}</div>
-    <div style="font-size:9px;color:#4A4A5A;">${d.mp_consolidado_detalle||''}</div>
-    <div style="font-size:9px;color:#8A8A9A;font-style:italic;">Ya incluido arriba, no se suma aparte.</div></div><div class="linea"></div>` : ''}
-    <div class="centro fecha-hora">Impreso: ${new Date().toLocaleString('es-CL')}</div>
-    <div class="centro fecha-hora">NEXO Retail System</div>
+    <table>
+      <tr><td class="metodo">TARJETAS:</td><td class="monto">${e(d.sum_tarjetas)}</td></tr>
+      <tr><td class="metodo">EFECTIVO Y OTROS:</td><td class="monto">${e(d.sum_efectivo)}</td></tr>
+      <tr><td class="metodo">VENTA INTERNET:</td><td class="monto">${e(d.sum_internet)}</td></tr>
+    </table>
+    <div class="venta-total"><div class="lbl">VENTA TOTAL</div><div class="val">${e(d.venta_total)}</div></div>
+    <div class="efectivo-caja"><table><tr><td class="metodo"><b>EFECTIVO EN CAJA:</b></td><td class="monto">${e(d.efectivo)}</td></tr></table>
+    <div class="nota">A contar en el cajon (va dentro de Efectivo y Otros)</div></div>
+    <div class="linea-doble"></div>
+    ${secciones}
+    ${d.mp_consolidado && d.mp_consolidado !== '$0' ? `<div class="seccion"><div class="subtitulo">TOTAL MERCADO PAGO</div><table>
+      <tr class="fila-total"><td class="metodo">TOTAL MERCADO PAGO:</td><td class="monto">${e(d.mp_consolidado)}</td></tr>
+      ${[['  Point / QR (meson)', d.mercadopago_pos], ['  Marketplace', d.mercadopago], ['  Mercado Libre', d.mercadolibre], ['  Ecommerce propio', d.ecommerce_mercadopago]]
+          .filter(([, v]) => v && v !== '$0').map(fila).join('')}
+      <tr><td colspan="2" class="nota">Ya incluido arriba, no suma aparte.</td></tr></table></div><div class="linea"></div>` : ''}
+    <div class="pie">Impreso: ${e(new Date().toLocaleString('es-CL'))}</div>
+    <div class="pie">NEXO Retail System</div>
     <scr${''}ipt>window.onload=function(){setTimeout(function(){window.print();setTimeout(function(){window.close();},500);},300);};window.onafterprint=function(){window.close();};<\/script>
     </body></html>`;
 }
@@ -4742,11 +4974,11 @@ function _pintarSubtotales(totales) {
         <div class="subtotales-metodo">
             <div class="d-flex justify-content-between align-items-center">
                 <strong><i class="ri-bar-chart-line me-1"></i>Subtotales por método</strong>
-                <span class="text-muted" style="font-size:.7rem;">${cant} pagos · ${fmCLP(total)} total</span>
+                <span class="text-muted">${cant} pagos · <strong>${fmCLP(total)}</strong> total</span>
             </div>
-            <div class="mt-1 d-flex flex-wrap gap-1">
+            <div class="mt-2 d-flex flex-wrap gap-2">
                 ${totales.map(t => `
-                    <span class="badge ${_badgeClaseCategoria(t.categoria)}" style="font-size:.7rem;font-weight:500;">
+                    <span class="badge dp-subtotal-chip ${_badgeClaseCategoria(t.categoria)}">
                         ${t.metodo_pago_display}: ${fmCLP(t.total)} <small class="opacity-75">(${t.cantidad})</small>
                     </span>
                 `).join('')}
@@ -4818,21 +5050,21 @@ function _filaDetalleHTML(it, idx) {
     if (it.dte) {
         const tipoBadge = _badgeClaseTipoDte(it.dte.tipo);
         docCell = `
-            <span class="badge ${tipoBadge}" style="font-size:.65rem;">${_abreviarTipoDte(it.dte.tipo)}</span>
-            ${it.ticket_correlativo ? `<div class="text-muted" style="font-size:.6rem;">Ticket #${it.ticket_correlativo}</div>` : ''}
+            <span class="badge dp-badge ${tipoBadge}">${_abreviarTipoDte(it.dte.tipo)}</span>
+            ${it.ticket_correlativo ? `<div class="text-muted dp-sub">Ticket #${it.ticket_correlativo}</div>` : ''}
         `;
     } else if (it.tipo_dte_ticket && it.tipo_dte_ticket !== 'TICKET') {
         docCell = `
-            <span class="badge bg-warning text-dark" style="font-size:.63rem;" title="Ticket tiene tipo ${it.tipo_dte_ticket} pero no se encontró el DTE asociado">
+            <span class="badge dp-badge bg-warning text-dark" title="Ticket tiene tipo ${it.tipo_dte_ticket} pero no se encontró el DTE asociado">
                 <i class="ri-alert-line"></i> ${_abreviarTipoDte(it.tipo_dte_ticket)}
             </span>
-            <div class="text-muted" style="font-size:.6rem;">Ticket #${it.ticket_correlativo || it.correlativo}</div>
-            <div class="text-danger" style="font-size:.55rem;">Sin DTE</div>
+            <div class="text-muted dp-sub">Ticket #${it.ticket_correlativo || it.correlativo}</div>
+            <div class="text-danger dp-sub-xs">Sin DTE</div>
         `;
     } else {
         docCell = `
-            <span class="badge bg-secondary" style="font-size:.65rem;">TICKET</span>
-            <div class="text-muted" style="font-size:.6rem;">#${it.ticket_correlativo || it.correlativo}</div>
+            <span class="badge dp-badge bg-secondary">TICKET</span>
+            <div class="text-muted dp-sub">#${it.ticket_correlativo || it.correlativo}</div>
         `;
     }
 
@@ -4843,7 +5075,7 @@ function _filaDetalleHTML(it, idx) {
         dteCell = `
             <div class="dte-tag">
                 <span class="tipo">NC</span> #${it.dte.folio}
-                <div class="text-muted" style="font-size:.68rem;">
+                <div class="text-muted dp-sub">
                     Emisión: ${it.dte.fecha_emision}
                     ${it.dte.fecha_pago && it.dte.fecha_pago !== it.dte.fecha_emision ? `<br>Cuadratura: <span class="fecha-pago-nc fw-bold" data-dte-id="${it.dte.id}">${it.dte.fecha_pago}</span>` : `<br>Cuadratura: <span class="fecha-pago-nc" data-dte-id="${it.dte.id}">${it.dte.fecha_pago || it.dte.fecha_emision}</span>`}
                 </div>
@@ -4851,12 +5083,12 @@ function _filaDetalleHTML(it, idx) {
         `;
     } else if (it.dte) {
         const driftBadge = it.drift_fecha
-            ? `<span class="badge bg-danger ms-1" style="font-size:.6rem;" title="La fecha del Ticket (${it.ticket_fecha}) NO coincide con la fecha de emisión del DTE (${it.dte.fecha_emision}). Usa Sincronizar para mover el ticket al día correcto.">⚠ Drift</span>`
+            ? `<span class="badge bg-danger ms-1 dp-sub-xs" title="La fecha del Ticket (${it.ticket_fecha}) NO coincide con la fecha de emisión del DTE (${it.dte.fecha_emision}). Usa Sincronizar para mover el ticket al día correcto.">⚠ Drift</span>`
             : '';
         dteCell = `
             <div class="dte-tag">
                 <span class="tipo">${_abreviarTipoDte(it.dte.tipo)}</span> #${it.dte.folio}${driftBadge}
-                <div class="text-muted" style="font-size:.68rem;">
+                <div class="text-muted dp-sub">
                     Emisión: <span class="fecha-dte" data-dte-id="${it.dte.id}">${it.dte.fecha_emision}</span>
                     ${it.ticket_fecha && it.drift_fecha ? `<span class="text-danger ms-1" title="Fecha del ticket">· Ticket: ${it.ticket_fecha}</span>` : ''}
                 </div>
@@ -4864,7 +5096,7 @@ function _filaDetalleHTML(it, idx) {
         `;
     } else if (it.tipo_dte_ticket && it.tipo_dte_ticket !== 'TICKET' && it.tipo_dte_ticket !== '') {
         dteCell = `
-            <span class="text-warning" style="font-size:.7rem;" title="Este ticket debería tener un DTE tipo ${it.tipo_dte_ticket} pero no se encontró en el sistema">
+            <span class="text-warning dp-sub" title="Este ticket debería tener un DTE tipo ${it.tipo_dte_ticket} pero no se encontró en el sistema">
                 <i class="ri-alert-line"></i> No encontrado
             </span>
         `;
@@ -4920,42 +5152,48 @@ function _filaDetalleHTML(it, idx) {
     if (acciones.length) {
         accionesCell = `<div class="d-flex gap-1 flex-wrap justify-content-center">${acciones.join('')}</div>`;
     } else if (!it.dte) {
-        accionesCell = '<span class="text-muted" style="font-size:.68rem;" title="Sin DTE asociado: no hay fecha de emisión que editar">Sin DTE</span>';
+        accionesCell = '<span class="text-muted dp-sub" title="Sin DTE asociado: no hay fecha de emisión que editar">Sin DTE</span>';
     } else if (it.es_nota_credito) {
-        accionesCell = '<span class="text-muted" style="font-size:.68rem;" title="Editar la fecha de cuadratura o eliminar una NC requiere permiso (Editar pagos / Eliminar documento)">Sin permiso</span>';
+        accionesCell = '<span class="text-muted dp-sub" title="Editar la fecha de cuadratura o eliminar una NC requiere permiso (Editar pagos / Eliminar documento)">Sin permiso</span>';
     } else if (!PERMISOS_RESUMEN.puede_editar_algun_dte) {
-        accionesCell = '<span class="text-muted" style="font-size:.68rem;" title="Sin permiso de edición de DTEs">Sin permiso</span>';
+        accionesCell = '<span class="text-muted dp-sub" title="Sin permiso de edición de DTEs">Sin permiso</span>';
     } else {
-        accionesCell = `<span class="text-muted" style="font-size:.68rem;" title="No autorizado para editar ${it.dte.tipo}">Sin permiso (${_abreviarTipoDte(it.dte.tipo)})</span>`;
+        accionesCell = `<span class="text-muted dp-sub" title="No autorizado para editar ${it.dte.tipo}">Sin permiso (${_abreviarTipoDte(it.dte.tipo)})</span>`;
     }
 
     // Mercado Pago: el voucher guarda el id de la Orders API, que no existe en
     // el panel de MP. Cuando está el Nº de operación real se muestra ese (más
     // la autorización), porque es el único que permite cruzar con la cartola.
+    // Dos líneas: medio arriba, N° de operación abajo (monoespaciada).
     let tarjetaVoucher;
     if (it.payment_id_mp) {
-        tarjetaVoucher = [
+        const medio = [
             it.medio_mp || it.tipo_tarjeta,
-            'N° MP ' + it.payment_id_mp,
-            it.codigo_autorizacion ? 'Aut ' + it.codigo_autorizacion : '',
             it.ultimos_4_digitos ? '****' + it.ultimos_4_digitos : '',
         ].filter(Boolean).join(' · ');
+        const op = [
+            'N° MP ' + it.payment_id_mp,
+            it.codigo_autorizacion ? 'Aut ' + it.codigo_autorizacion : '',
+        ].filter(Boolean).join(' · ');
+        tarjetaVoucher = `${medio ? `<div class="dp-voucher-medio">${medio}</div>` : ''}<div class="dp-voucher-op">${op}</div>`;
+    } else if (it.tipo_tarjeta || it.voucher) {
+        tarjetaVoucher = `${it.tipo_tarjeta ? `<div class="dp-voucher-medio">${it.tipo_tarjeta}</div>` : ''}${it.voucher ? `<div class="dp-voucher-op">${it.voucher}</div>` : ''}`;
     } else {
-        tarjetaVoucher = [it.tipo_tarjeta, it.voucher].filter(Boolean).join(' · ') || '—';
+        tarjetaVoucher = '<span class="text-muted">—</span>';
     }
     const filaClase = it.es_nota_credito ? 'table-danger' : (it.drift_fecha ? 'table-warning' : (!it.dte && it.tipo_dte_ticket && it.tipo_dte_ticket !== 'TICKET' ? 'table-light' : ''));
     const montoClase = it.monto < 0 ? 'text-danger' : '';
 
     return `
         <tr class="${filaClase}" data-idx="${idx}" data-dte-id="${it.dte ? it.dte.id : ''}" data-ticket-id="${it.ticket_id || ''}">
-            <td>${it.hora || '—'}</td>
+            <td class="fw-semibold">${it.hora || '—'}</td>
             <td>${docCell}</td>
             <td class="fw-bold">#${it.correlativo || '—'}</td>
-            <td class="text-truncate" style="max-width:220px;" title="${(it.cliente || '').replace(/"/g, '&quot;')}">${it.cliente || '—'}${it.cliente_rut ? `<div class="text-muted" style="font-size:.65rem;">${it.cliente_rut}</div>` : ''}</td>
+            <td style="max-width:260px;" title="${(it.cliente || '').replace(/"/g, '&quot;')}"><div class="text-truncate">${it.cliente || '—'}</div>${it.cliente_rut ? `<div class="text-muted dp-sub">${it.cliente_rut}</div>` : ''}</td>
             <td><span class="badge badge-categoria ${_badgeClaseCategoria(it.categoria)}">${it.metodo_pago_display}</span></td>
-            <td class="text-muted" style="font-size:.72rem;">${tarjetaVoucher}</td>
+            <td>${tarjetaVoucher}</td>
             <td>${dteCell}</td>
-            <td class="text-end fw-bold font-monospace ${montoClase}">${fmCLP(it.monto)}</td>
+            <td class="text-end fw-bold font-monospace dp-monto ${montoClase}">${fmCLP(it.monto)}</td>
             <td class="text-center">${accionesCell}</td>
         </tr>
     `;
@@ -5933,102 +6171,63 @@ function _generarEscPosCuadratura(datos) {
 
     /* ── Cabecera empresa / sucursal ───────────────────────────── */
     c.push(_EP.CENTER, _EP.BOLD_ON);
-    if (datos.empresa) c.push(datos.empresa.toUpperCase().substring(0, _COLS) + _N);
-    if (datos.sucursal) c.push(datos.sucursal.toUpperCase().substring(0, _COLS) + _N);
+    if (datos.empresa) c.push(_sinTildes(datos.empresa).toUpperCase().substring(0, _COLS) + _N);
+    if (datos.sucursal) c.push(_sinTildes(datos.sucursal).toUpperCase().substring(0, _COLS) + _N);
     c.push(_EP.BOLD_OFF);
 
     /* ── Título doble tamaño ───────────────────────────────────── */
     c.push(_EP.CENTER, _EP.DBL_ON, _EP.BOLD_ON);
     c.push('RESUMEN DE CAJA' + _N);
     c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
-
     c.push(_EP.CENTER);
     c.push(datos.fecha + _N);
     c.push(_sep('='));
 
-    /* ── RESUMEN GENERAL ───────────────────────────────────────── */
-    c.push(_EP.LEFT, _EP.BOLD_ON);
-    c.push(_pL('RESUMEN GENERAL', _COLS) + _N);
-    c.push(_EP.BOLD_OFF);
-    c.push(_sep('-'));
-    c.push(_col2('EFECTIVO EN CAJA:', datos.efectivo || '$0'));
-    c.push(_col2('TARJETAS:', datos.transbank || '$0'));
-    c.push(_col2('EFECTIVO Y OTROS:', datos.tarjetas_comerciales || '$0'));
-    c.push(_col2('VENTA INTERNET:', datos.venta_internet || '$0'));
+    /* ── RESUMEN GENERAL: los tres bloques que suman el VENTA TOTAL ─
+          (sin "EFECTIVO EN CAJA": ya va dentro de EFECTIVO Y OTROS). */
+    c.push(_EP.LEFT);
+    c.push(_col2('TARJETAS:', datos.sum_tarjetas || '$0'));
+    c.push(_col2('EFECTIVO Y OTROS:', datos.sum_efectivo || '$0'));
+    c.push(_col2('VENTA INTERNET:', datos.sum_internet || '$0'));
     c.push(_sep('-'));
 
-    /* ── Secciones por bloque: se imprime la línea sólo si tiene monto,
-          pero ningún medio de pago queda fuera de la lista. ────────── */
-    const _bloque = (titulo, filas) => {
-        const conMonto = filas.filter(([, v]) => v && v !== '$0');
-        if (!conMonto.length) return;
-        c.push(_EP.BOLD_ON);
-        c.push(_pL(titulo, _COLS) + _N);
-        c.push(_EP.BOLD_OFF);
-        c.push(_sep('-'));
-        conMonto.forEach(([n, v]) => c.push(_col2(n + ':', v)));
-        c.push(_sep('-'));
-    };
-
-    /* ── DETALLE TARJETAS ──────────────────────────────────────── */
-    _bloque('DETALLE TARJETAS', [
-        ['VISA/MC/AMEX', datos.visa],
-        ['REDCOMPRA DEB.', datos.debito],
-        ['PRESTO', datos.presto],
-        ['HITES', datos.hites],
-        ['MERCADO PAGO POS', datos.mercadopago_pos],
-        ['  MP DEBITO', datos.mp_debito],
-        ['  MP CREDITO', datos.mp_credito],
-        ['  MP QR/OTROS', datos.mp_otros],
-    ]);
-
-    /* ── EFECTIVO Y OTROS ──────────────────────────────────────── */
-    // Faltaba entero: el ticket mostraba el subtotal del bloque pero nunca
-    // de qué medios estaba hecho (convenio, créditos, gift card, cheque, OC).
-    // Las filas (con el bruto − NC = neto de cada medio) las arma el mismo
-    // helper que usa el HTML, para que los dos papeles no se desincronicen.
-    _bloque('EFECTIVO Y OTROS', _filasEfectivoOtrosTermica(datos));
-
-    /* ── VENTA INTERNET + ECOMMERCE PROPIO ─────────────────────── */
-    // Dos bloques separados a propósito: el marketplace lo liquida Paris /
-    // Ripley / Walmart, el ecommerce propio lo liquida la pasarela (Webpay o
-    // Mercado Pago). Mezclados, la única línea "MERCADO PAGO" del ticket
-    // contaba como MP hasta la venta cobrada por Webpay.
-    _bloque('VENTA INTERNET', _filasVentaInternetTermica(datos));
-    _bloque('ECOMMERCE PROPIO', _filasEcommerceTermica(datos));
-
-    /* ── DOCUMENTOS (solo si hay montos) ───────────────────────── */
-    const hayD = [
-        datos.boletas_electronicas,
-        datos.boletas_papel,
-        datos.facturas,
-        datos.facturas_exentas,
-        datos.notas_credito,
-    ].some(v => v && v !== '$0');
-    if (hayD) {
-        c.push(_EP.BOLD_ON);
-        c.push(_pL('DOCUMENTOS', _COLS) + _N);
-        c.push(_EP.BOLD_OFF);
-        c.push(_sep('-'));
-        if (datos.boletas_electronicas && datos.boletas_electronicas !== '$0')
-            c.push(_col2('BOLETAS ELEC. (' + (datos.cant_boletas_electronicas||0) + '):', datos.boletas_electronicas));
-        if (datos.boletas_papel && datos.boletas_papel !== '$0')
-            c.push(_col2('BOLETAS PAPEL (' + (datos.cant_boletas_papel||0) + '):', datos.boletas_papel));
-        if (datos.facturas && datos.facturas !== '$0')
-            c.push(_col2('FACTURAS (' + (datos.cant_facturas||0) + '):', datos.facturas));
-        if (datos.facturas_exentas && datos.facturas_exentas !== '$0')
-            c.push(_col2('FACT. EXENTAS (' + (datos.cant_facturas_exentas||0) + '):', datos.facturas_exentas));
-        if (datos.notas_credito && datos.notas_credito !== '$0')
-            c.push(_col2('NOTAS CREDITO (' + (datos.cant_notas_credito||0) + '):', datos.notas_credito));
-        c.push(_sep('-'));
-    }
-
-    /* ── VENTA TOTAL doble tamaño ──────────────────────────────── */
-    c.push(_sep('='));
+    /* ── VENTA TOTAL arriba, en doble tamaño (24 columnas) ──────── */
     c.push(_EP.CENTER, _EP.DBL_ON, _EP.BOLD_ON);
-    c.push('TOTAL: ' + (datos.venta_total || '$0') + _N);
+    c.push('VENTA TOTAL' + _N);
+    c.push((datos.venta_total || '$0') + _N);
     c.push(_EP.DBL_OFF, _EP.BOLD_OFF);
     c.push(_sep('='));
+
+    /* ── EFECTIVO EN CAJA: lo que se cuenta en el cajón ─────────── */
+    c.push(_EP.LEFT, _EP.BOLD_ON);
+    c.push(_col2('EFECTIVO EN CAJA:', datos.efectivo || '$0'));
+    c.push(_EP.BOLD_OFF);
+    c.push(_pL('  A contar en el cajon (va en Efectivo y Otros)', _COLS) + _N);
+    c.push(_sep('='));
+
+    /* ── Bloques de detalle: mismo modelo que el HTML ───────────── */
+    _seccionesTermica(datos).forEach(s => {
+        c.push(_EP.LEFT, _EP.BOLD_ON);
+        c.push(_pL(s.titulo, _COLS) + _N);
+        c.push(_EP.BOLD_OFF);
+        c.push(_sep('-'));
+        s.filas.forEach(f => {
+            if (Array.isArray(f)) {
+                c.push(_col2(f[0] + ':', f[1]));
+            } else if (f.aviso) {
+                c.push(_EP.BOLD_ON, _pL('  ' + f.aviso, _COLS) + _N, _EP.BOLD_OFF);
+            } else {
+                c.push(_pL('  ' + f.nota, _COLS) + _N);
+            }
+        });
+        if (s.total) {
+            c.push(_sep('-'));
+            c.push(_EP.BOLD_ON);
+            c.push(_col2(s.total[0] + ':', s.total[1] || '$0'));
+            c.push(_EP.BOLD_OFF);
+        }
+        c.push(_sep('='));
+    });
 
     /* ── TOTAL MERCADO PAGO (lectura de gestión, no suma al total) ── */
     if (datos.mp_consolidado && datos.mp_consolidado !== '$0') {
@@ -6038,12 +6237,14 @@ function _generarEscPosCuadratura(datos) {
         // Desglose en filas propias, no en una línea de texto: `_pL` trunca a
         // 48 columnas y "POS $1.046.610 + marketplace $37.590 + ecommerce $0"
         // se cortaba a la mitad en el papel.
-        c.push(_col2('  Point / QR (mesón)', datos.mercadopago_pos || '$0'));
-        c.push(_col2('  Marketplace', datos.mercadopago || '$0'));
-        c.push(_col2('  Mercado Libre', datos.mercadolibre || '$0'));
-        c.push(_col2('  Ecommerce propio', datos.ecommerce_mercadopago || '$0'));
-        c.push(_pL('Ya incluido arriba, no suma aparte.', _COLS) + _N);
-        c.push(_sep('-'));
+        [['  Point / QR (meson)', datos.mercadopago_pos],
+         ['  Marketplace', datos.mercadopago],
+         ['  Mercado Libre', datos.mercadolibre],
+         ['  Ecommerce propio', datos.ecommerce_mercadopago]]
+            .filter(([, v]) => v && v !== '$0')
+            .forEach(([n, v]) => c.push(_col2(n, v)));
+        c.push(_pL('  Ya incluido arriba, no suma aparte.', _COLS) + _N);
+        c.push(_sep('='));
     }
 
     /* ── Pie ────────────────────────────────────────────────────── */

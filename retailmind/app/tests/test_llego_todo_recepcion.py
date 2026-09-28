@@ -127,9 +127,13 @@ class LlegoTodoTest(TestCase):
         return Producto_Talla.objects.get(id=talla.id).stock
 
     def _crear_nc(self, estado_dte='EMITIDO', numero=555):
+        # 'NOTA DE CREDITO' y no 'NOTA DE CREDITO ELECTRONICA': es el valor que
+        # escriben los emisores reales de NC de traspaso (ajustar_dte_emisor_api)
+        # y el otro no cabe en Dte.tipo_documento (varchar(20)): el fixture
+        # reventaba con DataError en PostgreSQL antes de llegar al endpoint.
         return Dte.objects.create(
             emisor=self.empresa, receptor=self.empresa,
-            numero_documento=numero, tipo_documento='NOTA DE CREDITO ELECTRONICA',
+            numero_documento=numero, tipo_documento='NOTA DE CREDITO',
             monto_neto=Decimal('2000'), monto_con_iva=Decimal('2380'),
             estado_pago='PENDIENTE', estado_dte=estado_dte, responsable='tester',
             fecha_emision='2026-08-14', fecha_vencimiento='2026-08-14',

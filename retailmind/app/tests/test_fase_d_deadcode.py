@@ -59,7 +59,7 @@ from app import views_modulo_existencias as modulo_huerfano
 from app.models import Categoria, ModuloSistema, OpcionMenu, PermisoRol, Producto
 from .factories import (
     crear_empresa, crear_empresa_user, crear_producto_con_talla, crear_sucursal,
-    crear_usuario,
+    crear_usuario, otorgar_ver_pantalla,
 )
 
 # Las 5 FBV eliminadas el 2026-08-22.
@@ -251,6 +251,10 @@ class GemelasVivasDeF06RespondenTest(TestCase):
         self.user = crear_usuario(rol='administrador')
         crear_empresa_user(self.user, self.empresa, self.sucursal)
         self.client.force_login(self.user)
+        # Ambas rutas son APIs de Gestión Producto: el middleware exige ver
+        # esa pantalla (si no, redirige antes de llegar a la vista).
+        otorgar_ver_pantalla('administrador', 'gestion_producto',
+                             puede_crear=True, puede_editar=True)
 
     def test_crear_producto_desde_recepcion_corta_por_falta_de_sucursal(self):
         """Sin sucursal en sesión la vista viva corta en 400 y no toca la BD.
@@ -260,7 +264,10 @@ class GemelasVivasDeF06RespondenTest(TestCase):
         llenar en cada request cuando el usuario tiene una asignada.
         """
         cliente = Client()
-        cliente.force_login(crear_usuario(username='sin_sucursal', rol='vendedor'))
+        # Rol con la pantalla Gestión Producto (setUp): un vendedor ya no
+        # llega a la vista, el middleware lo corta antes (ver
+        # test_sec_permisos_compras).
+        cliente.force_login(crear_usuario(username='sin_sucursal', rol='administrador'))
         antes = Producto.objects.count()
         respuesta = cliente.post(reverse('crear_producto_desde_recepcion'), {})
         self.assertEqual(respuesta.status_code, 400)
@@ -377,3 +384,271 @@ class ReportesExistenciasVivosTest(TestCase):
         self.assertEqual(legacy['kpis_globales']['total_stock'], 7)   # 10 + (-3)
         self.assertEqual(fila['total_pares'], 10)                     # solo stock > 0
         self.assertEqual(fila['total_pares'] - legacy['kpis_globales']['total_stock'], 3)
+
+
+# =============================================================================
+# Unidad D de la auditoría de Compras (2026-09-26): código y rutas muertas del
+# módulo. Guardas para que no reaparezcan (hallazgos B16-01/B7-08, B16-02,
+# B16-03, B1-15, B2-13/B12-14, B3-13, B8-14/B10-08, B16-05, B16-06, B16-08,
+# B16-09, B10-09/B16-07, A3-05 y pedidos de limpieza de las otras unidades).
+# =============================================================================
+from django.template import TemplateDoesNotExist
+from django.template.loader import get_template
+from django.urls import Resolver404
+
+from app import views_modulo_compras as vmc
+from app.middleware_permisos import URL_PERMISO_MAP
+
+# Funciones borradas de app/views.py que NO deben volver a definirse ahí.
+FBV_BORRADAS_VIEWS_COMPRAS = (
+    'editar_dte_traspaso_api',            # B16-01 / B7-08: reescribía traspasos sin rol
+    'obtener_dte_compras',                # B16-02 (gemelo POST sin ruta)
+    'restaurar_dte',                      # B16-03
+    'obtenerDetalleComprasPorParametros', # B1-15 / B16-06: devolvía True → 500
+    'productos_recepcionados',            # B2-13 / B12-14: 500 siempre
+    'empresas_proveedoras',               # B3-13 / B16-08 (la viva está en vmc)
+    'procesar_ajuste_interno_individual', # B8-14 / B10-08
+    'procesar_cambio_producto_individual',
+    'generar_nota_credito_automatica',
+    'obtener_dtes_con_problemas',
+    'exportar_dashboard_compras',         # B16-08 (stub; la viva está en vmc)
+    'verDiagnosticoCompras',              # B10-09 / B16-07
+    'diagnostico_datos_compras',
+    'notasCredito', 'agregarNotaCredito', 'eliminarNotaCredito',  # B16-09
+    'exportar_productos_filtrado',        # A3-05 (la copia de existencias se queda)
+    'obtener_facturas_para_nc',           # B16-06
+    'ajustar_margenes',
+    'eliminar_curva_distribucion',
+    'limpiar_productos_compra',           # B2-07 (pedido V1B/SEC)
+    'actualizar_sucursal_recepciones',    # pedido F1/SEC
+    'asociar_producto_guia', 'verificar_existencia_producto',      # B16-08
+    'obtener_tallas_post', 'buscar_productos_bodega_DUPLICADA_NO_USAR',
+)
+
+# Copias muertas borradas de app/views_modulo_compras.py (B1-15 / B3-13 / B16-05).
+FBV_BORRADAS_VMC = (
+    'verGestionCompras', 'crear_compra', 'obtener_compras_por_anio',
+    'importar_csv_compra', 'recepcionar_compra', 'verGestionDteCompras',
+    'obtener_dte', 'obtener_dte_compras', 'crearDteCompras', 'cargarDteCompra',
+    'registrarPagoDTE', 'obtenerDetallePago', 'pagosDTE', 'eliminarPago',
+    'detallePago', 'editarPago', 'notasCredito', 'agregarNotaCredito',
+    'eliminarNotaCredito', 'eliminar_dte', 'dashboard_compras_estrategico',
+    'verDiagnosticoCompras', 'diagnostico_datos_compras',
+    'obtenerDetalleComprasPorParametros', 'obtener_info_compensacion',
+    'validar_rut_basico',
+)
+
+# Nombres de URL retirados: reverse() debe fallar.
+URLS_RETIRADAS = (
+    'editar_dte_traspaso_api', 'obtener_dte_compras', 'restaurar_dte',
+    'obtenerDetalleComprasPorParametros', 'productos_recepcionados',
+    'procesar_ajuste_interno_individual', 'procesar_cambio_producto_individual',
+    'obtener_dtes_con_problemas', 'verDiagnosticoCompras', 'diagnostico_datos_compras',
+    'notasCredito', 'agregarNotaCredito', 'eliminarNotaCredito',
+    'exportar_productos_filtrado', 'obtener_facturas_para_nc', 'obtener_info_compensacion',
+    'ajustar_margenes', 'eliminar_curva_distribucion', 'limpiar_productos_compra',
+    'actualizar_sucursal_recepciones',
+)
+
+# Paths retirados: no resuelven (404) y no quedan en URL_PERMISO_MAP.
+PATHS_RETIRADOS = (
+    '/app/dte/editar_traspaso/', '/app/obtener_dte_compras/', '/app/restaurarDTE/1/',
+    '/app/obtenerDetalleComprasPorParametros/', '/app/productos_recepcionados/',
+    '/app/dte/ajuste_interno_individual/', '/app/dte/cambio_producto_individual/',
+    '/app/dte/obtener_dtes_con_problemas/', '/app/verDiagnosticoCompras/',
+    '/app/diagnostico_datos_compras/', '/app/notasCredito/1/', '/app/agregarNC/',
+    '/app/eliminarNC/1/', '/app/exportar_productos_filtrado/',
+    '/app/obtener_facturas_para_nc/', '/app/obtener_info_compensacion/1/',
+    '/app/ajustar_margenes/', '/app/api/curvas-distribucion/eliminar/',
+    '/app/limpiar_productos_compra/', '/app/actualizar_sucursal_recepciones/',
+)
+
+# Rutas VIVAS homónimas de las copias borradas: siguen ruteadas a su módulo.
+RUTAS_VIVAS = (
+    ('/app/verGestionCompras/', 'app.views'),
+    ('/app/crear_compra/', 'app.views'),
+    ('/app/obtener_compras/', 'app.views'),
+    ('/app/importar_csv_compra/', 'app.views'),
+    ('/app/compra/recepcionar/', 'app.views'),
+    ('/app/verGestionDteCompras/', 'app.views'),
+    ('/app/obtenerDTE/1/', 'app.views'),
+    ('/app/crearDteCompras/', 'app.views'),
+    ('/app/cargarDteCompra/', 'app.views'),
+    ('/app/registrarPagoDTE/', 'app.views'),
+    ('/app/obtenerDetallePago/1/', 'app.views'),
+    ('/app/pagosDTE/1/', 'app.views'),
+    ('/app/eliminarPago/1/', 'app.views'),
+    ('/app/detallePago/1/', 'app.views'),
+    ('/app/editarPago/1/', 'app.views'),
+    ('/app/eliminarDTE/1/', 'app.views'),
+    ('/app/empresas_proveedoras/', 'app.views_modulo_compras'),
+    ('/app/exportar_dashboard_compras/', 'app.views_modulo_compras'),
+    ('/app/verificar_dte_duplicado/', 'app.views_modulo_compras'),
+    # B16-10: la bandeja de solicitudes del emisor NO se borra sin decidir el flujo.
+    ('/app/dte/obtener_solicitudes_recibidas/', 'app.views'),
+    ('/app/dte/decidir_solicitud/', 'app.views'),
+)
+
+
+class CodigoMuertoComprasBorradoTest(SimpleTestCase):
+    """Unidad D (2026-09-26): lo borrado no vuelve y lo vivo sigue ruteado."""
+
+    def test_funciones_borradas_de_views_py(self):
+        for nombre in FBV_BORRADAS_VIEWS_COMPRAS:
+            with self.subTest(fbv=nombre):
+                self.assertFalse(hasattr(views_vivas, nombre),
+                                 f'{nombre} reapareció en app/views.py (código muerto borrado)')
+
+    def test_copias_muertas_borradas_de_views_modulo_compras(self):
+        for nombre in FBV_BORRADAS_VMC:
+            with self.subTest(fbv=nombre):
+                self.assertFalse(hasattr(vmc, nombre),
+                                 f'{nombre} reapareció en views_modulo_compras.py; la viva está en views.py')
+
+    def test_urls_retiradas_no_hacen_reverse(self):
+        for nombre in URLS_RETIRADAS:
+            with self.subTest(url=nombre):
+                with self.assertRaises(NoReverseMatch):
+                    reverse(nombre)
+
+    def test_paths_retirados_no_resuelven(self):
+        for path in PATHS_RETIRADOS:
+            with self.subTest(path=path):
+                with self.assertRaises(Resolver404):
+                    resolve(path)
+
+    def test_mapa_de_permisos_sin_claves_de_rutas_retiradas(self):
+        claves_muertas = (
+            '/app/dte/editar_traspaso/', '/app/obtener_dte_compras/', '/app/restaurarDTE/',
+            '/app/obtenerDetalleComprasPorParametros/', '/app/productos_recepcionados/',
+            '/app/dte/ajuste_interno_individual/', '/app/dte/cambio_producto_individual/',
+            '/app/dte/obtener_dtes_con_problemas/', '/app/verDiagnosticoCompras/',
+            '/app/diagnostico_datos_compras/', '/app/notasCredito/', '/app/agregarNC/',
+            '/app/eliminarNC/', '/app/exportar_productos_filtrado/',
+            '/app/obtener_facturas_para_nc/', '/app/obtener_info_compensacion/',
+            '/app/limpiar_productos_compra/', '/app/actualizar_sucursal_recepciones/',
+            '/app/edicion-rapida-precios/',
+        )
+        for clave in claves_muertas:
+            with self.subTest(clave=clave):
+                self.assertNotIn(clave, URL_PERMISO_MAP)
+
+    def test_rutas_vivas_siguen_en_su_modulo(self):
+        for path, modulo in RUTAS_VIVAS:
+            with self.subTest(path=path):
+                self.assertEqual(_modulo_real(resolve(path).func), modulo)
+
+    def test_template_huerfano_de_diagnostico_borrado(self):
+        with self.assertRaises(TemplateDoesNotExist):
+            get_template('vistas/modulo_compras/diagnostico_compras.html')
+
+    def test_no_se_borro_de_mas(self):
+        """Lo que se decidió CONSERVAR (vivo o pendiente de decisión)."""
+        for nombre in ('cargarDteCompra', 'pagosDTE', 'eliminar_dte', 'guardar_recepcion',
+                       'regularizar_producto_api', 'obtener_solicitudes_recibidas',
+                       'obtener_solicitud_producto', 'decidir_solicitud_api',
+                       'marcar_notificacion_dte_leida', 'dte_audit_api',
+                       'guardar_curva_distribucion', 'guardar_margenes_usuario'):
+            with self.subTest(views=nombre):
+                self.assertTrue(callable(getattr(views_vivas, nombre, None)))
+        for nombre in ('empresas_proveedoras', 'verificar_dte_duplicado',
+                       'exportar_dashboard_compras', 'verDashboardCompras',
+                       'dashboard_compras_mejorado_api', 'calcular_roi_temporadas_mejorado',
+                       'obtener_resumen_pendientes_anio', 'METODO_COMPENSACION',
+                       'METODO_COMPENSACION_EMITIDA'):
+            with self.subTest(vmc=nombre):
+                self.assertTrue(hasattr(vmc, nombre))
+
+
+# ---------------------------------------------------------------------------
+# B13-09 (revisión adversarial): las ramas de error que quedaban devolviendo
+# el texto de la excepción al cliente. Se llaman con RequestFactory y mocks,
+# sin BD ni middleware: lo único que se comprueba es que el detalle interno
+# (SQL, nombres de tablas, mensajes de Python) va al log y no a la respuesta.
+# ---------------------------------------------------------------------------
+from unittest import mock
+
+from django.contrib.auth import get_user_model
+from django.db.utils import ProgrammingError
+from django.test import RequestFactory
+
+_SECRETO = 'SECRETO relation "app_dtealertadescartada" does not exist'
+
+
+class ErroresSinFugaAlClienteTest(SimpleTestCase):
+
+    def setUp(self):
+        self.rf = RequestFactory()
+        # Instancia sin guardar: basta para @login_required y no toca la BD.
+        self.user = get_user_model()(username='d_fuga')
+
+    def _req(self, metodo, url, sesion, **kwargs):
+        request = getattr(self.rf, metodo)(url, **kwargs)
+        request.user = self.user
+        request.session = sesion
+        return request
+
+    def test_descartar_dte_pendiente_error_de_bd_no_sale_al_cliente(self):
+        request = self._req(
+            'post', '/app/dtes-pendientes-recibir/descartar/',
+            {'idSucursalActual': 1},
+            data=json.dumps({'dte_id': 7}), content_type='application/json')
+        dte_falso = mock.MagicMock()
+        alerta = mock.MagicMock()
+        alerta.objects.get_or_create.side_effect = ProgrammingError(_SECRETO)
+        # R2V3: la vista exige recepcion_dte.puede_ver (campana del menú);
+        # sin BD en este SimpleTestCase, el permiso se simula concedido.
+        with mock.patch.object(views_vivas, 'Dte') as dte_cls, \
+                mock.patch('app.decorators.PermisoRol.tiene_permiso', return_value=True), \
+                mock.patch('app.models.DteAlertaDescartada', alerta), \
+                self.assertLogs('app.views', level='ERROR') as logs:
+            dte_cls.objects.filter.return_value.first.return_value = dte_falso
+            respuesta = views_vivas.descartar_dte_pendiente(request)
+        self.assertEqual(respuesta.status_code, 500)
+        datos = json.loads(respuesta.content)
+        self.assertFalse(datos['success'])
+        self.assertEqual(datos['error'], 'No se pudo descartar el aviso del DTE.')
+        self.assertNotIn('SECRETO', respuesta.content.decode())
+        self.assertIn('SECRETO', '\n'.join(logs.output))
+
+    def test_margenes_usuario_error_no_sale_al_cliente(self):
+        request = self._req('get', '/app/margenes_usuario/',
+                            {'idEmpresaActual': 1, 'idSucursalActual': 1})
+        with mock.patch.object(views_vivas, 'EmpresaUser') as eu, \
+                self.assertLogs('app.views', level='ERROR') as logs:
+            eu.objects.filter.side_effect = RuntimeError(_SECRETO)
+            respuesta = views_vivas.margenes_usuario(request)
+        # Se conserva el 200 con success=False: verGestionProductos.html lee success.
+        self.assertEqual(respuesta.status_code, 200)
+        datos = json.loads(respuesta.content)
+        self.assertFalse(datos['success'])
+        self.assertEqual(datos['error'], 'No se pudieron obtener los márgenes.')
+        self.assertNotIn('SECRETO', respuesta.content.decode())
+        self.assertIn('SECRETO', '\n'.join(logs.output))
+
+    def test_guardar_margenes_usuario_error_no_sale_al_cliente(self):
+        request = self._req('post', '/app/guardar_margenes_usuario/',
+                            {'idEmpresaActual': 1, 'idSucursalActual': 1},
+                            data={'margenSobreprecio': '10', 'margenPrecioVenta': '5'})
+        with mock.patch.object(views_vivas, 'EmpresaUser') as eu, \
+                self.assertLogs('app.views', level='ERROR') as logs:
+            eu.objects.get_or_create.side_effect = RuntimeError(_SECRETO)
+            respuesta = views_vivas.guardar_margenes_usuario(request)
+        self.assertEqual(respuesta.status_code, 200)
+        datos = json.loads(respuesta.content)
+        self.assertFalse(datos['success'])
+        self.assertEqual(datos['error'], 'No se pudieron guardar los márgenes.')
+        self.assertNotIn('SECRETO', respuesta.content.decode())
+        self.assertIn('SECRETO', '\n'.join(logs.output))
+
+    def test_guardar_margenes_usuario_valor_invalido_sin_texto_de_python(self):
+        request = self._req('post', '/app/guardar_margenes_usuario/',
+                            {'idEmpresaActual': 1, 'idSucursalActual': 1},
+                            data={'margenSobreprecio': '12.5', 'margenPrecioVenta': '0'})
+        with mock.patch.object(views_vivas, 'EmpresaUser') as eu, \
+                self.assertLogs('app.views', level='ERROR'):
+            respuesta = views_vivas.guardar_margenes_usuario(request)
+            eu.objects.get_or_create.assert_not_called()
+        datos = json.loads(respuesta.content)
+        self.assertFalse(datos['success'])
+        self.assertNotIn('invalid literal', respuesta.content.decode())

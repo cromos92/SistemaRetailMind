@@ -1,5 +1,6 @@
 {% load static %}
 {% load humanize %}
+{% load permisos_tags %}
 {% include 'layout/header.html' %}
 {% include 'layout/menu.html' %}
 {% comment %} El footer cierra .main-content, #layout-wrapper y </body></html>. Estando
@@ -434,10 +435,21 @@
                                 {% if es_centro_distribucion %}Vista agregada (Centro de Distribucion){% else %}{{ sucursal_nombre }}{% endif %}
                             </span>
                         </div>
-                        <div class="d-flex align-items-center gap-3 mt-2">
+                        <div class="d-flex align-items-center gap-3 mt-2 flex-wrap">
                             <span class="text-white-50 small" id="lastUpdate">
                                 <i class="ri-time-line me-1"></i>Cargando datos...
                             </span>
+                            {% puede_ver_opcion_tag 'inteligencia_compra' as pv_inteligencia %}
+                            {% puede_ver_opcion_tag 'plan_liquidacion' as pv_liquidacion %}
+                            {% if pv_inteligencia or pv_liquidacion %}
+                            <span class="text-white-50 small"
+                                  title="Misma pregunta (que comprar) con otro motor: en Inteligencia de compra la cobertura se mide en MESES sobre el PRONOSTICO de 12 meses; en Plan de liquidacion, en meses sobre la venta real de 12 meses (TTM); aqui, en DIAS sobre los ultimos 90. No son comparables uno a uno.">
+                                <i class="ri-links-line me-1"></i>Tambien:
+                                {% if pv_inteligencia %}<a href="{% url 'ver_inteligencia_compra' %}" class="text-white text-decoration-underline">Inteligencia de compra</a>{% endif %}
+                                {% if pv_inteligencia and pv_liquidacion %}&middot;{% endif %}
+                                {% if pv_liquidacion %}<a href="{% url 'ver_plan_liquidacion' %}" class="text-white text-decoration-underline">Plan de liquidacion</a>{% endif %}
+                            </span>
+                            {% endif %}
                         </div>
                     </div>
                     <div class="header-actions d-flex gap-2 flex-wrap">
@@ -467,37 +479,37 @@
 
             <!-- ========== KPIs ========== -->
             <div class="kpi-grid" id="kpiGrid">
-                <div class="kpi-card kpi-danger">
+                <div class="kpi-card kpi-danger" title="Alertas de velocidad + quiebres de talle con urgencia CRITICA, no resueltas, del ultimo batch (productos de esta sucursal, sin los excluidos de analitica)">
                     <div class="kpi-accent"></div>
                     <div class="kpi-icon-bg"><i class="ri-alarm-warning-line"></i></div>
                     <div class="kpi-value" id="kpiCriticas"><span class="shimmer"></span></div>
                     <div class="kpi-label">Alertas Criticas</div>
                 </div>
-                <div class="kpi-card kpi-warning">
+                <div class="kpi-card kpi-warning" title="Alertas de velocidad no resueltas (todas las urgencias): SKUs cuya venta reciente cambio de ritmo frente a su historial, segun el ultimo batch">
                     <div class="kpi-accent"></div>
                     <div class="kpi-icon-bg"><i class="ri-speed-line"></i></div>
                     <div class="kpi-value" id="kpiVelocidad"><span class="shimmer"></span></div>
                     <div class="kpi-label">Alertas Velocidad</div>
                 </div>
-                <div class="kpi-card kpi-orange">
+                <div class="kpi-card kpi-orange" title="Alertas de quiebre de talle no resueltas: articulos con talles centrales de la curva sin stock, segun el ultimo batch">
                     <div class="kpi-accent"></div>
                     <div class="kpi-icon-bg"><i class="ri-scissors-cut-line"></i></div>
                     <div class="kpi-value" id="kpiQuiebre"><span class="shimmer"></span></div>
                     <div class="kpi-label">Quiebres de Talle</div>
                 </div>
-                <div class="kpi-card kpi-primary">
+                <div class="kpi-card kpi-primary" title="Lineas de sugerencia de compra del batch aun no aprobadas (una linea = un SKU/talle)">
                     <div class="kpi-accent"></div>
                     <div class="kpi-icon-bg"><i class="ri-shopping-cart-2-line"></i></div>
                     <div class="kpi-value" id="kpiSugerencias"><span class="shimmer"></span></div>
                     <div class="kpi-label">Sugerencias Pendientes</div>
                 </div>
-                <div class="kpi-card kpi-success">
+                <div class="kpi-card kpi-success" title="Suma de 'unidades a pedir' de las sugerencias pendientes, calculada el dia del batch (la tabla recalcula 'A pedir hoy' contra el stock actual). No descuenta lo pedido en OC abiertas: las OC no estan vinculadas a SKU.">
                     <div class="kpi-accent"></div>
                     <div class="kpi-icon-bg"><i class="ri-stack-line"></i></div>
                     <div class="kpi-value" id="kpiUnidades"><span class="shimmer"></span></div>
                     <div class="kpi-label">Unidades a Pedir</div>
                 </div>
-                <div class="kpi-card kpi-info">
+                <div class="kpi-card kpi-info" title="Productos clasificados A por el batch: los que concentran la mayor parte del INGRESO por ventas del periodo analizado (ABC por ingreso, no por valor de stock)">
                     <div class="kpi-accent"></div>
                     <div class="kpi-icon-bg"><i class="ri-pie-chart-line"></i></div>
                     <div class="kpi-value" id="kpiClaseA"><span class="shimmer"></span></div>
@@ -518,7 +530,7 @@
                             <i class="ri-shopping-bag-3-line"></i> Plan de compra sugerido
                         </div>
                         <p class="text-muted small mb-0">
-                            Resume las sugerencias pendientes y descuenta stock actual + unidades en transito.
+                            Resume las sugerencias pendientes y descuenta stock actual. Lo ya pedido en OC abiertas NO se descuenta: las lineas de las OC no estan vinculadas a SKU, asi que el transito no se conoce (revisa el panel de OC antes de comprar).
                         </p>
                     </div>
                     <button class="nexo-btn nexo-btn-accent" onclick="document.querySelector('[data-tab=tabSugerencias]').click()">
@@ -843,7 +855,11 @@ async function fetchJSON(url, opts) {
     if (opts && opts.body) headers['Content-Type'] = 'application/json';
     const res = await fetch(url, { ...opts, headers });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { throw new Error(data.error || data.detail || `Error ${res.status}`); }
+    if (!res.ok) {
+        // `detalle` (lista) explica qué campo quedó fuera de rango en la configuración.
+        const extra = Array.isArray(data.detalle) && data.detalle.length ? ': ' + data.detalle.join('; ') : '';
+        throw new Error((data.error || data.detail || `Error ${res.status}`) + extra);
+    }
     return data;
 }
 
@@ -1085,7 +1101,7 @@ function renderRankingProveedor(d) {
     const total = d.resumen?.total_unidades_ordenadas || 1;
     let html = `<table class="nexo-table"><thead><tr>
         <th>#</th><th>Proveedor</th><th>OCs</th><th>Productos</th>
-        <th>Unidades ordenadas</th><th>Recibidas</th><th>En transito</th><th>vs Ano ant.</th>
+        <th>Unidades ordenadas</th><th title="Unidades recepcionadas contra las lineas de la OC (Productos_Recepcionados)">Recibidas</th><th title="Ordenado menos recepcionado contra la OC. La mercaderia que entra por Compra Manual no se liga a la OC, asi que puede estar sobrestimado: es informativo y no se descuenta de las sugerencias.">En transito</th><th>vs Ano ant.</th>
     </tr></thead><tbody>`;
     rows.forEach((r, i) => {
         const vp = r.variacion_vs_anterior_pct;
@@ -1119,7 +1135,7 @@ async function cargarSugerencias() {
     const d = await fetchJSON(url);
     const el = document.getElementById('tablaSugerencias');
     if (!d.sugerencias.length) {
-        el.innerHTML = '<div class="empty-state"><i class="ri-inbox-line"></i>Sin sugerencias pendientes.<br><small style="opacity:.7">Se generan cuando la demanda predicha supera stock actual + en transito.</small></div>';
+        el.innerHTML = '<div class="empty-state"><i class="ri-inbox-line"></i>Sin sugerencias pendientes.<br><small style="opacity:.7">Se generan cuando la demanda predicha supera el stock actual (el transito de las OC no se conoce: no estan vinculadas a SKU).</small></div>';
         return;
     }
     // Contraste contra la realidad: cuantas de estas lineas piden comprar algo
@@ -1143,12 +1159,12 @@ async function cargarSugerencias() {
         <th>SKU</th><th>Articulo</th><th>Talle</th><th>Marca</th><th>Sucursal</th>
         <th title="Stock del dia en que corrio el batch">Stock batch</th>
         <th title="Stock real de hoy">Stock hoy</th>
-        <th title="Unidades en ordenes de compra ACTIVAS hoy">Transito</th>
+        <th title="Unidades en ordenes de compra ACTIVAS hoy, solo cuando la OC esta vinculada al SKU. s/d = las lineas de la OC no estan vinculadas al SKU (hoy casi todas): el transito no se conoce y NO se descuenta de A pedir hoy.">Transito</th>
         <th title="Unidades vendidas en los ultimos 90 dias">Ventas 90d</th>
         <th title="Unidades vendidas en los ultimos 365 dias">Ventas 365d</th>
-        <th title="Dias que dura el stock actual al ritmo de los ultimos 90 dias">Cobertura</th>
+        <th title="Cobertura (90 d) = stock de hoy / (unidades vendidas en los ultimos 90 dias / 90). En Inteligencia de compra la cobertura se mide en meses sobre el pronostico de 12 meses (en Plan de liquidacion, sobre la venta TTM): no son comparables uno a uno.">Cobertura (90 d)</th>
         <th title="Lo que pedia el batch">A pedir</th>
-        <th title="Recalculado contra stock y transito de hoy">A pedir hoy</th>
+        <th title="Recalculado contra stock de hoy y el transito cuando se conoce (s/d no se descuenta)">A pedir hoy</th>
         <th>Fundamento</th></tr></thead><tbody>`;
 
     d.sugerencias.forEach(s => {
@@ -1178,7 +1194,9 @@ async function cargarSugerencias() {
             <td>${esc(s.talle)}</td><td>${esc(s.marca)}</td><td>${esc(s.sucursal)}</td>
             <td style="color:var(--nexo-gray-500);">${s.stock_actual}</td>
             <td><strong>${s.stock_hoy}</strong></td>
-            <td>${s.en_transito_hoy}</td>
+            <td>${(s.en_transito_hoy === null || s.en_transito_hoy === undefined)
+                ? '<span style="color:var(--nexo-gray-500);" title="Las OC no estan vinculadas a este SKU: el transito no se conoce y no se descuenta de A pedir hoy">s/d</span>'
+                : s.en_transito_hoy}</td>
             <td>${v90}</td>
             <td>${muerto ? '<span style="color:#DC2626;font-weight:700;" title="Sin ventas en 365 dias">0</span>' : v365}</td>
             <td>${cobHtml}</td>
@@ -1204,7 +1222,7 @@ function toggleAll(el) {
 async function aprobarSeleccionadas() {
     const ids = [...document.querySelectorAll('.chk-sug:checked')].map(c => parseInt(c.value));
     if (!ids.length) { toast('Selecciona al menos una sugerencia', 'warning'); return; }
-    if (!confirm(`Aprobar ${ids.length} sugerencia(s)?`)) return;
+    if (!confirm(`Aprobar ${ids.length} sugerencia(s)?\n\nAprobar las marca como revisadas y las saca de esta lista: NO crea una orden de compra.`)) return;
     try {
         const d = await fetchJSON('/app/api/prediccion/aprobar-sugerencia/', { method:'POST', body:JSON.stringify({ids}) });
         toast(`${d.aprobadas} sugerencias aprobadas`, 'success');

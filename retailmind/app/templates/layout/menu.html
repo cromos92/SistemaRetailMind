@@ -62,6 +62,9 @@
 {% puede_ver_opcion_tag 'reporte_ventas_comparativo' as permiso_reporte_ventas_comparativo %}
 {% puede_ver_opcion_tag 'reporte_ventas_internet' as permiso_reporte_ventas_internet %}
 {% puede_ver_opcion_tag 'reporte_ventas_sucursal' as permiso_reporte_ventas_sucursal %}
+{% puede_ver_opcion_tag 'reporte_ventas_global' as permiso_reporte_ventas_global %}
+{% puede_ver_opcion_tag 'reporte_mercaderia_transito' as permiso_reporte_mercaderia_transito %}
+{% puede_ver_opcion_tag 'reporte_diferencias_recepcion' as permiso_reporte_diferencias_recepcion %}
 {% puede_ver_opcion_tag 'resumen_existencias' as permiso_resumen_existencias %}
 {% puede_ver_opcion_tag 'revisar_cambios_precios' as permiso_revisar_cambios_precios %}
 {% puede_ver_opcion_tag 'revision_arqueos' as permiso_revision_arqueos %}
@@ -126,6 +129,21 @@
     /* Items del menú principal */
     .navbar-nav > .nav-item {
         margin: 2px 8px;
+    }
+
+    /* Reportes agrupados en pestañas: nombres de las pestañas bajo la entrada
+       (también los encuentra el buscador del menú, que lee textContent). */
+    .navbar-nav .nav-link:has(> .menu-grupo-reportes) {
+        flex-wrap: wrap;
+    }
+    .navbar-nav .nav-link .menu-grupo-reportes {
+        display: block;
+        flex-basis: 100%;
+        font-size: 0.68rem;
+        line-height: 1.2;
+        opacity: 0.65;
+        margin: 1px 0 0 2.3rem;
+        white-space: normal;
     }
 
     .navbar-nav > .nav-item > .nav-link.menu-link {
@@ -1231,6 +1249,16 @@
                             }
                         }
                         
+                        // Escapa texto del servidor antes de insertarlo con innerHTML:
+                        // emisor, sucursal y destino salen de Empresa.nombre / alias, que
+                        // se pueden editar (proveedores, importación CSV); sin escapar, un
+                        // nombre con <script>/<img onerror> corría en cada página del menú.
+                        function _escNotifDte(valor) {
+                            return String(valor ?? '').replace(/[&<>"'`]/g, c => ({
+                                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;'
+                            }[c]));
+                        }
+
                         // Cargar notificaciones de DTEs
                         async function cargarNotificacionesDTE() {
                             if (dtesCargados) return;
@@ -1247,7 +1275,7 @@
                                 
                                 if (data.success && data.dtes && data.dtes.length > 0) {
                                     list.innerHTML = data.dtes.map(dte => `
-                                        <a href="{% url 'recepcion_dte' %}?dte_id=${dte.id}" class="text-reset notification-item d-block dropdown-item position-relative" id="dte-notif-${dte.id}">
+                                        <a href="{% url 'recepcion_dte' %}?dte_id=${encodeURIComponent(dte.id)}" class="text-reset notification-item d-block dropdown-item position-relative" id="dte-notif-${dte.id}">
                                             <div class="d-flex">
                                                 <div class="avatar-xs me-3 flex-shrink-0">
                                                     <span class="avatar-title ${dte.urgente ? 'bg-soft-danger text-danger' : 'bg-soft-warning text-warning'} rounded-circle fs-16">
@@ -1256,23 +1284,23 @@
                                                 </div>
                                                 <div class="flex-1">
                                                     <h6 class="mt-0 mb-1 fs-13 fw-semibold">
-                                                        <span class="badge bg-info me-1">${dte.tipo_documento}</span>
-                                                        #${dte.numero_documento}
+                                                        <span class="badge bg-info me-1">${_escNotifDte(dte.tipo_documento)}</span>
+                                                        #${_escNotifDte(dte.numero_documento)}
                                                     </h6>
                                                     <p class="fs-12 text-muted mb-1">
-                                                        Emisor: <strong>${dte.emisor_nombre}</strong>
+                                                        Emisor: <strong>${_escNotifDte(dte.emisor_nombre)}</strong>
                                                     </p>
                                                     <p class="fs-12 mb-1">
                                                         <span class="text-success fw-bold">$${Number(dte.monto_con_iva).toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
-                                                        <span class="text-muted">• ${dte.unidades_productos} uds</span>
+                                                        <span class="text-muted">• ${_escNotifDte(dte.unidades_productos)} uds</span>
                                                     </p>
                                                     <p class="fs-12 text-muted mb-1">
-                                                        Sucursal: <strong>${dte.sucursal_origen_alias || '-'}</strong>
+                                                        Sucursal: <strong>${_escNotifDte(dte.sucursal_origen_alias || '-')}</strong>
                                                     </p>
                                                     <p class="mb-0 fs-11 fw-medium text-uppercase text-muted">
-                                                        <span><i class="mdi mdi-clock-outline"></i> ${dte.fecha_emision}</span>
-                                                        ${dte.urgente ? '<span class="badge bg-danger ms-2">+7 dias</span>' : 
-                                                         dte.dias_desde_emision > 3 ? '<span class="badge bg-warning text-dark ms-2">' + dte.dias_desde_emision + ' dias</span>' : ''}
+                                                        <span><i class="mdi mdi-clock-outline"></i> ${_escNotifDte(dte.fecha_emision)}</span>
+                                                        ${dte.urgente ? '<span class="badge bg-danger ms-2">+7 dias</span>' :
+                                                         dte.dias_desde_emision > 3 ? '<span class="badge bg-warning text-dark ms-2">' + _escNotifDte(dte.dias_desde_emision) + ' dias</span>' : ''}
                                                     </p>
                                                     <p class="mb-0 mt-1">
                                                         <small class="text-primary"><i class="ri-arrow-right-line"></i> Click para recepcionar</small>
@@ -1336,7 +1364,7 @@
                                 
                                 if (data.success && data.dtes && data.dtes.length > 0) {
                                     list.innerHTML = data.dtes.map(dte => `
-                                        <a href="{% url 'recepcion_dte' %}" class="text-reset notification-item d-block dropdown-item position-relative">
+                                        <a href="{% url 'recepcion_dte' %}?vista=regularizar&buscar=${encodeURIComponent(dte.numero_documento ?? '')}" class="text-reset notification-item d-block dropdown-item position-relative">
                                             <div class="d-flex">
                                                 <div class="avatar-xs me-3 flex-shrink-0">
                                                     <span class="avatar-title ${dte.urgente ? 'bg-soft-danger text-danger' : 'bg-soft-warning text-warning'} rounded-circle fs-16">
@@ -1345,19 +1373,19 @@
                                                 </div>
                                                 <div class="flex-1">
                                                     <h6 class="mt-0 mb-1 fs-13 fw-semibold">
-                                                        <span class="badge bg-secondary me-1">DTE #${dte.numero_documento}</span>
+                                                        <span class="badge bg-secondary me-1">DTE #${_escNotifDte(dte.numero_documento)}</span>
                                                         ${dte.urgente ? '<span class="badge bg-danger">Urgente</span>' : ''}
                                                     </h6>
                                                     <p class="fs-12 text-muted mb-1">
-                                                        Enviado a: <strong>${dte.destino_nombre}</strong>
+                                                        Enviado a: <strong>${_escNotifDte(dte.destino_nombre)}</strong>
                                                     </p>
                                                     <p class="fs-12 mb-1">
-                                                        <span class="text-danger fw-bold">${dte.productos_problema} producto(s)</span>
+                                                        <span class="text-danger fw-bold">${_escNotifDte(dte.productos_problema)} producto(s)</span>
                                                         <span class="text-muted">con problemas</span>
                                                     </p>
                                                     <p class="mb-0 fs-11 fw-medium text-uppercase text-muted">
-                                                        <span><i class="mdi mdi-clock-outline"></i> Recibido: ${dte.fecha_recepcion}</span>
-                                                        ${dte.dias_pendiente > 0 ? '<span class="badge bg-warning text-dark ms-2">' + dte.dias_pendiente + ' días</span>' : ''}
+                                                        <span><i class="mdi mdi-clock-outline"></i> Recibido: ${_escNotifDte(dte.fecha_recepcion)}</span>
+                                                        ${dte.dias_pendiente > 0 ? '<span class="badge bg-warning text-dark ms-2">' + _escNotifDte(dte.dias_pendiente) + ' días</span>' : ''}
                                                     </p>
                                                     <p class="mb-0 mt-1">
                                                         <small class="text-warning"><i class="ri-pencil-line"></i> Click para corregir</small>
@@ -2429,7 +2457,7 @@
                                     {% if permiso_devolucion_garantia %}
                                     <li class="nav-item">
                                         <a href="{% url 'modulo_devolucion_garantia' %}" class="nav-link" data-key="t-devolucion-garantia">
-                                            <i class="ri-refund-2-line"></i> Devolución por Garantía
+                                            <i class="ri-refund-2-line"></i> Devolución de Dinero
                                         </a>
                                     </li>
                                     {% endif %}
@@ -2883,7 +2911,7 @@
                                                 {% if permiso_reporte_despachos_proveedor %}
                                                 <li class="nav-item">
                                                     <a href="{% url 'verReporteDespachosProveedor' %}" class="nav-link" data-key="t-chartjs">
-                                                        <i class="bi bi-truck"></i> Despachos por Proveedor
+                                                        <i class="bi bi-truck"></i> Ingresos por Proveedor
                                                     </a>
                                                 </li>
                                                 {% endif %}
@@ -2913,7 +2941,7 @@
                                     </li>
                                     {% endif %}
                                     <!-- Sección: Reportes Ventas -->
-                                    {% if permiso_reporte_ventas_sucursal or permiso_reporte_ventas_comparativo or permiso_reporte_productos_vendidos or permiso_reporte_ventas_internet or permiso_reporte_documentos_emitidos %}
+                                    {% if permiso_reporte_ventas_sucursal or permiso_reporte_ventas_comparativo or permiso_reporte_ventas_global or permiso_reporte_productos_vendidos or permiso_reporte_ventas_internet or permiso_reporte_documentos_emitidos %}
                                     <li class="nav-item">
                                         <a class="nav-link menu-link collapsed" href="#reportesVentas" data-bs-toggle="collapse"
                                             role="button" aria-expanded="false" aria-controls="reportesVentas">
@@ -2921,17 +2949,14 @@
                                         </a>
                                         <div class="menu-dropdown collapse" id="reportesVentas">
                                             <ul class="nav nav-sm flex-column">
-                                                {% if permiso_reporte_ventas_sucursal %}
+                                                {% comment %} Grupo con pestañas (fusión de reportes, sep-2026): una entrada que
+                                                    abre la primera pestaña permitida; las demás se recorren desde la tira de la
+                                                    familia (vistas/modulo_reportes/_familia_reportes.html). {% endcomment %}
+                                                {% if permiso_reporte_ventas_sucursal or permiso_reporte_ventas_comparativo or permiso_reporte_ventas_global %}
                                                 <li class="nav-item">
-                                                    <a href="{% url 'ver_reporte_ventas_sucursal' %}" class="nav-link" data-key="t-ventas-sucursal">
-                                                        <i class="ri-store-2-line"></i> Ventas Sucursal
-                                                    </a>
-                                                </li>
-                                                {% endif %}
-                                                {% if permiso_reporte_ventas_comparativo %}
-                                                <li class="nav-item">
-                                                    <a href="{% url 'ver_reporte_ventas_comparativo' %}" class="nav-link" data-key="t-ventas-comparativo">
-                                                        <i class="ri-bar-chart-2-line"></i> Comparativo Ventas
+                                                    <a href="{% if permiso_reporte_ventas_sucursal %}{% url 'ver_reporte_ventas_sucursal' %}{% elif permiso_reporte_ventas_comparativo %}{% url 'ver_reporte_ventas_comparativo' %}{% else %}{% url 'ver_reporte_ventas_global' %}{% endif %}" class="nav-link" data-key="t-ventas-sucursal">
+                                                        <i class="ri-store-2-line"></i> Ventas
+                                                        <small class="menu-grupo-reportes">sucursal · comparativo · global</small>
                                                     </a>
                                                 </li>
                                                 {% endif %}
@@ -2997,24 +3022,12 @@
                                                     </a>
                                                 </li>
                                                 {% endif %}
-                                                {% if permiso_reporte_existencias_marca %}
+                                                {% comment %} Grupo con pestañas: marca · sucursal · resumen. {% endcomment %}
+                                                {% if permiso_reporte_existencias_marca or permiso_reporte_existencias_sucursal or permiso_resumen_existencias %}
                                                 <li class="nav-item">
-                                                    <a href="{% url 'ver_reporte_existencias_marca' %}" class="nav-link" data-key="t-reporte-existencias-marca">
-                                                        <i class="ri-price-tag-3-line"></i> Existencias por Marca
-                                                    </a>
-                                                </li>
-                                                {% endif %}
-                                                {% if permiso_reporte_existencias_sucursal %}
-                                                <li class="nav-item">
-                                                    <a href="{% url 'ver_reporte_existencias_sucursal' %}" class="nav-link" data-key="t-reporte-existencias-sucursal">
-                                                        <i class="ri-store-2-line"></i> Existencias por Sucursal
-                                                    </a>
-                                                </li>
-                                                {% endif %}
-                                                {% if permiso_resumen_existencias %}
-                                                <li class="nav-item">
-                                                    <a href="{% url 'ver_resumen_existencias' %}" class="nav-link" data-key="t-resumen-existencias">
-                                                        <i class="ri-pie-chart-line"></i> Resumen Existencias
+                                                    <a href="{% if permiso_reporte_existencias_marca %}{% url 'ver_reporte_existencias_marca' %}{% elif permiso_reporte_existencias_sucursal %}{% url 'ver_reporte_existencias_sucursal' %}{% else %}{% url 'ver_resumen_existencias' %}{% endif %}" class="nav-link" data-key="t-reporte-existencias-marca">
+                                                        <i class="ri-price-tag-3-line"></i> Stock
+                                                        <small class="menu-grupo-reportes">marca · sucursal · resumen</small>
                                                     </a>
                                                 </li>
                                                 {% endif %}
@@ -3024,12 +3037,27 @@
                                                         <i class="ri-exchange-line"></i> Inicial vs Restante
                                                     </a>
                                                 </li>
+                                                {% endif %}
+                                            </ul>
+                                        </div>
+                                    </li>
+                                    {% endif %}
+                                    <!-- Sección: Reportes Logística (grupo con pestañas despachos · tránsito · diferencias).
+                                         Despachos a Tiendas comparte el permiso de Inicial vs Restante (URL_PERMISO_MAP). -->
+                                    {% if permiso_reporte_movimientos_sucursal or permiso_reporte_mercaderia_transito or permiso_reporte_diferencias_recepcion %}
+                                    <li class="nav-item">
+                                        <a class="nav-link menu-link collapsed" href="#reportesLogistica" data-bs-toggle="collapse"
+                                            role="button" aria-expanded="false" aria-controls="reportesLogistica">
+                                            <i class="ri-truck-line"></i> Reportes Logística
+                                        </a>
+                                        <div class="menu-dropdown collapse" id="reportesLogistica">
+                                            <ul class="nav nav-sm flex-column">
                                                 <li class="nav-item">
-                                                    <a href="{% url 'ver_reporte_despachos_tiendas' %}" class="nav-link" data-key="t-despachos-tiendas">
-                                                        <i class="ri-truck-line"></i> Despachos a Tiendas
+                                                    <a href="{% if permiso_reporte_movimientos_sucursal %}{% url 'ver_reporte_despachos_tiendas' %}{% elif permiso_reporte_mercaderia_transito %}{% url 'ver_reporte_mercaderia_transito' %}{% else %}{% url 'ver_reporte_diferencias_recepcion' %}{% endif %}" class="nav-link" data-key="t-despachos-tiendas">
+                                                        <i class="ri-route-line"></i> Cadena Logística
+                                                        <small class="menu-grupo-reportes">despachos · tránsito · diferencias</small>
                                                     </a>
                                                 </li>
-                                                {% endif %}
                                             </ul>
                                         </div>
                                     </li>

@@ -101,6 +101,10 @@
     .cf-chip { display: inline-block; background: #eef2ff; color: #364574; border-radius: 6px; padding: 1px 6px; font-size: .74rem; margin: 1px; white-space: nowrap; }
     .cf-chip.nueva { background: #e0f2f1; color: #0a7d6d; }
     .cf-chip.no { background: #fff3cd; color: #9a6b00; }
+    .cf-chip.aprendido { background: #f3e8ff; color: #6b21a8; }
+    .cf-chip.internet { background: #e0f2fe; color: #0369a1; }
+    .cf-uso { font-size: .72rem; color: #8a93a6; margin-top: 6px; white-space: normal; }
+    .cf-hallazgo { font-size: .8rem; margin-top: 3px; white-space: normal; }
     .cf-nota { font-size: .76rem; margin: 0; }
     .cf-nota.aviso { color: #b7791f; }
     .cf-nota.error { color: #d9534f; }
@@ -201,9 +205,10 @@
                         <datalist id="cfMarcas"></datalist>
                     </label>
                     <label class="cf-param"><span>Lecturas</span>
-                        <select id="cfLecturas" class="form-select form-select-sm" title="Lecturas independientes que se comparan entre sí">
-                            <option value="2">2 (verifica)</option>
+                        <select id="cfLecturas" class="form-select form-select-sm" title="Una lectura; la segunda (de verificación) solo si la primera deja dudas. «2 siempre» = dos lecturas independientes comparadas">
+                            <option value="2">auto (2ª solo si hay dudas)</option>
                             <option value="1">1 (rápida)</option>
+                            <option value="3">2 siempre</option>
                         </select>
                     </label>
                 </div>

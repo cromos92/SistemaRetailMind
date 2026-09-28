@@ -41,6 +41,7 @@ Integración con los ecommerces externos vía **AllConnected** (`paola.cl`, `rea
 
 ## 🔍 Auditorías
 - [Trazabilidad y dashboards](auditorias/AUDITORIA_TRAZABILIDAD_Y_DASHBOARDS.md)
+- [Glosario de indicadores por reporte — cobertura, rotación, sell-through, stock viejo vs dead stock (2026-09)](GLOSARIO_INDICADORES_2026-09.md)
 
 ---
 

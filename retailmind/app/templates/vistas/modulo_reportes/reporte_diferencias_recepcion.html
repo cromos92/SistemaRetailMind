@@ -267,6 +267,8 @@
     </div>
   </div>
 
+  {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='logistica' activo='diferencias' %}
+
   <!-- ── KPIs ─────────────────────────────────────────── -->
   <div class="nexo-kpi-row">
     <div class="nexo-kpi-card kpi-primary">
@@ -286,14 +288,14 @@
     <div class="nexo-kpi-card kpi-error">
       <div class="nexo-kpi-icon icon-error"><i class="ri-close-circle-line"></i></div>
       <div class="nexo-kpi-body">
-        <div class="nexo-kpi-label">Faltantes</div>
+        <div class="nexo-kpi-label" title="Suma de unidades faltantes registradas al recepcionar">Faltantes</div>
         <div class="nexo-kpi-value" id="kpi-faltantes">—</div>
       </div>
     </div>
     <div class="nexo-kpi-card kpi-warning">
       <div class="nexo-kpi-icon icon-warning"><i class="ri-alert-line"></i></div>
       <div class="nexo-kpi-body">
-        <div class="nexo-kpi-label">Dañadas</div>
+        <div class="nexo-kpi-label" title="Suma de unidades dañadas registradas al recepcionar">Dañadas</div>
         <div class="nexo-kpi-value" id="kpi-danadas">—</div>
       </div>
     </div>
@@ -321,7 +323,7 @@
     <div class="nexo-kpi-card kpi-primary">
       <div class="nexo-kpi-icon icon-primary"><i class="ri-file-list-3-line"></i></div>
       <div class="nexo-kpi-body">
-        <div class="nexo-kpi-label">Documentos / Líneas</div>
+        <div class="nexo-kpi-label" title="Documentos distintos y líneas de recepción que cumplen el filtro">Documentos / Líneas</div>
         <div class="nexo-kpi-value" id="kpi-docs">—</div>
       </div>
     </div>
@@ -497,6 +499,16 @@ function setTipo(btn) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Filtros compartidos que trae la URL (tira de reportes o enlace guardado), antes
+  // de la primera consulta. `mes` se convierte en el rango del mes.
+  if (window.FiltrosReporte) {
+    const f = FiltrosReporte.completar(FiltrosReporte.leer());
+    if (f.fecha_inicio && f.fecha_fin) {
+      FiltrosReporte.ponerValor('#f-desde', f.fecha_inicio);
+      FiltrosReporte.ponerValor('#f-hasta', f.fecha_fin);
+    }
+    if (f.sucursal_id) FiltrosReporte.ponerValor('#f-sucursal', f.sucursal_id);
+  }
   document.getElementById('f-proveedor').addEventListener('change', e => {
     proveedorSel = e.target.value;
     cargarReporte(1);
@@ -521,6 +533,14 @@ async function cargarReporte(pagina) {
   const suc = document.getElementById('f-sucursal').value;
   if (suc) params.append('sucursal_id', suc);
   if (proveedorSel) params.append('proveedor_id', proveedorSel);
+  // La URL queda con el período y la sucursal consultados ('' = Todas la quita).
+  if (window.FiltrosReporte) {
+    FiltrosReporte.reflejar({
+      fecha_inicio: params.get('fecha_desde'),
+      fecha_fin: params.get('fecha_hasta'),
+      sucursal_id: suc,
+    });
+  }
 
   btn.disabled = true;
   btn.innerHTML = '<i class="ri-loader-4-line spin"></i> Consultando...';

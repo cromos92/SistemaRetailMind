@@ -362,6 +362,7 @@
                                 <option value="RECEPCIONADO_SOBRANTE">Con sobrantes</option>
                                 <option value="EN_REGULARIZACION">En regularización</option>
                                 <option value="EMITIDO">Emitidos sin recepcionar</option>
+                                <option value="RECEPCIONADO_COMPLETO">NC esperando devolución</option>
                             </select>
                         </div>
                         <div class="col-lg-2 col-md-2 col-sm-6">
@@ -503,7 +504,39 @@ const ETIQUETA_ESTADO = {
     'RECEPCIONADO_SOBRANTE': 'Con sobrantes',
     'EN_REGULARIZACION': 'En regularización',
     'EMITIDO': 'Sin recepcionar',
+    // Recibido completo con una NC hija que espera la devolución física
+    // (B7-02): el emisor no tiene acción, la confirma el destino.
+    'RECEPCIONADO_COMPLETO': 'Recepcionado',
 };
+
+// Texto del servidor (motivos, descripciones, alias) antes de ir a innerHTML.
+function _escLimbo(valor) {
+    return String(valor ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+}
+
+// Chip «N NC esperando devolución»: la NC ya se emitió y el destino todavía
+// no confirma el despacho de vuelta en «Mis Regularizaciones».
+function chipNcEsperandoDevolucion(n) {
+    const cant = Number(n) || 0;
+    if (cant <= 0) return '';
+    return `<span class="chip-problema chip-nc-pendiente" title="El destino debe despachar la mercadería y confirmar el despacho en Recepción DTE › Mis Regularizaciones"><i class="bi bi-hourglass-split me-1"></i>${cant} NC esperando devolución</span>`;
+}
+
+// Mensaje de error de una respuesta JSON: @requiere_permiso responde
+// {error: true, mensaje: '...'} (mostrar data.error dejaba «true»).
+function _msgLimbo(data, porDefecto) {
+    if (data && typeof data.error === 'string' && data.error) return data.error;
+    if (data && typeof data.mensaje === 'string' && data.mensaje) return data.mensaje;
+    return porDefecto;
+}
+
+// Red caída o respuesta no JSON: el botón quedaba deshabilitado para siempre.
+function _falloConexionAccion() {
+    document.getElementById('btnEnviarAccion').disabled = false;
+    aviso('error', 'No se pudo completar la acción', 'Revisa tu conexión e inténtalo de nuevo. Si el problema sigue, recarga la página.');
+}
 
 function aviso(icono, titulo, texto) {
     if (window.Swal) {
@@ -591,7 +624,7 @@ function cargarLimboInbox() {
         .then(data => {
             if (!data.success) {
                 document.getElementById('tablaLimbo').innerHTML =
-                    `<tr><td colspan="10"><div class="empty-state-nexo"><i class="bi bi-exclamation-triangle"></i><h4>No se pudo cargar la lista</h4><p class="mb-2">${data.error || 'desconocido'}</p><button type="button" class="btn btn-sm btn-nexo-outline" onclick="cargarLimboInbox()"><i class="bi bi-arrow-clockwise me-1"></i>Reintentar</button></div></td></tr>`;
+                    `<tr><td colspan="10"><div class="empty-state-nexo"><i class="bi bi-exclamation-triangle"></i><h4>No se pudo cargar la lista</h4><p class="mb-2">${_escLimbo((data && (typeof data.error === 'string' ? data.error : data.mensaje)) || 'Error desconocido.')}</p><button type="button" class="btn btn-sm btn-nexo-outline" onclick="cargarLimboInbox()"><i class="bi bi-arrow-clockwise me-1"></i>Reintentar</button></div></td></tr>`;
                 return;
             }
             const recibidos = (data.items || []).length;
@@ -605,7 +638,7 @@ function cargarLimboInbox() {
         })
         .catch(err => {
             document.getElementById('tablaLimbo').innerHTML =
-                `<tr><td colspan="10"><div class="empty-state-nexo"><i class="bi bi-exclamation-triangle"></i><h4>No se pudo cargar la lista</h4><p class="mb-2">${err}</p><button type="button" class="btn btn-sm btn-nexo-outline" onclick="cargarLimboInbox()"><i class="bi bi-arrow-clockwise me-1"></i>Reintentar</button></div></td></tr>`;
+                `<tr><td colspan="10"><div class="empty-state-nexo"><i class="bi bi-exclamation-triangle"></i><h4>No se pudo cargar la lista</h4><p class="mb-2">Revisa tu conexión e inténtalo de nuevo.</p><button type="button" class="btn btn-sm btn-nexo-outline" onclick="cargarLimboInbox()"><i class="bi bi-arrow-clockwise me-1"></i>Reintentar</button></div></td></tr>`;
         });
 }
 
@@ -616,8 +649,10 @@ function badgeEstado(estado) {
         'RECEPCIONADO_SOBRANTE': 'badge-sobrante',
         'EN_REGULARIZACION': 'badge-regularizacion',
         'EMITIDO': 'badge-emitido-viejo',
+        'RECEPCIONADO_COMPLETO': 'badge-sobrante',
     };
-    return `<span class="badge-estado ${map[estado] || 'badge-regularizacion'}" title="${estado}">${ETIQUETA_ESTADO[estado] || estado.replace(/_/g, ' ')}</span>`;
+    const est = String(estado || '');
+    return `<span class="badge-estado ${map[est] || 'badge-regularizacion'}" title="${_escLimbo(est)}">${_escLimbo(ETIQUETA_ESTADO[est] || est.replace(/_/g, ' '))}</span>`;
 }
 
 function badgeDias(dias) {
@@ -653,23 +688,25 @@ function renderTabla(items) {
         return;
     }
     tbody.innerHTML = items.map(it => {
-        const pendNc = it.ncs_hijas_pendientes_devolucion > 0
-            ? `<span class="chip-problema chip-nc-pendiente"><i class="bi bi-hourglass-split me-1"></i>${it.ncs_hijas_pendientes_devolucion} NC esperando devolución</span>`
-            : '';
+        const pendNc = chipNcEsperandoDevolucion(it.ncs_hijas_pendientes_devolucion);
+        const idNum = Number(it.id) || 0;
+        // Sin acciones (recibido completo con NC esperando devolución): el
+        // emisor solo puede mirar; lo resuelve el destino.
+        const sinAcciones = Array.isArray(it.acciones_permitidas) && it.acciones_permitidas.length === 0;
         return `
             <tr>
-                <td><strong>#${it.numero_documento}</strong></td>
-                <td><small>${it.tipo_documento || '-'}</small></td>
-                <td>${it.destino_alias || '-'}</td>
-                <td class="text-center"><small class="text-nowrap">${fechaCorta(it.fecha_emision)}</small></td>
-                <td>${badgeEstado(it.estado_dte)}${it.motivo_rechazo ? `<small class="text-muted motivo-rechazo">${it.motivo_rechazo}</small>` : ''}</td>
+                <td><strong>#${_escLimbo(it.numero_documento)}</strong></td>
+                <td><small>${_escLimbo(it.tipo_documento || '-')}</small></td>
+                <td>${_escLimbo(it.destino_alias || '-')}</td>
+                <td class="text-center"><small class="text-nowrap">${_escLimbo(fechaCorta(it.fecha_emision))}</small></td>
+                <td>${badgeEstado(it.estado_dte)}${it.motivo_rechazo ? `<small class="text-muted motivo-rechazo" title="${_escLimbo(it.motivo_rechazo)}">${_escLimbo(it.motivo_rechazo)}</small>` : ''}</td>
                 <td class="text-center">${badgeDias(it.dias_en_limbo)}</td>
                 <td>${chipsProblemas(it.resumen_problemas)}${pendNc}</td>
-                <td class="text-end text-nowrap">${it.unidades_productos}</td>
-                <td class="text-end text-nowrap fw-semibold">$${Math.round(it.monto_con_iva).toLocaleString('es-CL')}</td>
+                <td class="text-end text-nowrap">${Number(it.unidades_productos) || 0}</td>
+                <td class="text-end text-nowrap fw-semibold">$${Math.round(Number(it.monto_con_iva) || 0).toLocaleString('es-CL')}</td>
                 <td>
                     ${PUEDE_APROBAR
-                        ? `<button type="button" class="btn btn-sm btn-nexo-primary" onclick="abrirResolver(${it.id})">Resolver</button>`
+                        ? `<button type="button" class="btn btn-sm ${sinAcciones ? 'btn-nexo-outline' : 'btn-nexo-primary'}" onclick="abrirResolver(${idNum})">${sinAcciones ? 'Ver' : 'Resolver'}</button>`
                         : '<small class="text-muted">Sin permiso</small>'}
                 </td>
             </tr>`;
@@ -685,18 +722,23 @@ function abrirResolver(dteId) {
     document.getElementById('btnEnviarAccion').classList.add('d-none');
     new bootstrap.Modal(document.getElementById('modalResolver')).show();
 
-    fetch(`/app/dte/limbo_resumen/${dteId}/`)
+    fetch(`/app/dte/limbo_resumen/${Number(dteId) || 0}/`)
         .then(r => r.json())
         .then(data => {
-            if (!data.success) {
+            if (!data || !data.success) {
+                const msg = (data && (typeof data.error === 'string' ? data.error : data.mensaje)) || 'No se pudo cargar el documento.';
                 document.getElementById('modalResolverBody').innerHTML =
-                    `<div class="alert-nexo alert-nexo-error">${data.error}</div>`;
+                    `<div class="alert-nexo alert-nexo-error">${_escLimbo(msg)}</div>`;
                 return;
             }
             detalleActual = data;
             document.getElementById('modalResolverTitulo').textContent =
                 `Resolver DTE #${data.dte.numero_documento} (${data.dte.tipo_documento})`;
             renderPasoAccion();
+        })
+        .catch(() => {
+            document.getElementById('modalResolverBody').innerHTML =
+                '<div class="alert-nexo alert-nexo-error">No se pudo cargar el documento. Revisa tu conexión e inténtalo de nuevo.</div>';
         });
 }
 
@@ -706,14 +748,26 @@ function renderPasoAccion() {
     const ncSinPermiso = _ncBloqueadaLimbo(d.tipo_documento);
     const puedeNc = (acciones.includes('nc_con_devolucion') || acciones.includes('nc_sin_devolucion'))
         && !ncSinPermiso;
+    const ncEsperando = Number(d.ncs_hijas_pendientes_devolucion) || 0;
+    // NC ya emitida que espera la devolución física: el stock se mueve cuando
+    // el destino confirma el despacho (B7-02). Si no queda otra acción, se dice.
+    const avisoDevolucion = ncEsperando > 0
+        ? `<div class="alert-nexo alert-nexo-info py-2 small mb-3"><i class="bi bi-truck me-1"></i>
+               ${chipNcEsperandoDevolucion(ncEsperando)}
+               El destino debe despachar la mercadería de vuelta y confirmar el despacho en
+               <strong>Recepción DTE › Mis Regularizaciones</strong>; el stock se mueve cuando lo confirme.
+               ${acciones.length === 0 ? '<br>No requiere acción de tu parte.' : ''}
+           </div>`
+        : '';
     const html = `
         <div class="row mb-3">
             <div class="col-md-3"><small class="text-muted">Estado</small><br>${badgeEstado(d.estado_dte)}</div>
-            <div class="col-md-3"><small class="text-muted">Destino</small><br><strong>${d.destino_alias || '-'}</strong></div>
-            <div class="col-md-3"><small class="text-muted">Unidades</small><br><strong>${d.unidades_productos}</strong></div>
-            <div class="col-md-3"><small class="text-muted">Monto</small><br><strong>$${Math.round(d.monto_con_iva).toLocaleString('es-CL')}</strong></div>
+            <div class="col-md-3"><small class="text-muted">Destino</small><br><strong>${_escLimbo(d.destino_alias || '-')}</strong></div>
+            <div class="col-md-3"><small class="text-muted">Unidades</small><br><strong>${Number(d.unidades_productos) || 0}</strong></div>
+            <div class="col-md-3"><small class="text-muted">Monto</small><br><strong>$${Math.round(Number(d.monto_con_iva) || 0).toLocaleString('es-CL')}</strong></div>
         </div>
-        ${d.motivo_rechazo ? `<div class="alert-nexo alert-nexo-warning py-2 small mb-3"><i class="bi bi-chat-left-text me-1"></i><strong>Motivo de rechazo:</strong> ${d.motivo_rechazo}</div>` : ''}
+        ${d.motivo_rechazo ? `<div class="alert-nexo alert-nexo-warning py-2 small mb-3"><i class="bi bi-chat-left-text me-1"></i><strong>Motivo de rechazo:</strong> ${_escLimbo(d.motivo_rechazo)}</div>` : ''}
+        ${avisoDevolucion}
 
         <h6 class="mb-3">¿Qué quieres hacer?</h6>
         <div class="row g-3">
@@ -788,13 +842,21 @@ function enviarRehabilitar() {
                 cargarLimboInbox();
                 aviso('success', 'DTE rehabilitado', data.message || 'DTE rehabilitado correctamente');
             } else {
-                aviso('error', 'No se pudo rehabilitar', data.error || 'Error al rehabilitar');
+                aviso('error', 'No se pudo rehabilitar', _msgLimbo(data, 'Error al rehabilitar'));
             }
-        });
+        })
+        .catch(_falloConexionAccion);
 }
 
 function renderCorregir() {
-    const productos = detalleActual.productos.filter(p => (p.cantidad_faltante || 0) > 0);
+    // Solo líneas corregibles (B7-01): una línea REGULARIZADO conserva
+    // cantidad_faltante pero ya se resolvió con NC/ajuste, y corregirla
+    // duplicaba el stock en destino. Si el backend no manda el flag, se
+    // cae al criterio anterior (faltante > 0).
+    const productos = (detalleActual.productos || []).filter(p =>
+        Object.prototype.hasOwnProperty.call(p, 'corregible')
+            ? !!p.corregible
+            : (p.cantidad_faltante || 0) > 0);
     if (productos.length === 0) {
         document.getElementById('modalResolverBody').innerHTML =
             '<div class="alert-nexo alert-nexo-warning">No hay productos faltantes para corregir.</div>';
@@ -820,17 +882,18 @@ function renderCorregir() {
                 </thead>
                 <tbody>
                     ${productos.map(p => `
-                        <tr data-recepcion-id="${p.recepcion_id}">
-                            <td><small>${p.sku}</small></td>
-                            <td>${p.talla}</td>
-                            <td><small>${p.descripcion}</small></td>
-                            <td class="text-end">${p.cantidad_esperada}</td>
-                            <td class="text-end">${p.cantidad_recepcionada}</td>
-                            <td class="text-end text-danger">${p.cantidad_faltante}</td>
+                        <tr data-recepcion-id="${Number(p.recepcion_id) || ''}">
+                            <td><small>${_escLimbo(p.sku)}</small></td>
+                            <td>${_escLimbo(p.talla)}</td>
+                            <td><small>${_escLimbo(p.descripcion)}</small></td>
+                            <td class="text-end">${Number(p.cantidad_esperada) || 0}</td>
+                            <td class="text-end">${Number(p.cantidad_recepcionada) || 0}</td>
+                            <td class="text-end text-danger">${Number(p.cantidad_faltante) || 0}</td>
                             <td class="text-end">
                                 <input type="number" class="form-control form-control-sm cantidad-corregir"
-                                       min="${p.cantidad_recepcionada}" max="${p.cantidad_esperada}"
-                                       value="${p.cantidad_esperada}" />
+                                       aria-label="Cantidad real ${_escLimbo(p.sku)}"
+                                       min="${Number(p.cantidad_recepcionada) || 0}" max="${Number(p.cantidad_esperada) || 0}"
+                                       value="${Number(p.cantidad_esperada) || 0}" />
                             </td>
                         </tr>
                     `).join('')}
@@ -873,9 +936,10 @@ function enviarCorregir() {
                 cargarLimboInbox();
                 aviso('success', 'Corrección aplicada', data.message);
             } else {
-                aviso('error', 'No se pudo corregir', data.error || 'Error al corregir');
+                aviso('error', 'No se pudo corregir', _msgLimbo(data, 'Error al corregir'));
             }
-        });
+        })
+        .catch(_falloConexionAccion);
 }
 
 function renderNc() {
@@ -932,10 +996,10 @@ function renderNc() {
                     </thead>
                     <tbody>
                         ${productos.map(p => `
-                            <tr data-dte-producto-id="${p.dte_producto_id || ''}">
-                                <td><input type="checkbox" class="form-check-input nc-check" aria-label="Creditar ${p.sku}" ${p.cant_sugerida > 0 ? 'checked' : ''} /></td>
-                                <td><small>${p.sku}</small></td>
-                                <td><small>${p.descripcion}</small></td>
+                            <tr data-dte-producto-id="${Number(p.dte_producto_id) || ''}">
+                                <td><input type="checkbox" class="form-check-input nc-check" aria-label="Creditar ${_escLimbo(p.sku)}" ${p.cant_sugerida > 0 ? 'checked' : ''} /></td>
+                                <td><small>${_escLimbo(p.sku)}</small></td>
+                                <td><small>${_escLimbo(p.descripcion)}</small></td>
                                 <td class="text-end">${p.cantidad_esperada}</td>
                                 <td class="text-end">
                                     ${p.cantidad_faltante ? `<span class="chip-problema chip-faltante" title="Faltantes">${p.cantidad_faltante}F</span>` : ''}
@@ -1049,9 +1113,10 @@ function enviarNc() {
                 cargarLimboInbox();
                 aviso('success', 'Nota de Crédito emitida', data.message);
             } else {
-                aviso('error', 'No se pudo emitir la NC', data.error || 'Error al emitir NC');
+                aviso('error', 'No se pudo emitir la NC', _msgLimbo(data, 'Error al emitir NC'));
             }
-        });
+        })
+        .catch(_falloConexionAccion);
 }
 
 // Eventos

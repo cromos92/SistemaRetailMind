@@ -1,6 +1,7 @@
 """
 Tests del descuento a la diferencia de un ticket de CAMBIO en el POS,
-autorizado con el PIN de un administrador.
+autorizado con el código de la barra superior de un Administrador o Maestro
+(reemplazó al PIN fijo de Mi Perfil el 25-09-2026).
 
 Contexto: el POS bloqueaba TODO descuento sobre un ticket de cambio (botón
 "Dcto. Global" deshabilitado y `mostrarModalDescuento` cortado), así que cuando
@@ -15,8 +16,9 @@ Lo que se prueba acá:
    materializa como una línea manual negativa; sin ella, la boleta saldría por
    el monto original y el cliente pagaría uno distinto al del documento.
 
-2. **El PIN es la autorización real.** Sin PIN válido no se toca el ticket, y
-   cinco intentos fallidos bloquean al cajero por 15 minutos.
+2. **El código es la autorización real.** Sin un código vigente de un
+   Administrador o Maestro no se toca el ticket; el código se quema solo si el
+   descuento se aplica, y cinco intentos fallidos bloquean al cajero 15 minutos.
 
 3. **El cambio asociado queda sincronizado.** Si `CambioDevolucion.diferencia_monto`
    no baja junto al ticket, el módulo de cambios muestra un monto por cobrar que
@@ -34,8 +36,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from app.models import (
-    CambioDevolucion, HistorialCambioDevolucion, RegistroAutorizacion,
-    Ticket, Ticket_Productos,
+    CambioDevolucion, CodigoAutorizacionDinamico, HistorialCambioDevolucion,
+    RegistroAutorizacion, Ticket, Ticket_Productos,
 )
 from app.views_modulo_ventas import generar_dte_desde_ticket
 
@@ -44,11 +46,8 @@ from .factories import (
     crear_usuario, crear_vendedor,
 )
 
-PIN_ADMIN = '482913'
-
-
 class DescuentoDiferenciaCambioTests(TestCase):
-    """El cajero rebaja la diferencia de un cambio con el PIN de un admin."""
+    """El cajero rebaja la diferencia de un cambio con el código de un admin."""
 
     def setUp(self):
         self.empresa = crear_empresa()
@@ -57,7 +56,7 @@ class DescuentoDiferenciaCambioTests(TestCase):
 
         self.cajero = crear_usuario(username='cajera', rol='cajero')
         self.admin = crear_usuario(username='jefa', rol='administrador')
-        self.admin.set_pin_autorizacion(PIN_ADMIN)
+        self._seq_codigo = 0
 
         self.producto, self.talla = crear_producto_con_talla(self.sucursal)
 
@@ -123,13 +122,23 @@ class DescuentoDiferenciaCambioTests(TestCase):
             motivo_principal='CAMBIO_TALLA',
         )
 
-    def _post(self, **payload):
+    def _codigo(self, usuario=None):
+        """Código vigente de la barra superior (de un solo uso: uno por POST)."""
+        self._seq_codigo += 1
+        return CodigoAutorizacionDinamico.objects.create(
+            codigo=f'{482900 + self._seq_codigo:06d}',
+            fecha_hora_inicio=timezone.now() - timedelta(minutes=1),
+            fecha_hora_fin=timezone.now() + timedelta(minutes=30),
+            generado_por=usuario or self.admin,
+        )
+
+    def _post(self, codigo=None, **payload):
         body = {
             'correlativo': 5001,
             'tipo': 'PORCENTAJE',
             'valor': 10,
             'motivo': 'Acuerdo con el cliente por la demora',
-            'pin': PIN_ADMIN,
+            'codigo_autorizacion': codigo if codigo is not None else self._codigo().codigo,
         }
         body.update(payload)
         return self.client.post(
@@ -222,15 +231,64 @@ class DescuentoDiferenciaCambioTests(TestCase):
         self.assertEqual(historial.usuario_id, self.cajero.id)
         self.assertEqual(historial.datos_adicionales['origen'], 'POS_DESCUENTO_PIN')
 
-    def test_registra_la_autorizacion(self):
+    def test_registra_la_autorizacion_y_quema_el_codigo(self):
         self._crear_ticket_cambio(diferencia=20000)
-        self._post(tipo='PORCENTAJE', valor=10)
+        codigo = self._codigo()
+        self._post(codigo=codigo.codigo, tipo='PORCENTAJE', valor=10)
 
         registro = RegistroAutorizacion.objects.get(tipo_operacion='DESCUENTO_ESPECIAL')
         self.assertTrue(registro.exitoso)
         self.assertEqual(registro.usuario_solicitante_id, self.cajero.id)
         self.assertEqual(registro.usuario_autorizador_id, self.admin.id)
-        self.assertNotIn(PIN_ADMIN, json.dumps(registro.datos_adicionales))
+        self.assertEqual(registro.datos_adicionales['codigo_autorizacion_id'], codigo.id)
+        codigo.refresh_from_db()
+        self.assertTrue(codigo.usado)
+
+    def test_codigo_del_descuento_no_sirve_para_descuentos_por_linea(self):
+        """Regresión (revisión 28-09): `registrar_pagos_ticket` sube el tope del
+        descuento por línea al del dueño del código si encuentra un registro
+        DESCUENTO_ESPECIAL con `codigo_usado__codigo`. El del descuento a la
+        diferencia no puede quedar así, o el código quemado serviría para
+        cualquier venta posterior."""
+        self._crear_ticket_cambio(diferencia=20000)
+        codigo = self._codigo()
+        self._post(codigo=codigo.codigo, tipo='MONTO', valor=1000)
+
+        self.assertFalse(RegistroAutorizacion.objects.filter(
+            codigo_usado__codigo=codigo.codigo,
+            usuario_solicitante=self.cajero,
+            tipo_operacion='DESCUENTO_ESPECIAL',
+            exitoso=True,
+        ).exists())
+
+    def test_el_mismo_codigo_no_sirve_dos_veces(self):
+        ticket = self._crear_ticket_cambio(diferencia=20000)
+        codigo = self._codigo()
+        self.assertTrue(self._post(codigo=codigo.codigo, tipo='MONTO', valor=1000).json()['success'])
+
+        resp = self._post(codigo=codigo.codigo, tipo='MONTO', valor=1000)
+
+        self.assertEqual(resp.status_code, 403)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.total, 19000)
+
+    def test_acepta_codigo_de_maestro(self):
+        ticket = self._crear_ticket_cambio(diferencia=20000)
+        maestro = crear_usuario(username='duena', rol='maestro')
+
+        resp = self._post(codigo=self._codigo(maestro).codigo, tipo='MONTO', valor=2000)
+
+        self.assertTrue(resp.json()['success'], resp.json())
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.total, 18000)
+
+    def test_campo_pin_del_js_anterior_sigue_funcionando(self):
+        """Una caja con la página abierta desde antes manda el código en `pin`."""
+        ticket = self._crear_ticket_cambio(diferencia=20000)
+        resp = self._post(codigo='', pin=self._codigo().codigo, tipo='MONTO', valor=1000)
+        self.assertTrue(resp.json()['success'], resp.json())
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.total, 19000)
 
     def test_descuentos_sucesivos_se_acumulan(self):
         ticket = self._crear_ticket_cambio(diferencia=20000)
@@ -243,12 +301,12 @@ class DescuentoDiferenciaCambioTests(TestCase):
 
     # ------------------------------------------------------------------ guards
 
-    def test_pin_incorrecto_no_toca_el_ticket(self):
+    def test_codigo_incorrecto_no_toca_el_ticket(self):
         ticket = self._crear_ticket_cambio(diferencia=20000)
 
-        resp = self._post(pin='000000')
+        resp = self._post(codigo='000000')
         self.assertEqual(resp.status_code, 403)
-        self.assertEqual(resp.json()['error_tipo'], 'PIN_INVALIDO')
+        self.assertEqual(resp.json()['error_tipo'], 'INVALID_AUTH_CODE')
 
         ticket.refresh_from_db()
         self.assertEqual(ticket.total, 20000)
@@ -257,37 +315,40 @@ class DescuentoDiferenciaCambioTests(TestCase):
         registro = RegistroAutorizacion.objects.get(tipo_operacion='DESCUENTO_ESPECIAL')
         self.assertFalse(registro.exitoso)
 
-    def test_pin_de_usuario_sin_rol_admin_no_sirve(self):
-        """Un PIN sólo autoriza si su dueño es administrador/jefe de local."""
+    def test_codigo_de_rol_no_administrador_no_sirve(self):
+        """Solo Administrador o Maestro: ni el vendedor ni el jefe de local."""
         ticket = self._crear_ticket_cambio(diferencia=20000)
-        # `set_pin_autorizacion` rechaza roles sin permiso; se fuerza el hash a
-        # mano para probar que el lookup igual descarta al vendedor.
-        from django.contrib.auth.hashers import make_password
-        vendedor_user = crear_usuario(username='vendedorx', rol='vendedor')
-        vendedor_user.pin_autorizacion = make_password('654321')
-        vendedor_user.save(update_fields=['pin_autorizacion'])
+        for username, rol in (('vendedorx', 'vendedor'), ('jefelocal', 'jefe_local')):
+            dueno = crear_usuario(username=username, rol=rol)
+            codigo = self._codigo(dueno)
 
-        resp = self._post(pin='654321')
-        self.assertEqual(resp.status_code, 403)
+            resp = self._post(codigo=codigo.codigo)
+
+            self.assertEqual(resp.status_code, 403, rol)
+            codigo.refresh_from_db()
+            self.assertFalse(codigo.usado, rol)
         ticket.refresh_from_db()
         self.assertEqual(ticket.total, 20000)
 
     def test_cinco_intentos_fallidos_bloquean(self):
         self._crear_ticket_cambio(diferencia=20000)
         for _ in range(5):
-            self.assertEqual(self._post(pin='000000').status_code, 403)
+            self.assertEqual(self._post(codigo='000000').status_code, 403)
 
-        resp = self._post(pin=PIN_ADMIN)  # PIN bueno, pero ya bloqueado
+        resp = self._post()  # código bueno, pero ya bloqueado
         self.assertEqual(resp.status_code, 429)
-        self.assertEqual(resp.json()['error_tipo'], 'PIN_BLOQUEADO')
+        self.assertEqual(resp.json()['error_tipo'], 'AUTH_CODE_BLOCKED')
 
-    def test_rechaza_ticket_de_venta_normal(self):
+    def test_rechaza_ticket_de_venta_normal_sin_quemar_el_codigo(self):
         ticket = self._crear_ticket_cambio(diferencia=20000, modulo='VENTA_PUBLICO')
-        resp = self._post()
+        codigo = self._codigo()
+        resp = self._post(codigo=codigo.codigo)
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(resp.json()['error_tipo'], 'NO_ES_CAMBIO')
         ticket.refresh_from_db()
         self.assertEqual(ticket.total, 20000)
+        codigo.refresh_from_db()
+        self.assertFalse(codigo.usado)
 
     def test_rechaza_ticket_ya_pagado(self):
         self._crear_ticket_cambio(diferencia=20000, estado='PAGADO')
@@ -310,11 +371,11 @@ class DescuentoDiferenciaCambioTests(TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn('justificación', resp.json()['error'])
 
-    def test_rechaza_pin_de_formato_invalido(self):
+    def test_rechaza_codigo_de_formato_invalido(self):
         self._crear_ticket_cambio(diferencia=20000)
-        resp = self._post(pin='123')
+        resp = self._post(codigo='123')
         self.assertEqual(resp.status_code, 400)
-        self.assertEqual(resp.json()['error_tipo'], 'PIN_FORMATO')
+        self.assertEqual(resp.json()['error_tipo'], 'AUTH_CODE_FORMAT')
 
     def test_rechaza_ticket_de_otra_sucursal(self):
         self._crear_ticket_cambio(diferencia=20000)
@@ -342,7 +403,8 @@ class DescuentoDiferenciaCambioTests(TestCase):
         resp = anonimo.post(
             self.url,
             data=json.dumps({'correlativo': 5001, 'tipo': 'MONTO', 'valor': 100,
-                             'motivo': 'prueba anonima', 'pin': PIN_ADMIN}),
+                             'motivo': 'prueba anonima',
+                             'codigo_autorizacion': self._codigo().codigo}),
             content_type='application/json',
         )
         self.assertIn(resp.status_code, (302, 403))

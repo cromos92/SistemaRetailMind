@@ -1254,10 +1254,10 @@ ESTADO_DEVOLUCION_GARANTIA_CHOICES = [
 ]
 
 # Decisión del aprobador: cómo impacta la NC en la cuadratura de caja.
-# TRANSFERENCIA_BANCARIA/EFECTIVO_CAJA/REBAJA_CREDITO -> NC
+# TRANSFERENCIA_BANCARIA/EFECTIVO_CAJA/REBAJA_CREDITO/MERCADO_PAGO -> NC
 # tipo_transaccion='DEVOLUCION' con Dte_Detalle_Pago.fecha_pago =
 # fecha_imputacion_caja; cada uno cae en el bucket de cuadratura de su medio
-# (transferencia / efectivo / crédito externo);
+# (transferencia / efectivo / crédito externo / Mercado Pago POS);
 # NO_AFECTA_CAJA -> NC tipo_transaccion='ANULACION' sin detalle de pago
 # (informativa: cuenta como documento del día, no resta teóricos).
 #
@@ -1266,11 +1266,17 @@ ESTADO_DEVOLUCION_GARANTIA_CHOICES = [
 # efectivo (o transferencia) dejaría el arqueo con un faltante inventado. La NC
 # rebaja la cuenta por cobrar y se imputa al bucket de crédito.
 #
-# El orden importa: es el que usa la UI. TRANSFERENCIA_BANCARIA va primero
-# (opción primaria) y EFECTIVO_CAJA queda al final, oculto en la UI y
-# conservado solo para las devoluciones históricas que ya lo usaron.
+# MERCADO_PAGO (28-09-2026): la venta se cobró con la Point/QR de Mercado Pago
+# y la plata se devolvió desde Mercado Pago (vuelve a la tarjeta/cuenta del
+# cliente). La NC lleva el mismo método MP_* del cobro y el N° de operación en
+# el voucher, así resta del bucket MP POS y no del efectivo ni de las
+# transferencias.
+#
+# EFECTIVO_CAJA estuvo oculto (03-08) y volvió a ofrecerse el 28-09-2026 en
+# los dos flujos, con los bloqueos de venta a crédito del service.
 METODO_DEVOLUCION_DG_CHOICES = [
     ('TRANSFERENCIA_BANCARIA', 'Transferencia bancaria'),
+    ('MERCADO_PAGO', 'Mercado Pago'),
     ('REBAJA_CREDITO', 'Rebaja crédito del cliente'),
     ('NO_AFECTA_CAJA', 'No afecta caja'),
     ('EFECTIVO_CAJA', 'Efectivo de caja'),

@@ -16,10 +16,12 @@ from django.test import TestCase, override_settings
 from app.middleware_permisos import URL_PERMISO_MAP
 from app.models import (
     AtributoOpcion, CargaFacturaPdf, Categoria, Dte, GuiaTalla, GuiaTallaItem,
-    ModuloSistema, Movimientos_Producto, OpcionMenu, PermisoRol, Producto,
-    Producto_Talla, Productos_Atributos,
+    ModuloSistema, Movimientos_Producto, OpcionMenu, PerfilCargaMarca, PermisoRol,
+    Producto, Producto_Talla, ProductoAprendido, Productos_Atributos,
 )
+from app.services.carga_factura import lectura as svc_lectura
 from app.services.carga_factura import web as svc_web
+from app.services.carga_factura.perfiles import perfil_para
 from app.services.carga_factura.precios import precio_por_regla
 from app.tests.factories import (
     crear_correlativo, crear_empresa, crear_empresa_user, crear_sucursal, crear_usuario,
@@ -61,8 +63,11 @@ class TestAgenteCargaFactura(TestCase):
         modulo = ModuloSistema.objects.create(codigo='existencias_test', nombre='Existencias', orden=1)
         opcion = OpcionMenu.objects.create(modulo=modulo, codigo='gestion_producto',
                                            nombre='Gestión Producto', activo=True)
-        for rol in ('administrador', 'vendedor'):
-            PermisoRol.objects.create(rol=rol, opcion_menu=opcion, puede_ver=True)
+        # Cargar ingresa stock por crear_producto_manual, que exige
+        # gestion_producto/puede_crear: el bodeguero (administrador) lo tiene.
+        for rol, crear in (('administrador', True), ('vendedor', False)):
+            PermisoRol.objects.create(rol=rol, opcion_menu=opcion, puede_ver=True,
+                                      puede_crear=crear)
 
         calzado = Categoria.objects.create(nombre='Calzado')
         cls.cat = Categoria.objects.create(nombre='Zapatillas', padre=calzado)
@@ -618,3 +623,163 @@ class TestAgenteCargaFactura(TestCase):
         self.assertEqual(Producto_Talla.objects.get(producto=plata, talla='36').stock, 3)
         resultado = CargaFacturaPdf.objects.get(id=sesion_id).facturas[0]['_resultado']
         self.assertEqual([l['opcion'] for l in resultado['lineas'] if l.get('opcion')], ['t', 's'])
+
+    # ---------------------------------------------------------- aprendizaje
+
+    def test_aprende_de_la_carga_y_lo_reusa(self):
+        sesion_id = self._subir()
+        resp = self.client.post(f'/app/carga-factura/{sesion_id}/cargar/',
+                                data={'idx': 0, 'opciones': {}}, content_type='application/json')
+        self.assertTrue(resp.json()['success'], resp.json())
+        perfil = PerfilCargaMarca.objects.get(marca='NIKE')
+        self.assertEqual((perfil.veces_usado, perfil.ultima_factura), (1, '555'))
+        aprendido = ProductoAprendido.objects.get(marca='NIKE', articulo='HQ6034-001')
+        self.assertEqual((aprendido.genero, aprendido.categoria, aprendido.fuente),
+                         ('HOMBRE', 'Calzado > Zapatillas', 'carga'))
+        self.assertEqual(aprendido.precioventa,
+                         precio_por_regla(30000, 40000, Decimal('1.85'), Decimal('1.8')))
+        self.assertEqual(aprendido.color, '')     # MULTI (el por defecto) no se aprende
+        self.assertTrue(CargaFacturaPdf.objects.get(id=sesion_id).mensajes[-1].get('aprendido'))
+        # La siguiente lectura del mismo código viene sin género ni categoría: se completan solos.
+        nueva = self._subir(_lectura_simulada(genero=None, categoria=None))
+        sesion = CargaFacturaPdf.objects.get(id=nueva)
+        linea = sesion.facturas[0]['lineas'][0]
+        self.assertEqual((linea['genero'], linea['categoria']), ('HOMBRE', 'Calzado > Zapatillas'))
+        self.assertEqual(linea['_aprendido'], ['género', 'categoría'])
+        self.assertEqual(linea['_precio_aprendido'], aprendido.precioventa)
+        self.assertEqual(sesion.mensajes[-1]['aprendido'], ['HQ6034-001: género, categoría'])
+        plan = self._planificar(nueva)['facturas'][0]['planes'][0]
+        self.assertEqual(plan['errores'], [])
+        self.assertEqual(plan['aprendido'], ['género', 'categoría'])
+        self.assertEqual(plan['genero']['valor'], 'HOMBRE')
+
+    def test_perfil_aprendido_pisa_al_generico(self):
+        PerfilCargaMarca.objects.create(
+            marca='CHALADA', nombre='CHALADA', tipo_talla='US', factor_bajo=Decimal('1.9'),
+            factor_alto=Decimal('1.9'), pistas_lectura='el color va en la descripción')
+        perfil = perfil_para('Chalada')
+        self.assertTrue(perfil.aprendido)
+        self.assertEqual((perfil.marca, perfil.tipo_talla, perfil.factor_bajo, perfil.factor_alto),
+                         ('CHALADA', 'US', Decimal('1.9'), Decimal('1.9')))
+        self.assertIn('el color va en la descripción', perfil.pistas_lectura)
+        self.assertFalse(perfil_para('NIKE').aprendido)
+        self.assertEqual(perfil_para('OTRA').tipo_talla, 'CL')
+
+    def test_recordar_por_chat_queda_en_el_perfil(self):
+        sesion_id = self._subir()
+        respuesta = {'respuesta': 'Anotado.', 'cambios': [], 'investigar': [],
+                     'recordar': 'las tallas de Nike vienen en US con C e Y'}
+        with mock.patch('app.services.carga_factura.chat._preguntar', return_value=respuesta):
+            data = self.client.post(f'/app/carga-factura/{sesion_id}/conversar/',
+                                    data={'texto': 'recuerda que las tallas de Nike vienen en US'},
+                                    content_type='application/json').json()
+        self.assertTrue(data['success'], data)
+        self.assertEqual(len(data['aprendido']), 1)
+        self.assertIn('las tallas de Nike vienen en US con C e Y',
+                      PerfilCargaMarca.objects.get(marca='NIKE').pistas_lectura)
+        self.assertIn('las tallas de Nike vienen en US con C e Y', perfil_para('NIKE').pistas_lectura)
+
+    # ------------------------------------------------------------- internet
+
+    def _hallazgo(self, **cambios):
+        base = {'encontrado': True, 'nombre': 'Nike Court Vision Low', 'que_es': 'Zapatilla urbana de cuero',
+                'color_primario': 'BLACK', 'colores_vistos': 'Black/White', 'genero': '', 'categoria': '',
+                'fuente_url': 'https://www.nike.com/x', 'confianza': 'alta'}
+        base.update(cambios)
+        return base
+
+    def test_chat_pide_buscar_en_internet(self):
+        AtributoOpcion.objects.create(atributo=Productos_Atributos.objects.get(nombre='Color'), valor='BLACK')
+        sesion_id = self._subir()
+        respuesta = {'respuesta': 'Voy a buscarlo.', 'cambios': [], 'investigar': [{'idx': 0, 'n': 1}], 'recordar': ''}
+        with mock.patch('app.services.carga_factura.chat._preguntar', return_value=respuesta), \
+             mock.patch('app.services.carga_factura.busqueda.investigar_articulo',
+                        return_value=self._hallazgo()) as buscar:
+            data = self.client.post(f'/app/carga-factura/{sesion_id}/conversar/',
+                                    data={'texto': 'busca en internet la línea 1'},
+                                    content_type='application/json').json()
+        self.assertTrue(data['success'], data)
+        self.assertEqual(data['investigando'], 1)
+        self.assertEqual(buscar.call_args.args[1], 'HQ6034-001')
+        sesion = CargaFacturaPdf.objects.get(id=sesion_id)
+        self.assertEqual(sesion.estado, 'LEIDA')      # en modo síncrono ya terminó
+        linea = sesion.facturas[0]['lineas'][0]
+        self.assertEqual(linea['color'], 'BLACK')
+        self.assertIn('Nike Court Vision Low', linea['_que_es'])
+        ultimo = sesion.mensajes[-1]
+        self.assertEqual(ultimo['tipo'], 'busqueda')
+        self.assertEqual(ultimo['hallazgos'][0]['aplicado'], ['color'])
+        aprendido = ProductoAprendido.objects.get(marca='NIKE', articulo='HQ6034-001')
+        self.assertEqual((aprendido.color_internet, aprendido.fuente), ('BLACK', 'internet'))
+        plan = self._planificar(sesion_id)['facturas'][0]['planes'][0]
+        self.assertEqual(plan['color']['valor'], 'BLACK')
+        self.assertIn('internet', plan['aprendido'])
+
+    def test_boton_buscar_en_internet(self):
+        sesion_id = self._subir()
+        with mock.patch('app.services.carga_factura.busqueda.investigar_articulo',
+                        return_value=self._hallazgo(encontrado=False, nombre='', color_primario='')):
+            data = self.client.post(f'/app/carga-factura/{sesion_id}/investigar/',
+                                    data={'idx': 0}, content_type='application/json').json()
+        self.assertTrue(data['success'], data)
+        self.assertEqual(data['lineas'], [1])
+        sesion = CargaFacturaPdf.objects.get(id=sesion_id)
+        self.assertEqual([m['tipo'] for m in sesion.mensajes[-2:]], ['busqueda', 'busqueda'])
+        self.assertFalse(sesion.mensajes[-1]['hallazgos'][0]['ok'])
+        self.assertIsNone(sesion.facturas[0]['lineas'][0].get('color'))
+        self.assertEqual(sesion.estado, 'LEIDA')
+
+    # ------------------------------------------------------ lector (unidad)
+
+    def _lectura_cruda(self, **cambios):
+        linea = {'articulo': 'A1', 'descripcion': 'x', 'tallas': [{'talla': '7', 'cantidad': 5}],
+                 'cantidad': 5, 'precio_unitario': 30000, 'importe': 150000, 'confianza': 'alta',
+                 'dudas': '', 'precio_venta_a_mano': -1, 'precio_venta_a_mano_alternativa': -1,
+                 'descuento_pct': -1, 'descuento_monto': -1, 'reparto_a_mano': [], 'marca': '',
+                 'color': 'black', 'genero': 'hombre', 'categoria': 'calzado > zapatillas',
+                 'especialidades': ['running', 'inventada']}
+        linea.update(cambios)
+        return {'facturas': [{'tipo_documento': 'FACTURA', 'folio': 1, 'proveedor_nombre': 'P',
+                              'proveedor_rut': '1-9', 'fecha_emision': '2026-01-01', 'marca': '',
+                              'total_unidades': 5, 'descuento_global_pct': -1,
+                              'descuento_global_monto': -1, 'total_neto': 150000, 'paginas': [1],
+                              'lineas': [linea], 'observaciones': ''}]}
+
+    def test_limpiar_lectura_convierte_centinelas_y_valida_listas(self):
+        lectura = svc_lectura._limpiar_lectura(
+            self._lectura_cruda(), categorias=['Calzado > Zapatillas'],
+            especialidades=['running'], colores=['BLACK'])
+        f = lectura['facturas'][0]
+        l = f['lineas'][0]
+        self.assertIsNone(f['descuento_global_pct'])
+        self.assertIsNone(f['marca'])
+        self.assertIsNone(l['precio_venta_a_mano'])
+        self.assertEqual((l['color'], l['genero'], l['categoria']), ('BLACK', 'HOMBRE', 'Calzado > Zapatillas'))
+        self.assertEqual(l['especialidades'], ['running'])
+        self.assertEqual(l['cantidad'], 5)
+
+    def test_esquema_del_lector_sin_uniones_de_tipo(self):
+        import json as _json
+        esquema = svc_lectura._esquema(['Calzado > Zapatillas'], ['running'], ['BLACK'] * 300)
+        texto = _json.dumps(esquema)
+        self.assertNotIn('anyOf', texto)
+        self.assertNotIn('"null"', texto)
+        self.assertNotIn('BLACK', texto)     # los colores no van como enum
+
+    def test_segunda_lectura_solo_si_hay_dudas(self):
+        import copy
+        limpia = self._lectura_cruda()
+        dudosa = self._lectura_cruda(confianza='media')
+
+        def correr(lectura, lecturas):
+            with mock.patch.object(svc_lectura, '_cliente', return_value=object()), \
+                 mock.patch.object(svc_lectura, '_imagenes_de_pagina', return_value=None), \
+                 mock.patch.object(svc_lectura, '_una_lectura',
+                                   side_effect=lambda *a, **k: copy.deepcopy(lectura)) as una:
+                r = svc_lectura.leer_pdf(b'%PDF-1.4', lecturas=lecturas)
+            return len(r['lecturas']), r['segunda'], una.call_count
+
+        self.assertEqual(correr(limpia, 2), (1, 'no hizo falta', 1))
+        self.assertEqual(correr(dudosa, 2), (2, 'por dudas', 2))
+        self.assertEqual(correr(limpia, 3), (2, 'siempre', 2))
+        self.assertEqual(correr(dudosa, 1), (1, 'no pedida', 1))

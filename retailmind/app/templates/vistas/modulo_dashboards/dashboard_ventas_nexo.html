@@ -79,6 +79,38 @@
 .scope-badge-off { background: rgba(255, 176, 32, .18); color: #996B00; }
 .scope-off-card { box-shadow: inset 3px 0 0 0 var(--nexo-warning); }
 .nexo-scope-warning { margin-bottom: 1rem; }
+
+/* ── Pestañas del tablero (mismo patrón .nav-tabs-nexo de reporte_compras) ──── */
+.nav-tabs-nexo { border-bottom: 2px solid var(--nexo-gray-300); gap: 4px; margin-bottom: 1.25rem; }
+.nav-tabs-nexo .nav-link {
+    color: var(--nexo-gray-500); font-weight: 600; padding: 12px 20px; border: none;
+    border-radius: var(--nexo-radius-md) var(--nexo-radius-md) 0 0;
+    transition: all var(--nexo-transition-fast);
+    display: inline-flex; align-items: center; gap: 0.45rem;
+}
+.nav-tabs-nexo .nav-link:hover { color: var(--nexo-primary); background: var(--nexo-primary-light); }
+.nav-tabs-nexo .nav-link.active {
+    color: var(--nexo-primary); background: var(--nexo-white);
+    border-bottom: 3px solid var(--nexo-primary);
+}
+.nav-tabs-nexo .tab-counter {
+    font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.45rem; line-height: 1.2;
+    border-radius: var(--nexo-radius-full); background: var(--nexo-error); color: #fff;
+}
+@media (max-width: 576px) {
+    .nav-tabs-nexo { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .nav-tabs-nexo .nav-link { font-size: 0.78rem; padding: 8px 10px; white-space: nowrap; }
+}
+
+/* ── Indicadores avanzados: fila secundaria, más chica que los 8 KPIs ───────── */
+.nexo-section-header.sec-compacta { margin-top: 0.25rem; margin-bottom: 0.5rem; }
+.nexo-section-header.sec-compacta .nexo-section-icon { width: 28px; height: 28px; font-size: 0.85rem; }
+.nexo-section-header.sec-compacta .nexo-section-title { font-size: 0.95rem; }
+.kpi-secundario .nexo-chart-body { padding: 0.6rem 0.75rem; }
+.kpi-secundario .ks-icon { font-size: 1.4rem; line-height: 1; }
+.kpi-secundario h2 { font-size: 1.25rem; margin: 0.15rem 0 0; }
+.kpi-secundario .nexo-kpi-label { font-size: 0.78rem; }
+.kpi-secundario small { font-size: 0.7rem; }
 </style>
 
 <div class="page-content nexo-page">
@@ -256,6 +288,37 @@
             </div>
         </div>
 
+        <!-- ═══════════════════════════════════════════════════════════════════════════════
+             PESTAÑAS: Resumen · Tiendas y vendedores · Operación
+             (los charts de un pane oculto nacen en 0×0: ver inicializarTabsDashboard)
+             ═══════════════════════════════════════════════════════════════════════════════ -->
+        <ul class="nav nav-tabs nav-tabs-nexo nexo-animate-fadein" id="dashTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="tabResumenLink" data-bs-toggle="tab" data-bs-target="#tabResumen"
+                        type="button" role="tab" aria-controls="tabResumen" aria-selected="true">
+                    <i class="bi bi-speedometer2"></i> Resumen
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tabTiendasLink" data-bs-toggle="tab" data-bs-target="#tabTiendas"
+                        type="button" role="tab" aria-controls="tabTiendas" aria-selected="false">
+                    <i class="bi bi-shop"></i> Tiendas y vendedores
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tabOperacionLink" data-bs-toggle="tab" data-bs-target="#tabOperacion"
+                        type="button" role="tab" aria-controls="tabOperacion" aria-selected="false">
+                    <i class="bi bi-clipboard-check"></i> Operación
+                    <span class="tab-counter" id="badgeTabOperacion" style="display:none;" title="Alertas del período (críticas + advertencias)">0</span>
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="dashTabsContent">
+
+        <!-- ─────────────────────────── PESTAÑA 1: RESUMEN ─────────────────────────── -->
+        <div class="tab-pane fade show active" id="tabResumen" role="tabpanel" aria-labelledby="tabResumenLink">
+
         <div class="nexo-section-header nexo-animate-fadein" id="secKPIs">
             <div class="nexo-section-icon">
                 <i class="bi bi-speedometer2"></i>
@@ -265,7 +328,7 @@
 
         <div class="nexo-kpi-grid">
             <!-- Ventas Totales -->
-            <div class="nexo-kpi-card kpi-primary nexo-animate-fadein nexo-animate-delay-1" data-bs-toggle="tooltip" data-bs-placement="top" title="📊 Monto total de ventas en el período. Compare con períodos anteriores para medir crecimiento. ✅ Positivo: crecimiento >5% | ⚠️ Alerta: caída >10%">
+            <div class="nexo-kpi-card kpi-primary nexo-animate-fadein nexo-animate-delay-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Ventas totales = Σ total (bruto, IVA incluido) de los tickets PAGADOS creados en el período, sin tickets de cambio/devolución. NO resta notas de crédito: el neto de NC va en la sublínea y resta sólo NC de ventas con ticket del tablero (excluye NC de traspasos y de ventas sin ticket: ecommerce/legacy); con estado distinto de Pagado se muestra «—». Variación vs el período comparativo. ✅ crecimiento >5% | ⚠️ caída >10%">
                 <div class="nexo-kpi-header">
                     <div class="nexo-kpi-icon"><i class="bi bi-currency-dollar"></i></div>
                     <span class="nexo-kpi-trend up" id="trendVentas">
@@ -274,11 +337,11 @@
                 </div>
                 <div class="nexo-kpi-value" id="kpiVentasTotales">$0</div>
                 <div class="nexo-kpi-label">Ventas Totales <i class="bi bi-info-circle-fill text-muted" style="font-size: 0.7rem;"></i></div>
-                <div class="nexo-kpi-sublabel">vs período anterior</div>
+                <div class="nexo-kpi-sublabel">Neto de NC: <strong id="kpiVentasNetas">—</strong> <span id="kpiNcDetalle"></span></div>
             </div>
 
             <!-- Transacciones -->
-            <div class="nexo-kpi-card kpi-success nexo-animate-fadein nexo-animate-delay-1" data-bs-toggle="tooltip" data-bs-placement="top" title="🧾 Cantidad de tickets/ventas realizadas. ✅ Óptimo: crecimiento sostenido | ⚠️ Bajo: menos de 10/día en retail pequeño">
+            <div class="nexo-kpi-card kpi-success nexo-animate-fadein nexo-animate-delay-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Transacciones = N° de tickets PAGADOS creados en el período (sin tickets de cambio/devolución). Por día = transacciones ÷ días del período. ✅ crecimiento sostenido | ⚠️ <10/día en retail pequeño">
                 <div class="nexo-kpi-header">
                     <div class="nexo-kpi-icon"><i class="bi bi-receipt"></i></div>
                     <span class="nexo-kpi-trend up" id="trendTransacciones">
@@ -291,7 +354,7 @@
             </div>
 
             <!-- Ticket Promedio (ATV) -->
-            <div class="nexo-kpi-card kpi-info nexo-animate-fadein nexo-animate-delay-2" data-bs-toggle="tooltip" data-bs-placement="top" title="💰 Monto promedio por venta. Objetivo: maximizar sin perder clientes. ✅ Excelente: >$50.000 | 👍 Bueno: $25.000-$50.000 | ⚠️ Bajo: <$25.000 (en retail moda)">
+            <div class="nexo-kpi-card kpi-info nexo-animate-fadein nexo-animate-delay-2" data-bs-toggle="tooltip" data-bs-placement="top" title="Ticket promedio (ATV) = ventas totales ÷ transacciones (misma base: tickets PAGADOS del período). ✅ >$50.000 | 👍 $25.000–$50.000 | ⚠️ <$25.000 (retail moda)">
                 <div class="nexo-kpi-header">
                     <div class="nexo-kpi-icon"><i class="bi bi-calculator"></i></div>
                     <span class="nexo-kpi-trend up" id="trendTicket">
@@ -304,7 +367,7 @@
             </div>
 
             <!-- UPT (Units Per Transaction) -->
-            <div class="nexo-kpi-card kpi-purple nexo-animate-fadein nexo-animate-delay-2" data-bs-toggle="tooltip" data-bs-placement="top" title="📦 Unidades vendidas por ticket. Mide éxito en venta cruzada. ✅ Excelente: >2.5 | 👍 Bueno: 1.8-2.5 | ⚠️ Bajo: <1.5 (oportunidad de mejorar cross-selling)">
+            <div class="nexo-kpi-card kpi-purple nexo-animate-fadein nexo-animate-delay-2" data-bs-toggle="tooltip" data-bs-placement="top" title="UPT = unidades vendidas ÷ transacciones (ambas sobre los tickets PAGADOS del período). Mide la venta cruzada. ✅ >2,5 | 👍 1,8–2,5 | ⚠️ <1,5">
                 <div class="nexo-kpi-header">
                     <div class="nexo-kpi-icon"><i class="bi bi-box-seam"></i></div>
                     <span class="nexo-kpi-trend neutral" id="trendUPT">
@@ -317,7 +380,7 @@
             </div>
 
             <!-- Unidades Vendidas -->
-            <div class="nexo-kpi-card kpi-warning nexo-animate-fadein nexo-animate-delay-2" data-bs-toggle="tooltip" data-bs-placement="top" title="📊 Total de productos vendidos. Compara con stock disponible para medir rotación. Objetivo: maximizar sin quedarse sin stock">
+            <div class="nexo-kpi-card kpi-warning nexo-animate-fadein nexo-animate-delay-2" data-bs-toggle="tooltip" data-bs-placement="top" title="Unidades = Σ cantidad de las líneas de los tickets PAGADOS del período (sin productos excluidos de analítica). Por día = unidades ÷ días del período.">
                 <div class="nexo-kpi-header">
                     <div class="nexo-kpi-icon"><i class="bi bi-boxes"></i></div>
                 </div>
@@ -327,7 +390,7 @@
             </div>
 
             <!-- Margen Bruto -->
-            <div class="nexo-kpi-card kpi-success nexo-animate-fadein nexo-animate-delay-3" data-bs-toggle="tooltip" data-bs-placement="top" title="💵 Ganancia bruta (Ventas - Costo). ✅ Excelente: >40% del total | 👍 Bueno: 30-40% | ⚠️ Bajo: 20-30% | ❌ Crítico: <20%">
+            <div class="nexo-kpi-card kpi-success nexo-animate-fadein nexo-animate-delay-3" data-bs-toggle="tooltip" data-bs-placement="top" title="Margen bruto = ingreso neto de IVA (subtotal ÷ 1,19) − costo FIFO, sólo sobre las líneas con costo FIFO > 0; % = margen ÷ ingreso neto costeado. 's/d' si ninguna línea del período tiene costo. ✅ >40% | 👍 30–40% | ⚠️ 20–30% | ❌ <20%">
                 <div class="nexo-kpi-header">
                     <div class="nexo-kpi-icon"><i class="bi bi-graph-up"></i></div>
                 </div>
@@ -337,7 +400,7 @@
             </div>
 
             <!-- Sell-Through Rate -->
-            <div class="nexo-kpi-card kpi-pink nexo-animate-fadein nexo-animate-delay-3" data-bs-toggle="tooltip" data-bs-placement="top" title="📈 % de inventario vendido vs recibido. ✅ Excelente: >70% | 👍 Bueno: 50-70% | ⚠️ Bajo: 30-50% | ❌ Crítico: <30% (acumulación de stock)">
+            <div class="nexo-kpi-card kpi-pink nexo-animate-fadein nexo-animate-delay-3" data-bs-toggle="tooltip" data-bs-placement="top" title="Sell-through = unidades vendidas ÷ (unidades vendidas + stock actual del alcance) × 100. ✅ >70% | 👍 50–70% | ⚠️ 30–50% | ❌ <30% (acumulación de stock)">
                 <div class="nexo-kpi-header">
                     <div class="nexo-kpi-icon"><i class="bi bi-percent"></i></div>
                 </div>
@@ -347,13 +410,75 @@
             </div>
 
             <!-- Cambios y Devoluciones -->
-            <div class="nexo-kpi-card kpi-danger nexo-animate-fadein nexo-animate-delay-3" data-bs-toggle="tooltip" data-bs-placement="top" title="🔄 Ratio de productos devueltos o cambiados. ✅ Excelente: <3% | 👍 Normal: 3-5% | ⚠️ Alto: 5-8% | ❌ Crítico: >8% (revisar calidad o descripciones)">
+            <div class="nexo-kpi-card kpi-danger nexo-animate-fadein nexo-animate-delay-3" data-bs-toggle="tooltip" data-bs-placement="top" title="Cambios/Devoluciones = solicitudes de cambio o devolución creadas en el período (todos los estados). Ratio = cambios ÷ transacciones × 100. ✅ <3% | 👍 3–5% | ⚠️ 5–8% | ❌ >8% (revisar calidad o descripciones)">
                 <div class="nexo-kpi-header">
                     <div class="nexo-kpi-icon"><i class="bi bi-arrow-left-right"></i></div>
                 </div>
                 <div class="nexo-kpi-value" id="kpiCambios">0</div>
                 <div class="nexo-kpi-label">Cambios/Devoluciones <i class="bi bi-info-circle-fill text-muted" style="font-size: 0.7rem;"></i></div>
                 <div class="nexo-kpi-sublabel"><strong id="kpiCambiosPct">0%</strong> ratio de devolución</div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════════════════
+             INDICADORES AVANZADOS DE RETAIL (GMROI, Rotación, Días de stock, Descuento)
+             Fila secundaria, más chica que los 8 KPIs principales.
+             ═══════════════════════════════════════════════════════════════════════════════ -->
+        <div class="nexo-section-header sec-compacta nexo-animate-fadein" id="secAvanzados">
+            <div class="nexo-section-icon" style="background: var(--nexo-gradient-purple);">
+                <i class="bi bi-bar-chart-steps"></i>
+            </div>
+            <h3 class="nexo-section-title">Indicadores Avanzados de Gestión Retail</h3>
+        </div>
+
+        <div class="row g-2 nexo-animate-fadein mb-4 kpi-secundario">
+            <div class="col-lg-3 col-md-6 col-6">
+                <div class="nexo-chart-card h-100" data-bs-toggle="tooltip" data-bs-placement="top" title="GMROI = margen bruto ÷ inventario a costo (stock actual × costo FIFO unitario promedio de lo vendido). 's/d' cuando el margen no es calculable. ✅ >3,0 | 👍 2,0–3,0 | ⚠️ 1,0–2,0 | ❌ <1,0">
+                    <div class="nexo-chart-body text-center">
+                        <div class="ks-icon" style="color: var(--nexo-primary);">
+                            <i class="bi bi-arrow-repeat"></i>
+                        </div>
+                        <h2 class="mb-1" id="kpiGMROI">0.00</h2>
+                        <div class="nexo-kpi-label">GMROI <i class="bi bi-info-circle-fill text-muted" style="font-size: 0.7rem;"></i></div>
+                        <small class="text-muted">Gross Margin Return on Investment</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 col-6">
+                <div class="nexo-chart-card h-100" data-bs-toggle="tooltip" data-bs-placement="top" title="Rotación = unidades vendidas en el período ÷ stock actual (veces en el período, alcance del filtro). Referencia anual retail moda: ✅ >6x | 👍 4–6x | ⚠️ 2–4x | ❌ <2x">
+                    <div class="nexo-chart-body text-center">
+                        <div class="ks-icon" style="color: var(--nexo-success);">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </div>
+                        <h2 class="mb-1" id="kpiRotacion">0.0</h2>
+                        <div class="nexo-kpi-label">Rotación Inventario <i class="bi bi-info-circle-fill text-muted" style="font-size: 0.7rem;"></i></div>
+                        <small class="text-muted">Veces en el período</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 col-6">
+                <div class="nexo-chart-card h-100" data-bs-toggle="tooltip" data-bs-placement="top" title="Días de stock = stock actual ÷ (unidades vendidas ÷ días del período): cuántos días alcanza el stock al ritmo de venta actual. ✅ 30–45 | 👍 45–60 | ⚠️ 60–90 | ❌ >90">
+                    <div class="nexo-chart-body text-center">
+                        <div class="ks-icon" style="color: var(--nexo-warning);">
+                            <i class="bi bi-hourglass-split"></i>
+                        </div>
+                        <h2 class="mb-1" id="kpiDiasStock">0</h2>
+                        <div class="nexo-kpi-label">Días de Stock <i class="bi bi-info-circle-fill text-muted" style="font-size: 0.7rem;"></i></div>
+                        <small class="text-muted">Promedio actual</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6 col-6">
+                <div class="nexo-chart-card h-100" data-bs-toggle="tooltip" data-bs-placement="top" title="Descuento promedio = promedio del % de descuento de las líneas vendidas (tickets PAGADOS del período). Monto = Σ cantidad × descuento unitario. Mide la presión de las promociones sobre el margen.">
+                    <div class="nexo-chart-body text-center">
+                        <div class="ks-icon" style="color: #6C5CE7;">
+                            <i class="bi bi-tags"></i>
+                        </div>
+                        <h2 class="mb-1" id="kpiDescuento">0%</h2>
+                        <div class="nexo-kpi-label">Descuento Promedio <i class="bi bi-info-circle-fill text-muted" style="font-size: 0.7rem;"></i></div>
+                        <small class="text-muted" id="kpiDescuentoMonto">$0 total descontado</small>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -482,11 +607,16 @@
             </div>
         </div>
 
+        </div><!-- /tabResumen -->
+
+        <!-- ───────────────────── PESTAÑA 2: TIENDAS Y VENDEDORES ───────────────────── -->
+        <div class="tab-pane fade" id="tabTiendas" role="tabpanel" aria-labelledby="tabTiendasLink">
+
         <!-- ═══════════════════════════════════════════════════════════════════════════════
              COMPARATIVO POR TIENDA  (ignora el filtro de sucursal a propósito:
              compara TODAS las tiendas visibles del usuario en el mismo período)
              ═══════════════════════════════════════════════════════════════════════════════ -->
-        <div class="nexo-section-header mt-4 nexo-animate-fadein">
+        <div class="nexo-section-header nexo-animate-fadein">
             <div class="nexo-section-icon" style="background: linear-gradient(135deg, #6C5CE7 0%, #4FACFE 100%);">
                 <i class="bi bi-shop"></i>
             </div>
@@ -556,54 +686,6 @@
         </div>
 
         <!-- ═══════════════════════════════════════════════════════════════════════════════
-             ANÁLISIS TEMPORAL - PEAK HOURS
-             ═══════════════════════════════════════════════════════════════════════════════ -->
-        <div class="nexo-section-header mt-4 nexo-animate-fadein">
-            <div class="nexo-section-icon" style="background: var(--nexo-gradient-blue);">
-                <i class="bi bi-clock-history"></i>
-            </div>
-            <h3 class="nexo-section-title">Análisis Temporal - Horas Pico</h3>
-        </div>
-
-        <div class="row nexo-animate-fadein">
-            <!-- Ventas por Hora (Heatmap) -->
-            <div class="col-lg-6">
-                <div class="nexo-chart-card">
-                    <div class="nexo-chart-header">
-                        <h5 class="nexo-chart-title">
-                            <i class="bi bi-clock"></i>
-                            Distribución por Hora
-                        </h5>
-                        <span class="nexo-badge nexo-badge-success" id="horasPico">Pico: -</span>
-                    </div>
-                    <div class="nexo-chart-body">
-                        <div class="nexo-chart-container-sm">
-                            <canvas id="chartPorHora"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Ventas por Día de la Semana -->
-            <div class="col-lg-6">
-                <div class="nexo-chart-card">
-                    <div class="nexo-chart-header">
-                        <h5 class="nexo-chart-title">
-                            <i class="bi bi-calendar-week"></i>
-                            Ventas por Día
-                        </h5>
-                        <span class="nexo-badge nexo-badge-primary" id="mejorDia">Mejor: -</span>
-                    </div>
-                    <div class="nexo-chart-body">
-                        <div class="nexo-chart-container-sm">
-                            <canvas id="chartPorDia"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ═══════════════════════════════════════════════════════════════════════════════
              RANKINGS - TOP VENDEDORES Y PRODUCTOS
              ═══════════════════════════════════════════════════════════════════════════════ -->
         <div class="nexo-section-header mt-4 nexo-animate-fadein">
@@ -614,8 +696,8 @@
         </div>
 
         <div class="row nexo-animate-fadein">
-            <!-- Top Vendedores -->
-            <div class="col-lg-6">
+            <!-- Top Vendedores (fila completa: la columna par se retiró hace tiempo) -->
+            <div class="col-lg-12">
                 <div class="nexo-chart-card">
                     <div class="nexo-chart-header">
                         <h5 class="nexo-chart-title">
@@ -689,9 +771,62 @@
         </div>
 
         <!-- ═══════════════════════════════════════════════════════════════════════════════
-             ALERTAS Y ESTADO DE CUADRATURAS
+             ANÁLISIS TEMPORAL - PEAK HOURS
              ═══════════════════════════════════════════════════════════════════════════════ -->
         <div class="nexo-section-header mt-4 nexo-animate-fadein">
+            <div class="nexo-section-icon" style="background: var(--nexo-gradient-blue);">
+                <i class="bi bi-clock-history"></i>
+            </div>
+            <h3 class="nexo-section-title">Análisis Temporal - Horas Pico</h3>
+        </div>
+
+        <div class="row nexo-animate-fadein">
+            <!-- Ventas por Hora (Heatmap) -->
+            <div class="col-lg-6">
+                <div class="nexo-chart-card" title="Ventas ($) de los tickets PAGADOS del período agrupadas por hora de creación. El color marca la intensidad respecto de la hora pico.">
+                    <div class="nexo-chart-header">
+                        <h5 class="nexo-chart-title">
+                            <i class="bi bi-clock"></i>
+                            Distribución por Hora
+                        </h5>
+                        <span class="nexo-badge nexo-badge-success" id="horasPico">Pico: -</span>
+                    </div>
+                    <div class="nexo-chart-body">
+                        <div class="nexo-chart-container-sm">
+                            <canvas id="chartPorHora"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ventas por Día de la Semana -->
+            <div class="col-lg-6">
+                <div class="nexo-chart-card" title="Ventas ($) de los tickets PAGADOS del período agrupadas por día de la semana (lunes a domingo).">
+                    <div class="nexo-chart-header">
+                        <h5 class="nexo-chart-title">
+                            <i class="bi bi-calendar-week"></i>
+                            Ventas por Día
+                        </h5>
+                        <span class="nexo-badge nexo-badge-primary" id="mejorDia">Mejor: -</span>
+                    </div>
+                    <div class="nexo-chart-body">
+                        <div class="nexo-chart-container-sm">
+                            <canvas id="chartPorDia"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        </div><!-- /tabTiendas -->
+
+        <!-- ───────────────────────── PESTAÑA 3: OPERACIÓN ───────────────────────── -->
+        <div class="tab-pane fade" id="tabOperacion" role="tabpanel" aria-labelledby="tabOperacionLink">
+
+        <!-- ═══════════════════════════════════════════════════════════════════════════════
+             ALERTAS Y ESTADO DE CUADRATURAS
+             ═══════════════════════════════════════════════════════════════════════════════ -->
+        <div class="nexo-section-header nexo-animate-fadein">
             <div class="nexo-section-icon" style="background: linear-gradient(135deg, #FF4D4D 0%, #E03131 100%);">
                 <i class="bi bi-bell"></i>
             </div>
@@ -731,93 +866,32 @@
                     </div>
                     <div class="nexo-chart-body">
                         <div class="row text-center mb-4">
-                            <div class="col-4">
+                            <div class="col-4" title="Arqueos del período con |efectivo contado − (teórico + fondo fijo)| ≤ $1.000">
                                 <h2 class="mb-1" style="color: var(--nexo-success);" id="cuadraturasOK">0</h2>
                                 <small class="text-muted">Exitosas</small>
                             </div>
-                            <div class="col-4">
+                            <div class="col-4" title="Arqueos del período con diferencia absoluta > $1.000">
                                 <h2 class="mb-1" style="color: var(--nexo-warning);" id="cuadraturasDif">0</h2>
                                 <small class="text-muted">Con Diferencias</small>
                             </div>
-                            <div class="col-4">
+                            <div class="col-4" title="Días con venta de cada tienda sin arqueo registrado (hasta ayer; el arqueo de hoy se hace al cierre)">
                                 <h2 class="mb-1" style="color: var(--nexo-error);" id="cuadraturasPend">0</h2>
                                 <small class="text-muted">Pendientes</small>
                             </div>
                         </div>
                         <hr>
-                        <div class="nexo-stats-mini">
+                        <div class="nexo-stats-mini" title="Σ |diferencia| de todos los arqueos del período">
                             <span class="nexo-stats-mini-label">Diferencia Total</span>
                             <span class="nexo-stats-mini-value danger" id="diferenciaCuadratura">$0</span>
                         </div>
-                        <div class="nexo-stats-mini">
+                        <div class="nexo-stats-mini" title="Diferencia total ÷ N° de arqueos del período">
                             <span class="nexo-stats-mini-label">Promedio Diferencia</span>
                             <span class="nexo-stats-mini-value warning" id="promedioDiferencia">$0</span>
                         </div>
-                        <div class="nexo-stats-mini">
+                        <div class="nexo-stats-mini" title="Solicitudes de cambio/devolución del período en estado SOLICITADO o EN PROCESO">
                             <span class="nexo-stats-mini-label">Cambios Pendientes</span>
                             <span class="nexo-stats-mini-value" id="cambiosPendientes">0</span>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ═══════════════════════════════════════════════════════════════════════════════
-             INDICADORES AVANZADOS DE RETAIL (GMROI, Rotación)
-             ═══════════════════════════════════════════════════════════════════════════════ -->
-        <div class="nexo-section-header mt-4 nexo-animate-fadein" id="secAvanzados">
-            <div class="nexo-section-icon" style="background: var(--nexo-gradient-purple);">
-                <i class="bi bi-bar-chart-steps"></i>
-            </div>
-            <h3 class="nexo-section-title">Indicadores Avanzados de Gestión Retail</h3>
-        </div>
-
-        <div class="row nexo-animate-fadein mb-4">
-            <div class="col-lg-3 col-md-6">
-                <div class="nexo-chart-card" data-bs-toggle="tooltip" data-bs-placement="top" title="💰 Retorno del margen bruto sobre inversión en inventario. Fórmula: Margen Bruto / Costo Inventario. ✅ Excelente: >3.0 | 👍 Bueno: 2.0-3.0 | ⚠️ Aceptable: 1.0-2.0 | ❌ Bajo: <1.0 (inventario no rentable)">
-                    <div class="nexo-chart-body text-center">
-                        <div style="font-size: 3rem; color: var(--nexo-primary);">
-                            <i class="bi bi-arrow-repeat"></i>
-                        </div>
-                        <h2 class="mt-2 mb-1" id="kpiGMROI">0.00</h2>
-                        <div class="nexo-kpi-label">GMROI <i class="bi bi-info-circle-fill text-muted" style="font-size: 0.7rem;"></i></div>
-                        <small class="text-muted">Gross Margin Return on Investment</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6">
-                <div class="nexo-chart-card" data-bs-toggle="tooltip" data-bs-placement="top" title="🔄 Veces que el inventario se vende y repone. En retail moda anual: ✅ Excelente: >6x | 👍 Bueno: 4-6x | ⚠️ Bajo: 2-4x | ❌ Crítico: <2x (stock estancado)">
-                    <div class="nexo-chart-body text-center">
-                        <div style="font-size: 3rem; color: var(--nexo-success);">
-                            <i class="bi bi-arrow-clockwise"></i>
-                        </div>
-                        <h2 class="mt-2 mb-1" id="kpiRotacion">0.0</h2>
-                        <div class="nexo-kpi-label">Rotación Inventario <i class="bi bi-info-circle-fill text-muted" style="font-size: 0.7rem;"></i></div>
-                        <small class="text-muted">Veces en el período</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6">
-                <div class="nexo-chart-card" data-bs-toggle="tooltip" data-bs-placement="top" title="📅 Días promedio que el stock permanece antes de venderse. ✅ Óptimo: 30-45 días | 👍 Aceptable: 45-60 días | ⚠️ Alto: 60-90 días | ❌ Crítico: >90 días (riesgo obsolescencia)">
-                    <div class="nexo-chart-body text-center">
-                        <div style="font-size: 3rem; color: var(--nexo-warning);">
-                            <i class="bi bi-hourglass-split"></i>
-                        </div>
-                        <h2 class="mt-2 mb-1" id="kpiDiasStock">0</h2>
-                        <div class="nexo-kpi-label">Días de Stock <i class="bi bi-info-circle-fill text-muted" style="font-size: 0.7rem;"></i></div>
-                        <small class="text-muted">Promedio actual</small>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6">
-                <div class="nexo-chart-card" data-bs-toggle="tooltip" data-bs-placement="top" title="🏷️ Descuento promedio aplicado a productos vendidos en el período. Monitorea la presión sobre márgenes por promociones.">
-                    <div class="nexo-chart-body text-center">
-                        <div style="font-size: 3rem; color: #6C5CE7;">
-                            <i class="bi bi-tags"></i>
-                        </div>
-                        <h2 class="mt-2 mb-1" id="kpiDescuento">0%</h2>
-                        <div class="nexo-kpi-label">Descuento Promedio <i class="bi bi-info-circle-fill text-muted" style="font-size: 0.7rem;"></i></div>
-                        <small class="text-muted" id="kpiDescuentoMonto">$0 total descontado</small>
                     </div>
                 </div>
             </div>
@@ -873,37 +947,37 @@
                         </h5>
                     </div>
                     <div class="nexo-chart-body">
-                        <div class="nexo-stats-mini">
+                        <div class="nexo-stats-mini" title="Tickets creados en el período, TODOS los estados y canales (incluye cambios/devoluciones): panel de operación, no de venta">
                             <span class="nexo-stats-mini-label">Total Tickets</span>
                             <span class="nexo-stats-mini-value" id="ticketsTotal">0</span>
                         </div>
-                        <div class="nexo-stats-mini">
+                        <div class="nexo-stats-mini" title="Tickets del período en estado ANULADO">
                             <span class="nexo-stats-mini-label">Tickets Anulados</span>
                             <span class="nexo-stats-mini-value danger" id="ticketsAnulados">0</span>
                         </div>
-                        <div class="nexo-stats-mini">
+                        <div class="nexo-stats-mini" title="% anulación = anulados ÷ total de tickets × 100">
                             <span class="nexo-stats-mini-label">% Anulación</span>
                             <span class="nexo-stats-mini-value" id="ticketsPctAnulados">0%</span>
                         </div>
                         <hr>
-                        <div class="nexo-stats-mini">
+                        <div class="nexo-stats-mini" title="Tickets del período en estado PENDIENTE (sin cobrar)">
                             <span class="nexo-stats-mini-label">Pendientes de Pago</span>
                             <span class="nexo-stats-mini-value warning" id="ticketsPendientes">0</span>
                         </div>
-                        <div class="nexo-stats-mini">
+                        <div class="nexo-stats-mini" title="Σ total de los tickets PENDIENTE del período">
                             <span class="nexo-stats-mini-label">Monto Pendiente</span>
                             <span class="nexo-stats-mini-value warning" id="ticketsMontoPendiente">$0</span>
                         </div>
                         <hr>
-                        <div class="nexo-stats-mini">
+                        <div class="nexo-stats-mini" title="Tickets PAGADOS del período con factura electrónica (33) o exenta (34)">
                             <span class="nexo-stats-mini-label">Con Factura</span>
                             <span class="nexo-stats-mini-value" id="ticketsFactura">0</span>
                         </div>
-                        <div class="nexo-stats-mini">
+                        <div class="nexo-stats-mini" title="Tickets PAGADOS del período con boleta electrónica (39)">
                             <span class="nexo-stats-mini-label">Con Boleta</span>
                             <span class="nexo-stats-mini-value" id="ticketsBoleta">0</span>
                         </div>
-                        <div class="nexo-stats-mini">
+                        <div class="nexo-stats-mini" title="Tickets PAGADOS del período creados sin conexión en el POS desktop y sincronizados después">
                             <span class="nexo-stats-mini-label">Creados Offline</span>
                             <span class="nexo-stats-mini-value" id="ticketsOffline">0</span>
                         </div>
@@ -975,19 +1049,19 @@
                 <div class="nexo-chart-card">
                     <div class="nexo-chart-body">
                         <div class="row text-center">
-                            <div class="col-md-3">
+                            <div class="col-md-3" title="Σ monto original de las solicitudes de cambio/devolución creadas en el período (todos los estados)">
                                 <h3 class="mb-1" style="color: var(--nexo-error);" id="cambiosMontoTotal">$0</h3>
                                 <small class="text-muted">Monto Total Impactado</small>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-3" title="Solicitudes del período en estado SOLICITADO o EN PROCESO">
                                 <h3 class="mb-1" style="color: var(--nexo-warning);" id="cambiosPendientesAprobacion">0</h3>
                                 <small class="text-muted">Pendientes de Aprobación</small>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-3" title="N° de solicitudes de cambio/devolución creadas en el período (todos los estados)">
                                 <h3 class="mb-1" style="color: var(--nexo-primary);" id="cambiosTotalPeriodo">0</h3>
                                 <small class="text-muted">Total del Período</small>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-3" title="Ratio = solicitudes del período ÷ total de tickets del período (todos los estados) × 100. OJO: distinto del KPI Cambios/Devoluciones de Resumen, que divide por tickets PAGADOS">
                                 <h3 class="mb-1" style="color: var(--nexo-success);" id="cambiosRatioPeriodo">0%</h3>
                                 <small class="text-muted">Ratio sobre Ventas</small>
                             </div>
@@ -1009,40 +1083,40 @@
             <!-- KPIs de control -->
             <div class="row nexo-animate-fadein">
                 <div class="col-lg-2 col-md-4 col-6">
-                    <div class="nexo-chart-card text-center" style="padding:12px;">
+                    <div class="nexo-chart-card text-center" style="padding:12px;" title="Solicitudes del período marcadas como fuera del plazo de cambio (es_fuera_de_plazo); % = ÷ total de solicitudes del período">
                         <div style="font-size:0.7rem; text-transform:uppercase; color:#888; letter-spacing:.5px;">Fuera de Plazo</div>
                         <h3 class="mb-0 mt-1" style="color: #ff9800;" id="ctrl-fuera-plazo">0</h3>
                         <small class="text-muted" id="ctrl-tasa-fuera-plazo">0%</small>
                     </div>
                 </div>
                 <div class="col-lg-2 col-md-4 col-6">
-                    <div class="nexo-chart-card text-center" style="padding:12px;">
+                    <div class="nexo-chart-card text-center" style="padding:12px;" title="Solicitudes autorizadas por un supervisor de OTRA sucursal (autorización cross-branch); % = ÷ total de solicitudes del período">
                         <div style="font-size:0.7rem; text-transform:uppercase; color:#888; letter-spacing:.5px;">Cross-Branch</div>
                         <h3 class="mb-0 mt-1" style="color: #9c27b0;" id="ctrl-cross-branch">0</h3>
                         <small class="text-muted" id="ctrl-tasa-cross-branch">0%</small>
                     </div>
                 </div>
                 <div class="col-lg-2 col-md-4 col-6">
-                    <div class="nexo-chart-card text-center" style="padding:12px;">
+                    <div class="nexo-chart-card text-center" style="padding:12px;" title="Monto = Σ diferencias devueltas al cliente (diferencia < 0) en cambios ejecutados o completados del período. Ítems = productos recibidos como NO aptos para reventa">
                         <div style="font-size:0.7rem; text-transform:uppercase; color:#888; letter-spacing:.5px;">Pérdida No Apto</div>
                         <h3 class="mb-0 mt-1" style="color: var(--nexo-error);" id="ctrl-perdida-no-apto">$0</h3>
                         <small class="text-muted" id="ctrl-items-no-apto">0 items</small>
                     </div>
                 </div>
                 <div class="col-lg-2 col-md-4 col-6">
-                    <div class="nexo-chart-card text-center" style="padding:12px;">
+                    <div class="nexo-chart-card text-center" style="padding:12px;" title="Solicitudes del período que requieren revisión gerencial y aún no han sido revisadas">
                         <div style="font-size:0.7rem; text-transform:uppercase; color:#888; letter-spacing:.5px;">Rev. Gerencial Pend.</div>
                         <h3 class="mb-0 mt-1" style="color: var(--nexo-warning);" id="ctrl-revision-pend">0</h3>
                     </div>
                 </div>
                 <div class="col-lg-2 col-md-4 col-6">
-                    <div class="nexo-chart-card text-center" style="padding:12px;">
+                    <div class="nexo-chart-card text-center" style="padding:12px;" title="Horas promedio entre la solicitud y la fecha de completado, sólo sobre solicitudes COMPLETADAS del período">
                         <div style="font-size:0.7rem; text-transform:uppercase; color:#888; letter-spacing:.5px;">Tiempo Prom. Resolución</div>
                         <h3 class="mb-0 mt-1" style="color: var(--nexo-primary);" id="ctrl-tiempo-prom">-</h3>
                     </div>
                 </div>
                 <div class="col-lg-2 col-md-4 col-6">
-                    <div class="nexo-chart-card text-center" style="padding:12px;">
+                    <div class="nexo-chart-card text-center" style="padding:12px;" title="Variación % de la cantidad de solicitudes vs el período inmediatamente anterior de igual duración (rojo = más cambios)">
                         <div style="font-size:0.7rem; text-transform:uppercase; color:#888; letter-spacing:.5px;">vs Periodo Anterior</div>
                         <h3 class="mb-0 mt-1" id="ctrl-variacion">-</h3>
                         <small class="text-muted" id="ctrl-anterior-total">-</small>
@@ -1136,21 +1210,21 @@
                     </div>
                     <div class="nexo-chart-body">
                         <div class="row text-center mb-3">
-                            <div class="col-4">
+                            <div class="col-4" title="Transacciones del POS físico (Transbank / Mercado Pago) iniciadas en el período, en estado COMPLETADA">
                                 <h2 class="mb-1" style="color: var(--nexo-success);" id="posCompletadas">0</h2>
                                 <small class="text-muted">Completadas</small>
                             </div>
-                            <div class="col-4">
+                            <div class="col-4" title="Fallidas = total − completadas (rechazadas, canceladas, con error o sin cerrar)">
                                 <h2 class="mb-1" style="color: var(--nexo-error);" id="posFallidas">0</h2>
                                 <small class="text-muted">Fallidas</small>
                             </div>
-                            <div class="col-4">
+                            <div class="col-4" title="Tasa de éxito = completadas ÷ total × 100">
                                 <h2 class="mb-1" style="color: var(--nexo-primary);" id="posTasaExito">0%</h2>
                                 <small class="text-muted">Tasa de Éxito</small>
                             </div>
                         </div>
                         <hr>
-                        <div class="nexo-stats-mini">
+                        <div class="nexo-stats-mini" title="Todas las transacciones del POS físico iniciadas en el período, cualquier estado">
                             <span class="nexo-stats-mini-label">Total Transacciones POS</span>
                             <span class="nexo-stats-mini-value" id="posTotal">0</span>
                         </div>
@@ -1167,21 +1241,21 @@
                     </div>
                     <div class="nexo-chart-body">
                         <div class="row text-center mb-3">
-                            <div class="col-6">
+                            <div class="col-6" title="Depósitos bancarios con fecha de depósito en el período marcados como verificados (tienda o empresa del filtro; sin filtro, las tiendas que el usuario puede ver)">
                                 <h2 class="mb-1" style="color: var(--nexo-success);" id="depositosVerificados">0</h2>
                                 <small class="text-muted">Verificados</small>
                             </div>
-                            <div class="col-6">
+                            <div class="col-6" title="Depósitos bancarios del período aún sin verificar">
                                 <h2 class="mb-1" style="color: var(--nexo-warning);" id="depositosPendientes">0</h2>
                                 <small class="text-muted">Pendientes</small>
                             </div>
                         </div>
                         <hr>
-                        <div class="nexo-stats-mini">
+                        <div class="nexo-stats-mini" title="Σ monto de los depósitos verificados del período">
                             <span class="nexo-stats-mini-label">Monto Verificado</span>
                             <span class="nexo-stats-mini-value success" id="depositosMontoVerificado">$0</span>
                         </div>
-                        <div class="nexo-stats-mini">
+                        <div class="nexo-stats-mini" title="Σ monto de los depósitos sin verificar del período">
                             <span class="nexo-stats-mini-label">Monto Pendiente</span>
                             <span class="nexo-stats-mini-value warning" id="depositosMontoPendiente">$0</span>
                         </div>
@@ -1202,7 +1276,7 @@
 
         <div class="row nexo-animate-fadein mb-4">
             <div class="col-lg-3 col-md-6">
-                <div class="nexo-chart-card">
+                <div class="nexo-chart-card" title="DTE de traspaso en estado EMITIDO (guías sin recepcionar). Foto actual de TODA la cadena: no usa el período ni los filtros de sucursal/empresa">
                     <div class="nexo-chart-body text-center">
                         <div style="font-size: 2.5rem; color: var(--nexo-warning);">
                             <i class="bi bi-file-earmark-arrow-down"></i>
@@ -1214,7 +1288,7 @@
                 </div>
             </div>
             <div class="col-lg-3 col-md-6">
-                <div class="nexo-chart-card">
+                <div class="nexo-chart-card" title="Solicitudes de regularización en estado PENDIENTE o EN REVISIÓN. Foto actual de TODA la cadena: no usa el período ni los filtros de sucursal/empresa">
                     <div class="nexo-chart-body text-center">
                         <div style="font-size: 2.5rem; color: var(--nexo-error);">
                             <i class="bi bi-exclamation-diamond"></i>
@@ -1226,7 +1300,7 @@
                 </div>
             </div>
             <div class="col-lg-3 col-md-6">
-                <div class="nexo-chart-card">
+                <div class="nexo-chart-card" title="Solicitudes de cambio/devolución del período en estado SOLICITADO o EN PROCESO (mismo dato que 'Pendientes de Aprobación')">
                     <div class="nexo-chart-body text-center">
                         <div style="font-size: 2.5rem; color: #FF6B9D;">
                             <i class="bi bi-arrow-left-right"></i>
@@ -1238,7 +1312,7 @@
                 </div>
             </div>
             <div class="col-lg-3 col-md-6">
-                <div class="nexo-chart-card">
+                <div class="nexo-chart-card" title="Depósitos bancarios del período aún sin verificar (mismo dato que 'Pendientes' en Depósitos Bancarios)">
                     <div class="nexo-chart-body text-center">
                         <div style="font-size: 2.5rem; color: var(--nexo-primary);">
                             <i class="bi bi-bank2"></i>
@@ -1250,6 +1324,9 @@
                 </div>
             </div>
         </div>
+
+        </div><!-- /tabOperacion -->
+        </div><!-- /tab-content -->
 
     </div><!-- container-fluid -->
 </div><!-- page-content -->
@@ -1317,7 +1394,12 @@ $(document).ready(function() {
     
     // Establecer fecha de actualización
     $('#fechaActualizacion').text(new Date().toLocaleString('es-CL'));
-    
+
+    // Pestañas (Resumen / Tiendas y vendedores / Operación): resize de charts
+    // al mostrar cada pane y recuerdo de la última pestaña. Va ANTES de la
+    // primera carga para que un pane restaurado ya esté visible al dibujar.
+    inicializarTabsDashboard();
+
     // Aplicar período por defecto (este mes)
     aplicarPeriodo('mes', $('.nexo-filter-shortcuts .btn[data-periodo="mes"]'));
     
@@ -1362,6 +1444,46 @@ $(document).ready(function() {
 
     console.log('✅ Dashboard NEXO inicializado correctamente');
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PESTAÑAS DEL TABLERO
+// Un chart de Chart.js creado dentro de un .tab-pane oculto (display:none) nace
+// con 0×0. Todas las funciones de carga pintan por id sin mirar visibilidad, así
+// que basta con pedir resize() a los charts del pane recién mostrado. Se usa el
+// registro `charts` (todos los gráficos del tablero se guardan ahí).
+// ═══════════════════════════════════════════════════════════════════════════════
+const TAB_STORAGE_KEY = 'dashVentasNexo.tab';
+
+function resizeChartsDePane(pane) {
+    if (!pane) return;
+    Object.keys(charts).forEach(function(k) {
+        const ch = charts[k];
+        if (ch && ch.canvas && pane.contains(ch.canvas)) {
+            try { ch.resize(); } catch (e) { /* chart destruido a medio camino */ }
+        }
+    });
+}
+
+function inicializarTabsDashboard() {
+    const botones = document.querySelectorAll('#dashTabs [data-bs-toggle="tab"]');
+    if (!botones.length) return;
+    botones.forEach(function(btn) {
+        btn.addEventListener('shown.bs.tab', function(e) {
+            const target = e.target.getAttribute('data-bs-target');
+            resizeChartsDePane(document.querySelector(target));
+            try { localStorage.setItem(TAB_STORAGE_KEY, target); } catch (e2) { /* modo privado */ }
+        });
+    });
+    // Restaurar la última pestaña (conveniencia por navegador; si falla, Resumen)
+    let guardada = null;
+    try { guardada = localStorage.getItem(TAB_STORAGE_KEY); } catch (e) { guardada = null; }
+    if (guardada && guardada !== '#tabResumen') {
+        const btn = document.querySelector('#dashTabs [data-bs-target="' + guardada + '"]');
+        if (btn && window.bootstrap && bootstrap.Tab) {
+            bootstrap.Tab.getOrCreateInstance(btn).show();
+        }
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GESTIÓN DE PERÍODOS Y FILTROS
@@ -1641,8 +1763,10 @@ function cargarDashboard() {
             fecha_fin: fechaFinComparativo
         };
         
-        // Cargar datos comparativos primero
-        cargarIndicadoresGlobalesComparativo(paramsComparativo).then(() => {
+        // Cargar datos comparativos primero. `always`: si el comparativo
+        // falla, el período actual se carga igual (sin tendencias).
+        dashboardDataComparativo = {};
+        cargarIndicadoresGlobalesComparativo(paramsComparativo).always(() => {
             // Luego cargar datos del período actual
             cargarDatosPeriodoActual(params);
         });
@@ -1739,6 +1863,23 @@ function cargarIndicadoresGlobalesComparativo(params) {
 }
 
 function cargarDatosPeriodoActual(params) {
+    // Lo que lee generarAlertas se limpia antes de pedir el nuevo filtro: si
+    // un endpoint falla, sus alertas NO salen con datos del filtro anterior.
+    dashboardData.indicadores = dashboardData.cuadraturas = null;
+    dashboardData.operacional = dashboardData.avanzados = null;
+    $('#badgeTabOperacion').hide();
+
+    // Cada carga se "asienta" (ok o error) por separado: con Promise.all un
+    // solo fallo (500 transitorio, timeout) dejaba sin alertas ni badge.
+    const asentar = p => Promise.resolve(p).then(
+        () => ({ status: 'fulfilled' }),
+        err => ({ status: 'rejected', reason: err })
+    );
+    // Control de Fugas responde 403 a propósito a quien no tiene el rol: la
+    // sección se oculta y NO cuenta como carga fallida.
+    const fugas = Promise.resolve(cargarControlFugas(params)).then(
+        null, xhr => (xhr && xhr.status === 403) ? null : Promise.reject(xhr)
+    );
     Promise.all([
         cargarIndicadoresGlobales(params),
         cargarVentasPorVendedor(params),
@@ -1749,15 +1890,26 @@ function cargarDatosPeriodoActual(params) {
         cargarCambiosDevoluciones(params),
         cargarIndicadoresAvanzados(params),
         cargarEstadoOperacional(params),
-        cargarControlFugas(params),
+        fugas,
         cargarVentasPorCategoria(params),
         cargarVentasPorEspecialidad(params),
         cargarIndicadorCompra(params),
         cargarMixPorSucursal(params)
-    ]).then(() => {
-        generarAlertas();
-    }).catch(err => {
-        console.error('Error cargando dashboard:', err);
+    ].map(asentar)).then(res => {
+        const fallidas = res.filter(r => r.status === 'rejected');
+        generarAlertas(fallidas.length > 0);
+        if (fallidas.length) {
+            console.error('Dashboard: ' + fallidas.length + ' carga(s) fallaron', fallidas.map(r => r.reason));
+            $('#containerAlertas').prepend(`
+                <div class="nexo-alert nexo-alert-info">
+                    <div class="nexo-alert-icon"><i class="bi bi-exclamation-circle"></i></div>
+                    <div class="nexo-alert-content">
+                        <h6>Algunas secciones no cargaron</h6>
+                        <p>Las alertas pueden estar incompletas. Vuelva a aplicar los filtros para reintentar.</p>
+                    </div>
+                </div>
+            `);
+        }
     });
 }
 
@@ -1768,6 +1920,21 @@ function cargarIndicadoresGlobales(params) {
             
             // KPIs principales
             $('#kpiVentasTotales').text(formatMoney(response.ventas_totales || 0));
+            // Neto de notas de crédito: la tarjeta sigue mostrando la venta bruta
+            // (base compartida con el resto del tablero); las NC van en la sublínea.
+            // ventas_netas null = el backend no neteó (estado distinto de
+            // Pagado): se muestra «—» y no «sin NC», que sería falso.
+            if (response.ventas_netas === undefined || response.ventas_netas === null) {
+                $('#kpiVentasNetas').text('—');
+                $('#kpiNcDetalle').text('');
+            } else {
+                const ncMonto = response.nc_monto || 0;
+                const ncCant = response.nc_cantidad || 0;
+                $('#kpiVentasNetas').text(formatMoney(response.ventas_netas));
+                $('#kpiNcDetalle').text(ncCant > 0
+                    ? `(−${formatNumber(ncCant)} NC · ${formatMoney(ncMonto)})`
+                    : '(sin NC en el período)');
+            }
             $('#kpiTransacciones').text(formatNumber(response.cantidad_ventas || 0));
             $('#kpiTicketPromedio').text(formatMoney(response.ticket_promedio || 0));
             $('#kpiCambios').text(formatNumber(response.cantidad_cambios || 0));
@@ -2615,7 +2782,9 @@ function actualizarTablaProductos(productos) {
 // ALERTAS E INDICADORES AVANZADOS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function generarAlertas() {
+// hayFallos: alguna carga del período falló, así que no todas las alertas se
+// pudieron evaluar (no se muestra «Todo está funcionando correctamente»).
+function generarAlertas(hayFallos) {
     const container = $('#containerAlertas');
     container.empty();
     
@@ -2650,13 +2819,20 @@ function generarAlertas() {
         }
     }
     
-    // Cuadraturas pendientes
+    // Cuadraturas pendientes: pares (tienda, día) con venta y sin arqueo
     if (dashboardData.cuadraturas && dashboardData.cuadraturas.pendientes > 0) {
+        // El mensaje se inserta como HTML: el alias de la tienda se escapa.
+        const esc = s => $('<div>').text(s == null ? '' : String(s)).html();
+        const det = (dashboardData.cuadraturas.pendientes_detalle || [])
+            .slice(0, 3)
+            .map(p => `${esc(p.sucursal)} ${esc(p.fecha)}`)
+            .join(', ');
         alertas.push({
             tipo: 'warning',
             icono: 'bi-calculator',
             titulo: `${dashboardData.cuadraturas.pendientes} cuadraturas pendientes`,
-            mensaje: 'Hay cierres de caja sin realizar en el período.'
+            mensaje: 'Días con venta sin arqueo registrado (hasta ayer)'
+                + (det ? `: ${det}${dashboardData.cuadraturas.pendientes > 3 ? '…' : ''}.` : '.')
         });
     }
     
@@ -2731,7 +2907,24 @@ function generarAlertas() {
         });
     }
     
+    // Contador en la pestaña Operación: sólo críticas + advertencias, para que
+    // desde Resumen se vea si hay algo que atender sin cambiar de pestaña.
+    const nAtender = alertas.filter(a => a.tipo === 'danger' || a.tipo === 'warning').length;
+    const tituloBadge = 'Alertas del período (críticas + advertencias)';
+    if (nAtender > 0) {
+        $('#badgeTabOperacion').text(nAtender).attr('title', tituloBadge).show();
+    } else if (hayFallos) {
+        // Sin alertas evaluables pero con cargas fallidas: señal en la pestaña.
+        $('#badgeTabOperacion').text('!')
+            .attr('title', 'Algunas secciones no cargaron: las alertas pueden estar incompletas').show();
+    } else {
+        $('#badgeTabOperacion').hide();
+    }
+
     if (alertas.length === 0) {
+        // Con cargas fallidas no se afirma que todo está bien: el llamador
+        // antepone el aviso «Algunas secciones no cargaron».
+        if (hayFallos) return;
         container.html(`
             <div class="nexo-alert nexo-alert-success">
                 <div class="nexo-alert-icon"><i class="bi bi-check-circle"></i></div>

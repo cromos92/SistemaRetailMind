@@ -317,7 +317,7 @@
                 <!-- Ayuda: resumen en una línea + instrucciones colapsadas -->
                 <div class="ayuda-resumen">
                     <i class="bi bi-info-circle"></i>
-                    <span>Campos obligatorios: <strong>proveedor</strong> (RUT o ID), <strong>número de documento</strong> y <strong>monto_con_iva</strong> &middot; Formatos: CSV / XLSX / XLS</span>
+                    <span>Campos obligatorios: <strong>proveedor</strong> (RUT o ID), <strong>número de documento</strong>, <strong>fecha_emision</strong> y <strong>monto_con_iva</strong> &middot; Formatos: CSV / XLSX</span>
                     <button type="button" class="btn btn-link btn-sm p-0 ms-auto" data-bs-toggle="collapse" data-bs-target="#ayudaImportacion" aria-expanded="false" aria-controls="ayudaImportacion">
                         <i class="bi bi-question-circle me-1"></i>Ver instrucciones
                     </button>
@@ -330,15 +330,17 @@
                             <li>Selecciona cómo deseas identificar a los proveedores: por <strong>RUT</strong> o por <strong>ID</strong></li>
                             <li>Descarga el formato o exporta tus DTEs actuales para editarlos</li>
                             <li>Completa el archivo con los datos de tus DTEs de compras</li>
-                            <li>Campos obligatorios: <strong>identificador de proveedor</strong> (RUT o ID), <strong>número de documento</strong> y <strong>monto_con_iva</strong></li>
-                            <li>El RUT debe estar en formato: <strong>76123456-7</strong> (sin puntos, solo guión)</li>
+                            <li>Campos obligatorios: <strong>identificador de proveedor</strong> (RUT o ID), <strong>número de documento</strong>, <strong>fecha_emision</strong> (AAAA-MM-DD o DD/MM/AAAA) y <strong>monto_con_iva</strong></li>
+                            <li><strong>tipo_documento</strong>: FACTURA ELECTRONICA, FACTURA EXENTA, GUIA, NOTA DE CREDITO, NOTA DE DEBITO o COTIZACION, o el código SII (33, 34, 52, 56, 61). Vacío = FACTURA ELECTRONICA</li>
+                            <li>El RUT debe estar en formato: <strong>76123456-0</strong> (sin puntos, solo guión)</li>
                             <li>Usa el <strong>monto con IVA</strong> (monto total de la factura) - el sistema calculará el neto automáticamente</li>
                             <li>También puedes usar <strong>monto_neto</strong> si lo prefieres - el sistema calculará el total</li>
                             <li>El campo <strong>responsable</strong> no es necesario - se asignará automáticamente tu usuario</li>
                             <li>El campo <strong>receptor</strong> (tu empresa) se asigna automáticamente</li>
                             <li>Todos los DTEs se importan con estado de pago <strong>"Pendiente"</strong> para que registres los pagos después</li>
                             <li>Los proveedores deben existir previamente en el sistema</li>
-                            <li>Formatos aceptados: CSV (.csv), Excel (.xlsx, .xls)</li>
+                            <li>"Crear y Actualizar" solo modifica documentos de compra de tu empresa y solo las columnas que traen valor; si el documento ya tiene pagos, líneas o recepciones no se cambian montos ni fecha de emisión</li>
+                            <li>Formatos aceptados: CSV (.csv, separado por coma o punto y coma) y Excel (.xlsx). Si tienes un .xls, guárdalo como .xlsx</li>
                         </ul>
                     </div>
                 </div>
@@ -366,7 +368,7 @@
                                     </label>
                                 </div>
                                 <small class="text-muted d-block mt-2" id="helpText">
-                                    El RUT debe estar en formato: <strong>76123456-7</strong> (sin puntos)
+                                    El RUT debe estar en formato: <strong>76123456-0</strong> (sin puntos)
                                 </small>
                             </fieldset>
                         </div>
@@ -416,9 +418,8 @@
                         <p class="mb-0">
                             <span class="badge bg-light text-dark border">CSV</span>
                             <span class="badge bg-light text-dark border">XLSX</span>
-                            <span class="badge bg-light text-dark border">XLS</span>
                         </p>
-                        <input type="file" id="archivoDtes" accept=".csv,.xlsx,.xls" style="display: none;">
+                        <input type="file" id="archivoDtes" accept=".csv,.xlsx" style="display: none;">
                     </div>
 
                     <!-- Información del archivo -->
@@ -535,7 +536,7 @@
         $('input[name="tipoBusqueda"]').on('change', function() {
             const tipo = $('input[name="tipoBusqueda"]:checked').val();
             if (tipo === 'rut') {
-                $('#helpText').html('El RUT debe estar en formato: <strong>76123456-7</strong> (sin puntos)');
+                $('#helpText').html('El RUT debe estar en formato: <strong>76123456-0</strong> (sin puntos)');
             } else {
                 $('#helpText').text('El ID es el número único del proveedor en el sistema');
             }
@@ -567,32 +568,54 @@
         });
     }
 
+    // Todo lo que viene del archivo o del servidor se inserta escapado: un
+    // valor como <img onerror=...> en el CSV no debe ejecutarse al previsualizar.
+    function escapeHtml(valor) {
+        return String(valor === null || valor === undefined ? '' : valor)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // Mensaje de un error AJAX: el middleware de permisos responde
+    // {error: true, mensaje: '...'}; las vistas, {error: '...'}.
+    function mensajeErrorAjax(xhr, porDefecto) {
+        const r = (xhr && xhr.responseJSON) || {};
+        return r.mensaje || (typeof r.error === 'string' ? r.error : '') || porDefecto;
+    }
+
     function handleFileSelect(file) {
+        if (file.name.toLowerCase().endsWith('.xls')) {
+            Swal.fire('Formato no soportado', 'El formato .xls (Excel 97-2003) no se puede leer. Ábrelo en Excel y guárdalo como .xlsx o CSV.', 'warning');
+            resetForm();
+            return;
+        }
         archivoSeleccionado = file;
         $('#fileName').text(file.name);
         $('#fileInfo').show();
         $('#btnImportar').prop('disabled', false);
-        
+
         // Mostrar vista previa
         mostrarVistaPrevia(file);
     }
 
     function mostrarVistaPrevia(file) {
         const reader = new FileReader();
-        
+
         reader.onload = function(e) {
             try {
                 let data;
-                
-                if (file.name.endsWith('.csv')) {
-                    const text = e.target.result;
-                    const lines = text.split('\n');
-                    const headers = lines[0].split(',');
-                    
+
+                if (file.name.toLowerCase().endsWith('.csv')) {
+                    // Sin BOM; separador ',' o ';' como el servidor
+                    const text = String(e.target.result || '').replace(/^﻿/, '');
+                    const lines = text.split(/\r?\n/);
+                    const sep = (lines[0].split(';').length > lines[0].split(',').length) ? ';' : ',';
+                    const headers = lines[0].split(sep);
+
                     data = [];
                     for (let i = 1; i < Math.min(lines.length, 11); i++) {
                         if (lines[i].trim()) {
-                            const values = lines[i].split(',');
+                            const values = lines[i].split(sep);
                             const row = {};
                             headers.forEach((header, index) => {
                                 row[header.trim()] = values[index] ? values[index].trim() : '';
@@ -610,11 +633,11 @@
                 renderPreview(data);
                 
             } catch (error) {
-                Swal.fire('Error', 'No se pudo leer el archivo: ' + error.message, 'error');
+                Swal.fire('Error', escapeHtml('No se pudo leer el archivo: ' + error.message), 'error');
             }
         };
-        
-        if (file.name.endsWith('.csv')) {
+
+        if (file.name.toLowerCase().endsWith('.csv')) {
             reader.readAsText(file);
         } else {
             reader.readAsArrayBuffer(file);
@@ -633,15 +656,15 @@
         const headers = Object.keys(data[0]);
         let headerRow = '<tr>';
         headers.forEach(header => {
-            headerRow += `<th>${header}</th>`;
+            headerRow += `<th>${escapeHtml(header)}</th>`;
         });
         headerRow += '</tr>';
         thead.append(headerRow);
-        
+
         data.forEach(row => {
             let tr = '<tr>';
             headers.forEach(header => {
-                tr += `<td>${row[header] || ''}</td>`;
+                tr += `<td>${escapeHtml(row[header] || '')}</td>`;
             });
             tr += '</tr>';
             tbody.append(tr);
@@ -688,46 +711,52 @@
                 if (response.success) {
                     mostrarResultados(response);
                 } else {
-                    Swal.fire('Error', response.error, 'error');
+                    Swal.fire('Error', escapeHtml(response.error || 'No se pudo importar el archivo'), 'error');
                 }
             },
             error: function(xhr) {
                 Swal.close();
-                const errorMsg = xhr.responseJSON?.error || 'Error al procesar la solicitud';
-                Swal.fire('Error', errorMsg, 'error');
+                const errorMsg = mensajeErrorAjax(xhr, 'Error al procesar la solicitud');
+                Swal.fire('Error', escapeHtml(errorMsg), 'error');
             }
         });
     }
 
     function mostrarResultados(response) {
-        let summaryHTML = '<div class="alert alert-success">';
-        summaryHTML += `<h5><i class="bi bi-check-circle me-2"></i>Importación Completada</h5>`;
-        summaryHTML += `<p class="mb-1"><strong>DTEs creados:</strong> ${response.dtes_creados}</p>`;
+        const conErrores = !!(response.errores && response.errores.length > 0);
+        let summaryHTML = `<div class="alert ${conErrores ? 'alert-warning' : 'alert-success'}">`;
+        summaryHTML += `<h5><i class="bi ${conErrores ? 'bi-exclamation-triangle' : 'bi-check-circle'} me-2"></i>${conErrores ? 'Importación con observaciones' : 'Importación Completada'}</h5>`;
+        summaryHTML += `<p class="mb-1"><strong>DTEs creados:</strong> ${escapeHtml(response.dtes_creados)}</p>`;
         if (response.dtes_actualizados > 0) {
-            summaryHTML += `<p class="mb-1"><strong>DTEs actualizados:</strong> ${response.dtes_actualizados}</p>`;
+            summaryHTML += `<p class="mb-1"><strong>DTEs actualizados:</strong> ${escapeHtml(response.dtes_actualizados)}</p>`;
+        }
+        if (response.dtes_sin_cambios > 0) {
+            summaryHTML += `<p class="mb-1"><strong>Sin cambios:</strong> ${escapeHtml(response.dtes_sin_cambios)}</p>`;
         }
         if (response.dtes_omitidos > 0) {
-            summaryHTML += `<p class="mb-0 text-warning"><strong>DTEs omitidos:</strong> ${response.dtes_omitidos}</p>`;
+            summaryHTML += `<p class="mb-0 text-warning"><strong>DTEs omitidos:</strong> ${escapeHtml(response.dtes_omitidos)}</p>`;
         }
         summaryHTML += '</div>';
-        
+
         $('#resultSummary').html(summaryHTML);
-        
-        if (response.errores && response.errores.length > 0) {
-            $('#errorList').empty();
+
+        $('#errorList').empty();
+        $('#errorSection').hide();
+        if (conErrores) {
             response.errores.forEach(error => {
-                $('#errorList').append(`<li class="list-group-item list-group-item-danger">${error}</li>`);
+                $('#errorList').append($('<li class="list-group-item list-group-item-danger"></li>').text(error));
             });
             $('#errorSection').show();
         }
-        
+
         $('#resultSection').show();
-        
+
         Swal.fire({
-            icon: 'success',
-            title: 'Importación Exitosa',
+            icon: conErrores ? 'warning' : 'success',
+            title: conErrores ? 'Importación con observaciones' : 'Importación Exitosa',
             html: `<div class="text-start">
-                <p class="mb-2"><strong>${response.message}</strong></p>
+                <p class="mb-2"><strong>${escapeHtml(response.message)}</strong></p>
+                ${conErrores ? '<p class="mb-2 small">Revisa el detalle de las filas no procesadas en la sección de resultados.</p>' : ''}
                 <p class="mb-0 small text-muted">Los DTEs están disponibles en Gestión de DTEs</p>
             </div>`,
             confirmButtonText: 'Ir a Gestión de DTEs',

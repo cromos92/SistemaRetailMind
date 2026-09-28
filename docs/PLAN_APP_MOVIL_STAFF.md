@@ -231,9 +231,9 @@ Reglas a respetar (las mismas de siempre):
 | Feature | Tipo | Esf | Valor | Respaldo |
 |---|---|---|---|---|
 | KPIs deuda a proveedores + vencimientos (vencido/7 días/al día) | consulta | bajo | alto | `views_modulo_compras.py:obtener_resumen_pendientes_anio` |
-| Facturas de compra con estado de pago (paginado) | consulta | bajo | alto | `obtener_dte_compras` |
-| Detalle factura: pagos y saldo | consulta | bajo | alto | `views.py:obtenerDetallePago` (⚠️ usar la de views.py; la de views_modulo_compras está rota) |
-| Registrar pago a proveedor | operación | medio | alto | `views.py:registrarPagoDTE` (misma advertencia de duplicado roto) |
+| Facturas de compra con estado de pago (paginado) | consulta | bajo | alto | **Por crear**: `obtener_dte_compras` se retiró el 2026-09-26 (B16-02: sin llamador y sin alcance por empresa). Un endpoint nuevo debe exigir `gestion_dte_compras`, filtrar `receptor_id` = empresa de sesión y limitar `per_page` (1-100) |
+| Detalle factura: pagos y saldo | consulta | bajo | alto | `views.py:obtenerDetallePago` (las copias rotas de views_modulo_compras se borraron el 2026-09-26) |
+| Registrar pago a proveedor | operación | medio | alto | `views.py:registrarPagoDTE` |
 | % avance de recepción de una compra | consulta | bajo | alto | `obtener_pendientes_compra` + `obtener_recepciones_compra` (la app estrena el badge pendiente) |
 | Órdenes de compra del año | consulta | bajo | medio | `obtener_compras_por_anio` (excluir ELIMINADA) |
 | Traspasos en camino a mi sucursal (badge) | consulta | medio | alto | `obtener_dtes_pendientes_recibir`, `recepciones_pendientes_api` |

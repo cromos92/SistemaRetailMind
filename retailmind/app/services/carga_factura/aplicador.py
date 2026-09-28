@@ -14,19 +14,87 @@ import json
 from importlib import import_module
 
 from django.conf import settings
-from django.db import transaction
+from django.db import connection, transaction
 from django.test import RequestFactory
 from django.utils import timezone
 
-from app.models import Producto, Producto_Talla
+from app.models import Dte, Producto, Producto_Talla
+
+from .planificador import ingresado_contra_dte, ingreso_por_clave
 
 # Responsable que deja el modal en los movimientos (la sesión nunca trae
 # 'nombreUsuario', así que la vista cae a 'Sistema').
 RESPONSABLE = 'Sistema'
 
+# Espacio del advisory lock de PostgreSQL para "cargar líneas contra un DTE"
+# ('CFPD' en ASCII); la segunda clave es el id del DTE.
+_LOCK_CARGA_DTE = 0x43465044
+
 
 class _Revertir(Exception):
     """Deshace la transacción de una línea cuya carga no quedó completa."""
+
+
+class _YaCargada(_Revertir):
+    """La línea entró contra el DTE por otra carga mientras esta se preparaba."""
+
+
+def _bloquear_dte(dte_id):
+    """Serializa hasta el fin de la transacción las cargas de líneas contra un
+    mismo DTE: dos sesiones del agente, un doble clic o el comando en paralelo
+    esperan su turno y, ya con el lock, vuelven a medir lo ingresado."""
+    if connection.vendor == 'postgresql':
+        with connection.cursor() as cur:
+            cur.execute('SELECT pg_advisory_xact_lock(%s, %s)',
+                        [_LOCK_CARGA_DTE, int(dte_id) % 2147483647])
+    else:
+        list(Dte.objects.select_for_update().filter(id=dte_id).values_list('id', flat=True))
+
+
+def _vigilar_ingreso(plan):
+    """¿Se revisa esta línea contra otras cargas? Con --forzar (comando) no."""
+    return plan.get('ingreso_clave') is not None and not plan.get('forzar')
+
+
+def _registro_corrida(factura):
+    """Lo que esta corrida ya dejó contra el DTE, con la MISMA forma que
+    ingresado_contra_dte(): {'articulo': {art: {bodega: u}},
+    'color': {(art, COLOR): {bodega: u}}}."""
+    return factura.setdefault('_ingresado_en_corrida', {'articulo': {}, 'color': {}})
+
+
+def _ingreso_ajeno(plan, factura, ingresado=None):
+    """Unidades de esta línea que entraron contra el DTE DESPUÉS de planificar
+    y que no puso esta misma corrida (otra carga simultánea). 0 si no hay.
+
+    Lo propio se mide en el mismo espacio que lo ingresado: una línea con
+    clave ('articulo', art) ve lo cargado de TODOS los colores de art, así que
+    también descuenta lo que la corrida cargó en otros colores de ese código
+    (p. ej. una línea ROJO y otra MULTI del mismo código). Dos líneas de la
+    misma factura nunca se saltan entre sí."""
+    clave = plan.get('ingreso_clave')
+    if not _vigilar_ingreso(plan):
+        return 0
+    if ingresado is None:
+        ingresado = ingresado_contra_dte(factura['dte'])
+    ahora = sum(ingreso_por_clave(ingresado, clave).values())
+    propias = sum(ingreso_por_clave(_registro_corrida(factura), clave).values())
+    return max(0, ahora - int(plan.get('ingreso_previo') or 0) - propias)
+
+
+def _anotar_ingreso(factura, antes, despues):
+    """Suma a lo propio de la corrida lo que ESTA línea dejó contra el DTE:
+    la diferencia de ingresado_contra_dte() antes y después de la vista,
+    medida con el DTE bloqueado (nadie más carga contra él en el medio)."""
+    registro = _registro_corrida(factura)
+    for nivel in ('articulo', 'color'):
+        for clave, bodegas in despues[nivel].items():
+            previas = antes[nivel].get(clave, {})
+            for alias, unidades in bodegas.items():
+                delta = unidades - previas.get(alias, 0)
+                if delta > 0:
+                    propio = registro[nivel].setdefault(clave, {})
+                    propio[alias] = propio.get(alias, 0) + delta
 
 
 def precios_para_opcion(plan, opcion):
@@ -88,7 +156,8 @@ def payload_linea(plan, factura, precios, actualizar, sincronizar):
 
 
 def aplicar_linea(plan, factura, user, opcion='s'):
-    """Carga una línea. Devuelve {'ok': bool, 'error': str|None, 'respuesta': dict|None}.
+    """Carga una línea. Devuelve {'ok': bool, 'error': str|None, 'respuesta': dict|None}
+    y, si otra carga ya la ingresó mientras esta se preparaba, 'ya_cargado': True.
 
     `opcion` solo importa si el código ya existe ('s', 'c' o 't'; ver
     precios_para_opcion). Si falla, no queda nada de la línea.
@@ -109,8 +178,21 @@ def aplicar_linea(plan, factura, user, opcion='s'):
     # Todo o nada por línea: la vista no es atómica y, si falla a mitad (o no
     # alcanza a registrar la compra/DTE, cosa que ella misma se traga),
     # quedaría stock sin factura o tallas a medias.
+    vigilar = _vigilar_ingreso(plan)
+    antes = despues = None
     try:
         with transaction.atomic():
+            # Idempotencia por línea: con el DTE bloqueado se vuelve a medir lo
+            # ingresado; si subió por otra carga desde que se planificó, no se
+            # ingresa de nuevo.
+            _bloquear_dte(factura['dte'].id)
+            if vigilar:
+                antes = ingresado_contra_dte(factura['dte'])
+            ajeno = _ingreso_ajeno(plan, factura, antes) if vigilar else 0
+            if ajeno:
+                raise _YaCargada(
+                    f'mientras se preparaba esta carga entraron {ajeno} u de este código contra '
+                    f'el mismo DTE (otra carga en curso): no se ingresó de nuevo')
             for _pid, _alias, pt_id, viejo, nuevo in plan.get('renombres', []):
                 # .update() no dispara auto_now: updated_at explícito.
                 Producto_Talla.objects.filter(id=pt_id, talla=viejo).update(
@@ -128,8 +210,16 @@ def aplicar_linea(plan, factura, user, opcion='s'):
             # informaría OK.
             if transaction.get_rollback():
                 raise _Revertir('la vista tuvo un error de base de datos a mitad de camino')
+            if vigilar:
+                # Todavía con el DTE bloqueado: lo que subió es de esta línea.
+                despues = ingresado_contra_dte(factura['dte'])
+    except _YaCargada as exc:
+        return {'ok': False, 'ya_cargado': True, 'error': str(exc), 'respuesta': None}
     except _Revertir as exc:
         return {'ok': False, 'error': str(exc), 'respuesta': None}
     except Exception as exc:
         return {'ok': False, 'error': f'{type(exc).__name__}: {exc}', 'respuesta': None}
+    if vigilar:
+        # Solo tras el commit: una línea deshecha no deja nada propio.
+        _anotar_ingreso(factura, antes, despues)
     return {'ok': True, 'error': None, 'respuesta': respuesta}

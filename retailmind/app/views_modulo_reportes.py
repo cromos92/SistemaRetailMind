@@ -30,7 +30,7 @@ from .models import (
     TicketDetallePago, METODO_PAGO_TICKET_CHOICES, TIPO_DOCUMENTO_CHOICES,
     Categoria, AtributoOpcion, Productos_Atributos,
     PermisoRol, PedidoEcommerce, CANAL_ECOMMERCE_CHOICES,
-    CambioDevolucionDetalle,
+    CambioDevolucion, CambioDevolucionDetalle,
 )
 from .utils_permisos import (
     obtener_sucursales_usuario,
@@ -3690,12 +3690,19 @@ def obtener_reporte_existencias_marca(request):
                 producto_talla__producto_id__in=productos_ids,
                 fecha_ingreso__date__lte=_hoy - _td(days=181),
             ).aggregate(s=Sum('cantidad_disponible'))['s'] or 0
-            _vel = _vend30 / 30 if _vend30 else 0
+            # Fórmulas del glosario (app/services/indicadores.py): cobertura
+            # (30 d) y % de stock viejo por EDAD de lote (>180 d). Mismo
+            # resultado que la aritmética inline que había aquí; la ventana
+            # viaja en la respuesta para que el rótulo la declare.
+            from app.services.indicadores import cobertura_dias as _f_cobertura
+            from app.services.indicadores import pct_stock_viejo as _f_pct_viejo
             salud = {
-                'cobertura_dias': int(_stock_univ / _vel) if _vel else None,
-                'pct_stock_viejo': round(100 * _viejo / _stock_univ, 1) if _stock_univ else 0,
+                'cobertura_dias': _f_cobertura(_stock_univ, _vend30, 30),
+                'pct_stock_viejo': _f_pct_viejo(_viejo, _stock_univ, sin_datos=0),
                 'vendidas_30': _vend30,
                 'stock_total': _stock_univ,
+                'ventana_dias': 30,
+                'umbral_viejo_dias': 180,
             }
 
         # ========== RESPUESTA ==========
@@ -3793,9 +3800,49 @@ def exportar_existencias_marca_excel(request):
             if marca not in por_marca:
                 por_marca[marca] = []
             por_marca[marca].append(item)
-        
-        fila_actual = 1
-        
+
+        # ── Avisos de alcance (auditoría reportes §5 P3): la pantalla avisa si
+        # la lista viene cortada por el límite de artículos y declara siempre el
+        # universo; el Excel no decía nada y quien lo recibía leía un inventario
+        # parcial como total. Mismos campos y textos que actualizarAvisoTruncado
+        # (JS). Van arriba, antes de los bloques (esta hoja no tiene freeze panes
+        # ni autofiltro que dependan de la fila).
+        def _miles(n):
+            return f"{int(n or 0):,}".replace(',', '.')
+
+        mostrados = datos.get('articulos_mostrados')
+        disponibles = datos.get('articulos_disponibles')
+        avisos = []  # [(texto, es_advertencia)]
+        if datos.get('truncado'):
+            avisos.append((
+                f"LISTA INCOMPLETA: se incluyen {_miles(mostrados)} de {_miles(disponibles)} "
+                "artículos que cumplen el filtro. Los totales de este archivo corresponden "
+                "SOLO a lo incluido, no al inventario completo. Acota por marca, departamento "
+                "o búsqueda para ver el universo entero.",
+                True,
+            ))
+        aliases = [s['alias'] for s in sucursales_lista]
+        if not aliases:
+            ambito = 'sin sucursales'
+        elif len(aliases) == 1:
+            ambito = f'sucursal {aliases[0]}'
+        else:
+            ambito = (f"{len(aliases)} sucursales ({', '.join(aliases[:4])}"
+                      f"{', …' if len(aliases) > 4 else ''})")
+        if disponibles is not None and not datos.get('truncado'):
+            cuantos = f"{_miles(disponibles)} artículos"
+        else:
+            cuantos = f"{_miles(mostrados or len(datos_reporte))} artículos incluidos"
+        solo_stock = (datos.get('filtros_aplicados') or {}).get('solo_con_stock', True)
+        avisos.append((
+            f"Alcance: totales calculados sobre {cuantos} · {ambito}."
+            + (" Solo se incluyen artículos con stock." if solo_stock else ''),
+            False,
+        ))
+
+        # Notas + 1 fila en blanco antes del primer bloque de marca
+        fila_actual = len(avisos) + 2
+
         # Procesar cada marca
         for marca, productos in sorted(por_marca.items()):
             # Sucursales con stock actual U original en esta marca: una tienda
@@ -3981,7 +4028,28 @@ def exportar_existencias_marca_excel(request):
         
         for i in range(6, ws.max_column + 1):
             ws.column_dimensions[get_column_letter(i)].width = 10
-        
+
+        # Escribir los avisos en las filas reservadas arriba, ocupando todo el
+        # ancho usado por la hoja (alto estimado: las celdas combinadas no se
+        # autoajustan al abrir el archivo).
+        ultima_col = max(5, ws.max_column)
+        ancho_total = sum(
+            ws.column_dimensions[get_column_letter(i)].width or 10
+            for i in range(1, ultima_col + 1)
+        )
+        for fila_aviso, (texto, es_advertencia) in enumerate(avisos, start=1):
+            ws.merge_cells(start_row=fila_aviso, start_column=1,
+                           end_row=fila_aviso, end_column=ultima_col)
+            cell = ws.cell(row=fila_aviso, column=1, value=texto)
+            if es_advertencia:
+                cell.font = Font(bold=True, color='7A4B00', size=10)
+                cell.fill = PatternFill(start_color='FFF3CD', end_color='FFF3CD', fill_type='solid')
+            else:
+                cell.font = Font(italic=True, size=9, color='666666')
+            cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+            lineas = -(-int(len(texto) * 1.15) // int(ancho_total))
+            ws.row_dimensions[fila_aviso].height = max(15, 14 * lineas + 4)
+
         # Preparar respuesta
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -4032,23 +4100,59 @@ def obtener_reporte_existencias_sucursal(request):
             excluir_de_analitica=False
         ).select_related(
             'atributo1', 'atributo2', 'atributo3', 'categoria'
-        ).prefetch_related('producto_talla')
+        )
 
         if marca_id:
             queryset = queryset.filter(atributo1_id=marca_id)
 
-        # Pre-cargar total recibido desde Movimientos_Producto (todos los ingresos reales)
-        # La FK en Movimientos_Producto se llama "ProductoTalla" (mayúsculas)
-        # Mismo universo que `queryset` (analítica + marca): las tallas de
+        # Universo de tallas del reporte (analítica + marca): las tallas de
         # productos excluidos no aparecen en el reporte, así que tampoco se
         # les calcula nada.
-        talla_ids = list(
-            Producto_Talla.objects.filter(
-                producto__sucursal_id=sucursal_id,
-                producto__excluir_de_analitica=False,
-                **({'producto__atributo1_id': marca_id} if marca_id else {})
-            ).values_list('id', flat=True)
+        tallas_universo = Producto_Talla.objects.filter(
+            producto__sucursal_id=sucursal_id,
+            producto__excluir_de_analitica=False,
+            **({'producto__atributo1_id': marca_id} if marca_id else {})
         )
+
+        # PERF (26-sep-2026): por defecto (`incluir_sin_stock=false`) el
+        # reporte solo lista tallas con stock, pero cargaba y recorría en
+        # Python TODO el catálogo de la sucursal (EDEL: 340k tallas, 123 con
+        # stock) y le pedía el "recibido histórico" a todas: 14 s por
+        # llamada, y el Excel y el PDF pasan por aquí. Ahora el filtro de stock
+        # se hace en la base: solo productos con alguna talla con stock, solo
+        # esas tallas (Prefetch filtrado) y solo sus ids para el recibido. El
+        # conteo de tallas sin stock (`resumen.sin_stock`) sale de un COUNT
+        # sobre el mismo universo. Mismo conjunto de filas y mismos totales
+        # (verificado como multiconjunto contra el JSON previo, no fila a
+        # fila). Con `incluir_sin_stock=true` se conserva el recorrido completo.
+        #
+        # ORDEN EXPLÍCITO: Producto y Producto_Talla no tienen Meta.ordering y
+        # el camino rápido usa un plan paralelo (Parallel Hash Semi Join) cuyo
+        # orden de salida no es determinista: dos exportes seguidos de la misma
+        # sucursal salían en distinto orden. Se ordena por marca, artículo e id
+        # (desempate) y las tallas por id, en pantalla, Excel y PDF.
+        from django.db.models import Prefetch as _Prefetch
+        queryset = queryset.order_by('atributo1__valor', 'articulo', 'id')
+        productos_sin_stock_db = None
+        if not incluir_sin_stock:
+            from django.db.models import Exists as _Exists, OuterRef as _OuterRef
+            queryset = queryset.filter(
+                _Exists(Producto_Talla.objects.filter(producto_id=_OuterRef('pk'), stock__gt=0))
+            ).prefetch_related(
+                _Prefetch('producto_talla', queryset=Producto_Talla.objects.filter(stock__gt=0).order_by('id'))
+            )
+            productos_sin_stock_db = tallas_universo.filter(
+                Q(stock__lte=0) | Q(stock__isnull=True)
+            ).count()
+            talla_ids = list(tallas_universo.filter(stock__gt=0).values_list('id', flat=True))
+        else:
+            queryset = queryset.prefetch_related(
+                _Prefetch('producto_talla', queryset=Producto_Talla.objects.order_by('id'))
+            )
+            talla_ids = list(tallas_universo.values_list('id', flat=True))
+
+        # Pre-cargar total recibido desde Movimientos_Producto (todos los ingresos reales)
+        # La FK en Movimientos_Producto se llama "ProductoTalla" (mayúsculas)
 
         from django.db.models import Sum as _Sum
         # "Recibido hist." = TODO lo que alguna vez SUMÓ stock a este SKU.
@@ -4140,6 +4244,11 @@ def obtener_reporte_existencias_sucursal(request):
                     'sin_stock': stock <= 0,
                 })
 
+        if productos_sin_stock_db is not None:
+            # Camino rápido: las tallas sin stock no se recorrieron; el conteo
+            # viene de la base sobre el mismo universo.
+            productos_sin_stock = productos_sin_stock_db
+
         resumen = {
             'total_productos': skus_con_stock,
             'stock_total': total_stock,
@@ -4187,12 +4296,17 @@ def obtener_reporte_existencias_sucursal(request):
             fecha_ingreso__date__lte=_hoy - _td(days=181),
             **_universo_lote,
         ).aggregate(s=_Sum('cantidad_disponible'))['s'] or 0
-        _velocidad = vendidas_30 / 30 if vendidas_30 else 0
+        # Fórmulas del glosario (app/services/indicadores.py); mismo resultado
+        # que la aritmética inline anterior. La ventana viaja en la respuesta.
+        from app.services.indicadores import cobertura_dias as _f_cobertura
+        from app.services.indicadores import pct_stock_viejo as _f_pct_viejo
         resumen.update({
             'valor_venta_potencial': valor_venta_potencial,
-            'cobertura_dias': int(total_stock / _velocidad) if _velocidad else None,
-            'pct_stock_viejo': round(100 * stock_viejo / total_stock, 1) if total_stock else 0,
+            'cobertura_dias': _f_cobertura(total_stock, vendidas_30, 30),
+            'pct_stock_viejo': _f_pct_viejo(stock_viejo, total_stock, sin_datos=0),
             'vendidas_30': vendidas_30,
+            'ventana_dias': 30,
+            'umbral_viejo_dias': 180,
         })
 
         return JsonResponse({'success': True, 'datos': datos_reporte, 'resumen': resumen})
@@ -6225,8 +6339,26 @@ def api_rendimiento_compras(request):
 
     def _datos_desde_movimientos(anio, sucursal_id, pt_ids):
         """Agrega datos de Movimientos_Producto para el año dado."""
-        bf = {'fecha__year': anio, 'estado': 'COMPLETADO', 'ProductoTalla_id__in': pt_ids}
+        bf = {'fecha__year': anio, 'estado': 'COMPLETADO'}
         bf.update(_filtro_alcance('sucursal_origen_id', sucursal_id, permitidas))
+        # PERF (26-sep-2026): `ProductoTalla_id__in=pt_ids` arrastraba la
+        # subconsulta de `productos_activos_qs` (stock>0 O algún movimiento
+        # COMPLETADO desde ANIO_ACTIVIDAD_MINIMO, con DISTINCT sobre todo el
+        # kardex) a las ~10 consultas de movimientos del reporte: ~600 ms cada
+        # una en local, 45 s en prod (auditoría ago-2026). Para años >=
+        # ANIO_ACTIVIDAD_MINIMO toda fila que pasa `bf` (movimiento COMPLETADO
+        # de ese año) cumple por construcción la rama "con actividad", así que
+        # basta el resto de la condición: `excluir_de_analitica=False` y el
+        # mismo alcance por sucursal DEL PRODUCTO. Mismo resultado (verificado
+        # campo a campo contra el JSON previo); para años anteriores se
+        # conserva la subconsulta. La consulta de tickets sigue usando pt_ids:
+        # ahí la actividad no está implícita.
+        from .utils_analitica import ANIO_ACTIVIDAD_MINIMO
+        if anio >= ANIO_ACTIVIDAD_MINIMO:
+            bf['ProductoTalla__producto__excluir_de_analitica'] = False
+            bf.update(_filtro_alcance('ProductoTalla__producto__sucursal_id', sucursal_id, permitidas))
+        else:
+            bf['ProductoTalla_id__in'] = pt_ids
 
         ent = _mov_entrada_sin_apertura(**bf).aggregate(
             uds=Sum('cantidad'),
@@ -8500,9 +8632,9 @@ def api_reporte_rendimiento_proveedor(request):
             ),
         }})
 
-    except Exception as e:
+    except Exception:
         logger.exception("Error al generar rendimiento por proveedor")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        return JsonResponse({'success': False, 'error': 'No se pudo generar el reporte de rendimiento por proveedor.'}, status=500)
 
 
 @require_GET
@@ -10571,6 +10703,24 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
         qs_dp, user, request, campo_sucursal='dte__sucursal_id'
     )
     qs_dp = _aplicar_filtros_producto(qs_dp_base, 'productoTalla__producto', filtros)
+    # CAMBIO CON DIFERENCIA: la boleta del ticket nuevo trae el producto
+    # DEVUELTO como línea negativa (stock=+1, precio=-P, costo=C). Sumarla
+    # contaba +1 unidad, -P de monto y +C de costo, y el neteo por
+    # CambioDevolucionDetalle (abajo) volvía a restar la unidad y P: doble
+    # resta de monto y costo sumado dos veces (237219-BLK: 2 u, $4.000,
+    # margen -$109.250). Esa devolución ya la netea CambioDevolucionDetalle,
+    # así que se excluye SOLO esa línea negativa. Va sobre qs_dp y no sobre
+    # qs_dp_base: `_factores_iva_dte_lineas_netas` compara contra la cabecera
+    # y necesita todas las líneas del documento.
+    from django.db.models import Exists as _ExistsCambio
+    qs_dp = qs_dp.exclude(
+        _ExistsCambio(CambioDevolucion.objects.filter(
+            ticket_nuevo__dte_generado=True,
+            ticket_nuevo__folio_dte=OuterRef('dte__numero_documento'),
+            ticket_nuevo__sucursal_id=OuterRef('dte__sucursal_id'),
+        )),
+        precio__lt=0,
+    )
 
     # ---------- Agregación por producto ----------
     productos_acum = {}  # {producto_id: dict}
@@ -10696,6 +10846,10 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
         cantidad_original__gt=0,
         cambio_devolucion__fecha_ejecucion__date__gte=fi,
         cambio_devolucion__fecha_ejecucion__date__lte=ff,
+    ).exclude(
+        # Un cambio REVERTIDO devuelve el producto nuevo a stock: la venta
+        # original sigue en pie y no corresponde netearla.
+        cambio_devolucion__estado__in=['REVERTIDO', 'CANCELADO', 'RECHAZADO'],
     )
     qs_dev = filtrar_queryset_por_sucursal(
         qs_dev, user, request, campo_sucursal='cambio_devolucion__sucursal_id'
@@ -10719,9 +10873,17 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
             # no generar filas negativas fantasma.
             dev_omitidas += int(r['dev_u'] or 0)
             continue
-        p['unidades_devueltas'] += int(r['dev_u'] or 0)
+        du = int(r['dev_u'] or 0)
+        # El costo también se netea: antes se restaban unidades y monto pero
+        # no el costo, y el margen (monto - costo) quedaba subestimado. Se usa
+        # el costo medio BRUTO del producto (antes de restar las unidades; el
+        # costo FIFO de la línea original viene en 0) y se topa para que el
+        # costo nunca quede negativo.
+        cu = p['costo'] / p['unidades'] if p['unidades'] > 0 else 0
+        p['costo'] -= min(p['costo'], int(round(cu * du)))
+        p['unidades_devueltas'] += du
         p['monto_devuelto'] += int(r['dev_m'] or 0)
-        p['unidades'] -= int(r['dev_u'] or 0)   # unidades = NETAS de devoluciones
+        p['unidades'] -= du   # unidades = NETAS de devoluciones
         p['monto'] -= int(r['dev_m'] or 0)
     if dev_omitidas:
         logger.info(
@@ -10746,6 +10908,9 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
             for r in qs_stock.values('producto_id').annotate(s=Sum('stock'))
         }
     dias_periodo = max((ff - fi).days + 1, 1)
+    # Sell-through con la fórmula del glosario (app/services/indicadores.py):
+    # vendidas ÷ (vendidas + stock actual). Mismo resultado que el inline.
+    from app.services.indicadores import sell_through as _f_sell_through
 
     # ---------- Calcular margen por producto + totales ----------
     productos = []
@@ -10759,7 +10924,6 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
         margen_pct = (margen / p['monto'] * 100) if p['monto'] > 0 else 0
         sucs = len(sucursales_por_producto.get(pid, set()))
         stock_actual = stock_por_producto.get(pid, 0)
-        disponible = p['unidades'] + stock_actual
         velocidad_dia = p['unidades'] / dias_periodo if p['unidades'] else 0
         productos.append({
             **p,
@@ -10768,7 +10932,7 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
             'margen_pct': round(margen_pct, 1),
             'sucursales_count': sucs,
             'stock_actual': stock_actual,
-            'sell_through': round(100 * p['unidades'] / disponible, 1) if disponible else 0,
+            'sell_through': _f_sell_through(p['unidades'], stock_actual, sin_datos=0),
             'cobertura_dias': int(stock_actual / velocidad_dia) if velocidad_dia else None,
         })
         tot_unid += p['unidades']
@@ -10779,8 +10943,7 @@ def _agregar_productos_vendidos(fi, ff, filtros, user, request):
 
     tot_margen = tot_monto - tot_costo
     tot_margen_pct = (tot_margen / tot_monto * 100) if tot_monto > 0 else 0
-    tot_disponible = tot_unid + tot_stock
-    tot_sell_through = round(100 * tot_unid / tot_disponible, 1) if tot_disponible else 0
+    tot_sell_through = _f_sell_through(tot_unid, tot_stock, sin_datos=0)
     tot_cobertura = (int(tot_stock / (tot_unid / dias_periodo))
                      if tot_unid else None)
 
@@ -11055,9 +11218,9 @@ def obtener_productos_vendidos(request):
             'heatmap': data['heatmap'],
         })
 
-    except Exception as e:
+    except Exception:
         logger.exception("Error al obtener reporte productos vendidos")
-        return JsonResponse({'success': False, 'error': str(e)})
+        return JsonResponse({'success': False, 'error': 'No se pudo generar el reporte de productos vendidos.'})
 
 
 @require_GET

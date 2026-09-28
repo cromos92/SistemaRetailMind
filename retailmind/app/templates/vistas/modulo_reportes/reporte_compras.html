@@ -469,6 +469,8 @@
             </div>
         </div>
 
+        {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='compras' activo='compras' %}
+
         <!-- Filtros -->
         <div class="filtros-card">
             <div class="row g-3 align-items-end">
@@ -533,7 +535,7 @@
                             <i class="ri-file-list-3-line"></i>
                         </div>
                         <div class="ms-3">
-                            <p class="kpi-title">Total Compras</p>
+                            <p class="kpi-title" title="DTE de compra del período (sin notas de crédito); si no hay DTE, órdenes de compra">Total Compras</p>
                             <h3 class="kpi-value" id="kpiTotalCompras">0</h3>
                             <span class="kpi-trend neutral" id="trendTotalCompras">
                                 <i class="ri-subtract-line"></i> --
@@ -551,7 +553,7 @@
                             <i class="ri-money-dollar-circle-line"></i>
                         </div>
                         <div class="ms-3">
-                            <p class="kpi-title">Inversión Total</p>
+                            <p class="kpi-title" title="Neto de los DTE de compra menos notas de crédito; si no hay DTE, costo de las órdenes">Inversión Total</p>
                             <h3 class="kpi-value" id="kpiInversion">$0</h3>
                             <span class="kpi-trend neutral" id="trendInversion">
                                 <i class="ri-subtract-line"></i> --
@@ -569,7 +571,7 @@
                             <i class="ri-stack-line"></i>
                         </div>
                         <div class="ms-3">
-                            <p class="kpi-title">Unidades</p>
+                            <p class="kpi-title" title="Unidades esperadas según las recepciones u órdenes del período">Unidades</p>
                             <h3 class="kpi-value" id="kpiUnidades">0</h3>
                             <span class="kpi-trend neutral" id="trendUnidades">
                                 <i class="ri-subtract-line"></i> --
@@ -623,7 +625,7 @@
                             <i class="ri-building-line"></i>
                         </div>
                         <div class="ms-3">
-                            <p class="kpi-title">Proveedores</p>
+                            <p class="kpi-title" title="Emisores distintos de los DTE de compra del período">Proveedores</p>
                             <h3 class="kpi-value" id="kpiProveedores">0</h3>
                             <span class="kpi-trend neutral" id="trendProveedores">
                                 <i class="ri-subtract-line"></i> --
@@ -1101,7 +1103,7 @@
                                     <div class="row mb-4" id="kpisRendimiento">
                                         <div class="col-lg-2 col-md-4 col-6 mb-3">
                                             <div class="kpi-card" style="--kpi-accent: var(--nexo-primary)">
-                                                <div class="kpi-label">Entrada stock</div>
+                                                <div class="kpi-label" title="Unidades ingresadas al stock en el año (movimientos de entrada)">Entrada stock</div>
                                                 <div class="kpi-value" id="rend_comprado">0</div>
                                                 <div class="kpi-sublabel">uds ingreso año</div>
                                                 <div class="kpi-delta" id="rend_comprado_delta" style="display:none; font-size:0.78rem; margin-top:2px;"></div>
@@ -1109,7 +1111,7 @@
                                         </div>
                                         <div class="col-lg-2 col-md-4 col-6 mb-3">
                                             <div class="kpi-card" style="--kpi-accent: #8B5CF6">
-                                                <div class="kpi-label">Inversión (costo)</div>
+                                                <div class="kpi-label" title="Costo total de las unidades ingresadas">Inversión (costo)</div>
                                                 <div class="kpi-value" id="rend_inversion">$0</div>
                                                 <div class="kpi-sublabel">entrada año</div>
                                                 <div class="kpi-delta" id="rend_inversion_delta" style="display:none; font-size:0.78rem; margin-top:2px;"></div>
@@ -1117,14 +1119,14 @@
                                         </div>
                                         <div class="col-lg-2 col-md-4 col-6 mb-3">
                                             <div class="kpi-card" style="--kpi-accent: var(--nexo-warning)">
-                                                <div class="kpi-label">Despachado</div>
+                                                <div class="kpi-label" title="Unidades traspasadas a tiendas">Despachado</div>
                                                 <div class="kpi-value" id="rend_despachado">0</div>
                                                 <div class="kpi-sublabel">a sucursales</div>
                                             </div>
                                         </div>
                                         <div class="col-lg-2 col-md-4 col-6 mb-3">
                                             <div class="kpi-card" style="--kpi-accent: var(--nexo-success)">
-                                                <div class="kpi-label">Vendido</div>
+                                                <div class="kpi-label" title="Unidades vendidas: el mayor entre kardex y tickets">Vendido</div>
                                                 <div class="kpi-value" id="rend_vendido">0</div>
                                                 <div class="kpi-sublabel">unidades</div>
                                                 <div class="kpi-delta" id="rend_vendido_delta" style="display:none; font-size:0.78rem; margin-top:2px;"></div>
@@ -1132,14 +1134,14 @@
                                         </div>
                                         <div class="col-lg-2 col-md-4 col-6 mb-3">
                                             <div class="kpi-card" style="--kpi-accent: var(--nexo-error)">
-                                                <div class="kpi-label">Otros egresos</div>
+                                                <div class="kpi-label" title="Unidades salidas por mermas y ajustes (no venta ni despacho)">Otros egresos</div>
                                                 <div class="kpi-value" id="rend_otros_egresos">0</div>
                                                 <div class="kpi-sublabel">mermas/ajustes/dev.</div>
                                             </div>
                                         </div>
                                         <div class="col-lg-2 col-md-4 col-6 mb-3">
                                             <div class="kpi-card" style="--kpi-accent: var(--nexo-info)">
-                                                <div class="kpi-label">Rotación</div>
+                                                <div class="kpi-label" title="Vendido ÷ Entrada × 100">Rotación</div>
                                                 <div class="kpi-value" id="rend_rotacion">0%</div>
                                                 <div class="kpi-sublabel">vendido / entrada año</div>
                                                 <div class="kpi-delta" id="rend_rotacion_delta" style="display:none; font-size:0.78rem; margin-top:2px;"></div>
@@ -1147,7 +1149,7 @@
                                         </div>
                                         <div class="col-lg-2 col-md-4 col-6 mb-3">
                                             <div class="kpi-card" style="--kpi-accent: var(--nexo-error)">
-                                                <div class="kpi-label">ROI Real</div>
+                                                <div class="kpi-label" title="Margen ÷ costo de lo vendido × 100, con costo = inversión × (vendido ÷ entrada)">ROI Real</div>
                                                 <div class="kpi-value" id="rend_roi">0%</div>
                                                 <div class="kpi-sublabel">sobre costo vendido</div>
                                                 <div class="kpi-delta" id="rend_roi_delta" style="display:none; font-size:0.78rem; margin-top:2px;"></div>
@@ -1393,12 +1395,18 @@ function inicializarFiltros() {
         selectAnio.appendChild(option);
     }
 
-    // Inicializar selector de año del Rendimiento con año actual (se actualizará con datos reales al cargar)
+    // Año que llega en la URL (tira de reportes / enlace guardado); un mes o rango aporta su año.
+    const anioUrl = window.FiltrosReporte ? FiltrosReporte.completar(FiltrosReporte.leer()).anio : null;
+    const anioUrlAplicado = !!anioUrl && FiltrosReporte.ponerValor(selectAnio, anioUrl);
+
+    // Inicializar selector de año del Rendimiento con año actual (se actualizará con datos reales al cargar);
+    // si la URL trajo un año válido, arranca con ese para no contradecir al filtro principal.
     const selRendAnio = document.getElementById('rendimientoAnio');
     if (selRendAnio && selRendAnio.options.length === 0) {
+        const anioRend = anioUrlAplicado ? anioUrl : anioActual;
         const opt = document.createElement('option');
-        opt.value = anioActual;
-        opt.textContent = anioActual;
+        opt.value = anioRend;
+        opt.textContent = anioRend;
         selRendAnio.appendChild(opt);
     }
 }
@@ -1429,14 +1437,22 @@ function cargarDatosReporte() {
     
     // Mostrar loading
     mostrarLoading(true);
-    
+
     const params = new URLSearchParams({
         anio: anio,
         periodo: periodo,
         proveedor: proveedor,
         temporada: temporada
     });
-    
+
+    // URL: solo el año (los períodos relativos no tienen canónico y la sucursal
+    // aquí es la de la sesión). Con «Todo el Año» y el mismo año que ya implica la
+    // URL, un mes/rango heredado se conserva para la tira ({} solo normaliza alias).
+    if (window.FiltrosReporte) {
+        const cambiaAnio = periodo !== 'anual' || anio !== FiltrosReporte.completar(FiltrosReporte.leer()).anio;
+        FiltrosReporte.reflejar(cambiaAnio ? { anio: anio } : {});
+    }
+
     fetch(`/app/api/reporte-compras/?${params}`)
         .then(response => response.json())
         .then(data => {
@@ -2121,6 +2137,26 @@ function renderizarTablaRecepciones(datos) {
     }
 }
 
+function escHtmlPagos(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+
+// Enlace de una fila de pagos pendientes a Gestión DTE Compras, que lee
+// ?buscar= (folio, RUT o proveedor). Se busca por folio (o por proveedor si no
+// hay folio) y el rango parte en la fecha de emisión del documento: el rango
+// por defecto de esa pantalla no alcanza facturas más antiguas.
+function urlGestionDtePago(pago) {
+    const folio = (pago.numero_dte != null) ? String(pago.numero_dte).trim() : '';
+    const prov = (pago.proveedor && pago.proveedor !== 'N/A') ? String(pago.proveedor).trim() : '';
+    const buscar = folio || prov;
+    if (!buscar) return '';
+    const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(pago.fecha_emision || '');
+    const desde = m ? `&desde=${m[3]}-${m[2]}-${m[1]}&tipo_fecha=emision` : '';
+    return `/app/verGestionDteCompras/?buscar=${encodeURIComponent(buscar)}${desde}`;
+}
+
 function renderizarTablaPagos(datos) {
     const tbody = document.getElementById('tbodyPagos');
     tbody.innerHTML = '';
@@ -2140,10 +2176,14 @@ function renderizarTablaPagos(datos) {
             estadoBadge = '<span class="badge-nexo info">Pendiente</span>';
         }
         
+        const urlPago = urlGestionDtePago(pago);
+        const folioPago = escHtmlPagos(pago.numero_dte);
         tbody.innerHTML += `
             <tr>
-                <td class="fw-semibold">${pago.numero_dte}</td>
-                <td>${pago.proveedor}</td>
+                <td class="fw-semibold">${urlPago
+                    ? `<a href="${urlPago}" target="_blank" rel="noopener" title="Abrir en Gestión DTE Compras">${folioPago} <i class="ri-external-link-line"></i></a>`
+                    : folioPago}</td>
+                <td>${escHtmlPagos(pago.proveedor)}</td>
                 <td>${pago.fecha_emision}</td>
                 <td>${pago.fecha_vencimiento}</td>
                 <td class="text-end fw-semibold" title="Documento: ${formatearMoneda(pago.monto)} — abonado: ${formatearMoneda(pago.pagado || 0)}">${formatearMoneda(pago.saldo != null ? pago.saldo : pago.monto)}</td>
@@ -2271,6 +2311,8 @@ let chartFunnel = null;
 // `api_rendimiento_compras` valida el alcance, elegir una sucursal ajena en
 // este combo devolvía 403 y el usuario no entendía por qué.
 (function poblarSucursalesRendimiento() {
+    // sucursal_id de la URL (↔ `sucursal` de la API), leído antes de que algo la reescriba.
+    const sucUrl = window.FiltrosReporte ? FiltrosReporte.leer().sucursal_id : null;
     fetch('/app/api/reportes/sucursales/')
         .then(r => r.json())
         .then(data => {
@@ -2282,6 +2324,7 @@ let chartFunnel = null;
                 opt.textContent = s.alias || s.nombre;
                 sel.appendChild(opt);
             });
+            if (sucUrl) FiltrosReporte.ponerValor(sel, sucUrl);
         }).catch(() => {});
 })();
 
@@ -2310,6 +2353,9 @@ async function cargarRendimiento() {
     const anio = (anioEl && anioEl.value) ? anioEl.value : document.getElementById('filtroAnio').value;
     const sucursal = sucursalEl ? sucursalEl.value : '';
     const comparar = compararEl && compararEl.checked ? '1' : '0';
+
+    // URL: la sucursal de esta sección; el año lo refleja el filtro principal.
+    if (window.FiltrosReporte) FiltrosReporte.reflejar({ sucursal_id: sucursal || '' });
 
     try {
         const resp = await fetch(`/app/api/rendimiento-compras/?anio=${anio}&sucursal=${sucursal}&comparar=${comparar}`);

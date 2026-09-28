@@ -1492,7 +1492,7 @@
 </div>
 
 
-<!-- Modal Descuento a la Diferencia de un Ticket de Cambio (PIN de administrador) -->
+<!-- Modal Descuento a la Diferencia de un Ticket de Cambio (código de Administrador o Maestro) -->
 <div class="modal fade pv-modal pv-modal--warn" id="modalDescuentoCambio" tabindex="-1" aria-labelledby="modalDescuentoCambioTitulo">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
@@ -1506,7 +1506,7 @@
                 <!-- Franja única: qué se rebaja + autorización -->
                 <div class="pv-modal-strip">
                     <i class="ri-information-line"></i>
-                    <span>Rebaja solo <strong>la diferencia a cobrar</strong> · <strong>PIN de administrador</strong></span>
+                    <span>Rebaja solo <strong>la diferencia a cobrar</strong> · <strong>código de Administrador o Maestro</strong></span>
                 </div>
 
                 <div class="pv-stat-row">
@@ -1559,11 +1559,11 @@
 
                 <div class="pv-field pv-auth">
                     <label class="form-label" for="pinDescuentoCambio">
-                        <i class="ri-shield-keyhole-line"></i> PIN de administrador (6 dígitos)
+                        <i class="ri-shield-keyhole-line"></i> Código de la barra superior (Administrador o Maestro)
                     </label>
                     <input type="password" class="form-control pv-input-auth" id="pinDescuentoCambio"
                            inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••"
-                           title="El administrador configura su PIN en Mi Perfil → PIN de Autorización">
+                           title="Código de autorización que el Administrador o Maestro ve en la barra superior. Es de un solo uso.">
                 </div>
             </div>
             <div class="modal-footer">
@@ -5393,7 +5393,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // administrador: mostrarModalDescuentoGlobal() deriva al modal correcto.
             if (btnDctoGlobal) {
                 btnDctoGlobal.disabled = false;
-                btnDctoGlobal.title = 'Descontar sobre la diferencia a cobrar (requiere PIN de administrador)';
+                btnDctoGlobal.title = 'Descontar sobre la diferencia a cobrar (requiere código de Administrador o Maestro)';
                 btnDctoGlobal.innerHTML = '<i class="ri-price-tag-3-line"></i> <span class="pv-btn-label">Dcto. Diferencia</span> <i class="ri-lock-2-line pv-ico-sm"></i>';
             }
         } else {
@@ -8499,7 +8499,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function mostrarModalDescuentoGlobal() {
         if (esTicketCambio()) {
             // En un ticket de cambio no hay descuento que repartir entre líneas:
-            // se rebaja la diferencia a cobrar, y eso exige PIN de administrador.
+            // se rebaja la diferencia a cobrar, y eso exige el código de un Administrador o Maestro.
             mostrarModalDescuentoCambio();
             return;
         }
@@ -8944,7 +8944,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         if (!/^\d{6}$/.test(pin)) {
-            mostrarNotificacion('El PIN de autorización debe tener 6 dígitos', 'warning');
+            mostrarNotificacion('El código de autorización debe tener 6 dígitos', 'warning');
             document.getElementById('pinDescuentoCambio').focus();
             return;
         }
@@ -8968,7 +8968,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     tipo: tipo,
                     valor: valor,
                     motivo: motivo,
-                    pin: pin,
+                    codigo_autorizacion: pin,
                 }),
             });
             const data = await response.json();
@@ -11802,7 +11802,7 @@ body {
     window.confirmarDescuentoGlobal = confirmarDescuentoGlobal;
     window.quitarTodosLosDescuentos = quitarTodosLosDescuentos;
 
-    // Descuento a la diferencia de un ticket de cambio (PIN de administrador)
+    // Descuento a la diferencia de un ticket de cambio (código de Administrador o Maestro)
     window.mostrarModalDescuentoCambio = mostrarModalDescuentoCambio;
     window.actualizarPreviewDescuentoCambio = actualizarPreviewDescuentoCambio;
     window.confirmarDescuentoCambio = confirmarDescuentoCambio;

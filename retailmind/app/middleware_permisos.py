@@ -24,7 +24,6 @@ URL_PERMISO_MAP = {
     # Las claves sin barra final cubren la página y su variante '_mejorado'.
     '/app/dashboard_productos': 'dashboard_productos',
     '/app/exportar_dashboard_productos/': 'dashboard_productos',
-    '/app/exportar_productos_filtrado/': 'dashboard_productos',
     '/app/dashboard_fifo/': 'dashboard_fifo',
     '/app/obtener_datos_dashboard_fifo/': 'dashboard_fifo',
     '/app/exportar_dashboard_fifo/': 'dashboard_fifo',
@@ -39,6 +38,10 @@ URL_PERMISO_MAP = {
     '/app/dashboard-requerimientos/': 'dashboard_requerimientos',
     '/app/api/dashboard-requerimientos/': 'dashboard_requerimientos',
     '/app/prediccion/': 'prediccion_compras',
+    # Las 15 APIs del dashboard de predicción (solo las consume esa pantalla).
+    '/app/api/prediccion/': 'prediccion_compras',
+    # Widgets del dashboard de inicio (ventas en tiempo real, alertas de stock).
+    '/app/dashboard/api/': 'dashboard_general',
 
     # APIs del Dashboard de Ventas Mejorado. Se listan una a una a propósito:
     # NO mapear el prefijo '/app/api/ventas/', porque bajo él viven también
@@ -125,6 +128,65 @@ URL_PERMISO_MAP = {
     '/app/documentos/gestion-dte/': 'gestion_dte',
     '/app/recepcion-dte/': 'recepcion_dte',
     '/app/regularizar-recepciones/': 'recepcion_dte',
+    # --- Recepción y regularización de traspasos: APIs (auditoría 2026-09) ---
+    # Solo las páginas estaban mapeadas; las APIs '/app/dte/...' respondían a
+    # cualquier autenticado: un vendedor sin recepcion_dte listaba traspasos
+    # con precios, leía documentos de regularización de otras empresas y
+    # rehabilitaba un traspaso rechazado (vuelve a descontar stock). Sus
+    # consumidores son recepcion_dte.html (+ el parcial _modal_regularizar.html)
+    # y dtes_en_limbo.html, que exigen ambas recepcion_dte. Se listan una a
+    # una: NO se mapea el prefijo '/app/dte/' porque bajo él viven también
+    # '<id>/txt-acepta/', '<id>/documentos-vinculados/' y '<id>/reparar_stock/',
+    # que llaman Gestión DTE, cotizaciones, caja, etc. ('<id>/audit/' va aparte,
+    # más abajo: no tiene consumidores).
+    # Tampoco se mapean las APIs de la campana del menú
+    # ('/app/dtes-pendientes-recibir/', '/app/dtes-pendientes-regularizar/',
+    # '/app/notificaciones-dte/'): el menú se carga en todas las páginas.
+    # Los permisos finos (puede_aprobar, NC de traspaso) siguen en cada vista.
+    '/app/dtes-en-limbo/': 'recepcion_dte',
+    '/app/dte/recepciones_pendientes/': 'recepcion_dte',
+    '/app/dte/historial_recepciones/': 'recepcion_dte',
+    '/app/dte/confirmar_recepcion/': 'recepcion_dte',
+    '/app/dte/rechazar_recepcion/': 'recepcion_dte',
+    '/app/dte/decidir_sobrante/': 'recepcion_dte',
+    '/app/dte/rehabilitar_rechazado/': 'recepcion_dte',
+    '/app/dte/obtener_rechazados/': 'recepcion_dte',
+    '/app/dte/obtener_productos_problema/': 'recepcion_dte',
+    '/app/dte/corregir_recepcion_emisor/': 'recepcion_dte',
+    '/app/dte/cancelar_traspaso/': 'recepcion_dte',
+    '/app/dte/emitidos_pendientes/': 'recepcion_dte',
+    '/app/dte/emitidos_recepcionados/': 'recepcion_dte',
+    '/app/dte/ajustar_emitido/': 'recepcion_dte',
+    '/app/dte/ajustar_traspaso/': 'recepcion_dte',
+    '/app/dte/cambiar_talla/': 'recepcion_dte',
+    '/app/dte/obtener_limbo_emisor/': 'recepcion_dte',
+    '/app/dte/limbo_resumen/': 'recepcion_dte',
+    '/app/dte/confirmar_devolucion_fisica/': 'recepcion_dte',
+    '/app/dte/obtener_regularizacion_receptor/': 'recepcion_dte',
+    '/app/dte/devolucion_pendiente_detalle/': 'recepcion_dte',
+    '/app/dte/obtener_productos_regularizar/': 'recepcion_dte',
+    '/app/dte/exportar_productos_regularizar_pdf/': 'recepcion_dte',
+    '/app/dte/obtener_solicitudes_recibidas/': 'recepcion_dte',
+    '/app/dte/obtener_solicitud_producto/': 'recepcion_dte',
+    '/app/dte/decidir_solicitud/': 'recepcion_dte',
+    '/app/dte/documento-regularizacion/': 'recepcion_dte',
+    '/app/dte/buscar_productos_emisor/': 'recepcion_dte',
+    '/app/dte/regularizar_producto/': 'recepcion_dte',
+    '/app/dte/regularizar_dte_masivo/': 'recepcion_dte',
+    '/app/dte/anular_regularizacion_dte/': 'recepcion_dte',
+    '/app/dte/cancelar_regularizacion/': 'recepcion_dte',
+    '/app/dte/obtener_detalle_dte_recepcionado/': 'recepcion_dte',
+    # Timeline de un traspaso ('/app/dte/<id>/audit/', dte_audit_api): movimientos,
+    # responsables, recepciones y NC. Solo tenía @login_required: un vendedor de
+    # cualquier empresa recorría ids y leía traspasos ajenos. Ningún template ni
+    # JS lo llama. La clave es genérica porque el id va en medio, pero es la
+    # ÚNICA ruta del proyecto (todos los urls.py) que contiene '/audit/'. El
+    # alcance por empresa (emisor/receptor = empresa de la sesión) sigue
+    # pendiente dentro de la vista.
+    '/audit/': 'recepcion_dte',
+    # Despacho de pendientes: único consumidor emisionDTE.html.
+    '/app/pendientes_despacho/': 'emision_dte',
+    '/app/consumir_pendientes_despacho/': 'emision_dte',
     '/app/cotizaciones/': 'gestion_cotizaciones',
 
     # --- Cotizaciones: endpoints de ESCRITURA ---
@@ -188,15 +250,49 @@ URL_PERMISO_MAP = {
     # Agente "Cargar desde factura" (modal de verGestionProducto): cubre por
     # substring subir/, lista/, opciones/ y <id>/{planificar,cargar,cerrar}/.
     '/app/carga-factura/': 'gestion_producto',
-    '/app/edicion-rapida-precios/': 'edicion_rapida_precios',
+    # --- Gestión Producto: paso 5 (crear producto desde la recepción, alta
+    # manual, ingreso manual) y edición de recepciones (auditoría 2026-09) ---
+    # Solo la PÁGINA estaba mapeada (y restringida a EDEL/GILD/IMP/PA00): por
+    # URL directa un vendedor creaba stock en su tienda desde una recepción
+    # ajena, borraba recepciones pendientes o eliminaba productos de todas las
+    # sucursales. Único consumidor de todas: modulo_existencias/
+    # verGestionProductos.html. NO se mapea '/app/api/producto/revertir-a-
+    # pendiente/' (también la llama gestionCompras.html) ni '/app/proveedores/'
+    # (también gestionDteCompras.html).
+    '/app/productos_para_crear/': 'gestion_producto',
+    '/app/detalle_producto_para_crear/': 'gestion_producto',
+    '/app/crear_producto_desde_recepcion/': 'gestion_producto',
+    '/app/obtener_recepciones_producto/': 'gestion_producto',
+    '/app/actualizar_recepciones_producto/': 'gestion_producto',
+    '/app/eliminar_recepcion_pendiente/': 'gestion_producto',
+    # editar-atributos (la vista ya exige gestion_producto.puede_editar).
+    '/app/api/compras-producto/': 'gestion_producto',
+    '/app/api/producto/editar-talla-creado/': 'gestion_producto',
+    '/app/eliminar_producto_todas_sucursales/': 'gestion_producto',
+    '/app/dtes_por_proveedor/': 'gestion_producto',
+    '/app/crear_producto_manual/': 'gestion_producto',
+    '/app/actualizar_producto_existente/': 'gestion_producto',
+    # Ficha, sumar stock y reasignar DTE del ingreso manual.
+    '/app/api/ingreso-manual/': 'gestion_producto',
+    # Lotes FIFO: crear un lote o ajustar su cantidad MUEVE stock (movimientos
+    # AJUSTE_POSITIVO/NEGATIVO) y fija costo; solo los llama lotes_producto.html.
+    # Se usa gestion_producto y no ajuste_stock_rapido porque inicializar_
+    # permisos le da este último a cajero y jefe_local. La PÁGINA de lotes
+    # ('/app/lotes_producto/' y '/app/obtener_lotes_producto/') no se mapea
+    # aquí: la abren tres pantallas con permisos distintos (dashboard FIFO,
+    # dashboard de productos y gestión de producto); la vista exige alguno de
+    # esos tres y además valida el alcance por empresa.
+    '/app/crear_lote_manual/': 'gestion_producto',
+    '/app/ajustar_lote/': 'gestion_producto',
     '/app/gestion-precios/edicion-rapida/': 'edicion_rapida_precios',
     # La pantalla de Alertas de Precios vive en
     # '/app/gestion-precios/revisar-pendientes/' (urls.py:1115). La clave
     # anterior ('/app/revisar-cambios-precios/') no existe como ruta, así que
     # nunca hacía match y la pantalla quedaba abierta a cualquier autenticado.
     # Sus endpoints AJAX (listar-cambios, aprobar-cambio, rechazar-cambio) NO
-    # se mapean aquí: '/app/gestion-precios/aprobar-cambio/' lo llama también el
-    # widget de dashboard_general.html, que es página siempre accesible.
+    # se mapean aquí: '/app/gestion-precios/aprobar-cambio/' lo llamaba también el
+    # widget de dashboard_general.html (home legacy `verHome`, retirado el
+    # 28-09-2026; ya ninguna vista lo renderiza). Mapearlos queda por decidir.
     '/app/gestion-precios/revisar-pendientes/': 'revisar_cambios_precios',
     '/app/verMovimientosProducto/': 'movimientos_producto',
     '/app/gestion-inventarios/': 'gestion_inventarios',
@@ -240,7 +336,110 @@ URL_PERMISO_MAP = {
     '/app/eliminar_compra/': 'gestion_compras',
     '/app/verGestionDteCompras/': 'gestion_dte_compras',
     '/app/verificar_dte_duplicado/': 'gestion_dte_compras',
-    
+
+    # --- Gestión Compras: endpoints de la pantalla (auditoría 2026-09) ---
+    # Solo estaba mapeada la página: un vendedor o cajero sin 'gestion_compras'
+    # recibía 403 en /app/verGestionCompras/, pero por URL directa listaba
+    # costos, exportaba, creaba compras, importaba líneas, recepcionaba y
+    # hasta limpiaba productos con force. Único consumidor de todas estas
+    # rutas: modulo_compras/gestionCompras.html (grep en templates y static).
+    # El middleware solo exige puede_ver; los permisos finos van en la vista.
+    # NO se mapean aquí (los usa más de una pantalla, con permisos distintos):
+    # '/app/cargarDteCompra/' (también gestionDteCompras.html),
+    # '/app/api/producto/revertir-a-pendiente/' (también verGestionProductos),
+    # '/app/buscar_articulo_autocomplete/', '/app/guias_talla/' y afines.
+    '/app/crear_compra/': 'gestion_compras',
+    '/app/obtener_compra/': 'gestion_compras',
+    '/app/obtener_compras/': 'gestion_compras',
+    '/app/actualizar_compra/': 'gestion_compras',
+    '/app/validar_factura_proveedor/': 'gestion_compras',
+    '/app/importar_csv_compra/': 'gestion_compras',
+    '/app/compra/recepcionar/': 'gestion_compras',
+    '/app/guardar_recepcion/': 'gestion_compras',
+    '/app/agregar_producto_manual/': 'gestion_compras',
+    '/app/eliminar_producto_compra/': 'gestion_compras',
+    # Cubre listar y guardar/.
+    '/app/api/curvas-distribucion/': 'gestion_compras',
+    '/app/api/distribuir-tallas-compra-producto/': 'gestion_compras',
+    '/app/obtener_recepciones_compra/': 'gestion_compras',
+    '/app/obtener_pendientes_compra/': 'gestion_compras',
+    '/app/actualizar_recepciones_compra/': 'gestion_compras',
+    '/app/eliminar_pendientes_compra_masivo/': 'gestion_compras',
+    # Vinculación retroactiva (items-para-vincular, buscar-sku-vincular,
+    # buscar-producto-agrupado-vincular, vincular- y desvincular-retroactivo).
+    # No tapa '/app/api/compras/...' ni '/app/api/compras-producto/': la barra
+    # va justo después de 'compra'.
+    '/app/api/compra/': 'gestion_compras',
+    '/app/api/exportar-compras-excel/': 'gestion_compras',
+    '/app/api/exportar-compras-csv/': 'gestion_compras',
+    '/app/api/atributos-compras/': 'gestion_compras',
+    '/app/api/formato-importacion-compras/': 'gestion_compras',
+    '/app/facturas_pendientes/': 'gestion_compras',
+    # '/app/obtenerDetalleComprasPorParametros/', '/app/productos_recepcionados/',
+    # '/app/verDiagnosticoCompras/' y '/app/diagnostico_datos_compras/' se
+    # retiraron del URLconf (2026-09-26, código muerto sin consumidor).
+
+    # --- Gestión Documentos Compras: endpoints de la pantalla ---
+    # Mismo hueco: pagar, pago masivo, compensar, anexar/desasociar NC, crear y
+    # editar DTE, incidencias y restaurar respondían a cualquier autenticado
+    # (un vendedor de otra empresa llegó a saldar facturas de EDEL). Único
+    # consumidor: modulo_compras/gestionDteCompras.html (y sus subpantallas de
+    # importación, que se abren desde ella). Los permisos finos de pagos
+    # (dte_compras_pagos / dte_compras_eliminar) siguen en cada vista.
+    # NO se mapea '/app/empresas_proveedoras/' (lo usan el dashboard de compras
+    # y los reportes de compras / rendimiento por proveedor) ni
+    # '/app/proveedores/' (también verGestionProductos.html).
+    '/app/crearDteCompras/': 'gestion_dte_compras',
+    '/app/actualizarDteCompras/': 'gestion_dte_compras',
+    '/app/obtenerDTE/': 'gestion_dte_compras',
+    '/app/eliminarDTE/': 'gestion_dte_compras',
+    '/app/empresas_receptoras/': 'gestion_dte_compras',
+    '/app/api/resumen-pendientes-anio/': 'gestion_dte_compras',
+    '/app/facturasPendientesPorMes/': 'gestion_dte_compras',
+    '/app/comprobantePagoDTE/': 'gestion_dte_compras',
+    '/app/datos_envio_comprobante/': 'gestion_dte_compras',
+    '/app/enviar_comprobante_pago/': 'gestion_dte_compras',
+    '/app/registrarPagoDTE/': 'gestion_dte_compras',
+    '/app/procesar_pago_masivo/': 'gestion_dte_compras',
+    '/app/obtenerDetallePago/': 'gestion_dte_compras',
+    '/app/pagosDTE/': 'gestion_dte_compras',
+    '/app/detallePago/': 'gestion_dte_compras',
+    '/app/editarPago/': 'gestion_dte_compras',
+    '/app/eliminarPago/': 'gestion_dte_compras',
+    # Cubre listar (<dte_id>/), crear/, actualizar/ y eliminar/.
+    '/app/incidencias/': 'gestion_dte_compras',
+    '/app/obtener_documentos_base/': 'gestion_dte_compras',
+    '/app/obtener_ncs_disponibles/': 'gestion_dte_compras',
+    '/app/obtener_info_asociacion_nc/': 'gestion_dte_compras',
+    '/app/asociar_nc_existente/': 'gestion_dte_compras',
+    '/app/desasociar_nc/': 'gestion_dte_compras',
+    '/app/asociar_factura_cotizacion/': 'gestion_dte_compras',
+    '/app/desasociar_factura_cotizacion/': 'gestion_dte_compras',
+    '/app/obtener_asociaciones_dte/': 'gestion_dte_compras',
+    # Compensaciones (factura contra factura y contra documento emitido).
+    '/app/obtener_facturas_compensar_disponibles/': 'gestion_dte_compras',
+    '/app/asociar_factura_compensacion/': 'gestion_dte_compras',
+    '/app/desasociar_factura_compensacion/': 'gestion_dte_compras',
+    '/app/obtener_documentos_emitidos_compensar_disponibles/': 'gestion_dte_compras',
+    '/app/asociar_documento_emitido_compensacion/': 'gestion_dte_compras',
+    '/app/desasociar_documento_emitido_compensacion/': 'gestion_dte_compras',
+    # Proveedores (modal de gestionDteCompras) e importación/exportación CSV de
+    # proveedores y DTE: un vendedor llegó a reescribir la razón social de una
+    # empresa emisora y a descargar los DTE de compra de las 4 empresas.
+    '/app/crear_proveedor/': 'gestion_dte_compras',
+    '/app/gestionar_proveedor/': 'gestion_dte_compras',
+    '/app/listar_proveedores/': 'gestion_dte_compras',
+    '/app/importacion-proveedores/': 'gestion_dte_compras',
+    '/app/importacion-dtes/': 'gestion_dte_compras',
+    '/app/api/importar-proveedores/': 'gestion_dte_compras',
+    '/app/api/importar-dtes/': 'gestion_dte_compras',
+    '/app/api/descargar-formato-proveedores/': 'gestion_dte_compras',
+    '/app/api/descargar-formato-dtes/': 'gestion_dte_compras',
+    '/app/api/exportar-proveedores-actuales/': 'gestion_dte_compras',
+    '/app/api/exportar-proveedores-excel/': 'gestion_dte_compras',
+    '/app/api/exportar-dtes-actuales/': 'gestion_dte_compras',
+    '/app/api/exportar-dtes-excel/': 'gestion_dte_compras',
+
     # Requerimientos
     '/app/requerimientos/': 'lista_requerimientos',
     # Crear y Gestionar tenían permiso propio en la pantalla de permisos, pero
@@ -329,7 +528,8 @@ URL_PERMISO_MAP = {
     '/app/api/reporte-despachos-tiendas/': 'reporte_movimientos_sucursal',
 
     # Despachos por proveedor
-    '/app/verReporteDespachosProveedor/': 'reporte_despachos_proveedor',
+    '/app/reportes/ingresos-proveedor/': 'reporte_despachos_proveedor',
+    '/app/verReporteDespachosProveedor/': 'reporte_despachos_proveedor',  # ruta vieja: redirige
     '/app/reporte_despachos_por_proveedor/': 'reporte_despachos_proveedor',
 
     # Compras integral
@@ -485,6 +685,15 @@ class PermisosMenuMiddleware:
         self.get_response = get_response
     
     def __call__(self, request):
+        if request.user.is_authenticated:
+            # Caché de filas de permisos que vive SOLO esta request (el objeto
+            # usuario se crea de nuevo en cada una): el middleware, los
+            # decoradores y las vistas repetían las mismas 4 consultas por
+            # cada chequeo. Ver PermisoRol.tiene_permiso.
+            try:
+                setattr(request.user, PermisoRol.ATRIBUTO_CACHE_REQUEST, {})
+            except Exception:
+                pass
         if (request.user.is_authenticated
                 and not request.session.get('idSucursalActual')
                 and request.path.startswith('/app/')):
@@ -531,9 +740,14 @@ class PermisosMenuMiddleware:
             if path.startswith(url_permitida):
                 return None  # Permitir acceso
         
-        # 2. Verificar si la URL no requiere verificación de permisos
+        # 2. Verificar si la URL no requiere verificación de permisos.
+        # Coincidencia EXACTA: con startswith, '/app/dashboard/' dejaba sin
+        # verificar también '/app/dashboard/api/...' (ventas en tiempo real y
+        # alertas de stock del home), y su clave en URL_PERMISO_MAP
+        # ('dashboard_general') nunca se aplicaba. Ninguna otra ruta cuelga de
+        # estas tres páginas.
         for url_sin_verificacion in URLS_SIN_VERIFICACION:
-            if path.startswith(url_sin_verificacion):
+            if path == url_sin_verificacion:
                 return None  # Permitir acceso
         
         # 3. Si el usuario no está autenticado, dejar que Django maneje la autenticación

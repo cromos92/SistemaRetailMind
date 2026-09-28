@@ -724,6 +724,7 @@ class ProveedorProductoEquivalencia(models.Model):
 ESTADO_CARGA_FACTURA_PDF_CHOICES = [
     ('LEYENDO', 'Leyendo el PDF'),
     ('LEIDA', 'Leída: en vista previa'),
+    ('BUSCANDO', 'Buscando en internet'),
     ('ERROR', 'Error de lectura'),
     ('CARGANDO', 'Cargando productos'),
     ('CERRADA', 'Cerrada'),
@@ -768,6 +769,11 @@ class CargaFacturaPdf(models.Model):
         default=list, blank=True,
         help_text='Conversación: [{quien, texto, fecha, tipo, factura}].',
     )
+    uso = models.JSONField(
+        default=dict, blank=True,
+        help_text='Tokens y búsquedas consumidos: totales (llamadas, entrada, salida, cache_leida, '
+                  'cache_escrita, busquedas) y "pasos" con el detalle por lectura / chat / búsqueda.',
+    )
     creado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)
     leida_en = models.DateTimeField(null=True, blank=True)
@@ -790,3 +796,89 @@ class CargaFacturaPdf(models.Model):
             **{k: v for k, v in extra.items() if v not in (None, '', [], {})},
         }]
         self.save(update_fields=['mensajes', 'actualizado_en'])
+
+
+# =====================================================================
+# APRENDIZAJE DEL AGENTE DE CARGA (fase 4)
+#
+# Claude no recuerda nada entre una factura y otra; lo que "aprende" el
+# sistema se guarda aquí y se vuelve a aplicar solo:
+#   - PerfilCargaMarca: por marca, lo que la persona fijó en cargas anteriores
+#     (tipo de talla, guías, regla de precio, margen, si el color va aparte
+#     del código, notas para el lector). Pisa al perfil de código
+#     (services/carga_factura/perfiles.py) vía perfil_para().
+#   - ProductoAprendido: por marca + código, la clasificación con que se
+#     cargó (género, categoría, especialidades, color si el código lo lleva),
+#     el último precio de venta y lo que se encontró en internet (qué es,
+#     color primario). La lectura siguiente del mismo código llega ya
+#     clasificada.
+# Lo aprendido es visible y editable desde el chat («recuerda que…»).
+# =====================================================================
+class PerfilCargaMarca(models.Model):
+    marca = models.CharField(
+        max_length=100, unique=True,
+        help_text='Clave canónica de la marca (mayúsculas, sin puntuación; ver perfiles.clave_marca).')
+    nombre = models.CharField(max_length=100, blank=True, help_text='Marca tal como la escriben.')
+    tipo_talla = models.CharField(max_length=5, blank=True, help_text='CL / US / EU / UK / BR / CM.')
+    guias_talla = models.JSONField(
+        default=dict, blank=True, help_text='{HOMBRE: guía, MUJER: guía, INFANTIL: guía, DEFAULT: guía}.')
+    identidad_color = models.BooleanField(
+        null=True, blank=True,
+        help_text='True si el código no lleva el color y cada color es otra ficha (Chalada); '
+                  'False si el código ya lo trae (Nike). Vacío = lo que diga el perfil de código.')
+    color_defecto = models.CharField(max_length=100, blank=True)
+    umbral_costo = models.IntegerField(null=True, blank=True)
+    factor_bajo = models.DecimalField(max_digits=6, decimal_places=3, null=True, blank=True)
+    factor_alto = models.DecimalField(max_digits=6, decimal_places=3, null=True, blank=True)
+    margen_sobreprecio = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    pistas_lectura = models.TextField(
+        blank=True, help_text='Notas para el lector, una por línea («el color va en la descripción»).')
+    veces_usado = models.PositiveIntegerField(default=0)
+    ultima_factura = models.CharField(max_length=60, blank=True)
+    actualizado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='perfiles_carga_marca',
+    )
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Perfil aprendido de carga por marca'
+        verbose_name_plural = 'Perfiles aprendidos de carga por marca'
+        ordering = ['marca']
+
+    def __str__(self):
+        return f'{self.nombre or self.marca} (usado {self.veces_usado} veces)'
+
+
+class ProductoAprendido(models.Model):
+    FUENTE_CHOICES = [('carga', 'Carga confirmada'), ('chat', 'Chat'), ('internet', 'Internet')]
+
+    marca = models.CharField(max_length=100, help_text='Clave canónica de la marca.')
+    articulo = models.CharField(max_length=100, help_text='Código normalizado (utils_producto_match).')
+    descripcion = models.CharField(max_length=255, blank=True)
+    color = models.CharField(
+        max_length=100, blank=True,
+        help_text='Solo para marcas cuyo código lleva el color (un código = un color).')
+    genero = models.CharField(max_length=50, blank=True)
+    categoria = models.CharField(max_length=150, blank=True, help_text='Ruta v1.2: "Padre > Hija".')
+    especialidades = models.JSONField(default=list, blank=True)
+    precioventa = models.IntegerField(null=True, blank=True, help_text='Última venta con que se cargó.')
+    costo = models.IntegerField(null=True, blank=True, help_text='Último costo neto con que se cargó.')
+    nombre_internet = models.CharField(max_length=255, blank=True)
+    que_es = models.TextField(blank=True, help_text='Qué es el producto según internet.')
+    color_internet = models.CharField(max_length=100, blank=True, help_text='Color predominante según internet.')
+    fuente_url = models.URLField(max_length=500, blank=True)
+    fuente = models.CharField(max_length=20, choices=FUENTE_CHOICES, default='carga')
+    veces_usado = models.PositiveIntegerField(default=0)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Producto aprendido por el agente'
+        verbose_name_plural = 'Productos aprendidos por el agente'
+        unique_together = ('marca', 'articulo')
+        ordering = ['marca', 'articulo']
+
+    def __str__(self):
+        return f'{self.marca} {self.articulo}'

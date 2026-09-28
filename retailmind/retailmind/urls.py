@@ -19,6 +19,7 @@ from django.contrib import admin
 from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
+from django.contrib.auth.decorators import login_required
 from django.views.static import serve
 
 from app.views_modulo_fidelizacion import descargar_app_puntos
@@ -49,9 +50,15 @@ urlpatterns = [
     path('api/', include('app.api.external.urls')),
 ]
 
-# Servir archivos media SIEMPRE (desarrollo y producción local)
+# Servir archivos media SIEMPRE (desarrollo y producción local), SOLO con
+# sesión iniciada. Antes cualquier anónimo descargaba por URL los TXT SII de
+# notas de crédito (RUT, montos, líneas), comprobantes bancarios de depósitos,
+# PDFs de cotizaciones y facturas de proveedor subidas al agente de carga
+# (verificado 26-09-2026). Nada público enlaza a /media/: ni la API externa,
+# ni las tiendas, ni los correos, ni la impresión QZ (que no usa flavor
+# 'file'). Todos los consumidores son páginas internas con sesión.
 urlpatterns += [
-    re_path(r'^media/(?P<path>.*)$', serve, {
+    re_path(r'^media/(?P<path>.*)$', login_required(serve), {
         'document_root': settings.MEDIA_ROOT,
     }),
 ]

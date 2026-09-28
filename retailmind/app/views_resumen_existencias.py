@@ -849,6 +849,75 @@ def _resumen_por_categoria(request, marca_id, fecha_corte, es_historico, empresa
         })
 
 
+def _fmt_miles(n):
+    """Entero con separador de miles chileno (1.234.567)."""
+    try:
+        return f"{int(round(float(n or 0))):,}".replace(',', '.')
+    except (TypeError, ValueError):
+        return '0'
+
+
+def _avisos_resumen_existencias(datos):
+    """
+    Avisos que la pantalla de Resumen de Existencias muestra sobre el universo
+    (alerta de modo histórico, exclusiones del modal y stock marcado
+    `excluir_de_analitica`), armados con los MISMOS campos de la API para que
+    el Excel y el PDF digan lo que dice la pantalla (auditoría reportes §5 P3).
+
+    Devuelve [(clave, texto)] en el orden de la pantalla; vacío si no hay nada
+    que advertir. `ocultos` solo existe en la agrupación por sucursal (la API
+    por categoría no lo publica y la pantalla tampoco lo muestra).
+    """
+    avisos = []
+
+    if datos.get('es_historico') and datos.get('fecha_corte'):
+        try:
+            fecha_txt = datetime.strptime(datos['fecha_corte'], '%Y-%m-%d').strftime('%d/%m/%Y')
+        except (TypeError, ValueError):
+            fecha_txt = str(datos['fecha_corte'])
+        avisos.append(('historico', (
+            f"HISTÓRICO: inventario al cierre del {fecha_txt} (incluye los movimientos de "
+            "ese día). Solo las unidades son de esa fecha: los montos se valorizan con el "
+            "costo y el precio de HOY, así que no sirven para conciliar con contabilidad. "
+            "Además, los ingresos migrados del sistema antiguo pueden no revertirse, lo que "
+            "deja el stock histórico algo alto."
+        )))
+
+    excluir_count = datos.get('excluir_articulos_count') or 0
+    if excluir_count:
+        exc = datos.get('totales_excluidos') or {}
+        detalle = ''
+        if int(exc.get('pares') or 0) > 0:
+            detalle = (
+                f" — {_fmt_miles(exc.get('pares'))} unidad(es) por "
+                f"${_fmt_miles(exc.get('precio_venta'))} a precio venta "
+                f"(${_fmt_miles(exc.get('costo'))} costo)"
+            )
+        avisos.append(('exclusiones', (
+            f"EXCLUSIONES: {excluir_count} artículo(s) excluidos del análisis{detalle} "
+            "(filtro temporal de la sesión). No suman en los totales."
+        )))
+
+    ocultos = datos.get('totales_ocultos_flag') or {}
+    if int(ocultos.get('pares') or 0) > 0:
+        por_sucursal = ' · '.join(
+            f"{fila.get('sucursal')} {_fmt_miles(fila.get('ocultos_pares'))} u"
+            + (' (sin stock analítico)' if not fila.get('total_pares') else '')
+            for fila in (datos.get('datos') or [])
+            if (fila.get('ocultos_pares') or 0) > 0
+        )
+        avisos.append(('ocultos', (
+            f"EXCLUIDAS DE ANALÍTICA: {_fmt_miles(ocultos.get('pares'))} u "
+            f"(${_fmt_miles(ocultos.get('costo'))} costo / "
+            f"${_fmt_miles(ocultos.get('precio_venta'))} precio venta) en "
+            f"{ocultos.get('sucursales', 0)} sucursal(es) NO entran en los totales: son "
+            "productos marcados «excluir de analítica» en su ficha (bolsas, envíos, ajustes; "
+            f"se gestionan en Gestión de Productos). Por sucursal: {por_sucursal}."
+        )))
+
+    return avisos
+
+
 @require_GET
 @login_required
 def exportar_resumen_existencias_excel(request):
@@ -878,8 +947,6 @@ def exportar_resumen_existencias_excel(request):
         total_general = datos.get('total_general', {})
         es_historico = datos.get('es_historico', False)
         resumen_empresas = datos.get('resumen_empresas', []) or []
-        excluir_count = datos.get('excluir_articulos_count', 0)
-        totales_excluidos = datos.get('totales_excluidos', {}) or {}
 
         if not datos_resumen:
             return JsonResponse({
@@ -921,24 +988,39 @@ def exportar_resumen_existencias_excel(request):
         cell.font = Font(bold=True, color="FFFFFF", size=14)
         cell.alignment = Alignment(horizontal='center', vertical='center')
         ws.row_dimensions[1].height = 30
-        
+
+        # Avisos de la pantalla (histórico / exclusiones / excluidas de analítica)
+        # entre el título y la tabla. Sin avisos la hoja queda como antes
+        # (encabezados en la fila 2); no hay freeze panes ni autofiltro.
+        avisos = _avisos_resumen_existencias(datos)
+        ancho_avisos = 28 + 35 + 15 + 18 + 22 + 20  # anchos de A:F fijados más abajo
+        for fila_aviso, (_clave, texto) in enumerate(avisos, start=2):
+            ws.merge_cells(start_row=fila_aviso, start_column=1, end_row=fila_aviso, end_column=6)
+            cell = ws.cell(row=fila_aviso, column=1, value=texto)
+            cell.font = Font(bold=True, color='7A4B00', size=10)
+            cell.fill = PatternFill(start_color='FFF3CD', end_color='FFF3CD', fill_type='solid')
+            cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+            lineas = -(-int(len(texto) * 1.15) // ancho_avisos)
+            ws.row_dimensions[fila_aviso].height = max(15, 14 * lineas + 4)
+        fila_header = 2 + len(avisos)
+
         # Encabezados dinámicos según agrupación
         if agrupar_por == 'categoria':
             headers = ['Categoría', 'Sucursales', 'Total Pares', 'Total Costo', 'Total Precio Interno', 'Total Precio Venta']
         else:
             headers = ['Sucursal', 'Dirección', 'Total Pares', 'Total Costo', 'Total Precio Interno', 'Total Precio Venta']
-        
+
         for idx, header in enumerate(headers, start=1):
-            cell = ws.cell(row=2, column=idx, value=header)
+            cell = ws.cell(row=fila_header, column=idx, value=header)
             cell.fill = header_fill
             cell.font = header_font
             cell.alignment = Alignment(horizontal='center', vertical='center')
             cell.border = border
-        
-        ws.row_dimensions[2].height = 25
-        
+
+        ws.row_dimensions[fila_header].height = 25
+
         # Datos
-        fila = 3
+        fila = fila_header + 1
         for item in datos_resumen:
             if agrupar_por == 'categoria':
                 ws.cell(row=fila, column=1, value=item['categoria']).border = border
@@ -1059,26 +1141,8 @@ def exportar_resumen_existencias_excel(request):
 
                 fila += 1
 
-        # Nota de exclusiones (si aplica) — incluye unidades y valores realmente excluidos
-        if excluir_count:
-            fila += 1
-            ws.merge_cells(start_row=fila, start_column=1, end_row=fila, end_column=6)
-            pares_exc = int(totales_excluidos.get('pares', 0) or 0)
-            venta_exc = int(totales_excluidos.get('precio_venta', 0) or 0)
-            costo_exc = int(totales_excluidos.get('costo', 0) or 0)
-            detalle_exc = ''
-            if pares_exc > 0:
-                detalle_exc = (
-                    f" — {pares_exc:,} unidad(es) por ${venta_exc:,} a precio venta "
-                    f"(${costo_exc:,} costo)"
-                ).replace(',', '.')
-            nota = ws.cell(
-                row=fila, column=1,
-                value=(f"Nota: {excluir_count} artículo(s) excluidos del análisis "
-                       f"(filtro temporal de la sesión){detalle_exc}.")
-            )
-            nota.font = Font(italic=True, color="8a6914")
-            nota.alignment = Alignment(horizontal='left', vertical='center')
+        # La nota de exclusiones que iba aquí al pie ahora es uno de los avisos
+        # de arriba (misma cifra, visible antes de la tabla, como en pantalla).
 
         # Ajustar anchos de columna
         ws.column_dimensions['A'].width = 28
@@ -1577,6 +1641,15 @@ def exportar_resumen_existencias_pdf(request):
                 st_note,
             ))
 
+        # Resto de avisos de la pantalla (histórico / excluidas de analítica);
+        # la exclusión del modal ya tiene su nota propia justo arriba.
+        from xml.sax.saxutils import escape as _escape_xml
+        for clave, texto in _avisos_resumen_existencias(datos):
+            if clave == 'exclusiones':
+                continue
+            elements.append(Spacer(1, 0.3 * cm))
+            elements.append(Paragraph(_escape_xml(texto), st_note))
+
         # ===== TOP 30 POR SUCURSAL (solo agrupación por sucursal) =====
         if agrupar_por == 'sucursal':
             empresas_usuario, marca_id_f, excluir_ids_f, fecha_corte_f, es_hist_f = \
@@ -1820,7 +1893,12 @@ def _calcular_detalle_top_por_sucursal(empresas_usuario, sucursal_id, limite=30,
         for t in tallas_data:
             _acumular_producto_detalle(productos, t, t['stock'] or 0)
 
-    items_ordenados = sorted(productos.values(), key=lambda p: p['pares'], reverse=True)
+    # Desempate por artículo: con igual cantidad de pares el orden dependía del
+    # orden de llegada de la consulta y cambiaba qué producto quedaba en el tope.
+    items_ordenados = sorted(
+        productos.values(),
+        key=lambda p: (-p['pares'], str(p.get('articulo') or ''), str(p.get('descripcion') or '')),
+    )
     top = items_ordenados[:limite]
 
     return {

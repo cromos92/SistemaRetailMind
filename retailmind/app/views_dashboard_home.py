@@ -5,10 +5,12 @@ Vista principal con KPIs de retail para seguimiento de sucursal
 
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache, caches
 from django.http import JsonResponse
 from django.db.models import Sum, Count, Q, Avg, F, Min, Max
 from django.utils import timezone
-from datetime import timedelta
+from django.db.models.functions import Coalesce
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 import logging
 
@@ -22,6 +24,19 @@ from .models import (
 )
 
 logger = logging.getLogger('app')
+
+# Qué va en vivo y qué es la foto de 5 minutos (A1-01):
+#   · EN VIVO (cada request): ventas de hoy, compras por recepcionar,
+#     requerimientos, caja/depósitos, precios pendientes, DTEs con problemas y
+#     el conteo de cambios/devoluciones pendientes. Son baratos (2-20 ms) y
+#     alimentan alertas que el usuario resuelve y vuelve a mirar.
+#   · FOTO DE 5 MIN (caché por sucursal, empresa y día): stock/quiebres,
+#     operaciones (traspasos, ajustes, regularizaciones, por cobrar), top
+#     productos, salud de inventario y pagos a proveedor. Son los caros
+#     (stock recorre 100k+ Producto_Talla); la alerta de quiebres y la de
+#     facturas de proveedor salen de esta foto.
+DASHBOARD_HOME_CACHE_TTL = 300  # 5 minutos
+_DASHBOARD_HOME_CACHE_VERSION = 'v2'
 
 
 @login_required
@@ -239,65 +254,52 @@ def dashboard_home(request):
         mes_pasado_inicio = (inicio_mes - timedelta(days=1)).replace(day=1)
         mes_pasado_fin = inicio_mes - timedelta(days=1)
         
-        # ========== 1. KPIs DE VENTAS ==========
+        # ========== 1. KPIs DE VENTAS (siempre en vivo) ==========
         ventas_data = calcular_kpis_ventas(sucursal_id, hoy, inicio_semana, inicio_mes, mes_pasado_inicio, mes_pasado_fin)
-        
-        # ========== 2. KPIs DE STOCK/EXISTENCIAS ==========
-        stock_data = calcular_kpis_stock(sucursal_id, empresa_id)
-        
-        # ========== 3. KPIs DE COMPRAS ==========
-        compras_data = calcular_kpis_compras(sucursal_id, empresa_id, hoy, inicio_mes)
-        
-        # ========== 4. KPIs DE REQUERIMIENTOS ==========
-        requerimientos_data = calcular_kpis_requerimientos(sucursal_id, hoy, inicio_mes)
-        
-        # ========== 5. KPIs OPERACIONALES ==========
-        operaciones_data = calcular_kpis_operaciones(sucursal_id, empresa_id, hoy, inicio_mes)
-        
-        # ========== 6. KPIs CAJA Y DEPOSITOS ==========
-        try:
-            caja_data = calcular_kpis_caja_depositos(sucursal_id, hoy, inicio_mes)
-        except Exception:
-            caja_data = {
-                'arqueos_abiertos': 0, 'arqueos_con_diferencias': 0,
-                'diferencia_efectivo': 0, 'diferencia_transbank': 0,
-                'diferencia_total': 0, 'fecha_ultimo_arqueo': None,
-                'depositos_pendientes': 0, 'monto_sin_verificar': 0,
-                'total_arqueos_mes': 0,
-            }
 
-        # ========== 7. KPIs PRECIOS PENDIENTES ==========
-        try:
-            precios_data = calcular_kpis_precios_pendientes(sucursal_id)
-        except Exception:
-            precios_data = {
-                'total_pendientes': 0, 'urgentes': 0, 'impacto_estimado': 0,
-            }
+        # ========== 2-9b. BLOQUES LENTOS (cacheados 5 min por sucursal/empresa/día) ==========
+        # `?refrescar=1` fuerza el recálculo (lo usa el botón "recalcular tablero").
+        forzar_recalculo = request.GET.get('refrescar') == '1'
+        bloques, bloques_calculados_en, bloques_desde_cache = obtener_bloques_dashboard(
+            sucursal_id, empresa_id, hoy, inicio_mes, forzar=forzar_recalculo
+        )
+        stock_data = bloques['stock']
+        top_productos = bloques['top_productos']
+        salud_inventario = bloques['salud_inventario']
+        # Operaciones es la foto de 5 min, SALVO el conteo de cambios
+        # pendientes: un COUNT de ~0 ms que alimenta una alerta que el usuario
+        # resuelve y vuelve a mirar (A1-01).
+        operaciones_data = dict(
+            bloques['operaciones'],
+            cambios_pendientes=_cambios_pendientes_qs(sucursal_id).count(),
+        )
 
-        # ========== 8. DTEs CON PROBLEMAS (rechazados / en regularización) ==========
-        try:
-            dte_problemas = calcular_kpis_dte_problemas(sucursal_id, empresa_id)
-        except Exception:
-            dte_problemas = {'rechazados': 0, 'en_regularizacion': 0, 'total': 0}
-
-        # ========== 9. TOP PRODUCTOS DEL MES ==========
-        try:
-            top_productos = obtener_top_productos(sucursal_id, inicio_mes, hoy)
-        except Exception:
-            top_productos = []
-
-        # ========== 9b. SALUD DE INVENTARIO (ejecutivo) ==========
-        try:
-            salud_inventario = calcular_kpis_salud_inventario(sucursal_id, hoy)
-        except Exception:
-            logger.exception("Error calculando salud de inventario")
-            salud_inventario = None
+        # ========== 3-8. BLOQUES EN VIVO (baratos, alimentan alertas) ==========
+        en_vivo = calcular_bloques_en_vivo(sucursal_id, empresa_id, hoy, inicio_mes)
+        compras_data = en_vivo['compras']
+        requerimientos_data = en_vivo['requerimientos']
+        caja_data = en_vivo['caja']
+        precios_data = en_vivo['precios']
+        dte_problemas = en_vivo['dte_problemas']
 
         # ========== 10. ALERTAS CRÍTICAS ==========
+        # Van en vivo salvo quiebres (stock) y facturas de proveedor, que salen
+        # de la foto de 5 min.
         alertas = generar_alertas_criticas(
             stock_data, compras_data, requerimientos_data, operaciones_data,
             caja_data, precios_data, dte_problemas
         )
+
+        # Facturas de proveedor vencidas / por vencer (B15-11): el bloque se
+        # cachea por empresa sin mirar al usuario, así que el permiso se
+        # revisa acá, al renderizar.
+        pagos_proveedor = None
+        if bloques.get('pagos_proveedor') and _usuario_puede_ver(request, 'gestion_dte_compras', sucursal_id):
+            pagos_proveedor = bloques['pagos_proveedor']
+            alerta_pagos = alerta_pagos_proveedor(pagos_proveedor)
+            if alerta_pagos:
+                alertas.append(alerta_pagos)
+                alertas.sort(key=lambda x: x['prioridad'])
 
         context = {
             'sucursal_actual': sucursal_actual,
@@ -313,19 +315,29 @@ def dashboard_home(request):
             'dte_problemas': dte_problemas,
             'top_productos': top_productos,
             'salud_inventario': salud_inventario,
+            'pagos_proveedor': pagos_proveedor,
 
             'alertas': alertas,
+
+            # Hora en que se calcularon los bloques cacheados (para el rótulo
+            # "Inventario y operaciones actualizados a las HH:MM").
+            'bloques_calculados_en': bloques_calculados_en,
+            'bloques_desde_cache': bloques_desde_cache,
+            'bloques_cache_minutos': DASHBOARD_HOME_CACHE_TTL // 60,
         }
 
         return render(request, 'vistas/dashboard_home.html', context)
         
-    except Exception as e:
+    except Exception:
         logger.exception("Error en dashboard_home usuario_id=%s", request.user.id)
-        
-        # Retornar contexto mínimo en caso de error
+
+        # Retornar contexto mínimo en caso de error (sin el texto de la
+        # excepción: el detalle queda en el log)
         return render(request, 'vistas/dashboard_home.html', {
-            'error': str(e),
-            'ventas': {'hoy': 0, 'semana': 0, 'mes': 0, 'unidades_hoy': 0, 'ticket_promedio': 0, 'ventas_ultimos_30_dias': [], 'ventas_por_hora': []},
+            'error': 'No se pudo calcular el tablero',
+            'ventas': {'hoy': 0, 'semana': 0, 'mes': 0, 'unidades_hoy': 0, 'ticket_promedio': 0, 'ventas_ultimos_30_dias': [], 'ventas_por_hora': [],
+                       'ayer': 0, 'hace_7_dias': 0, 'variacion_ayer': None, 'variacion_7d': None,
+                       'tendencia_ayer': 'stable', 'tendencia_7d': 'stable'},
             'stock': {'total_skus': 0, 'stock_critico': 0, 'sin_stock': 0, 'valor_inventario': 0,
                       'quiebres_rotantes': 0, 'quiebres_lista': [], 'total_unidades': 0, 'rotacion_mes': 0},
             'compras': {'pendientes_recepcion': 0, 'dtes_pendientes': 0, 'monto_pendiente': 0, 'compras_mes': 0, 'lista_pendientes': []},
@@ -346,8 +358,267 @@ def dashboard_home(request):
         })
 
 
-def calcular_kpis_ventas(sucursal_id, hoy, inicio_semana, inicio_mes, mes_pasado_inicio, mes_pasado_fin):
-    """Calcula KPIs de ventas"""
+def _clave_cache_bloques(sucursal_id, empresa_id, hoy):
+    return "dashboard_home:bloques:{}:{}:{}:{}".format(
+        _DASHBOARD_HOME_CACHE_VERSION, sucursal_id or 0, empresa_id or 0, hoy.isoformat()
+    )
+
+
+def calcular_bloques_en_vivo(sucursal_id, empresa_id, hoy, inicio_mes):
+    """Bloques baratos que alimentan alertas: se calculan en CADA request (A1-01).
+
+    Antes iban en la foto de 5 min y una alerta resuelta (arqueo cerrado,
+    depósito verificado, precio regularizado) seguía en el home hasta 5
+    minutos para toda la sucursal. Cuestan 2-20 ms cada uno.
+
+    Mismo manejo de errores que tenía `dashboard_home`: compras y
+    requerimientos propagan la excepción (la captura el try/except externo de
+    la vista); caja, precios y DTEs con problemas caen a valores vacíos.
+    """
+    bloques = {}
+
+    # ========== 3. KPIs DE COMPRAS ==========
+    bloques['compras'] = calcular_kpis_compras(sucursal_id, empresa_id, hoy, inicio_mes)
+
+    # ========== 4. KPIs DE REQUERIMIENTOS ==========
+    bloques['requerimientos'] = calcular_kpis_requerimientos(sucursal_id, hoy, inicio_mes)
+
+    # ========== 6. KPIs CAJA Y DEPOSITOS ==========
+    try:
+        bloques['caja'] = calcular_kpis_caja_depositos(sucursal_id, hoy, inicio_mes)
+    except Exception:
+        logger.exception("Error calculando KPIs de caja/depósitos sucursal_id=%s", sucursal_id)
+        bloques['caja'] = {
+            'arqueos_abiertos': 0, 'arqueos_con_diferencias': 0,
+            'diferencia_efectivo': 0, 'diferencia_transbank': 0,
+            'diferencia_total': 0, 'fecha_ultimo_arqueo': None,
+            'depositos_pendientes': 0, 'monto_sin_verificar': 0,
+            'total_arqueos_mes': 0,
+        }
+
+    # ========== 7. KPIs PRECIOS PENDIENTES ==========
+    try:
+        bloques['precios'] = calcular_kpis_precios_pendientes(sucursal_id)
+    except Exception:
+        logger.exception("Error calculando KPIs de precios pendientes sucursal_id=%s", sucursal_id)
+        bloques['precios'] = {
+            'total_pendientes': 0, 'urgentes': 0, 'impacto_estimado': 0,
+        }
+
+    # ========== 8. DTEs CON PROBLEMAS (rechazados / en regularización) ==========
+    try:
+        bloques['dte_problemas'] = calcular_kpis_dte_problemas(sucursal_id, empresa_id)
+    except Exception:
+        logger.exception("Error calculando DTEs con problemas sucursal_id=%s", sucursal_id)
+        bloques['dte_problemas'] = {'rechazados': 0, 'en_regularizacion': 0, 'total': 0}
+
+    return bloques
+
+
+def calcular_bloques_lentos(sucursal_id, empresa_id, hoy, inicio_mes):
+    """Calcula los bloques caros del tablero (la foto de 5 minutos).
+
+    Conserva el manejo de errores original de `dashboard_home`: stock y
+    operaciones propagan la excepción (la captura el try/except externo de la
+    vista, que renderiza el contexto mínimo); top productos, salud de
+    inventario y pagos a proveedor caen a valores vacíos.
+
+    Devuelve (bloques, completo): `completo` es False si algún bloque cayó a su
+    valor vacío, para no cachear 5 minutos un fallo transitorio.
+    """
+    completo = True
+    bloques = {}
+
+    # ========== 2. KPIs DE STOCK/EXISTENCIAS ==========
+    bloques['stock'] = calcular_kpis_stock(sucursal_id, empresa_id)
+
+    # ========== 5. KPIs OPERACIONALES ==========
+    bloques['operaciones'] = calcular_kpis_operaciones(sucursal_id, empresa_id, hoy, inicio_mes)
+
+    # ========== 9. TOP PRODUCTOS DEL MES ==========
+    try:
+        bloques['top_productos'] = obtener_top_productos(sucursal_id, inicio_mes, hoy)
+    except Exception:
+        logger.exception("Error calculando top productos sucursal_id=%s", sucursal_id)
+        completo = False
+        bloques['top_productos'] = []
+
+    # ========== 9b. SALUD DE INVENTARIO (ejecutivo) ==========
+    try:
+        bloques['salud_inventario'] = calcular_kpis_salud_inventario(sucursal_id, hoy)
+    except Exception:
+        logger.exception("Error calculando salud de inventario")
+        completo = False
+        bloques['salud_inventario'] = None
+
+    # ========== 9c. FACTURAS DE PROVEEDOR VENCIDAS / POR VENCER ==========
+    try:
+        bloques['pagos_proveedor'] = calcular_kpis_pagos_proveedor(empresa_id, hoy)
+    except Exception:
+        logger.exception("Error calculando pagos a proveedor empresa_id=%s", empresa_id)
+        completo = False
+        bloques['pagos_proveedor'] = None
+
+    return bloques, completo
+
+
+def _usuario_puede_ver(request, codigo, sucursal_id=None):
+    """`puede_ver` de una opción de menú con el caché de permisos por request
+    (el mismo del menú lateral); sin caché, `PermisoRol.tiene_permiso`."""
+    from app.templatetags.permisos_tags import _permisos
+    permisos_cache = _permisos(request, request.user)
+    if permisos_cache is not None:
+        return permisos_cache.resolver(codigo, 'puede_ver')
+    return PermisoRol.tiene_permiso(request.user, codigo, 'puede_ver', sucursal_id)
+
+
+def _universo_deuda_proveedor():
+    """Constantes del universo de deuda con proveedores de Gestión Documentos
+    Compras (`views_modulo_compras.obtener_resumen_pendientes_anio`), para que
+    el aviso del home cuadre con la pantalla a la que enlaza. Si ese módulo
+    cambia los nombres, se usan los valores vigentes al 26-sep-2026."""
+    try:
+        from app import views_modulo_compras as vmc
+        return (
+            getattr(vmc, 'FECHA_CORTE_PENDIENTES', date(2025, 1, 1)),
+            tuple(getattr(vmc, 'TIPOS_EXCLUIDOS_DEUDA_PROVEEDOR', ('NOTA DE CREDITO', 'COTIZACION'))),
+        )
+    except Exception:
+        logger.exception("No se pudo leer el universo de deuda con proveedores")
+        return date(2025, 1, 1), ('NOTA DE CREDITO', 'COTIZACION')
+
+
+def calcular_kpis_pagos_proveedor(empresa_id, hoy, dias_aviso=7):
+    """Facturas de proveedor impagas VENCIDAS y que VENCEN en `dias_aviso` días
+    (B15-11), sólo CANTIDADES.
+
+    Mismo universo que los KPI de Gestión Documentos Compras
+    (`obtener_resumen_pendientes_anio`): DTE de COMPRA de la empresa (o sin
+    receptor), no descartados, desde el corte de pendientes, sin NC ni
+    cotizaciones ni RECHAZADOS, estado_pago Pendiente/Parcial/Abonado y saldo
+    (monto − pagos) > $1. No se muestran montos: el saldo neto de NC y
+    compensaciones se lee en la pantalla. Sin empresa en sesión → None.
+    Una sola consulta (agregado por documento).
+    """
+    if not empresa_id:
+        return None
+    fecha_corte, tipos_excluidos = _universo_deuda_proveedor()
+    pendientes = Dte.objects.filter(
+        tipo_transaccion='COMPRA',
+        descartado=False,
+        fecha_emision__gte=fecha_corte,
+    ).filter(
+        Q(receptor_id=empresa_id) | Q(receptor__isnull=True)
+    ).exclude(
+        tipo_documento__in=tipos_excluidos,
+    ).exclude(
+        es_nota_credito=True,
+    ).exclude(
+        estado_dte__iexact='RECHAZADO',
+    ).filter(
+        Q(estado_pago__iexact='pendiente')
+        | Q(estado_pago__iexact='parcial')
+        | Q(estado_pago__iexact='abonado')
+    ).annotate(
+        pagado=Coalesce(Sum('dte_asociado__monto'), 0),
+    ).values_list('monto_con_iva', 'fecha_vencimiento', 'pagado')
+
+    limite = hoy + timedelta(days=dias_aviso)
+    vencidas = por_vencer = 0
+    for monto, vencimiento, pagado in pendientes:
+        if float((monto or 0) - (pagado or 0)) <= 1 or vencimiento is None:
+            continue  # pagada de hecho, o sin vencimiento (la pantalla la da "al día")
+        if vencimiento < hoy:
+            vencidas += 1
+        elif vencimiento <= limite:
+            por_vencer += 1
+    return {'vencidas': vencidas, 'por_vencer': por_vencer, 'dias_aviso': dias_aviso}
+
+
+def alerta_pagos_proveedor(pagos):
+    """Alerta del home para facturas de proveedor vencidas / por vencer."""
+    if not pagos or not (pagos.get('vencidas') or pagos.get('por_vencer')):
+        return None
+    partes = []
+    if pagos['vencidas']:
+        partes.append(f"{pagos['vencidas']} vencida{'s' if pagos['vencidas'] != 1 else ''}")
+    if pagos['por_vencer']:
+        partes.append(f"{pagos['por_vencer']} vence{'n' if pagos['por_vencer'] != 1 else ''} "
+                      f"en {pagos['dias_aviso']} días")
+    return {
+        'tipo': 'danger' if pagos['vencidas'] else 'warning',
+        'icono': 'ri-bill-fill',
+        'titulo': 'Facturas de proveedor por pagar: ' + ' · '.join(partes),
+        'descripcion': 'Impagas con saldo, según su fecha de vencimiento (se actualiza cada 5 min)',
+        'accion': 'Ver documentos',
+        'url': '/app/verGestionDteCompras/',
+        'prioridad': 3,
+    }
+
+
+def _cache_home():
+    """Caché para los bloques del home: el alias `ventas` (Redis cuando hay
+    `REDIS_URL`, así el cálculo se comparte entre los workers de gunicorn; sin
+    Redis es LocMem por proceso). Si el alias no existe, cae al `default`."""
+    try:
+        return caches['ventas']
+    except Exception:
+        return cache
+
+
+def obtener_bloques_dashboard(sucursal_id, empresa_id, hoy, inicio_mes, forzar=False):
+    """Devuelve (bloques, calculado_en, desde_cache) usando el caché `ventas`
+    con TTL `DASHBOARD_HOME_CACHE_TTL`, clave por (sucursal, empresa, día).
+
+    Solo se guarda en caché un cálculo completo (sin bloques caídos), para que
+    un fallo transitorio se reintente en la siguiente petición como antes.
+    """
+    clave = _clave_cache_bloques(sucursal_id, empresa_id, hoy)
+    cache_home = _cache_home()
+
+    if not forzar:
+        try:
+            cacheado = cache_home.get(clave)
+        except Exception:
+            logger.exception("Error leyendo caché del dashboard clave=%s", clave)
+            cacheado = None
+        if isinstance(cacheado, dict) and 'bloques' in cacheado and 'calculado_en' in cacheado:
+            return cacheado['bloques'], cacheado['calculado_en'], True
+
+    bloques, completo = calcular_bloques_lentos(sucursal_id, empresa_id, hoy, inicio_mes)
+    calculado_en = timezone.now()
+
+    if completo:
+        try:
+            cache_home.set(clave, {'bloques': bloques, 'calculado_en': calculado_en}, DASHBOARD_HOME_CACHE_TTL)
+        except Exception:
+            logger.exception("Error guardando caché del dashboard clave=%s", clave)
+
+    return bloques, calculado_en, False
+
+
+def _variacion_pct(actual, base):
+    """Variación % de `actual` contra `base`. None si no hay base (base <= 0):
+    mostrar +100% contra un día sin ventas no es una comparación honesta."""
+    if base and base > 0:
+        return round(((actual - base) / base) * 100, 1)
+    return None
+
+
+def _tendencia(variacion):
+    if variacion is None or variacion == 0:
+        return 'stable'
+    return 'up' if variacion > 0 else 'down'
+
+
+def calcular_kpis_ventas(sucursal_id, hoy, inicio_semana, inicio_mes, mes_pasado_inicio, mes_pasado_fin,
+                         ahora=None):
+    """Calcula KPIs de ventas.
+
+    `ahora` (datetime aware, opcional) fija la hora de corte de las
+    comparaciones de hoy contra ayer / hace 7 días; por defecto, la hora
+    actual. Se inyecta en los tests para no depender del reloj.
+    """
     # Base queryset de tickets.
     # Se excluyen los tickets de CAMBIO_DEVOLUCION: son la diferencia a cobrar
     # de un cambio, no una venta nueva. Sumarlos inflaba ventas, ticket
@@ -396,7 +667,34 @@ def calcular_kpis_ventas(sucursal_id, hoy, inicio_semana, inicio_mes, mes_pasado
         variacion_mes = round(((ventas_mes - ventas_mes_pasado) / ventas_mes_pasado) * 100, 1)
     else:
         variacion_mes = 100 if ventas_mes > 0 else 0
-    
+
+    # Comparaciones de HOY contra AYER y contra HACE 7 DÍAS (mismo día de la
+    # semana pasada) HASTA LA MISMA HORA (A1-02). "Hoy" es un día parcial:
+    # compararlo contra días completos dejaba el chip en rojo (-70/-80 %) casi
+    # todo el día aunque la tienda fuera mejor que ayer a esa hora. Los totales
+    # del día completo se devuelven aparte para el tooltip. Misma base
+    # `tickets_base` y fecha real `created_at`. Una sola consulta.
+    ahora = timezone.localtime(ahora or timezone.now())
+    corte = ahora.time()
+    ayer = hoy - timedelta(days=1)
+    hace_7_dias = hoy - timedelta(days=7)
+    fin_ayer = timezone.make_aware(datetime.combine(ayer, corte))
+    fin_7d = timezone.make_aware(datetime.combine(hace_7_dias, corte))
+    q_ayer = Q(created_at__date=ayer)
+    q_7d = Q(created_at__date=hace_7_dias)
+    comparacion = tickets_base.filter(q_ayer | q_7d).aggregate(
+        total_ayer=Sum('total', filter=q_ayer & Q(created_at__lt=fin_ayer)),
+        tickets_ayer=Count('id', filter=q_ayer & Q(created_at__lt=fin_ayer)),
+        total_7d=Sum('total', filter=q_7d & Q(created_at__lt=fin_7d)),
+        tickets_7d=Count('id', filter=q_7d & Q(created_at__lt=fin_7d)),
+        total_ayer_dia=Sum('total', filter=q_ayer),
+        total_7d_dia=Sum('total', filter=q_7d),
+    )
+    ventas_ayer = int(comparacion['total_ayer'] or 0)
+    ventas_hace_7_dias = int(comparacion['total_7d'] or 0)
+    variacion_ayer = _variacion_pct(int(ventas_hoy), ventas_ayer)
+    variacion_7d = _variacion_pct(int(ventas_hoy), ventas_hace_7_dias)
+
     # Ticket promedio
     ticket_promedio = round(ventas_hoy / tickets_hoy, 0) if tickets_hoy > 0 else 0
     ticket_promedio_mes = round(ventas_mes / tickets_mes, 0) if tickets_mes > 0 else 0
@@ -444,6 +742,19 @@ def calcular_kpis_ventas(sucursal_id, hoy, inicio_semana, inicio_mes, mes_pasado
         'ventas_por_hora': ventas_por_hora,
         'ventas_ultimos_30_dias': ventas_ultimos_30_dias,
         'tendencia': 'up' if variacion_mes > 0 else ('down' if variacion_mes < 0 else 'stable'),
+        # Comparaciones de hoy contra ayer / hace 7 días HASTA LA MISMA HORA
+        'hora_corte': ahora.strftime('%H:%M'),
+        'ayer': ventas_ayer,
+        'tickets_ayer': comparacion['tickets_ayer'] or 0,
+        'ayer_dia_completo': int(comparacion['total_ayer_dia'] or 0),
+        'hace_7_dias': ventas_hace_7_dias,
+        'tickets_hace_7_dias': comparacion['tickets_7d'] or 0,
+        'hace_7_dias_dia_completo': int(comparacion['total_7d_dia'] or 0),
+        'fecha_hace_7_dias': hace_7_dias,
+        'variacion_ayer': variacion_ayer,          # None si ayer a esta hora no hubo ventas
+        'variacion_7d': variacion_7d,              # None si hace 7 días a esta hora no hubo ventas
+        'tendencia_ayer': _tendencia(variacion_ayer),
+        'tendencia_7d': _tendencia(variacion_7d),
     }
 
 
@@ -708,6 +1019,21 @@ def calcular_kpis_requerimientos(sucursal_id, hoy, inicio_mes):
     }
 
 
+ESTADOS_CAMBIO_PENDIENTE = (
+    'SOLICITADO', 'EN_PROCESO', 'APROBADO',
+    'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE',
+)
+
+
+def _cambios_pendientes_qs(sucursal_id):
+    """Cambios/devoluciones que requieren acción (misma regla en el bloque de
+    operaciones y en el conteo en vivo del home)."""
+    qs = CambioDevolucion.objects.filter(estado__in=ESTADOS_CAMBIO_PENDIENTE)
+    if sucursal_id:
+        qs = qs.filter(sucursal_id=sucursal_id)
+    return qs
+
+
 def calcular_kpis_operaciones(sucursal_id, empresa_id, hoy, inicio_mes):
     """Calcula KPIs operacionales"""
     # Traspasos pendientes
@@ -724,13 +1050,10 @@ def calcular_kpis_operaciones(sucursal_id, empresa_id, hoy, inicio_mes):
     if sucursal_id:
         ajustes_pendientes = ajustes_pendientes.filter(sucursal_id=sucursal_id)
     
-    # Cambios y devoluciones pendientes
-    cambios_pendientes = CambioDevolucion.objects.filter(
-        estado__in=['SOLICITADO', 'EN_PROCESO', 'APROBADO', 'EJECUTADO_COBRO_PENDIENTE', 'EJECUTADO_DEVOL_PENDIENTE']
-    )
-    if sucursal_id:
-        cambios_pendientes = cambios_pendientes.filter(sucursal_id=sucursal_id)
-    
+    # Cambios y devoluciones pendientes (el home lo sobrescribe en vivo con
+    # el mismo helper; acá queda para quien use el bloque suelto)
+    cambios_pendientes = _cambios_pendientes_qs(sucursal_id)
+
     # DTEs pendientes de pago
     dtes_pago_pendiente = Dte.objects.filter(
         estado_pago='PENDIENTE',
@@ -994,44 +1317,8 @@ def obtener_top_productos(sucursal_id, inicio_mes, hoy):
     return resultado
 
 
-def obtener_productos_sin_movimiento(sucursal_id, dias=30):
-    """Obtiene productos sin ventas en los últimos X días"""
-    fecha_limite = timezone.localdate() - timedelta(days=dias)
-    
-    # SKUs que SÍ tuvieron ventas en el período
-    skus_con_ventas = Ticket_Productos.objects.filter(
-        idTicket__created_at__date__gte=fecha_limite,
-        idTicket__estado='PAGADO'
-    )
-    if sucursal_id:
-        skus_con_ventas = skus_con_ventas.filter(idTicket__sucursal_id=sucursal_id)
-    
-    skus_vendidos = set(skus_con_ventas.values_list('ProductoTalla_id', flat=True))
-    
-    # Productos con stock que NO se vendieron
-    productos_con_stock = LoteProducto.objects.filter(
-        activo=True,
-        cantidad_disponible__gt=0
-    ).values(
-        'producto_talla_id',
-        'producto_talla__producto__articulo',
-        'producto_talla__talla',
-    ).annotate(
-        stock=Sum('cantidad_disponible')
-    ).exclude(
-        producto_talla_id__in=skus_vendidos
-    ).order_by('-stock')[:10]
-    
-    resultado = []
-    for item in productos_con_stock:
-        resultado.append({
-            'producto': item['producto_talla__producto__articulo'],
-            'talla': item['producto_talla__talla'],
-            'stock': item['stock'],
-            'dias_sin_venta': dias
-        })
-    
-    return resultado
+# (obtener_productos_sin_movimiento, sin ninguna referencia, se borró el
+# 2026-09-26 — pedido H1.)
 
 
 # ========== API ENDPOINTS PARA DASHBOARD ==========
@@ -1043,28 +1330,36 @@ def api_dashboard_ventas_tiempo_real(request):
         sucursal_id = request.session.get('idSucursalActual')
         hoy = timezone.localdate()
         
-        # Ventas de hoy actualizadas
-        tickets_hoy = Ticket.objects.filter(fecha=hoy, estado='PAGADO')
+        # Ventas de hoy actualizadas. MISMA base que `calcular_kpis_ventas`
+        # (el tablero): fecha real `created_at` (Ticket.fecha es auto_now y se
+        # reescribe en cada save) y sin los tickets de CAMBIO_DEVOLUCION. Antes
+        # este contador y el del tablero no cuadraban, y el aviso "N ventas
+        # nuevas" saltaba por tickets que el tablero nunca iba a mostrar.
+        tickets_hoy = Ticket.objects.filter(
+            created_at__date=hoy, estado='PAGADO',
+        ).exclude(modulo_origen='CAMBIO_DEVOLUCION')
         if sucursal_id:
             tickets_hoy = tickets_hoy.filter(sucursal_id=sucursal_id)
-        
+
         total_hoy = tickets_hoy.aggregate(total=Sum('total'))['total'] or 0
         cantidad_tickets = tickets_hoy.count()
-        
-        # Última venta
-        ultima_venta = tickets_hoy.order_by('-hora').first()
-        
+
+        # Última venta: hora de `created_at` (Ticket.hora es auto_now y se
+        # reescribe en cada save, puede ser posterior a la venta).
+        ultima_venta = tickets_hoy.order_by('-created_at').first()
+
         return JsonResponse({
             'success': True,
             'ventas_hoy': int(total_hoy),
             'tickets_hoy': cantidad_tickets,
             'ultima_venta': {
-                'hora': ultima_venta.hora.strftime('%H:%M') if ultima_venta else None,
+                'hora': timezone.localtime(ultima_venta.created_at).strftime('%H:%M') if ultima_venta else None,
                 'monto': int(ultima_venta.total) if ultima_venta else 0
             } if ultima_venta else None
         })
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+    except Exception:
+        logger.exception("Error en API ventas tiempo real del home")
+        return JsonResponse({'success': False, 'error': 'No se pudo consultar la venta de hoy'})
 
 
 @login_required
@@ -1082,5 +1377,6 @@ def api_dashboard_stock_alertas(request):
             'sin_stock': stock_data['sin_stock'],
             'productos_criticos': stock_data['productos_criticos'][:5]
         })
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+    except Exception:
+        logger.exception("Error en API alertas de stock del home")
+        return JsonResponse({'success': False, 'error': 'No se pudo consultar el stock'})

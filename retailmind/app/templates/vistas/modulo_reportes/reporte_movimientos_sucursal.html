@@ -7,32 +7,7 @@
     <div class="container-fluid">
 
 <style>
-    /* ========== NEXO DESIGN SYSTEM ========== */
-    :root {
-        --nexo-primary: #0066FF;
-        --nexo-primary-dark: #0052CC;
-        --nexo-primary-light: #E6F0FF;
-        --nexo-secondary: #1A1A2E;
-        --nexo-accent: #00D4AA;
-        --nexo-success: #00D4AA;
-        --nexo-warning: #FFB020;
-        --nexo-error: #FF4D4D;
-        --nexo-info: #0066FF;
-        --nexo-gray-900: #1A1A2E;
-        --nexo-gray-700: #4A4A5A;
-        --nexo-gray-500: #8A8A9A;
-        --nexo-gray-300: #D1D1D9;
-        --nexo-gray-100: #F5F5F7;
-        --nexo-white: #FFFFFF;
-        --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
-        --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
-        --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
-        --nexo-radius-sm: 4px;
-        --nexo-radius-md: 8px;
-        --nexo-radius-lg: 12px;
-        --nexo-radius-xl: 16px;
-        --nexo-transition-fast: 150ms ease;
-    }
+    /* Variables --nexo-*: vienen de nexo-design-system.css (layout/header.html) */
 
     .nexo-container {
         max-width: 100%;
@@ -770,11 +745,13 @@
         </div>
     </div>
 
+    {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='existencias' activo='movimientos' %}
+
     <!-- ========== KPI ROW ========== -->
     <div class="nexo-kpi-row" id="kpi-row">
         <div class="nexo-kpi-card kpi-primary">
             <div class="nexo-kpi-icon icon-primary"><i class="ri-price-tag-3-line"></i></div>
-            <div class="nexo-kpi-label">Total Artículos</div>
+            <div class="nexo-kpi-label" title="Artículos (filas) que cumplen el filtro actual">Total Artículos</div>
             <div class="nexo-kpi-value" id="kpi-articulos">-</div>
         </div>
         <!-- Todo lo que la sucursal tuvo disponible: lo que ya tenia al inicio
@@ -789,7 +766,7 @@
         </div>
         <div class="nexo-kpi-card kpi-error">
             <div class="nexo-kpi-icon icon-error"><i class="ri-shopping-cart-line"></i></div>
-            <div class="nexo-kpi-label" id="kpi-label-vendido">Vendido</div>
+            <div class="nexo-kpi-label" title="Suma de la columna Vendido: salidas por venta del kardex (conceptos de venta, incluye VENTA_DIRECTA)" id="kpi-label-vendido">Vendido</div>
             <div class="nexo-kpi-value" id="kpi-vendido">-</div>
         </div>
         <!-- Sin filtro de fechas es el stock de hoy; con filtro es el saldo al
@@ -958,8 +935,22 @@ let registrosPorPagina = 50;
 
 // ========== INICIALIZACION ==========
 document.addEventListener('DOMContentLoaded', function() {
-    cargarMarcasSelect2();
+    const pMarcas = cargarMarcasSelect2();
     cargarDepartamentosSelect2();
+
+    // Filtros de la URL (tira de reportes o enlace guardado): solo quedan puestos;
+    // el reporte sigue esperando "Buscar". El período va a Desde/Hasta (un mes = sus días).
+    if (window.FiltrosReporte) {
+        const f = FiltrosReporte.completar(FiltrosReporte.leer());
+        if (f.fecha_inicio) FiltrosReporte.ponerValor('#filtro-fecha-desde', f.fecha_inicio);
+        if (f.fecha_fin) FiltrosReporte.ponerValor('#filtro-fecha-hasta', f.fecha_fin);
+        if (f.marca_id) {
+            pMarcas.then(() => {
+                // change.select2 refresca Select2 sin disparar los handlers de la app
+                if (FiltrosReporte.ponerValor('#filtro-marca', f.marca_id)) $('#filtro-marca').trigger('change.select2');
+            });
+        }
+    }
 });
 
 // ========== LOADING ==========
@@ -1046,6 +1037,21 @@ async function cargarReporte() {
             'Esto puede tomar tiempo. Deseas continuar?'
         );
         if (!confirmar) return;
+    }
+
+    // Estado compartido en la URL: Desde/Hasta = fecha_inicio/fecha_fin. Sin fechas
+    // se borra el período solo si venía uno que este reporte aplicó (rango o mes);
+    // un año suelto no se toca.
+    if (window.FiltrosReporte) {
+        const estado = { marca_id: marcaId || '' };
+        if (fechaDesde || fechaHasta) {
+            estado.fecha_inicio = fechaDesde;
+            estado.fecha_fin = fechaHasta;
+        } else {
+            const previo = FiltrosReporte.leer();
+            if (previo.fecha_inicio || previo.fecha_fin || previo.mes) estado.fecha_inicio = '';
+        }
+        FiltrosReporte.reflejar(estado);
     }
 
     // Bloquear boton y mostrar estado de carga

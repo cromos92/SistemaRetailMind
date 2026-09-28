@@ -375,10 +375,15 @@ class POSTransactionService:
         transaccion.detalle_pago = detalle_pago
         transaccion.save()
         
-        # Actualizar estado del ticket si está completamente pagado
+        # El ticket NO se marca PAGADO acá: el cierre de la venta (descuento
+        # de stock + DTE) lo hace el cobro del POS (`registrar_pagos_ticket`).
+        # Marcarlo desde aquí dejaba la venta PAGADA sin rebajar stock.
         if transaccion.ticket.saldo_por_pagar <= 0:
-            transaccion.ticket.estado = 'PAGADO'
-            transaccion.ticket.save()
+            logger.warning(
+                'Pago TBK cubre el ticket id=%s (transaccion %s): queda PENDIENTE '
+                'hasta cerrarlo en el POS',
+                transaccion.ticket_id, transaccion.id,
+            )
     
     @staticmethod
     def anular_transaccion(

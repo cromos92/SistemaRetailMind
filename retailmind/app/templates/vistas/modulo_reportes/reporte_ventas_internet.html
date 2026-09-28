@@ -283,6 +283,8 @@
             </div>
 
             <div class="card-body">
+                {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='ventas' activo='internet' %}
+
                 <div class="scope-strip mb-3">
                     <span><i class="bi bi-building"></i>Empresa: <strong>{{ empresa_activa_nombre|default:"Todas permitidas" }}</strong></span>
                     <span><i class="bi bi-shop"></i>Sucursal activa: <strong>{{ sucursal_activa_nombre|default:"Todas permitidas" }}</strong></span>
@@ -364,7 +366,7 @@
                         <div class="card kpi-card" style="background:linear-gradient(135deg,#fff8e1,#ffecb3);border-left:4px solid #ffbe0b;">
                             <div class="card-body d-flex gap-2 align-items-center">
                                 <div class="kpi-icon" style="background:linear-gradient(135deg,#ffbe0b,#f0a500);"><i class="bi bi-receipt"></i></div>
-                                <div><div class="kpi-label">Tickets</div><div class="kpi-value" id="kpiTickets">0</div><div class="kpi-detail" id="kpiTicketPromedio">$0 prom.</div></div>
+                                <div><div class="kpi-label" title="Tickets de venta por internet listados en el período (filas del detalle)">Tickets</div><div class="kpi-value" id="kpiTickets">0</div><div class="kpi-detail" id="kpiTicketPromedio">$0 prom.</div></div>
                             </div>
                         </div>
                     </div>
@@ -380,7 +382,7 @@
                         <div class="card kpi-card" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-left:4px solid #0ab39c;">
                             <div class="card-body d-flex gap-2 align-items-center">
                                 <div class="kpi-icon" style="background:linear-gradient(135deg,#0ab39c,#099885);"><i class="bi bi-box-seam"></i></div>
-                                <div><div class="kpi-label">Unidades</div><div class="kpi-value" id="kpiUnidades">0</div><div class="kpi-detail" id="kpiProductos">0 productos</div></div>
+                                <div><div class="kpi-label" title="Suma de unidades de los tickets del período">Unidades</div><div class="kpi-value" id="kpiUnidades">0</div><div class="kpi-detail" id="kpiProductos">0 productos</div></div>
                             </div>
                         </div>
                     </div>
@@ -388,7 +390,7 @@
                         <div class="card kpi-card" style="background:linear-gradient(135deg,#eef2ff,#c7d2fe);border-left:4px solid #6c5ce7;">
                             <div class="card-body d-flex gap-2 align-items-center">
                                 <div class="kpi-icon" style="background:linear-gradient(135deg,#6c5ce7,#8b5cf6);"><i class="bi bi-shop"></i></div>
-                                <div><div class="kpi-label">Plataformas</div><div class="kpi-value" id="kpiPlataformas">0</div><div class="kpi-detail">Paris, Ripley, Shopify...</div></div>
+                                <div><div class="kpi-label" title="Plataformas distintas con venta en el período">Plataformas</div><div class="kpi-value" id="kpiPlataformas">0</div><div class="kpi-detail">Paris, Ripley, Shopify...</div></div>
                             </div>
                         </div>
                     </div>
@@ -396,7 +398,7 @@
                         <div class="card kpi-card" style="background:linear-gradient(135deg,#dcfce7,#bbf7d0);border-left:4px solid #16a34a;">
                             <div class="card-body d-flex gap-2 align-items-center">
                                 <div class="kpi-icon" style="background:linear-gradient(135deg,#16a34a,#15803d);"><i class="bi bi-cart-check"></i></div>
-                                <div><div class="kpi-label">Ecommerce</div><div class="kpi-value" id="kpiEcommerce">0</div><div class="kpi-detail">AllConnected</div></div>
+                                <div><div class="kpi-label" title="Tickets cuyo origen es el ecommerce (AllConnected)">Ecommerce</div><div class="kpi-value" id="kpiEcommerce">0</div><div class="kpi-detail">AllConnected</div></div>
                             </div>
                         </div>
                     </div>
@@ -404,7 +406,7 @@
                         <div class="card kpi-card" style="background:linear-gradient(135deg,#e0f2fe,#bae6fd);border-left:4px solid #0284c7;">
                             <div class="card-body d-flex gap-2 align-items-center">
                                 <div class="kpi-icon" style="background:linear-gradient(135deg,#0284c7,#0369a1);"><i class="bi bi-display"></i></div>
-                                <div><div class="kpi-label">POS Internet</div><div class="kpi-value" id="kpiPos">0</div><div class="kpi-detail">Tickets POS</div></div>
+                                <div><div class="kpi-label" title="Tickets de internet registrados desde el POS">POS Internet</div><div class="kpi-value" id="kpiPos">0</div><div class="kpi-detail">Tickets POS</div></div>
                             </div>
                         </div>
                     </div>
@@ -520,6 +522,9 @@
     let chartVentas = null;
     let chartPlataformas = null;
     let chartBoletasEmpresa = null;
+    // Sucursal pedida en la URL, pendiente de validar contra las permitidas
+    // (llegan con la primera respuesta).
+    let sucursalUrl = '';
 
     const $ = selector => document.querySelector(selector);
     const $$ = selector => Array.from(document.querySelectorAll(selector));
@@ -550,6 +555,59 @@
         $$('.quick-range').forEach(btn => btn.classList.toggle('active', btn.dataset.range === tipo));
     }
 
+    // Rango rápido equivalente a [inicio, fin], o null. El mes y el año en curso
+    // valen hasta hoy o hasta su último día (no hay ventas futuras).
+    function rangoRapido(inicio, fin) {
+        const hoy = new Date();
+        const hoyIso = localIso(hoy);
+        if (inicio === hoyIso && fin === hoyIso) return 'hoy';
+        if (inicio === localIso(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - 29)) && fin === hoyIso) return '30';
+        if (inicio === localIso(new Date(hoy.getFullYear(), hoy.getMonth(), 1)) && fin >= hoyIso && fin.slice(0, 7) === hoyIso.slice(0, 7)) return 'mes';
+        if (inicio === localIso(new Date(hoy.getFullYear(), 0, 1)) && fin >= hoyIso && fin.slice(0, 4) === hoyIso.slice(0, 4)) return 'anio';
+        return null;
+    }
+
+    // Período y sucursal de la URL (tira de reportes o enlace guardado), antes de
+    // la primera consulta. Un mes se toma como su rango y un año como ene-dic.
+    function aplicarFiltrosUrl() {
+        if (!window.FiltrosReporte) return;
+        const f = FiltrosReporte.leer();
+        const c = FiltrosReporte.completar(f);
+        let inicio = c.fecha_inicio;
+        let fin = c.fecha_fin;
+        if (!inicio && c.anio) { inicio = `${c.anio}-01-01`; fin = `${c.anio}-12-31`; }
+        if (inicio && fin) {
+            const rapido = rangoRapido(inicio, fin);
+            if (rapido) {
+                setRange(rapido);
+            } else {
+                $('#fechaInicio').value = inicio;
+                $('#fechaFin').value = fin;
+                $$('.quick-range').forEach(btn => btn.classList.remove('active'));
+            }
+        }
+        if (f.sucursal_id) {
+            // Las sucursales llegan con la primera respuesta: una opción provisoria
+            // hace que esa consulta ya vaya filtrada. cargarFiltros la reemplaza y,
+            // si no está entre las permitidas, queda "Todas" y se consulta de nuevo.
+            $('#sucursalId').insertAdjacentHTML('beforeend', `<option value="${esc(f.sucursal_id)}">Sucursal ${esc(f.sucursal_id)}</option>`);
+            $('#sucursalId').value = f.sucursal_id;
+            sucursalUrl = f.sucursal_id;
+        }
+    }
+
+    // Deja en la URL el período y la sucursal consultados (nombres canónicos).
+    // "Todo histórico" no es un período: se quita el tiempo de la URL.
+    function reflejarFiltros() {
+        if (!window.FiltrosReporte) return;
+        const historico = $('#todoHistorico').value === '1';
+        FiltrosReporte.reflejar({
+            fecha_inicio: historico ? '' : $('#fechaInicio').value,
+            fecha_fin: historico ? '' : $('#fechaFin').value,
+            sucursal_id: $('#sucursalId').value
+        });
+    }
+
     function params(incluirPagina) {
         const data = {
             fecha_inicio: $('#fechaInicio').value,
@@ -568,20 +626,29 @@
     }
 
     async function cargar() {
+        let repetir = false;
         $('#btnConsultar').disabled = true;
         $('#btnActualizar').disabled = true;
+        reflejarFiltros();
         try {
             const response = await fetch(`${apiUrl}?${params(true)}`, {headers: {'Accept': 'application/json'}});
             const data = await response.json();
             if (!response.ok || !data.success) throw new Error(data.error || 'No fue posible cargar el informe.');
-            if (!filtrosCargados) cargarFiltros(data.filtros);
-            render(data);
+            if (!filtrosCargados) {
+                cargarFiltros(data.filtros);
+                // La sucursal de la URL no está entre las permitidas: quedó en
+                // "Todas" y esta respuesta (vacía) no se muestra.
+                repetir = Boolean(sucursalUrl) && $('#sucursalId').value !== sucursalUrl;
+                sucursalUrl = '';
+            }
+            if (!repetir) render(data);
         } catch (error) {
             mostrarError(error.message || 'Error al consultar ventas internet.');
         } finally {
             $('#btnConsultar').disabled = false;
             $('#btnActualizar').disabled = false;
         }
+        if (repetir) cargar();
     }
 
     function cargarFiltros(filtros) {
@@ -831,6 +898,7 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         setRange('anio');
+        aplicarFiltrosUrl();
         cargar();
     });
 })();

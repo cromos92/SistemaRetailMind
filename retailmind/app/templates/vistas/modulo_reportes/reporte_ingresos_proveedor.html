@@ -697,41 +697,43 @@
             </div>
         </div>
         
+        {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='compras' activo='ingresos' %}
+
         <!-- ========== KPIs PRINCIPALES ========== -->
         <div class="kpis-strip">
             <div class="kpi-item">
                 <div class="kpi-item-icon primary"><i class="bi bi-building"></i></div>
                 <div>
                     <div class="kpi-item-value" id="totalProveedores">-</div>
-                    <div class="kpi-item-label">Proveedores</div>
+                    <div class="kpi-item-label" title="Emisores distintos de los DTE de compra filtrados">Proveedores</div>
                 </div>
             </div>
             <div class="kpi-item">
                 <div class="kpi-item-icon info"><i class="bi bi-file-earmark-text"></i></div>
                 <div>
                     <div class="kpi-item-value" id="totalDtes">-</div>
-                    <div class="kpi-item-label">Docs DTE</div>
+                    <div class="kpi-item-label" title="Cantidad de DTE de compra que cumplen el filtro">Docs DTE</div>
                 </div>
             </div>
             <div class="kpi-item">
                 <div class="kpi-item-icon warning"><i class="bi bi-hourglass-split"></i></div>
                 <div>
                     <div class="kpi-item-value" id="totalPendienteIngreso">-</div>
-                    <div class="kpi-item-label">Pares por Ingresar</div>
+                    <div class="kpi-item-label" title="DTE por DTE: unidades del detalle del documento menos las ya ingresadas (mínimo 0). Solo se puede medir en los DTE que traen detalle de productos; los DTE sin detalle se informan aparte en 'Por Ingresar'.">Pares por Ingresar</div>
                 </div>
             </div>
             <div class="kpi-item">
                 <div class="kpi-item-icon success"><i class="bi bi-box-seam"></i></div>
                 <div>
                     <div class="kpi-item-value" id="totalIngresado">-</div>
-                    <div class="kpi-item-label">Pares Ingresados</div>
+                    <div class="kpi-item-label" title="Suma de los movimientos INGRESO del kardex asociados a esos DTE">Pares Ingresados</div>
                 </div>
             </div>
             <div class="kpi-item">
                 <div class="kpi-item-icon secondary"><i class="bi bi-currency-dollar"></i></div>
                 <div>
                     <div class="kpi-item-value" id="montoTotal">-</div>
-                    <div class="kpi-item-label">Monto Compras</div>
+                    <div class="kpi-item-label" title="Costo de lo ingresado a inventario: suma de cantidad × costo de los movimientos INGRESO asociados a esos DTE. No es el monto facturado del documento.">Costo Ingresado</div>
                 </div>
             </div>
         </div>
@@ -917,7 +919,9 @@ function cargarProveedoresReporte() {
         const select = $('#filtroProveedorReporte');
         select.empty().append('<option value="">Todos los proveedores</option>');
         data.forEach(function(proveedor) {
-            select.append(`<option value="${proveedor.id}">${proveedor.nombre} (${proveedor.rut})</option>`);
+            // Se arma el <option> como nodo (no como HTML): el nombre del
+            // proveedor es texto libre de la BD.
+            select.append($('<option>').val(proveedor.id).text(`${proveedor.nombre} (${proveedor.rut})`));
         });
     });
 }
@@ -938,7 +942,13 @@ function cargarReporteProveedor(page = 1) {
     Object.keys(filtros).forEach(key => {
         if (filtros[key]) filtrosActivos[key] = filtros[key];
     });
-    
+
+    // URL: el rango consultado. Sin fechas (90 días por defecto o búsqueda por
+    // DTE) no hay período que compartir y se quita; sucursal/marca se conservan.
+    if (window.FiltrosReporte) {
+        FiltrosReporte.reflejar({ fecha_inicio: filtros.fecha_inicio || null, fecha_fin: filtros.fecha_fin || null });
+    }
+
     // Mostrar loading
     mostrarLoading();
     
@@ -958,8 +968,11 @@ function cargarReporteProveedor(page = 1) {
         } else {
             mostrarError('No se pudo cargar el reporte');
         }
-    }).fail(function() {
-        mostrarError('Error de conexión al servidor');
+    }).fail(function(xhr) {
+        // 400: filtro mal formado (el backend explica cuál); mostrarError usa text, no HTML.
+        const msg = (xhr && xhr.status === 400 && xhr.responseJSON && xhr.responseJSON.error)
+            ? xhr.responseJSON.error : 'Error de conexión al servidor';
+        mostrarError(msg);
     });
 }
 
@@ -1010,36 +1023,43 @@ function mostrarReporteProveedor(data, pagination) {
         else if (item.estado_dte === 'PENDIENTE') estadoDteClass = 'warning';
         else if (item.estado_dte === 'RECHAZADO') estadoDteClass = 'error';
         
-        // Determinar clase para estado pago
+        // Determinar clase para estado pago (compras escribe 'Pendiente'/'Pagado'
+        // en formato título: se compara sin distinguir mayúsculas).
+        const estadoPago = String(item.estado_pago || '').toUpperCase();
         let estadoPagoClass = 'light';
-        if (item.estado_pago === 'PAGADO') estadoPagoClass = 'success';
-        else if (item.estado_pago === 'PENDIENTE') estadoPagoClass = 'warning';
-        else if (item.estado_pago === 'VENCIDO') estadoPagoClass = 'error';
-        
+        if (estadoPago === 'PAGADO') estadoPagoClass = 'success';
+        else if (estadoPago === 'PENDIENTE') estadoPagoClass = 'warning';
+        else if (estadoPago === 'VENCIDO') estadoPagoClass = 'error';
+
+        // DTE sin líneas: no hay contra qué medir lo pendiente de ingreso.
+        const celdaDetalle = item.sin_detalle
+            ? `<div class="unidades-row" title="El DTE no tiene detalle de productos: no se puede medir lo pendiente de ingreso"><span class="badge-tag light">Sin detalle</span></div>`
+            : `${item.unidades_en_dte > 0 ? `<div class="unidades-row"><span class="badge-tag light">DTE</span>${formatearNumero(item.unidades_en_dte)}</div>` : ''}
+                    ${item.unidades_pendientes_ingreso > 0 ? `<div class="unidades-row"><span class="badge-tag warning">Pend</span><strong style="color:var(--nexo-warning);">${formatearNumero(item.unidades_pendientes_ingreso)}</strong></div>` : ''}`;
+
         const fila = `
             <tr>
                 <td class="text-start">
-                    <div class="proveedor-nombre" title="${item.proveedor_nombre}">${item.proveedor_nombre}</div>
-                    <span class="proveedor-rut">${item.proveedor_rut}</span>
+                    <div class="proveedor-nombre" title="${escHtmlIngresos(item.proveedor_nombre)}">${escHtmlIngresos(item.proveedor_nombre)}</div>
+                    <span class="proveedor-rut">${escHtmlIngresos(item.proveedor_rut)}</span>
                 </td>
                 <td class="text-start">
-                    <span class="dte-num">${item.dte_numero}</span>
-                    <span class="dte-tipo" title="${item.dte_tipo}">${item.dte_tipo}</span>
+                    <span class="dte-num">${escHtmlIngresos(item.dte_numero)}</span>
+                    <span class="dte-tipo" title="${escHtmlIngresos(item.dte_tipo)}">${escHtmlIngresos(item.dte_tipo)}</span>
                 </td>
                 <td class="text-center text-nowrap">${formatearFecha(item.fecha_emision)}</td>
                 <td>
-                    ${item.unidades_en_dte > 0 ? `<div class="unidades-row"><span class="badge-tag light">DTE</span>${formatearNumero(item.unidades_en_dte)}</div>` : ''}
-                    ${item.unidades_pendientes_ingreso > 0 ? `<div class="unidades-row"><span class="badge-tag warning">Pend</span><strong style="color:var(--nexo-warning);">${formatearNumero(item.unidades_pendientes_ingreso)}</strong></div>` : ''}
+                    ${celdaDetalle}
                     <div class="unidades-row"><span class="badge-tag primary">Ing</span>${formatearNumero(item.total_ingresado)}</div>
                 </td>
                 <td class="text-end">
                     <div class="monto-principal">$${formatearNumero(item.monto_ingresado)}</div>
-                    <div class="monto-secundario">Ingresado a inventario</div>
+                    <div class="monto-secundario">Costo ingresado a inventario</div>
                 </td>
                 <td>
                     <div class="estados-cell">
-                        <span class="badge-nexo ${estadoDteClass}" style="font-size:0.7rem; padding:4px 7px;">${item.estado_dte}</span>
-                        <span class="badge-nexo ${estadoPagoClass}" style="font-size:0.7rem; padding:4px 7px;">${item.estado_pago}</span>
+                        <span class="badge-nexo ${estadoDteClass}" style="font-size:0.7rem; padding:4px 7px;">${escHtmlIngresos(item.estado_dte)}</span>
+                        <span class="badge-nexo ${estadoPagoClass}" style="font-size:0.7rem; padding:4px 7px;">${escHtmlIngresos(item.estado_pago)}</span>
                     </div>
                 </td>
             </tr>`;
@@ -1102,11 +1122,21 @@ function calcularIndicadoresDesdeResumen(resumen) {
     
     $('#pendienteValor').text(formatearNumero(pendientes));
     $('#pendienteBar').css('width', Math.min(porcentajePendiente, 100) + '%');
-    $('#pendienteDetalle').text(`${formatearNumero(pendientes)} de ${formatearNumero(totalEnDtes)}`);
-    
+    // Los DTE sin detalle de productos no se pueden medir: se avisa cuántos
+    // son para que el 0 no se lea como "no hay nada por ingresar".
+    const sinDetalle = resumen.dtes_sin_detalle || 0;
+    $('#pendienteDetalle').text(
+        `${formatearNumero(pendientes)} de ${formatearNumero(totalEnDtes)}` +
+        (sinDetalle > 0 ? ` · ${formatearNumero(sinDetalle)} DTE sin detalle` : '')
+    );
+    $('#pendienteDetalle').attr('title', sinDetalle > 0
+        ? `${formatearNumero(sinDetalle)} DTE no traen detalle de productos (${formatearNumero(resumen.unidades_ingresadas_sin_detalle || 0)} pares ingresados contra ellos): su pendiente de ingreso no se puede medir.`
+        : '');
+
     let pendienteStatus = 'OK';
     if (pendientes > 0 && porcentajePendiente > 50) pendienteStatus = 'Alto';
     else if (pendientes > 0) pendienteStatus = 'Parcial';
+    else if (sinDetalle > 0) pendienteStatus = 'Sin detalle';
     $('#pendienteBadge').text(pendienteStatus);
 }
 
@@ -1146,7 +1176,7 @@ function calcularIndicadores(data) {
     }
     
     // 1. Estado de Pagos
-    const dtesPagados = data.filter(item => item.estado_pago === 'PAGADO').length;
+    const dtesPagados = data.filter(item => String(item.estado_pago || '').toUpperCase() === 'PAGADO').length;
     const totalDtes = data.length;
     const porcentajePagos = totalDtes > 0 ? ((dtesPagados / totalDtes) * 100) : 0;
     
@@ -1223,6 +1253,14 @@ function formatearNumero(numero) {
     return Math.round(numero).toLocaleString('es-CL');
 }
 
+// Escapa texto de la BD (nombre de proveedor, tipo, estados) antes de
+// insertarlo como HTML en la tabla.
+function escHtmlIngresos(valor) {
+    return String(valor == null ? '' : valor).replace(/[&<>"']/g, function (c) {
+        return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+    });
+}
+
 function formatearFecha(fecha) {
     if (!fecha) return '-';
     const partes = fecha.split('-');
@@ -1253,7 +1291,24 @@ $(document).ready(function() {
     // Limpiar campos iniciales
     $('#filtroProveedorReporte').val('').trigger('change');
     $('#filtroFechaInicioReporte, #filtroFechaFinReporte').val('').addClass('fecha-vacia');
-    
+
+    // Período que llega en la URL (tira de reportes / enlace guardado). Un mes da
+    // su rango; un año solo, del 1-ene al 31-dic (o a hoy si es el año en curso).
+    if (window.FiltrosReporte) {
+        const f = FiltrosReporte.completar(FiltrosReporte.leer());
+        let desde = f.fecha_inicio, hasta = f.fecha_fin;
+        if (!desde && !hasta && f.anio) {
+            const h = new Date();  // fecha local del navegador, no UTC
+            const hoy = h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0') + '-' + String(h.getDate()).padStart(2, '0');
+            if (f.anio + '-01-01' <= hoy) {
+                desde = f.anio + '-01-01';
+                hasta = f.anio + '-12-31' < hoy ? f.anio + '-12-31' : hoy;
+            }
+        }
+        if (FiltrosReporte.ponerValor('#filtroFechaInicioReporte', desde)) manejarVisibilidadFecha($('#filtroFechaInicioReporte'));
+        if (FiltrosReporte.ponerValor('#filtroFechaFinReporte', hasta)) manejarVisibilidadFecha($('#filtroFechaFinReporte'));
+    }
+
     // Eventos de fechas
     $('#filtroFechaInicioReporte, #filtroFechaFinReporte').on('change focus blur', function(e) {
         if (e.type === 'focus') {

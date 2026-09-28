@@ -17,9 +17,10 @@ import logging
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
-from .models import CargaFacturaPdf, Sucursal
+from .models import CargaFacturaPdf, PermisoRol, Sucursal
 from .services.carga_factura import chat as svc_chat
 from .services.carga_factura import web as svc_web
 from .services.carga_factura.facturas import ErrorCarga
@@ -59,6 +60,7 @@ def _resumen(sesion):
         'creado_por': (sesion.creado_por.get_full_name() or sesion.creado_por.username)
                       if sesion.creado_por else '',
         'creado_en': sesion.creado_en.isoformat(timespec='seconds'),
+        'uso': {k: v for k, v in (sesion.uso or {}).items() if k != 'pasos'},
         'facturas': [{'idx': i, 'folio': d.get('folio'), 'proveedor': d.get('proveedor_nombre'),
                       'estado': d.get('_estado', 'PENDIENTE'), 'lineas': len(d.get('lineas') or [])}
                      for i, d in enumerate(sesion.facturas or [])],
@@ -132,11 +134,13 @@ def api_carga_factura_subir(request):
     if indicaciones:
         # Van al lector como pistas (ver web.leer_en_segundo_plano).
         sesion.agregar_mensaje(svc_web.USUARIO, indicaciones, tipo='indicaciones')
+    como = {1: 'con una lectura rápida',
+            2: 'con una lectura y, solo si deja dudas, una segunda de verificación',
+            3: 'con dos lecturas independientes que después comparo'}[lecturas]
     sesion.agregar_mensaje(
         svc_web.AGENTE,
-        f'Recibí el PDF. Lo estoy leyendo con {lecturas} lectura(s) '
-        f'{"independientes que después comparo" if lecturas > 1 else "rápida"}; '
-        f'suele tardar unos minutos. Te aviso aquí cuando tenga la vista previa.',
+        f'Recibí el PDF. Lo estoy leyendo {como}; suele tardar unos minutos. '
+        f'Te aviso aquí cuando tenga la vista previa.',
         tipo='texto')
     svc_web.iniciar_lectura(sesion.id)
     return JsonResponse({'success': True, 'id': sesion.id, 'sesion': _resumen(sesion)})
@@ -161,7 +165,7 @@ def api_carga_factura_planificar(request, sesion_id):
     sesion = _sesion_del_usuario(request, sesion_id)
     if sesion is None:
         return _error('No existe esa sesión o no es de tus bodegas.', status=404)
-    if sesion.estado not in ('LEIDA', 'CARGANDO'):
+    if sesion.estado not in ('LEIDA', 'CARGANDO', 'BUSCANDO'):
         return _error(f'La sesión está {sesion.get_estado_display().lower()}; '
                       f'todavía no hay vista previa.')
     try:
@@ -174,9 +178,10 @@ def api_carga_factura_planificar(request, sesion_id):
         facturas = svc_web.planificar(sesion, request.user, solo_idx=solo)
     except ErrorCarga as exc:
         return _error(str(exc))
-    except Exception as exc:
+    except Exception:
         logger.exception('carga_factura: error planificando la sesión %s', sesion_id)
-        return _error(f'No pude armar la vista previa: {type(exc).__name__}: {exc}', status=500)
+        return _error('No pude armar la vista previa por un error interno (quedó registrado). '
+                      'Inténtalo de nuevo o avisa a soporte.', status=500)
     return JsonResponse({'success': True, 'sesion': _resumen(sesion), 'facturas': facturas})
 
 
@@ -199,12 +204,20 @@ def api_carga_factura_cargar(request, sesion_id):
         return _error('Indica qué factura cargar.')
     if data.get('_estado') == 'CARGADA':
         return _error(f'La factura {data.get("folio")} ya se cargó.')
+    # Cargar = ingresar stock por el camino del modal "Crear Producto Manual",
+    # que exige gestion_producto/puede_crear en la bodega: se avisa aquí, antes
+    # de lanzar la carga, en vez de fallar línea por línea en segundo plano.
+    if not PermisoRol.tiene_permiso(request.user, 'gestion_producto', 'puede_crear',
+                                    sesion.sucursal_id):
+        return _error('No tienes permiso para crear productos ni ingresar stock en Gestión de '
+                      'Productos de esta bodega. Pídeselo a un administrador.', status=403)
     opciones = cuerpo.get('opciones') if isinstance(cuerpo.get('opciones'), dict) else {}
     try:
         previa = svc_web.planificar(sesion, request.user, solo_idx=idx)[0]
-    except Exception as exc:
+    except Exception:
         logger.exception('carga_factura: error validando la factura %s de la sesión %s', idx, sesion_id)
-        return _error(f'No pude validar la factura: {type(exc).__name__}: {exc}', status=500)
+        return _error('No pude validar la factura por un error interno (quedó registrado). '
+                      'Inténtalo de nuevo o avisa a soporte.', status=500)
     if previa['error']:
         return _error(previa['error'])
     if previa['totales']['bloqueantes']:
@@ -224,9 +237,21 @@ def api_carga_factura_cargar(request, sesion_id):
             f'línea {p["n"]} {p["articulo"]} → '
             f'{textos.get(str(opciones.get(str(p["n"]), p["opcion_sugerida"])).lower(), textos["s"])}'
             for p in existentes)
-    sesion.estado = 'CARGANDO'
-    sesion.progreso = 'Iniciando la carga…'
-    sesion.save(update_fields=['estado', 'progreso', 'actualizado_en'])
+    # LEIDA → CARGANDO con UPDATE condicional: de dos clics (o dos pestañas)
+    # solo uno gana y lanza el hilo; el otro recibe el aviso. Antes se leía el
+    # estado, se planificaba y recién después se guardaba CARGANDO, y los dos
+    # pedidos podían lanzar dos cargas de la misma factura (CC-13).
+    tomada = CargaFacturaPdf.objects.filter(id=sesion.id, estado='LEIDA').update(
+        estado='CARGANDO', progreso='Iniciando la carga…', actualizado_en=timezone.now())
+    if not tomada:
+        return _error('Ya hay una carga u otra tarea en curso en esta sesión; espera a que termine.')
+    sesion.refresh_from_db(fields=['estado', 'progreso', 'facturas', 'mensajes', 'actualizado_en'])
+    facturas = sesion.facturas or []
+    if idx < len(facturas) and facturas[idx].get('_estado') == 'CARGADA':
+        # Terminó otra carga de esta factura entre la lectura y el bloqueo.
+        CargaFacturaPdf.objects.filter(id=sesion.id, estado='CARGANDO').update(
+            estado='LEIDA', progreso='', actualizado_en=timezone.now())
+        return _error(f'La factura {data.get("folio")} ya se cargó.')
     sesion.agregar_mensaje(svc_web.USUARIO, resumen + '.', tipo='carga', factura=idx)
     svc_web.iniciar_carga(sesion.id, idx, opciones, request.user.id)
     return JsonResponse({'success': True, 'sesion': _resumen(sesion)})
@@ -246,11 +271,44 @@ def api_carga_factura_conversar(request, sesion_id):
         salida = svc_chat.conversar(sesion, request.user, texto)
     except ErrorCarga as exc:
         return _error(str(exc))
-    except Exception as exc:
+    except Exception:
         logger.exception('carga_factura: error en el chat de la sesión %s', sesion_id)
-        return _error(f'No pude procesar el mensaje: {type(exc).__name__}: {exc}', status=500)
+        return _error('No pude procesar el mensaje por un error interno (quedó registrado). '
+                      'Inténtalo de nuevo o avisa a soporte.', status=500)
     sesion.refresh_from_db()
     return JsonResponse({'success': True, 'sesion': _resumen(sesion), **salida})
+
+
+@require_POST
+@login_required
+def api_carga_factura_investigar(request, sesion_id):
+    """Botón «Buscar en internet» de la tarjeta: qué es cada artículo y su color
+    predominante. Cuerpo {idx, n: [..]}; sin n = las líneas sin color."""
+    sesion = _sesion_del_usuario(request, sesion_id)
+    if sesion is None:
+        return _error('No existe esa sesión o no es de tus bodegas.', status=404)
+    if sesion.estado != 'LEIDA':
+        return _error('Espera a que termine lo que está haciendo la sesión.')
+    try:
+        cuerpo = _cuerpo(request)
+        idx = int(cuerpo.get('idx'))
+        data = sesion.facturas[idx]
+        pedidas = cuerpo.get('n') if isinstance(cuerpo.get('n'), list) else None
+        ns = [int(n) for n in (pedidas or svc_web.lineas_sin_color(data))]
+    except (ErrorCarga, TypeError, ValueError, IndexError):
+        return _error('Indica qué factura (y, opcionalmente, qué líneas).')
+    if not ns:
+        return _error('Todas las líneas de esa factura ya tienen color; pide una línea concreta '
+                      'si quieres verificar alguna.')
+    try:
+        sesion.agregar_mensaje(
+            svc_web.USUARIO,
+            f'Buscar en internet {len(ns)} artículo(s) de la factura {data.get("folio")}: '
+            f'línea(s) {", ".join(map(str, ns))}.', tipo='busqueda', factura=idx)
+        cuantas = svc_web.iniciar_investigacion(sesion, [(idx, n) for n in ns], request.user)
+    except ErrorCarga as exc:
+        return _error(str(exc))
+    return JsonResponse({'success': True, 'sesion': _resumen(sesion), 'lineas': ns[:cuantas]})
 
 
 @require_POST

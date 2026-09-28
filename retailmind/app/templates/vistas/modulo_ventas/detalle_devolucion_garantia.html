@@ -38,7 +38,7 @@
     <div class="container-fluid">
 
         <div class="page-header-nexo mb-2">
-            <h1 style="font-size:1.2rem; margin:0;"><i class="ri-refund-2-line"></i> Devolución {{ devolucion.numero_operacion }}</h1>
+            <h1 style="font-size:1.2rem; margin:0;"><i class="ri-refund-2-line"></i> Devolución de Dinero {{ devolucion.numero_operacion }}</h1>
         </div>
 
         <div class="detalle-card">
@@ -51,6 +51,8 @@
             <h6><i class="ri-user-line me-1"></i> Cliente / Receptor</h6>
             <p class="mb-1"><strong>{{ devolucion.receptor.nombre }}</strong> — {{ devolucion.receptor.rut }}</p>
             <p class="mb-1">{{ devolucion.receptor.direccion }} {{ devolucion.receptor.comuna }} {{ devolucion.receptor.ciudad }}</p>
+            {% if devolucion.receptor.correoVendedor %}<p class="mb-1"><strong>Correo:</strong> {{ devolucion.receptor.correoVendedor }}</p>{% endif %}
+            {% if devolucion.receptor.contacto1 %}<p class="mb-1"><strong>Teléfono:</strong> {{ devolucion.receptor.contacto1 }}</p>{% endif %}
             <p class="mb-0">{{ devolucion.receptor.giro }}</p>
         </div>
 
@@ -93,6 +95,12 @@
             <p class="mb-1"><strong>Aprobado por:</strong> {{ devolucion.autorizado_por.username|default:"—" }} <span class="text-muted">({{ devolucion.fecha_aprobacion|date:"d/m/Y H:i" }})</span></p>
             {% if devolucion.metodo_devolucion %}
             <p class="mb-1"><strong>Impacto en caja:</strong> {{ devolucion.get_metodo_devolucion_display }}{% if devolucion.fecha_imputacion_caja %} — imputa el {{ devolucion.fecha_imputacion_caja|date:"d/m/Y" }}{% endif %}</p>
+            {% endif %}
+            {% if mercadopago %}
+            <p class="mb-1"><strong>Mercado Pago:</strong>
+                {% if mercadopago.numero_operacion %}N° de operación <code>{{ mercadopago.numero_operacion }}</code>{% else %}<span class="text-warning">sin N° de operación registrado</span>{% endif %}
+                {% if mercadopago.medio %} · {{ mercadopago.medio }}{% endif %}
+            </p>
             {% endif %}
             {% if devolucion.observaciones_aprobacion %}
             <p class="mb-1"><strong>Observaciones:</strong> {{ devolucion.observaciones_aprobacion }}</p>

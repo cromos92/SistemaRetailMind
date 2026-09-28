@@ -19,6 +19,23 @@ class ErrorCarga(Exception):
     """Error que impide planificar o cargar una factura (mensaje para el usuario)."""
 
 
+class DteNoEncontrado(ErrorCarga):
+    """La factura (folio + RUT) no está registrada como DTE. El mensaje es el
+    del comando; la pantalla arma el suyo con `folio`, `rut` y `otros`."""
+
+    def __init__(self, mensaje, folio=None, rut=None, otros=''):
+        super().__init__(mensaje)
+        self.folio, self.rut, self.otros = folio, rut, otros
+
+
+class DteAmbiguo(ErrorCarga):
+    """El folio calza con varios DTE: hay que elegir uno (`detalle` los lista)."""
+
+    def __init__(self, mensaje, folio=None, detalle=''):
+        super().__init__(mensaje)
+        self.folio, self.detalle = folio, detalle
+
+
 def archivos_de_patrones(patrones):
     """Rutas de los JSON: acepta comodines ('compras/facturas/EQUINOX_*.json')."""
     rutas = []
@@ -72,16 +89,18 @@ def resolver_dte(data, dte_id=None, nombre=''):
     dtes = compras or facturas
     if not dtes:
         otros = ', '.join(f'id={d.id} {d.tipo_documento} {d.tipo_transaccion}' for d in candidatos)
-        raise ErrorCarga(
+        raise DteNoEncontrado(
             f'{nombre}: no está en el sistema la FACTURA {data["folio"]} del RUT '
             f'{data["proveedor_rut"]}'
             + (f' (con ese número solo hay: {otros})' if otros else '')
-            + '. Si la creaste con otro proveedor o tipo, pon su "dte_id" en el JSON.')
+            + '. Si la creaste con otro proveedor o tipo, pon su "dte_id" en el JSON.',
+            folio=data['folio'], rut=data['proveedor_rut'], otros=otros)
     if len(dtes) > 1:
         detalle = ', '.join(f'id={d.id} ({d.emisor.nombre}, {d.fecha_emision}, '
                             f'{d.tipo_transaccion})' for d in dtes)
-        raise ErrorCarga(f'{nombre}: el folio {data["folio"]} calza con varios DTE: '
-                         f'{detalle}. Pon el correcto como "dte_id" en el JSON.')
+        raise DteAmbiguo(f'{nombre}: el folio {data["folio"]} calza con varios DTE: '
+                         f'{detalle}. Pon el correcto como "dte_id" en el JSON.',
+                         folio=data['folio'], detalle=detalle)
     return dtes[0]
 
 

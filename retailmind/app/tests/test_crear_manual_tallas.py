@@ -13,7 +13,7 @@ from app.models import (
 )
 from app.tests.factories import (
     crear_correlativo, crear_empresa, crear_empresa_user, crear_sucursal,
-    crear_usuario,
+    crear_usuario, otorgar_ver_pantalla,
 )
 from app.utils_tallas import clave_orden_talla
 
@@ -32,6 +32,10 @@ class BaseModalManual(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = crear_usuario(username='bodeguero', rol='administrador')
+        # Crear Producto Manual es de la pantalla Gestión Producto: el
+        # middleware exige verla también en sus APIs.
+        otorgar_ver_pantalla('administrador', 'gestion_producto',
+                             puede_crear=True, puede_editar=True)
         cls.empresa = crear_empresa()
         cls.sucursal = crear_sucursal(empresa=cls.empresa, alias='NICK1')
         crear_empresa_user(cls.user, cls.empresa, cls.sucursal)

@@ -4966,6 +4966,13 @@ function showError(msg) {
                 const estadoDOM = $('#filtroEstado').val();
                 if (estadoDOM) filtros.estado = estadoDOM;
             }
+            // B15-04: llegada desde Gestión Compras con ?compra_id=N. Se filtra
+            // por esa compra SIN año (anio vacío pisa el del caller), así lo
+            // recepcionado en diciembre no desaparece el 1 de enero.
+            if (window._compraIdFiltroUrl) {
+                filtros.compra_id = window._compraIdFiltroUrl;
+                filtros.anio = '';
+            }
             return filtros;
         }
 
@@ -7386,6 +7393,20 @@ $(document).on('click', '#tablaTallasCrearProducto .btn-usar-talla-disponible', 
     $fila.find(`.sku-display[data-talla="${tallaAnterior}"]`).attr('data-talla', tallaNueva);
     $fila.find(`select[name="guia_talla_${tallaAnterior}"]`).attr('name', `guia_talla_${tallaNueva}`);
 
+    // B2-01: el backend busca las recepciones por la talla ORIGINAL de la
+    // compra (`talla_origen_<nueva>`). Sin este dato el renombre no calzaba
+    // con ninguna recepción y el stock entraba sin factura. Si ya se había
+    // corregido antes, se conserva la talla original (no la intermedia).
+    const $origen = $fila.find(`input[name="talla_origen_${tallaAnterior}"]`);
+    if ($origen.length) {
+        $origen.attr('name', `talla_origen_${tallaNueva}`);
+    } else {
+        $('<input type="hidden">')
+            .attr('name', `talla_origen_${tallaNueva}`)
+            .val(tallaAnterior)
+            .appendTo($fila.find('td:first'));
+    }
+
     // Re-disparar validación de la guía de talla
     const guiaId = $('#selectGuiaTalla').val();
     if (guiaId) {
@@ -8612,7 +8633,9 @@ function showErrorAlert(msg, text = '') {
     if (window.GestionCompras && typeof GestionCompras.showError === 'function') {
         GestionCompras.showError(msg, text);
     } else {
-        Swal.fire({ icon: 'error', title: 'Error', text: msg });
+        // Con dos argumentos (título, detalle) el detalle se perdía: los 409/400
+        // del backend (talla sin recepción, compra eliminada…) salían como "Error".
+        Swal.fire({ icon: 'error', title: text ? msg : 'Error', text: text || msg });
     }
 }
 function showInfoAlert(msg, text = '') {
@@ -8736,7 +8759,8 @@ function cargarConteoTabs(extraParams) {
     delete base.estado;
     delete base.page;
     delete base.page_size;
-    base.anio = base.anio || anioActual;
+    // Con filtro de compra (B15-04) el conteo va sin año, igual que la tabla.
+    if (!base.compra_id) base.anio = base.anio || anioActual;
     base.page_size = 1;
 
     const pinta = function(params, ids) {
@@ -8825,6 +8849,8 @@ function limpiarFiltros() {
     $('#filtroGenero').val('');
     $('#filtroEstado').val('');
     $('#filtroFactura').val('');
+    // También el filtro de compra que vino en la URL (B15-04).
+    if (typeof quitarFiltroCompraUrl === 'function') quitarFiltroCompraUrl(false);
     const anioActual = new Date().getFullYear();
     // cargarProductosParaCrear ya refresca los conteos (cargarConteoTabs).
     cargarProductosParaCrear(anioActual);
@@ -9606,7 +9632,7 @@ $('#formCrearProductoDesdeRecepcion').off('submit').on('submit', function(e) {
     // ========== VERIFICAR SI HAY PRODUCTO EXISTENTE DETECTADO ==========
     const hayProductoExistente = $('#panelProductoEncontrado').length > 0 && $('#panelProductoEncontrado').is(':visible');
 
-    function enviarFormularioRecepcion(actualizarPrecios) {
+    function enviarFormularioRecepcion(actualizarPrecios, confirmarIngresoPrevio) {
         // ========== MOSTRAR LOADING ==========
         const textoOriginal = $btnSubmit.html();
         $btnSubmit.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Creando...');
@@ -9623,6 +9649,12 @@ $('#formCrearProductoDesdeRecepcion').off('submit').on('submit', function(e) {
         // precios/costos del producto existente si mandamos actualizar_precios=true.
         formData = formData.filter(f => f.name !== 'actualizar_precios');
         formData.push({ name: 'actualizar_precios', value: actualizarPrecios ? 'true' : 'false' });
+        // B15-03: solo viaja cuando el usuario ya vio el aviso de ingreso
+        // previo por Crear Manual con la misma factura y eligió "Crear igual".
+        formData = formData.filter(f => f.name !== 'confirmar_ingreso_previo');
+        if (confirmarIngresoPrevio === true) {
+            formData.push({ name: 'confirmar_ingreso_previo', value: '1' });
+        }
         $.ajax({
             url: '/app/crear_producto_desde_recepcion/',
             type: 'POST',
@@ -9647,7 +9679,36 @@ $('#formCrearProductoDesdeRecepcion').off('submit').on('submit', function(e) {
                 }
             },
             error: function(xhr) {
-                showErrorAlert('Error', xhr.responseJSON?.error || 'Error inesperado al crear el producto.');
+                const r = xhr.responseJSON || {};
+                if (xhr.status === 409 && r.requiere_confirmacion_ingreso_previo && confirmarIngresoPrevio !== true) {
+                    // B15-03: el artículo ya entró por Crear Manual con la misma
+                    // factura. El backend no escribió nada; se pide decisión.
+                    const filas = (Array.isArray(r.ingresos_previos) ? r.ingresos_previos : []).map(p =>
+                        `<li>${escManual(p.fecha || 's/f')}: <b>${escManual(p.unidades)}</b> u con ${escManual(p.documento || '')}</li>`
+                    ).join('');
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Ya ingresó con esta factura',
+                        width: 560,
+                        html: `<div style="text-align:left;font-size:.88rem;">
+                            <p>Este artículo ya entró a la bodega por <b>Crear Manual</b> con la misma factura:</p>
+                            <ul class="mb-2">${filas}</ul>
+                            <p class="mb-1">Crear ahora las <b>${escManual(r.unidades_pendientes || 0)}</b> u pendientes <b>duplicaría el stock</b> si es la misma mercadería.</p>
+                            <p class="text-muted mb-0" style="font-size:.8rem;">Si ya está en bodega, cancela y elimina la recepción pendiente. Usa «Crear igual» solo si de verdad es otra entrega.</p>
+                        </div>`,
+                        showCancelButton: true,
+                        confirmButtonText: 'Crear igual',
+                        cancelButtonText: 'Cancelar',
+                        confirmButtonColor: '#f06548',
+                        cancelButtonColor: '#6c757d',
+                        reverseButtons: true,
+                        focusCancel: true
+                    }).then(res2 => {
+                        if (res2.isConfirmed) enviarFormularioRecepcion(actualizarPrecios, true);
+                    });
+                    return;
+                }
+                showErrorAlert('Error', r.error || 'Error inesperado al crear el producto.');
             },
             complete: function() {
                 // ========== RESTAURAR BOTÓN ==========
@@ -13059,6 +13120,56 @@ $(document).on('click', '#btnToggleFlujoRecepcion', function() {
     }
 });
 
+// B15-04: Gestión Compras enlaza a /app/verGestionProducto/?compra_id=N
+// (badges "Por crear", paso 4, Swal post-recepción). Se expande el bloque
+// "Crear desde Recepción" ya filtrado por esa compra, en la pestaña de
+// pendientes y sin filtro de año. Un chip permite quitar el filtro.
+function quitarFiltroCompraUrl(recargar) {
+    window._compraIdFiltroUrl = '';
+    $('#chipFiltroCompraUrl').remove();
+    try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('compra_id')) {
+            url.searchParams.delete('compra_id');
+            window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+        }
+    } catch (e) { /* navegador sin URL API: el filtro igual queda quitado */ }
+    if (recargar) {
+        currentPage = 1;
+        cargarProductosParaCrear(new Date().getFullYear());
+    }
+}
+$(document).ready(function() {
+    let compraId = '';
+    try {
+        compraId = (new URLSearchParams(window.location.search).get('compra_id') || '').trim();
+    } catch (e) { compraId = ''; }
+    if (!/^\d{1,12}$/.test(compraId)) return;
+    window._compraIdFiltroUrl = compraId;
+    // Pestaña "pendientes" (lo que cuenta el badge "Por crear"), sin tocar la
+    // preferencia guardada del usuario.
+    tabActivo = 'pendientes';
+    $('#tabsGestionProductos .nav-link').removeClass('active');
+    $('#tabsGestionProductos .nav-link[data-tab="pendientes"]').addClass('active');
+    $('#filtroEstado').val('').closest('.col-md-2').hide();
+    $('#cardFlujoRecepcion').show();
+    $('#lblToggleFlujoRecepcion').text('Ocultar flujo antiguo');
+    _flujoRecepcionCargado = true;
+    $('#chipFiltroCompraUrl').remove();
+    $('<span id="chipFiltroCompraUrl" class="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle d-inline-flex align-items-center gap-1"></span>')
+        .append($('<i class="bi bi-funnel-fill"></i>'))
+        .append($('<span></span>').text('Compra #' + compraId))
+        .append($('<button type="button" class="btn-close ms-1" style="font-size:.55rem;" aria-label="Quitar filtro de compra" title="Quitar filtro de compra"></button>')
+            .on('click', function() { quitarFiltroCompraUrl(true); }))
+        .insertAfter('#btnToggleFlujoRecepcion');
+    currentPage = 1;
+    cargarProductosParaCrear('');
+    const card = document.getElementById('cardFlujoRecepcion');
+    if (card && card.scrollIntoView) {
+        setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
+    }
+});
+
 $(document).ready(cargarActividadManual);
 
 // ========== AUTOCOMPLETE INTELIGENTE DE ARTÍCULO ==========
@@ -14317,6 +14428,14 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
     if ($('#selectGuiaTallaManual').val() === 'SIN_GUIA') {
         formDataArr = formDataArr.map(f => f.name === 'guia_talla' ? { name: 'guia_talla', value: '' } : f);
     }
+    // Reuso de factura (409 needs_confirmation): la confirmación solo viaja si
+    // se dio para ESTE mismo producto + documento + unidades; cambiar
+    // cualquiera de los tres vuelve a pedirla.
+    formDataArr = formDataArr.filter(f => f.name !== 'confirmar_exceso_factura');
+    const _confExceso = window._excesoFacturaConfirmadoManual;
+    if (_confExceso && _confExceso.clave === claveExcesoFacturaManual(formDataArr)) {
+        formDataArr.push({ name: 'confirmar_exceso_factura', value: 'true' });
+    }
     const formData = $.param(formDataArr);
     
     // Verificar tallas que se están enviando
@@ -14364,6 +14483,8 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
             const seguirCreando = window._modoSeguirCreando === true;
             window._modoSeguirCreando = false;
             if (res.success) {
+                // La confirmación de reuso de factura no se hereda al siguiente.
+                window._excesoFacturaConfirmadoManual = null;
                 // ✅ Guardar proveedor/DTE usados para restaurarlos en la
                 // próxima creación (contexto de carga por lote)
                 guardarContextoTrasCrear();
@@ -14443,14 +14564,64 @@ function enviarFormularioCrearProductoManual(modal, $btnSubmit) {
             }
         },
         error: function(xhr) {
+            const seguirCreandoErr = window._modoSeguirCreando === true;
             window._modoSeguirCreando = false;
-            showErrorAlert('Error', xhr.responseJSON?.error || 'Error inesperado al crear el producto.');
+            const r = xhr.responseJSON || {};
+            if (xhr.status === 409 && r.needs_confirmation) {
+                // El documento ya tiene unidades ingresadas (posible doble
+                // ingreso). El backend no escribió nada: se pide confirmación
+                // y se reenvía con confirmar_exceso_factura=true.
+                const fr = r.factura_reutilizada || {};
+                const claveEnvio = claveExcesoFacturaManual(formDataArr);
+                const fmt = (v) => Number(v || 0).toLocaleString('es-CL');
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Factura ya usada',
+                    width: 560,
+                    html: `<div style="text-align:left;font-size:.88rem;">
+                        <p>${escManual(r.error || 'Este documento ya tiene unidades ingresadas.')}</p>
+                        <ul class="mb-2" style="font-size:.84rem;">
+                            ${fr.numero != null ? `<li>Documento N° <b>${escManual(fr.numero)}</b></li>` : ''}
+                            ${fr.unidades_documento != null ? `<li>Declara: <b>${fmt(fr.unidades_documento)}</b> u</li>` : ''}
+                            <li>Ya ingresadas: <b>${fmt(fr.ya_ingresadas)}</b> u${fr.ya_ingresadas_articulo ? ` (de este artículo: <b>${fmt(fr.ya_ingresadas_articulo)}</b> u)` : ''}</li>
+                            <li>Este ingreso: <b>${fmt(fr.nuevas)}</b> u</li>
+                        </ul>
+                        <p class="text-muted mb-0" style="font-size:.8rem;">Confirma solo si NO es la misma mercadería ingresada dos veces.</p>
+                    </div>`,
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, ingresar igual',
+                    cancelButtonText: 'Revisar',
+                    confirmButtonColor: '#f06548',
+                    cancelButtonColor: '#6c757d',
+                    reverseButtons: true,
+                    focusCancel: true
+                }).then(function(rr) {
+                    if (!rr.isConfirmed) return;
+                    window._excesoFacturaConfirmadoManual = { clave: claveEnvio };
+                    // El resumen de creación ya se aceptó en este intento.
+                    window._confirmadoCreacionManual = true;
+                    window._modoSeguirCreando = seguirCreandoErr;
+                    enviarFormularioCrearProductoManual(modal, $btnSubmit);
+                });
+                return;
+            }
+            showErrorAlert('Error', r.error || 'Error inesperado al crear el producto.');
         },
         complete: function() {
             // ========== RESTAURAR BOTÓN ==========
             $btnSubmit.prop('disabled', false).html(textoOriginal);
         }
     });
+}
+
+// Clave de la confirmación de reuso de factura: identidad del producto +
+// documento + total de unidades del envío (serializeArray del formulario).
+function claveExcesoFacturaManual(formDataArr) {
+    const arr = Array.isArray(formDataArr) ? formDataArr : [];
+    const dte = (arr.find(f => f.name === 'dte_manual') || {}).value || '';
+    const total = arr.filter(f => f.name === 'stock[]')
+        .reduce((s, f) => s + (parseInt(f.value, 10) || 0), 0);
+    return [claveIdentidadManual(), dte, total].join('|');
 }
 
 // Clave de IDENTIDAD del formulario manual (mismo criterio que el backend:
@@ -15835,7 +16006,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
             const subtotal = rec.cantidad * costo;
             
             const fila = `
-                <tr data-recepcion-id="${rec.id}" data-cantidad-original="${rec.cantidad}" data-talla-original="${rec.talla}" data-compra-producto-talla-id="${rec.compra_producto_talla_id}">
+                <tr data-recepcion-id="${rec.id}" data-cantidad-original="${rec.cantidad}" data-talla-original="${escManual(rec.talla)}" data-compra-producto-talla-id="${rec.compra_producto_talla_id}" data-sucursal-destino-id="${rec.sucursal_destino_id == null ? '' : Number(rec.sucursal_destino_id)}" data-sucursal-destino="${escManual(rec.sucursal_destino || '')}">
                     <td>
                         ${rec.dte_numero 
                             ? `<a href="/app/detalle_dte/${rec.dte_id}/" target="_blank" class="text-decoration-none">
@@ -15849,7 +16020,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     </td>
                     <td>
                         <input type="text" class="form-control form-control-sm text-center input-talla-editar"
-                               value="${rec.talla}" data-recepcion-id="${rec.id}"
+                               value="${escManual(rec.talla)}" data-recepcion-id="${rec.id}"
                                style="width: 80px; display: inline-block;" placeholder="Talla">
                     </td>
                     <td class="text-center">
@@ -16031,14 +16202,31 @@ $('#btnConfirmarActualizacion').on('click', function() {
     // Crear producto desde modal de edición de recepción
     $('#btnCrearDesdeRecepcion').on('click', function() {
         const productoId = $('#productoIdRecepcion').val();
-        
+        // B2-01: mismas sucursales destino que las recepciones cargadas en
+        // este modal, para que el detalle y el POST filtren igual (sin ellas
+        // el detalle listaba todas las sucursales y el POST solo la activa).
+        const sucIds = [];
+        const sucNombres = [];
+        $('#tbodyRecepcionesPorDte tr').each(function() {
+            const sid = String($(this).attr('data-sucursal-destino-id') || '').trim();
+            if (sid && !sucIds.includes(sid)) {
+                sucIds.push(sid);
+                const nom = $(this).attr('data-sucursal-destino') || '';
+                if (nom) sucNombres.push(nom);
+            }
+        });
+        const abrirCrear = () => abrirModalCrearProducto(productoId, sucIds, sucNombres.join(', '));
+
         // Verificar si hay cambios sin guardar
         let hayCambios = false;
         $('#tbodyRecepcionesPorDte tr').each(function() {
             const cantidadOriginal = parseInt($(this).data('cantidad-original')) || 0;
             const cantidadActual = parseInt($(this).find('.input-cantidad-editar').val()) || 0;
-            const tallaOriginal = $(this).data('talla-original') || '';
-            const tallaActual = $(this).find('.input-talla-editar').val() || '';
+            // attr (texto), no .data(): jQuery convierte "36" en el número 36 y
+            // la comparación con el input ('36') marcaba "cambios sin guardar"
+            // en toda talla numérica aunque no se hubiera tocado nada.
+            const tallaOriginal = String($(this).attr('data-talla-original') || '');
+            const tallaActual = String($(this).find('.input-talla-editar').val() || '');
             if (cantidadOriginal !== cantidadActual || tallaOriginal !== tallaActual) {
                 hayCambios = true;
                 return false;
@@ -16059,18 +16247,18 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     $('#btnGuardarRecepcionEditada').click();
                     setTimeout(() => {
                         bootstrap.Modal.getInstance(document.getElementById('modalEditarRecepcion')).hide();
-                        abrirModalCrearProducto(productoId);
+                        abrirCrear();
                     }, 1500);
                 } else if (result.dismiss === Swal.DismissReason.cancel) {
                     // Crear directamente sin guardar
                     bootstrap.Modal.getInstance(document.getElementById('modalEditarRecepcion')).hide();
-                    abrirModalCrearProducto(productoId);
+                    abrirCrear();
                 }
             });
         } else {
             // No hay cambios, crear directamente
             bootstrap.Modal.getInstance(document.getElementById('modalEditarRecepcion')).hide();
-            abrirModalCrearProducto(productoId);
+            abrirCrear();
         }
     });
 
@@ -16669,7 +16857,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
 <script src="{% static 'js/edicion_productos.js' %}?v=202608191200"></script>
 
 <!-- Agente "Cargar desde factura": botón #btnCargarFacturaIA → modal #modalCargaFactura -->
-<script src="{% static 'js/carga_factura.js' %}?v=202609252200"></script>
+<script src="{% static 'js/carga_factura.js' %}?v=202609270100"></script>
 
 <!-- SortableJS: reordenar tallas en el modal de Guía de Talla (se inicializa en shown.bs.modal) -->
 <script src="{% static 'libs/sortablejs/Sortable.min.js' %}"></script>
@@ -18926,8 +19114,11 @@ $('#btnConfirmarActualizacion').on('click', function() {
                     showConfirmButton: true,
                 });
                 cargarProductosParaCrear();
-            }).catch(function() {
-                Swal.fire('Error', 'Error al revertir algunas tallas', 'error');
+            }).catch(function(xhr) {
+                // El backend explica el rechazo (403 sin permiso, 409 talla con
+                // historial sin stock); sus mensajes ya vienen escapados.
+                const rj = (xhr && xhr.responseJSON) || {};
+                Swal.fire('Error', (typeof rj.error === 'string' && rj.error) || 'Error al revertir algunas tallas', 'error');
                 cargarProductosParaCrear();
             });
         });
@@ -18937,7 +19128,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
         const tallaInfo = talla ? ` (talla ${talla})` : '';
         Swal.fire({
             title: `¿Revertir "${nombre}"${tallaInfo}?`,
-            html: `<p style="font-size:.85rem;">El producto volverá a "Pendiente de crear". Se borrarán movimientos, lotes y stock, pero se <b>conserva la trazabilidad</b> de compra y factura.</p>
+            html: `<p style="font-size:.85rem;">El producto volverá a "Pendiente de crear" y se <b>conserva la trazabilidad</b> de compra y factura. Si la talla aún no tiene ventas ni traspasos se borran sus movimientos y lotes; si ya los tiene, no se borra nada: se descuenta su stock con un egreso de corrección.</p>
                    <textarea id="swalMotivoRevertir" class="swal2-textarea" placeholder="Motivo de la reversión (obligatorio)" style="font-size:.85rem;"></textarea>`,
             icon: 'warning',
             showCancelButton: true,

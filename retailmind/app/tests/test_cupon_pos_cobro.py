@@ -339,7 +339,11 @@ class ReversaDelCuponTest(_BaseCuponPOS):
         ticket.refresh_from_db()
         return ticket
 
-    def test_anular_documento_venta_devuelve_el_cupon(self):
+    def test_anular_documento_venta_rechaza_ticket_pagado_y_no_toca_el_cupon(self):
+        """Anular un ticket PAGADO por esta ruta lo dejaba ANULADO con el stock
+        afuera (28-09-2026). Ahora se rechaza: la venta cobrada se deja sin
+        efecto con Eliminar documento o NC, que devuelven stock y cupón (ver
+        test_eliminar_documento_desde_cuadratura_devuelve_el_cupon)."""
         ticket = self._cobrar_con_cupon()
         # Anular exige el permiso `dte_eliminar_documento` (antes bastaba el
         # login): se anula como Maestro, que lo pasa siempre.
@@ -353,12 +357,13 @@ class ReversaDelCuponTest(_BaseCuponPOS):
                              'motivo': 'error de caja'}),
             content_type='application/json',
         )
-        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(resp.status_code, 400, resp.content)
+        self.assertEqual(resp.json().get('error_tipo'), 'DOCUMENTO_CON_STOCK')
 
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.estado, 'PAGADO')
         self.cupon.refresh_from_db()
-        self.assertEqual(self.cupon.estado, 'PENDIENTE')
-        self.assertIsNone(self.cupon.ticket_id)
-        self.assertEqual(self.cupon.monto_descuento, 0)
+        self.assertEqual(self.cupon.estado, 'CANJEADO')
 
     def test_eliminar_documento_desde_cuadratura_devuelve_el_cupon(self):
         ticket = self._cobrar_con_cupon(correlativo=5)

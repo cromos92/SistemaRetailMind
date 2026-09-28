@@ -1,4 +1,4 @@
-{% load static %}
+{% load static indicadores_tags %}
 {% include 'layout/header.html' %}
 {% include 'layout/menu.html' %}
 
@@ -6,32 +6,12 @@
 <div class="container-fluid">
 
 <style>
-  /* ========== NEXO DESIGN SYSTEM ========== */
+  /* ========== NEXO DESIGN SYSTEM ==========
+     El resto de --nexo-* viene de nexo-design-system.css; aquí solo los que no define. */
   :root {
-    --nexo-primary:       #0066FF;
-    --nexo-primary-dark:  #0052CC;
-    --nexo-primary-light: #E6F0FF;
-    --nexo-secondary:     #1A1A2E;
-    --nexo-accent:        #00D4AA;
-    --nexo-success:       #00D4AA;
-    --nexo-warning:       #FFB020;
-    --nexo-error:         #FF4D4D;
-    --nexo-gray-900:      #1A1A2E;
-    --nexo-gray-700:      #4A4A5A;
     --nexo-gray-600:      #6A6A7A;
-    --nexo-gray-500:      #8A8A9A;
     --nexo-gray-400:      #AAAABC;
-    --nexo-gray-300:      #D1D1D9;
     --nexo-gray-200:      #E8E8F0;
-    --nexo-gray-100:      #F5F5F7;
-    --nexo-white:         #FFFFFF;
-    --nexo-shadow-sm:     0 1px 2px rgba(26,26,46,.05);
-    --nexo-shadow-md:     0 4px 6px rgba(26,26,46,.1);
-    --nexo-shadow-lg:     0 10px 15px rgba(26,26,46,.1);
-    --nexo-radius-sm:     4px;
-    --nexo-radius-md:     8px;
-    --nexo-radius-lg:     12px;
-    --nexo-radius-xl:     16px;
     --nexo-transition:    150ms ease;
   }
 
@@ -460,6 +440,8 @@
     </div>
   </div>
 
+  {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='existencias' activo='sucursal' %}
+
   <!-- ── KPI cards ────────────────────────────────────── -->
   <div class="nexo-kpi-row" id="kpi-row">
     <!-- Skeletons (visibles mientras no hay datos) -->
@@ -515,14 +497,14 @@
     <div class="nexo-kpi-card kpi-primary" id="kpi-card-5" style="display:none">
       <div class="nexo-kpi-icon icon-primary"><i class="ri-time-line"></i></div>
       <div class="nexo-kpi-body">
-        <div class="nexo-kpi-label" title="Stock actual ÷ velocidad de venta de los últimos 30 días">Cobertura (días)</div>
+        <div class="nexo-kpi-label" id="kpi-cobertura-label" title="{% definicion 'cobertura_dias' 30 %}">Cobertura (30 d)</div>
         <div class="nexo-kpi-value" id="kpi-cobertura">—</div>
       </div>
     </div>
     <div class="nexo-kpi-card kpi-error" id="kpi-card-6" style="display:none">
       <div class="nexo-kpi-icon icon-error"><i class="ri-archive-2-line"></i></div>
       <div class="nexo-kpi-body">
-        <div class="nexo-kpi-label" title="Unidades en lotes con más de 180 días de antigüedad, dividido por el stock plano. Si hay descalce entre lotes y stock, este porcentaje es aproximado.">Stock &gt;180 días (aprox.)</div>
+        <div class="nexo-kpi-label" id="kpi-viejo-label" title="{% definicion 'pct_stock_viejo' 180 %} Si hay descalce entre lotes y stock plano, el porcentaje es aproximado.">Stock &gt;180 d por edad de lote (aprox.)</div>
         <div class="nexo-kpi-value" id="kpi-viejo">—</div>
       </div>
     </div>
@@ -654,8 +636,30 @@ const POR_PAGINA   = 100;
    Init
    ================================================================ */
 document.addEventListener('DOMContentLoaded', () => {
-  cargarSucursales();
-  cargarMarcas();
+  const pSucursales = cargarSucursales();
+  const pMarcas = cargarMarcas();
+
+  // Filtros de la URL (tira de reportes o enlace guardado): solo quedan puestos
+  // en los combos; el reporte sigue esperando "Generar".
+  if (window.FiltrosReporte) {
+    const f = FiltrosReporte.leer();
+    if (f.sucursal_id) {
+      pSucursales.then(() => FiltrosReporte.ponerValor('#filtro-sucursal', f.sucursal_id));
+    }
+    // El combo de marcas se llena al buscar: se busca por el nombre y se elige.
+    if (f.marca_id) {
+      pMarcas.then(() => {
+        const m = Array.isArray(todasLasMarcas) ? todasLasMarcas.find(x => String(x.id) === f.marca_id) : null;
+        if (!m) return;
+        document.getElementById('search-marca').value = m.valor;
+        filtrarMarcas();
+        if (!FiltrosReporte.ponerValor('#filtro-marca', f.marca_id)) {
+          document.getElementById('filtro-marca').appendChild(new Option(m.valor, m.id));
+          FiltrosReporte.ponerValor('#filtro-marca', f.marca_id);
+        }
+      });
+    }
+  }
 });
 
 /* ================================================================
@@ -714,6 +718,9 @@ async function cargarReporte() {
   const marcaId  = document.getElementById('filtro-marca').value;
   const sinStock = document.getElementById('check-sin-stock').checked;
 
+  // Estado compartido en la URL ('' = todas las marcas)
+  if (window.FiltrosReporte) FiltrosReporte.reflejar({ sucursal_id: sucursalId, marca_id: marcaId });
+
   // Bloquear botón y mostrar estado de carga
   btnGenerar.disabled = true;
   btnGenerar.innerHTML = '<i class="ri-loader-4-line spin"></i> Consultando...';
@@ -745,6 +752,9 @@ async function cargarReporte() {
     document.getElementById('kpi-unidades').textContent  = num(r.stock_total);
     document.getElementById('kpi-valor').textContent     = '$' + numCL(r.valor_inventario);
     document.getElementById('kpi-sin-stock').textContent = num(r.sin_stock);
+    // El rótulo declara la ventana que la API realmente usó.
+    if (r.ventana_dias) document.getElementById('kpi-cobertura-label').textContent = `Cobertura (${r.ventana_dias} d)`;
+    if (r.umbral_viejo_dias) document.getElementById('kpi-viejo-label').textContent = `Stock >${r.umbral_viejo_dias} d por edad de lote (aprox.)`;
     document.getElementById('kpi-cobertura').textContent = r.cobertura_dias ? num(r.cobertura_dias) : '—';
     document.getElementById('kpi-viejo').textContent     = (r.pct_stock_viejo != null ? r.pct_stock_viejo : 0) + '%';
     document.getElementById('kpi-valor-venta').textContent = '$' + numCL(r.valor_venta_potencial || 0);

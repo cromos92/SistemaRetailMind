@@ -509,32 +509,32 @@
         const modalEl = document.getElementById(REPAR_MODAL_ID);
         bootstrap.Modal.getOrCreateInstance(modalEl).show();
 
-        // Cargamos el diagnóstico vía api/ncs_sin_stock filtrado por esa NC:
-        // para evitar agregar otro endpoint, reutilizamos la info pidiendo
-        // la trazabilidad del padre — pero necesitamos el detalle por línea,
-        // así que usamos ncs_sin_stock sin filtro y filtramos client-side
-        // por nc_id. Si hay muchas NCs pendientes esto puede ser pesado,
-        // así que usamos además paginación con page_size=100 y seguimos
-        // pagineando hasta encontrar la NC. Para lotes chicos es suficiente.
+        // Diagnóstico por línea vía api/ncs_sin_stock filtrado por esa NC
+        // (nc_id, que el endpoint soporta). Antes se paginaba TODO el
+        // diagnóstico de la empresa (page_size=100, ~2 consultas por NC) hasta
+        // dar con la NC (CC-10). La paginación queda por si el servidor
+        // ignorara el filtro.
         _buscarDiagnosticoNc(ncId, 1);
     }
 
     function _buscarDiagnosticoNc(ncId, pagina) {
-        fetch(`/app/api/dte/ncs_sin_stock/?pagina=${pagina}&page_size=100`, {
+        fetch(`/app/api/dte/ncs_sin_stock/?pagina=${pagina}&page_size=100&nc_id=${encodeURIComponent(ncId)}`, {
             credentials: 'same-origin',
-            headers: { 'Accept': 'application/json' },
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         })
             .then(r => r.json())
             .then(data => {
                 if (!data || !data.success) {
+                    const msg = (data && (typeof data.error === 'string' ? data.error : data.mensaje))
+                        || 'No se pudo cargar el diagnóstico.';
                     document.getElementById('reparModalBody').innerHTML = `
                         <div class="alert alert-danger">
-                            ${(data && data.error) || 'No se pudo cargar el diagnóstico.'}
+                            ${esc(msg)}
                         </div>`;
                     return;
                 }
                 const items = data.items || [];
-                const diag = items.find(i => i.nc_id === ncId);
+                const diag = items.find(i => Number(i.nc_id) === Number(ncId));
                 if (diag) {
                     renderDiagnosticoReparacion(diag);
                     return;
@@ -549,9 +549,9 @@
                         </div>`;
                 }
             })
-            .catch(err => {
+            .catch(() => {
                 document.getElementById('reparModalBody').innerHTML = `
-                    <div class="alert alert-danger">${err && err.message}</div>`;
+                    <div class="alert alert-danger">No se pudo cargar el diagnóstico. Revisa tu conexión e inténtalo de nuevo.</div>`;
             });
     }
 
@@ -628,10 +628,10 @@
                 if (deltas.length) {
                     const filas = deltas.map(d => `
                         <tr>
-                            <td><small class="font-monospace">${d.sku}</small></td>
-                            <td><small>${d.talla || '-'}</small></td>
-                            <td><small>${d.sucursal_alias || d.sucursal_id}</small></td>
-                            <td class="text-end"><strong>${d.stock}</strong></td>
+                            <td><small class="font-monospace">${esc(d.sku)}</small></td>
+                            <td><small>${esc(d.talla || '-')}</small></td>
+                            <td><small>${esc(d.sucursal_alias || d.sucursal_id)}</small></td>
+                            <td class="text-end"><strong>${Number(d.stock) || 0}</strong></td>
                         </tr>`).join('');
                     stockHtml = `
                         <p class="small mb-1"><strong>Stock actual tras reparación:</strong></p>
@@ -648,7 +648,7 @@
                         icon: 'success',
                         title: 'Reparación aplicada',
                         html: `
-                            <p>${data.message || 'OK'}</p>
+                            <p>${esc(data.message || 'OK')}</p>
                             ${stockHtml}`,
                         width: deltas.length ? '620px' : undefined,
                     }).then(() => {

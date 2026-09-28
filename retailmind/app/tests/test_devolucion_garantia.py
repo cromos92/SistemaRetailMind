@@ -823,9 +823,9 @@ class DevolucionGarantiaFiltroSucursalTest(TestCase):
         jefe = self._cliente('jefe_local')
         self.assertNotIn('id="filtro-sucursal"', jefe.get(url).content.decode('utf-8'))
 
-    def test_modal_aprobacion_ofrece_rebaja_credito_y_oculta_efectivo(self):
-        """Con permiso de aprobar: transferencia primaria, rebaja de crédito
-        disponible y efectivo oculto (solo para solicitudes históricas)."""
+    def test_modal_aprobacion_ofrece_rebaja_credito_efectivo_y_mercado_pago(self):
+        """Con permiso de aprobar: transferencia, rebaja de crédito, y desde el
+        28-09-2026 también efectivo (ya no oculto) y Mercado Pago."""
         user = crear_usuario(username='user_aprob_metodos', rol='administrador')
         PermisoRol.objects.update_or_create(
             rol=user.rol, opcion_menu=self.opcion,
@@ -839,7 +839,9 @@ class DevolucionGarantiaFiltroSucursalTest(TestCase):
         html = client.get(reverse('modulo_devolucion_garantia')).content.decode('utf-8')
         self.assertIn('<option value="TRANSFERENCIA_BANCARIA">', html)
         self.assertIn('<option value="REBAJA_CREDITO">', html)
-        self.assertIn('<option value="EFECTIVO_CAJA" hidden>', html)
+        self.assertIn('<option value="EFECTIVO_CAJA">', html)
+        self.assertNotIn('<option value="EFECTIVO_CAJA" hidden>', html)
+        self.assertIn('<option value="MERCADO_PAGO">', html)
 
     def test_admin_puede_abrir_devolucion_de_otra_sucursal(self):
         """Sin esto el filtro "todas" sería un callejón: fila visible, 404 al abrir."""
@@ -953,6 +955,17 @@ class DevolucionGarantiaTransbankTest(TestCase):
         self.assertFalse(preview['bloqueado'])
         self.assertTrue(any('PARCIAL' in a for a in preview['advertencias']))
 
+    def test_ticket_de_boleta_con_tipo_ticket_tambien_se_encuentra(self):
+        """El POS deja el ticket de una boleta electrónica con tipo_dte='TICKET'
+        (visto en prod, PAO1 28-09-2026): la anulación por máquina de ese
+        ticket también tiene que bloquear."""
+        boleta = self._boleta_tarjeta(5408)
+        self._anulacion_pos(boleta, 23800, tipo_dte_ticket='TICKET')
+        self.assertTrue(service.pago_transbank_dte(boleta)['anulado_completo'])
+        with self.assertRaisesMessage(service.DevolucionGarantiaError,
+                                      'ANULADO por la máquina Transbank'):
+            self._solicitud(boleta)
+
     def test_anulacion_de_otro_folio_no_afecta(self):
         """El vínculo es por folio+sucursal+tipo: la anulación de OTRA venta
         no contamina este documento."""
@@ -961,3 +974,647 @@ class DevolucionGarantiaTransbankTest(TestCase):
         self._anulacion_pos(otra, 23800)
         self.assertEqual(service.pago_transbank_dte(boleta)['monto_anulado_pos'], 0)
         self._solicitud(boleta)  # no se bloquea
+
+
+@override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)
+class DevolucionDineroDirectaTest(TestCase):
+    """Devolución DIRECTA (25-09-2026): quien crea la devolución la firma en el
+    momento con el código de la barra superior de un Administrador o Maestro;
+    se crea y se aprueba en una sola transacción (NC imputada hoy)."""
+
+    def setUp(self):
+        self.env = setup_entorno_completo()
+        self.sucursal = self.env['sucursal']
+        crear_correlativo(self.sucursal, tipo_dte='NOTA DE CREDITO')
+        self.boleta = _crear_documento(self.env, 5300, [(self.env['producto_talla'], 2, 11900)])
+
+        modulo, _ = ModuloSistema.objects.get_or_create(
+            codigo='ventas', defaults={'nombre': 'Ventas', 'orden': 2})
+        self.opcion, _ = OpcionMenu.objects.get_or_create(
+            codigo='devolucion_garantia',
+            defaults={'modulo': modulo, 'nombre': 'Devolucion de Dinero', 'orden': 3})
+        PermisoRol.objects.update_or_create(
+            rol='jefe_local', opcion_menu=self.opcion,
+            defaults={'puede_ver': True, 'puede_crear': True})
+        PermisoRol.objects.update_or_create(
+            rol='administrador', opcion_menu=self.opcion,
+            defaults={'puede_ver': True, 'puede_crear': True, 'puede_aprobar': True})
+
+        self.jefe = crear_usuario(username='jefe_directa', rol='jefe_local')
+        self.admin = crear_usuario(username='admin_directa', rol='administrador')
+        self.client = Client()
+        self.client.force_login(self.jefe)
+        session = self.client.session
+        session['idSucursalActual'] = self.sucursal.id
+        session.save()
+        self._seq = 0
+
+    def _codigo(self, usuario):
+        from app.models import CodigoAutorizacionDinamico
+        self._seq += 1
+        return CodigoAutorizacionDinamico.objects.create(
+            codigo=f'{731000 + self._seq:06d}',
+            fecha_hora_inicio=timezone.now() - timedelta(minutes=1),
+            fecha_hora_fin=timezone.now() + timedelta(minutes=30),
+            generado_por=usuario,
+        )
+
+    def _post(self, codigo, cantidad=1, **extra):
+        import json as _json
+        payload = {
+            'folio_dte': self.boleta.numero_documento,
+            'productos': [{'dte_producto_id': self.boleta.dte_productos.first().id,
+                           'modo': 'CANTIDAD', 'cantidad': cantidad}],
+            'rut': '13013448-3', 'nombre': 'Cliente Directo',
+            'metodo_solicitado': 'TRANSFERENCIA_BANCARIA',
+            'banco': 'Banco Estado', 'tipo_cuenta': 'VISTA', 'numero_cuenta': '123456',
+            'cuenta_titular_rut': '13013448-3',
+            'motivo': 'Producto fallado',
+            'directa': True,
+            'codigo_autorizacion': codigo,
+        }
+        payload.update(extra)
+        return self.client.post(
+            reverse('api_generar_devolucion_garantia'),
+            data=_json.dumps(payload), content_type='application/json',
+        )
+
+    def test_directa_con_codigo_de_administrador_genera_la_nc(self):
+        from app.models import RegistroAutorizacion
+        codigo = self._codigo(self.admin)
+
+        resp = self._post(codigo.codigo)
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()['data']
+        self.assertTrue(data['directa'])
+        dev = DevolucionGarantia.objects.get(id=data['devolucion_id'])
+        self.assertEqual(dev.estado, 'NC_GENERADA')
+        self.assertEqual(dev.solicitado_por_id, self.jefe.id)
+        self.assertEqual(dev.autorizado_por_id, self.admin.id)
+        self.assertEqual(dev.metodo_devolucion, 'TRANSFERENCIA_BANCARIA')
+        self.assertEqual(dev.fecha_imputacion_caja, timezone.localdate())
+        self.assertTrue(dev.observaciones_aprobacion.startswith('[DIRECTA]'))
+        self.assertEqual(data['nc_numero'], dev.nota_credito.numero_documento)
+        pago = dev.nota_credito.dte_asociado.get()
+        self.assertEqual(pago.metodo_pago, 'TRANSFERENCIA')
+        codigo.refresh_from_db()
+        self.assertTrue(codigo.usado)
+        registro = RegistroAutorizacion.objects.get(exitoso=True)
+        self.assertEqual(registro.usuario_autorizador_id, self.admin.id)
+        self.assertEqual(registro.codigo_usado_id, codigo.id)
+        self.assertEqual(registro.datos_adicionales['operacion'], 'DEVOLUCION_DINERO_DIRECTA')
+
+        listado = self.client.get(reverse('api_listar_devoluciones_garantia')).json()
+        self.assertTrue(listado['data'][0]['directa'])
+
+    def test_directa_con_codigo_de_maestro(self):
+        maestro = crear_usuario(username='maestro_directa', rol='maestro')
+
+        resp = self._post(self._codigo(maestro).codigo)
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        dev = DevolucionGarantia.objects.get(id=resp.json()['data']['devolucion_id'])
+        self.assertEqual(dev.autorizado_por_id, maestro.id)
+
+    def test_directa_rechaza_codigo_de_jefe_de_local(self):
+        codigo = self._codigo(self.jefe)
+
+        resp = self._post(codigo.codigo)
+
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()['code'], 'INVALID_AUTH_CODE')
+        self.assertFalse(DevolucionGarantia.objects.exists())
+        codigo.refresh_from_db()
+        self.assertFalse(codigo.usado)
+
+    def test_directa_rechaza_admin_sin_permiso_de_aprobar(self):
+        PermisoRol.objects.filter(rol='administrador', opcion_menu=self.opcion).update(puede_aprobar=False)
+        codigo = self._codigo(self.admin)
+
+        resp = self._post(codigo.codigo)
+
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.json()['code'], 'AUTHORIZER_CANNOT_APPROVE')
+        self.assertFalse(DevolucionGarantia.objects.exists())
+        codigo.refresh_from_db()
+        self.assertFalse(codigo.usado)
+
+    def test_directa_codigo_inexistente_no_crea_nada(self):
+        resp = self._post('000000')
+
+        self.assertEqual(resp.status_code, 403)
+        self.assertFalse(DevolucionGarantia.objects.exists())
+
+    def test_directa_fallida_no_deja_solicitud_ni_quema_el_codigo(self):
+        codigo = self._codigo(self.admin)
+
+        resp = self._post(codigo.codigo, cantidad=5)  # se vendieron 2
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(DevolucionGarantia.objects.exists())
+        codigo.refresh_from_db()
+        self.assertFalse(codigo.usado)
+
+    def test_directa_rechaza_metodo_no_permitido(self):
+        codigo = self._codigo(self.admin)
+
+        resp = self._post(codigo.codigo, metodo_solicitado='NO_AFECTA_CAJA')
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(DevolucionGarantia.objects.exists())
+
+    # ----- Efectivo de caja (solo en la directa, 28-09-2026) -----
+
+    def test_directa_en_efectivo_resta_del_efectivo_de_hoy(self):
+        codigo = self._codigo(self.admin)
+
+        resp = self._post(codigo.codigo, metodo_solicitado='EFECTIVO_CAJA')
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        dev = DevolucionGarantia.objects.get(id=resp.json()['data']['devolucion_id'])
+        self.assertEqual(dev.estado, 'NC_GENERADA')
+        self.assertEqual(dev.metodo_devolucion, 'EFECTIVO_CAJA')
+        self.assertEqual(dev.metodo_solicitado, 'EFECTIVO_CAJA')
+        self.assertEqual(dev.banco, '')  # efectivo no guarda datos bancarios
+        pago = dev.nota_credito.dte_asociado.get()
+        self.assertEqual(pago.metodo_pago, 'EFECTIVO')
+        self.assertEqual(pago.fecha_pago, timezone.localdate())
+        cuadratura = _calcular_cuadratura_data(
+            self.sucursal, timezone.localdate().strftime('%Y-%m-%d'))
+        self.assertEqual(cuadratura['total_nc_efectivo'], int(dev.monto_total))
+
+    def test_directa_en_efectivo_bloqueada_si_la_venta_fue_a_credito(self):
+        credito = _crear_documento(
+            self.env, 5301, [(self.env['producto_talla'], 1, 11900)], metodo_pago='CREDITO_EXTERNO')
+        codigo = self._codigo(self.admin)
+
+        resp = self._post(
+            codigo.codigo, metodo_solicitado='EFECTIVO_CAJA', folio_dte=credito.numero_documento,
+            productos=[{'dte_producto_id': credito.dte_productos.first().id,
+                        'modo': 'CANTIDAD', 'cantidad': 1}],
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('crédito', resp.json()['error'])
+        self.assertFalse(DevolucionGarantia.objects.exists())
+        codigo.refresh_from_db()
+        self.assertFalse(codigo.usado)
+
+    def test_directa_en_efectivo_bloqueada_si_el_arqueo_de_hoy_esta_cerrado(self):
+        from app.models import ArqueoCaja
+        arqueo = ArqueoCaja.objects.create(
+            fecha_arqueo=timezone.localdate(), sucursal=self.sucursal,
+            usuario_responsable=self.admin, estado='CERRADO',
+        )
+        ArqueoCaja.objects.filter(pk=arqueo.pk).update(estado='CERRADO')
+        codigo = self._codigo(self.admin)
+
+        resp = self._post(codigo.codigo, metodo_solicitado='EFECTIVO_CAJA')
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('arqueo', resp.json()['error'])
+        self.assertFalse(DevolucionGarantia.objects.exists())
+        codigo.refresh_from_db()
+        self.assertFalse(codigo.usado)
+
+    def test_directa_por_transferencia_con_arqueo_cerrado_solo_avisa(self):
+        from app.models import ArqueoCaja
+        arqueo = ArqueoCaja.objects.create(
+            fecha_arqueo=timezone.localdate(), sucursal=self.sucursal,
+            usuario_responsable=self.admin, estado='CERRADO',
+        )
+        ArqueoCaja.objects.filter(pk=arqueo.pk).update(estado='CERRADO')
+
+        resp = self._post(self._codigo(self.admin).codigo)
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertTrue(resp.json()['data']['avisos_caja'])
+
+    def test_directa_en_efectivo_bloqueada_si_parte_se_pago_a_credito(self):
+        """Boleta mixta efectivo + crédito trabajador: `es_credito` no la marca,
+        pero entregar el total en efectivo pagaría la parte financiada."""
+        mixta = _crear_documento(
+            self.env, 5302, [(self.env['producto_talla'], 1, 100000)], metodo_pago=None)
+        Dte_Detalle_Pago.objects.create(dte=mixta, metodo_pago='EFECTIVO', monto=20000)
+        Dte_Detalle_Pago.objects.create(dte=mixta, metodo_pago='CREDITO_TRABAJADOR', monto=80000)
+        codigo = self._codigo(self.admin)
+
+        resp = self._post(
+            codigo.codigo, metodo_solicitado='EFECTIVO_CAJA', folio_dte=mixta.numero_documento,
+            productos=[{'dte_producto_id': mixta.dte_productos.first().id,
+                        'modo': 'CANTIDAD', 'cantidad': 1}],
+        )
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('crédito', resp.json()['error'])
+        self.assertFalse(DevolucionGarantia.objects.exists())
+        codigo.refresh_from_db()
+        self.assertFalse(codigo.usado)
+
+    def test_directa_bloqueada_con_anulacion_parcial_transbank(self):
+        from unittest import mock
+        parcial = {
+            'es_transbank': True, 'monto_tarjeta': 23800, 'monto_anulado_pos': 11900,
+            'anulado_completo': False, 'anulaciones_pos': [{'fecha': '28/09/2026', 'monto': 11900}],
+        }
+        codigo = self._codigo(self.admin)
+        with mock.patch.object(service, 'pago_transbank_dte', return_value=parcial):
+            resp = self._post(codigo.codigo)
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('PARCIAL', resp.json()['error'])
+        self.assertFalse(DevolucionGarantia.objects.exists())
+        codigo.refresh_from_db()
+        self.assertFalse(codigo.usado)
+
+    def test_fallos_de_otro_flujo_con_tipo_otro_no_bloquean_la_directa(self):
+        """El permiso temporal de Cambios también registra sus fallos como OTRO:
+        no deben contar para el freno de la devolución directa."""
+        from app.models import RegistroAutorizacion
+        for _ in range(5):
+            RegistroAutorizacion.objects.create(
+                usuario_solicitante=self.jefe, tipo_operacion='OTRO', exitoso=False,
+                descripcion='Intento fallido permiso temporal de cambio',
+            )
+
+        resp = self._post(self._codigo(self.admin).codigo)
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+
+    def test_directa_bloquea_tras_cinco_codigos_fallidos(self):
+        for intento in ('900001', '900002', '900003', '900004', '900005'):
+            self.assertEqual(self._post(intento).status_code, 403)
+
+        resp = self._post(self._codigo(self.admin).codigo)
+
+        self.assertEqual(resp.status_code, 429)
+        self.assertEqual(resp.json()['code'], 'AUTH_CODE_BLOCKED')
+
+    def test_efectivo_y_mercado_pago_se_ofrecen_en_los_dos_flujos(self):
+        """28-09-2026: efectivo ya no depende de «Devolver ahora» (solo de que
+        la venta no sea a crédito) y existe el método Mercado Pago. Los radios
+        nacen ocultos: los destapa la búsqueda del documento."""
+        html = self.client.get(reverse('modulo_devolucion_garantia')).content.decode()
+        self.assertIn('id="dg-metodo-efectivo" value="EFECTIVO_CAJA"', html)
+        self.assertIn('id="dg-metodo-mp" value="MERCADO_PAGO"', html)
+        self.assertNotIn('const permiteEfectivo = directa &&', html)
+
+        # El modal de aprobación (solo con puede_aprobar) también los ofrece.
+        self.client.force_login(self.admin)
+        session = self.client.session
+        session['idSucursalActual'] = self.sucursal.id
+        session.save()
+        html = self.client.get(reverse('modulo_devolucion_garantia')).content.decode()
+        self.assertIn('<option value="MERCADO_PAGO">', html)
+        self.assertIn('<option value="EFECTIVO_CAJA">Efectivo de caja</option>', html)
+
+    def test_directa_por_mercado_pago(self):
+        """Venta cobrada con MP devuelta en el momento: la NC resta de MP POS y
+        guarda el N° de operación."""
+        boleta = _crear_documento(
+            self.env, 5310, [(self.env['producto_talla'], 1, 11900)], metodo_pago=None)
+        Dte_Detalle_Pago.objects.create(
+            dte=boleta, metodo_pago='MP_POINT_DEBITO', tipo_tarjeta='debit_card', monto=11900)
+        codigo = self._codigo(self.admin)
+
+        resp = self._post(
+            codigo.codigo, metodo_solicitado='MERCADO_PAGO', numero_operacion_mp='177000000555',
+            folio_dte=boleta.numero_documento,
+            productos=[{'dte_producto_id': boleta.dte_productos.first().id,
+                        'modo': 'CANTIDAD', 'cantidad': 1}],
+        )
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()['data']
+        self.assertEqual(data['numero_operacion_mp'], '177000000555')
+        dev = DevolucionGarantia.objects.get(id=data['devolucion_id'])
+        self.assertEqual(dev.metodo_devolucion, 'MERCADO_PAGO')
+        pago = dev.nota_credito.dte_asociado.get()
+        self.assertEqual(pago.metodo_pago, 'MP_POINT_DEBITO')
+        self.assertEqual(pago.voucher, '177000000555')
+
+    def test_directa_por_mercado_pago_sin_cobro_mp_no_crea_nada(self):
+        codigo = self._codigo(self.admin)
+
+        resp = self._post(codigo.codigo, metodo_solicitado='MERCADO_PAGO',
+                          numero_operacion_mp='123')  # la boleta del setUp es EFECTIVO
+
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('Mercado Pago', resp.json()['error'])
+        self.assertFalse(DevolucionGarantia.objects.exists())
+        codigo.refresh_from_db()
+        self.assertFalse(codigo.usado)
+
+    def test_sin_directa_sigue_quedando_pendiente(self):
+        resp = self._post('', directa=False)
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        dev = DevolucionGarantia.objects.get()
+        self.assertEqual(dev.estado, 'PENDIENTE')
+        self.assertIsNone(dev.nota_credito_id)
+
+    def test_pagina_ofrece_devolver_ahora_con_codigo(self):
+        resp = self.client.get(reverse('modulo_devolucion_garantia'))
+
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn('Devolución de Dinero', html)
+        self.assertIn('id="dg-res-directa"', html)
+        self.assertIn('id="dg-codigo-autorizacion"', html)
+
+
+@override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)
+class DevolucionDineroMercadoPagoTest(TestCase):
+    """Devolución por MERCADO PAGO (28-09-2026, caso PAO1 DG-2-202609-0002 /
+    NC 5155): la venta se cobró con la Point y la plata se devolvió desde
+    Mercado Pago. La NC debe restar del bucket MP POS (no de efectivo ni de
+    transferencias), llevar el N° de operación de MP y anotar la devolución en
+    el libro de cobros MP."""
+
+    NUMERO_MP = '177000000001'
+
+    def setUp(self):
+        from app.models import MercadoPagoConfig, TransaccionMercadoPago
+        self.env = setup_entorno_completo()
+        self.user = self.env['user']
+        self.sucursal = self.env['sucursal']
+        self.pt = self.env['producto_talla']
+        crear_correlativo(self.sucursal, tipo_dte='NOTA DE CREDITO')
+        self.hoy = timezone.localdate()
+        self.hoy_str = self.hoy.strftime('%Y-%m-%d')
+        # Boleta de 2 u × $11.900 cobrada con la Point (débito), como la del POS.
+        self.boleta = _crear_documento(self.env, 6100, [(self.pt, 2, 11900)], metodo_pago=None)
+        Dte_Detalle_Pago.objects.create(
+            dte=self.boleta, metodo_pago='MP_POINT_DEBITO', tipo_tarjeta='debit_card',
+            voucher='PAY01TESTULID0001', monto=23800, notas='MP Point Aut: -')
+        self.config = MercadoPagoConfig.objects.create(
+            sucursal=self.sucursal, habilitado=True, modo='POINT',
+            token_env='MP_TOKEN_TEST', webhook_secret_env='MP_SECRET_TEST',
+            external_pos_id='POS001', external_store_id='SUC001',
+        )
+        self.trx = TransaccionMercadoPago.objects.create(
+            config=self.config, sucursal=self.sucursal, correlativo_ticket='12180',
+            tipo='VENTA', canal='POINT', external_reference='RM-TEST-12180-c6i01',
+            payment_id='PAY01TESTULID0001', payment_id_mp=self.NUMERO_MP,
+            metodo_pago_mp='debit_card', monto=23800, estado='APROBADA', consumida=True,
+        )
+
+    def _solicitud(self, dte=None, cantidad=1, metodo='MERCADO_PAGO'):
+        dte = dte or self.boleta
+        transf = metodo == 'TRANSFERENCIA_BANCARIA'
+        return service.crear_solicitud_devolucion(
+            dte_original=dte, sucursal=self.sucursal, receptor=_receptor(self.env),
+            motivo='Falla', usuario=self.user, metodo_solicitado=metodo,
+            banco='Banco X' if transf else '',
+            tipo_cuenta='VISTA' if transf else '',
+            numero_cuenta='123' if transf else '',
+            cuenta_titular_rut='11.111.111-1' if transf else '',
+            detalles=[{'dte_producto_id': dte.dte_productos.first().id,
+                       'modo': 'CANTIDAD', 'cantidad': cantidad}],
+        )
+
+    def _aprobar(self, dev, metodo='MERCADO_PAGO', numero=''):
+        return service.aprobar_devolucion(
+            devolucion_id=dev.id, aprobador=self.user, metodo_devolucion=metodo,
+            fecha_imputacion=self.hoy, numero_operacion_mp=numero,
+        )
+
+    def _cuadratura(self):
+        return _calcular_cuadratura_data(self.sucursal, self.hoy_str)
+
+    # ----- detección del cobro MP -----
+
+    def test_detecta_el_cobro_mp_y_su_numero_de_operacion(self):
+        mp = service.pago_mercadopago_dte(self.boleta)
+        self.assertTrue(mp['es_mp'])
+        self.assertEqual(mp['monto_mp'], 23800)
+        self.assertEqual(mp['metodo_pago'], 'MP_POINT_DEBITO')
+        self.assertEqual(mp['numero_operacion'], self.NUMERO_MP)
+        self.assertEqual(mp['disponible'], 23800)
+        self.assertEqual(service.metodo_devolucion_sugerido(self.boleta, mp), 'MERCADO_PAGO')
+
+    def test_sin_numero_en_el_sistema_se_lo_pregunta_a_mercado_pago(self):
+        """El POS guarda el ULID de Orders (PAY01…), que el panel de MP no
+        encuentra; el número real se completa con payments/search."""
+        from unittest import mock
+        from app.services import mercadopago_service as mp_service
+        self.trx.payment_id_mp = ''
+        self.trx.save(update_fields=['payment_id_mp'])
+        respuesta = mock.Mock(status_code=200)
+        respuesta.json.return_value = {'results': [{
+            'id': 188000000123, 'status': 'refunded',
+            'external_reference': self.trx.external_reference,
+            'authorization_code': '326087', 'card': {'last_four_digits': '1281'},
+        }]}
+        with mock.patch.object(mp_service, '_request', return_value=respuesta) as req:
+            mp = service.pago_mercadopago_dte(self.boleta, consultar_api=True)
+
+        self.assertEqual(mp['numero_operacion'], '188000000123')
+        self.assertEqual(req.call_args.kwargs['params']['external_reference'],
+                         self.trx.external_reference)
+        self.trx.refresh_from_db()
+        self.assertEqual(self.trx.payment_id_mp, '188000000123')
+        self.assertEqual(self.trx.ultimos_4_digitos, '1281')
+
+    def test_si_mercado_pago_no_responde_no_rompe(self):
+        from unittest import mock
+        from app.services import mercadopago_service as mp_service
+        self.trx.payment_id_mp = ''
+        self.trx.save(update_fields=['payment_id_mp'])
+        with mock.patch.object(mp_service, '_request',
+                               side_effect=mp_service.MercadoPagoError('sin red', red=True)):
+            mp = service.pago_mercadopago_dte(self.boleta, consultar_api=True)
+        self.assertTrue(mp['es_mp'])
+        self.assertEqual(mp['numero_operacion'], '')
+
+    # ----- aprobar por Mercado Pago -----
+
+    def test_aprobar_por_mercado_pago_resta_de_mp_pos(self):
+        dev = self._solicitud()
+        dev, nc, _, _ = self._aprobar(dev)
+
+        pago = nc.dte_asociado.get()
+        self.assertEqual(pago.metodo_pago, 'MP_POINT_DEBITO')
+        self.assertEqual(pago.tipo_tarjeta, 'debit_card')
+        self.assertEqual(pago.voucher, self.NUMERO_MP)  # el del cobro, si no se indica otro
+        self.assertEqual(pago.fecha_pago, self.hoy)
+        self.assertEqual(dev.metodo_devolucion, 'MERCADO_PAGO')
+
+        c = self._cuadratura()
+        self.assertEqual(int(c['total_mercadopago_pos_bruto']), 23800)
+        self.assertEqual(int(c['total_nc_mercadopago_pos']), 11900)
+        self.assertEqual(int(c['total_mercadopago_pos']), 11900)
+        self.assertEqual(int(c['total_mercadopago_pos_debito']), 11900)
+        self.assertEqual(int(c['total_nc_transferencia']), 0)
+        self.assertEqual(int(c['total_transferencia']), 0)
+        self.assertEqual(int(c['total_nc_efectivo']), 0)
+        self.assertEqual(int(c['venta_total']), 11900)
+
+        # Libro de cobros MP: devolución parcial anotada, la venta sigue aprobada.
+        self.assertEqual([d.monto for d in self.trx.devoluciones.all()], [11900])
+        self.trx.refresh_from_db()
+        self.assertEqual(self.trx.estado, 'APROBADA')
+
+    def test_devolucion_total_por_mp_deja_el_cobro_devuelto(self):
+        dev = self._solicitud(cantidad=2)
+        self._aprobar(dev, numero='177000009999')
+        self.trx.refresh_from_db()
+        self.assertEqual(self.trx.estado, 'DEVUELTA')
+        dev.refresh_from_db()
+        self.assertEqual(dev.nota_credito.dte_asociado.get().voucher, '177000009999')
+
+    def test_mercado_pago_exige_numero_si_el_sistema_no_lo_conoce(self):
+        self.trx.payment_id_mp = ''
+        self.trx.save(update_fields=['payment_id_mp'])
+        dev = self._solicitud()
+        with self.assertRaisesMessage(service.DevolucionGarantiaError, 'N° de operación'):
+            self._aprobar(dev)
+        dev.refresh_from_db()
+        self.assertEqual(dev.estado, 'PENDIENTE')
+
+        _, nc, _, _ = self._aprobar(dev, numero=' 177 000 000 777 ')
+        self.assertEqual(nc.dte_asociado.get().voucher, '177000000777')
+
+    def test_mercado_pago_bloqueado_si_la_venta_no_fue_con_mp(self):
+        efectivo = _crear_documento(self.env, 6101, [(self.pt, 1, 11900)], metodo_pago='EFECTIVO')
+        with self.assertRaisesMessage(service.DevolucionGarantiaError, 'no se cobró con Mercado Pago'):
+            self._solicitud(efectivo)
+
+        dev = self._solicitud(efectivo, metodo='TRANSFERENCIA_BANCARIA')
+        preview = service.impacto_caja_preview(devolucion=dev, metodo='MERCADO_PAGO',
+                                               fecha_imputacion=self.hoy)
+        self.assertTrue(preview['bloqueado'])
+        with self.assertRaisesMessage(service.DevolucionGarantiaError, 'no se cobró con Mercado Pago'):
+            self._aprobar(dev, numero='1')
+
+    def test_no_devuelve_por_mp_mas_de_lo_cobrado_con_mp(self):
+        """Boleta mixta: $11.900 efectivo + $11.900 MP. Por MP se devuelve hasta
+        lo cobrado con MP; el resto va por el medio con que se pagó."""
+        mixta = _crear_documento(self.env, 6102, [(self.pt, 2, 11900)], metodo_pago=None)
+        Dte_Detalle_Pago.objects.create(dte=mixta, metodo_pago='EFECTIVO', monto=11900)
+        Dte_Detalle_Pago.objects.create(dte=mixta, metodo_pago='MP_POINT_CREDITO',
+                                        tipo_tarjeta='credit_card', voucher='555', monto=11900)
+        with self.assertRaisesMessage(service.DevolucionGarantiaError, 'hasta $11,900'):
+            self._solicitud(mixta, cantidad=2)
+        dev = self._solicitud(mixta, cantidad=1)
+        preview = service.impacto_caja_preview(devolucion=dev, metodo='MERCADO_PAGO',
+                                               fecha_imputacion=self.hoy)
+        self.assertFalse(preview['bloqueado'])
+        self.assertIn('Mercado Pago POS', preview['descripcion'])
+        _, nc, _, _ = self._aprobar(dev)
+        self.assertEqual(nc.dte_asociado.get().voucher, '555')  # N° del MP manual
+        self.assertEqual(service.pago_mercadopago_dte(mixta)['disponible'], 0)
+
+    # ----- corrección de una devolución ya aprobada (caso PAO1) -----
+
+    def test_corregir_transferencia_a_mercado_pago_mueve_la_caja(self):
+        dev = self._solicitud(metodo='TRANSFERENCIA_BANCARIA')
+        dev, nc, _, _ = self._aprobar(dev, metodo='TRANSFERENCIA_BANCARIA')
+        c = self._cuadratura()
+        self.assertEqual(int(c['total_nc_transferencia']), 11900)
+        self.assertEqual(int(c['total_transferencia']), -11900)   # lo que se veía en PAO1
+        self.assertEqual(int(c['total_mercadopago_pos']), 23800)
+
+        res = service.cambiar_metodo_devolucion(
+            devolucion_id=dev.id, usuario=self.user, metodo_nuevo='MERCADO_PAGO',
+            motivo='Se devolvió por la app de MP')
+
+        self.assertEqual(res['numero_operacion_mp'], self.NUMERO_MP)
+        pago = nc.dte_asociado.get()
+        self.assertEqual(pago.metodo_pago, 'MP_POINT_DEBITO')
+        self.assertEqual(pago.voucher, self.NUMERO_MP)
+        self.assertEqual(pago.fecha_pago, self.hoy)          # conserva la imputación
+        c = self._cuadratura()
+        self.assertEqual(int(c['total_nc_transferencia']), 0)
+        self.assertEqual(int(c['total_transferencia']), 0)
+        self.assertEqual(int(c['total_nc_mercadopago_pos']), 11900)
+        self.assertEqual(int(c['total_mercadopago_pos']), 11900)
+        self.assertEqual(int(c['venta_total']), 11900)       # el total no cambia
+        dev.refresh_from_db()
+        self.assertEqual(dev.metodo_devolucion, 'MERCADO_PAGO')
+        self.assertEqual(dev.metodo_solicitado, 'MERCADO_PAGO')
+        self.assertIn('[CORREGIDO', dev.observaciones_aprobacion)
+        self.assertEqual(self.trx.devoluciones.count(), 1)
+
+        # Y de vuelta: la devolución sale del libro MP.
+        service.cambiar_metodo_devolucion(
+            devolucion_id=dev.id, usuario=self.user, metodo_nuevo='TRANSFERENCIA_BANCARIA')
+        self.assertEqual(self.trx.devoluciones.count(), 0)
+        self.assertEqual(int(self._cuadratura()['total_nc_transferencia']), 11900)
+
+    def test_corregir_rechaza_devolucion_pendiente_o_mismo_metodo(self):
+        dev = self._solicitud(metodo='TRANSFERENCIA_BANCARIA')
+        with self.assertRaisesMessage(service.DevolucionGarantiaError, 'aprobada'):
+            service.cambiar_metodo_devolucion(
+                devolucion_id=dev.id, usuario=self.user, metodo_nuevo='MERCADO_PAGO')
+        self._aprobar(dev, metodo='TRANSFERENCIA_BANCARIA')
+        with self.assertRaisesMessage(service.DevolucionGarantiaError, 'ya está registrada'):
+            service.cambiar_metodo_devolucion(
+                devolucion_id=dev.id, usuario=self.user, metodo_nuevo='TRANSFERENCIA_BANCARIA')
+
+    def test_comando_dry_run_no_escribe_y_apply_corrige_y_recalcula_arqueo(self):
+        from io import StringIO
+        from django.core.management import call_command
+        from app.models import ArqueoCaja
+        dev = self._solicitud(metodo='TRANSFERENCIA_BANCARIA')
+        dev, nc, _, _ = self._aprobar(dev, metodo='TRANSFERENCIA_BANCARIA')
+        arqueo = ArqueoCaja.objects.create(
+            fecha_arqueo=self.hoy, sucursal=self.sucursal, usuario_responsable=self.user,
+            estado='CERRADO', total_transferencia_teorico=-11900,
+            total_mercadopago_pos_teorico=23800,
+        )
+
+        salida = StringIO()
+        call_command('corregir_metodo_devolucion_dg', dev.numero_operacion, metodo='MP',
+                     usuario=self.user.username, stdout=salida)
+        self.assertIn('DRY-RUN', salida.getvalue())
+        self.assertEqual(nc.dte_asociado.get().metodo_pago, 'TRANSFERENCIA')
+
+        salida = StringIO()
+        call_command('corregir_metodo_devolucion_dg', dev.numero_operacion, metodo='MP',
+                     usuario=self.user.username, apply=True, recalcular_arqueo=True, stdout=salida)
+        self.assertIn('OK', salida.getvalue())
+        self.assertEqual(nc.dte_asociado.get().metodo_pago, 'MP_POINT_DEBITO')
+        arqueo.refresh_from_db()
+        self.assertEqual(int(arqueo.total_transferencia_teorico), 0)
+        self.assertEqual(int(arqueo.total_mercadopago_pos_teorico), 11900)
+
+    # ----- comprobante, detalle y búsqueda -----
+
+    def test_comprobante_trae_correo_y_numero_de_operacion(self):
+        receptor = _receptor(self.env)
+        receptor.correoVendedor = 'cliente@correo.cl'
+        receptor.save(update_fields=['correoVendedor'])
+        dev = self._solicitud()
+        self._aprobar(dev)
+
+        modulo, _ = ModuloSistema.objects.get_or_create(
+            codigo='ventas', defaults={'nombre': 'Ventas', 'orden': 2})
+        opcion, _ = OpcionMenu.objects.get_or_create(
+            codigo='devolucion_garantia',
+            defaults={'modulo': modulo, 'nombre': 'Devolucion de Dinero', 'orden': 3})
+        usuario = crear_usuario(username='user_ticket_mp', rol='jefe_local')
+        PermisoRol.objects.update_or_create(
+            rol=usuario.rol, opcion_menu=opcion, defaults={'puede_ver': True})
+        client = Client()
+        client.force_login(usuario)
+        session = client.session
+        session['idSucursalActual'] = self.sucursal.id
+        session.save()
+
+        data = client.get(reverse('api_ticket_devolucion_garantia', args=[dev.id])).json()['data']
+        self.assertEqual(data['cliente']['email'], 'cliente@correo.cl')
+        self.assertEqual(data['metodo_solicitado_display'], 'Mercado Pago')
+        self.assertEqual(data['mercadopago']['numero_operacion'], self.NUMERO_MP)
+        self.assertTrue(data['mercadopago']['devuelto'])
+        self.assertIsNone(data['transferencia'])
+
+        detalle = client.get(reverse('detalle_devolucion_garantia', args=[dev.id])).content.decode()
+        self.assertIn('cliente@correo.cl', detalle)
+        self.assertIn(self.NUMERO_MP, detalle)
+
+        # Búsqueda del listado por el N° de operación de Mercado Pago.
+        listado = client.get(reverse('api_listar_devoluciones_garantia'),
+                             {'q': self.NUMERO_MP}).json()
+        self.assertEqual([d['id'] for d in listado['data']], [dev.id])

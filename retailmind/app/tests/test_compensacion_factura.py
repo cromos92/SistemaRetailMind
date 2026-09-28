@@ -23,7 +23,7 @@ from django.utils import timezone
 from app.models import Dte, Dte_Detalle_Pago, Dte_Incidencia
 from app.views_modulo_compras import METODO_COMPENSACION
 
-from .factories import crear_empresa, setup_entorno_completo
+from .factories import crear_empresa, otorgar_ver_pantalla, setup_entorno_completo
 
 STATICFILES_STORAGE_TEST = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
@@ -68,6 +68,9 @@ class CompensacionFacturaTest(TestCase):
         self.otro_proveedor = crear_empresa(
             nombre='Otro Proveedor', rut='78.000.000-8', esProveedor=True,
         )
+        # El middleware exige ver la pantalla Gestión Documentos Compras
+        # (URL_PERMISO_MAP mapea las APIs de compensación a ese código).
+        otorgar_ver_pantalla(self.env['user'].rol, 'gestion_dte_compras')
 
         self.client = Client()
         self.client.login(username='testuser', password='TestPass123!')

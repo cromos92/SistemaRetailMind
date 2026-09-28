@@ -1,4 +1,4 @@
-{% load static %}
+{% load static indicadores_tags %}
 
 {% include '../../layout/header.html' %}
 {% include '../../layout/menu.html' %}
@@ -11,34 +11,7 @@
     <div class="container-fluid">
 
 <style>
-    /* ========== NEXO DESIGN SYSTEM VARIABLES ========== */
-    :root {
-        --nexo-primary: #0066FF;
-        --nexo-primary-dark: #0052CC;
-        --nexo-primary-light: #E6F0FF;
-        --nexo-secondary: #1A1A2E;
-        --nexo-accent: #00D4AA;
-        --nexo-success: #00D4AA;
-        --nexo-warning: #FFB020;
-        --nexo-error: #FF4D4D;
-        --nexo-info: #0066FF;
-        --nexo-gray-900: #1A1A2E;
-        --nexo-gray-700: #4A4A5A;
-        --nexo-gray-500: #8A8A9A;
-        --nexo-gray-300: #D1D1D9;
-        --nexo-gray-100: #F5F5F7;
-        --nexo-white: #FFFFFF;
-        --nexo-shadow-sm: 0 1px 2px rgba(26, 26, 46, 0.05);
-        --nexo-shadow-md: 0 4px 6px rgba(26, 26, 46, 0.1);
-        --nexo-shadow-lg: 0 10px 15px rgba(26, 26, 46, 0.1);
-        --nexo-shadow-xl: 0 20px 25px rgba(26, 26, 46, 0.15);
-        --nexo-radius-sm: 4px;
-        --nexo-radius-md: 8px;
-        --nexo-radius-lg: 12px;
-        --nexo-radius-xl: 16px;
-        --nexo-transition-fast: 150ms ease;
-        --nexo-transition-normal: 250ms ease;
-    }
+    /* Variables --nexo-*: vienen de nexo-design-system.css (layout/header.html) */
 
     /* ========== CONTENEDOR PRINCIPAL ========== */
     .nexo-container {
@@ -1079,6 +1052,8 @@
         </div>
     </div>
 
+    {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='existencias' activo='marca' %}
+
     <!-- ========== KPI DASHBOARD ========== -->
     <div class="nexo-kpi-dashboard" id="kpi-dashboard">
         <div class="nexo-kpi-card kpi-primary">
@@ -1139,18 +1114,18 @@
             <div class="nexo-kpi-icon icon-primary">
                 <i class="ri-time-line"></i>
             </div>
-            <div class="nexo-kpi-label">Cobertura (días)</div>
+            <div class="nexo-kpi-label" id="kpi-cobertura-label" title="{% definicion 'cobertura_dias' 30 %}">Cobertura (30 d)</div>
             <div class="nexo-kpi-value" id="kpi-cobertura">-</div>
-            <div class="nexo-kpi-meta">Stock ÷ velocidad 30d del universo filtrado</div>
+            <div class="nexo-kpi-meta">Stock ÷ venta diaria de los últimos 30 d, del universo filtrado</div>
         </div>
 
         <div class="nexo-kpi-card kpi-error">
             <div class="nexo-kpi-icon icon-error">
                 <i class="ri-archive-2-line"></i>
             </div>
-            <div class="nexo-kpi-label">Stock &gt;180 días</div>
+            <div class="nexo-kpi-label" id="kpi-viejo-label" title="{% definicion 'pct_stock_viejo' 180 %}">Stock &gt;180 d por edad de lote</div>
             <div class="nexo-kpi-value" id="kpi-viejo">-</div>
-            <div class="nexo-kpi-meta">% del stock en lotes antiguos (dead stock)</div>
+            <div class="nexo-kpi-meta">% del stock en lotes ingresados hace más de 180 d (edad, no falta de venta)</div>
         </div>
     </div>
 
@@ -1308,10 +1283,33 @@ const SUCURSAL_ACTUAL_ALIAS = '{{ sucursal_actual.alias|default:"" }}';
 
 // ========== INICIALIZACIÓN ==========
 document.addEventListener('DOMContentLoaded', function() {
-    cargarMarcas();
+    const pMarcas = cargarMarcas();
     cargarDepartamentos();
-    cargarSucursales();
+    const pSucursales = cargarSucursales();
     mostrarAlertaFiltro(false);
+
+    // Filtros de la URL (tira de reportes o enlace guardado): solo quedan puestos
+    // en los combos; el reporte sigue esperando "Buscar".
+    if (window.FiltrosReporte) {
+        const f = FiltrosReporte.leer();
+        // La sucursal actual es la opción '' ("(actual)"): si la URL trae su id, ya queda elegida.
+        if (f.sucursal_id) {
+            pSucursales.then(() => FiltrosReporte.ponerValor('#filtro-sucursal', f.sucursal_id));
+        }
+        // El combo de marcas se llena al buscar: se busca por el nombre y se elige.
+        if (f.marca_id) {
+            pMarcas.then(() => {
+                const m = Array.isArray(todasLasMarcas) ? todasLasMarcas.find(x => String(x.id) === f.marca_id) : null;
+                if (!m) return;
+                document.getElementById('search-marca').value = m.valor;
+                filtrarMarcas();
+                if (!FiltrosReporte.ponerValor('#filtro-marca', f.marca_id)) {
+                    document.getElementById('filtro-marca').appendChild(new Option(m.valor, m.id));
+                    FiltrosReporte.ponerValor('#filtro-marca', f.marca_id);
+                }
+            });
+        }
+    }
 });
 
 // ========== LOADING OVERLAY ==========
@@ -1635,7 +1633,13 @@ async function cargarReporte(forzarSinFiltro = false) {
         const deptId = document.getElementById('filtro-departamento').value;
         const busqueda = document.getElementById('busqueda-articulo').value.trim();
         const sucursalId = document.getElementById('filtro-sucursal').value;
-        
+
+        // Estado compartido en la URL. '' es la sucursal actual: va con su id para
+        // que el siguiente reporte la reciba; 'todas' se deja tal cual.
+        if (window.FiltrosReporte) {
+            FiltrosReporte.reflejar({ sucursal_id: sucursalId || SUCURSAL_ACTUAL_ID, marca_id: marcaId });
+        }
+
         let url = '/app/api/reporte-existencias-marca/';
         const params = new URLSearchParams();
         
@@ -1667,6 +1671,13 @@ async function cargarReporte(forzarSinFiltro = false) {
             actualizarKPIs(data.datos);
             // KPIs de salud (server-side, sobre el universo filtrado)
             const salud = data.salud || {};
+            // El rótulo declara la ventana que la API realmente usó.
+            if (salud.ventana_dias) {
+                document.getElementById('kpi-cobertura-label').textContent = `Cobertura (${salud.ventana_dias} d)`;
+            }
+            if (salud.umbral_viejo_dias) {
+                document.getElementById('kpi-viejo-label').textContent = `Stock >${salud.umbral_viejo_dias} d por edad de lote`;
+            }
             document.getElementById('kpi-cobertura').textContent =
                 salud.cobertura_dias != null ? salud.cobertura_dias.toLocaleString('es-CL') : '—';
             document.getElementById('kpi-viejo').textContent =

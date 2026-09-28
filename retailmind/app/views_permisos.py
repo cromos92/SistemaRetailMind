@@ -16,14 +16,17 @@ Jerarquía para editar (la hace cumplir el servidor, no solo la pantalla):
 """
 import json
 import logging
+import warnings
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation
+from types import SimpleNamespace
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Count, Max, Q
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render, redirect
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
@@ -333,6 +336,67 @@ def obtener_permisos_rol(request):
         'configuracion_arqueo': obtener_configuracion_rango_arqueo(rol),
         'modulos': _arbol_modulos(construir),
     }, json_dumps_params={'default': str})
+
+
+@login_required
+@solo_administrador
+@require_http_methods(["GET"])
+def vista_previa_menu(request):
+    """El menú lateral tal como lo VE un rol o un usuario: se renderiza el
+    `layout/menu.html` real con un usuario simulado, así la vista previa
+    obedece exactamente a lo que obedece la barra (permisos por rol, overrides,
+    restricción de la sucursal simulada y los `if` por rol del propio menú).
+
+    ?rol=vendedor                      → un usuario ficticio de ese rol (sin overrides)
+    ?usuario_id=N[&sucursal_id=S]      → ese usuario, en esa sucursal (0/vacío: sin sucursal)
+    Solo refleja lo GUARDADO. Devuelve el HTML del menú; la pantalla lo
+    convierte en árbol y lo compara con lo que ve el Maestro.
+    """
+    from .models import Sucursal
+
+    usuario_id = (request.GET.get('usuario_id') or '').strip()
+    rol = (request.GET.get('rol') or '').strip()
+    if usuario_id:
+        simulado = Usuario.objects.filter(id=usuario_id).first() if usuario_id.isdigit() else None
+        if simulado is None:
+            return _json_error('Usuario no encontrado', status=404)
+        etiqueta = simulado.get_full_name() or simulado.username
+    elif rol in ROLES_VALIDOS:
+        # Sin guardar: no tiene overrides ni sucursales; sus filtros por
+        # usuario resuelven a «ninguna fila».
+        simulado = Usuario(username=f'vista-previa-{rol}', first_name=ROLES_VALIDOS[rol],
+                           rol=rol, is_active=True, es_activo=True)
+        etiqueta = f'rol {ROLES_VALIDOS[rol]}'
+    else:
+        return _json_error('Indica un rol válido o un usuario')
+
+    try:
+        sucursal_id = int(request.GET.get('sucursal_id') or 0) or None
+    except (TypeError, ValueError):
+        sucursal_id = None
+    sucursal = Sucursal.objects.filter(id=sucursal_id).first() if sucursal_id else None
+    sesion = {
+        'idSucursalActual': sucursal.id if sucursal else None,
+        'alias': sucursal.alias if sucursal else 'Sin sucursal',
+        'nombreSucursalActual': (sucursal.nombre or sucursal.alias) if sucursal else '',
+        'idEmpresaActual': sucursal.empresa_id if sucursal else None,
+    }
+    # Lo mínimo que el menú y sus tags leen del request (caché de permisos incluida).
+    falso = SimpleNamespace(user=simulado, session=sesion, path='/app/', GET={}, META={})
+    contexto = {
+        'user': simulado, 'request': falso,
+        'pedidos_pendientes': 0, 'pending_ecommerce_count': 0,
+        'pos_kiosk': False, 'pos_kiosk_strict': False,
+    }
+    with warnings.catch_warnings():
+        # Filtrar por un usuario sin guardar avisa (Django 4.x) y resuelve a «sin filas»: es lo que queremos.
+        warnings.simplefilter('ignore')
+        html = render_to_string('layout/menu.html', contexto)
+    return JsonResponse({
+        'success': True, 'html': html, 'etiqueta': etiqueta,
+        'sucursal': sucursal.alias if sucursal else '',
+        'es_maestro': es_maestro(simulado),
+    })
 
 
 @login_required

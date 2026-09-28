@@ -31,16 +31,16 @@ CATALOGO = {
         },
         'depende_de': ['emitir_nota_credito'],
         'notas': 'Administrador y jefe de local tienen «Cancelar/Revertir» sin este casillero (el administrador sin código). Crear no revisa permisos; '
-                 'aprobar pide código de supervisor y, fuera de plazo, el PIN de un administrador; «Generar NC» exige Nota de Crédito.',
+                 'aprobar pide el código de la barra de un supervisor y, fuera de plazo, el de un Administrador o Maestro; «Generar NC» exige Nota de Crédito.',
     },
 
     'devolucion_garantia': {
-        'pantalla': 'Devolución por Garantía',
+        'pantalla': 'Devolución de Dinero',
         'ruta': '/app/devolucion-garantia/',
-        'resumen': 'Solicitudes de devolución de dinero por garantía: la tienda las crea y un aprobador las aprueba (emite la NC) o rechaza.',
+        'resumen': 'Devoluciones de dinero al cliente: la tienda las crea y un aprobador las aprueba (emite la NC) o rechaza; o se devuelven en el momento con el código de un Administrador/Maestro.',
         'permisos': {
             'puede_ver': 'Entrar a la pantalla y al detalle, buscar el documento, ver el listado, imprimir el comprobante y anular una solicitud propia.',
-            'puede_crear': 'Botón «Nueva Solicitud»: registrar la solicitud de devolución (queda pendiente, sin NC).',
+            'puede_crear': 'Botón «Nueva Devolución»: solicitud pendiente (sin NC) o «Devolver ahora» con el código de barra de un Admin/Maestro que apruebe (NC al instante).',
             'puede_aprobar': 'Modal «Analizar solicitud»: ver detalle e impacto en caja, «Rechazar» y «Aprobar y generar NC».',
         },
         'depende_de': [],

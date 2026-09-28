@@ -43,11 +43,12 @@ from __future__ import annotations
 
 import json
 import logging
+import zlib
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.contrib.auth import get_user_model
 from django.core import signing
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import F, Q, Value
 from django.db.models.functions import Replace
 from django.http import JsonResponse
@@ -60,10 +61,11 @@ from .models import (
     ProveedorProductoEquivalencia, Sucursal,
 )
 from .services.dte_xml_parser import (
-    DEFUSEDXML_DISPONIBLE, MAX_DETALLE_POR_DOCUMENTO, TIPOS_BOLETA, TIPOS_NOTA,
+    DEFUSEDXML_DISPONIBLE, MAX_BYTES_ARCHIVO, MAX_DETALLE_POR_DOCUMENTO, TIPOS_BOLETA,
     XmlDteError, a_json, calcular_cuadratura, parsear_xml_envio,
     validar_dte_parseado,
 )
+from .utils_estado_pago import ESTADO_PAGO_PENDIENTE
 from .utils_folio_dte import normalizar_rut
 from .utils_permisos import obtener_empresas_usuario, obtener_sucursales_usuario
 from .utils_producto_match import (
@@ -84,9 +86,30 @@ TOKEN_MAX_AGE = 60 * 60 * 4     # 4 h: dura una jornada de conciliación
 # --- Topes defensivos ---
 MAX_ARCHIVOS_POR_LOTE = 20
 MAX_DOCUMENTOS_POR_ARCHIVO = 50
+# Líneas de detalle por análisis (suma de todos los documentos del lote). El
+# matching hace varias consultas por línea: 20 archivos × 60 líneas rozaba el
+# timeout de 60 s del worker (B11-16). 600 líneas ≈ 10 facturas completas.
+MAX_LINEAS_POR_LOTE = 600
 LIMITE_CANDIDATOS = 10
 LIMITE_PREFILTRO_NOMBRE = 300
 LIMITE_BUSQUEDA = 30
+
+# TpoCodigo de códigos GLOBALES (identifican el artículo+talla, no el estilo):
+# si los códigos de una línea tienen equivalencias a productos distintos, se
+# prefiere el de estos tipos (B11-09).
+PREFIJOS_CODIGO_GLOBAL = ('EAN', 'GTIN', 'UPC', 'DUN')
+
+# Estado de pago con que nace una factura importada: el valor canónico de
+# app/utils_estado_pago.py, que es el que leen (sin distinguir mayúsculas) los
+# filtros Pendientes / Vencidos / Por vencer y el KPI de pendientes del año
+# (B11-11 / B15-08). No se acepta del cliente: antes guardaba cualquier texto.
+ESTADO_PAGO_INICIAL = ESTADO_PAGO_PENDIENTE
+
+# Solo el tipo 61 es nota de CRÉDITO; la 56 (débito) aumenta la deuda (B11-12).
+TIPO_SII_NOTA_CREDITO = 61
+
+# Espacio del advisory lock de "confirmar XML" ('XDTE' en ASCII).
+_LOCK_FOLIO_XML = 0x58445445
 
 # --- Semáforo de la conciliación ---
 CONFIANZA_ALTA = 'ALTA'          # verde  → se puede confirmar tal cual
@@ -144,6 +167,18 @@ def _buscar_empresa_receptora(rut, empresas_usuario):
         if normalizar_rut(empresa.rut) == rut_norm:
             return empresa
     return None
+
+
+def _empresas_propias(user):
+    """Empresas del usuario que pueden RECIBIR una factura de compra.
+
+    Solo las del grupo, es decir, las que tienen sucursales. Para un
+    administrador `obtener_empresas_usuario` devuelve TODAS las empresas
+    activas (≈1.500: clientes y proveedores incluidos), y así una factura a
+    nombre de un cliente quedaba "receptor reconocido" y se registraba a
+    nombre de un tercero, invisible en Gestión Documentos Compras (B11-10).
+    """
+    return obtener_empresas_usuario(user).filter(sucursales_app__isnull=False).distinct()
 
 
 def buscar_dtes_duplicados(rut_emisor, tipo_documento, folio, limite=10):
@@ -253,35 +288,115 @@ def _codigos_de_linea(linea):
     return codigos
 
 
-def _match_por_equivalencia(codigos, empresa_proveedor_id):
-    """(a) Equivalencia aprendida. Devuelve (Producto_Talla, codigo) o (None, None)."""
+def _tipos_de_linea(linea):
+    """{valor: TpoCodigo} de los CdgItem de la línea."""
+    return {
+        (item.get('valor') or '').strip(): (item.get('tipo') or '').strip()
+        for item in (linea.get('codigos') or [])
+        if (item.get('valor') or '').strip()
+    }
+
+
+def _es_codigo_global(tipo):
+    limpio = (tipo or '').upper().replace('-', '').replace(' ', '')
+    return limpio.startswith(PREFIJOS_CODIGO_GLOBAL)
+
+
+def _equivalencias_de(codigos, empresa_proveedor_id):
+    """{codigo_externo: equivalencia} de esos códigos del proveedor (1 consulta)."""
     if not (codigos and empresa_proveedor_id):
-        return None, None
-    equivalencias = {
+        return {}
+    return {
         e.codigo_externo: e
         for e in ProveedorProductoEquivalencia.objects
-        .filter(empresa_proveedor_id=empresa_proveedor_id, codigo_externo__in=codigos)
+        .filter(empresa_proveedor_id=empresa_proveedor_id, codigo_externo__in=list(codigos))
         .select_related('producto_talla', 'producto_talla__producto',
                         'producto_talla__producto__sucursal')
     }
-    for codigo in codigos:
-        equivalencia = equivalencias.get(codigo)
-        if equivalencia and equivalencia.producto_talla_id:
-            return equivalencia.producto_talla, codigo
-    return None, None
 
 
-def _match_por_sku(codigos, sucursal_id):
-    """(b) Código numérico contra `Producto_Talla.sku`."""
+def _match_por_equivalencia(codigos, empresa_proveedor_id, tipos=None, equivalencias=None):
+    """(a) Equivalencia aprendida.
+
+    Devuelve (Producto_Talla | None, codigo | None, alternativas). Sin
+    conflicto `alternativas` es []: todas las equivalencias de la línea apuntan
+    al mismo producto/talla (o hay una sola). Si apuntan a productos/talla
+    DISTINTOS (típico: el proveedor factura con el código de estilo, igual para
+    todas las tallas, además del EAN) `alternativas` trae todos esos
+    Producto_Talla y la propuesta es la del código global (EAN/GTIN) si todos
+    los globales coinciden; si no, no hay propuesta (B11-09).
+
+    `equivalencias` = {codigo: equivalencia} precargado por documento; sin él
+    se consulta aquí.
+    """
+    if not (codigos and empresa_proveedor_id):
+        return None, None, []
+    if equivalencias is None:
+        equivalencias = _equivalencias_de(codigos, empresa_proveedor_id)
+    tipos = tipos or {}
+    encontradas = [
+        (codigo, equivalencias[codigo]) for codigo in codigos
+        if codigo in equivalencias and equivalencias[codigo].producto_talla_id
+    ]
+    if not encontradas:
+        return None, None, []
+    distintas = {}
+    for _codigo, equivalencia in encontradas:
+        distintas.setdefault(equivalencia.producto_talla_id, equivalencia.producto_talla)
+    if len(distintas) == 1:
+        codigo, equivalencia = encontradas[0]
+        return equivalencia.producto_talla, codigo, []
+
+    alternativas = list(distintas.values())
+    globales = [
+        (codigo, equivalencia) for codigo, equivalencia in encontradas
+        if _es_codigo_global(tipos.get(codigo) or equivalencia.tipo_codigo)
+    ]
+    if globales and len({e.producto_talla_id for _c, e in globales}) == 1:
+        codigo, equivalencia = globales[0]
+        return equivalencia.producto_talla, codigo, alternativas
+    return None, None, alternativas
+
+
+def _skus_de(codigos_por_linea):
+    """{sku: [Producto_Talla por id]} de los códigos numéricos (1 consulta)."""
+    skus = set()
+    for codigos in codigos_por_linea:
+        for codigo in codigos:
+            limpio = codigo.strip().lstrip('0') or '0'
+            if limpio.isdigit() and len(limpio) <= 18:
+                skus.add(int(limpio))
+    if not skus:
+        return {}
+    por_sku = {}
+    for pt in (Producto_Talla.objects.filter(sku__in=skus)
+               .select_related('producto', 'producto__sucursal').order_by('id')):
+        por_sku.setdefault(pt.sku, []).append(pt)
+    return por_sku
+
+
+def _match_por_sku(codigos, sucursal_id, por_sku=None):
+    """(b) Código numérico contra `Producto_Talla.sku`.
+
+    `por_sku` = {sku: [Producto_Talla ordenados por id]} precargado por
+    documento; se resuelve igual que `producto_talla_por_sku`: primero la de
+    la sucursal y, si no hay, la primera de cualquiera (menor id).
+    """
     for codigo in codigos:
         limpio = codigo.strip().lstrip('0') or '0'
         if not limpio.isdigit() or len(limpio) > 18:
             continue
-        pt = producto_talla_por_sku(
-            int(limpio),
-            sucursal_id=sucursal_id,
-            select_related=('producto', 'producto__sucursal'),
-        )
+        if por_sku is not None:
+            candidatas = por_sku.get(int(limpio)) or []
+            pt = next((c for c in candidatas
+                       if sucursal_id and c.producto.sucursal_id == sucursal_id), None) \
+                or (candidatas[0] if candidatas else None)
+        else:
+            pt = producto_talla_por_sku(
+                int(limpio),
+                sucursal_id=sucursal_id,
+                select_related=('producto', 'producto__sucursal'),
+            )
         if pt is not None:
             return pt, codigo
     return None, None
@@ -325,19 +440,43 @@ def _productos_por_nombre(nombre, sucursal_id):
     return [p for p in candidatos if normalizar_articulo(p.articulo) == objetivo]
 
 
-def matchear_linea(linea, empresa_proveedor_id, sucursal_id):
+def matchear_linea(linea, empresa_proveedor_id, sucursal_id, precarga=None):
     """Resuelve UNA línea del detalle contra el catálogo.
+
+    `precarga` (opcional, la arma `matchear_detalle` una vez por documento):
+    {'equivalencias': {codigo: equivalencia}, 'por_sku': {sku: [pt]}}. Sin
+    ella cada paso consulta por su cuenta (mismo resultado).
 
     Returns:
         dict con ``propuesta`` (talla serializada o None), ``confianza``
         ('ALTA' | 'MEDIA' | 'SIN_MATCH'), ``motivo``, ``origen`` y
         ``candidatos`` (opciones cuando hay ambigüedad).
     """
+    precarga = precarga or {}
     codigos = _codigos_de_linea(linea)
     nombre = linea.get('nombre') or ''
 
     # (a) EQUIVALENCIA APRENDIDA
-    pt, codigo = _match_por_equivalencia(codigos, empresa_proveedor_id)
+    pt, codigo, alternativas = _match_por_equivalencia(
+        codigos, empresa_proveedor_id, _tipos_de_linea(linea),
+        precarga.get('equivalencias'))
+    if alternativas:
+        # Los códigos de la línea apuntan a productos distintos: nunca verde.
+        opciones = ', '.join(
+            f'{x.producto.articulo if x.producto else "?"} T{x.talla}' for x in alternativas)
+        return {
+            'propuesta': _serializar_talla(pt) if pt is not None else None,
+            'confianza': CONFIANZA_MEDIA,
+            'origen': 'EQUIVALENCIA',
+            'motivo': (
+                f'Los códigos de esta línea tienen equivalencias a productos '
+                f'distintos ({opciones}). '
+                + (f'Se propone la del código global «{codigo}»: revisa antes de confirmar.'
+                   if pt is not None else 'Elige cuál corresponde.')
+            ),
+            'candidatos': [_serializar_talla(x) for x in alternativas][:LIMITE_CANDIDATOS],
+            'codigo_usado': codigo,
+        }
     if pt is not None:
         return {
             'propuesta': _serializar_talla(pt),
@@ -349,7 +488,7 @@ def matchear_linea(linea, empresa_proveedor_id, sucursal_id):
         }
 
     # (b) SKU
-    pt, codigo = _match_por_sku(codigos, sucursal_id)
+    pt, codigo = _match_por_sku(codigos, sucursal_id, precarga.get('por_sku'))
     if pt is not None:
         misma_sucursal = (
             pt.producto is not None and pt.producto.sucursal_id == sucursal_id
@@ -429,11 +568,22 @@ def matchear_linea(linea, empresa_proveedor_id, sucursal_id):
 
 
 def matchear_detalle(detalle, empresa_proveedor_id, sucursal_id):
-    """Aplica `matchear_linea` a todo el detalle y devuelve las líneas anotadas."""
+    """Aplica `matchear_linea` a todo el detalle y devuelve las líneas anotadas.
+
+    Precarga en 2 consultas las equivalencias y los SKU de TODOS los códigos
+    del documento (antes eran 1-3 consultas por línea, B11-16); el matching
+    por nombre sigue siendo por línea.
+    """
+    codigos_por_linea = [_codigos_de_linea(linea) for linea in detalle]
+    todos = {c for codigos in codigos_por_linea for c in codigos}
+    precarga = {
+        'equivalencias': _equivalencias_de(todos, empresa_proveedor_id),
+        'por_sku': _skus_de(codigos_por_linea),
+    }
     lineas = []
     for linea in detalle:
         anotada = dict(linea)
-        anotada['match'] = matchear_linea(linea, empresa_proveedor_id, sucursal_id)
+        anotada['match'] = matchear_linea(linea, empresa_proveedor_id, sucursal_id, precarga)
         lineas.append(anotada)
     return lineas
 
@@ -445,7 +595,7 @@ def matchear_detalle(detalle, empresa_proveedor_id, sucursal_id):
 @requiere_permiso(PERMISO, 'puede_crear')
 def ver_importar_xml_dte(request):
     """Pantalla única del wizard (subir → conciliar → confirmar)."""
-    empresas = list(obtener_empresas_usuario(request.user))
+    empresas = list(_empresas_propias(request.user))
     sucursales = list(obtener_sucursales_usuario(request.user))
     sucursal_actual = _int_o_none(request.session.get('idSucursalActual'))
     empresa_actual = _int_o_none(request.session.get('idEmpresaActual'))
@@ -480,12 +630,13 @@ def analizar_xml_dte(request):
         }, status=400)
 
     sucursal_id = _resolver_sucursal(request)
-    empresas_usuario = list(obtener_empresas_usuario(request.user))
+    empresas_usuario = list(_empresas_propias(request.user))
 
     resultados = []
+    presupuesto = {'lineas': MAX_LINEAS_POR_LOTE}
     for archivo in archivos:
         resultados.append(
-            _analizar_archivo(archivo, sucursal_id, empresas_usuario))
+            _analizar_archivo(archivo, sucursal_id, empresas_usuario, presupuesto))
 
     total_docs = sum(len(r.get('documentos', [])) for r in resultados)
     return JsonResponse({
@@ -497,8 +648,21 @@ def analizar_xml_dte(request):
     })
 
 
-def _analizar_archivo(archivo, sucursal_id, empresas_usuario):
+def _analizar_archivo(archivo, sucursal_id, empresas_usuario, presupuesto=None):
+    """Parsea y concilia un archivo. `presupuesto` = {'lineas': n} compartido
+    por todo el lote: se descuentan las líneas de detalle analizadas y, si no
+    alcanzan, el archivo se rechaza con un aviso de dividir el lote."""
     nombre = getattr(archivo, 'name', 'archivo.xml')
+    tamano = getattr(archivo, 'size', None)
+    if tamano is not None and tamano > MAX_BYTES_ARCHIVO:
+        # Antes de read(): un archivo enorme renombrado a .xml no se sube a
+        # memoria para después rechazarlo (B11-16). Mismo texto del parser.
+        return {
+            'archivo': nombre, 'ok': False,
+            'error': f'El archivo pesa {tamano // 1024} KB y supera el máximo '
+                     f'admitido ({MAX_BYTES_ARCHIVO // 1024} KB).',
+            'documentos': [],
+        }
     try:
         # IMPORTANTE: BYTES. El XML declara ISO-8859-1 y pasarlo como str
         # revienta el parser ("Unicode strings with encoding declaration").
@@ -506,11 +670,12 @@ def _analizar_archivo(archivo, sucursal_id, empresas_usuario):
         documentos = parsear_xml_envio(contenido)
     except XmlDteError as error:
         return {'archivo': nombre, 'ok': False, 'error': str(error), 'documentos': []}
-    except Exception as error:  # noqa: BLE001 - no queremos tumbar el lote
+    except Exception:  # noqa: BLE001 - no queremos tumbar el lote
         logger.exception('Error inesperado parseando XML DTE %s', nombre)
         return {
             'archivo': nombre, 'ok': False,
-            'error': f'Error inesperado leyendo el archivo: {error}',
+            'error': 'Error inesperado leyendo el archivo (quedó registrado). '
+                     'Revisa que sea el XML del DTE que envió el proveedor.',
             'documentos': [],
         }
 
@@ -521,6 +686,18 @@ def _analizar_archivo(archivo, sucursal_id, empresas_usuario):
                      f'por archivo es {MAX_DOCUMENTOS_POR_ARCHIVO}.',
             'documentos': [],
         }
+
+    if presupuesto is not None:
+        lineas = sum(len(datos.get('detalle') or []) for datos in documentos)
+        if lineas > presupuesto['lineas']:
+            return {
+                'archivo': nombre, 'ok': False,
+                'error': f'Este archivo trae {lineas} líneas de detalle y el lote ya no '
+                         f'admite más (máximo {MAX_LINEAS_POR_LOTE} líneas por análisis). '
+                         f'Divide el lote y súbelo en partes.',
+                'documentos': [],
+            }
+        presupuesto['lineas'] -= lineas
 
     analizados = [
         _analizar_documento(datos, sucursal_id, empresas_usuario, nombre)
@@ -534,8 +711,13 @@ def _analizar_documento(datos, sucursal_id, empresas_usuario, nombre_archivo):
     emisor = datos.get('emisor') or {}
     receptor = datos.get('receptor') or {}
 
+    # Antes de validar: una cantidad NaN/Infinity pasa a "sin cantidad" y así
+    # la validación y la pantalla la marcan como faltante.
+    avisos_cantidad = _limpiar_cantidades_invalidas(datos.get('detalle') or [])
     validacion = validar_dte_parseado(datos)
     bloqueos = list(validacion['errores'])
+    validacion['warnings'] = (list(validacion['warnings']) + avisos_cantidad
+                              + _avisos_cantidad_fraccionaria(datos.get('detalle') or []))
 
     # --- Proveedor (emisor del XML) ---
     proveedor = _buscar_proveedor(emisor.get('rut'))
@@ -720,7 +902,7 @@ def confirmar_xml_dte(request):
         errores.append(
             f'El proveedor con RUT {emisor.get("rut") or "?"} no existe en el sistema.')
 
-    empresas_usuario = list(obtener_empresas_usuario(request.user))
+    empresas_usuario = list(_empresas_propias(request.user))
     empresa_receptora = _buscar_empresa_receptora(
         (datos.get('receptor') or {}).get('rut'), empresas_usuario)
     if empresa_receptora is None:
@@ -770,13 +952,20 @@ def confirmar_xml_dte(request):
         # representar mercadería.
         cantidad = _dec_o_none(linea.get('cantidad'))
         origen_cantidad = 'XML'
-        if cantidad is None or cantidad <= 0:
+        # Una cantidad fraccionaria del XML que no llega a 1 unidad (0.5) se
+        # trata como faltante: la completa el usuario (B11-12).
+        if cantidad is None or cantidad <= 0 or _unidades(cantidad) <= 0:
             cantidad = _dec_o_none(resolucion.get('cantidad'))
             origen_cantidad = 'MANUAL'
         if cantidad is None or cantidad <= 0:
             errores.append(
                 f'Línea {nro} ({linea.get("nombre") or "sin nombre"}): falta la '
                 f'cantidad. El XML no la trae y no la completaste.')
+            continue
+        if _unidades(cantidad) <= 0:
+            errores.append(
+                f'Línea {nro} ({linea.get("nombre") or "sin nombre"}): la cantidad '
+                f'{cantidad} no alcanza a una unidad. Escríbela en unidades.')
             continue
 
         producto_talla = None
@@ -812,21 +1001,42 @@ def confirmar_xml_dte(request):
     es_boleta = tipo_dte_sii in TIPOS_BOLETA
 
     monto_total = _dec_o_none(totales.get('monto_total')) or Decimal(0)
-    monto_neto = _dec_o_none(totales.get('monto_neto'))
-    monto_exento = _dec_o_none(totales.get('monto_exento')) or Decimal(0)
-    if monto_neto is None:
-        monto_neto = (
-            (monto_total / Decimal('1.19')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
-            if es_boleta else monto_total - monto_exento
-        )
+    monto_neto_xml = _dec_o_none(totales.get('monto_neto'))
+    monto_exento_xml = _dec_o_none(totales.get('monto_exento'))
+    monto_exento = monto_exento_xml or Decimal(0)
+    if es_boleta:
+        monto_neto = monto_neto_xml if monto_neto_xml is not None else (
+            (monto_total / Decimal('1.19')).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+    elif monto_neto_xml is not None or monto_exento_xml is not None:
+        # Dte no tiene campo de exento y todo el sistema deriva el IVA como
+        # monto_con_iva - monto_neto: la base sin IVA es neto + exento. Así una
+        # exenta (34) queda con neto = total e IVA 0 (como emitir_dte_concepto)
+        # y una 33 con líneas exentas muestra su IVA real (B11-08).
+        monto_neto = (monto_neto_xml or Decimal(0)) + monto_exento
+    else:
+        monto_neto = monto_total
 
     fecha_vencimiento = _fecha_desde(documento.get('fecha_vencimiento')) or fecha_emision
     dias_credito = max(0, (fecha_vencimiento - fecha_emision).days)
-    unidades = sum(int(l['cantidad']) for l in lineas_finales)
+    unidades = sum(_unidades(l['cantidad']) for l in lineas_finales)
 
     referencias_txt = _texto_referencias(datos.get('referencias') or [])
+    if monto_exento and not es_boleta:
+        referencias_txt = ' | '.join(t for t in (
+            referencias_txt, f'Exento ${int(monto_exento):,} incluido en el neto'.replace(',', '.'))
+            if t)[:2000]
 
     with transaction.atomic():
+        # Doble envío (dos pestañas / dos clics): se serializa por (RUT emisor,
+        # tipo, folio) y se vuelve a mirar el duplicado ya con el lock.
+        _bloquear_folio(emisor.get('rut'), tipo_sistema, folio)
+        duplicados = buscar_dtes_duplicados(emisor.get('rut'), tipo_sistema, folio)
+        if duplicados:
+            return JsonResponse({
+                'success': False,
+                'error': f'Ya existe un {tipo_sistema} folio {folio} de este proveedor '
+                         f'(DTE #{duplicados[0]["dte_id"]}).',
+            }, status=400)
         dte = Dte.objects.create(
             emisor=proveedor,                 # el proveedor emite la factura
             receptor=empresa_receptora,       # nosotros la recibimos
@@ -834,7 +1044,8 @@ def confirmar_xml_dte(request):
             tipo_documento=tipo_sistema,
             monto_con_iva=monto_total,
             monto_neto=monto_neto,
-            estado_pago=payload.get('estado_pago') or 'PENDIENTE',
+            # Nunca del cliente (la pantalla no lo manda y aceptaba cualquier texto).
+            estado_pago=ESTADO_PAGO_INICIAL,
             estado_dte='EMITIDO',
             responsable=responsable,
             fecha_emision=fecha_emision,
@@ -846,7 +1057,8 @@ def confirmar_xml_dte(request):
             sucursal=sucursal,
             tipo_transaccion='COMPRA',
             referencias=referencias_txt or None,
-            es_nota_credito=(tipo_dte_sii in TIPOS_NOTA),
+            # Solo la 61; una nota de DÉBITO (56) no es crédito (B11-12).
+            es_nota_credito=(tipo_dte_sii == TIPO_SII_NOTA_CREDITO),
             # Cargado desde un XML externo, no emitido por este sistema.
             es_manual=True,
             # Tiene líneas de detalle: NO es una compra "por concepto".
@@ -890,7 +1102,7 @@ def confirmar_xml_dte(request):
                 descuento_pct=descuento_pct,
                 descuento_monto=descuento_monto,
                 monto_item=monto_item,
-                stock=int(cantidad),
+                stock=_unidades(cantidad),
                 activo=True,
             ))
 
@@ -939,10 +1151,36 @@ def _aprender_equivalencias(lineas_finales, proveedor, usuario):
       * Si la equivalencia ya existía se le suma 1 a `veces_usada`; si apuntaba
         a OTRO producto se REAPUNTA al que acaba de elegir el usuario (la
         última decisión humana gana) y se deja rastro en el log.
+      * Un código que en ESTA factura aparece en líneas vinculadas a productos
+        o tallas distintos (el código de estilo que el proveedor repite en
+        todas las tallas) no identifica nada: no se graba ni se reapunta
+        (B11-09). El EAN de cada línea sí se aprende.
     """
     creadas = 0
     reutilizadas = 0
     usuario_db = usuario if isinstance(usuario, Usuario) else None
+
+    def _codigos_item(item):
+        linea = item['linea']
+        codigos = (linea.get('codigos') or [])
+        if not codigos and linea.get('codigo'):
+            codigos = [{'tipo': '', 'valor': linea['codigo']}]
+        return codigos
+
+    destinos_por_codigo = {}
+    for item in lineas_finales:
+        if item['producto_talla'] is None:
+            continue
+        for codigo in _codigos_item(item):
+            valor = (codigo.get('valor') or '').strip()[:50]
+            if valor:
+                destinos_por_codigo.setdefault(valor, set()).add(item['producto_talla'].id)
+    ambiguos = {valor for valor, destinos in destinos_por_codigo.items() if len(destinos) > 1}
+    if ambiguos:
+        logger.info(
+            'Equivalencias no aprendidas por ambiguas: proveedor=%s codigos=%s '
+            '(la misma factura los usa para productos/tallas distintos)',
+            proveedor.id, sorted(ambiguos))
 
     for item in lineas_finales:
         producto_talla = item['producto_talla']
@@ -950,13 +1188,9 @@ def _aprender_equivalencias(lineas_finales, proveedor, usuario):
             continue
 
         linea = item['linea']
-        codigos = (linea.get('codigos') or [])
-        if not codigos and linea.get('codigo'):
-            codigos = [{'tipo': '', 'valor': linea['codigo']}]
-
-        for codigo in codigos:
+        for codigo in _codigos_item(item):
             valor = (codigo.get('valor') or '').strip()[:50]
-            if not valor:
+            if not valor or valor in ambiguos:
                 continue
             existente = ProveedorProductoEquivalencia.objects.filter(
                 empresa_proveedor=proveedor, codigo_externo=valor).first()
@@ -1012,9 +1246,65 @@ def _dec_o_none(valor):
     if valor in (None, '', 'null', 'None'):
         return None
     try:
-        return Decimal(str(valor))
+        numero = Decimal(str(valor))
     except Exception:  # noqa: BLE001
         return None
+    # Decimal acepta 'NaN' e 'Infinity': no son montos ni cantidades (y
+    # compararlos lanza InvalidOperation).
+    return numero if numero.is_finite() else None
+
+
+def _bloquear_folio(rut_emisor, tipo_documento, folio):
+    """Advisory lock de transacción por (RUT emisor, tipo, folio): dos
+    confirmaciones simultáneas del mismo XML esperan su turno y la segunda ve
+    el DTE que creó la primera."""
+    if connection.vendor != 'postgresql':
+        return
+    clave = f'{normalizar_rut(rut_emisor) or ""}|{tipo_documento or ""}|{folio or ""}'
+    with connection.cursor() as cur:
+        cur.execute('SELECT pg_advisory_xact_lock(%s, %s)',
+                    [_LOCK_FOLIO_XML, zlib.crc32(clave.encode('utf-8')) - 2 ** 31])
+
+
+def _unidades(cantidad):
+    """Unidades enteras de una cantidad del XML (QtyItem admite decimales):
+    redondeo half-up, no truncado (2.5 → 3; antes int() dejaba 2, y 0.5 → 0)."""
+    return int(Decimal(cantidad).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+
+
+def _limpiar_cantidades_invalidas(detalle):
+    """QtyItem que el parser deja pasar pero no es un número (NaN, Infinity):
+    la línea queda SIN cantidad, como si el XML no la trajera (el usuario la
+    escribe y confirmar la exige). Devuelve los avisos."""
+    avisos = []
+    for linea in detalle:
+        valor = linea.get('cantidad')
+        if valor in (None, '') or _dec_o_none(valor) is not None:
+            continue
+        linea['cantidad'] = None
+        avisos.append(
+            f'Línea {linea.get("nro_linea") or "?"}: la cantidad del XML ({valor}) no es un '
+            f'número. Escribe la cantidad en unidades antes de confirmar.')
+    return avisos
+
+
+def _avisos_cantidad_fraccionaria(detalle):
+    avisos = []
+    for linea in detalle:
+        cantidad = _dec_o_none(linea.get('cantidad'))
+        if cantidad is None or cantidad <= 0 or cantidad == cantidad.to_integral_value():
+            continue
+        unidades = _unidades(cantidad)
+        nro = linea.get('nro_linea') or '?'
+        if unidades <= 0:
+            avisos.append(
+                f'Línea {nro}: la cantidad del XML ({cantidad}) no alcanza a una unidad. '
+                f'Escribe la cantidad en unidades antes de confirmar.')
+        else:
+            avisos.append(
+                f'Línea {nro}: la cantidad del XML ({cantidad}) no es entera; se '
+                f'registrará como {unidades} unidad(es).')
+    return avisos
 
 
 def _fecha_desde(valor):

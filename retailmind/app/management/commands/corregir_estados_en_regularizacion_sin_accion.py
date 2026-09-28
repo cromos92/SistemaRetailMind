@@ -15,9 +15,14 @@ Contexto:
 
     Este comando recorre los registros viejos en EN_REGULARIZACION y los
     reclasifica al estado correcto SOLO si:
-      - No tienen NC asociada (no existe un Dte hijo es_nota_credito=True
-        con documento_afectado=recepcion.dte y referencias que mencione
-        "regularización").
+      - No tienen NC de regularización asociada: un Dte hijo
+        es_nota_credito=True con documento_afectado=recepcion.dte que sea de
+        regularización en cualquiera de los dos formatos de `referencias`:
+          * texto (hasta el 19-may): menciona "regularización";
+          * JSON (desde el 19-may, solo tipo/folio/fecha/razón SII): se
+            reconoce por tipo_transaccion='TRASPASO', que solo usan las NC de
+            regularizar_producto_api / regularizar_dte_masivo (misma regla que
+            views._detectar_origen_nc).
       - No tienen una Solicitud_Regularizacion activa
         (estado in {PENDIENTE, EN_REVISION, APROBADA, EJECUTADA}).
 
@@ -41,6 +46,9 @@ logger = logging.getLogger('app')
 
 
 SOLICITUD_ACTIVA_STATES = ('PENDIENTE', 'EN_REVISION', 'APROBADA', 'EJECUTADA')
+
+# NC de regularización (formato texto o JSON de `referencias`).
+Q_NC_REGULARIZACION = Q(referencias__icontains='regulariz') | Q(tipo_transaccion='TRASPASO')
 
 
 def estado_correcto_para(recepcion):
@@ -97,11 +105,15 @@ class Command(BaseCommand):
         self.stdout.write(self.style.NOTICE(f'Modo: {modo}'))
 
         # IDs de DTEs originales que tienen una NC de regularización emitida.
+        # Dos formatos de `referencias` (ver docstring): el texto viejo se
+        # busca por 'regulariz' (sin tilde: también calza un JSON con el texto
+        # escapado 'regularización') y el JSON por tipo_transaccion.
         ncs_emitidas_dte_ids = set(
             Dte.objects.filter(
                 es_nota_credito=True,
                 documento_afectado__isnull=False,
-                referencias__icontains='regularización',
+            ).filter(
+                Q_NC_REGULARIZACION
             ).values_list('documento_afectado_id', flat=True).distinct()
         )
 

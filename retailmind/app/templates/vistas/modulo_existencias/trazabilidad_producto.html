@@ -348,10 +348,17 @@ function avisar(mensaje, icono) {
     }
 }
 
+// A3-02: el deep-link puede traer `pt` (id del Producto_Talla de la fila que
+// se pinchó). Solo se envía mientras el SKU del input sea el enlazado: una
+// búsqueda manual de otro SKU no arrastra un pt ajeno.
+let _skuEnlazado = null;
+let _ptEnlazado = null;
+
 function buscarTrazabilidad() {
     const sku = document.getElementById('inputSku').value.trim();
     if (!sku) { avisar('Ingrese un SKU para consultar la trazabilidad.', 'info'); return; }
-    fetch(`/app/api/trazabilidad-producto/?sku=${encodeURIComponent(sku)}`)
+    const qsPt = (_ptEnlazado && sku === _skuEnlazado) ? `&pt=${encodeURIComponent(_ptEnlazado)}` : '';
+    fetch(`/app/api/trazabilidad-producto/?sku=${encodeURIComponent(sku)}${qsPt}`)
         .then(r => r.json()).then(data => {
             if (!data.success) { avisar(data.error || 'No se pudo obtener la trazabilidad.', 'error'); return; }
             const meta = data.movimientos_meta || {};
@@ -405,9 +412,15 @@ function renderProductoInfo(p) {
             aviso.className = 'alert alert-warning small py-2 d-flex align-items-center gap-2';
             cont.prepend(aviso);
         }
+        // A3-02: el texto dice qué copia se eligió y por qué.
+        const motivo = p.seleccion === 'pt'
+            ? 'Se muestra la trazabilidad de la fila que abriste'
+            : (p.seleccion === 'sesion'
+                ? 'Se muestra la trazabilidad del de la sucursal activa'
+                : 'Se muestra la trazabilidad de una de las copias');
         aviso.innerHTML = `<i class="ri-error-warning-line"></i>
             <div><strong>SKU duplicado:</strong> este código existe en <b>${escapeHtml(p.sku_ocurrencias)}</b> productos/tallas.
-            Se muestra la trazabilidad del de la sucursal activa (<b>${escapeHtml(p.sucursal)}</b>). Conviene depurar el SKU duplicado.</div>`;
+            ${motivo} (<b>${escapeHtml(p.sucursal)}</b>). Conviene depurar el SKU duplicado.</div>`;
     } else if (aviso) {
         aviso.remove();
     }
@@ -714,9 +727,16 @@ document.getElementById('inputSku').addEventListener('keydown', e => { if (e.key
 // tabla de Actividad reciente de verGestionProducto), que abren esta pantalla
 // en una pestaña nueva y no pueden escribir en el input.
 (function () {
-    const skuUrl = new URLSearchParams(window.location.search).get('sku');
+    const params = new URLSearchParams(window.location.search);
+    const skuUrl = params.get('sku');
     if (!skuUrl) return;
     document.getElementById('inputSku').value = skuUrl.trim();
+    // `&pt=<id>` (dashboard de productos): fija la copia exacta del SKU.
+    const ptUrl = (params.get('pt') || '').trim();
+    if (/^\d{1,18}$/.test(ptUrl)) {
+        _skuEnlazado = skuUrl.trim();
+        _ptEnlazado = ptUrl;
+    }
     buscarTrazabilidad();
 })();
 </script>

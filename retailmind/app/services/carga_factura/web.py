@@ -19,18 +19,24 @@ import logging
 import threading
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlencode
 
 from django.contrib.auth import get_user_model
-from django.db import connection
+from django.db import connection, transaction
+from django.db.models import F
 from django.utils import timezone
 
-from app.models import AtributoOpcion, CargaFacturaPdf, Dte, GuiaTalla
+from app.models import (
+    AtributoOpcion, CargaFacturaPdf, Dte, GuiaTalla, PerfilCargaMarca, ProductoAprendido,
+)
 from app.utils_producto_match import normalizar_articulo
 
 from . import lectura as svc_lectura
 from .aplicador import aplicar_linea
-from .facturas import ErrorCarga, factura_desde_datos, variantes_rut
-from .perfiles import perfil_para
+from .facturas import (
+    DteAmbiguo, DteNoEncontrado, ErrorCarga, factura_desde_datos, variantes_rut,
+)
+from .perfiles import clave_marca, perfil_para
 from .planificador import (
     ATRIBUTOS_GENERO, PlanificadorCarga, estado_visible, opciones_existente,
     tallas_y_stock,
@@ -99,6 +105,22 @@ def _guardar_factura(sesion_id, idx, data):
     return sesion
 
 
+def _sumar_uso(sesion_id, paso, uso):
+    """Acumula en sesion.uso lo consumido en un paso (lectura, chat, búsqueda)."""
+    if not uso or not uso.get('llamadas'):
+        return uso
+    sesion = CargaFacturaPdf.objects.get(id=sesion_id)
+    total = dict(sesion.uso or {})
+    for k, v in uso.items():
+        total[k] = int(total.get(k) or 0) + int(v or 0)
+    pasos = list(total.get('pasos') or [])
+    pasos.append({'paso': paso, 'fecha': timezone.now().isoformat(timespec='seconds'), **uso})
+    total['pasos'] = pasos[-40:]
+    sesion.uso = total
+    sesion.save(update_fields=['uso', 'actualizado_en'])
+    return uso
+
+
 # Sin señal del hilo (progreso, mensajes, facturas) en este tiempo, la lectura
 # o la carga murieron con el proceso (deploy / reinicio del servidor): el hilo
 # es daemon y nadie la retoma. Una lectura larga avisa al empezar cada pasada.
@@ -108,10 +130,17 @@ TIEMPO_MAX_SIN_SENAL = timedelta(minutes=30)
 def revisar_interrumpida(sesion):
     """Si la sesión lleva demasiado LEYENDO / CARGANDO sin señal, la cierra en
     un estado del que la persona pueda seguir. Devuelve True si la cambió."""
-    if sesion.estado not in ('LEYENDO', 'CARGANDO'):
+    if sesion.estado not in ('LEYENDO', 'CARGANDO', 'BUSCANDO'):
         return False
     if timezone.now() - sesion.actualizado_en <= TIEMPO_MAX_SIN_SENAL:
         return False
+    if sesion.estado == 'BUSCANDO':
+        sesion.estado = 'LEIDA'
+        sesion.progreso = ''
+        sesion.save(update_fields=['estado', 'progreso', 'actualizado_en'])
+        sesion.agregar_mensaje(AGENTE, 'La búsqueda en internet se interrumpió (el servidor se '
+                               'reinició). Puedes pedirla de nuevo.', tipo='error')
+        return True
     if sesion.estado == 'LEYENDO':
         sesion.estado = 'ERROR'
         sesion.error = 'La lectura se interrumpió (el servidor se reinició a mitad de camino).'
@@ -154,6 +183,7 @@ def leer_en_segundo_plano(sesion_id):
         # tallas son CL…"): van al lector junto con las pistas del perfil.
         pistas = next((m.get('texto', '') for m in reversed(sesion.mensajes or [])
                        if m.get('tipo') == 'indicaciones'), '')
+        svc_lectura.uso_iniciar()
         leido = svc_lectura.leer_pdf(pdf, marca=sesion.marca or None,
                                      lecturas=sesion.lecturas, progreso=avisar, pistas=pistas)
         avisar('Comparando las lecturas…')
@@ -161,14 +191,21 @@ def leer_en_segundo_plano(sesion_id):
         facturas = consolidada.get('facturas', [])
         if not facturas:
             raise ErrorCarga('No encontré ninguna factura en el documento.')
-        datos = []
+        datos, aprendido = [], []
         for factura in facturas:
             d = svc_lectura.a_json_de_carga(
                 factura, sesion.sucursal.alias, marca=sesion.marca or None,
                 fuente=f'{sesion.nombre_archivo}, leída con {svc_lectura.MODELO} '
-                       f'({sesion.lecturas} lectura(s))')
+                       f'({len(leido["lecturas"])} lectura(s))')
             d['_estado'] = 'PENDIENTE'
+            # Lo confirmado en cargas anteriores del mismo código (género,
+            # categoría…) manda sobre lo que el lector supuso.
+            try:
+                aprendido += aplicar_aprendido(d)
+            except Exception:
+                logger.exception('carga_factura: no se pudo aplicar lo aprendido (sesión %s)', sesion_id)
             datos.append(d)
+        uso = _sumar_uso(sesion_id, 'lectura', svc_lectura.uso_actual())
         sesion.refresh_from_db()
         sesion.facturas = datos
         sesion.estado = 'LEIDA'
@@ -178,7 +215,9 @@ def leer_en_segundo_plano(sesion_id):
         sesion.error = ''
         sesion.save(update_fields=['facturas', 'estado', 'modelo', 'leida_en', 'progreso',
                                    'error', 'actualizado_en'])
-        sesion.agregar_mensaje(AGENTE, _texto_lectura(datos, leido['modo']), tipo='lectura')
+        sesion.agregar_mensaje(AGENTE, _texto_lectura(datos, leido['modo'], leido.get('segunda')),
+                               tipo='lectura', uso=uso, aprendido=aprendido,
+                               lecturas=len(leido['lecturas']), segunda=leido.get('segunda'))
     except Exception as exc:
         mensaje = str(exc) if isinstance(exc, ErrorCarga) else f'{type(exc).__name__}: {exc}'
         logger.exception('carga_factura: falló la lectura de la sesión %s', sesion_id)
@@ -193,9 +232,18 @@ def leer_en_segundo_plano(sesion_id):
         _cerrar_conexion()
 
 
-def _texto_lectura(facturas, modo):
+_TEXTO_SEGUNDA = {
+    'no hizo falta': 'La primera lectura cuadró completa, así que no hizo falta la segunda.',
+    'por dudas': 'La primera lectura dejó dudas, así que hice una segunda y las comparé.',
+    'siempre': 'Hice dos lecturas independientes y las comparé.',
+}
+
+
+def _texto_lectura(facturas, modo, segunda=None):
     partes = [f'Leí el PDF ({"escaneo" if modo == "escaneo" else "PDF con texto"}) y encontré '
               f'{len(facturas)} factura(s):']
+    if _TEXTO_SEGUNDA.get(segunda):
+        partes[0] += ' ' + _TEXTO_SEGUNDA[segunda]
     for d in facturas:
         lineas = d['lineas']
         unidades = sum(sum(l['tallas'].values()) for l in lineas)
@@ -210,8 +258,144 @@ def _texto_lectura(facturas, modo):
             + (f', {dudas} línea(s) para revisar' if dudas else '')
             + (f', {len(d["_revisar"])} aviso(s) de cuadre' if d.get('_revisar') else '') + '.')
     partes.append('Abajo va la vista previa de cada una: revisa lo marcado, corrige lo que '
-                  'haga falta y cuando esté bien aprieta «Cargar».')
+                  'haga falta y cuando esté bien aprieta «Cargar». Si algún artículo no trae '
+                  'color, dime «busca en internet la línea N» (o «todas») y lo averiguo.')
     return '\n'.join(partes)
+
+
+# ------------------------------------------------------------- aprendizaje
+
+
+def _ruta_categoria(cat):
+    if cat is None:
+        return ''
+    return (f'{cat.padre.nombre} > ' if cat.padre_id else '') + cat.nombre
+
+
+def aplicar_aprendido(data):
+    """Rellena en las líneas lo confirmado en cargas anteriores del mismo
+    código (ProductoAprendido): género, categoría, especialidades y, si el
+    código lleva el color (Nike), el color. El último precio de venta y lo
+    encontrado en internet se dejan como pista (no se imponen).
+    Devuelve textos «código: campos» de lo aplicado."""
+    marca = clave_marca(data.get('marca'))
+    if not marca:
+        return []
+    perfil = perfil_para(data.get('marca'))
+    lineas = data.get('lineas') or []
+    codigos = {normalizar_articulo(l.get('articulo')) for l in lineas}
+    aprendidos = {p.articulo: p for p in ProductoAprendido.objects.filter(marca=marca, articulo__in=codigos)}
+    if not aprendidos:
+        return []
+    aplicados = []
+    for l in lineas:
+        p = aprendidos.get(normalizar_articulo(l.get('articulo')))
+        if p is None:
+            continue
+        campos = []
+        if p.genero and l.get('genero') != p.genero:
+            l['genero'] = p.genero
+            campos.append('género')
+        if p.categoria and l.get('categoria') != p.categoria:
+            l['categoria'] = p.categoria
+            campos.append('categoría')
+        if p.especialidades and not l.get('especialidades'):
+            l['especialidades'] = list(p.especialidades)
+            campos.append('especialidades')
+        color = p.color or p.color_internet
+        if color and not l.get('color') and not perfil.identidad_color:
+            l['color'] = color
+            campos.append('color')
+        if p.precioventa:
+            l['_precio_aprendido'] = p.precioventa
+        que_es = ': '.join(t for t in (p.nombre_internet, p.que_es) if t)
+        if que_es:
+            l['_que_es'] = que_es
+        if campos:
+            l['_aprendido'] = campos
+            aplicados.append(f'{l.get("articulo")}: {", ".join(campos)}')
+    if aplicados:
+        ProductoAprendido.objects.filter(marca=marca, articulo__in=codigos).update(
+            veces_usado=F('veces_usado') + 1)
+    return aplicados
+
+
+def aprender_de_carga(data, planes, resultado, user=None):
+    """Guarda lo que esta carga confirmó: el perfil de la marca (tipo de talla,
+    guías, regla de precio, margen, color por defecto) y, por cada línea que
+    entró, su clasificación final y precios. Devuelve textos para el chat."""
+    marca = clave_marca(data.get('marca'))
+    if not marca:
+        return []
+    perfil = perfil_para(data.get('marca'))
+    aprendido = []
+    defaults = {'nombre': str(data.get('marca') or '').strip().upper(),
+                'ultima_factura': str(data.get('folio') or '')[:60]}
+    if user is not None and getattr(user, 'pk', None):
+        defaults['actualizado_por'] = user
+    if data.get('tipo_talla'):
+        defaults['tipo_talla'] = str(data['tipo_talla']).upper()[:5]
+    if data.get('guias_talla'):
+        defaults['guias_talla'] = {str(k).upper(): v for k, v in data['guias_talla'].items() if v}
+    if data.get('color'):
+        defaults['color_defecto'] = str(data['color']).upper()[:100]
+    for campo, destino in (('_umbral_costo', 'umbral_costo'), ('_factor_bajo', 'factor_bajo'),
+                           ('_factor_alto', 'factor_alto'), ('_margen_sobreprecio', 'margen_sobreprecio')):
+        if data.get(campo) not in (None, ''):
+            defaults[destino] = data[campo]
+    fila, _creado = PerfilCargaMarca.objects.update_or_create(marca=marca, defaults=defaults)
+    PerfilCargaMarca.objects.filter(id=fila.id).update(veces_usado=F('veces_usado') + 1)
+    detalle = [f'tallas {fila.tipo_talla or perfil.tipo_talla}']
+    if fila.guias_talla:
+        detalle.append('guías ' + ', '.join(sorted(set(fila.guias_talla.values()))))
+    if fila.factor_bajo or fila.factor_alto:
+        detalle.append(f'venta ×{fila.factor_bajo or perfil.factor_bajo} / ×{fila.factor_alto or perfil.factor_alto}')
+    detalle.append('color aparte del código' if perfil.identidad_color else 'color en el código')
+    aprendido.append(f'{fila.nombre or marca}: ' + ', '.join(detalle))
+
+    ok = {f['n'] for f in resultado.get('lineas', []) if f.get('estado') == 'OK'}
+    for plan in planes:
+        if plan['n'] not in ok:
+            continue
+        linea = plan['linea']
+        defaults = {
+            'descripcion': str(linea.get('descripcion') or '')[:255],
+            'genero': str(getattr(plan['genero'], 'valor', '') or '')[:50],
+            'categoria': _ruta_categoria(plan['categoria'])[:150],
+            'especialidades': [o.valor for o in plan['especialidades']],
+            'precioventa': plan['factura'][2], 'costo': plan['factura'][0],
+            'fuente': 'carga',
+        }
+        if not perfil.identidad_color:
+            # El código lleva el color: se aprende, salvo el por defecto (MULTI),
+            # que solo dice «no se sabía».
+            color = str(getattr(plan['color'], 'valor', '') or '').strip().upper()
+            defaults['color'] = '' if color == str(perfil.color_defecto).upper() else color[:100]
+        fila, _creado = ProductoAprendido.objects.update_or_create(
+            marca=marca, articulo=plan['articulo'], defaults=defaults)
+        aprendido.append(f'{plan["articulo"]}: ' + ' / '.join(
+            t for t in (fila.genero, fila.categoria.split(' > ')[-1] if fila.categoria else '',
+                        fila.color) if t))
+    return aprendido
+
+
+def recordar_para_marca(marca, texto, user=None):
+    """«Recuerda que en Chalada el color va en la descripción»: queda como
+    pista del lector para esa marca (PerfilCargaMarca.pistas_lectura)."""
+    clave = clave_marca(marca)
+    texto = ' '.join(str(texto or '').split())[:500]
+    if not clave or not texto:
+        return None
+    fila, _creado = PerfilCargaMarca.objects.get_or_create(
+        marca=clave, defaults={'nombre': str(marca).strip().upper()})
+    pistas = [p for p in fila.pistas_lectura.splitlines() if p.strip()]
+    if texto not in pistas:
+        pistas.append(texto)
+        fila.pistas_lectura = '\n'.join(pistas[-20:])
+        if user is not None and getattr(user, 'pk', None):
+            fila.actualizado_por = user
+        fila.save(update_fields=['pistas_lectura', 'actualizado_por', 'actualizado_en'])
+    return f'{fila.nombre or clave}: «{texto}»'
 
 
 # ------------------------------------------------------------ correcciones
@@ -289,7 +473,23 @@ def aplicar_correcciones(sesion, cambios):
     `cambios` = [{'idx': n, 'lineas': [{...}, ...], <campos de factura>}]. Solo
     se copian los campos editables; las líneas se emparejan por posición.
     Devuelve True si cambió algo. Lanza ErrorCarga con el dato mal escrito.
+
+    El chat llama con una sesión leída ANTES de esperar a Claude: el estado y
+    las facturas se validan y se corrigen sobre la fila fresca y bloqueada,
+    así una carga que terminó mientras tanto no se pisa (su _estado y su
+    _resultado quedan). El objeto `sesion` sale con lo guardado.
     """
+    with transaction.atomic():
+        fresca = CargaFacturaPdf.objects.select_for_update().get(id=sesion.id)
+        tocado = _corregir_facturas(fresca, cambios)
+    sesion.estado = fresca.estado
+    sesion.facturas = fresca.facturas
+    sesion.actualizado_en = fresca.actualizado_en
+    return tocado
+
+
+def _corregir_facturas(sesion, cambios):
+    """aplicar_correcciones sobre la sesión ya bloqueada."""
     if sesion.estado != 'LEIDA':
         raise ErrorCarga('La sesión no está en vista previa: no se puede corregir ahora.')
     facturas = list(sesion.facturas or [])
@@ -418,6 +618,22 @@ def _candidatos_dte(data):
     return salida
 
 
+# Pantalla donde se registra a mano un DTE de compra (el agente no lo crea:
+# la lectura no trae total con IVA ni vencimiento).
+URL_GESTION_DTE_COMPRAS = '/app/verGestionDteCompras/'
+
+
+def datos_para_registrar(data):
+    """Lo leído de la factura para registrarla en Gestión Documentos Compras
+    (la tarjeta lo muestra y lo manda en el querystring del enlace)."""
+    datos = {'folio': data.get('folio'), 'rut': data.get('proveedor_rut'),
+             'proveedor': data.get('proveedor_nombre'), 'fecha': data.get('fecha_emision'),
+             'neto': data.get('total_neto')}
+    params = {'nuevo': 1, **{k: v for k, v in datos.items()
+                             if k != 'proveedor' and v not in (None, '')}}
+    return {**datos, 'url': f'{URL_GESTION_DTE_COMPRAS}?{urlencode(params)}'}
+
+
 def _plan(plan):
     linea = plan['linea']
     costo, sobre, pv = plan['factura']
@@ -455,6 +671,10 @@ def _plan(plan):
         'fichas_formato': [f'{f.sucursal.alias} #{f.id}' for f in plan.get('fichas_formato', [])],
         'candidatas': [_ficha(f) for f in plan.get('candidatas', [])],
         'avisos': list(plan['avisos']), 'errores': list(plan['errores']),
+        # Lo aprendido de cargas anteriores / internet (pistas para la persona).
+        'aprendido': list(linea.get('_aprendido') or []),
+        'precio_aprendido': linea.get('_precio_aprendido'),
+        'que_es': linea.get('_que_es'),
         # Lo que dice hoy el JSON (para los editores de la vista previa).
         'json': {campo: linea.get(campo) for campo in CAMPOS_LINEA_EDITABLES},
     }
@@ -521,8 +741,22 @@ def _motor(data):
 
 
 def _factura(data, user):
+    """Factura lista para planificar. El DTE (por folio + RUT o el elegido con
+    dte_id) tiene que poder respaldar un ingreso de stock de la empresa de la
+    bodega: el mismo criterio con que crear_producto_manual rechaza cada línea
+    (CC-03). Se revisa aquí para que la vista previa lo muestre y la carga no se
+    lance para fallar entera en segundo plano."""
+    from app.views import _error_dte_compra_para_ingreso
+
     margen = Decimal(data['_margen_sobreprecio']) if data.get('_margen_sobreprecio') else None
-    return factura_desde_datos(data, user, margen=margen)
+    f = factura_desde_datos(data, user, margen=margen)
+    error = _error_dte_compra_para_ingreso(f['dte'], f['sucursal'].empresa_id)
+    if error:
+        dte = f['dte']
+        raise ErrorCarga(f'El DTE #{dte.id} ({dte.tipo_documento} N° {dte.numero_documento} de '
+                         f'{dte.emisor.nombre}) no sirve para cargar en {f["sucursal"].alias}: '
+                         f'{error} Elige en la lista el DTE correcto.')
+    return f
 
 
 def planificar(sesion, user, solo_idx=None):
@@ -540,12 +774,15 @@ def planificar(sesion, user, solo_idx=None):
             'dte_id': data.get('dte_id'), 'renombrar_tallas': data.get('_renombrar_tallas', True) is not False,
             'tipo_talla': (data.get('tipo_talla') or perfil.tipo_talla or 'CL').upper(),
             'guias_talla': {str(k).upper(): v for k, v in (data.get('guias_talla') or perfil.guias or {}).items()},
-            'perfil': perfil.marca or 'genérico',
+            'perfil': (perfil.marca or 'genérico') + (' (aprendido)' if perfil.aprendido else ''),
+            'perfil_aprendido': perfil.aprendido,
+            'identidad_color': perfil.identidad_color,
             'n_lineas': len(data.get('lineas') or []),
             'descuento_global': data.get('descuento_global'),
             'fuente': data.get('_fuente'), 'revisar': list(data.get('_revisar') or []),
             'resultado': data.get('_resultado'),
-            'dte': None, 'error': None, 'candidatos_dte': [], 'planes': [], 'totales': None,
+            'dte': None, 'error': None, 'candidatos_dte': [], 'registrar_dte': None,
+            'planes': [], 'totales': None,
         }
         try:
             f = _factura(data, user)
@@ -557,6 +794,21 @@ def planificar(sesion, user, solo_idx=None):
                              'margen_sobreprecio': str(f['margen'])}
             item['planes'] = [_plan(p) for p in planes]
             item['totales'] = _totales(f, planes)
+        except DteNoEncontrado as exc:
+            # El texto del comando habla de "dte_id en el JSON": aquí se le dice
+            # a la persona qué hacer en la pantalla (B15-10).
+            item['error'] = (
+                f'La FACTURA {exc.folio} del RUT {exc.rut} no está registrada en el sistema'
+                + (f' (con ese número solo hay: {exc.otros})' if exc.otros else '')
+                + '. Regístrala en Gestión Documentos Compras («Registrar esta factura») y '
+                  'aprieta «Volver a calcular», o elige en la lista el DTE correcto si la '
+                  'registraron con otro proveedor o tipo.')
+            item['candidatos_dte'] = _candidatos_dte(data)
+            item['registrar_dte'] = datos_para_registrar(data)
+        except DteAmbiguo as exc:
+            item['error'] = (f'El folio {exc.folio} calza con varios DTE ({exc.detalle}): '
+                             f'elige el correcto en la lista.')
+            item['candidatos_dte'] = _candidatos_dte(data)
         except ErrorCarga as exc:
             item['error'] = str(exc)
             item['candidatos_dte'] = _candidatos_dte(data)
@@ -585,6 +837,10 @@ def cargar_en_segundo_plano(sesion_id, idx, opciones, user_id):
     try:
         user = get_user_model().objects.get(id=user_id)
         sesion = CargaFacturaPdf.objects.get(id=sesion_id)
+        if sesion.facturas[idx].get('_estado') == 'CARGADA':
+            # Otra orden de carga ya la terminó: no se toca su resultado.
+            raise ErrorCarga(f'la factura {sesion.facturas[idx].get("folio")} ya se cargó; '
+                             f'no se repite.')
         data = dict(sesion.facturas[idx])
         avisar = _progreso(sesion_id)
         avisar('Revisando la factura antes de cargar…')
@@ -620,7 +876,9 @@ def cargar_en_segundo_plano(sesion_id, idx, opciones, user_id):
                             opcion = disponibles[0]
                 if fila.get('estado') != 'SALTADA':
                     r = aplicar_linea(plan, f, user, opcion)
-                    if r['ok']:
+                    if r.get('ya_cargado'):
+                        fila.update(estado='SALTADA', detalle=r['error'])
+                    elif r['ok']:
                         resp = r['respuesta']
                         cargadas = sum(t.get('stock_ingresado', 0) for t in resp.get('tallas_detalle', []))
                         fila.update(
@@ -646,7 +904,14 @@ def cargar_en_segundo_plano(sesion_id, idx, opciones, user_id):
         data['_resultado'] = resultado
         data['_estado'] = 'PARCIAL' if resultado['fallidas'] else 'CARGADA'
         sesion = _guardar_factura(sesion_id, idx, data)
-        sesion.agregar_mensaje(AGENTE, _texto_carga(data, resultado), tipo='carga', factura=idx)
+        aprendido = []
+        if resultado['ok']:
+            try:
+                aprendido = aprender_de_carga(data, planes, resultado, user)
+            except Exception:
+                logger.exception('carga_factura: no se pudo guardar lo aprendido (sesión %s)', sesion_id)
+        sesion.agregar_mensaje(AGENTE, _texto_carga(data, resultado), tipo='carga', factura=idx,
+                               aprendido=aprendido)
     except Exception as exc:
         mensaje = str(exc) if isinstance(exc, ErrorCarga) else f'{type(exc).__name__}: {exc}'
         logger.exception('carga_factura: falló la carga de la factura %s de la sesión %s', idx, sesion_id)
@@ -677,6 +942,183 @@ def _texto_carga(data, resultado):
     else:
         texto += '. Ya aparecen en «Actividad reciente».'
     return texto
+
+
+# --------------------------------------------------------- internet
+
+
+def lineas_sin_color(data):
+    """N° (1-based) de las líneas que no tienen color propio (o traen el por
+    defecto) y todavía se pueden cargar: candidatas a buscar en internet."""
+    defecto = str(data.get('color') or '').strip().upper()
+    salida = []
+    for n, l in enumerate(data.get('lineas') or [], start=1):
+        if l.get('_omitir'):
+            continue
+        color = str(l.get('color') or '').strip().upper()
+        if not color or color == defecto:
+            salida.append(n)
+    return salida
+
+
+def iniciar_investigacion(sesion, pares, user):
+    """Deja la sesión BUSCANDO y lanza la búsqueda en internet de `pares`
+    [(idx, n), ...] en segundo plano. Devuelve cuántas líneas se buscarán."""
+    if sesion.estado != 'LEIDA':
+        raise ErrorCarga('Espera a que termine lo que está haciendo la sesión.')
+    validos = []
+    for idx, n in pares:
+        try:
+            data = sesion.facturas[idx]
+            linea = data['lineas'][n - 1]
+        except (IndexError, KeyError, TypeError):
+            continue
+        if data.get('_estado') == 'CARGADA' or linea.get('_omitir') or n < 1:
+            continue
+        if (idx, n) not in validos:
+            validos.append((idx, n))
+    if not validos:
+        raise ErrorCarga('No hay líneas para buscar (¿ya están cargadas u omitidas?).')
+    validos = validos[:25]
+    progreso = f'Buscando en internet {len(validos)} artículo(s)…'
+    # Paso LEIDA → BUSCANDO con UPDATE condicional: dos pedidos simultáneos
+    # (o un «Cargar» a la vez) no lanzan dos hilos sobre la misma sesión.
+    tomada = CargaFacturaPdf.objects.filter(id=sesion.id, estado='LEIDA').update(
+        estado='BUSCANDO', progreso=progreso, actualizado_en=timezone.now())
+    if not tomada:
+        raise ErrorCarga('Espera a que termine lo que está haciendo la sesión.')
+    sesion.estado, sesion.progreso = 'BUSCANDO', progreso
+    _lanzar(investigar_en_segundo_plano, sesion.id, validos, getattr(user, 'id', None))
+    return len(validos)
+
+
+def investigar_en_segundo_plano(sesion_id, pares, user_id):
+    """Hilo: busca cada artículo en internet, completa color / categoría /
+    género donde la línea no los tenía, guarda lo aprendido y deja un
+    mensaje con lo encontrado."""
+    from . import busqueda
+
+    hallazgos = []
+    try:
+        user = get_user_model().objects.filter(id=user_id).first() if user_id else None
+        sesion = CargaFacturaPdf.objects.get(id=sesion_id)
+        catalogo = opciones_catalogo(user) if user else _catalogo_basico()
+        avisar = _progreso(sesion_id)
+        svc_lectura.uso_iniciar()
+        por_factura = {}
+        for k, (idx, n) in enumerate(pares, start=1):
+            sesion = CargaFacturaPdf.objects.get(id=sesion_id)
+            data = dict(sesion.facturas[idx])
+            lineas = list(data.get('lineas') or [])
+            linea = dict(lineas[n - 1])
+            articulo = str(linea.get('articulo') or '')
+            marca = str(linea.get('marca') or data.get('marca') or '')
+            avisar(f'Buscando en internet {k} de {len(pares)}: {articulo}…')
+            hallazgo = {'idx': idx, 'n': n, 'articulo': articulo, 'ok': False, 'aplicado': []}
+            try:
+                r = busqueda.investigar_articulo(marca, articulo, linea.get('descripcion'), catalogo)
+            except Exception as exc:
+                logger.exception('carga_factura: falló la búsqueda de %s (sesión %s)', articulo, sesion_id)
+                hallazgo['detalle'] = str(exc)
+                hallazgos.append(hallazgo)
+                continue
+            hallazgo.update(ok=r['encontrado'], nombre=r['nombre'], que_es=r['que_es'],
+                            color=r['color_primario'], colores_vistos=r['colores_vistos'],
+                            fuente_url=r['fuente_url'], confianza=r['confianza'])
+            if r['encontrado']:
+                defecto = str(data.get('color') or '').strip().upper()
+                color_actual = str(linea.get('color') or '').strip().upper()
+                if r['color_primario'] and (not color_actual or color_actual == defecto):
+                    linea['color'] = r['color_primario']
+                    hallazgo['aplicado'].append('color')
+                if r['categoria'] and not linea.get('categoria'):
+                    linea['categoria'] = r['categoria']
+                    hallazgo['aplicado'].append('categoría')
+                if r['genero'] and str(linea.get('genero') or 'UNISEX').upper() == 'UNISEX' \
+                        and r['genero'].upper() != 'UNISEX':
+                    linea['genero'] = r['genero']
+                    hallazgo['aplicado'].append('género')
+                que_es = ': '.join(t for t in (r['nombre'], r['que_es']) if t)
+                if que_es:
+                    linea['_que_es'] = que_es
+                if hallazgo['aplicado']:
+                    linea['_aprendido'] = sorted(set(list(linea.get('_aprendido') or []) + ['internet']))
+                lineas[n - 1] = linea
+                data['lineas'] = lineas
+                _guardar_factura(sesion_id, idx, data)
+                por_factura[idx] = por_factura.get(idx, 0) + 1
+                try:
+                    _aprender_de_internet(marca, articulo, linea, r)
+                except Exception:
+                    logger.exception('carga_factura: no se pudo guardar lo aprendido de internet')
+            hallazgos.append(hallazgo)
+        uso = _sumar_uso(sesion_id, 'busqueda', svc_lectura.uso_actual())
+        sesion = CargaFacturaPdf.objects.get(id=sesion_id)
+        sesion.agregar_mensaje(AGENTE, _texto_busqueda(hallazgos), tipo='busqueda',
+                               hallazgos=hallazgos, uso=uso)
+    except Exception as exc:
+        mensaje = str(exc) if isinstance(exc, ErrorCarga) else f'{type(exc).__name__}: {exc}'
+        logger.exception('carga_factura: falló la búsqueda en internet (sesión %s)', sesion_id)
+        try:
+            CargaFacturaPdf.objects.get(id=sesion_id).agregar_mensaje(
+                AGENTE, f'La búsqueda en internet se detuvo: {mensaje}', tipo='error',
+                hallazgos=hallazgos)
+        except Exception:
+            pass
+    finally:
+        CargaFacturaPdf.objects.filter(id=sesion_id).update(
+            estado='LEIDA', progreso='', actualizado_en=timezone.now())
+        _cerrar_conexion()
+
+
+def _aprender_de_internet(marca, articulo, linea, r):
+    clave = clave_marca(marca)
+    if not clave or not articulo:
+        return
+    defaults = {'nombre_internet': r['nombre'][:255], 'que_es': r['que_es'][:2000],
+                'color_internet': r['color_primario'][:100], 'fuente_url': r['fuente_url'][:500]}
+    fila, creado = ProductoAprendido.objects.get_or_create(
+        marca=clave, articulo=normalizar_articulo(articulo),
+        defaults={**defaults, 'descripcion': str(linea.get('descripcion') or '')[:255], 'fuente': 'internet'})
+    if not creado:
+        for k, v in defaults.items():
+            if v:
+                setattr(fila, k, v)
+        fila.save(update_fields=list(defaults) + ['actualizado_en'])
+
+
+def _texto_busqueda(hallazgos):
+    if not hallazgos:
+        return 'No había artículos para buscar.'
+    partes = [f'Busqué en internet {len(hallazgos)} artículo(s):']
+    for h in hallazgos:
+        if not h.get('ok'):
+            partes.append(f'• {h["articulo"]}: no lo encontré' + (f' ({h["detalle"]})' if h.get('detalle') else '') + '.')
+            continue
+        texto = f'• {h["articulo"]}: {h.get("nombre") or "encontrado"}'
+        if h.get('que_es'):
+            texto += f' — {h["que_es"]}'
+        if h.get('color'):
+            texto += f' · color {h["color"]}'
+            if h.get('colores_vistos'):
+                texto += f' ({h["colores_vistos"]})'
+        texto += (' → apliqué ' + ', '.join(h['aplicado']) if h.get('aplicado') else ' → sin cambios en la línea')
+        partes.append(texto + '.')
+    partes.append('Lo encontrado queda aprendido para la próxima factura con esos códigos. '
+                  'Revisa la vista previa recalculada.')
+    return '\n'.join(partes)
+
+
+def _catalogo_basico():
+    categorias, especialidades, colores = svc_lectura._listas_del_sistema()
+    generos = []
+    for nombre in ATRIBUTOS_GENERO:
+        generos = [v for v in AtributoOpcion.objects.filter(atributo__nombre__iexact=nombre)
+                   .values_list('valor', flat=True)]
+        if generos:
+            break
+    return {'categorias': categorias, 'especialidades': especialidades, 'colores': colores,
+            'generos': generos, 'marcas': [], 'guias': {}}
 
 
 # ---------------------------------------------------------------- catálogo

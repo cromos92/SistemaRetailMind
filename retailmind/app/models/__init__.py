@@ -99,6 +99,8 @@ from .compras import (  # noqa: F401
     ProveedorProductoEquivalencia,
     CargaFacturaPdf,
     ESTADO_CARGA_FACTURA_PDF_CHOICES,
+    PerfilCargaMarca,
+    ProductoAprendido,
 )
 
 from .cotizaciones import (  # noqa: F401

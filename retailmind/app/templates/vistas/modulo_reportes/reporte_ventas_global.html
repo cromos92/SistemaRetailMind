@@ -50,6 +50,8 @@
         </ol>
     </div>
 
+    {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='ventas' activo='global' %}
+
     <!-- Filtros -->
     <div class="card mb-2" style="border:0;box-shadow:0 1px 4px rgba(0,0,0,.05)">
         <div class="card-body py-2">
@@ -77,32 +79,32 @@
     <div class="row g-2 mb-2">
         <div class="col-6 col-md-2">
             <div class="card mb-0" style="border:0;box-shadow:0 1px 4px rgba(0,0,0,.05)">
-                <div class="kpi-sm"><div class="kpi-val text-primary" id="kpiVentas">$0</div><div class="kpi-label">Ventas Netas</div></div>
+                <div class="kpi-sm" title="Suma por empresa de las ventas de sus sucursales menos las notas de crédito de venta del período"><div class="kpi-val text-primary" id="kpiVentas">$0</div><div class="kpi-label">Ventas Netas</div></div>
             </div>
         </div>
         <div class="col-6 col-md-2">
             <div class="card mb-0" style="border:0;box-shadow:0 1px 4px rgba(0,0,0,.05)">
-                <div class="kpi-sm"><div class="kpi-val text-danger" id="kpiDcto">$0</div><div class="kpi-label">Descuentos</div></div>
+                <div class="kpi-sm" title="Suma de los descuentos registrados en los documentos de venta del período"><div class="kpi-val text-danger" id="kpiDcto">$0</div><div class="kpi-label">Descuentos</div></div>
             </div>
         </div>
         <div class="col-6 col-md-2">
             <div class="card mb-0" style="border:0;box-shadow:0 1px 4px rgba(0,0,0,.05)">
-                <div class="kpi-sm"><div class="kpi-val text-warning" id="kpiDev">$0</div><div class="kpi-label">Devoluciones</div></div>
+                <div class="kpi-sm" title="Suma de las notas de crédito de venta del período"><div class="kpi-val text-warning" id="kpiDev">$0</div><div class="kpi-label">Devoluciones</div></div>
             </div>
         </div>
         <div class="col-6 col-md-2">
             <div class="card mb-0" style="border:0;box-shadow:0 1px 4px rgba(0,0,0,.05)">
-                <div class="kpi-sm"><div class="kpi-val" id="kpiDocs">0</div><div class="kpi-label">Documentos</div></div>
+                <div class="kpi-sm" title="Cantidad de documentos de venta del período"><div class="kpi-val" id="kpiDocs">0</div><div class="kpi-label">Documentos</div></div>
             </div>
         </div>
         <div class="col-6 col-md-2">
             <div class="card mb-0" style="border:0;box-shadow:0 1px 4px rgba(0,0,0,.05)">
-                <div class="kpi-sm"><div class="kpi-val text-info" id="kpiEmpresas">0</div><div class="kpi-label">Empresas</div></div>
+                <div class="kpi-sm" title="Empresas con ventas en el período"><div class="kpi-val text-info" id="kpiEmpresas">0</div><div class="kpi-label">Empresas</div></div>
             </div>
         </div>
         <div class="col-6 col-md-2">
             <div class="card mb-0" style="border:0;box-shadow:0 1px 4px rgba(0,0,0,.05)">
-                <div class="kpi-sm"><div class="kpi-val text-success" id="kpiSucursales">0</div><div class="kpi-label">Sucursales</div></div>
+                <div class="kpi-sm" title="Sucursales con ventas en el período, sumadas por empresa"><div class="kpi-val text-success" id="kpiSucursales">0</div><div class="kpi-label">Sucursales</div></div>
             </div>
         </div>
     </div>
@@ -134,6 +136,18 @@ const fmt = n => Math.abs(n).toLocaleString('es-CL');
 document.addEventListener('DOMContentLoaded', () => {
     const now = new Date();
     document.getElementById('filtroMes').value = now.toISOString().slice(0,7);
+    // Período que llega en la URL (tira de reportes o enlace guardado): el rango manda sobre el mes.
+    if (window.FiltrosReporte) {
+        const f = FiltrosReporte.leer();
+        if (f.fecha_inicio && f.fecha_fin) {
+            FiltrosReporte.ponerValor('#filtroDesde', f.fecha_inicio);
+            FiltrosReporte.ponerValor('#filtroHasta', f.fecha_fin);
+            const c = FiltrosReporte.completar(f);
+            if (c.mes) FiltrosReporte.ponerValor('#filtroMes', c.mes);
+        } else if (f.mes) {
+            FiltrosReporte.ponerValor('#filtroMes', f.mes);
+        }
+    }
     cargarDatos();
 });
 
@@ -147,6 +161,9 @@ function cargarDatos() {
         params = `fecha_inicio=${desde}&fecha_fin=${hasta}`;
     } else {
         params = `mes=${mes}`;
+    }
+    if (window.FiltrosReporte) {
+        FiltrosReporte.reflejar(desde && hasta ? { fecha_inicio: desde, fecha_fin: hasta } : { mes: mes });
     }
 
     document.getElementById('contenedor-empresas').innerHTML = '<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div></div>';

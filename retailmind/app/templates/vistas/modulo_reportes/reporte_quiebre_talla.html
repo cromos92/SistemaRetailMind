@@ -6,33 +6,13 @@
 <div class="container-fluid">
 
 <style>
-  /* ========== NEXO DESIGN SYSTEM (mismas variables que el resto del módulo
-     de reportes — ver reporte_existencias_sucursal.html) ========== */
+  /* ========== NEXO DESIGN SYSTEM ==========
+     El resto de --nexo-* viene de nexo-design-system.css; aquí solo los que no define
+     (los mismos que reporte_existencias_sucursal.html). */
   :root {
-    --nexo-primary:       #0066FF;
-    --nexo-primary-dark:  #0052CC;
-    --nexo-primary-light: #E6F0FF;
-    --nexo-secondary:     #1A1A2E;
-    --nexo-accent:        #00D4AA;
-    --nexo-success:       #00D4AA;
-    --nexo-warning:       #FFB020;
-    --nexo-error:         #FF4D4D;
-    --nexo-gray-900:      #1A1A2E;
-    --nexo-gray-700:      #4A4A5A;
     --nexo-gray-600:      #6A6A7A;
-    --nexo-gray-500:      #8A8A9A;
     --nexo-gray-400:      #AAAABC;
-    --nexo-gray-300:      #D1D1D9;
     --nexo-gray-200:      #E8E8F0;
-    --nexo-gray-100:      #F5F5F7;
-    --nexo-white:         #FFFFFF;
-    --nexo-shadow-sm:     0 1px 2px rgba(26,26,46,.05);
-    --nexo-shadow-md:     0 4px 6px rgba(26,26,46,.1);
-    --nexo-shadow-lg:     0 10px 15px rgba(26,26,46,.1);
-    --nexo-radius-sm:     4px;
-    --nexo-radius-md:     8px;
-    --nexo-radius-lg:     12px;
-    --nexo-radius-xl:     16px;
     --nexo-transition:    150ms ease;
   }
 
@@ -296,6 +276,8 @@
     </div>
   </div>
 
+  {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='existencias' activo='quiebre' %}
+
   <!-- ── KPI cards ────────────────────────────────────── -->
   <div class="nexo-kpi-row" id="kpi-row">
     <div class="nexo-kpi-skeleton" id="kpi-sk-1"><div class="sk-icon"></div><div class="sk-body"><div class="sk-label"></div><div class="sk-value"></div></div></div>
@@ -336,7 +318,7 @@
     <div class="nexo-kpi-card kpi-success" id="kpi-card-5" style="display:none">
       <div class="nexo-kpi-icon icon-success"><i class="ri-inbox-unarchive-line"></i></div>
       <div class="nexo-kpi-body">
-        <div class="nexo-kpi-label">Unidades en CD</div>
+        <div class="nexo-kpi-label" title="Suma de las unidades disponibles en el CD de las tallas quebradas que son reponibles">Unidades en CD</div>
         <div class="nexo-kpi-value" id="kpi-unidades-cd">0</div>
       </div>
     </div>
@@ -464,11 +446,20 @@ let ultimaRespuesta = null;
 const PAGE_SIZE = 25;
 
 document.addEventListener('DOMContentLoaded', () => {
-  cargarSucursales();
+  const pSucursales = cargarSucursales();
   document.getElementById('filtro-umbral').addEventListener('change', () => {
     document.getElementById('met-umbral').textContent =
       document.getElementById('filtro-umbral').value || '80';
   });
+
+  // Sucursal de la URL (tira de reportes o enlace guardado): solo queda puesta;
+  // el reporte sigue esperando "Generar".
+  if (window.FiltrosReporte) {
+    const f = FiltrosReporte.leer();
+    if (f.sucursal_id) {
+      pSucursales.then(() => FiltrosReporte.ponerValor('#filtro-sucursal', f.sucursal_id));
+    }
+  }
 });
 
 /* ================================================================
@@ -499,6 +490,9 @@ async function cargarReporte(page) {
 
   const sucursalId = document.getElementById('filtro-sucursal').value;
   if (!sucursalId) { toast('Selecciona una sucursal primero'); return; }
+
+  // Estado compartido en la URL (los días son una ventana propia, no un período)
+  if (window.FiltrosReporte) FiltrosReporte.reflejar({ sucursal_id: sucursalId });
 
   const params = new URLSearchParams({
     sucursal_id: sucursalId,

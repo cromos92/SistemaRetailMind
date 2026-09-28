@@ -23,6 +23,8 @@
             </div>
         </div>
 
+        {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='ventas' activo='productos' %}
+
         <!-- Filtros -->
         <div class="row mb-3">
             <div class="col-12">
@@ -174,7 +176,7 @@
             <div class="col-6 col-md-3">
                 <div class="card kpi-card border-0 shadow-sm h-100">
                     <div class="card-body py-3">
-                        <div class="kpi-label"><i class="ri-money-dollar-circle-line text-success"></i> Monto total</div>
+                        <div class="kpi-label" title="Suma del monto vendido con IVA de las líneas del período"><i class="ri-money-dollar-circle-line text-success"></i> Monto total</div>
                         <div class="kpi-main" id="kpiMonto">$0</div>
                     </div>
                 </div>
@@ -182,7 +184,7 @@
             <div class="col-6 col-md-3">
                 <div class="card kpi-card border-0 shadow-sm h-100">
                     <div class="card-body py-3">
-                        <div class="kpi-label"><i class="ri-coins-line text-warning"></i> Margen</div>
+                        <div class="kpi-label" title="Monto vendido menos costo de las unidades vendidas · Margen % = margen ÷ monto"><i class="ri-coins-line text-warning"></i> Margen</div>
                         <div class="kpi-main" id="kpiMargen">$0</div>
                         <div class="kpi-sub">Margen %: <span id="kpiMargenPct">0%</span></div>
                     </div>
@@ -191,7 +193,7 @@
             <div class="col-6 col-md-3">
                 <div class="card kpi-card border-0 shadow-sm h-100">
                     <div class="card-body py-3">
-                        <div class="kpi-label"><i class="ri-price-tag-3-line text-info"></i> SKUs únicos</div>
+                        <div class="kpi-label" title="Productos distintos con venta en el período · Precio prom/u = monto ÷ unidades"><i class="ri-price-tag-3-line text-info"></i> SKUs únicos</div>
                         <div class="kpi-main" id="kpiSkus">0</div>
                         <div class="kpi-sub">Precio prom/u: <span id="kpiPrecioPromedio">$0</span></div>
                     </div>
@@ -200,7 +202,7 @@
             <div class="col-6 col-md-4">
                 <div class="card kpi-card border-0 shadow-sm h-100">
                     <div class="card-body py-3">
-                        <div class="kpi-label"><i class="ri-trophy-line text-primary"></i> Top Producto</div>
+                        <div class="kpi-label" title="Primer producto del ranking según el orden elegido en el filtro (por defecto, unidades)"><i class="ri-trophy-line text-primary"></i> Top Producto</div>
                         <div class="kpi-main fs-6" id="kpiTopProducto">-</div>
                     </div>
                 </div>
@@ -538,14 +540,61 @@
     const fmtNum = n => new Intl.NumberFormat('es-CL').format(Math.round(n || 0));
     const fmtPct = n => (Number(n || 0)).toFixed(1) + '%';
 
+    // ── Filtros compartidos por URL (tira de reportes / enlace guardado) ──
+    // Fechas en hora local del navegador (Chile), no en UTC.
+    const pad2 = n => String(n).padStart(2, '0');
+    const isoLocal = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+    // Período de la URL → preset. El mes en curso (hasta hoy o completo) queda en
+    // "Mes a la fecha" por defecto: el mes completo mete días futuros en el
+    // sell-through. Año en curso → "Año a la fecha", año pasado completo →
+    // anio_full; cualquier otro período → rango personalizado.
+    function flujoDesdeUrl(f) {
+        const c = FiltrosReporte.completar(f);
+        let fi = c.fecha_inicio, ff = c.fecha_fin;
+        if (!fi && c.anio) { fi = c.anio + '-01-01'; ff = c.anio + '-12-31'; }
+        if (!fi || !ff) return null;
+        const hoy = isoLocal(new Date());
+        const anio = hoy.slice(0, 4), anioAnt = String(Number(anio) - 1);
+        if (fi === hoy.slice(0, 7) + '-01' && ff.slice(0, 7) === hoy.slice(0, 7) && ff >= hoy) return { flujo: 'mes_mtd' };
+        if (fi === anio + '-01-01' && ff.slice(0, 4) === anio && ff >= hoy) return { flujo: 'anio_ytd' };
+        if (fi === anioAnt + '-01-01' && ff === anioAnt + '-12-31') return { flujo: 'anio_full' };
+        return { flujo: 'custom', fi: fi, ff: ff };
+    }
+
+    // Período consultado → claves canónicas: un mes calendario (o el mes en
+    // curso hasta hoy) va como `mes`; cualquier otro tramo, como rango.
+    function periodoCanonico(fi, ff) {
+        if (fi && ff && fi.slice(8) === '01' && fi.slice(0, 7) === ff.slice(0, 7)) {
+            const mes = FiltrosReporte.completar({ mes: fi.slice(0, 7) });
+            if (ff === mes.fecha_fin || ff === isoLocal(new Date())) return { mes: mes.mes };
+        }
+        return { fecha_inicio: fi, fecha_fin: ff };
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
+        // Período de la URL: se aplica antes de la primera consulta. Sucursal y
+        // marca, cuando llegan sus opciones (si no están entre ellas, se ignoran).
+        const filtrosUrl = window.FiltrosReporte ? FiltrosReporte.leer() : {};
+        const flujoUrl = window.FiltrosReporte ? flujoDesdeUrl(filtrosUrl) : null;
+        if (flujoUrl && FiltrosReporte.ponerValor('#tipoFlujo', flujoUrl.flujo) && flujoUrl.flujo === 'custom') {
+            document.getElementById('fechaInicio').value = flujoUrl.fi;
+            document.getElementById('fechaFin').value = flujoUrl.ff;
+            document.getElementById('contFechaInicio').classList.remove('d-none');
+            document.getElementById('contFechaFin').classList.remove('d-none');
+        }
+
         Promise.all([
             cargarSucursales(),
             cargarOpciones('marca', 'filtroMarca'),
             cargarOpciones('categoria', 'filtroCategoria'),
             cargarOpciones('sexo', 'filtroSexo'),
             cargarOpciones('especialidad', 'filtroEspecialidad'),
-        ]).then(() => consultar());
+        ]).then(() => {
+            if (filtrosUrl.sucursal_id) FiltrosReporte.ponerValor('#filtroSucursal', filtrosUrl.sucursal_id);
+            if (filtrosUrl.marca_id) FiltrosReporte.ponerValor('#filtroMarca', filtrosUrl.marca_id);
+            consultar();
+        });
 
         document.getElementById('btnConsultar').addEventListener('click', consultar);
         document.getElementById('btnLimpiar').addEventListener('click', limpiarFiltros);
@@ -661,12 +710,22 @@
     function consultar() {
         document.getElementById('infoPeriodo').innerHTML =
             '<div class="spinner-border spinner-border-sm text-primary me-2"></div> Consultando...';
+        const sucursalPedida = document.getElementById('filtroSucursal').value;
+        const marcaPedida = document.getElementById('filtroMarca').value;
         fetch('/app/api/reportes/productos-vendidos/?' + construirQuery())
             .then(r => r.json())
             .then(data => {
                 if (!data.success) {
                     Swal.fire({ icon: 'error', title: 'Error', text: data.error || 'Error al cargar' });
                     return;
+                }
+                // URL: el período que resolvió el backend (también en los presets),
+                // la sucursal y la marca pedidas. El resto de filtros es propio.
+                if (window.FiltrosReporte && data.periodo) {
+                    const estadoUrl = periodoCanonico(data.periodo.inicio, data.periodo.fin);
+                    estadoUrl.sucursal_id = sucursalPedida;
+                    estadoUrl.marca_id = marcaPedida;
+                    FiltrosReporte.reflejar(estadoUrl);
                 }
                 renderPeriodo(data.periodo);
                 renderKPIs(data.kpis);

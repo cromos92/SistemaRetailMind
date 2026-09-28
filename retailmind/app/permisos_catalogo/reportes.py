@@ -130,8 +130,8 @@ CATALOGO = {
 
     # ----------------------------------------------------------------- Compras
     'reporte_despachos_proveedor': {
-        'pantalla': 'Despachos por Proveedor',
-        'ruta': '/app/verReporteDespachosProveedor/',
+        'pantalla': 'Ingresos por Proveedor',
+        'ruta': '/app/reportes/ingresos-proveedor/',
         'resumen': 'Ingresos por proveedor y DTE de compra: unidades del documento, pendientes de ingreso, ingresadas y su monto.',
         'permisos': {
             'puede_ver': 'Entrar al reporte, verlo en el menú y consultar los ingresos por proveedor; el botón de exportar genera un CSV en el navegador.',

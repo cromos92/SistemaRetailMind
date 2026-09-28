@@ -115,6 +115,15 @@
     .dg-total-nc { font-size: 1.05rem; font-weight: 800; color: var(--nexo-accent); }
     .dg-modo-btn.active { background: var(--nexo-primary) !important; color: #fff !important; border-color: var(--nexo-primary) !important; }
     .apr-impacto-box { background: #0f1420; border: 1px solid #2a3045; border-radius: 8px; padding: 0.75rem; font-size: 0.82rem; }
+
+    /* ========== RESOLUCIÓN: APROBACIÓN vs DIRECTA ========== */
+    .dg-resolucion .btn { font-size: 0.8rem; font-weight: 600; padding: 0.45rem 0.5rem; }
+    .dg-resolucion .btn small { display: block; font-weight: 400; font-size: 0.68rem; opacity: 0.8; }
+    #dg-codigo-autorizacion {
+        max-width: 190px; letter-spacing: 0.35em; font-size: 1.15rem;
+        text-align: center; font-weight: 700;
+    }
+    .badge-directa { background: rgba(0, 102, 255, 0.12); color: var(--nexo-primary); border: 1px solid rgba(0, 102, 255, 0.3); font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: var(--nexo-radius-full); }
 </style>
 
 <div class="page-content">
@@ -124,7 +133,7 @@
     <div class="page-header-nexo mb-2">
         <div class="row align-items-center">
             <div class="col">
-                <h1><i class="ri-refund-2-line"></i> Devolución por Garantía</h1>
+                <h1><i class="ri-refund-2-line"></i> Devolución de Dinero</h1>
                 <p class="sucursal-info mb-0">
                     <i class="ri-store-2-line me-1"></i> <strong>{{ sucursal_actual.alias }}</strong>
                 </p>
@@ -132,7 +141,7 @@
             {% if puede_crear %}
             <div class="col-auto">
                 <button class="btn btn-nexo-success" data-bs-toggle="modal" data-bs-target="#modalNuevaDevolucion" style="font-size:0.88rem; padding:0.45rem 1rem;">
-                    <i class="ri-add-line me-1"></i> Nueva Solicitud
+                    <i class="ri-add-line me-1"></i> Nueva Devolución
                 </button>
             </div>
             {% endif %}
@@ -171,7 +180,7 @@
     <div class="table-nexo p-2 mb-2">
         <div class="row g-2 align-items-center">
             <div class="col-md-{% if es_admin %}4{% else %}6{% endif %}">
-                <input type="text" id="filtro-busqueda" class="form-control form-control-sm" placeholder="Buscar por N° operación, RUT, nombre o N° NC...">
+                <input type="text" id="filtro-busqueda" class="form-control form-control-sm" placeholder="Buscar por N° operación (DG o Mercado Pago), RUT, nombre o N° NC...">
             </div>
             <div class="col-md-3">
                 <select id="filtro-estado" class="form-select form-select-sm">
@@ -244,7 +253,7 @@
         <div class="modal-content border-0" style="background:#1a1f2e;">
             <div class="modal-header py-2 px-3" style="background:#1a1f2e; border-bottom:2px solid #0d6efd;">
                 <div class="text-white fw-bold" style="font-size:0.95rem;">
-                    <i class="ri-refund-2-line me-1"></i> Nueva Solicitud de Devolución por Garantía
+                    <i class="ri-refund-2-line me-1"></i> Nueva Devolución de Dinero
                 </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
@@ -333,21 +342,62 @@
                         <div id="dg-resumen" class="text-secondary" style="font-size:0.82rem;"></div>
                     </div>
 
+                    <!-- Cómo se resuelve: aprobación posterior o devolución directa. -->
+                    <div class="cliente-box mb-2">
+                        <div class="text-white fw-semibold mb-2" style="font-size:0.85rem;"><i class="ri-shield-keyhole-line me-1" style="color:#0d6efd;"></i> ¿Cómo se resuelve?</div>
+                        <div class="btn-group w-100 mb-2 dg-resolucion" role="group">
+                            <input type="radio" class="btn-check" name="dg-resolucion" id="dg-res-aprobacion" value="APROBACION" checked onchange="dgToggleResolucion()">
+                            <label class="btn btn-outline-light" for="dg-res-aprobacion">
+                                <i class="ri-time-line me-1"></i> Enviar a aprobación
+                                <small>Queda pendiente; la NC se genera al aprobar</small>
+                            </label>
+                            <input type="radio" class="btn-check" name="dg-resolucion" id="dg-res-directa" value="DIRECTA" onchange="dgToggleResolucion()">
+                            <label class="btn btn-outline-light" for="dg-res-directa">
+                                <i class="ri-flashlight-line me-1"></i> Devolver ahora
+                                <small>Con el código de un Administrador o Maestro</small>
+                            </label>
+                        </div>
+                        <div id="dg-aviso-aprobacion" class="alert alert-warning py-1 px-2 small mb-0">
+                            <i class="ri-time-line me-1"></i> La solicitud quedará <strong>pendiente de aprobación</strong>. La NC se genera al aprobar.
+                        </div>
+                    </div>
+
                     <!-- Método de devolución al cliente -->
                     <div class="cliente-box mb-2">
                         <div class="text-white fw-semibold mb-2" style="font-size:0.85rem;"><i class="ri-bank-line me-1" style="color:#0d6efd;"></i> Método de devolución al cliente</div>
-                        {# Transferencia es el método primario. Efectivo queda OCULTO
-                           (el input sigue en el DOM para no romper el JS y para poder
-                           mostrar solicitudes históricas que sí lo usaron). #}
+                        {# Mercado Pago solo aparece si la venta se cobró con MP (la plata
+                           vuelve por donde entró). Efectivo se ofrece en los dos flujos,
+                           salvo venta a crédito. Rebaja de crédito, solo si fue a crédito.
+                           Los radios nacen ocultos y los destapa la búsqueda del documento. #}
                         <div class="btn-group btn-group-sm w-100 mb-2" role="group">
+                            <input type="radio" class="btn-check d-none" name="dg-metodo" id="dg-metodo-mp" value="MERCADO_PAGO" onchange="dgToggleMetodo()">
+                            <label class="btn btn-outline-light d-none" id="dg-lbl-mp" for="dg-metodo-mp"><i class="ri-smartphone-line me-1"></i> Mercado Pago</label>
+                            <input type="radio" class="btn-check d-none" name="dg-metodo" id="dg-metodo-efectivo" value="EFECTIVO_CAJA" onchange="dgToggleMetodo()">
+                            <label class="btn btn-outline-light d-none" id="dg-lbl-efectivo" for="dg-metodo-efectivo"><i class="ri-cash-line me-1"></i> Efectivo (caja)</label>
                             <input type="radio" class="btn-check" name="dg-metodo" id="dg-metodo-transf" value="TRANSFERENCIA_BANCARIA" checked onchange="dgToggleMetodo()">
                             <label class="btn btn-outline-light" for="dg-metodo-transf"><i class="ri-bank-card-line me-1"></i> Transferencia</label>
                             {# Solo aparece si el documento se vendió a crédito: ahí no hay
                                plata que devolver, se rebaja la cuenta por cobrar. #}
                             <input type="radio" class="btn-check d-none" name="dg-metodo" id="dg-metodo-credito" value="REBAJA_CREDITO" onchange="dgToggleMetodo()">
                             <label class="btn btn-outline-light d-none" id="dg-lbl-credito" for="dg-metodo-credito"><i class="ri-scales-3-line me-1"></i> Rebaja de crédito</label>
-                            <input type="radio" class="btn-check d-none" name="dg-metodo" id="dg-metodo-efectivo" value="EFECTIVO_CAJA" onchange="dgToggleMetodo()">
-                            <label class="btn btn-outline-light d-none" for="dg-metodo-efectivo"><i class="ri-cash-line me-1"></i> Efectivo (caja)</label>
+                        </div>
+                        <div id="dg-aviso-efectivo" class="alert alert-info py-1 px-2 small mb-2 d-none"></div>
+                        {# Mercado Pago: la plata se devuelve desde la app/panel de MP o la
+                           Point; aquí queda registrada con su N° de operación. #}
+                        <div id="dg-mp-fields" class="d-none">
+                            <div id="dg-mp-info" class="alert alert-info py-1 px-2 small mb-2"></div>
+                            {# Solo en «Devolver ahora»: con aprobación, el N° lo registra
+                               quien aprueba (se le prellena con el del cobro). #}
+                            <div id="dg-mp-operacion-wrap">
+                                <label for="dg-mp-operacion" class="form-label text-white small mb-1">
+                                    N° de operación de Mercado Pago <span class="text-warning">(obligatorio)</span>
+                                </label>
+                                <input type="text" id="dg-mp-operacion" class="form-control form-control-sm font-monospace" maxlength="50"
+                                       placeholder="Ej: 177422093000 (app / panel de Mercado Pago o voucher de la Point)">
+                                <div class="form-text text-secondary" style="font-size:0.7rem;">
+                                    Queda en la Nota de Crédito y en el comprobante para ubicar la devolución en Mercado Pago.
+                                </div>
+                            </div>
                         </div>
                         <div id="dg-aviso-credito" class="alert alert-warning py-1 px-2 small mb-2 d-none"></div>
                         {# Cobro con tarjeta por la máquina Transbank: un error de
@@ -382,8 +432,21 @@
                         <i class="ri-file-text-line me-1" style="color:#0d6efd;"></i> Motivo
                     </label>
                     <textarea id="dg-motivo" class="form-control form-control-sm" rows="2">Garantía aprobada</textarea>
-                    <div class="alert alert-warning py-1 px-2 small mt-2 mb-0">
-                        <i class="ri-time-line me-1"></i> La solicitud quedará <strong>pendiente de aprobación</strong> por un administrador. La NC se genera al aprobar.
+
+                    <!-- Firma de la devolución directa (lo último: el Administrador
+                         o Maestro lo digita cuando todo lo demás está revisado) -->
+                    <div id="dg-wrap-directa" class="cliente-box mt-2 d-none">
+                        <label for="dg-codigo-autorizacion" class="form-label text-white small mb-1">
+                            Código de autorización de la <strong>barra superior</strong> (6 dígitos)
+                        </label>
+                        <input type="password" id="dg-codigo-autorizacion" class="form-control form-control-sm font-monospace mb-2"
+                               inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="••••••">
+                        <div class="alert alert-info py-1 px-2 small mb-0">
+                            <i class="ri-information-line me-1"></i> Se genera la <strong>Nota de Crédito ahora</strong>, imputada
+                            <strong>hoy</strong> en la caja de {{ sucursal_actual.alias }} según el método elegido arriba.
+                            El código es de un solo uso y debe ser de un <strong>Administrador o Maestro</strong> con permiso para aprobar.
+                        </div>
+                        <div id="dg-error-codigo" class="text-danger small mt-1 d-none"></div>
                     </div>
                 </div>
 
@@ -399,7 +462,7 @@
                     Siguiente <i class="ri-arrow-right-line"></i>
                 </button>
                 <button type="button" class="btn btn-sm btn-success d-none" id="dg-btn-confirmar" onclick="confirmarDevolucionGarantia()">
-                    <i class="ri-check-line me-1"></i> Crear Solicitud
+                    <i class="ri-check-line me-1"></i> <span id="dg-btn-confirmar-texto">Crear Solicitud</span>
                 </button>
             </div>
         </div>
@@ -425,19 +488,25 @@
                     <div class="text-white fw-semibold mb-2" style="font-size:0.85rem;"><i class="ri-bank-line me-1" style="color:#0d6efd;"></i> Impacto en caja</div>
                     <div class="row g-2 align-items-center mb-2">
                         <div class="col-md-7">
-                            {# Transferencia primero (primaria). "Efectivo de caja"
-                               va oculto: solo se muestra si la solicitud ya venía
-                               con ese método (histórico). #}
+                            {# Mercado Pago solo se puede aprobar si la venta se cobró con MP
+                               (el preview lo bloquea si no); el front lo oculta en ese caso. #}
                             <select id="apr-metodo" class="form-select form-select-sm" onchange="aprActualizarImpacto()">
                                 <option value="TRANSFERENCIA_BANCARIA">Transferencia bancaria</option>
+                                <option value="MERCADO_PAGO">Mercado Pago (devuelto a la tarjeta / cuenta MP)</option>
+                                <option value="EFECTIVO_CAJA">Efectivo de caja</option>
                                 <option value="REBAJA_CREDITO">Rebaja crédito del cliente (venta a crédito)</option>
                                 <option value="NO_AFECTA_CAJA">No afecta caja</option>
-                                <option value="EFECTIVO_CAJA" hidden>Efectivo de caja</option>
                             </select>
                         </div>
                         <div class="col-md-5" id="apr-fecha-wrap">
                             <input type="date" id="apr-fecha" class="form-control form-control-sm" onchange="aprActualizarImpacto()">
                         </div>
+                    </div>
+                    <div id="apr-mp-wrap" class="mb-2 d-none">
+                        <label for="apr-mp-operacion" class="form-label text-white small mb-1">N° de operación de Mercado Pago</label>
+                        <input type="text" id="apr-mp-operacion" class="form-control form-control-sm font-monospace" maxlength="50"
+                               placeholder="Ej: 177422093000 (app / panel de Mercado Pago o voucher de la Point)">
+                        <div id="apr-mp-info" class="form-text text-secondary" style="font-size:0.72rem;"></div>
                     </div>
                     <div id="apr-impacto" class="apr-impacto-box text-secondary">—</div>
                 </div>
@@ -486,7 +555,7 @@
     const urlCon = (plantilla, id) => plantilla.replace('/0/', '/' + id + '/');
 
     // Estado del wizard
-    let dgWizard = { paso: 1, dte: null, seleccion: {}, requerimientoId: null, condicionPago: null, pagoTransbank: null };
+    let dgWizard = { paso: 1, dte: null, seleccion: {}, requerimientoId: null, condicionPago: null, pagoTransbank: null, pagoMP: null };
 
     function getCookie(name) {
         let v = null;
@@ -561,7 +630,7 @@
 
     // ===================== WIZARD =====================
     function resetModalDevolucionGarantia() {
-        dgWizard = { paso: 1, dte: null, seleccion: {}, requerimientoId: null, condicionPago: null, pagoTransbank: null };
+        dgWizard = { paso: 1, dte: null, seleccion: {}, requerimientoId: null, condicionPago: null, pagoTransbank: null, pagoMP: null };
         $('#dg-folio').val('');
         $('#dg-doc-info').addClass('d-none').empty();
         $('#dg-lista-productos').empty();
@@ -570,15 +639,23 @@
         $('#dg-cliente-estado').addClass('d-none');
         $('#dg-alerta-generico').addClass('d-none');
         $('#dg-motivo').val('Garantía aprobada');
-        // Transferencia es el método primario (efectivo está oculto).
+        // Sin documento, solo transferencia: MP, efectivo y crédito los destapa
+        // la búsqueda según cómo se vendió.
         $('#dg-metodo-transf').prop('checked', true);
-        $('#dg-metodo-credito, #dg-lbl-credito').addClass('d-none');
+        $('#dg-metodo-credito, #dg-lbl-credito, #dg-metodo-mp, #dg-lbl-mp, #dg-metodo-efectivo, #dg-lbl-efectivo').addClass('d-none');
         $('#dg-aviso-credito, #dg-aviso-transbank').addClass('d-none').empty();
+        $('#dg-mp-operacion').val('');
+        $('#dg-mp-info').empty();
         $('#dg-banco, #dg-num-cuenta, #dg-titular-rut').val('');
         $('#dg-tipo-cuenta').val('');
         $('#dg-titular-mismo').prop('checked', true);
+        // Cada devolución arranca "con aprobación": la directa es una decisión
+        // explícita y el código no debe quedar escrito para la siguiente.
+        $('#dg-res-aprobacion').prop('checked', true);
+        $('#dg-codigo-autorizacion').val('');
         dgToggleMetodo();
         dgToggleTitular();
+        dgToggleResolucion();
         window._dgClienteId = null;
         dgIrPaso(1, true);
     }
@@ -603,13 +680,75 @@
 
     function dgToggleMetodo() {
         const esTransf = $('#dg-metodo-transf').is(':checked');
+        const esMP = $('#dg-metodo-mp').is(':checked');
+        const esEfectivo = $('#dg-metodo-efectivo').is(':checked');
         $('#dg-transf-fields').toggleClass('d-none', !esTransf);
+        $('#dg-mp-fields').toggleClass('d-none', !esMP);
+        // Directa: la plata sale ahora. Con aprobación: sale al aprobar.
+        const directa = dgEsDirecta();
+        $('#dg-aviso-efectivo').toggleClass('d-none', !esEfectivo).html(esEfectivo
+            ? (directa
+                ? `<i class="ri-cash-line me-1"></i> Entregue el dinero <strong>en efectivo</strong> al cliente: se descuenta del efectivo de la caja de <strong>hoy</strong> en {{ sucursal_actual.alias|escapejs }}.`
+                : `<i class="ri-cash-line me-1"></i> El cliente recibirá el dinero <strong>en efectivo</strong> cuando se apruebe: se descuenta del efectivo de la caja del día que elija el aprobador.`)
+            : '');
+        if (esMP) { dgRenderInfoMP(); }
         $('#dg-error-metodo').addClass('d-none');
+    }
+
+    // Recuadro del método Mercado Pago: qué se cobró por MP, cuánto queda por
+    // devolver por esa vía y dónde hacer la devolución.
+    function dgRenderInfoMP() {
+        const mp = dgWizard.pagoMP || {};
+        const ops = (mp.operaciones || []).map(o =>
+            `N° <strong>${esc(o.numero || 'sin N° en el sistema')}</strong> · ${clp(o.monto)}` +
+            (o.medio ? ` · ${esc(o.medio)}` : '') + (o.ultimos_4 ? ` ****${esc(o.ultimos_4)}` : '') +
+            (o.fecha ? ` · ${esc(o.fecha)}` : '')).join('<br>');
+        $('#dg-mp-info').html(
+            `<i class="ri-smartphone-line me-1"></i>Cobrada con <strong>Mercado Pago</strong> ${esc(mp.medio || '')} ` +
+            `(${clp(mp.monto_mp)}` + (mp.monto_devuelto ? `, ya devuelto ${clp(mp.monto_devuelto)}` : '') +
+            `; se pueden devolver hasta <strong>${clp(mp.disponible)}</strong>).` +
+            (ops ? `<br>${ops}` : '') +
+            (dgEsDirecta()
+                ? `<br>Devuelve el dinero desde la <strong>app o el panel de Mercado Pago</strong> (o la Point): ` +
+                  `este sistema solo lo registra.`
+                : `<br>Quien apruebe hace la devolución en Mercado Pago y registra el N° de operación.`) +
+            ` Resta de <strong>Mercado Pago POS</strong> en la caja, no del efectivo.`
+        );
+        $('#dg-mp-operacion-wrap').toggleClass('d-none', !dgEsDirecta());
     }
     function dgToggleTitular() {
         const mismo = $('#dg-titular-mismo').is(':checked');
         $('#dg-wrap-titular').toggleClass('d-none', mismo);
     }
+
+    // ¿Devolución directa (firma en el momento con el código de la barra)?
+    function dgEsDirecta() {
+        return $('#dg-res-directa').is(':checked');
+    }
+    function dgToggleResolucion() {
+        const directa = dgEsDirecta();
+        $('#dg-wrap-directa').toggleClass('d-none', !directa);
+        $('#dg-aviso-aprobacion').toggleClass('d-none', directa);
+        $('#dg-error-codigo').addClass('d-none').empty();
+        $('#dg-btn-confirmar-texto').text(directa ? 'Devolver y generar NC' : 'Crear Solicitud');
+        // Efectivo de caja: en los dos flujos (28-09-2026), con documento
+        // buscado y nunca sobre una venta a crédito (el backend aplica la
+        // misma regla).
+        const cp = dgWizard.condicionPago || {};
+        const esCredito = !!cp.es_credito;
+        // Venta mixta (efectivo + crédito trabajador/externo): `es_credito` no
+        // la marca, pero entregar efectivo pagaría lo que quedó a crédito.
+        const permiteEfectivo = !!dgWizard.dte && !esCredito && !(Number(cp.monto_credito) > 0);
+        $('#dg-metodo-efectivo, #dg-lbl-efectivo').toggleClass('d-none', !permiteEfectivo);
+        if (!permiteEfectivo && $('#dg-metodo-efectivo').is(':checked')) {
+            $(esCredito ? '#dg-metodo-credito' : '#dg-metodo-transf').prop('checked', true);
+        }
+        dgToggleMetodo();
+    }
+    $(document).on('input', '#dg-codigo-autorizacion', function () {
+        this.value = this.value.replace(/\D/g, '').slice(0, 6);
+        $('#dg-error-codigo').addClass('d-none').empty();
+    });
 
     function dgRenderPaso() {
         const p = dgWizard.paso;
@@ -700,7 +839,30 @@
                     if (!trut || !validarRutChileno(trut)) { dgMostrarErrorMetodo('Ingresa un RUT válido del titular de la cuenta.'); return false; }
                 }
             }
+            if ($('#dg-metodo-mp').is(':checked')) {
+                const mp = dgWizard.pagoMP || {};
+                if (dgTotalNC() > Number(mp.disponible || 0)) {
+                    dgMostrarErrorMetodo('Por Mercado Pago se pueden devolver hasta ' + clp(mp.disponible) +
+                        ' (lo cobrado con MP). El resto va por el medio con que se pagó.');
+                    return false;
+                }
+                if (dgEsDirecta() && !$('#dg-mp-operacion').val().trim()) {
+                    dgMostrarErrorMetodo('Ingresa el N° de operación de Mercado Pago de la devolución.');
+                    $('#dg-mp-operacion').trigger('focus');
+                    return false;
+                }
+            }
             $('#dg-error-metodo').addClass('d-none');
+            const tbk = dgWizard.pagoTransbank;
+            if (dgEsDirecta() && tbk && tbk.monto_anulado_pos && !tbk.anulado_completo) {
+                dgMostrarErrorCodigo('Esta venta tiene una anulación PARCIAL por la máquina Transbank: envíala a aprobación.');
+                return false;
+            }
+            if (dgEsDirecta() && !/^\d{6}$/.test($('#dg-codigo-autorizacion').val())) {
+                dgMostrarErrorCodigo('Ingresa los 6 dígitos del código de un Administrador o Maestro.');
+                $('#dg-codigo-autorizacion').trigger('focus');
+                return false;
+            }
             return true;
         }
         return true;
@@ -708,6 +870,7 @@
     function dgMostrarErrorTotal(msg) { $('#dg-error-total').removeClass('d-none').text(msg); }
     function dgMostrarErrorCliente(msg) { $('#dg-error-cliente').removeClass('d-none').text(msg); }
     function dgMostrarErrorMetodo(msg) { $('#dg-error-metodo').removeClass('d-none').text(msg); }
+    function dgMostrarErrorCodigo(msg) { $('#dg-error-codigo').removeClass('d-none').text(msg); }
 
     function buscarDteDevolucionGarantia() {
         const folio = $('#dg-folio').val().trim();
@@ -729,9 +892,11 @@
             dgWizard.seleccion = {};
             dgWizard.condicionPago = resp.condicion_pago || null;
             dgWizard.pagoTransbank = resp.pago_transbank || null;
+            dgWizard.pagoMP = resp.pago_mercadopago || null;
 
             const cp = dgWizard.condicionPago;
             const tbk = dgWizard.pagoTransbank;
+            const mp = dgWizard.pagoMP;
             // Cobro con tarjeta por la máquina Transbank: un ERROR DE COBRO se
             // corrige anulando en la MISMA máquina (el dinero vuelve a la
             // tarjeta). Si esa anulación ya está registrada, esta devolución
@@ -749,13 +914,25 @@
                     `Cobrada con TARJETA por máquina Transbank (${clp(tbk.monto_tarjeta)}). ` +
                     `Si es un ERROR DE COBRO, no se devuelve por aquí: se ANULA en la misma máquina ` +
                     `y el dinero vuelve a la tarjeta. Continúa solo si es una garantía real.</span>`;
+                if (tbk.monto_anulado_pos) {
+                    tbkInfo += `<br><span class="text-danger"><i class="ri-error-warning-line me-1"></i>` +
+                        `Ya tiene una anulación PARCIAL por la máquina (${clp(tbk.monto_anulado_pos)} vuelto a la tarjeta): ` +
+                        `no se puede devolver al instante, envíala a aprobación.</span>`;
+                }
             }
             // Venta a crédito → se ofrece (y preselecciona) "Rebaja de crédito":
             // no hay plata que transferir, se descuenta la cuenta por cobrar.
+            // Cobrada con Mercado Pago → se ofrece (y preselecciona) Mercado
+            // Pago: la plata vuelve por donde entró. Manda `metodo_sugerido`.
             const esCredito = !!(cp && cp.es_credito);
+            const hayMP = !!(mp && mp.es_mp && Number(mp.disponible) > 0);
             $('#dg-metodo-credito, #dg-lbl-credito').toggleClass('d-none', !esCredito);
-            $(esCredito ? '#dg-metodo-credito' : '#dg-metodo-transf').prop('checked', true);
-            dgToggleMetodo();
+            $('#dg-metodo-mp, #dg-lbl-mp').toggleClass('d-none', !hayMP);
+            const sugerido = resp.metodo_sugerido || (esCredito ? 'REBAJA_CREDITO' : 'TRANSFERENCIA_BANCARIA');
+            const radioSugerido = { MERCADO_PAGO: '#dg-metodo-mp', REBAJA_CREDITO: '#dg-metodo-credito' }[sugerido] || '#dg-metodo-transf';
+            $(radioSugerido).prop('checked', true);
+            $('#dg-mp-operacion').val(hayMP ? (mp.numero_operacion || '') : '');
+            dgToggleResolucion();
             $('#dg-doc-info').removeClass('d-none').html(
                 `<i class="ri-checkbox-circle-line text-success me-1"></i>` +
                 `${resp.dte.tipo_documento} #${resp.dte.folio} — ${resp.dte.fecha_emision} — Total ${clp(resp.dte.total)}` +
@@ -766,7 +943,13 @@
                     ? `<br><span class="text-warning"><i class="ri-error-warning-line me-1"></i>` +
                       `Vendida A CRÉDITO — ${esc(cp.motivos.join('; '))}</span>`
                     : '') +
-                tbkInfo
+                tbkInfo +
+                (mp && mp.es_mp
+                    ? `<br><span class="text-info"><i class="ri-smartphone-line me-1"></i>` +
+                      `Cobrada con Mercado Pago ${esc(mp.medio || '')} (${clp(mp.monto_mp)})` +
+                      (mp.numero_operacion ? ` · N° operación <strong>${esc(mp.numero_operacion)}</strong>` : '') +
+                      `</span>`
+                    : '')
             );
 
             const $lista = $('#dg-lista-productos').empty();
@@ -817,6 +1000,9 @@
             } else if (resp.receptor_actual && !$('#dg-cliente-rut').val().trim()) {
                 $('#dg-cliente-rut').val(resp.receptor_actual.rut);
                 $('#dg-cliente-nombre').val(resp.receptor_actual.nombre);
+                if (!$('#dg-cliente-email').val().trim()) {
+                    $('#dg-cliente-email').val(resp.receptor_actual.email || '');
+                }
             }
 
             // Cobro anulado por la máquina: se queda en el paso 1 (el backend
@@ -983,7 +1169,9 @@
             `<div class="mb-1"><strong>Documento:</strong> ${esc(d.tipo_documento)} #${esc(d.folio)}</div>` +
             filas +
             `<div class="mt-1"><strong>Total NC:</strong> <span class="dg-total-nc">${clp(dgTotalNC())}</span></div>` +
-            `<div class="mt-1"><strong>Cliente:</strong> ${esc($('#dg-cliente-nombre').val())} (${esc($('#dg-cliente-rut').val())})</div>`
+            `<div class="mt-1"><strong>Cliente:</strong> ${esc($('#dg-cliente-nombre').val())} (${esc($('#dg-cliente-rut').val())})</div>` +
+            ($('#dg-cliente-email').val().trim()
+                ? `<div><strong>Correo:</strong> ${esc($('#dg-cliente-email').val().trim())}</div>` : '')
         );
     }
 
@@ -1009,6 +1197,7 @@
             tipo_cuenta: esTransf ? $('#dg-tipo-cuenta').val() : '',
             numero_cuenta: esTransf ? $('#dg-num-cuenta').val().trim() : '',
             cuenta_titular_rut: titularRut,
+            numero_operacion_mp: ($('#dg-metodo-mp').is(':checked') && dgEsDirecta()) ? $('#dg-mp-operacion').val().trim() : '',
         };
 
         // Última confirmación del caso Transbank: que quien crea la solicitud
@@ -1017,32 +1206,51 @@
             ? `<br><small class="text-warning"><i class="ri-bank-card-line me-1"></i>Cobro con tarjeta ` +
               `Transbank: confirma que NO es un error de cobro (eso se anula en la máquina, no aquí).</small>`
             : '';
+        const directa = dgEsDirecta();
+        const metodoTxt = $('input[name="dg-metodo"]:checked').next('label').text().trim();
+        const totalCliente = `Total: <strong>${clp(dgTotalNC())}</strong> a nombre de <strong>${esc($('#dg-cliente-nombre').val())}</strong>.` +
+            (directa && $('#dg-metodo-efectivo').is(':checked')
+                ? `<br><span class="text-warning">Entregue <strong>${clp(dgTotalNC())} en efectivo</strong> al cliente desde la caja.</span>`
+                : '') +
+            (directa && $('#dg-metodo-mp').is(':checked')
+                ? `<br><span class="text-info">Confirme que devolvió <strong>${clp(dgTotalNC())}</strong> desde Mercado Pago ` +
+                  `(N° de operación ${esc($('#dg-mp-operacion').val().trim())}).</span>`
+                : '');
         Swal.fire({
-            title: 'Crear solicitud de devolución',
-            html: `Quedará <strong>pendiente de aprobación</strong> por un administrador.<br>` +
-                  `Total: <strong>${clp(dgTotalNC())}</strong> a nombre de <strong>${$('#dg-cliente-nombre').val()}</strong>.` +
-                  tbkConfirm,
+            title: directa ? 'Devolver dinero ahora' : 'Crear solicitud de devolución',
+            html: (directa
+                    ? `Se generará la <strong>Nota de Crédito ahora</strong> por <strong>${esc(metodoTxt)}</strong>, imputada hoy.<br>`
+                    : `Quedará <strong>pendiente de aprobación</strong>.<br>`) +
+                  totalCliente + tbkConfirm,
             icon: 'question', showCancelButton: true, confirmButtonColor: '#00A080',
-            confirmButtonText: '<i class="ri-check-line me-1"></i> Crear', cancelButtonText: 'Cancelar',
+            confirmButtonText: directa ? '<i class="ri-check-double-line me-1"></i> Devolver' : '<i class="ri-check-line me-1"></i> Crear',
+            cancelButtonText: 'Cancelar',
         }).then(function (result) {
             if (!result.isConfirmed) { return; }
             $('#dg-btn-confirmar').prop('disabled', true);
+            const payload = Object.assign({
+                folio_dte: dgWizard.dte.folio, productos: productos,
+                cliente_id: window._dgClienteId || null,
+                rut: $('#dg-cliente-rut').val().trim(), nombre: $('#dg-cliente-nombre').val().trim(),
+                email: $('#dg-cliente-email').val().trim(), telefono: $('#dg-cliente-telefono').val().trim(),
+                giro: $('#dg-cliente-giro').val().trim(), direccion: $('#dg-cliente-direccion').val().trim(),
+                comuna: $('#dg-cliente-comuna').val().trim(), ciudad: $('#dg-cliente-ciudad').val().trim(),
+                motivo: $('#dg-motivo').val().trim(), requerimiento_id: dgWizard.requerimientoId || null,
+            }, datosTransf);
+            if (directa) {
+                payload.directa = true;
+                payload.codigo_autorizacion = $('#dg-codigo-autorizacion').val();
+            }
             $.ajax({
                 url: URLS_DG.generar, method: 'POST', contentType: 'application/json',
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
-                data: JSON.stringify(Object.assign({
-                    folio_dte: dgWizard.dte.folio, productos: productos,
-                    cliente_id: window._dgClienteId || null,
-                    rut: $('#dg-cliente-rut').val().trim(), nombre: $('#dg-cliente-nombre').val().trim(),
-                    email: $('#dg-cliente-email').val().trim(), telefono: $('#dg-cliente-telefono').val().trim(),
-                    giro: $('#dg-cliente-giro').val().trim(), direccion: $('#dg-cliente-direccion').val().trim(),
-                    comuna: $('#dg-cliente-comuna').val().trim(), ciudad: $('#dg-cliente-ciudad').val().trim(),
-                    motivo: $('#dg-motivo').val().trim(), requerimiento_id: dgWizard.requerimientoId || null,
-                }, datosTransf)),
+                data: JSON.stringify(payload),
                 success: function (resp) {
                     $('#dg-btn-confirmar').prop('disabled', false);
-                    if (resp.success) {
-                        bootstrap.Modal.getInstance(document.getElementById('modalNuevaDevolucion'))?.hide();
+                    if (!resp.success) { Swal.fire({ icon: 'error', title: 'Error', text: resp.error }); return; }
+                    bootstrap.Modal.getInstance(document.getElementById('modalNuevaDevolucion'))?.hide();
+                    if (resp.data.directa) { dgMostrarResultadoDirecta(resp.data); }
+                    else {
                         Swal.fire({
                             icon: 'success', title: 'Solicitud creada',
                             html: `<p><strong>${esc(resp.data.numero_operacion)}</strong></p>` +
@@ -1054,16 +1262,49 @@
                         }).then(function (r) {
                             if (r.isConfirmed) { imprimirDevolucionGarantia(resp.data.devolucion_id); }
                         });
-                        cargarDevoluciones();
-                    } else {
-                        Swal.fire({ icon: 'error', title: 'Error', text: resp.error });
                     }
+                    cargarDevoluciones();
                 },
                 error: function (xhr) {
                     $('#dg-btn-confirmar').prop('disabled', false);
-                    Swal.fire({ icon: 'error', title: 'Error', text: errMsg(xhr) });
+                    const r = xhr.responseJSON || {};
+                    // Código rechazado: el wizard queda abierto en el paso 4 con
+                    // el campo limpio (nada se creó y el código no se quemó).
+                    if (directa && r.code && (/^AUTH_CODE/.test(r.code) || r.code === 'INVALID_AUTH_CODE' || r.code === 'AUTHORIZER_CANNOT_APPROVE')) {
+                        $('#dg-codigo-autorizacion').val('').trigger('focus');
+                        let msg = r.error || 'Código de autorización inválido';
+                        if (r.intentos_restantes != null) { msg += ` (intentos restantes: ${r.intentos_restantes})`; }
+                        dgMostrarErrorCodigo(msg);
+                        return;
+                    }
+                    Swal.fire({ icon: 'error', title: directa ? 'No se pudo devolver' : 'Error', text: errMsg(xhr) });
                 },
             });
+        });
+    }
+
+    function dgMostrarResultadoDirecta(d) {
+        const warns = d.txt_warnings || [];
+        const avisos = d.avisos_caja || [];
+        Swal.fire({
+            icon: (warns.length || avisos.length) ? 'warning' : 'success',
+            title: 'Devolución realizada',
+            html: `<p class="mb-1"><strong>${esc(d.numero_operacion)}</strong> — ${clp(d.monto_total)}</p>` +
+                  `<p class="mb-1">NC #${esc(d.nc_numero)} · ${esc(d.metodo_devolucion)}` +
+                  (d.numero_operacion_mp ? ` · N° operación MP <strong>${esc(d.numero_operacion_mp)}</strong>` : '') + `</p>` +
+                  `<p class="small text-muted mb-2">Autorizó ${esc(d.autorizado_por)}. ${esc(d.descripcion_caja || '')}</p>` +
+                  `<a href="${d.nc_txt_url}" class="btn btn-sm btn-outline-primary"><i class="ri-download-line me-1"></i> Descargar TXT Acepta</a>` +
+                  avisos.map(a => `<div class="alert alert-warning text-start small mt-2 mb-0"><i class="ri-alert-line me-1"></i>${esc(a)}</div>`).join('') +
+                  (warns.length
+                      ? `<div class="alert alert-warning text-start small mt-2 mb-0">` +
+                        `<strong>Revisa el TXT antes de subirlo a Acepta:</strong><ul class="mb-0 ps-3">` +
+                        warns.map(w => `<li>${esc(w)}</li>`).join('') + `</ul></div>`
+                      : ''),
+            showCancelButton: true, confirmButtonColor: '#0066FF',
+            confirmButtonText: '<i class="ri-printer-line me-1"></i> Imprimir comprobante',
+            cancelButtonText: 'Cerrar',
+        }).then(function (r) {
+            if (r.isConfirmed) { imprimirDevolucionGarantia(d.devolucion_id); }
         });
     }
 
@@ -1105,7 +1346,11 @@
                         <td>${esc(d.receptor_nombre)}<br><small class="text-muted">${esc(d.receptor_rut)}</small></td>
                         <td>${clp(d.monto_total)}</td>
                         <td>${d.nc_numero ? '#' + esc(d.nc_numero) : '-'}</td>
-                        <td><span class="status-badge status-${esc(d.estado.toLowerCase())}">${esc(d.estado_display)}</span></td>
+                        <td>
+                            <span class="status-badge status-${esc(d.estado.toLowerCase())}">${esc(d.estado_display)}</span>
+                            ${d.directa ? '<span class="badge-directa ms-1" title="Devuelta en el momento con código de Administrador/Maestro"><i class="ri-flashlight-line"></i> Directa</span>' : ''}
+                            ${d.estado === 'NC_GENERADA' && d.autorizado_por ? `<br><small class="text-muted">Aprobó ${esc(d.autorizado_por)}</small>` : ''}
+                        </td>
                         <td>${esc(d.solicitado_por)}</td>
                         <td class="col-sucursal-dg ${verSucursal ? '' : 'd-none'}">${esc(d.sucursal || '')}</td>
                         <td>${esc(d.fecha)}</td>
@@ -1151,6 +1396,7 @@
 
     // ===================== APROBACIÓN =====================
     let aprActual = null;
+    let aprPagoMP = null;  // pago_mercadopago del documento de la solicitud abierta
     function abrirModalAprobacion(id) {
         if (!PUEDE_APROBAR) { return; }
         aprActual = id;
@@ -1158,8 +1404,12 @@
         $('#apr-resumen').html('Cargando...');
         $('#apr-observaciones').val('');
         // Transferencia es el default; el backend puede sugerir REBAJA_CREDITO
-        // si el documento se vendió a crédito (se aplica al llegar el detalle).
+        // (venta a crédito) o MERCADO_PAGO (cobrada con MP) al llegar el detalle.
         $('#apr-metodo').val('TRANSFERENCIA_BANCARIA');
+        $('#apr-metodo option[value="MERCADO_PAGO"]').prop('hidden', true).prop('disabled', true);
+        $('#apr-mp-operacion').val('');
+        $('#apr-mp-info').empty();
+        aprPagoMP = null;
         const hoy = fechaLocalISO();
         $('#apr-fecha').val(hoy).attr('max', hoy);
         new bootstrap.Modal(document.getElementById('modalAprobarDevolucion')).show();
@@ -1209,23 +1459,40 @@
                     `corresponde anular en la máquina (no esta NC): rechaza la solicitud. ` +
                     `Aprueba solo si es una garantía real.</div>`;
             }
+            // Cobro con Mercado Pago: habilita la opción MP y prellena el N°.
+            const mp = d.pago_mercadopago || {};
+            aprPagoMP = mp;
+            const hayMP = !!(mp.es_mp && Number(mp.disponible) > 0);
+            $('#apr-metodo option[value="MERCADO_PAGO"]').prop('hidden', !hayMP).prop('disabled', !hayMP);
+            $('#apr-mp-operacion').val(hayMP ? (mp.numero_operacion || '') : '');
+            const mpHtml = mp.es_mp
+                ? `<div class="alert alert-info py-1 px-2 small mt-2 mb-0"><i class="ri-smartphone-line me-1"></i>` +
+                  `Cobrada con <strong>Mercado Pago</strong> ${esc(mp.medio || '')} (${clp(mp.monto_mp)}` +
+                  (mp.monto_devuelto ? `, ya devuelto ${clp(mp.monto_devuelto)}` : '') + `)` +
+                  (mp.numero_operacion ? ` · N° operación <strong>${esc(mp.numero_operacion)}</strong>` : '') +
+                  `. Si se devuelve por Mercado Pago, hazlo desde la app o el panel de MP y regístralo aquí.</div>`
+                : '';
             $('#apr-resumen').html(
                 `<div class="mb-1"><strong>Solicitante:</strong> ${esc(d.solicitado_por)} · ${esc(d.fecha_solicitud)}${d.sucursal ? ' · ' + esc(d.sucursal) : ''}</div>` +
                 `<div class="mb-1"><strong>Documento:</strong> ${esc(d.dte.tipo)} #${esc(d.dte.folio)} (${esc(d.dte.fecha)}) — Total ${clp(d.dte.total)}</div>` +
-                `<div class="mb-1"><strong>Cliente:</strong> ${esc(d.receptor.nombre)} (${esc(d.receptor.rut)})</div>` +
+                `<div class="mb-1"><strong>Cliente:</strong> ${esc(d.receptor.nombre)} (${esc(d.receptor.rut)})` +
+                (d.receptor.email ? ` · ${esc(d.receptor.email)}` : '') + `</div>` +
                 `<div class="mb-1"><strong>Motivo:</strong> ${esc(d.motivo)}</div>` +
                 `<hr class="my-1" style="border-color:#2a3045;">` + lineas +
                 `<div class="mt-1"><strong>Total NC:</strong> ${clp(d.monto_total)}</div>` +
-                metodoHtml + credHtml + tbkHtml +
+                metodoHtml + credHtml + tbkHtml + mpHtml +
                 (d.hay_conflicto ? `<div class="alert alert-danger py-1 px-2 small mt-2 mb-0">Alguna línea ya no tiene disponibilidad suficiente. Si apruebas puede fallar; considera rechazar.</div>` : '')
             );
             // Preselección: manda la sugerencia del backend (REBAJA_CREDITO si
             // la venta fue a crédito). Solo si NO es a crédito se respeta lo
-            // que pidió el cliente — pedir efectivo no puede imponer efectivo.
+            // que pidió el cliente — pedir efectivo no puede imponer efectivo;
+            // sin pedido explícito, la sugerencia (MERCADO_PAGO si se cobró con MP).
             if (d.metodo_sugerido === 'REBAJA_CREDITO') {
                 $('#apr-metodo').val('REBAJA_CREDITO');
-            } else if (d.metodo_solicitado) {
+            } else if (d.metodo_solicitado && (d.metodo_solicitado !== 'MERCADO_PAGO' || hayMP)) {
                 $('#apr-metodo').val(d.metodo_solicitado);
+            } else if (d.metodo_sugerido) {
+                $('#apr-metodo').val(d.metodo_sugerido);
             }
             aprActualizarImpacto();
         }).fail(function (xhr) {
@@ -1238,6 +1505,14 @@
         const metodo = $('#apr-metodo').val();
         const afecta = metodo !== 'NO_AFECTA_CAJA';
         $('#apr-fecha-wrap').toggleClass('d-none', !afecta);
+        const esMP = metodo === 'MERCADO_PAGO';
+        $('#apr-mp-wrap').toggleClass('d-none', !esMP);
+        if (esMP) {
+            const mp = aprPagoMP || {};
+            $('#apr-mp-info').html(mp.numero_operacion
+                ? `Prellenado con el N° del cobro original. Cámbialo si Mercado Pago te dio otro para la devolución.`
+                : `El sistema no tiene el N° de este cobro: cópialo desde la app o el panel de Mercado Pago (o el voucher de la Point).`);
+        }
         // Mientras se recalcula, el botón queda bloqueado: si el request falla,
         // no debe quedar habilitado con el preview de otra combinación.
         $('#apr-impacto').text('Calculando...');
@@ -1264,9 +1539,17 @@
         if (!aprActual || !PUEDE_EMITIR_NC) { return; }
         const metodo = $('#apr-metodo').val();
         const fecha = metodo !== 'NO_AFECTA_CAJA' ? $('#apr-fecha').val() : null;
+        const numeroMP = metodo === 'MERCADO_PAGO' ? $('#apr-mp-operacion').val().trim() : '';
+        if (metodo === 'MERCADO_PAGO' && !numeroMP) {
+            Swal.fire({ icon: 'info', title: 'Falta el N° de operación',
+                text: 'Ingresa el N° de operación de Mercado Pago de la devolución: queda en la NC para ubicarla.' });
+            $('#apr-mp-operacion').trigger('focus');
+            return;
+        }
         Swal.fire({
             title: 'Aprobar y generar NC',
-            html: `Se generará la Nota de Crédito y el TXT Acepta.<br><small class="text-muted">${$('#apr-impacto').text()}</small>`,
+            html: `Se generará la Nota de Crédito y el TXT Acepta.<br><small class="text-muted">${esc($('#apr-impacto').text())}</small>` +
+                  (numeroMP ? `<br><small>N° de operación Mercado Pago: <strong>${esc(numeroMP)}</strong></small>` : ''),
             icon: 'question', showCancelButton: true, confirmButtonColor: '#00A080',
             confirmButtonText: 'Aprobar', cancelButtonText: 'Cancelar',
         }).then(function (r) {
@@ -1275,7 +1558,7 @@
             $.ajax({
                 url: urlCon(URLS_DG.aprobar, aprActual), method: 'POST', contentType: 'application/json',
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
-                data: JSON.stringify({ metodo_devolucion: metodo, fecha_imputacion: fecha, observaciones: $('#apr-observaciones').val().trim() }),
+                data: JSON.stringify({ metodo_devolucion: metodo, fecha_imputacion: fecha, observaciones: $('#apr-observaciones').val().trim(), numero_operacion_mp: numeroMP }),
                 success: function (resp) {
                     $('#apr-btn-aprobar').prop('disabled', false);
                     if (resp.success) {

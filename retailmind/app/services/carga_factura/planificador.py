@@ -99,6 +99,14 @@ def ingresado_contra_dte(dte):
     return {'articulo': por_articulo, 'color': por_color}
 
 
+def ingreso_por_clave(ingresado, clave):
+    """{bodega: unidades} ya ingresadas para la clave de una línea
+    (('articulo', art) o ('color', art, COLOR)), sobre ingresado_contra_dte()."""
+    if clave[0] == 'color':
+        return ingresado['color'].get((clave[1], clave[2]), {})
+    return ingresado['articulo'].get(clave[1], {})
+
+
 class PlanificadorCarga:
     """Planifica facturas con las opciones de la carga.
 
@@ -449,9 +457,15 @@ class PlanificadorCarga:
         color_ingreso = str(getattr(color, 'valor', '') or '').strip().upper()
         if (perfil.identidad_color and color_ingreso
                 and color_ingreso != str(perfil.color_defecto).upper()):
-            ya = ingresado['color'].get((articulo, color_ingreso), {})
+            plan['ingreso_clave'] = ('color', articulo, color_ingreso)
         else:
-            ya = ingresado['articulo'].get(articulo, {})
+            plan['ingreso_clave'] = ('articulo', articulo)
+        ya = ingreso_por_clave(ingresado, plan['ingreso_clave'])
+        # Lo que había entrado al planificar: el aplicador lo vuelve a medir
+        # bajo lock justo antes de cargar la línea (dos cargas simultáneas de
+        # la misma factura no deben ingresar dos veces).
+        plan['ingreso_previo'] = sum(ya.values())
+        plan['forzar'] = forzar
         if ya:
             total = sum(ya.values())
             detalle = ', '.join(f'{a}: {u} u' for a, u in sorted(ya.items()))

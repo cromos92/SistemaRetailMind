@@ -7,26 +7,33 @@ from datetime import timedelta
 from collections import defaultdict
 
 from django.contrib.auth.decorators import login_required
+from django.db import connection
 from django.db.models import (
     Sum, Count, Avg, Q, F, Case, When, Value,
     IntegerField, CharField, DecimalField,
+    OuterRef, Subquery, ExpressionWrapper, DurationField,
 )
 from django.db.models.functions import (
-    TruncMonth, TruncDate, Coalesce, ExtractMonth, ExtractYear,
+    TruncMonth, TruncDate, Coalesce, ExtractMonth, ExtractYear, Abs, Upper,
+    Greatest, Least,
 )
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.http import require_GET
 
+from .constants_kardex import CONCEPTOS_VENTA
+from .utils_estado_pago import (
+    ESTADO_PAGO_PARCIAL, ESTADO_PAGO_PENDIENTE, q_estado_pago_pendiente,
+)
 from .models import (
-    Dte, Dte_Productos, Dte_Incidencia,
+    Dte, Dte_Productos, Dte_Incidencia, Dte_Detalle_Pago,
     ArqueoCaja,
     Requerimiento,
     Cliente, Proveedor, ContactoEmpresa, Empresa,
     Sucursal,
     Productos_Recepcionados,
-    Movimientos_Producto,
+    Movimientos_Producto, Producto_Talla,
 )
 
 logger = logging.getLogger('app')
@@ -92,14 +99,115 @@ def api_dashboard_documentos(request):
 
     periodo_qs = base_qs.filter(fecha_emision__range=[inicio, fin])
 
-    total_dtes = periodo_qs.count()
-    monto_total = periodo_qs.aggregate(
-        total=Coalesce(Sum('monto_con_iva'), 0, output_field=DecimalField())
-    )['total']
+    # Un solo aggregate con conteos condicionales: antes eran 16 COUNT/SUM
+    # separados sobre el mismo período (un viaje a la base por cada KPI).
+    hoy = timezone.localdate()
+    # Con saldo por pagar/cobrar, sin distinguir mayúsculas: PENDIENTE /
+    # 'Pendiente' y los abonados PARCIAL / 'Parcial' / 'Abonado' (ver
+    # utils_estado_pago). Antes sólo PENDIENTE: una factura con un abono salía
+    # ENTERA de la deuda y de las vencidas. Los abonados cuentan por su SALDO
+    # (se les descuenta lo pagado tras el aggregate); los PENDIENTE, por su monto.
+    pend = q_estado_pago_pendiente()
+    abonado_q = pend & ~Q(estado_pago__iexact=ESTADO_PAGO_PENDIENTE)
+
+    # NOTAS DE CRÉDITO CON SIGNO. `monto_con_iva` se guarda en positivo también
+    # para las NC, salvo 6 NC históricas migradas (2020 y jun-2022, emisor PAO)
+    # guardadas en negativo: por eso se usa Abs(), para que esas también resten
+    # (con -F() pasaban a SUMAR). Para toda NC positiva Abs() es idéntico.
+    # Sin el signo, "Monto Facturado" y todos
+    # los listados por monto (por tipo, por emisor, por sucursal, evolución,
+    # proveedores) las SUMABAN como si fueran facturación: una NC de $8,7M
+    # aparecía como $8,7M facturados. `nc_q` es la misma condición del conteo
+    # `notas_credito`; `monto_signed` es el monto con signo (NC resta) y es lo
+    # que agregan los listados. Los KPIs de deuda (por pagar / vencido) cuentan
+    # SOLO facturas: las NC de proveedor quedan fuera (ver nota en el aggregate).
+    nc_q = Q(tipo_documento='NOTA DE CREDITO') | Q(es_nota_credito=True)
+    monto_signed = Case(
+        When(nc_q, then=-Abs(F('monto_con_iva'))),
+        default=F('monto_con_iva'),
+        output_field=DecimalField(),
+    )
+    # Universos de deuda (se combinan con `pend`). Compartidos por el aggregate
+    # y por el descuento de abonos, para que ambos midan lo mismo.
+    deuda_compra_q = Q(tipo_transaccion='COMPRA') & ~nc_q
+    vencido_q = deuda_compra_q & Q(fecha_vencimiento__lt=hoy)
+    cobrar_q = Q(tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'], diasCredito__gt=0)
+    resumen = periodo_qs.aggregate(
+        total_dtes=Count('id'),
+        # Bruto (sin NC) y NC por separado; el neto se deriva abajo.
+        monto_bruto=Coalesce(Sum('monto_con_iva', filter=~nc_q), 0, output_field=DecimalField()),
+        monto_nc=Coalesce(Sum(Abs('monto_con_iva'), filter=nc_q), 0, output_field=DecimalField()),
+        # Recepción INTERNA cerrada (estado_dte del sistema), no el acuse del
+        # SII: el dashboard lo rotula "% Recepcionados".
+        aceptados=Count('id', filter=Q(estado_dte__in=['ACEPTADO', 'RECEPCIONADO_COMPLETO'])),
+        # Facturas y boletas incluyen sus variantes: 'FACTURA EXENTA' (300 docs en
+        # prod) y 'BOLETA PAPEL' (140.491 docs, el 21% de las boletas) quedaban
+        # fuera del conteo, así que Facturas + Boletas nunca sumaban el total.
+        facturas=Count('id', filter=Q(tipo_documento__in=['FACTURA ELECTRONICA', 'FACTURA EXENTA'])),
+        # Capta también las NC emitidas con otro tipo_documento (p. ej. 'AJUSTE TRASPASO').
+        notas_credito=Count('id', filter=Q(tipo_documento='NOTA DE CREDITO') | Q(es_nota_credito=True)),
+        guias=Count('id', filter=Q(tipo_documento='GUIA')),
+        boletas=Count('id', filter=Q(tipo_documento__in=['BOLETA ELECTRONICA', 'BOLETA PAPEL'])),
+        pendientes_recepcion=Count('id', filter=(Q(receptor_id=emp_id, estado_dte='EMITIDO')
+                                                 if emp_id else Q(pk__in=[]))),
+        # DEUDA: por pagar (COMPRA) separada de por cobrar (VENTA a crédito),
+        # con __iexact porque compras escribe 'Pendiente' en formato título.
+        # Las boletas del POS nacen PENDIENTE y se cobran en caja: no son deuda.
+        # Las NC de proveedor (tipo_transaccion COMPRA) quedan 'Pendiente' para
+        # siempre y nacen vencidas (fecha_vencimiento = fecha_emision): sumarlas
+        # inflaba la deuda con plata A FAVOR y las contaba como compras vencidas.
+        # Se EXCLUYEN (no se restan): la NC que ya se aplicó como pago a una
+        # factura PAGADO se restaría dos veces y la deuda quedaría corta.
+        monto_por_pagar=Coalesce(Sum('monto_con_iva', filter=pend & deuda_compra_q),
+                                 0, output_field=DecimalField()),
+        monto_por_cobrar=Coalesce(Sum('monto_con_iva', filter=pend & cobrar_q),
+                                  0, output_field=DecimalField()),
+        # VENCIDOS: `estado_pago='VENCIDO'` nunca se escribe (0 filas en prod);
+        # se mide por la fecha de vencimiento real de lo que sigue impago.
+        dtes_vencidos=Count('id', filter=pend & vencido_q),
+        monto_vencido=Coalesce(Sum('monto_con_iva', filter=pend & vencido_q),
+                               0, output_field=DecimalField()),
+        # Abonados dentro de algún universo de deuda: sólo si hay alguno se
+        # hace la consulta de pagos para descontarlos.
+        abonados=Count('id', filter=abonado_q & (deuda_compra_q | cobrar_q)),
+        dias_credito_avg=Coalesce(Avg('diasCredito'), 0, output_field=DecimalField()),
+    )
+    # Los abonados entraron arriba por el monto del documento: se les descuenta
+    # lo ya pagado (Dte_Detalle_Pago: efectivo, NC aplicadas, compensaciones),
+    # topado entre 0 y el monto, para que sumen su SALDO, como en Gestión de
+    # DTE de Compras. Las PENDIENTE no se tocan (misma cifra que antes).
+    pagado_abonos = {'por_pagar': 0, 'por_cobrar': 0, 'vencido': 0}
+    if resumen['abonados']:
+        pagos_dte = (
+            Dte_Detalle_Pago.objects.filter(dte_id=OuterRef('pk'))
+            .order_by().values('dte_id').annotate(t=Sum('monto')).values('t')
+        )
+        pagado_abonos = periodo_qs.filter(abonado_q).annotate(
+            pagado_doc=Greatest(
+                Least(
+                    Coalesce(Subquery(pagos_dte, output_field=DecimalField()), 0,
+                             output_field=DecimalField()),
+                    F('monto_con_iva'),
+                    output_field=DecimalField(),
+                ),
+                Value(0),
+                output_field=DecimalField(),
+            ),
+        ).aggregate(
+            por_pagar=Coalesce(Sum('pagado_doc', filter=deuda_compra_q), 0, output_field=DecimalField()),
+            por_cobrar=Coalesce(Sum('pagado_doc', filter=cobrar_q), 0, output_field=DecimalField()),
+            vencido=Coalesce(Sum('pagado_doc', filter=vencido_q), 0, output_field=DecimalField()),
+        )
+    total_dtes = resumen['total_dtes']
+    monto_bruto = resumen['monto_bruto']
+    monto_nc = resumen['monto_nc']
+    # Se mantiene la clave histórica `monto_total` del payload, ahora NETA:
+    # facturado bruto menos notas de crédito.
+    monto_total = monto_bruto - monto_nc
 
     por_tipo = list(
         periodo_qs.values('tipo_documento')
-        .annotate(cantidad=Count('id'), monto=Sum('monto_con_iva'))
+        .annotate(cantidad=Count('id'), monto=Sum(monto_signed))
         .order_by('-cantidad')
     )
     for t in por_tipo:
@@ -111,32 +219,16 @@ def api_dashboard_documentos(request):
         .order_by('-cantidad')
     )
 
-    aceptados = periodo_qs.filter(
-        estado_dte__in=['ACEPTADO', 'RECEPCIONADO_COMPLETO']
-    ).count()
+    aceptados = resumen['aceptados']
     pct_aceptados = round((aceptados / total_dtes * 100) if total_dtes else 0, 1)
 
-    # Facturas y boletas incluyen sus variantes: 'FACTURA EXENTA' (300 docs en
-    # prod) y 'BOLETA PAPEL' (140.491 docs, el 21% de las boletas) quedaban fuera
-    # del conteo, así que Facturas + Boletas nunca sumaban el total.
-    facturas = periodo_qs.filter(
-        tipo_documento__in=['FACTURA ELECTRONICA', 'FACTURA EXENTA']
-    ).count()
-    # Capta también las NC emitidas con otro tipo_documento (p. ej. 'AJUSTE TRASPASO').
-    notas_credito = periodo_qs.filter(
-        Q(tipo_documento='NOTA DE CREDITO') | Q(es_nota_credito=True)
-    ).count()
-    guias = periodo_qs.filter(tipo_documento='GUIA').count()
-    boletas = periodo_qs.filter(
-        tipo_documento__in=['BOLETA ELECTRONICA', 'BOLETA PAPEL']
-    ).count()
+    facturas = resumen['facturas']
+    notas_credito = resumen['notas_credito']
+    guias = resumen['guias']
+    boletas = resumen['boletas']
 
     # --- Nuevos KPIs retail ---
-    pendientes_recepcion = 0
-    if emp_id:
-        pendientes_recepcion = periodo_qs.filter(
-            receptor_id=emp_id, estado_dte='EMITIDO'
-        ).count()
+    pendientes_recepcion = resumen['pendientes_recepcion']
 
     # DEUDA: antes era un solo número que sumaba `estado_pago='PENDIENTE'` sobre
     # TODOS los tipos de transacción. Eso mezclaba cuentas por pagar con cuentas
@@ -146,22 +238,12 @@ def api_dashboard_documentos(request):
     # Además `=` es case-sensitive en Postgres y el módulo de compras escribe
     # 'Pendiente' en formato título: 277 documentos por $316,5M quedaban fuera.
     # Ahora se separa por pagar (COMPRA) de por cobrar (VENTA a crédito) y se
-    # compara con __iexact.
-    deuda_pendiente_qs = periodo_qs.filter(estado_pago__iexact='PENDIENTE')
-
-    monto_por_pagar = float(deuda_pendiente_qs.filter(
-        tipo_transaccion='COMPRA'
-    ).aggregate(
-        total=Coalesce(Sum('monto_con_iva'), 0, output_field=DecimalField())
-    )['total'])
+    # compara con __iexact. Los abonados (PARCIAL) suman sólo su saldo.
+    monto_por_pagar = float(resumen['monto_por_pagar'] - pagado_abonos['por_pagar'])
 
     # Solo las ventas a crédito son cobrables: una boleta al público con
     # diasCredito=0 ya se pagó en caja.
-    monto_por_cobrar = float(deuda_pendiente_qs.filter(
-        tipo_transaccion__in=['VENTA', 'VENTA_PUBLICO'], diasCredito__gt=0
-    ).aggregate(
-        total=Coalesce(Sum('monto_con_iva'), 0, output_field=DecimalField())
-    )['total'])
+    monto_por_cobrar = float(resumen['monto_por_cobrar'] - pagado_abonos['por_cobrar'])
 
     # Se mantiene la clave histórica del payload, ahora con el significado
     # correcto: deuda a proveedores.
@@ -170,14 +252,8 @@ def api_dashboard_documentos(request):
     # VENCIDOS: `estado_pago='VENCIDO'` nunca se escribe en el sistema (0 filas
     # en prod), así que el indicador mostraba 0 para siempre. Se mide por la
     # fecha de vencimiento real de lo que sigue impago.
-    dtes_vencidos = deuda_pendiente_qs.filter(
-        tipo_transaccion='COMPRA', fecha_vencimiento__lt=timezone.localdate()
-    ).count()
-    monto_vencido = float(deuda_pendiente_qs.filter(
-        tipo_transaccion='COMPRA', fecha_vencimiento__lt=timezone.localdate()
-    ).aggregate(
-        total=Coalesce(Sum('monto_con_iva'), 0, output_field=DecimalField())
-    )['total'])
+    dtes_vencidos = resumen['dtes_vencidos']
+    monto_vencido = float(resumen['monto_vencido'] - pagado_abonos['vencido'])
 
     incidencias_qs = Dte_Incidencia.objects.filter(
         dte__descartado=False,
@@ -191,19 +267,20 @@ def api_dashboard_documentos(request):
         incidencias_qs = incidencias_qs.filter(dte__sucursal_id=suc_id)
     incidencias_abiertas = incidencias_qs.count()
 
-    dias_credito_avg = periodo_qs.aggregate(
-        avg=Coalesce(Avg('diasCredito'), 0, output_field=DecimalField())
-    )['avg']
+    dias_credito_avg = resumen['dias_credito_avg']
     dias_credito_promedio = round(float(dias_credito_avg), 1)
 
-    ticket_promedio = round(float(monto_total) / total_dtes, 0) if total_dtes else 0
+    # Ticket promedio sobre los documentos que facturan (bruto / docs sin NC):
+    # con el neto y las NC en el denominador el promedio se hundía sin razón.
+    docs_sin_nc = total_dtes - notas_credito
+    ticket_promedio = round(float(monto_bruto) / docs_sin_nc, 0) if docs_sin_nc > 0 else 0
     tasa_nc = round((notas_credito / facturas * 100) if facturas else 0, 1)
 
     # --- Evolución mensual ---
     evolucion = list(
         periodo_qs.annotate(mes=TruncMonth('fecha_emision'))
         .values('mes')
-        .annotate(cantidad=Count('id'), monto=Sum('monto_con_iva'))
+        .annotate(cantidad=Count('id'), monto=Sum(monto_signed))
         .order_by('mes')
     )
     for e in evolucion:
@@ -212,34 +289,39 @@ def api_dashboard_documentos(request):
 
     top_emisores = list(
         periodo_qs.values('emisor__nombre')
-        .annotate(cantidad=Count('id'), monto=Sum('monto_con_iva'))
+        .annotate(cantidad=Count('id'), monto=Sum(monto_signed))
         .order_by('-monto')[:10]
     )
     for t in top_emisores:
         t['monto'] = float(t['monto'] or 0)
 
-    por_transaccion = list(
-        periodo_qs.values('tipo_transaccion')
-        .annotate(cantidad=Count('id'), monto=Sum('monto_con_iva'))
-        .order_by('-cantidad')
-    )
-    for t in por_transaccion:
-        t['monto'] = float(t['monto'] or 0)
+    # (La clave 'por_transaccion' se retiró el 2026-09-26 — pedido H2: la
+    # plantilla no la pintaba y costaba un GROUP BY por carga.)
 
     # --- Estado de pagos ---
+    # Agrupado sin distinguir mayúsculas: compras escribe 'Pendiente'/'Pagado'
+    # en formato título y la dona partía cada estado en dos porciones (una en
+    # gris). Se conserva la clave `estado_pago` del JSON. 'Abonado' (grafía
+    # vieja de registrarPagoDTE) es la misma porción que PARCIAL.
+    estado_pago_canon = Case(
+        When(estado_pago__iexact='ABONADO', then=Value(ESTADO_PAGO_PARCIAL)),
+        default=Upper('estado_pago'),
+        output_field=CharField(),
+    )
     por_estado_pago = list(
-        periodo_qs.values('estado_pago')
-        .annotate(cantidad=Count('id'), monto=Sum('monto_con_iva'))
+        periodo_qs.annotate(ep=estado_pago_canon).values('ep')
+        .annotate(cantidad=Count('id'), monto=Sum(monto_signed))
         .order_by('-cantidad')
     )
     for p in por_estado_pago:
+        p['estado_pago'] = p.pop('ep')
         p['monto'] = float(p['monto'] or 0)
 
     # --- Por sucursal ---
     por_sucursal = list(
         periodo_qs.filter(sucursal__isnull=False)
         .values('sucursal__alias')
-        .annotate(cantidad=Count('id'), monto=Sum('monto_con_iva'))
+        .annotate(cantidad=Count('id'), monto=Sum(monto_signed))
         .order_by('-cantidad')[:10]
     )
     for s in por_sucursal:
@@ -251,8 +333,12 @@ def api_dashboard_documentos(request):
         .values('emisor__nombre')
         .annotate(
             cantidad=Count('id'),
-            monto=Sum('monto_con_iva'),
-            pendientes=Count('id', filter=Q(estado_pago='PENDIENTE')),
+            monto=Sum(monto_signed),
+            # __iexact: compras escribe 'Pendiente' en formato título (ver
+            # nota en el aggregate de arriba); con '=' el "% pend." salía en 0.
+            # Incluye las abonadas (PARCIAL): siguen con saldo.
+            # Sin NC: una NC de proveedor no es una factura impaga.
+            pendientes=Count('id', filter=pend & ~nc_q),
         )
         .order_by('-monto')[:10]
     )
@@ -263,14 +349,26 @@ def api_dashboard_documentos(request):
         )
 
     # --- Evolución compras vs ventas mensual ---
+    # Las NC de proveedor traen tipo_transaccion COMPRA y netean la serie
+    # Compras; las NC emitidas traen NOTA_CREDITO / ANULACION / DEVOLUCION y
+    # salían como tres series sueltas con el código crudo. Se juntan en una
+    # sola serie 'NC_EMITIDA' (barra negativa aparte). No se netean contra
+    # Ventas a ciegas: NOTA_CREDITO incluye NC a empresas del propio grupo.
+    serie_tx = Case(
+        When(nc_q & Q(tipo_transaccion__in=['NOTA_CREDITO', 'ANULACION', 'DEVOLUCION']),
+             then=Value('NC_EMITIDA')),
+        default=F('tipo_transaccion'),
+        output_field=CharField(),
+    )
     evolucion_transaccion = list(
-        periodo_qs.annotate(mes=TruncMonth('fecha_emision'))
-        .values('mes', 'tipo_transaccion')
-        .annotate(cantidad=Count('id'), monto=Sum('monto_con_iva'))
+        periodo_qs.annotate(mes=TruncMonth('fecha_emision'), serie_tx=serie_tx)
+        .values('mes', 'serie_tx')
+        .annotate(cantidad=Count('id'), monto=Sum(monto_signed))
         .order_by('mes')
     )
     for e in evolucion_transaccion:
         e['mes'] = e['mes'].strftime('%Y-%m') if e['mes'] else ''
+        e['tipo_transaccion'] = e.pop('serie_tx')
         e['monto'] = float(e['monto'] or 0)
 
     # --- Flujo Despacho/Recepción (pipeline traspasos) ---
@@ -317,12 +415,18 @@ def api_dashboard_documentos(request):
         'success': True,
         'kpis': {
             'total_dtes': total_dtes,
+            # monto_total = NETO (bruto − NC). Bruto y NC van aparte para mostrarlos.
             'monto_total': float(monto_total),
+            'monto_bruto': float(monto_bruto),
+            'monto_nc': float(monto_nc),
             'facturas': facturas,
             'notas_credito': notas_credito,
             'guias': guias,
             'boletas': boletas,
+            # Recepción interna cerrada; se conserva la clave histórica y se
+            # publica también con el nombre de lo que mide.
             'pct_aceptados': pct_aceptados,
+            'pct_recepcionados': pct_aceptados,
             'variacion_mes': variacion,
             'pendientes_recepcion': pendientes_recepcion,
             'monto_pendiente_pago': monto_pendiente_pago,
@@ -341,7 +445,6 @@ def api_dashboard_documentos(request):
         'evolucion': evolucion,
         'evolucion_transaccion': evolucion_transaccion,
         'top_emisores': top_emisores,
-        'por_transaccion': por_transaccion,
         'por_sucursal': por_sucursal,
         'top_proveedores': top_proveedores,
         'flujo': flujo,
@@ -759,6 +862,98 @@ def api_despachos_flujo(request):
     })
 
 
+def _eficacia_despacho_por_tienda(inicio, fin, emp_id=None, suc_id=None, hoy=None):
+    """Eficacia de despacho por tienda destino: de las unidades despachadas en
+    [inicio, fin] a cada tienda desde un CD (TRASPASO_SALIDA COMPLETADO con
+    destino y origen CD: misma pierna que cuenta `api_despachos_flujo`),
+    cuántas se VENDIERON en esa tienda dentro de los 30 días siguientes.
+
+    Alcance: con sucursal activa se cuentan los despachos que ELLA envió o
+    recibió; `api_despachos_flujo` (zona superior) cuenta por los CD de la
+    empresa, así que los totales de ambas zonas no tienen por qué coincidir.
+
+    Ventana abierta: las unidades despachadas hace menos de 30 días (respecto
+    de `hoy`) todavía pueden venderse; se informan aparte
+    (`uds_ventana_abierta`) para rotular la eficacia como PARCIAL en vez de
+    mostrarla como un fracaso. La cifra de eficacia no se altera.
+
+    No hay vínculo unidad-a-unidad despacho→venta en el kardex, así que es un
+    PROXY al grano (tienda, sku), declarado así en el rótulo del dashboard:
+    - La venta se empareja por `Producto_Talla.sku`: el catálogo es POR
+      SUCURSAL, el PT del CD y el de la tienda son filas distintas con el mismo
+      sku (así lo cruza la recepción al crear TRASPASO_ENTRADA). Verificado:
+      0 pares SALIDA/ENTRADA comparten ProductoTalla_id, 94% comparten sku.
+    - Ventas = conceptos de `constants_kardex.CONCEPTOS_VENTA`, COMPLETADO, con
+      `sucursal_origen` = la tienda (ahí vive la sucursal de una venta).
+    - Ventana por sku: desde el primer despacho del período hasta 30 días
+      después del último. Se topa en lo despachado (LEAST) para que stock que
+      la tienda ya tenía no infle el porcentaje por sobre 100%.
+    Una sola consulta agregada (CTE); nada de bucles por tienda.
+    """
+    mov = Movimientos_Producto._meta.db_table
+    pt_col = Movimientos_Producto._meta.get_field('ProductoTalla').column
+    pt = Producto_Talla._meta.db_table
+    dte = Dte._meta.db_table
+    suc = Sucursal._meta.db_table
+    in_ventas = ', '.join(['%s'] * len(CONCEPTOS_VENTA))
+    # Fecha de corte de la ventana de 30 d, calculada en Python con la zona
+    # del proyecto (no CURRENT_DATE, que usa la zona del servidor de BD).
+    corte_ventana = (hoy or timezone.localdate()) - timedelta(days=30)
+
+    filtros, params = [], [corte_ventana, inicio, fin]
+    if emp_id:
+        filtros.append('AND (dt.emisor_id = %s OR dt.receptor_id = %s)')
+        params += [emp_id, emp_id]
+    if suc_id:
+        filtros.append('AND (m.sucursal_origen_id = %s OR m.sucursal_destino_id = %s)')
+        params += [suc_id, suc_id]
+    params += list(CONCEPTOS_VENTA)
+
+    # Origen CD: mismo predicado que `_es_cd_q` (OR de los dos flags). Sin él
+    # entraban devoluciones tienda→CD y traspasos tienda→tienda, y el CD
+    # aparecía como "tienda" con eficacia 0%.
+    sql = f'''
+        WITH d AS (
+            SELECT m.sucursal_destino_id AS suc_id, pt.sku AS sku,
+                   MIN(m.fecha) AS f0, MAX(m.fecha) AS f1, SUM(-m.cantidad) AS uds,
+                   COALESCE(SUM(-m.cantidad) FILTER (WHERE m.fecha > %s), 0) AS uds_abiertas
+            FROM {mov} m
+            JOIN {pt} pt ON pt.id = m."{pt_col}"
+            JOIN {dte} dt ON dt.id = m.dte_id
+            JOIN {suc} so ON so.id = m.sucursal_origen_id
+             AND (so.es_centro_distribucion OR so.tipo_sucursal = 'CENTRO_DISTRIBUCION')
+            WHERE m.concepto = 'TRASPASO_SALIDA' AND m.estado = 'COMPLETADO'
+              AND m.sucursal_destino_id IS NOT NULL
+              AND m.fecha BETWEEN %s AND %s
+              AND dt.tipo_transaccion = 'TRASPASO' AND dt.descartado = false
+              {' '.join(filtros)}
+            GROUP BY 1, 2
+            HAVING SUM(-m.cantidad) > 0
+        ), v AS (
+            SELECT d.suc_id, d.sku, d.uds, d.uds_abiertas,
+                   GREATEST(COALESCE(SUM(-s.cantidad), 0), 0) AS vend
+            FROM d
+            LEFT JOIN ({mov} s JOIN {pt} ps ON ps.id = s."{pt_col}")
+              ON ps.sku = d.sku AND s.sucursal_origen_id = d.suc_id
+             AND s.concepto IN ({in_ventas}) AND s.estado = 'COMPLETADO'
+             AND s.fecha >= d.f0 AND s.fecha <= d.f1 + 30
+            GROUP BY 1, 2, 3, 4
+        )
+        SELECT sc.alias, SUM(v.uds) AS despachado, SUM(LEAST(v.vend, v.uds)) AS vendido,
+               SUM(GREATEST(LEAST(v.uds_abiertas, v.uds), 0)) AS abiertas
+        FROM v JOIN {suc} sc ON sc.id = v.suc_id
+        GROUP BY sc.alias
+        ORDER BY despachado DESC
+    '''
+    with connection.cursor() as cur:
+        cur.execute(sql, params)
+        return [
+            {'tienda': alias or 'Suc?', 'despachado': int(desp or 0), 'vendido_30d': int(vend or 0),
+             'uds_ventana_abierta': int(abiertas or 0)}
+            for alias, desp, vend, abiertas in cur.fetchall()
+        ]
+
+
 @login_required
 @require_GET
 def api_dashboard_despachos(request):
@@ -825,35 +1020,101 @@ def api_dashboard_despachos(request):
         Q(fecha_recepcion__date__range=[inicio, fin]) |
         Q(fecha_recepcion__isnull=True, dte__fecha_emision__range=[inicio, fin])
     )
+    if suc_id:
+        # El scoping por sucursal une con dte_movimientos y repite cada
+        # recepción por línea de kardex. En vez de agregar sobre ese join con
+        # COUNT(DISTINCT) (un SELECT DISTINCT de todas las columnas: ~750 ms en
+        # rangos largos), el DISTINCT queda solo en la subconsulta de ids y la
+        # consulta exterior no toca dte_movimientos. Es el pk__in lo que evita
+        # el doble conteo en rec_res, por sucursal y tendencia.
+        rec_periodo = Productos_Recepcionados.objects.filter(pk__in=rec_periodo.values('pk'))
 
-    total_recepciones = rec_periodo.count()
-    total_ok = rec_periodo.filter(estado='RECEPCIONADO_OK').count()
+    # Un solo aggregate (antes 8 COUNT separados). Sin distinct: tras el
+    # pk__in el único join es dte→sucursal (FK hacia adelante, no multiplica).
+    rec_res = rec_periodo.aggregate(
+        total=Count('id'),
+        ok=Count('id', filter=Q(estado='RECEPCIONADO_OK')),
+        faltantes=Count('id', filter=Q(estado__in=['FALTANTE', 'RECEPCIONADO_PARCIAL'])),
+        danados=Count('id', filter=Q(estado='RECEPCIONADO_DANADO')),
+        sobrantes=Count('id', filter=Q(estado__in=['RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE'])),
+        regularizados=Count('id', filter=Q(estado='REGULARIZADO')),
+        pendientes=Count('id', filter=Q(estado__in=[
+            'RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE',
+            'EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION',
+            'RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE'])),
+    )
+    total_recepciones = rec_res['total']
+    total_ok = rec_res['ok']
     tasa_exito = round((total_ok / total_recepciones * 100) if total_recepciones else 0, 1)
+    total_faltantes = rec_res['faltantes']
+    total_danados = rec_res['danados']
+    total_sobrantes = rec_res['sobrantes']
+    total_regularizados = rec_res['regularizados']
+    total_pendientes = rec_res['pendientes']
 
-    total_faltantes = rec_periodo.filter(estado__in=['FALTANTE', 'RECEPCIONADO_PARCIAL']).count()
-    total_danados = rec_periodo.filter(estado='RECEPCIONADO_DANADO').count()
-    total_sobrantes = rec_periodo.filter(estado__in=['RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']).count()
-    total_regularizados = rec_periodo.filter(estado='REGULARIZADO').count()
-    total_pendientes = rec_periodo.filter(
-        estado__in=['RECEPCIONADO_PARCIAL', 'RECEPCIONADO_DANADO', 'FALTANTE',
-                    'EN_REGULARIZACION', 'EN_SOLICITUD_REGULARIZACION',
-                    'RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE']
-    ).count()
-
-    # Tiempo promedio emisión a recepción
-    dtes_con_recepcion = traspasos_qs.filter(fecha_recepcion__isnull=False)
-    avg_dias_raw = None
-    if dtes_con_recepcion.exists():
-        from django.db.models import ExpressionWrapper, DurationField
-        dtes_con_recepcion = dtes_con_recepcion.annotate(
-            dias_dur=ExpressionWrapper(
-                F('fecha_recepcion') - F('fecha_emision'),
-                output_field=DurationField()
-            )
+    # Tiempo promedio emisión a recepción (global y POR TIENDA destino).
+    # Se parte de `pk__in` y no de `traspasos_qs` directo: el scoping por
+    # sucursal une con dte_movimientos y repite cada DTE por línea de kardex,
+    # así que un AVG sobre ese join quedaba ponderado por número de líneas.
+    dtes_con_recepcion = Dte.objects.filter(
+        pk__in=traspasos_qs.values('pk'), fecha_recepcion__isnull=False,
+    ).annotate(
+        dias_dur=ExpressionWrapper(
+            F('fecha_recepcion') - F('fecha_emision'),
+            output_field=DurationField()
         )
-        avg_dias_raw = dtes_con_recepcion.aggregate(avg=Avg('dias_dur'))['avg']
+    )
+    avg_dias_raw = dtes_con_recepcion.aggregate(avg=Avg('dias_dur'))['avg']
     # .days trunca: un promedio de 0,9 días se mostraba como 0.
     avg_dias = round(avg_dias_raw.total_seconds() / 86400, 1) if avg_dias_raw else 0
+
+    # Por tienda: el destino de un traspaso vive en sus líneas de kardex
+    # (Dte.sucursal es el ORIGEN). Un DTE nunca tiene más de un destino
+    # (verificado en prod), así que basta la primera línea con destino.
+    destino_sq = (
+        Movimientos_Producto.objects
+        .filter(dte=OuterRef('pk'), sucursal_destino__isnull=False)
+        .order_by().values('sucursal_destino__alias')[:1]
+    )
+    dias_por_tienda = {
+        r['destino']: r for r in (
+            dtes_con_recepcion.annotate(destino=Subquery(destino_sq))
+            .values('destino')
+            .annotate(avg=Avg('dias_dur'), n=Count('id'))
+            .order_by()
+        ) if r['destino']
+    }
+
+    # --- Eficacia de despacho (vendido a 30 d / despachado, por tienda) ---
+    eficacia_rows = _eficacia_despacho_por_tienda(inicio, fin, emp_id, suc_id, hoy=timezone.localdate())
+    tiendas = {}
+    for r in eficacia_rows:
+        tiendas[r['tienda']] = {
+            'tienda': r['tienda'],
+            'despachado': r['despachado'],
+            'vendido_30d': r['vendido_30d'],
+            'eficacia': round(r['vendido_30d'] / r['despachado'] * 100, 1) if r['despachado'] else None,
+            'uds_ventana_abierta': r['uds_ventana_abierta'],
+            'dias_recepcion': None,
+            'traspasos_recepcionados': 0,
+        }
+    for alias, r in dias_por_tienda.items():
+        # Tienda con recepciones pero sin despachos desde CD en el período:
+        # su eficacia NO es 0% (no hubo nada que medir), va en None ('-').
+        fila = tiendas.setdefault(alias, {
+            'tienda': alias, 'despachado': 0, 'vendido_30d': 0, 'eficacia': None,
+            'uds_ventana_abierta': 0, 'dias_recepcion': None, 'traspasos_recepcionados': 0,
+        })
+        fila['dias_recepcion'] = round(r['avg'].total_seconds() / 86400, 1) if r['avg'] else 0
+        fila['traspasos_recepcionados'] = r['n']
+    eficacia_por_tienda = sorted(tiendas.values(), key=lambda x: (-x['despachado'], x['tienda']))
+    eficacia_despachado = sum(t['despachado'] for t in eficacia_por_tienda)
+    eficacia_vendido = sum(t['vendido_30d'] for t in eficacia_por_tienda)
+    eficacia_30d = round(eficacia_vendido / eficacia_despachado * 100, 1) if eficacia_despachado else 0.0
+    # Unidades despachadas hace < 30 días: su ventana de venta sigue abierta,
+    # así que la eficacia del período es PARCIAL (el mes en curso siempre lo es).
+    eficacia_uds_ventana_abierta = sum(t['uds_ventana_abierta'] for t in eficacia_por_tienda)
+    eficacia_parcial = eficacia_uds_ventana_abierta > 0
 
     # --- Pipeline ---
     pipeline = {
@@ -871,11 +1132,11 @@ def api_dashboard_despachos(request):
     suc_data = rec_periodo.filter(dte__sucursal__isnull=False).values(
         'dte__sucursal__alias'
     ).annotate(
-        total=Count('id', distinct=True),
-        ok=Count('id', distinct=True, filter=Q(estado='RECEPCIONADO_OK')),
-        faltantes=Count('id', distinct=True, filter=Q(estado__in=['FALTANTE', 'RECEPCIONADO_PARCIAL'])),
-        danados=Count('id', distinct=True, filter=Q(estado='RECEPCIONADO_DANADO')),
-        sobrantes=Count('id', distinct=True, filter=Q(estado__in=['RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE'])),
+        total=Count('id'),
+        ok=Count('id', filter=Q(estado='RECEPCIONADO_OK')),
+        faltantes=Count('id', filter=Q(estado__in=['FALTANTE', 'RECEPCIONADO_PARCIAL'])),
+        danados=Count('id', filter=Q(estado='RECEPCIONADO_DANADO')),
+        sobrantes=Count('id', filter=Q(estado__in=['RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE'])),
     ).order_by('-total')[:15]
 
     for s in suc_data:
@@ -895,11 +1156,11 @@ def api_dashboard_despachos(request):
         rec_periodo.filter(fecha_recepcion__isnull=False).annotate(
             mes=TruncMonth('fecha_recepcion')
         ).values('mes').annotate(
-            total=Count('id', distinct=True),
-            ok=Count('id', distinct=True, filter=Q(estado='RECEPCIONADO_OK')),
-            faltantes=Count('id', distinct=True, filter=Q(estado__in=['FALTANTE', 'RECEPCIONADO_PARCIAL'])),
-            danados=Count('id', distinct=True, filter=Q(estado='RECEPCIONADO_DANADO')),
-            sobrantes=Count('id', distinct=True, filter=Q(estado__in=['RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE'])),
+            total=Count('id'),
+            ok=Count('id', filter=Q(estado='RECEPCIONADO_OK')),
+            faltantes=Count('id', filter=Q(estado__in=['FALTANTE', 'RECEPCIONADO_PARCIAL'])),
+            danados=Count('id', filter=Q(estado='RECEPCIONADO_DANADO')),
+            sobrantes=Count('id', filter=Q(estado__in=['RECEPCIONADO_SOBRANTE', 'SOBRANTE_PENDIENTE'])),
         ).order_by('mes')
     )
     for t in tendencia:
@@ -1095,7 +1356,15 @@ def api_dashboard_despachos(request):
             'total_regularizados': total_regularizados,
             'por_recibir': por_recibir,
             'por_regularizar': por_regularizar,
+            # Eficacia de despacho global: % de las unidades despachadas en el
+            # período que se vendieron en la tienda destino dentro de 30 días.
+            'eficacia_30d': eficacia_30d,
+            'eficacia_despachado': eficacia_despachado,
+            'eficacia_vendido': eficacia_vendido,
+            'eficacia_parcial': eficacia_parcial,
+            'eficacia_uds_ventana_abierta': eficacia_uds_ventana_abierta,
         },
+        'eficacia_por_tienda': eficacia_por_tienda,
         'flujo_origen_destino': flujo_origen_destino,
         'errores_origen': errores_origen,
         'ver_todas': ver_todas,

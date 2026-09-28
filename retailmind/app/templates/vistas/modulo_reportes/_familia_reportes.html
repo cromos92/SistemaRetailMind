@@ -1,0 +1,521 @@
+{% comment %}
+Tira de navegación entre reportes de una misma familia (ventas / existencias /
+logistica / compras). Uso, justo debajo del header del módulo:
+
+    {% include 'vistas/modulo_reportes/_familia_reportes.html' with familia='ventas' activo='sucursal' %}
+
+- `familia`: ventas | existencias | logistica | compras
+- `activo`:  clave del reporte actual dentro de la familia (se resalta)
+
+Inventario y familias: docs/FAMILIAS_REPORTES_2026-09.md. No toca datos ni el JS
+de cálculo de cada reporte: es navegación pura. Al hacer clic conserva del query
+string actual SOLO los filtros compartidos (fechas, año, mes, sucursal, marca)
+para que cambiar de reporte no pierda el contexto.
+
+Filtros compartidos (`window.FiltrosReporte`, definido abajo): cada reporte, al
+arrancar, pone en sus controles lo que traiga la URL (`FiltrosReporte.leer()`)
+y, al consultar, deja la URL con el estado actual (`FiltrosReporte.reflejar()`,
+history.replaceState). En la URL viajan SIEMPRE los nombres canónicos
+`fecha_inicio`, `fecha_fin`, `mes`, `anio`, `sucursal_id`, `marca_id`; los
+alias históricos (`fecha_desde`, `desde`, `sucursal`, `marca`…) se aceptan al
+leer. Las APIs de cada reporte no cambian: cada template traduce a sus nombres.
+
+Permisos: cada enlace se pinta solo si el usuario puede abrir ese reporte, con
+el mismo `puede_ver_opcion_tag` (y los mismos códigos de OpcionMenu que
+middleware_permisos.URL_PERMISO_MAP) que usa el menú; el reporte activo se
+pinta siempre. Sin esto, un cajero o jefe de local veía accesos que al hacer
+clic lo sacaban a bienvenida con "Acceso denegado".
+
+Estilos: mismos `quick-filter-btn` de ESTILOS_MODULOS.md (paleta #405189 → #0ab39c),
+acotados a `.familia-reportes` para no pisar los quick-filter propios de cada vista.
+{% endcomment %}
+{% load permisos_tags %}
+<style>
+    .familia-reportes {
+        margin: 10px 0 14px;
+        padding: 0;
+    }
+    .familia-reportes-titulo {
+        font-size: .72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+        color: #8A8A9A;
+        margin: 0 0 6px;
+        line-height: 1.2;
+    }
+    .familia-reportes-links {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+    }
+    .familia-reportes .quick-filter-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: #fff;
+        border: 1px solid rgba(64, 81, 137, 0.2);
+        border-radius: 20px;
+        padding: 5px 14px;
+        min-height: 32px;
+        font-size: .75rem;
+        font-weight: 500;
+        color: #405189;
+        text-decoration: none;
+        line-height: 1.2;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .familia-reportes .quick-filter-btn i {
+        font-size: .9rem;
+        line-height: 1;
+    }
+    .familia-reportes .quick-filter-btn:hover,
+    .familia-reportes .quick-filter-btn:focus-visible {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        border-color: transparent;
+        color: #fff;
+        transform: translateY(-1px);
+        box-shadow: 0 3px 8px rgba(64, 81, 137, 0.25);
+        outline: none;
+    }
+    .familia-reportes .quick-filter-btn.active {
+        background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+        border-color: transparent;
+        color: #fff;
+        font-weight: 600;
+        cursor: default;
+        transform: none;
+        box-shadow: none;
+    }
+    /* Grupo de pestañas: reportes que responden la misma pregunta con otra
+       dimensión (fusión sep-2026). Se ven como un solo reporte con pestañas;
+       cada pestaña sigue siendo su URL y los filtros compartidos viajan en ella. */
+    .familia-reportes .familia-grupo {
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 4px 3px 12px;
+        border-radius: 22px;
+        background: rgba(64, 81, 137, 0.06);
+        border: 1px solid rgba(64, 81, 137, 0.18);
+    }
+    .familia-reportes .familia-grupo-titulo {
+        font-size: .68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+        color: #405189;
+        margin-right: 2px;
+        white-space: nowrap;
+    }
+    /* Vistas con contenedor full-bleed: alinear con el padding lateral de sus filas (KPI/controles) */
+    .nexo-container > .familia-reportes,
+    .nexo-page-wrapper > .familia-reportes {
+        padding-left: 40px;
+        padding-right: 40px;
+    }
+    .nexo-resumen-container > .familia-reportes {
+        padding-left: 32px;
+        padding-right: 32px;
+    }
+    .ic-wrap > .familia-reportes {
+        padding-left: 34px;
+        padding-right: 34px;
+    }
+    /* Modo táctil (pos-kiosk / tablet): target cómodo */
+    @media (max-width: 991.98px) {
+        .familia-reportes .quick-filter-btn { min-height: 40px; }
+    }
+    @media print {
+        .familia-reportes { display: none !important; }
+    }
+</style>
+
+<nav class="familia-reportes" id="familiaReportes" data-familia="{{ familia }}" data-activo="{{ activo }}"
+     aria-label="Reportes de {{ familia }}">
+    {% if familia == 'ventas' %}
+    {% puede_ver_opcion_tag 'reporte_ventas_sucursal' as pv_sucursal %}
+    {% puede_ver_opcion_tag 'reporte_ventas_comparativo' as pv_comparativo %}
+    {% puede_ver_opcion_tag 'reporte_ventas_global' as pv_global %}
+    {% puede_ver_opcion_tag 'reporte_ventas_internet' as pv_internet %}
+    {% puede_ver_opcion_tag 'reporte_productos_vendidos' as pv_productos %}
+    {% puede_ver_opcion_tag 'reporte_documentos_emitidos' as pv_documentos %}
+    <div class="familia-reportes-titulo">Reportes de ventas</div>
+    <div class="familia-reportes-links">
+        {% if pv_sucursal or pv_comparativo or pv_global or activo == 'sucursal' or activo == 'comparativo' or activo == 'global' %}
+        <div class="familia-grupo" role="group" aria-label="Ventas: pestañas del mismo reporte">
+            <span class="familia-grupo-titulo">Ventas</span>
+            {% if pv_sucursal or activo == 'sucursal' %}
+            <a href="{% url 'ver_reporte_ventas_sucursal' %}" data-familia-link
+               class="quick-filter-btn{% if activo == 'sucursal' %} active{% endif %}"{% if activo == 'sucursal' %} aria-current="page"{% endif %}>
+                <i class="ri-bar-chart-box-line"></i>Por sucursal
+            </a>
+            {% endif %}
+            {% if pv_comparativo or activo == 'comparativo' %}
+            <a href="{% url 'ver_reporte_ventas_comparativo' %}" data-familia-link
+               class="quick-filter-btn{% if activo == 'comparativo' %} active{% endif %}"{% if activo == 'comparativo' %} aria-current="page"{% endif %}>
+                <i class="ri-bar-chart-2-line"></i>Comparativo
+            </a>
+            {% endif %}
+            {% if pv_global or activo == 'global' %}
+            <a href="{% url 'ver_reporte_ventas_global' %}" data-familia-link
+               class="quick-filter-btn{% if activo == 'global' %} active{% endif %}"{% if activo == 'global' %} aria-current="page"{% endif %}>
+                <i class="ri-building-2-line"></i>Global por empresa
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% if pv_internet or activo == 'internet' %}
+        <a href="{% url 'ver_reporte_ventas_internet' %}" data-familia-link
+           class="quick-filter-btn{% if activo == 'internet' %} active{% endif %}"{% if activo == 'internet' %} aria-current="page"{% endif %}>
+            <i class="ri-global-line"></i>Internet
+        </a>
+        {% endif %}
+        {% if pv_productos or activo == 'productos' %}
+        <a href="{% url 'ver_reporte_productos_vendidos' %}" data-familia-link
+           class="quick-filter-btn{% if activo == 'productos' %} active{% endif %}"{% if activo == 'productos' %} aria-current="page"{% endif %}>
+            <i class="ri-shopping-bag-line"></i>Productos vendidos
+        </a>
+        {% endif %}
+        {% if pv_documentos or activo == 'documentos' %}
+        <a href="{% url 'ver_documentos_emitidos' %}" data-familia-link
+           class="quick-filter-btn{% if activo == 'documentos' %} active{% endif %}"{% if activo == 'documentos' %} aria-current="page"{% endif %}>
+            <i class="ri-file-list-3-line"></i>Documentos emitidos
+        </a>
+        {% endif %}
+    </div>
+    {% elif familia == 'existencias' %}
+    {% puede_ver_opcion_tag 'reporte_existencias' as pv_existencias %}
+    {% puede_ver_opcion_tag 'reporte_existencias_marca' as pv_marca %}
+    {% puede_ver_opcion_tag 'reporte_existencias_sucursal' as pv_sucursal %}
+    {% puede_ver_opcion_tag 'resumen_existencias' as pv_resumen %}
+    {% puede_ver_opcion_tag 'reporte_movimientos_sucursal' as pv_movimientos %}
+    {% puede_ver_opcion_tag 'reporte_existencias_sucursal' as pv_quiebre %}
+    {% puede_ver_opcion_tag 'plan_liquidacion' as pv_liquidacion %}
+    <div class="familia-reportes-titulo">Reportes de existencias</div>
+    <div class="familia-reportes-links">
+        {% if pv_existencias or activo == 'existencias' %}
+        <a href="{% url 'ver_reporte_existencias' %}" data-familia-link
+           class="quick-filter-btn{% if activo == 'existencias' %} active{% endif %}"{% if activo == 'existencias' %} aria-current="page"{% endif %}>
+            <i class="ri-archive-line"></i>Existencias
+        </a>
+        {% endif %}
+        {% if pv_marca or pv_sucursal or pv_resumen or activo == 'marca' or activo == 'sucursal' or activo == 'resumen' %}
+        <div class="familia-grupo" role="group" aria-label="Stock: pestañas del mismo reporte">
+            <span class="familia-grupo-titulo">Stock</span>
+            {% if pv_marca or activo == 'marca' %}
+            <a href="{% url 'ver_reporte_existencias_marca' %}" data-familia-link
+               class="quick-filter-btn{% if activo == 'marca' %} active{% endif %}"{% if activo == 'marca' %} aria-current="page"{% endif %}>
+                <i class="ri-price-tag-3-line"></i>Por marca
+            </a>
+            {% endif %}
+            {% if pv_sucursal or activo == 'sucursal' %}
+            <a href="{% url 'ver_reporte_existencias_sucursal' %}" data-familia-link
+               class="quick-filter-btn{% if activo == 'sucursal' %} active{% endif %}"{% if activo == 'sucursal' %} aria-current="page"{% endif %}>
+                <i class="ri-store-2-line"></i>Por sucursal
+            </a>
+            {% endif %}
+            {% if pv_resumen or activo == 'resumen' %}
+            <a href="{% url 'ver_resumen_existencias' %}" data-familia-link
+               class="quick-filter-btn{% if activo == 'resumen' %} active{% endif %}"{% if activo == 'resumen' %} aria-current="page"{% endif %}>
+                <i class="ri-pie-chart-line"></i>Resumen
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% if pv_movimientos or activo == 'movimientos' %}
+        <a href="{% url 'ver_reporte_movimientos_sucursal' %}" data-familia-link
+           class="quick-filter-btn{% if activo == 'movimientos' %} active{% endif %}"{% if activo == 'movimientos' %} aria-current="page"{% endif %}>
+            <i class="ri-exchange-line"></i>Original vs actual
+        </a>
+        {% endif %}
+        {% if pv_quiebre or activo == 'quiebre' %}
+        <a href="{% url 'ver_reporte_quiebre_talla' %}" data-familia-link
+           class="quick-filter-btn{% if activo == 'quiebre' %} active{% endif %}"{% if activo == 'quiebre' %} aria-current="page"{% endif %}>
+            <i class="ri-ruler-2-line"></i>Quiebre de talla
+        </a>
+        {% endif %}
+        {% if pv_liquidacion or activo == 'liquidacion' %}
+        <a href="{% url 'ver_plan_liquidacion' %}" data-familia-link
+           class="quick-filter-btn{% if activo == 'liquidacion' %} active{% endif %}"{% if activo == 'liquidacion' %} aria-current="page"{% endif %}>
+            <i class="ri-scissors-cut-line"></i>Plan de liquidación
+        </a>
+        {% endif %}
+    </div>
+    {% elif familia == 'logistica' %}
+    {% puede_ver_opcion_tag 'reporte_movimientos_sucursal' as pv_despachos %}
+    {% puede_ver_opcion_tag 'reporte_mercaderia_transito' as pv_transito %}
+    {% puede_ver_opcion_tag 'reporte_diferencias_recepcion' as pv_diferencias %}
+    <div class="familia-reportes-titulo">Reportes de logística</div>
+    <div class="familia-reportes-links">
+        {% if pv_despachos or pv_transito or pv_diferencias or activo == 'despachos' or activo == 'transito' or activo == 'diferencias' %}
+        <div class="familia-grupo" role="group" aria-label="Cadena logística: pestañas del mismo reporte">
+            <span class="familia-grupo-titulo">Cadena logística</span>
+            {% if pv_despachos or activo == 'despachos' %}
+            <a href="{% url 'ver_reporte_despachos_tiendas' %}" data-familia-link
+               class="quick-filter-btn{% if activo == 'despachos' %} active{% endif %}"{% if activo == 'despachos' %} aria-current="page"{% endif %}>
+                <i class="ri-truck-line"></i>Despachos a tiendas
+            </a>
+            {% endif %}
+            {% if pv_transito or activo == 'transito' %}
+            <a href="{% url 'ver_reporte_mercaderia_transito' %}" data-familia-link
+               class="quick-filter-btn{% if activo == 'transito' %} active{% endif %}"{% if activo == 'transito' %} aria-current="page"{% endif %}>
+                <i class="ri-time-line"></i>Mercadería en tránsito
+            </a>
+            {% endif %}
+            {% if pv_diferencias or activo == 'diferencias' %}
+            <a href="{% url 'ver_reporte_diferencias_recepcion' %}" data-familia-link
+               class="quick-filter-btn{% if activo == 'diferencias' %} active{% endif %}"{% if activo == 'diferencias' %} aria-current="page"{% endif %}>
+                <i class="ri-scales-3-line"></i>Diferencias de recepción
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+    {% elif familia == 'compras' %}
+    {% puede_ver_opcion_tag 'reporte_compras' as pv_compras %}
+    {% puede_ver_opcion_tag 'reporte_rendimiento_proveedor' as pv_rendimiento %}
+    {% puede_ver_opcion_tag 'reporte_despachos_proveedor' as pv_ingresos %}
+    {% puede_ver_opcion_tag 'reporte_productos_origen' as pv_origen %}
+    {% puede_ver_opcion_tag 'inteligencia_compra' as pv_inteligencia %}
+    <div class="familia-reportes-titulo">Reportes de compras</div>
+    <div class="familia-reportes-links">
+        {% if pv_compras or activo == 'compras' %}
+        <a href="{% url 'ver_reporte_compras' %}" data-familia-link
+           class="quick-filter-btn{% if activo == 'compras' %} active{% endif %}"{% if activo == 'compras' %} aria-current="page"{% endif %}>
+            <i class="ri-shopping-cart-2-line"></i>Compras
+        </a>
+        {% endif %}
+        {% if pv_rendimiento or activo == 'rendimiento' %}
+        <a href="{% url 'ver_reporte_rendimiento_proveedor' %}" data-familia-link
+           class="quick-filter-btn{% if activo == 'rendimiento' %} active{% endif %}"{% if activo == 'rendimiento' %} aria-current="page"{% endif %}>
+            <i class="ri-group-line"></i>Rendimiento por proveedor
+        </a>
+        {% endif %}
+        {% if pv_ingresos or activo == 'ingresos' %}
+        <a href="{% url 'verReporteDespachosProveedor' %}" data-familia-link
+           class="quick-filter-btn{% if activo == 'ingresos' %} active{% endif %}"{% if activo == 'ingresos' %} aria-current="page"{% endif %}>
+            <i class="ri-inbox-archive-line"></i>Ingresos por proveedor
+        </a>
+        {% endif %}
+        {% if pv_origen or activo == 'origen' %}
+        <a href="{% url 'ver_reporte_productos_origen' %}" data-familia-link
+           class="quick-filter-btn{% if activo == 'origen' %} active{% endif %}"{% if activo == 'origen' %} aria-current="page"{% endif %}>
+            <i class="ri-seedling-line"></i>Origen de catálogo
+        </a>
+        {% endif %}
+        {% if pv_inteligencia or activo == 'inteligencia' %}
+        <a href="{% url 'ver_inteligencia_compra' %}" data-familia-link
+           class="quick-filter-btn{% if activo == 'inteligencia' %} active{% endif %}"{% if activo == 'inteligencia' %} aria-current="page"{% endif %}>
+            <i class="ri-brain-line"></i>Inteligencia de compra
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+</nav>
+
+<script>
+/* Filtros compartidos entre reportes + navegación de la tira.
+
+   window.FiltrosReporte (API usada por cada reporte):
+     leer()            -> {fecha_inicio, fecha_fin, mes, anio, sucursal_id, marca_id}
+                          solo con lo que trae la URL (acepta alias) y con formato válido.
+     completar(f)      -> copia de f con lo derivable: mes -> rango del mes,
+                          rango dentro de un mes -> mes, anio desde mes/fecha_inicio.
+     reflejar(estado)  -> deja en la URL (replaceState) el estado del reporte con
+                          nombres canónicos. El período es un bloque: si `estado` trae
+                          alguna clave de tiempo (fecha_inicio/fecha_fin/mes/anio), las
+                          demás de tiempo se borran. sucursal_id/marca_id que el reporte
+                          no informe se conservan ('' o null las borra). Los alias se
+                          normalizan; los params ajenos (pestaña, página…) no se tocan.
+     ponerValor(el, v, {disparar}) -> asigna v a un input/select; en un <select>
+                          solo si existe esa opción. Devuelve true si quedó puesto.
+   Idempotente: si el parcial se incluyera dos veces, se define y registra una sola vez. */
+(function () {
+    if (window.__familiaReportesInit) { return; }
+    window.__familiaReportesInit = true;
+
+    var CANON = ['fecha_inicio', 'fecha_fin', 'mes', 'anio', 'sucursal_id', 'marca_id'];
+    var TIEMPO = ['fecha_inicio', 'fecha_fin', 'mes', 'anio'];
+    var ALIAS = {
+        fecha_desde: 'fecha_inicio', desde: 'fecha_inicio',
+        fecha_hasta: 'fecha_fin', hasta: 'fecha_fin',
+        sucursal: 'sucursal_id', marca: 'marca_id'
+    };
+    var FORMATO = {
+        fecha_inicio: /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/,
+        fecha_fin: /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/,
+        mes: /^\d{4}-(0[1-9]|1[0-2])$/,
+        anio: /^(19|20)\d{2}$/,
+        sucursal_id: /^[A-Za-z0-9_-]{1,40}$/,
+        marca_id: /^[A-Za-z0-9_-]{1,40}$/
+    };
+
+    function valido(k, v) {
+        return v !== undefined && v !== null && v !== '' && FORMATO[k].test(String(v));
+    }
+
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+    function leer() {
+        var r = {};
+        var q;
+        try { q = new URLSearchParams(window.location.search); } catch (e) { return r; }
+        for (var i = 0; i < CANON.length; i++) {
+            var v = q.get(CANON[i]);
+            if (valido(CANON[i], v)) { r[CANON[i]] = v; }
+        }
+        for (var a in ALIAS) {
+            if (!Object.prototype.hasOwnProperty.call(ALIAS, a)) { continue; }
+            var k = ALIAS[a];
+            if (r[k] !== undefined) { continue; }
+            var va = q.get(a);
+            if (valido(k, va)) { r[k] = va; }
+        }
+        if (r.fecha_inicio && r.fecha_fin && r.fecha_inicio > r.fecha_fin) {
+            delete r.fecha_inicio;
+            delete r.fecha_fin;
+        }
+        return r;
+    }
+
+    function completar(f) {
+        var r = {};
+        for (var k in (f || {})) {
+            if (Object.prototype.hasOwnProperty.call(f, k)) { r[k] = f[k]; }
+        }
+        if (r.mes && !r.fecha_inicio && !r.fecha_fin) {
+            var p = r.mes.split('-');
+            var ultimo = new Date(parseInt(p[0], 10), parseInt(p[1], 10), 0).getDate();
+            r.fecha_inicio = r.mes + '-01';
+            r.fecha_fin = r.mes + '-' + pad(ultimo);
+        }
+        if (!r.mes && r.fecha_inicio && r.fecha_fin &&
+            r.fecha_inicio.slice(0, 7) === r.fecha_fin.slice(0, 7)) {
+            r.mes = r.fecha_inicio.slice(0, 7);
+        }
+        if (!r.anio) {
+            var base = r.mes || r.fecha_inicio;
+            if (base) { r.anio = base.slice(0, 4); }
+        }
+        return r;
+    }
+
+    function reflejar(estado) {
+        try {
+            estado = estado || {};
+            var previo = leer();
+            var final = {};
+            var i, k;
+            for (i = 0; i < CANON.length; i++) { final[CANON[i]] = previo[CANON[i]]; }
+            // El período es un bloque: si el reporte informa cualquier clave de
+            // tiempo, las de tiempo que no informe se borran (no quedan un mes y
+            // un rango que se contradicen). Sucursal y marca pasan de largo si
+            // el reporte no las maneja; '' o null las borra.
+            var tocaTiempo = false;
+            for (i = 0; i < TIEMPO.length; i++) {
+                if (Object.prototype.hasOwnProperty.call(estado, TIEMPO[i])) { tocaTiempo = true; }
+            }
+            if (tocaTiempo) {
+                for (i = 0; i < TIEMPO.length; i++) { final[TIEMPO[i]] = null; }
+            }
+            for (i = 0; i < CANON.length; i++) {
+                k = CANON[i];
+                if (Object.prototype.hasOwnProperty.call(estado, k)) { final[k] = estado[k]; }
+            }
+            var url = new URL(window.location.href);
+            var borrar = CANON.slice();
+            for (var a in ALIAS) {
+                if (Object.prototype.hasOwnProperty.call(ALIAS, a)) { borrar.push(a); }
+            }
+            for (i = 0; i < borrar.length; i++) { url.searchParams.delete(borrar[i]); }
+            for (i = 0; i < CANON.length; i++) {
+                k = CANON[i];
+                var v = final[k];
+                if (v !== undefined && v !== null) { v = String(v); }
+                if (valido(k, v)) { url.searchParams.set(k, v); }
+            }
+            var nueva = url.pathname + url.search + url.hash;
+            var actual = window.location.pathname + window.location.search + window.location.hash;
+            if (nueva !== actual) { window.history.replaceState(window.history.state, '', nueva); }
+            init();
+        } catch (e) { /* navegador sin URL/replaceState: la URL simplemente no se actualiza */ }
+    }
+
+    function ponerValor(el, v, opciones) {
+        if (typeof el === 'string') { el = document.querySelector(el); }
+        if (!el || v === undefined || v === null || v === '') { return false; }
+        v = String(v);
+        if (el.tagName === 'SELECT') {
+            var existe = false;
+            for (var i = 0; i < el.options.length; i++) {
+                if (el.options[i].value === v) { existe = true; break; }
+            }
+            if (!existe) { return false; }
+        }
+        el.value = v;
+        if (opciones && opciones.disparar) {
+            // Evento nativo: lo reciben los listeners de addEventListener y también
+            // los de jQuery/Select2 (jQuery.trigger no ejecuta los nativos).
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        return el.value === v;
+    }
+
+    window.FiltrosReporte = {
+        CANON: CANON.slice(),
+        leer: leer,
+        completar: completar,
+        reflejar: reflejar,
+        ponerValor: ponerValor
+    };
+
+    function hrefConFiltros(href) {
+        try {
+            var f = leer();
+            var destino = new URL(href, window.location.href);
+            var hay = false;
+            for (var i = 0; i < CANON.length; i++) {
+                var k = CANON[i];
+                if (f[k]) { destino.searchParams.set(k, f[k]); hay = true; }
+            }
+            return hay ? (destino.pathname + destino.search + destino.hash) : href;
+        } catch (e) {
+            return href;
+        }
+    }
+
+    function aplicar(nav) {
+        var links = nav.querySelectorAll('a[data-familia-link]');
+        for (var i = 0; i < links.length; i++) {
+            var a = links[i];
+            var base = a.getAttribute('data-href-base') || a.getAttribute('href');
+            a.setAttribute('data-href-base', base);
+            a.setAttribute('href', hrefConFiltros(base));
+        }
+    }
+
+    function init() {
+        var navs = document.querySelectorAll('.familia-reportes');
+        for (var i = 0; i < navs.length; i++) { aplicar(navs[i]); }
+    }
+
+    // Recalcular en el clic: el reporte pudo reescribir la URL (reflejar) después de cargar.
+    document.addEventListener('click', function (ev) {
+        var a = ev.target && ev.target.closest ? ev.target.closest('.familia-reportes a[data-familia-link]') : null;
+        if (!a) { return; }
+        var base = a.getAttribute('data-href-base') || a.getAttribute('href');
+        a.setAttribute('href', hrefConFiltros(base));
+    }, true);
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+</script>

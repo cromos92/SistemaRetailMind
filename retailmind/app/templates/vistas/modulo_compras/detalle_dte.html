@@ -543,7 +543,7 @@ function mostrarDetalleDte(response) {
     // Header
     $('#numeroDocumento').text(dte.numero_documento || {{ dte_id }});
     $('#tipoDocumentoHeader').text(dte.tipo_documento || '-');
-    $('#estadoDteHeader').html(`<i class="bi bi-check-circle me-1"></i>${formatEstado(dte.estado_dte)}`);
+    $('#estadoDteHeader').html(`<i class="bi bi-check-circle me-1"></i>${escapeHtmlDte(formatEstado(dte.estado_dte))}`);
 
     // Información General
     $('#tipoDocumento').text(dte.tipo_documento || '-');
@@ -564,7 +564,14 @@ function mostrarDetalleDte(response) {
     const iva = (dte.monto_con_iva || 0) - (dte.monto_neto || 0);
     $('#montoIva').text(formatMonto(iva));
     $('#montoTotal').text(formatMonto(dte.monto_con_iva));
-    $('#saldoPendiente').text(formatMonto(dte.saldo || 0));
+    // Saldo = total − TODOS los pagos, Notas de Crédito incluidas (misma regla
+    // que Gestión DTE Compras / obtenerDetallePago). El `saldo` de la API
+    // excluye los pagos 'Nota de Crédito' y mostraba deuda en facturas pagadas.
+    const pagosDte = Array.isArray(response.pagos) ? response.pagos : null;
+    const saldo = pagosDte
+        ? (Number(dte.monto_con_iva) || 0) - pagosDte.reduce((s, p) => s + (Number(p.monto) || 0), 0)
+        : (Number(dte.saldo) || 0);
+    $('#saldoPendiente').text(formatMonto(saldo));
 
     // Productos
     if (response.productos && response.productos.length > 0) {
@@ -581,9 +588,9 @@ function mostrarDetalleDte(response) {
             const estadoCol = tieneEstado ? `<td class="text-center">${getBadgeEstadoRecepcion(p.estado_recepcion)}</td>` : '';
             html += `
                 <tr>
-                    <td style="font-weight:500">${p.producto || p.descripcion || '-'}</td>
-                    <td><span class="sku-code">${p.sku || '-'}</span></td>
-                    <td><span class="talla-badge">${p.talla || '-'}</span></td>
+                    <td style="font-weight:500">${escapeHtmlDte(p.producto || p.descripcion || '-')}</td>
+                    <td><span class="sku-code">${escapeHtmlDte(p.sku || '-')}</span></td>
+                    <td><span class="talla-badge">${escapeHtmlDte(p.talla || '-')}</span></td>
                     <td class="text-center" style="font-weight:600">${p.cantidad || 0}</td>
                     <td class="text-end">${formatMonto(p.precio_unitario)}</td>
                     <td class="text-end" style="font-weight:700; color:#1A1A2E">${formatMonto(p.subtotal)}</td>
@@ -600,9 +607,9 @@ function mostrarDetalleDte(response) {
         response.pagos.forEach(p => {
             htmlPagos += `
                 <tr>
-                    <td style="font-weight:500">${p.metodo_pago || '-'}</td>
-                    <td><span class="sku-code">${p.voucher || '-'}</span></td>
-                    <td>${p.tipo_tarjeta || '-'}</td>
+                    <td style="font-weight:500">${escapeHtmlDte(p.metodo_pago || '-')}</td>
+                    <td><span class="sku-code">${escapeHtmlDte(p.voucher || '-')}</span></td>
+                    <td>${escapeHtmlDte(p.tipo_tarjeta || '-')}</td>
                     <td class="text-end" style="font-weight:700; color:#1A1A2E">${formatMonto(p.monto)}</td>
                 </tr>
             `;
@@ -638,7 +645,7 @@ function getBadgeEstado(estado) {
         'CANCELADO':              { bg: '#eceff1', color: '#546e7a', icon: 'ri-close-line' },
     };
     const s = estilos[estado] || { bg: '#eceff1', color: '#546e7a', icon: 'ri-question-line' };
-    return `<span class="badge-dte-estado" style="background:${s.bg}; color:${s.color}"><i class="${s.icon} me-1"></i>${formatEstado(estado)}</span>`;
+    return `<span class="badge-dte-estado" style="background:${s.bg}; color:${s.color}"><i class="${s.icon} me-1"></i>${escapeHtmlDte(formatEstado(estado))}</span>`;
 }
 
 function getBadgeEstadoPago(estado) {
@@ -647,8 +654,10 @@ function getBadgeEstadoPago(estado) {
         'PENDIENTE':  { bg: '#fff8e1', color: '#f57f17', icon: 'ri-time-line' },
         'VENCIDO':    { bg: '#ffebee', color: '#c62828', icon: 'ri-error-warning-line' },
     };
-    const s = estilos[estado] || { bg: '#eceff1', color: '#546e7a', icon: 'ri-question-line' };
-    return `<span class="badge-dte-estado" style="background:${s.bg}; color:${s.color}"><i class="${s.icon} me-1"></i>${estado || '-'}</span>`;
+    // estado_pago convive en mayúsculas y en 'Pendiente'/'Pagado' (DTE de compra):
+    // sin normalizar, esos salían grises con '?'.
+    const s = estilos[String(estado || '').trim().toUpperCase()] || { bg: '#eceff1', color: '#546e7a', icon: 'ri-question-line' };
+    return `<span class="badge-dte-estado" style="background:${s.bg}; color:${s.color}"><i class="${s.icon} me-1"></i>${escapeHtmlDte(estado || '-')}</span>`;
 }
 
 function getBadgeEstadoRecepcion(estado) {
@@ -663,11 +672,18 @@ function getBadgeEstadoRecepcion(estado) {
         'REGULARIZADO':                 { bg: '#e0f2f1', color: '#00796b', label: 'Regularizado' },
     };
     const s = estilos[estado] || { bg: '#eceff1', color: '#546e7a', label: estado || '-' };
-    return `<span class="badge-dte-estado" style="background:${s.bg}; color:${s.color}">${s.label}</span>`;
+    return `<span class="badge-dte-estado" style="background:${s.bg}; color:${s.color}">${escapeHtmlDte(s.label)}</span>`;
 }
 
 function formatMonto(monto) {
     if (!monto && monto !== 0) return '$0';
     return '$' + Math.round(monto).toLocaleString('es-CL');
+}
+
+// Texto seguro para interpolar en HTML (nombres de producto, voucher, etc.).
+function escapeHtmlDte(valor) {
+    return String(valor ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 </script>

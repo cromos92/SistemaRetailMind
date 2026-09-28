@@ -29,6 +29,7 @@ import json
 import logging
 import os
 import re
+import threading
 import zlib
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -43,6 +44,36 @@ from .perfiles import perfil_para
 logger = logging.getLogger('app')
 
 MODELO = os.environ.get('CARGA_FACTURA_MODELO', 'claude-opus-5')
+# Tareas triviales (¿cuántos grados está girada la página?) con un modelo más
+# barato; la lectura propiamente tal sigue con MODELO.
+MODELO_RAPIDO = os.environ.get('CARGA_FACTURA_MODELO_RAPIDO', 'claude-sonnet-5')
+
+# --- Contador de uso (tokens y búsquedas) por hilo: quien orquesta llama a
+# uso_iniciar() antes y uso_actual() después; _pedir suma cada respuesta.
+_USO = threading.local()
+_CAMPOS_USO = ('llamadas', 'entrada', 'salida', 'cache_leida', 'cache_escrita', 'busquedas')
+
+
+def uso_iniciar():
+    _USO.datos = {k: 0 for k in _CAMPOS_USO}
+
+
+def uso_actual():
+    return dict(getattr(_USO, 'datos', None) or {})
+
+
+def _registrar_uso(respuesta):
+    datos = getattr(_USO, 'datos', None)
+    u = getattr(respuesta, 'usage', None)
+    if datos is None or u is None:
+        return
+    datos['llamadas'] += 1
+    datos['entrada'] += int(getattr(u, 'input_tokens', 0) or 0)
+    datos['salida'] += int(getattr(u, 'output_tokens', 0) or 0)
+    datos['cache_leida'] += int(getattr(u, 'cache_read_input_tokens', 0) or 0)
+    datos['cache_escrita'] += int(getattr(u, 'cache_creation_input_tokens', 0) or 0)
+    servidor = getattr(u, 'server_tool_use', None)
+    datos['busquedas'] += int(getattr(servidor, 'web_search_requests', 0) or 0) if servidor else 0
 _BETA_FALLBACK = 'server-side-fallback-2026-07-01'
 _LADO_VISTA = 1600          # lado mayor de la imagen de página que se envía
 _LADO_ZOOM = 1600           # lado mayor de un recorte ampliado
@@ -140,13 +171,17 @@ def _cliente():
     return anthropic.Anthropic(api_key=clave, **extra) if clave else anthropic.Anthropic(**extra)
 
 
-def _pedir(cliente, **kwargs):
-    """Una respuesta de Claude (streaming, con respaldo de modelo si la rechaza)."""
+def _pedir(cliente, modelo=None, **kwargs):
+    """Una respuesta de Claude (streaming, con respaldo de modelo si la rechaza).
+
+    `cache_control` a nivel de petición: el prefijo estable (instrucciones,
+    imágenes de las páginas, listas del sistema) se cachea entre las vueltas
+    de zoom, entre la primera y la segunda lectura y entre turnos del chat."""
     import anthropic
 
     try:
         with cliente.beta.messages.stream(
-            model=MODELO,
+            model=modelo or MODELO,
             betas=[_BETA_FALLBACK],
             extra_body={'fallbacks': 'default'},
             cache_control={'type': 'ephemeral'},
@@ -160,6 +195,7 @@ def _pedir(cliente, **kwargs):
         if explicacion:
             raise ErrorLectura(explicacion) from exc
         raise
+    _registrar_uso(respuesta)
     if respuesta.stop_reason == 'refusal':
         detalle = getattr(respuesta, 'stop_details', None)
         raise ErrorLectura(f'Claude no quiso leer el documento ({getattr(detalle, "category", "")}).')
@@ -169,7 +205,10 @@ def _pedir(cliente, **kwargs):
 
 
 def _texto(respuesta):
-    return next((b.text for b in respuesta.content if b.type == 'text'), '')
+    """El ÚLTIMO bloque de texto: con herramientas del servidor (búsqueda web)
+    puede haber texto intermedio y el JSON final va al cierre."""
+    textos = [b.text for b in respuesta.content if getattr(b, 'type', '') == 'text']
+    return textos[-1] if textos else ''
 
 
 _ESQUEMA_ROTACION = {
@@ -183,7 +222,7 @@ _ESQUEMA_ROTACION = {
 def _enderezar(cliente, img):
     """Imagen derecha: Claude dice cuántos grados girarla en sentido horario."""
     respuesta = _pedir(
-        cliente, max_tokens=4000, output_config={
+        cliente, modelo=MODELO_RAPIDO, max_tokens=4000, output_config={
             'effort': 'low', 'format': {'type': 'json_schema', 'schema': _ESQUEMA_ROTACION}},
         messages=[{'role': 'user', 'content': [
             _bloque_imagen(img, 1000),
@@ -215,51 +254,68 @@ def _redondear(valor):
     return int(Decimal(str(valor)).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
 
 
-def _nulo(tipo):
-    return {'anyOf': [{'type': tipo}, {'type': 'null'}]}
+# La API compila el esquema a una gramática con dos techos: 16 campos con unión
+# de tipos (anyOf / null) y un tamaño total. Por eso no hay anyOf: lo que no
+# viene se marca con un centinela (-1 en números, "" en textos) y las listas
+# grandes del sistema (colores) no van como enum: Claude las ve en el pedido y
+# el valor se valida acá contra el catálogo (_limpiar_lectura). Menos esquema
+# = menos tokens por vuelta de zoom.
+SIN_DATO_NUM = -1
+_ENUM_MAXIMO = 80
+_NUM_LINEA = ('cantidad', 'precio_unitario', 'descuento_pct', 'descuento_monto', 'importe',
+              'precio_venta_a_mano', 'precio_venta_a_mano_alternativa')
+_NUM_FACTURA = ('total_unidades', 'descuento_global_pct', 'descuento_global_monto', 'total_neto')
+
+
+def _num(tipo):
+    return {'type': tipo, 'description': f'{SIN_DATO_NUM} = no viene impreso / no se lee'}
+
+
+def _txt(descripcion='"" = no viene / no se sabe'):
+    return {'type': 'string', 'description': descripcion}
+
+
+def _enum_o_texto(valores, descripcion):
+    valores = [v for v in valores if v]
+    if valores and len(valores) <= _ENUM_MAXIMO:
+        return {'type': 'string', 'enum': [''] + list(valores), 'description': '"" = no se sabe'}
+    return _txt(descripcion)
 
 
 def _esquema(categorias, especialidades, colores=()):
-    categoria = ({'anyOf': [{'type': 'string', 'enum': categorias}, {'type': 'null'}]}
-                 if categorias else _nulo('string'))
-    especialidad = ({'type': 'string', 'enum': especialidades} if especialidades
-                    else {'type': 'string'})
-    color = ({'anyOf': [{'type': 'string', 'enum': list(colores)}, {'type': 'null'}]}
-             if colores else _nulo('string'))
     linea = {
         'type': 'object',
         'properties': {
             'articulo': {'type': 'string'},
             'descripcion': {'type': 'string'},
-            'color': color,
+            'color': _txt('color de la línea: valor EXACTO de la lista de colores del sistema si calza; '
+                          'si el color impreso no está en la lista, tal cual está impreso; "" si no se sabe'),
             'tallas': {'type': 'array', 'items': {
                 'type': 'object',
                 'properties': {'talla': {'type': 'string'}, 'cantidad': {'type': 'integer'}},
                 'required': ['talla', 'cantidad'], 'additionalProperties': False}},
-            'cantidad': _nulo('integer'),
-            'precio_unitario': _nulo('integer'),
-            'descuento_pct': _nulo('number'),
-            'descuento_monto': _nulo('integer'),
-            'importe': _nulo('integer'),
-            'precio_venta_a_mano': _nulo('integer'),
-            'precio_venta_a_mano_alternativa': _nulo('integer'),
+            'cantidad': _num('integer'),
+            'precio_unitario': _num('integer'),
+            'descuento_pct': _num('number'),
+            'descuento_monto': _num('integer'),
+            'importe': _num('integer'),
+            'precio_venta_a_mano': _num('integer'),
+            'precio_venta_a_mano_alternativa': _num('integer'),
             'reparto_a_mano': {'type': 'array', 'items': {
                 'type': 'object',
                 'properties': {'tienda': {'type': 'string'}, 'cantidad': {'type': 'integer'}},
                 'required': ['tienda', 'cantidad'], 'additionalProperties': False}},
-            'marca': _nulo('string'),
-            'genero': {'anyOf': [{'type': 'string', 'enum': list(GENEROS)}, {'type': 'null'}]},
-            'categoria': categoria,
-            'especialidades': {'type': 'array', 'items': especialidad},
+            'marca': _txt('"" si es la misma marca de la factura'),
+            'genero': {'type': 'string', 'enum': [''] + list(GENEROS), 'description': '"" = no se sabe'},
+            'categoria': _enum_o_texto(categorias, '"" o valor EXACTO de la lista de categorías'),
+            'especialidades': {'type': 'array', 'items': {
+                'type': 'string', 'description': 'valor EXACTO de la lista de especialidades'}},
             'confianza': {'type': 'string', 'enum': ['alta', 'media', 'baja']},
             'dudas': {'type': 'string'},
         },
-        'required': ['articulo', 'descripcion', 'color', 'tallas', 'cantidad', 'precio_unitario',
-                     'descuento_pct', 'descuento_monto', 'importe',
-                     'precio_venta_a_mano', 'precio_venta_a_mano_alternativa', 'reparto_a_mano',
-                     'marca', 'genero', 'categoria', 'especialidades', 'confianza', 'dudas'],
         'additionalProperties': False,
     }
+    linea['required'] = list(linea['properties'])
     factura = {
         'type': 'object',
         'properties': {
@@ -267,24 +323,63 @@ def _esquema(categorias, especialidades, colores=()):
             'folio': {'type': 'integer'},
             'proveedor_nombre': {'type': 'string'},
             'proveedor_rut': {'type': 'string'},
-            'fecha_emision': {'type': 'string', 'format': 'date'},
-            'marca': _nulo('string'),
-            'total_unidades': _nulo('integer'),
-            'descuento_global_pct': _nulo('number'),
-            'descuento_global_monto': _nulo('integer'),
-            'total_neto': _nulo('integer'),
+            'fecha_emision': {'type': 'string', 'description': 'AAAA-MM-DD'},
+            'marca': _txt('marca de la mercadería; "" si no se sabe'),
+            'total_unidades': _num('integer'),
+            'descuento_global_pct': _num('number'),
+            'descuento_global_monto': _num('integer'),
+            'total_neto': _num('integer'),
             'paginas': {'type': 'array', 'items': {'type': 'integer'}},
             'lineas': {'type': 'array', 'items': linea},
             'observaciones': {'type': 'string'},
         },
-        'required': ['tipo_documento', 'folio', 'proveedor_nombre', 'proveedor_rut',
-                     'fecha_emision', 'marca', 'total_unidades', 'descuento_global_pct',
-                     'descuento_global_monto', 'total_neto', 'paginas', 'lineas', 'observaciones'],
         'additionalProperties': False,
     }
+    factura['required'] = list(factura['properties'])
     return {'type': 'object',
             'properties': {'facturas': {'type': 'array', 'items': factura}},
             'required': ['facturas'], 'additionalProperties': False}
+
+
+def _normalizar(valor, lista):
+    """El valor del catálogo que coincide (sin mayúsculas ni espacios de más) o None."""
+    clave = ' '.join(str(valor or '').split()).upper()
+    if not clave:
+        return None
+    for v in lista or []:
+        if ' '.join(str(v).split()).upper() == clave:
+            return v
+    return None
+
+
+def _limpiar_lectura(lectura, categorias=(), especialidades=(), colores=()):
+    """Centinelas → None y valores de lista validados contra el catálogo, para
+    que el resto del módulo (cuadre, JSON de carga) vea lo de siempre."""
+    def sin_dato(v):
+        return v is None or (isinstance(v, (int, float)) and not isinstance(v, bool) and v < 0)
+
+    for f in lectura.get('facturas') or []:
+        for k in _NUM_FACTURA:
+            if sin_dato(f.get(k)):
+                f[k] = None
+        f['marca'] = str(f.get('marca') or '').strip() or None
+        for l in f.get('lineas') or []:
+            for k in _NUM_LINEA:
+                if sin_dato(l.get(k)):
+                    l[k] = None
+            for k in ('marca', 'color', 'genero', 'categoria'):
+                l[k] = str(l.get(k) or '').strip() or None
+            if l.get('color') and colores:
+                # Del catálogo si calza; si no, se deja tal cual (la vista previa avisa).
+                l['color'] = _normalizar(l['color'], colores) or l['color']
+            if l.get('categoria'):
+                l['categoria'] = _normalizar(l['categoria'], categorias) if categorias else l['categoria']
+            if l.get('genero'):
+                l['genero'] = _normalizar(l['genero'], GENEROS)
+            if especialidades:
+                l['especialidades'] = [n for n in (_normalizar(e, especialidades)
+                                                   for e in l.get('especialidades') or []) if n]
+    return lectura
 
 
 _HERRAMIENTA_ZOOM = {
@@ -351,9 +446,13 @@ Cada línea de producto:
 - confianza: alta / media / baja, y en "dudas" cualquier celda que no hayas podido leer
   con seguridad (vacío si nada).
 
+Datos que no vienen: {SIN_DATO_NUM} en los números y "" en los textos. Nunca inventes un valor.
+
 Cómo leer bien:
-- Amplía con la herramienta "ampliar" todo lo que no se lea con total seguridad: la
-  grilla de tallas, precios, totales y todo lo escrito a mano. No adivines dígitos.
+- Amplía con la herramienta "ampliar" lo que no se lea con total seguridad: la grilla de
+  tallas (por bloques de varias líneas, no una por una), precios, totales y lo escrito a
+  mano. No adivines dígitos, pero tampoco amplíes lo que ya se lee bien: normalmente
+  bastan entre 4 y 10 ampliaciones por factura.
 - Antes de entregar, comprueba cada línea: la suma de cantidades por talla = cantidad, y
   cantidad × precio_unitario (menos el descuento de la línea, si lo hay) = importe, con
   diferencia de pocos pesos por redondeo; y que la suma de importes (menos el descuento
@@ -401,8 +500,8 @@ def _ejecutar_zoom(entrada, paginas):
     return _bloque_imagen(recorte, _LADO_ZOOM), None
 
 
-def _una_lectura(cliente, contenido, paginas, instrucciones, esquema, orden, total=1,
-                 progreso=None):
+def _una_lectura(cliente, contenido, paginas, instrucciones, esquema, orden,
+                 etiqueta='Leyendo el documento', progreso=None):
     """Una lectura completa (con su propio bucle de zoom). Devuelve el dict del esquema.
 
     `progreso(texto)` (opcional) recibe en qué va: la pantalla lo muestra
@@ -415,8 +514,7 @@ def _una_lectura(cliente, contenido, paginas, instrucciones, esquema, orden, tot
     herramientas = [_HERRAMIENTA_ZOOM] if paginas else []
     for turno in range(_MAX_TURNOS):
         if progreso:
-            progreso(f'Lectura {orden} de {total}: ' + (
-                'leyendo el documento…' if turno == 0 else f'ampliando detalles (vuelta {turno})…'))
+            progreso(f'{etiqueta}…' if turno == 0 else f'{etiqueta}: ampliando detalles (vuelta {turno})…')
         respuesta = _pedir(cliente, max_tokens=64000, tools=herramientas, messages=mensajes,
                            output_config={'effort': 'high',
                                           'format': {'type': 'json_schema', 'schema': esquema}})
@@ -436,9 +534,27 @@ def _una_lectura(cliente, contenido, paginas, instrucciones, esquema, orden, tot
     raise ErrorLectura(f'La lectura no terminó después de {_MAX_TURNOS} vueltas.')
 
 
-def leer_pdf(pdf_bytes, marca=None, lecturas=2, progreso=None, pistas=''):
-    """Lee el PDF. Devuelve {'lecturas': [dict, ...], 'modo': 'escaneo'|'pdf'}.
+def _con_dudas(lectura):
+    """True si la primera lectura deja algo que merece una segunda pasada: no
+    cuadra, confianza media/baja, dudas anotadas, o hay precios o repartos a
+    mano (lo más fácil de leer mal)."""
+    for f in lectura.get('facturas') or []:
+        if revisar_cuadre(f):
+            return True
+        for l in f.get('lineas') or []:
+            if l.get('confianza') != 'alta' or str(l.get('dudas') or '').strip():
+                return True
+            if l.get('precio_venta_a_mano') is not None or l.get('reparto_a_mano'):
+                return True
+    return False
 
+
+def leer_pdf(pdf_bytes, marca=None, lecturas=2, progreso=None, pistas=''):
+    """Lee el PDF. Devuelve {'lecturas': [dict, ...], 'modo': 'escaneo'|'pdf',
+    'segunda': por qué hubo (o no) segunda lectura}.
+
+    `lecturas`: 1 = una sola; 2 = la segunda solo si la primera deja dudas
+    (default: una factura limpia cuesta la mitad); 3 = dos siempre.
     `progreso(texto)` (opcional) recibe cada paso, para mostrarlo mientras se
     espera. `pistas`: indicaciones libres de la persona (marca, tipo de talla,
     cómo leer algo) que se suman a las del perfil."""
@@ -469,11 +585,19 @@ def leer_pdf(pdf_bytes, marca=None, lecturas=2, progreso=None, pistas=''):
             'data': base64.standard_b64encode(pdf_bytes).decode('ascii')}}]
         modo = 'pdf'
 
-    total = max(1, lecturas)
-    resultado = [_una_lectura(cliente, contenido, paginas, instrucciones, esquema, orden,
-                              total=total, progreso=progreso)
-                 for orden in range(1, total + 1)]
-    return {'lecturas': resultado, 'modo': modo}
+    modo_lecturas = max(1, min(3, int(lecturas or 2)))
+    primera = _una_lectura(cliente, contenido, paginas, instrucciones, esquema, 1,
+                           etiqueta='Leyendo el documento', progreso=progreso)
+    resultado = [_limpiar_lectura(primera, categorias, especialidades, colores)]
+    segunda = 'no pedida'
+    if modo_lecturas == 3 or (modo_lecturas == 2 and _con_dudas(resultado[0])):
+        otra = _una_lectura(cliente, contenido, paginas, instrucciones, esquema, 2,
+                            etiqueta='Segunda lectura (verificación)', progreso=progreso)
+        resultado.append(_limpiar_lectura(otra, categorias, especialidades, colores))
+        segunda = 'siempre' if modo_lecturas == 3 else 'por dudas'
+    elif modo_lecturas == 2:
+        segunda = 'no hizo falta'
+    return {'lecturas': resultado, 'modo': modo, 'segunda': segunda}
 
 
 # ------------------------------------------------------ comparar y convertir

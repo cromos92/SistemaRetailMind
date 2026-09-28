@@ -1,15 +1,19 @@
 """
-Módulo Devolución de Dinero por Garantía - RetailMind
+Módulo Devolución de Dinero - RetailMind (URL histórica /app/devolucion-garantia/)
 
-Vistas HTML (render) + APIs JSON, 100% function-based. Flujo en dos pasos:
+Vistas HTML (render) + APIs JSON, 100% function-based. Dos formas de ingresar:
 
-  - Un usuario con acceso al módulo (permiso `devolucion_garantia`) CREA la
-    solicitud (busca el DTE, elige líneas por cantidad o por monto parcial,
-    registra el cliente real como receptor). Queda PENDIENTE, sin NC.
-  - Un usuario con permiso de aprobar (`devolucion_garantia.puede_aprobar`)
-    la ANALIZA y responde: aprueba (decide el impacto en caja y ahí se genera
-    la NC 61 + TXT Acepta) o rechaza con motivo. El solicitante puede anular
-    su propia solicitud pendiente.
+  - Con aprobación: un usuario con acceso al módulo (permiso
+    `devolucion_garantia`) CREA la solicitud (busca el DTE, elige líneas por
+    cantidad o por monto parcial, registra el cliente real como receptor).
+    Queda PENDIENTE, sin NC. Un usuario con permiso de aprobar
+    (`devolucion_garantia.puede_aprobar`) la ANALIZA y responde: aprueba
+    (decide el impacto en caja y ahí se genera la NC 61 + TXT Acepta) o
+    rechaza con motivo. El solicitante puede anular su propia solicitud
+    pendiente.
+  - DIRECTA: la misma solicitud, firmada en el momento con el código de la
+    barra superior de un Administrador o Maestro. Se crea y se aprueba en una
+    sola transacción (NC imputada hoy con el método que pidió el cliente).
 
 La lógica de negocio vive en `app/services/devolucion_garantia_service.py`.
 """
@@ -17,6 +21,7 @@ import json
 import logging
 from datetime import datetime
 
+from django.db import transaction
 from django.utils import timezone
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse, Http404
@@ -27,11 +32,28 @@ from django.db.models import Q
 
 from .decorators import requiere_permiso
 from .models import (
-    Sucursal, DevolucionGarantia, PermisoRol, rol_efectivo, puede_emitir_nota_credito,
+    Sucursal, DevolucionGarantia, PermisoRol, RegistroAutorizacion, rol_efectivo,
 )
 from .services import devolucion_garantia_service as service
+from .services.codigo_autorizacion_service import (
+    CodigoAutorizacionError, consumir_codigo, validar_codigo_supervisor,
+)
 
 logger = logging.getLogger('app')
+
+# Auditoría de la devolución directa en RegistroAutorizacion. No tiene choice
+# propio (agregarlo pide migración): va como OTRO y se distingue por
+# `datos_adicionales.operacion`, que también acota el freno de fuerza bruta
+# (OTRO lo comparte el permiso temporal de Cambios).
+TIPO_OPERACION_DIRECTA = 'OTRO'
+OPERACION_DIRECTA = 'DEVOLUCION_DINERO_DIRECTA'
+# Marca en `observaciones_aprobacion`: el listado la usa para el badge
+# "Directa" sin agregar una columna al modelo.
+PREFIJO_DIRECTA = '[DIRECTA]'
+# Métodos de la devolución directa. EFECTIVO_CAJA pasa además por
+# `validar_efectivo_directo`; MERCADO_PAGO exige que la venta se haya cobrado
+# con MP (lo valida `aprobar_devolucion`).
+METODOS_DIRECTA = ('EFECTIVO_CAJA', 'TRANSFERENCIA_BANCARIA', 'REBAJA_CREDITO', 'MERCADO_PAGO')
 
 
 def _txt(valor):
@@ -122,7 +144,7 @@ def _cargar_devolucion(request, devolucion_id, extra_select=None, prefetch=None)
 
 @requiere_permiso('devolucion_garantia', 'puede_ver')
 def modulo_devolucion_garantia(request):
-    """Listado / registro de solicitudes de devolución por garantía."""
+    """Listado / registro de devoluciones de dinero (con aprobación o directas)."""
     from .views_modulo_ventas import _get_qz_config
 
     sucursal = _sucursal_actual(request)
@@ -175,6 +197,8 @@ def detalle_devolucion_garantia(request, devolucion_id):
 
     context = {
         'devolucion': devolucion,
+        # N° de operación / medio de Mercado Pago (None si no es por MP).
+        'mercadopago': service.mercadopago_de_devolucion(devolucion),
         # Impresión térmica 80mm del comprobante (mismo módulo QZ del ticket).
         'qz_config': _get_qz_config(sucursal.id),
     }
@@ -219,6 +243,9 @@ def api_buscar_dte_devolucion_garantia(request):
     saldo = service.saldo_documento(dte)
     receptor = dte.receptor
     es_generico = (not receptor) or (receptor.rut or '').replace('.', '') in ('66666666-6', '666666666')
+    # Cobro con Mercado Pago: habilita (y sugiere) devolver por MP y trae el
+    # N° de operación del cobro — si el sistema no lo tiene, se lo pregunta a MP.
+    pago_mp = service.pago_mercadopago_dte(dte, consultar_api=True)
 
     return JsonResponse({
         'success': True,
@@ -241,9 +268,14 @@ def api_buscar_dte_devolucion_garantia(request):
         # ANULA en la misma máquina, no por este módulo. Si la anulación por
         # máquina ya está registrada, el wizard bloquea la solicitud.
         'pago_transbank': service.pago_transbank_dte(dte),
+        'pago_mercadopago': pago_mp,
+        'metodo_sugerido': service.metodo_devolucion_sugerido(dte, pago_mp),
         'receptor_actual': {
             'rut': receptor.rut if receptor else '',
             'nombre': receptor.nombre if receptor else '',
+            # El receptor guarda el correo del cliente en `correoVendedor`
+            # (mismo campo que escribe resolver_o_crear_receptor).
+            'email': (receptor.correoVendedor or '') if receptor else '',
         } if receptor else None,
         'receptor_es_generico': es_generico,
         'productos': productos,
@@ -253,7 +285,17 @@ def api_buscar_dte_devolucion_garantia(request):
 @require_POST
 @requiere_permiso('devolucion_garantia', 'puede_crear')
 def api_generar_devolucion_garantia(request):
-    """Crea una SOLICITUD de devolución por garantía (queda PENDIENTE, sin NC)."""
+    """Crea una devolución de dinero.
+
+    Por defecto queda como SOLICITUD PENDIENTE (sin NC) para que la apruebe
+    quien tenga `puede_aprobar`.
+
+    Con `directa: true` + `codigo_autorizacion` (el código de la barra superior
+    de un Administrador o Maestro con permiso de aprobar) se crea Y se aprueba
+    en la misma transacción: NC 61 + TXT, imputada HOY con el método que pidió
+    el cliente. Si la aprobación falla no queda nada creado y el código no se
+    quema.
+    """
     try:
         body = json.loads(request.body or '{}')
     except (ValueError, json.JSONDecodeError):
@@ -263,6 +305,7 @@ def api_generar_devolucion_garantia(request):
     productos = body.get('productos') or []
     motivo = _txt(body.get('motivo')) or 'Garantía aprobada'
     requerimiento_id = body.get('requerimiento_id')
+    directa = body.get('directa') in (True, 1, '1', 'true')
 
     if not folio:
         return JsonResponse({'success': False, 'error': 'folio_dte es requerido'}, status=400)
@@ -273,6 +316,43 @@ def api_generar_devolucion_garantia(request):
     if not sucursal:
         return JsonResponse({'success': False, 'error': 'No hay sucursal seleccionada'}, status=400)
 
+    codigo_obj = autorizador = None
+    metodo_directo = None
+    if directa:
+        # Las guardas de efectivo y Mercado Pago van con el documento, abajo.
+        metodo_directo = _txt(body.get('metodo_solicitado')).upper() or 'TRANSFERENCIA_BANCARIA'
+        if metodo_directo not in METODOS_DIRECTA:
+            return JsonResponse({
+                'success': False,
+                'error': ('La devolución directa admite Efectivo, Transferencia, Mercado Pago '
+                          'o Rebaja de crédito.'),
+            }, status=400)
+        try:
+            codigo_obj, autorizador = validar_codigo_supervisor(
+                usuario=request.user,
+                codigo=_txt(body.get('codigo_autorizacion')),
+                tipo_operacion=TIPO_OPERACION_DIRECTA,
+                ip=request.META.get('REMOTE_ADDR'),
+                sucursal=sucursal,
+                descripcion=f'Devolución de dinero directa sobre el folio {folio}',
+                datos={'folio_dte': folio},
+                operacion=OPERACION_DIRECTA,
+            )
+        except CodigoAutorizacionError as e:
+            return JsonResponse(e.as_json(), status=e.status)
+
+        # La firma vale lo que valdría la aprobación de esa persona logueada:
+        # si en esta sucursal no puede aprobar devoluciones, su código tampoco.
+        if not PermisoRol.tiene_permiso(
+            autorizador, 'devolucion_garantia', 'puede_aprobar', sucursal_id=sucursal.id,
+        ):
+            return JsonResponse({
+                'success': False,
+                'code': 'AUTHORIZER_CANNOT_APPROVE',
+                'error': (f'{autorizador.get_full_name() or autorizador.username} no tiene '
+                          f'permiso para aprobar devoluciones de dinero en {sucursal.alias}.'),
+            }, status=403)
+
     requerimiento = None
     if requerimiento_id:
         from .models import Requerimiento
@@ -280,56 +360,146 @@ def api_generar_devolucion_garantia(request):
         # requerimiento de otra sucursal simplemente no se vincula.
         requerimiento = Requerimiento.objects.filter(id=requerimiento_id, sucursal=sucursal).first()
 
+    nc = contenido_txt = None
+    txt_warnings = []
     try:
-        dte_original = service.buscar_dte_para_devolucion(folio, sucursal=sucursal)
+        with transaction.atomic():
+            if directa:
+                consumir_codigo(codigo_obj)
 
-        receptor = service.resolver_o_crear_receptor(
-            cliente_id=body.get('cliente_id'),
-            rut=body.get('rut', ''),
-            nombre=body.get('nombre', ''),
-            giro=body.get('giro', ''),
-            direccion=body.get('direccion', ''),
-            comuna=body.get('comuna', ''),
-            ciudad=body.get('ciudad', ''),
-            email=body.get('email', ''),
-            telefono=body.get('telefono', ''),
-        )
+            dte_original = service.buscar_dte_para_devolucion(folio, sucursal=sucursal)
+            if directa:
+                # Lo que en el flujo con aprobación solo se advierte al
+                # aprobador, en la directa se bloquea (nadie ve el preview).
+                service.validar_transbank_directa(dte_original)
+                if metodo_directo == 'EFECTIVO_CAJA':
+                    service.validar_efectivo_directo(dte_original, sucursal)
 
-        devolucion = service.crear_solicitud_devolucion(
-            dte_original=dte_original,
-            sucursal=sucursal,
-            receptor=receptor,
-            motivo=motivo,
-            usuario=request.user,
-            detalles=productos,
-            requerimiento=requerimiento,
-            metodo_solicitado=body.get('metodo_solicitado', ''),
-            banco=body.get('banco', ''),
-            tipo_cuenta=body.get('tipo_cuenta', ''),
-            numero_cuenta=body.get('numero_cuenta', ''),
-            cuenta_titular_rut=body.get('cuenta_titular_rut', ''),
-        )
+            receptor = service.resolver_o_crear_receptor(
+                cliente_id=body.get('cliente_id'),
+                rut=body.get('rut', ''),
+                nombre=body.get('nombre', ''),
+                giro=body.get('giro', ''),
+                direccion=body.get('direccion', ''),
+                comuna=body.get('comuna', ''),
+                ciudad=body.get('ciudad', ''),
+                email=body.get('email', ''),
+                telefono=body.get('telefono', ''),
+            )
+
+            devolucion = service.crear_solicitud_devolucion(
+                dte_original=dte_original,
+                sucursal=sucursal,
+                receptor=receptor,
+                motivo=motivo,
+                usuario=request.user,
+                detalles=productos,
+                requerimiento=requerimiento,
+                metodo_solicitado=body.get('metodo_solicitado', ''),
+                banco=body.get('banco', ''),
+                tipo_cuenta=body.get('tipo_cuenta', ''),
+                numero_cuenta=body.get('numero_cuenta', ''),
+                cuenta_titular_rut=body.get('cuenta_titular_rut', ''),
+            )
+
+            if directa:
+                nombre_aut = autorizador.get_full_name() or autorizador.username
+                observaciones = (
+                    f'{PREFIJO_DIRECTA} Autorizada en el momento con el código de '
+                    f'{nombre_aut}; ingresada por {request.user.username}.'
+                )
+                extra = _txt(body.get('observaciones'))
+                if extra:
+                    observaciones += f' {extra}'
+                devolucion, nc, contenido_txt, txt_warnings = service.aprobar_devolucion(
+                    devolucion_id=devolucion.id,
+                    aprobador=autorizador,
+                    metodo_devolucion=metodo_directo,
+                    fecha_imputacion=timezone.localdate(),
+                    observaciones=observaciones,
+                    numero_operacion_mp=_txt(body.get('numero_operacion_mp')),
+                )
+                RegistroAutorizacion.objects.create(
+                    codigo_usado=codigo_obj,
+                    usuario_solicitante=request.user,
+                    usuario_autorizador=autorizador,
+                    tipo_operacion=TIPO_OPERACION_DIRECTA,
+                    descripcion=(
+                        f'Devolución de dinero directa {devolucion.numero_operacion} '
+                        f'(${int(devolucion.monto_total):,}, NC #{nc.numero_documento}) '
+                        f'autorizada por {nombre_aut}'
+                    ),
+                    ip_origen=request.META.get('REMOTE_ADDR'),
+                    exitoso=True,
+                    sucursal_solicitante=sucursal,
+                    datos_adicionales={
+                        'operacion': OPERACION_DIRECTA,
+                        'devolucion_id': devolucion.id,
+                        'numero_operacion': devolucion.numero_operacion,
+                        'nc_id': nc.id,
+                        'monto': int(devolucion.monto_total),
+                        'metodo_devolucion': metodo_directo,
+                    },
+                )
+    except CodigoAutorizacionError as e:
+        return JsonResponse(e.as_json(), status=e.status)
     except service.DevolucionGarantiaError as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=400)
     except Exception as e:
-        logger.exception("Error al crear solicitud de devolución por garantía")
+        logger.exception("Error al crear devolución de dinero (directa=%s)", directa)
         return JsonResponse({'success': False, 'error': f'Error inesperado: {e}'}, status=500)
 
+    data = {
+        'devolucion_id': devolucion.id,
+        'numero_operacion': devolucion.numero_operacion,
+        'estado': devolucion.estado,
+        'monto_total': float(devolucion.monto_total),
+        'receptor': {
+            'id': receptor.id,
+            'rut': receptor.rut,
+            'nombre': receptor.nombre,
+        },
+        'requerimiento_vinculado': requerimiento.numero_requerimiento if requerimiento else None,
+        'directa': directa,
+    }
+
+    if not directa:
+        return JsonResponse({
+            'success': True,
+            'message': f'Solicitud {devolucion.numero_operacion} creada. Queda pendiente de aprobación.',
+            'data': data,
+        })
+
+    # Único aviso de caja que el wizard no pudo mostrar antes: el arqueo de
+    # hoy ya cerrado (la NC descuadra los teóricos guardados).
+    avisos_caja = []
+    impacto = service.impacto_caja_preview(
+        devolucion=devolucion, metodo=metodo_directo, fecha_imputacion=devolucion.fecha_imputacion_caja,
+    )
+    if impacto['arqueo_existe'] and not impacto['arqueo_abierto']:
+        avisos_caja.append(
+            f"El arqueo de hoy en {sucursal.alias} ya está '{impacto['arqueo_estado']}': "
+            f"recalcule sus teóricos para que incluya esta devolución."
+        )
+
+    mp_dev = service.mercadopago_de_devolucion(devolucion)
+    data.update({
+        'nc_id': nc.id,
+        'nc_numero': nc.numero_documento,
+        'metodo_devolucion': devolucion.get_metodo_devolucion_display(),
+        'numero_operacion_mp': mp_dev['numero_operacion'] if mp_dev else '',
+        'autorizado_por': autorizador.get_full_name() or autorizador.username,
+        'descripcion_caja': impacto['descripcion'],
+        'avisos_caja': avisos_caja,
+        'txt_generado': contenido_txt is not None,
+        'txt_warnings': txt_warnings or [],
+        'nc_txt_url': reverse('descargar_txt_nc_api', args=[nc.id]),
+    })
     return JsonResponse({
         'success': True,
-        'message': f'Solicitud {devolucion.numero_operacion} creada. Queda pendiente de aprobación.',
-        'data': {
-            'devolucion_id': devolucion.id,
-            'numero_operacion': devolucion.numero_operacion,
-            'estado': devolucion.estado,
-            'monto_total': float(devolucion.monto_total),
-            'receptor': {
-                'id': receptor.id,
-                'rut': receptor.rut,
-                'nombre': receptor.nombre,
-            },
-            'requerimiento_vinculado': requerimiento.numero_requerimiento if requerimiento else None,
-        },
+        'message': (f'Devolución {devolucion.numero_operacion} realizada. '
+                    f'NC #{nc.numero_documento} generada.'),
+        'data': data,
     })
 
 
@@ -373,7 +543,10 @@ def api_listar_devoluciones_garantia(request):
             Q(numero_operacion__icontains=busqueda) |
             Q(receptor__rut__icontains=busqueda) |
             Q(receptor__nombre__icontains=busqueda) |
-            Q(nota_credito__numero_documento__icontains=busqueda)
+            Q(nota_credito__numero_documento__icontains=busqueda) |
+            # N° de operación de Mercado Pago (voucher del pago de la NC).
+            Q(id__in=DevolucionGarantia.objects.filter(
+                nota_credito__dte_asociado__voucher__icontains=busqueda).values('id'))
         )
 
     estado = (request.GET.get('estado') or '').strip()
@@ -405,6 +578,7 @@ def api_listar_devoluciones_garantia(request):
         'fecha': timezone.localtime(d.created_at).strftime('%d/%m/%Y %H:%M'),
         'solicitado_por': d.solicitado_por.username if d.solicitado_por else '',
         'autorizado_por': d.autorizado_por.username if d.autorizado_por else '',
+        'directa': (d.observaciones_aprobacion or '').startswith(PREFIJO_DIRECTA),
         'sucursal': d.sucursal.alias if d.sucursal else '',
         'puede_anular': d.estado == 'PENDIENTE' and (es_admin or d.solicitado_por_id == uid),
     } for d in pagina]
@@ -445,7 +619,7 @@ def api_ticket_devolucion_garantia(request, devolucion_id):
     devolucion = _cargar_devolucion(
         request, devolucion_id,
         extra_select=['sucursal__empresa'],
-        prefetch=['detalles__dte_producto__productoTalla'],
+        prefetch=['detalles__dte_producto__productoTalla', 'nota_credito__dte_asociado'],
     )
 
     suc, emp, dte = devolucion.sucursal, devolucion.sucursal.empresa, devolucion.dte_original
@@ -467,7 +641,17 @@ def api_ticket_devolucion_garantia(request, devolucion_id):
         })
 
     creado = timezone.localtime(devolucion.created_at)
-    es_transf = devolucion.metodo_solicitado == 'TRANSFERENCIA_BANCARIA'
+    # Método que muestra el papel: el aplicado al aprobar manda sobre el pedido
+    # (una solicitud de transferencia pudo pagarse por otro medio).
+    if devolucion.metodo_devolucion:
+        metodo = devolucion.metodo_devolucion
+        metodo_display = devolucion.get_metodo_devolucion_display()
+    else:
+        metodo = devolucion.metodo_solicitado
+        metodo_display = (devolucion.get_metodo_solicitado_display()
+                          if devolucion.metodo_solicitado else '')
+    es_transf = metodo == 'TRANSFERENCIA_BANCARIA'
+    mp_dev = service.mercadopago_de_devolucion(devolucion)
 
     return JsonResponse({
         'success': True,
@@ -488,14 +672,20 @@ def api_ticket_devolucion_garantia(request, devolucion_id):
                 'direccion': suc.direccion or '',
                 'telefono': suc.telefono or '',
             },
-            'cliente': {'nombre': receptor.nombre or '', 'rut': receptor.rut or ''},
+            'cliente': {
+                'nombre': receptor.nombre or '',
+                'rut': receptor.rut or '',
+                'email': receptor.correoVendedor or '',
+                'telefono': receptor.contacto1 or '',
+            },
             'dte': {
                 'tipo': dte.get_tipo_documento_display(),
                 'folio': dte.numero_documento,
                 'fecha': dte.fecha_emision.strftime('%d/%m/%Y') if dte.fecha_emision else '',
             },
-            'metodo_solicitado_display': (
-                devolucion.get_metodo_solicitado_display() if devolucion.metodo_solicitado else ''),
+            # Nombre histórico del campo: lo leen el ESC/POS y el HTML.
+            'metodo_solicitado_display': metodo_display,
+            'mercadopago': mp_dev,
             'transferencia': {
                 'banco': devolucion.banco or '',
                 'tipo_cuenta': devolucion.get_tipo_cuenta_display() if devolucion.tipo_cuenta else '',
@@ -545,6 +735,8 @@ def api_detalle_solicitud_devolucion_garantia(request, devolucion_id):
             'conflicto': conflicto,
         })
 
+    pago_mp = service.pago_mercadopago_dte(dte, consultar_api=True)
+
     return JsonResponse({
         'success': True,
         'data': {
@@ -565,7 +757,10 @@ def api_detalle_solicitud_devolucion_garantia(request, devolucion_id):
             # Cobro por máquina Transbank: si registra anulación por la máquina,
             # aprobar sería doble devolución (el preview de impacto lo bloquea).
             'pago_transbank': service.pago_transbank_dte(dte),
-            'metodo_sugerido': service.metodo_devolucion_sugerido(dte),
+            # Cobro con Mercado Pago: habilita devolver por MP y prellena el N°
+            # de operación (si el sistema no lo tiene, se lo pregunta a MP).
+            'pago_mercadopago': pago_mp,
+            'metodo_sugerido': service.metodo_devolucion_sugerido(dte, pago_mp),
             'sucursal': devolucion.sucursal.alias if devolucion.sucursal else '',
             'transferencia': {
                 'banco': devolucion.banco,
@@ -578,6 +773,7 @@ def api_detalle_solicitud_devolucion_garantia(request, devolucion_id):
                 'nombre': devolucion.receptor.nombre,
                 'giro': devolucion.receptor.giro,
                 'direccion': devolucion.receptor.direccion,
+                'email': devolucion.receptor.correoVendedor or '',
             },
             'dte': {
                 'folio': dte.numero_documento,
@@ -644,6 +840,7 @@ def api_aprobar_devolucion_garantia(request, devolucion_id):
             metodo_devolucion=metodo,
             fecha_imputacion=fecha_imp,
             observaciones=observaciones,
+            numero_operacion_mp=_txt(body.get('numero_operacion_mp')),
         )
     except service.DevolucionGarantiaError as e:
         # La solicitud queda PENDIENTE: el aprobador decide rechazar o reintentar.
