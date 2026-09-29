@@ -6,12 +6,14 @@ No escribe en la base: solo crea los archivos JSON. Revisa en la salida (y en
 el campo "_revisar" de cada archivo / línea) lo que no coincidió entre
 lecturas, lo que no cuadra y los precios a mano dudosos.
 
-La lógica vive en app/services/carga_factura/lectura.py. Necesita el paquete
-"anthropic" y ANTHROPIC_API_KEY.
+La lógica vive en app/services/carga_factura/lectura.py. Necesita la clave del
+proveedor del modelo: ANTHROPIC_API_KEY para Claude (default), OPENAI_API_KEY,
+GEMINI_API_KEY… para otros (ver app/utils_ia.py).
 
 Uso (desde retailmind/):
     python manage.py leer_factura_pdf "C:/ruta/Factura.pdf" --sucursal EDEL
     python manage.py leer_factura_pdf "C:/ruta/Factura.pdf" --sucursal EDEL --marca NIKE --lecturas 1
+    python manage.py leer_factura_pdf "C:/ruta/Factura.pdf" --sucursal EDEL --modelo gemini:gemini-3.8-flash
 Luego:
     python manage.py cargar_productos_factura compras/facturas/EQUINOX_148763.json
 """
@@ -41,6 +43,9 @@ class Command(BaseCommand):
         parser.add_argument('--marca', default=None, help='Marca (si no, la que lea en la factura)')
         parser.add_argument('--lecturas', type=int, default=2,
                             help='Lecturas independientes que se comparan (default 2)')
+        parser.add_argument('--modelo', default=None,
+                            help='Lector: claude-opus-5 (default), openai:gpt-5.4-mini, '
+                                 'gemini:gemini-3.8-flash… o una cadena de respaldo "a,b"')
         parser.add_argument('--salida', default='compras/facturas',
                             help='Carpeta de los JSON (default compras/facturas)')
         parser.add_argument('--sobrescribir', action='store_true',
@@ -55,13 +60,19 @@ class Command(BaseCommand):
         salida = Path(opts['salida'])
         salida.mkdir(parents=True, exist_ok=True)
 
-        self.stdout.write(f'Leyendo {ruta.name} con {svc_lectura.MODELO} '
+        modelo = opts['modelo'] or svc_lectura.modelo_lectura()
+        self.stdout.write(f'Leyendo {ruta.name} con {modelo} '
                           f'({opts["lecturas"]} lectura(s))… puede tardar unos minutos.')
+        svc_lectura.uso_iniciar()
         try:
             leido = svc_lectura.leer_pdf(ruta.read_bytes(), marca=opts['marca'],
-                                         lecturas=opts['lecturas'])
+                                         lecturas=opts['lecturas'], modelo=modelo)
         except ErrorCarga as exc:
             raise CommandError(str(exc))
+        uso = svc_lectura.uso_actual()
+        modelo = leido.get('modelo') or modelo
+        self.stdout.write(f'Leída con {modelo}: {uso.get("llamadas", 0)} llamada(s), '
+                          f'≈ US${uso.get("costo_usd", 0):.2f}.')
 
         consolidada = svc_lectura.combinar_lecturas(leido['lecturas'])
         facturas = consolidada.get('facturas', [])
@@ -72,7 +83,7 @@ class Command(BaseCommand):
         for factura in facturas:
             datos = svc_lectura.a_json_de_carga(
                 factura, opts['sucursal'].upper(), marca=opts['marca'],
-                fuente=f'{ruta.name}, leída con {svc_lectura.MODELO} ({opts["lecturas"]} lectura(s))')
+                fuente=f'{ruta.name}, leída con {modelo} ({opts["lecturas"]} lectura(s))')
             destino = salida / f'{_slug(factura.get("proveedor_nombre"))}_{factura["folio"]}.json'
             if destino.exists() and not opts['sobrescribir']:
                 destino = destino.with_name(destino.stem + '_leida.json')

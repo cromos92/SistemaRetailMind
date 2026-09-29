@@ -629,6 +629,9 @@ URL_PERMISO_MAP = {
     '/app/permisos/gestion/': 'gestion_permisos',
     '/app/permisos/': 'gestion_permisos',
     '/app/configuracion/interfaz-prueba-acepta/': 'interfaz_acepta',
+    # Claves de API y modelos de IA (y sus subrutas: clave/, probar/, modelos/).
+    # Las vistas además exigen puede_editar para guardar o probar.
+    '/app/configuracion/inteligencia-artificial/': 'inteligencia_artificial',
     # El generador de TXT del SII colgaba solo de @login_required: la URL no
     # matcheaba ninguna clave del mapa. Único consumidor:
     # static/js/generador_txt_acepta.js, cargado exclusivamente por

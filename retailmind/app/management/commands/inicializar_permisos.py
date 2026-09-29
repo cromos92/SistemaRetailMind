@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand
 from app.models import ModuloSistema, OpcionMenu, PermisoRol
 
 # Opciones que ningún rol recibe por defecto: solo el Maestro (que pasa todo).
-SOLO_MAESTRO = ('asociar_pagos_mercadopago',)
+SOLO_MAESTRO = ('asociar_pagos_mercadopago', 'inteligencia_artificial')
 
 
 class Command(BaseCommand):
@@ -373,6 +373,7 @@ class Command(BaseCommand):
             ('gestion_permisos', 'Gestión Permisos', 'gestion_permisos', None, 'bi-shield-lock', 6),
             ('interfaz_acepta', 'Interfaz Prueba Acepta', None, '/app/configuracion/interfaz-prueba-acepta/', 'ri-file-text-line', 7),
             ('integraciones_ecommerce', 'Integraciones Ecommerce', 'integraciones_ecommerce', None, 'ri-image-line', 8),
+            ('inteligencia_artificial', 'Inteligencia Artificial', 'inteligencia_artificial', None, 'ri-robot-line', 9),
         ]
         
         for codigo, nombre, url_name, url_path, icono, orden in opciones:

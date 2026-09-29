@@ -286,7 +286,15 @@
         font-size: .74rem; color: #0d6efd; cursor: pointer; text-decoration: none; user-select: none;
     }
     .chipSimilarManual { cursor: pointer; }
-    .chipSimilarManual:hover { background: #fff3cd !important; }
+    /* Códigos parecidos: una fila por ficha hermana con «Copiar datos» / «Usar código» */
+    .estado-codigo-card .ec-similares { display: flex; flex-direction: column; gap: 4px; }
+    .estado-codigo-card .ec-similar {
+        display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+        border: 1px solid #e9ecef; border-radius: 8px; padding: 4px 8px; background: #fff; font-size: .74rem;
+    }
+    .estado-codigo-card .ec-similar-info { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; min-width: 0; }
+    .estado-codigo-card .ec-similar-acciones { display: flex; gap: 4px; flex-shrink: 0; }
+    .estado-codigo-card .ec-similar .btn { font-size: .72rem; white-space: nowrap; }
     /* Código de artículo SIEMPRE en mayúsculas (el JS fuerza el valor real) */
     .articulo-autocomplete { text-transform: uppercase; }
 
@@ -5959,6 +5967,38 @@ function showError(msg) {
         mostrarModal('#modalCrearOpcionAtributo');
     });
 
+    // Rápido por teclado: al abrir, el cursor en «Nuevo valor»; lo que se
+    // escribe filtra a la vez la lista de existentes; Enter elige la que ya
+    // existe con ese nombre exacto o guarda la nueva.
+    $('#modalCrearOpcionAtributo').on('shown.bs.modal', function () {
+        $('#nuevaOpcionValor').trigger('focus');
+    });
+    $('#nuevaOpcionValor').on('input', function () {
+        $('#buscarOpcionExistente').val($(this).val()).trigger('input');
+    });
+    $('#nuevaOpcionValor').on('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const valor = $(this).val().trim().toLowerCase();
+        const existente = valor && opcionesAtributoCache.find(o => String(o.valor).toLowerCase() === valor);
+        if (existente) {
+            $(`#listaOpcionesExistentes .btn-seleccionar-opcion[data-id="${existente.id}"]`).first().trigger('click');
+        } else {
+            $('#btnGuardarOpcion').trigger('click');
+        }
+    });
+
+    // Tras elegir o crear una opción desde Crear Manual: seguir con el campo
+    // siguiente (marca → color → género → categoría) sin pasar por el mouse.
+    function seguirTrasOpcionManual(selectTarget) {
+        if (!$('#modalCrearProductoManual').hasClass('show') || typeof siguienteCampoManual !== 'function') return;
+        const el = $('#modalCrearProductoManual select[name="' + selectTarget + '"]')[0];
+        if (!el) return;
+        $('#modalCrearOpcionAtributo').one('hidden.bs.modal', function () {
+            setTimeout(() => siguienteCampoManual(el), 60);
+        });
+    }
+
 
     // Variable para almacenar todas las opciones cargadas
     let opcionesAtributoCache = [];
@@ -6035,8 +6075,9 @@ function showError(msg) {
         
         // Seleccionar la opción
         selectElement.val(opcionId).trigger('change');
-        
-        // Cerrar modal
+
+        // Cerrar modal y seguir con el campo siguiente
+        seguirTrasOpcionManual(selectTarget);
         cerrarModal('modalCrearOpcionAtributo');
         
         // Mostrar confirmación
@@ -6056,7 +6097,8 @@ function showError(msg) {
     $('#btnGuardarOpcion').on('click', function () {
         const atributoId = $('#atributoOpcionID').val();
         const selectTarget = $('#atributoSelectTarget').val();
-        const valor = $('#nuevaOpcionValor').val().trim();
+        // Las opciones del catálogo van en mayúsculas (NIKE, BLACK, HOMBRE…)
+        const valor = $('#nuevaOpcionValor').val().trim().toUpperCase();
 
         if (!valor) {
             Swal.fire({
@@ -6116,8 +6158,9 @@ function showError(msg) {
                     icon: 'success',
                     title: `"${res.valor}" agregado correctamente`
                 });
-                
-                // Cerrar modal
+
+                // Cerrar modal y seguir con el campo siguiente
+                seguirTrasOpcionManual(selectTarget);
                 cerrarModal('modalCrearOpcionAtributo');
             } else {
                 Swal.fire({
@@ -10019,6 +10062,77 @@ function actualizarBotonCrearManual() {
                      : '<i class="bi bi-check-lg me-1"></i> Crear producto');
     $('#btnCrearYSeguirManual').html('<i class="bi bi-arrow-repeat me-1"></i> ' + (existe ? 'Sumar y seguir' : 'Crear y seguir'));
 }
+
+// ==================================================================
+// TECLADO RÁPIDO en Crear Manual: Enter = siguiente campo (antes Enter en
+// cualquier input ENVIABA el formulario y saltaba «Campos incompletos»), y al
+// elegir marca / color / género / categoría / guía se pasa solo al siguiente.
+// Orden: Código → Descripción → Marca → Color → Género → Categoría → Guía →
+// Costo → Precio venta → cantidades por talla → Crear.
+// ==================================================================
+const ORDEN_CAMPOS_MANUAL = [
+    'input[name="articulo"]', 'input[name="descripcion"]',
+    'select[name="atributo1"]', 'select[name="atributo2"]', 'select[name="atributo3"]',
+    '#catManualBtn', '#selectGuiaTallaManual',
+    'input[name="costo"]', 'input[name="precioventa"]',
+];
+
+function enfocarCampoManual(selector) {
+    const $el = $('#formCrearProductoManual').find(selector).first();
+    if (!$el.length || $el.is(':disabled')) return false;
+    if ($el.is('select')) {
+        try { if ($el.data('select2')) { $el.select2('open'); return true; } } catch (e) { /* sin select2 */ }
+    }
+    $el.trigger('focus');
+    if ($el.is('input')) { try { $el[0].select(); } catch (e) { /* no seleccionable */ } }
+    return true;
+}
+
+function siguienteCampoManual(actual) {
+    const $f = $('#formCrearProductoManual');
+    const idx = ORDEN_CAMPOS_MANUAL.findIndex(sel => $f.find(sel).first().is(actual));
+    for (let i = idx + 1; i < ORDEN_CAMPOS_MANUAL.length; i++) {
+        if (enfocarCampoManual(ORDEN_CAMPOS_MANUAL[i])) return true;
+    }
+    _irATallasManual();
+    return true;
+}
+
+$(document).on('keydown', '#formCrearProductoManual input', function (e) {
+    if (e.key !== 'Enter' || e.ctrlKey || e.metaKey || e.altKey) return;
+    const $t = $(this);
+    if ($t.is('[type=checkbox], [type=hidden], #rangoTallaDesde, #rangoTallaHasta, #buscadorProductoExistente, #busquedaTabla, .markup-custom-input')) return;
+    if ($t.closest('.nexo-picker-panel').length) return;   // buscadores de los pickers
+    if ($t.is('#tablaTallasManual input[name="talla[]"]')) {
+        // Talla escrita → su cantidad (la cantidad ya baja con Enter a la siguiente fila)
+        e.preventDefault();
+        $t.closest('tr').find('.stock-input').trigger('focus').select();
+        return;
+    }
+    if ($t.closest('#tablaTallasManual').length) return;   // stock: manejo propio
+    e.preventDefault();
+    if ($t.is('input[name="articulo"]')) {
+        $('.articulo-autocomplete-dropdown').hide();
+        // Producto identificado y sin nada pendiente salvo las cantidades: directo a ellas.
+        const pendientes = CHECKLIST_MANUAL.filter(it => { try { return !it.ok(); } catch (er) { return true; } }).map(it => it.id);
+        if (window.productoExistenteManual && pendientes.every(id => id === 'tallas')) { _irATallasManual(); return; }
+        if (window.productoExistenteManual === null && $('#estadoCodigoManual .ec-verificando').length) {
+            // Todavía verificando: si resulta existente y completo, que salte a las cantidades.
+            window._irAStockTrasVerificar = true;
+        }
+    }
+    siguienteCampoManual(this);
+});
+
+// Al ELEGIR en un select (teclado o mouse) se pasa solo al siguiente campo.
+$(document).on('select2:select', '#modalCrearProductoManual select[name="atributo1"], #modalCrearProductoManual select[name="atributo2"], #modalCrearProductoManual select[name="atributo3"], #selectGuiaTallaManual', function () {
+    const el = this;
+    setTimeout(() => siguienteCampoManual(el), 30);
+});
+// …y al elegir la categoría en el picker.
+$(document).on('click', '#catManualList .nexo-prow', function () {
+    setTimeout(() => siguienteCampoManual($('#catManualBtn')[0]), 30);
+});
 $(document).on('change', '#selectDteManual', function() {
     $('#hiddenDteManual').val($(this).val());
     setTimeout(() => actualizarStepperManual(detectarPasoManual()), 200);
@@ -10644,7 +10758,7 @@ function stockPrevioDe(prev, sku, talla) {
         || 0;
 }
 
-function agregarFilaTallaManual() {
+function agregarFilaTallaManual(enfocar = true) {
     // Calcular el siguiente tabindex basado en las filas existentes.
     // Stock usa 100+ y talla 300+: Tab recorre TODOS los stocks en orden y,
     // como grupo aparte, todas las tallas en orden (flujo adicional para
@@ -10665,10 +10779,12 @@ function agregarFilaTallaManual() {
             </td>
         </tr>`;
     $('#tablaTallasManual tbody').append(fila);
-    
-    // Enfocar el campo de talla de la nueva fila (para que escriba la talla primero)
+
+    // Enfocar el campo de talla de la nueva fila (para que escriba la talla
+    // primero). Al abrir el modal se agrega la fila SIN foco: el cursor
+    // arranca en Código, no en la tabla.
     const $nuevaFila = $('#tablaTallasManual tbody tr:last');
-    $nuevaFila.find('input[name="talla[]"]').focus();
+    if (enfocar !== false) $nuevaFila.find('input[name="talla[]"]').focus();
     
     // ✅ Actualizar resumen de tallas
     actualizarResumenTallasManual();
@@ -10961,9 +11077,10 @@ $(document).on('keydown', '#tablaTallasManual input[name="stock[]"]', function(e
 
 // Evento para cargar guías de talla cuando se selecciona marca
 $(document).on('change', '#modalCrearProductoManual select[name="atributo1"]', function() {
+    if (window._rellenandoManual) return;   // lo está rellenando la propia verificación
     const marcaId = $(this).val();
     cargarGuiasTallaManual(marcaId);
-    
+
     // Verificar producto existente cuando cambia marca
     verificarProductoExistenteManual();
 });
@@ -11989,7 +12106,10 @@ function _ecSeccionBodegas(r, estado) {
         </div>`;
 }
 
-// Sección: códigos parecidos ya registrados (guardia anti-typo/duplicado)
+// Sección: códigos parecidos / de la misma familia ya registrados. Dos usos:
+//  - «Copiar datos»: llegó el mismo modelo en otra variante (44544-2 → 44544-3):
+//    se copia TODO salvo el código y se cambia solo lo que difiere (color…).
+//  - «Usar código»: lo tecleado era un typo de ese código.
 function _ecSeccionSimilares(r, articulo, estado) {
     if (estado === 'existe') return '';
     const vistos = new Set();
@@ -12001,15 +12121,55 @@ function _ecSeccionSimilares(r, articulo, estado) {
             return true;
         }).slice(0, 6);
     if (!similares.length) return '';
-    const chips = similares.map(s => `
-        <span class="badge bg-warning-subtle text-dark border chipSimilarManual" data-articulo="${s.articulo}"
-              title="${s.marca} / ${s.color} / ${s.genero} — clic para usar este código">${s.articulo}</span>`).join(' ');
+    const filas = similares.map(s => `
+        <div class="ec-similar">
+            <div class="ec-similar-info">
+                <b>${escManual(s.articulo)}</b>
+                ${s.descripcion ? `<span class="text-muted">${escManual(s.descripcion)}</span>` : ''}
+                <span class="badge bg-dark">${escManual(s.marca)}</span>
+                <span class="badge bg-info text-dark">${escManual(s.color)}</span>
+                <span class="badge bg-secondary">${escManual(s.genero)}</span>
+                <span class="badge bg-light text-dark border">${escManual(s.categoria)}</span>
+                ${s.precioventa ? `<span class="text-muted">$${Number(s.precioventa).toLocaleString('es-CL')}</span>` : ''}
+            </div>
+            <div class="ec-similar-acciones">
+                <button type="button" class="btn btn-sm btn-primary py-0 px-2 btnCopiarDeSimilar" data-producto-id="${s.id}" data-articulo="${escManual(s.articulo)}"
+                        title="Copiar marca, género, categoría, guía, tallas y precios de ${escManual(s.articulo)} manteniendo el código ${escManual(articulo)}; después cambias lo que difiera (color…)">
+                    <i class="bi bi-copy me-1"></i>Copiar datos
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 chipSimilarManual" data-articulo="${escManual(s.articulo)}"
+                        title="Era un typo: reemplazar el código por ${escManual(s.articulo)}">
+                    Usar código
+                </button>
+            </div>
+        </div>`).join('');
     return `
         <div class="ec-seccion">
-            <div class="ec-nota mb-1"><i class="bi bi-spellcheck me-1"></i>Códigos <b>parecidos</b> ya registrados (¿typo?): clic para usar uno.</div>
-            <div class="ec-chips">${chips}</div>
+            <div class="ec-nota mb-1"><i class="bi bi-diagram-2 me-1"></i><b>Parecidos ya registrados</b> — ¿es otra variante del mismo modelo? <b>Copiar datos</b> y cambia solo lo que difiera. ¿Era un typo? <b>Usar código</b>.</div>
+            <div class="ec-similares">${filas}</div>
         </div>`;
 }
+
+// «Copiar datos» de un código parecido: todo salvo el código, como PRODUCTO
+// NUEVO (SKUs frescos), y el foco queda en Color, que es lo que suele cambiar.
+$(document).on('click', '.btnCopiarDeSimilar', function () {
+    const $btn = $(this);
+    const productoId = $btn.data('producto-id');
+    const origen = String($btn.data('articulo') || '');
+    if (!productoId) return;
+    $btn.prop('disabled', true).html('<i class="bi bi-hourglass-split me-1"></i>Copiando…');
+    $.get(`/app/detalle_producto_para_copiar/${productoId}/`, function (response) {
+        if (!(response && response.success && response.producto)) {
+            $btn.prop('disabled', false).html('<i class="bi bi-copy me-1"></i>Copiar datos');
+            showToast('error', 'No se pudo obtener el detalle del producto');
+            return;
+        }
+        copiarProductoCoincidencia(response.producto, { comoVariante: true, origen: origen });
+    }).fail(function () {
+        $btn.prop('disabled', false).html('<i class="bi bi-copy me-1"></i>Copiar datos');
+        showToast('error', 'Error al obtener datos del producto');
+    });
+});
 
 // ✅ Comparación viva costo/sobreprecio/precio venta del formulario vs el
 // producto existente — SIN switch: si el usuario modificó alguno, los precios
@@ -12171,6 +12331,51 @@ $(document).on('input', '.articulo-autocomplete', function() {
 
 window._seqVerifManual = window._seqVerifManual || 0;
 
+// Con el código ya identificado, marca / color / género / categoría son las de
+// la ficha (es su identidad): se rellenan SOLO los campos que estén vacíos,
+// sin disparar los 'change' que vuelven a verificar (change.select2 solo
+// repinta el select). Devuelve los nombres de lo rellenado.
+function rellenarDesdeExistenteManual(prod) {
+    if (!prod) return [];
+    const $m = $('#modalCrearProductoManual');
+    const rellenados = [];
+    window._rellenandoManual = true;
+    try {
+        const setSel = (name, id, valor, etiqueta) => {
+            const $s = $m.find(`select[name="${name}"]`);
+            if (!$s.length || $s.val() || !id) return;
+            if (!$s.find(`option[value="${id}"]`).length) $s.append($('<option>').val(id).text(valor || ''));
+            $s.val(String(id)).trigger('change.select2');
+            rellenados.push(etiqueta);
+            if (name === 'atributo1' && typeof cargarGuiasTallaManual === 'function') cargarGuiasTallaManual(id);
+        };
+        setSel('atributo1', prod.marca_id, prod.marca, 'marca');
+        setSel('atributo2', prod.color_id, prod.color, 'color');
+        setSel('atributo3', prod.genero_id, prod.genero, 'género');
+        if (prod.categoria_id && !$('#catManualValue').val() && window.NexoManualPicker) {
+            NexoManualPicker.setCat(prod.categoria_id, prod.categoria);
+            rellenados.push('categoría');
+        }
+        if (window.NexoManualPicker && (prod.especialidades || []).length && !(NexoManualPicker.getEsp() || []).length) {
+            NexoManualPicker.setEsp(prod.especialidades);
+            rellenados.push('especialidades');
+        }
+        const $desc = $m.find('input[name="descripcion"]');
+        if (!($desc.val() || '').trim() && prod.descripcion) { $desc.val(prod.descripcion); rellenados.push('descripción'); }
+        const $costo = $m.find('input[name="costo"]'), $venta = $m.find('input[name="precioventa"]');
+        if (!(parseInt($costo.val()) || 0) && !(parseInt($venta.val()) || 0) && (prod.costo || prod.precioventa)) {
+            $costo.val(prod.costo || 0);
+            $m.find('input[name="sobreprecio"]').val(prod.sobreprecio || 0);
+            $venta.val(prod.precioventa || 0);
+            if (typeof actualizarIndicadoresMargen === 'function') actualizarIndicadoresMargen($m);
+            rellenados.push('precios');
+        }
+    } finally {
+        window._rellenandoManual = false;
+    }
+    return rellenados;
+}
+
 function verificarProductoExistenteManual() {
     // ✅ No reconstruir la tabla mientras el usuario decide en el Swal de
     // confirmación: un rebuild en esa ventana pisaba el stock tipeado y el
@@ -12316,22 +12521,34 @@ function verificarProductoExistenteManual() {
                         $('#tablaTallasManual tbody').append(fila);
                     });
                     
-                    // Enfocar el primer campo de stock para facilitar ingreso
-                    // (nunca si el usuario ya se fue a otro campo).
-                    const _focoAlCopiar = document.activeElement;
-                    setTimeout(() => {
-                        enfocarSiElUsuarioSigueDonde(
-                            _focoAlCopiar,
-                            $('#tablaTallasManual tbody tr:first .stock-input'),
-                        );
-                    }, 100);
-                    
                     // ✅ Actualizar resumen de tallas
                     actualizarResumenTallasManual();
-                    
+
                     console.log(`✅ ${tallasOrdenadas.length} tallas copiadas (ordenadas de menor a mayor)`);
                 }
-                
+
+                // Con el código identificado, la ficha manda: marca, color,
+                // género, categoría, descripción y precios se rellenan solos en
+                // los campos que sigan vacíos (el panel avisa cuáles).
+                const rellenados = rellenarDesdeExistenteManual(prod);
+                if (rellenados.length) {
+                    $('#estadoCodigoManual .ec-body').prepend(
+                        `<div class="ec-nota mb-1"><i class="bi bi-magic me-1"></i>Rellené desde la ficha: ${rellenados.join(', ')}.</div>`);
+                }
+                actualizarComparePrecioManual();
+                actualizarChecklistManual();
+
+                // Foco: NUNCA se roba mientras la persona sigue escribiendo o ya
+                // pasó a otro campo (antes el guard se capturaba dentro de este
+                // callback y siempre «ganaba»: cambiar el código te mandaba a
+                // las tallas). Solo salta a las cantidades cuando se pidió de
+                // forma explícita: «Sumar» de Actividad reciente o Enter en
+                // Código con el producto ya completo.
+                if (window._irAStockTrasVerificar) {
+                    window._irAStockTrasVerificar = false;
+                    setTimeout(() => _irATallasManual(), 60);
+                }
+
                 // (la comparación de precios vive dentro del panel único y se
                 // actualiza en vivo al tipear precioventa)
             } else {
@@ -12596,6 +12813,8 @@ $(document).on('click', '.btn-sumar-stock-actividad', function() {
     const articulo = $(this).data('articulo');
     $('#btnCrearManualGeneral').trigger('click');
     setTimeout(function() {
+        // Salto explícito a las cantidades cuando la verificación confirme la ficha.
+        window._irAStockTrasVerificar = true;
         $('#modalCrearProductoManual input[name="articulo"]')
             .val(articulo).trigger('change');
     }, 400);
@@ -13468,11 +13687,19 @@ function mostrarModalCoincidenciasArticulo(productos, articulo) {
 }
 
 // ✅ NUEVA: Copiar datos de una coincidencia seleccionada
-function copiarProductoCoincidencia(producto) {
+function copiarProductoCoincidencia(producto, opciones) {
     console.log('📋 copiarProductoCoincidencia - Copiando producto:', producto);
-    
-    window.productoExistenteManual = producto;
-    window.tallasExistentesManual = producto.tallas || [];
+    opciones = opciones || {};
+    // comoVariante: se crea OTRA ficha (código distinto o nueva variante) a
+    // partir de esta; no es «el producto existente», así que no se marca como
+    // tal (el botón seguiría diciendo «Sumar stock al existente»).
+    if (opciones.comoVariante) {
+        window.productoExistenteManual = null;
+        window.tallasExistentesManual = null;
+    } else {
+        window.productoExistenteManual = producto;
+        window.tallasExistentesManual = producto.tallas || [];
+    }
     
     // Copiar datos al formulario
     $('#modalCrearProductoManual input[name="descripcion"]').val(producto.descripcion || '');
@@ -13542,7 +13769,18 @@ function copiarProductoCoincidencia(producto) {
     // Actualizar indicadores de margen (el panel de estado se re-renderiza solo:
     // los .trigger('change') de los atributos disparan la verificación)
     setTimeout(() => actualizarIndicadoresMargen($('#modalCrearProductoManual')), 100);
-    
+
+    if (opciones.comoVariante) {
+        actualizarBotonCrearManual();
+        showToast('success', `Copiado de ${opciones.origen || producto.articulo}: cambia lo que difiera (color…) y crea`);
+        // El foco va a Color (lo que más suele cambiar entre hermanas): Enter o
+        // escribir lo abre. Se espera a que los selects recarguen sus opciones.
+        setTimeout(() => {
+            const $c = $('#modalCrearProductoManual select[name="atributo2"]').next('.select2-container').find('.select2-selection');
+            if ($c.length) $c.trigger('focus');
+        }, 900);
+        return;
+    }
     Swal.fire({
         icon: 'success',
         title: 'Producto seleccionado',
@@ -13782,6 +14020,7 @@ $('#modalCrearProductoManual input[name="articulo"]').on('change input', functio
 // Eventos para verificar producto cuando cambian otros campos (color, género, categoría)
 // (la categoría es un input hidden del picker; su change se dispara manualmente)
 $('#modalCrearProductoManual select[name="atributo2"], #modalCrearProductoManual select[name="atributo3"], #modalCrearProductoManual input[name="categoria"]').on('change', function() {
+    if (window._rellenandoManual) return;   // lo está rellenando la propia verificación
     clearTimeout(timeoutVerificacionManual);
     timeoutVerificacionManual = setTimeout(function() {
         verificarProductoExistenteManual();
@@ -14183,9 +14422,15 @@ $('#formCrearProductoManual').on('submit', function(e) {
         }
     });
     
+    // Sumar stock a un producto existente: las tallas ya tienen SKU real y el
+    // backend no usa la guía (solo la usa para crear fichas nuevas).
+    const soloTallasExistentes = !!window.productoExistenteManual && $filasTallas.filter(function() {
+        return (parseInt($(this).find('input[name="stock[]"]').val()) || 0) > 0 && !$(this).hasClass('talla-existente');
+    }).length === 0;
+
     // La guía de talla es obligatoria SOLO si hay productos con stock > 0,
-    // excepto en modo "Sin guía" (SIN_GUIA) que siempre se permite.
-    if (tieneStockPositivo && !guiaId && !modoSinGuiaManual) {
+    // excepto en modo "Sin guía" (SIN_GUIA) o al sumar a tallas existentes.
+    if (tieneStockPositivo && !guiaId && !modoSinGuiaManual && !soloTallasExistentes) {
         valido = false;
         mensajes.push('Debes seleccionar una Guía de Talla cuando hay productos con stock (o usa "Sin guía" para talla única 00).');
         $('#selectGuiaTallaManual').addClass('is-invalid');
@@ -15338,8 +15583,17 @@ $('#btnConfirmarActualizacion').on('click', function() {
     // Inicializar al abrir el modal
     $('#modalCrearProductoManual').on('shown.bs.modal', function() {
         if ($('#tablaTallasManual tbody tr').length === 0) {
-            agregarFilaTallaManual();
+            agregarFilaTallaManual(false);   // sin foco: el cursor va a Código
         }
+        // El cursor arranca donde hay que escribir: Proveedor si falta, si no Código.
+        setTimeout(() => {
+            if ($('#modalCrearProductoManual input[name="articulo"]').val()) return;   // ya venía precargado («Sumar»)
+            if (!$('#selectProveedorManual').val()) {
+                const $c = $('#selectProveedorManual').next('.select2-container').find('.select2-selection');
+                if ($c.length) { $c.trigger('focus'); return; }
+            }
+            $('#modalCrearProductoManual input[name="articulo"]').trigger('focus');
+        }, 260);
 
         $('#buscadorProductoExistente').val('');
         $('#resultadosBusqueda').hide();
@@ -16861,7 +17115,7 @@ $('#btnConfirmarActualizacion').on('click', function() {
 <script src="{% static 'js/edicion_productos.js' %}?v=202609281800"></script>
 
 <!-- Agente "Cargar desde factura": botón #btnCargarFacturaIA → modal #modalCargaFactura -->
-<script src="{% static 'js/carga_factura.js' %}?v=202609281800"></script>
+<script src="{% static 'js/carga_factura.js' %}?v=202609291400"></script>
 
 <!-- SortableJS: reordenar tallas en el modal de Guía de Talla (se inicializa en shown.bs.modal) -->
 <script src="{% static 'libs/sortablejs/Sortable.min.js' %}"></script>

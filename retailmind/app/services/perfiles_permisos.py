@@ -68,6 +68,8 @@ AJUSTES_ADMINISTRADOR = {
     'dte_editar_pago': _solo('puede_ver', 'puede_editar'),
     **{c: _solo('puede_ver', 'puede_editar') for c in TIPOS_DOCUMENTO},
     'devolucion_garantia': TODO,
+    # Claves de API de IA (cuestan plata): solo el Maestro; él la delega en Gestión Permisos.
+    'inteligencia_artificial': NADA,
 }
 
 PERFILES = {

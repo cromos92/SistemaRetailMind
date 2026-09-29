@@ -1,0 +1,900 @@
+{% load static %}
+
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+{% csrf_token %}
+
+{{ datos_ia|json_script:"data-ia" }}
+
+<style>
+/* ==================== ESTILOS MÓDULO INTELIGENCIA ARTIFICIAL ==================== */
+/* Estructura estándar de módulo: ver templates/vistas/ESTILOS_MODULOS.md.
+   Los tokens --nexo-* vienen de static/css/nexo-design-system.css (layout/header.html).
+   Misma base que integraciones_ecommerce.html (módulo Configuración). */
+
+.page-content {
+    background: #ffffff !important;
+    min-height: calc(100vh - 70px);
+}
+
+:root {
+    --rm-primary: #405189;
+    --rm-accent: #0ab39c;
+    --rm-warning: #ffbe0b;
+    --rm-danger: #f06548;
+    --rm-info: #299cdb;
+    --rm-gradient: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+}
+
+/* Card principal */
+.card.shadow {
+    border: none;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(64, 81, 137, 0.1);
+    animation: fadeInCard 0.4s ease;
+}
+@keyframes fadeInCard {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Header con gradiente */
+.module-header {
+    background: var(--rm-gradient);
+    color: white;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.module-header-left { display: flex; align-items: center; gap: 14px; }
+.module-header-icon {
+    width: 48px;
+    height: 48px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+}
+.module-header-info h5 { margin: 0; font-size: 18px; font-weight: 600; color: white; }
+.module-header-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    opacity: 0.9;
+    margin-top: 4px;
+}
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background: #4ade80;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+.status-dot.alerta { background: var(--rm-warning); }
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+.module-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.module-header-actions .btn {
+    border-radius: 10px;
+    font-weight: 500;
+    padding: 8px 14px;
+    font-size: 13px;
+    border: none;
+    transition: all 0.2s ease;
+}
+.module-header-actions .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.card-body { padding: 24px; background: white; }
+.modulo-intro { color: var(--nexo-gray-700); font-size: 0.875rem; margin: 0 0 16px; }
+
+/* KPI cards (colores por tipo de ESTILOS_MODULOS) */
+.kpi-card { border-radius: 12px; border: none; overflow: hidden; transition: all 0.3s ease; }
+.kpi-card:hover { transform: translateY(-4px); box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15); }
+.kpi-card .card-body { padding: 12px 16px; background: transparent; }
+.kpi-card .kpi-icon {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    color: white;
+}
+.kpi-card .kpi-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--nexo-text-secondary);
+    margin: 0;
+    line-height: 1.2;
+}
+.kpi-card .kpi-value { font-size: 1.35rem; font-weight: 700; color: var(--rm-primary); margin: 0; line-height: 1.1; }
+.kpi-card .kpi-sub { font-size: 0.72rem; color: var(--nexo-gray-700); margin: 2px 0 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi-yellow { background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 4px solid var(--rm-warning); }
+.kpi-yellow .kpi-icon { background: linear-gradient(135deg, #ffbe0b 0%, #f0a500 100%); }
+.kpi-green { background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 4px solid var(--rm-accent); }
+.kpi-green .kpi-icon { background: linear-gradient(135deg, #0ab39c 0%, #099885 100%); }
+.kpi-blue { background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid var(--rm-info); }
+.kpi-blue .kpi-icon { background: linear-gradient(135deg, #299cdb 0%, #1976d2 100%); }
+
+/* Secciones */
+.seccion-ia { margin-top: 24px; }
+.seccion-ia-titulo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.seccion-ia-titulo h6 { margin: 0; font-weight: 700; color: var(--nexo-gray-900); font-size: 0.95rem; }
+.seccion-ia-titulo p { margin: 2px 0 0; font-size: 0.78rem; color: var(--nexo-gray-500); }
+
+/* Tablas */
+.tabla-ia { margin-bottom: 0; }
+.tabla-ia thead th {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--nexo-gray-500);
+    font-weight: 600;
+    border-bottom: 1px solid var(--nexo-gray-300);
+    white-space: nowrap;
+}
+.tabla-ia td { font-size: 0.85rem; vertical-align: middle; }
+.ia-nombre { font-weight: 600; color: var(--nexo-gray-900); }
+.ia-meta { font-size: 0.75rem; color: var(--nexo-gray-500); margin-top: 2px; }
+.ia-meta code, .ia-ayuda code {
+    font-size: 0.72rem;
+    color: var(--nexo-gray-700);
+    background: var(--nexo-gray-100);
+    padding: 1px 5px;
+    border-radius: 4px;
+}
+.ia-modelo { font-family: Consolas, Monaco, monospace; font-size: 0.78rem; color: var(--rm-primary); overflow-wrap: anywhere; }
+.ia-error { font-size: 0.75rem; color: #a13030; margin-top: 4px; }
+.tabla-ia .form-control-sm { min-width: 230px; font-family: Consolas, Monaco, monospace; font-size: 0.78rem; }
+.tabla-ia .celda-en-uso { max-width: 300px; }
+.tabla-ia .celda-en-uso .chip { white-space: normal; }
+.acciones-fila { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+
+/* Badges y chips (mismos que Integraciones Ecommerce) */
+.badge-estado {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 9px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.badge-estado.si { background: #e8f9f3; color: #008060; }
+.badge-estado.no { background: var(--nexo-gray-100); color: var(--nexo-gray-500); }
+.badge-estado.env { background: var(--nexo-primary-light); color: var(--nexo-primary-dark); }
+.badge-estado.error { background: #f9eaea; color: #a13030; }
+.chip {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: var(--nexo-gray-100);
+    color: var(--nexo-gray-700);
+    margin: 2px 2px 0 0;
+    white-space: nowrap;
+}
+.chip.ok { background: #e8f9f3; color: #008060; }
+.chip.bad { background: #f9eaea; color: #a13030; }
+.chip.warn { background: #fff4e0; color: #8a5a00; }
+
+.ia-ayuda {
+    background: var(--nexo-gray-100);
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 0.8rem;
+    color: var(--nexo-gray-700);
+}
+.ia-ayuda ul { margin: 6px 0 0; padding-left: 18px; }
+.guardar-modelos-bar { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+/* Modales */
+.modal-content { border-radius: 12px; border: none; }
+.modal-header-rm { background: var(--rm-gradient); color: white; border-radius: 12px 12px 0 0; }
+.modal-header-rm .modal-title { color: white; font-weight: 600; }
+.form-label-required::after { content: ' *'; color: var(--nexo-error); }
+.form-text-rm { font-size: 0.75rem; color: var(--nexo-gray-500); }
+
+@media (max-width: 768px) {
+    .module-header { padding: 12px 16px; }
+    .module-header-icon { width: 40px; height: 40px; font-size: 20px; }
+    .card-body { padding: 16px; }
+    .tabla-ia .form-control-sm { min-width: 180px; }
+}
+</style>
+
+<div class="page-content">
+    <div class="container-fluid">
+
+        <div class="card shadow">
+            <!-- Header con gradiente -->
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon">
+                        <i class="ri-robot-line"></i>
+                    </div>
+                    <div class="module-header-info">
+                        <h5>Inteligencia Artificial</h5>
+                        <div class="module-header-status">
+                            <span class="status-dot{% if not kpi_con_clave %} alerta{% endif %}" id="header-status-dot"></span>
+                            <span>
+                                <span id="header-con-clave">{{ kpi_con_clave }}</span> de {{ kpi_proveedores }} proveedor(es) con clave ·
+                                lector: <span id="header-lector">{{ kpi_lector|default:'sin configurar' }}</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="module-header-actions">
+                    <a href="{% url 'inteligencia_artificial' %}" class="btn btn-light">
+                        <i class="ri-refresh-line me-1"></i>Actualizar
+                    </a>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <p class="modulo-intro">
+                    Claves de API de los proveedores de IA y el modelo que usa cada tarea (lectura de facturas,
+                    chat de la carga, búsqueda en internet, asistente). Lo que guardes aquí manda sobre las
+                    variables de entorno del servidor; si lo borras, vuelve a regir la variable o el modelo por
+                    defecto. Las claves se guardan cifradas y nunca se muestran completas.
+                </p>
+
+                <!-- KPIs -->
+                <div class="row g-2 mb-3">
+                    <div class="col-xl-3 col-md-6 col-6">
+                        <div class="kpi-card kpi-green card h-100">
+                            <div class="card-body d-flex align-items-center gap-2">
+                                <div class="kpi-icon"><i class="ri-key-2-line"></i></div>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <p class="kpi-label">Proveedores con clave</p>
+                                    <div class="kpi-value"><span id="kpi-con-clave">{{ kpi_con_clave }}</span> / {{ kpi_proveedores }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6 col-6">
+                        <div class="kpi-card kpi-blue card h-100">
+                            <div class="card-body d-flex align-items-center gap-2">
+                                <div class="kpi-icon"><i class="ri-settings-3-line"></i></div>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <p class="kpi-label">Tareas con modelo propio</p>
+                                    <div class="kpi-value"><span id="kpi-tareas-pantalla">{{ kpi_tareas_pantalla }}</span> / {{ kpi_tareas }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6 col-6">
+                        <div class="kpi-card kpi-yellow card h-100">
+                            <div class="card-body d-flex align-items-center gap-2">
+                                <div class="kpi-icon"><i class="ri-money-dollar-circle-line"></i></div>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <p class="kpi-label">Gasto estimado 30 días</p>
+                                    <div class="kpi-value" id="kpi-gasto">US$ {{ kpi_gasto|floatformat:2 }}</div>
+                                    <p class="kpi-sub">{{ kpi_sesiones }} carga(s) por factura con registro</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6 col-6">
+                        <div class="kpi-card kpi-blue card h-100">
+                            <div class="card-body d-flex align-items-center gap-2">
+                                <div class="kpi-icon"><i class="ri-file-search-line"></i></div>
+                                <div class="flex-grow-1 overflow-hidden">
+                                    <p class="kpi-label">Lector de facturas</p>
+                                    <p class="kpi-sub ia-modelo" id="kpi-lector" title="{{ kpi_lector }}">{{ kpi_lector|default:'sin configurar' }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Claves de API -->
+                <div class="seccion-ia">
+                    <div class="seccion-ia-titulo">
+                        <div>
+                            <h6><i class="ri-key-2-line me-1"></i>Claves de API</h6>
+                            <p>«Probar» le pide al proveedor su lista de modelos: valida la clave sin gastar tokens.</p>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle tabla-ia">
+                            <thead>
+                                <tr>
+                                    <th>Proveedor</th>
+                                    <th>Clave en uso</th>
+                                    <th>Última prueba</th>
+                                    <th class="text-end">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-proveedores"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Modelo por tarea -->
+                <div class="seccion-ia">
+                    <div class="seccion-ia-titulo">
+                        <div>
+                            <h6><i class="ri-cpu-line me-1"></i>Modelo por tarea</h6>
+                            <p>El respaldo se usa si el principal falla (sin clave, caído, saturado). Deja el campo vacío para volver a la variable de entorno o al modelo por defecto.</p>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle tabla-ia">
+                            <thead>
+                                <tr>
+                                    <th>Tarea</th>
+                                    <th>En uso ahora</th>
+                                    <th>Modelo principal</th>
+                                    <th>Respaldo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-tareas"></tbody>
+                        </table>
+                    </div>
+                    <div class="guardar-modelos-bar">
+                        <button type="button" class="btn btn-primary" data-accion="guardar-modelos" id="btn-guardar-modelos">
+                            <i class="ri-save-line me-1"></i>Guardar modelos
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Gasto -->
+                <div class="seccion-ia">
+                    <div class="seccion-ia-titulo">
+                        <div>
+                            <h6><i class="ri-money-dollar-circle-line me-1"></i>Gasto estimado de los últimos 30 días</h6>
+                            <p>Carga de productos por factura, con el precio de lista de cada modelo (la cuenta real la lleva cada proveedor).</p>
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle tabla-ia">
+                                    <thead><tr><th>Modelo</th><th class="text-end">US$</th></tr></thead>
+                                    <tbody id="tbody-gasto-modelo"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle tabla-ia">
+                                    <thead><tr><th>Paso</th><th class="text-end">US$</th></tr></thead>
+                                    <tbody id="tbody-gasto-paso"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ayuda -->
+                <div class="seccion-ia">
+                    <div class="ia-ayuda">
+                        <b><i class="ri-information-line me-1"></i>Cómo se escribe un modelo</b>
+                        <ul>
+                            <li>Claude va sin prefijo: <code>claude-opus-5</code>, <code>claude-sonnet-5</code>.</li>
+                            <li>Otros proveedores con prefijo: <code>openai:gpt-5.4-mini</code>, <code>gemini:gemini-3.8-flash</code>, <code>deepseek:deepseek-chat</code>, <code>openrouter:qwen/qwen3-vl</code>, <code>compatible:llama3.2-vision</code>.</li>
+                            <li>Las sugerencias salen de la tabla de precios y de los modelos que listó cada proveedor al probar su clave.</li>
+                            <li>Recomendado para gastar menos: lectura con el más preciso (Opus) y chat, enderezar y verificación con uno económico, siempre con Claude de respaldo.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<datalist id="dl-modelos"></datalist>
+
+<!-- Modal: clave de un proveedor -->
+<div class="modal fade" id="modalClave" tabindex="-1" aria-labelledby="modalClaveTitulo" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="formClave" autocomplete="off">
+                <input type="hidden" id="clave-proveedor" value="">
+                <div class="modal-header modal-header-rm">
+                    <h5 class="modal-title" id="modalClaveTitulo">Clave de API</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label" for="clave-valor" id="clave-valor-label">Clave de API</label>
+                            <div class="input-group">
+                                <input type="password" id="clave-valor" class="form-control" autocomplete="new-password" spellcheck="false">
+                                <button type="button" class="btn btn-outline-secondary" id="clave-toggle" aria-label="Mostrar u ocultar la clave">
+                                    <i class="ri-eye-line"></i>
+                                </button>
+                            </div>
+                            <div class="form-text-rm" id="clave-ayuda">Se guarda cifrada. Antes de guardarla se prueba con el proveedor.</div>
+                            <a href="#" target="_blank" rel="noopener" class="form-text-rm d-inline-block mt-1" id="clave-enlace">¿Dónde la consigo?</a>
+                        </div>
+                        <div class="col-12 d-none" id="grupo-url">
+                            <label class="form-label" for="clave-url">URL base</label>
+                            <input type="url" id="clave-url" class="form-control" placeholder="http://localhost:11434/v1" maxlength="255">
+                            <div class="form-text-rm">Servidor compatible con la API de OpenAI (Ollama, vLLM, Groq…).</div>
+                        </div>
+                        <div class="col-12 d-none" id="grupo-workspace">
+                            <label class="form-label" for="clave-workspace">Workspace (opcional)</label>
+                            <input type="text" id="clave-workspace" class="form-control" placeholder="wrkspc_…" maxlength="100">
+                            <div class="form-text-rm">Solo si la clave es de la organización y no de un workspace (Console → Settings → Workspaces → ID).</div>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="clave-activa" checked>
+                                <label class="form-check-label" for="clave-activa">Usar esta clave (apagada = rige la variable de entorno, si hay)</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-danger me-auto d-none" id="btn-quitar-clave" data-accion="quitar-clave">
+                        <i class="ri-delete-bin-line me-1"></i>Quitar de la pantalla
+                    </button>
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btn-guardar-clave">
+                        <i class="ri-save-line me-1"></i>Probar y guardar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% include '../../layout/footer.html' %}
+
+<script>
+(function () {
+    'use strict';
+
+    var URLS = {
+        guardarClave: "{% url 'guardar_clave_ia' %}",
+        probarClave: "{% url 'probar_clave_ia' %}",
+        guardarModelos: "{% url 'guardar_modelos_ia' %}"
+    };
+    var ESTADO = { proveedores: [], tareas: [], catalogo: [], gasto: {}, puede_editar: false };
+    try {
+        ESTADO = JSON.parse(document.getElementById('data-ia').textContent) || ESTADO;
+    } catch (e) { /* sin datos */ }
+
+    var ORIGEN_CLAVE = { pantalla: 'En pantalla', variable: 'Variable de entorno' };
+    var PASOS = { lectura: 'Lectura', chat: 'Chat', busqueda: 'Búsqueda en internet' };
+
+    // ---------- utilidades ----------
+    function $id(id) { return document.getElementById(id); }
+
+    function escHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function csrfToken() {
+        var el = document.querySelector('[name=csrfmiddlewaretoken]');
+        return el ? el.value : '';
+    }
+
+    function modal(id) {
+        var el = $id(id);
+        if (window.bootstrap && bootstrap.Modal.getOrCreateInstance) {
+            return bootstrap.Modal.getOrCreateInstance(el);
+        }
+        return bootstrap.Modal.getInstance(el) || new bootstrap.Modal(el);
+    }
+
+    function confirmar(titulo, texto, botonOk, peligro) {
+        if (window.Swal) {
+            return Swal.fire({
+                icon: peligro ? 'warning' : 'question',
+                title: titulo,
+                text: texto,
+                showCancelButton: true,
+                confirmButtonText: botonOk || 'Sí, continuar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: peligro ? '#f06548' : '#405189',
+                reverseButtons: true
+            }).then(function (r) { return r.isConfirmed; });
+        }
+        return Promise.resolve(window.confirm(titulo + '\n\n' + texto));
+    }
+
+    function avisar(icono, titulo, texto) {
+        if (window.Swal) {
+            Swal.fire({ icon: icono, title: titulo, text: texto, confirmButtonColor: '#405189' });
+        } else {
+            window.alert(titulo + '\n\n' + texto);
+        }
+    }
+
+    // Los 403 de permisos responden {error: true, mensaje: '…'}; las vistas, {ok: false, error: '…'}.
+    function postJson(url, cuerpo) {
+        return fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+                'X-CSRFToken': csrfToken()
+            },
+            body: JSON.stringify(cuerpo || {})
+        }).then(function (r) {
+            return r.json().catch(function () {
+                throw new Error('HTTP ' + r.status + ' (respuesta no es JSON)');
+            }).then(function (data) {
+                if (!r.ok && !(data && data.puede_forzar) && !(data && data.errores)) {
+                    var msg = (data && typeof data.error === 'string' && data.error) || (data && data.mensaje) || ('HTTP ' + r.status);
+                    throw new Error(msg);
+                }
+                return data;
+            });
+        });
+    }
+
+    function usd(n) {
+        return 'US$ ' + Number(n || 0).toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+    }
+
+    function precioTxt(p) {
+        if (!p) { return ''; }
+        var f = function (v) { return Number(v).toLocaleString('es-CL', { maximumFractionDigits: 3 }); };
+        return 'US$' + f(p[0]) + ' / ' + f(p[1]) + ' por millón (entrada / salida)';
+    }
+
+    function fecha(iso) {
+        if (!iso) { return ''; }
+        var d = new Date(iso);
+        return isNaN(d) ? iso : d.toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' });
+    }
+
+    function proveedor(codigo) {
+        for (var i = 0; i < ESTADO.proveedores.length; i++) {
+            if (ESTADO.proveedores[i].codigo === codigo) { return ESTADO.proveedores[i]; }
+        }
+        return null;
+    }
+
+    // ---------- pintar ----------
+    function badgeClave(p) {
+        if (p.origen === 'pantalla') {
+            return '<span class="badge-estado si"><i class="ri-shield-keyhole-line"></i>En pantalla' +
+                (p.ultimos4 ? ' · …' + escHtml(p.ultimos4) : '') + '</span>';
+        }
+        if (p.origen === 'variable') {
+            return '<span class="badge-estado env"><i class="ri-server-line"></i>Variable ' + escHtml(p.variable) + '</span>';
+        }
+        return '<span class="badge-estado no"><i class="ri-close-circle-line"></i>Sin clave</span>';
+    }
+
+    function celdaPrueba(p) {
+        if (!p.probada_en) { return '<span class="ia-meta">Sin probar</span>'; }
+        var chip = p.prueba_ok ? '<span class="chip ok">OK</span>' : '<span class="chip bad">Falló</span>';
+        return chip + ' <span class="ia-meta">' + escHtml(fecha(p.probada_en)) + '</span>' +
+            '<div class="ia-meta">' + escHtml(p.prueba_detalle) + '</div>';
+    }
+
+    function pintarProveedores() {
+        var editar = ESTADO.puede_editar;
+        $id('tbody-proveedores').innerHTML = ESTADO.proveedores.map(function (p) {
+            var meta = [];
+            if (p.guardada && !p.activa) { meta.push('<span class="chip warn">Guardada pero apagada</span>'); }
+            if (p.pide_url && p.url_base) { meta.push('URL <code>' + escHtml(p.url_base) + '</code>'); }
+            if (p.pide_workspace && p.workspace_id) { meta.push('Workspace <code>' + escHtml(p.workspace_id) + '</code>'); }
+            if (p.actualizado_por) { meta.push('Guardó: ' + escHtml(p.actualizado_por)); }
+            var acciones = '';
+            if (editar) {
+                acciones += '<button type="button" class="btn btn-sm btn-outline-primary" data-accion="editar-clave" data-proveedor="' +
+                    escHtml(p.codigo) + '"><i class="ri-edit-line me-1"></i>' + (p.guardada ? 'Cambiar' : 'Agregar') + '</button>';
+                if (p.origen) {
+                    acciones += '<button type="button" class="btn btn-sm btn-outline-secondary" data-accion="probar-clave" data-proveedor="' +
+                        escHtml(p.codigo) + '"><i class="ri-flashlight-line me-1"></i>Probar</button>';
+                }
+            }
+            return '<tr>' +
+                '<td><div class="ia-nombre">' + escHtml(p.nombre) + '</div><div class="ia-meta">' + meta.join(' · ') + '</div></td>' +
+                '<td>' + badgeClave(p) + '</td>' +
+                '<td>' + celdaPrueba(p) + '</td>' +
+                '<td><div class="acciones-fila">' + acciones + '</div></td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    function badgeOrigen(t) {
+        if (t.origen === 'pantalla') { return '<span class="badge-estado si">En pantalla</span>'; }
+        if (t.origen === 'variable') { return '<span class="badge-estado env">Variable ' + escHtml(t.variable) + '</span>'; }
+        return '<span class="badge-estado no">Por defecto</span>';
+    }
+
+    function celdaEnUso(t) {
+        var modelos = t.etiquetas.length ? t.etiquetas.map(function (e, i) {
+            var marca = '';
+            if (!t.configurado[i]) {
+                marca = ' <span class="chip bad" title="Ningún modelo de la cadena tiene clave">sin clave</span>';
+            } else if (t.usa[i] && t.usa[i] !== t.principales[i]) {
+                marca = '<div><span class="chip warn" title="El principal no tiene clave: se salta en cada llamada">' +
+                    'principal sin clave · responde ' + escHtml(t.usa_etiquetas[i]) + '</span></div>';
+            }
+            return '<div class="ia-modelo">' + escHtml(e) + marca + '</div>';
+        }).join('') : '<div class="ia-meta">' + (t.codigo === 'verificacion' ? 'El mismo de la lectura' : 'Ninguno') + '</div>';
+        return modelos + '<div class="mt-1">' + badgeOrigen(t) + '</div>' +
+            (t.precio ? '<div class="ia-meta">' + escHtml(precioTxt(t.precio)) + '</div>' : '');
+    }
+
+    function pintarTareas() {
+        var bloqueo = ESTADO.puede_editar ? '' : ' disabled';
+        $id('tbody-tareas').innerHTML = ESTADO.tareas.map(function (t) {
+            var partes = t.lista ? [t.guardado] : String(t.guardado || '').split(',');
+            var principal = (partes[0] || '').trim();
+            var respaldo = partes.slice(1).join(',').trim();
+            // Vacío muestra lo que rige sin la pantalla (variable o por defecto).
+            var rige = t.origen === 'pantalla' ? 'vacío = variable o por defecto'
+                : (t.principales[0] || 'igual que la lectura');
+            var entradas;
+            if (t.lista) {
+                entradas = '<td colspan="2"><input type="text" class="form-control form-control-sm" list="dl-modelos"' +
+                    ' data-tarea="' + escHtml(t.codigo) + '" data-campo="lista" value="' + escHtml(principal) + '"' +
+                    ' placeholder="gemini:gemini-3.8-flash; openai:gpt-5.4-mini" maxlength="255"' + bloqueo + '>' +
+                    '<div class="ia-meta">Varios separados por punto y coma.</div></td>';
+            } else {
+                entradas = '<td><input type="text" class="form-control form-control-sm" list="dl-modelos"' +
+                    ' data-tarea="' + escHtml(t.codigo) + '" data-campo="principal" value="' + escHtml(principal) + '"' +
+                    ' placeholder="' + escHtml(rige) + '" maxlength="120"' + bloqueo + '></td>' +
+                    '<td><input type="text" class="form-control form-control-sm" list="dl-modelos"' +
+                    ' data-tarea="' + escHtml(t.codigo) + '" data-campo="respaldo" value="' + escHtml(respaldo) + '"' +
+                    ' placeholder="opcional" maxlength="120"' + bloqueo + '></td>';
+            }
+            return '<tr data-fila-tarea="' + escHtml(t.codigo) + '">' +
+                '<td><div class="ia-nombre">' + escHtml(t.nombre) + '</div><div class="ia-meta">' + escHtml(t.ayuda) + '</div>' +
+                '<div class="ia-error d-none" data-error-tarea="' + escHtml(t.codigo) + '"></div></td>' +
+                '<td class="celda-en-uso">' + celdaEnUso(t) + '</td>' + entradas + '</tr>';
+        }).join('');
+        $id('btn-guardar-modelos').classList.toggle('d-none', !ESTADO.puede_editar);
+    }
+
+    function pintarCatalogo() {
+        $id('dl-modelos').innerHTML = ESTADO.catalogo.map(function (m) {
+            return '<option value="' + escHtml(m.id) + '">' + escHtml(precioTxt(m.precio)) + '</option>';
+        }).join('');
+    }
+
+    function pintarGasto() {
+        var g = ESTADO.gasto || {};
+        var filas = function (lista, nombres) {
+            if (!lista || !lista.length) { return '<tr><td colspan="2" class="ia-meta">Sin cargas con registro de costo en estos 30 días.</td></tr>'; }
+            return lista.map(function (x) {
+                return '<tr><td class="' + (nombres ? '' : 'ia-modelo') + '">' + escHtml(nombres ? (nombres[x[0]] || x[0]) : x[0]) +
+                    '</td><td class="text-end">' + escHtml(usd(x[1])) + '</td></tr>';
+            }).join('');
+        };
+        $id('tbody-gasto-modelo').innerHTML = filas(g.por_modelo, null);
+        $id('tbody-gasto-paso').innerHTML = filas(g.por_paso, PASOS);
+    }
+
+    function pintarKpis() {
+        var conClave = ESTADO.proveedores.filter(function (p) { return !!p.origen; }).length;
+        var propias = ESTADO.tareas.filter(function (t) { return t.origen === 'pantalla'; }).length;
+        var lectura = ESTADO.tareas.filter(function (t) { return t.codigo === 'lectura'; })[0];
+        var lector = lectura && lectura.etiquetas.length
+            ? (lectura.usa_etiquetas[0] || lectura.etiquetas[0]) : 'sin configurar';
+        $id('kpi-con-clave').textContent = conClave;
+        $id('header-con-clave').textContent = conClave;
+        $id('kpi-tareas-pantalla').textContent = propias;
+        $id('kpi-lector').textContent = lector;
+        $id('kpi-lector').title = lector;
+        $id('header-lector').textContent = lector;
+        $id('header-status-dot').classList.toggle('alerta', !conClave);
+    }
+
+    // conservar = true: repintado por una acción de CLAVE; lo escrito (sin
+    // guardar) en los modelos por tarea se vuelve a poner en los inputs nuevos.
+    function pintar(estado, conservar) {
+        if (estado) { ESTADO = estado; }
+        var escrito = {};
+        if (conservar) {
+            document.querySelectorAll('[data-tarea][data-campo]').forEach(function (el) {
+                escrito[el.dataset.tarea + '|' + el.dataset.campo] = el.value;
+            });
+        }
+        pintarProveedores();
+        pintarTareas();
+        if (conservar) {
+            document.querySelectorAll('[data-tarea][data-campo]').forEach(function (el) {
+                var k = el.dataset.tarea + '|' + el.dataset.campo;
+                if (Object.prototype.hasOwnProperty.call(escrito, k)) { el.value = escrito[k]; }
+            });
+        }
+        pintarCatalogo();
+        pintarGasto();
+        pintarKpis();
+    }
+
+    // ---------- claves ----------
+    function abrirClave(codigo) {
+        var p = proveedor(codigo);
+        if (!p) { return; }
+        $id('clave-proveedor').value = p.codigo;
+        $id('modalClaveTitulo').textContent = 'Clave de ' + p.nombre;
+        $id('clave-valor').value = '';
+        $id('clave-valor').type = 'password';
+        $id('clave-valor').placeholder = p.guardada && p.ultimos4 ? '•••• …' + p.ultimos4 + ' (vacío = conservar la actual)'
+            : (p.guardada ? '•••••••• (vacío = conservar la actual)' : 'Pega aquí la clave');
+        $id('clave-valor-label').classList.toggle('form-label-required', !p.guardada && !p.pide_url);
+        $id('clave-ayuda').textContent = p.pide_url
+            ? 'Opcional si el servidor no pide clave (Ollama local). Se guarda cifrada.'
+            : 'Se guarda cifrada. Antes de guardarla se prueba con ' + p.nombre + '.';
+        $id('clave-enlace').classList.toggle('d-none', !p.enlace);
+        $id('clave-enlace').href = p.enlace || '#';
+        $id('grupo-url').classList.toggle('d-none', !p.pide_url);
+        $id('clave-url').value = p.url_base || '';
+        $id('grupo-workspace').classList.toggle('d-none', !p.pide_workspace);
+        $id('clave-workspace').value = p.workspace_id || '';
+        $id('clave-activa').checked = p.guardada ? !!p.activa : true;
+        $id('btn-quitar-clave').classList.toggle('d-none', !p.guardada);
+        modal('modalClave').show();
+        setTimeout(function () { $id('clave-valor').focus(); }, 300);
+    }
+
+    function guardarClave(forzar) {
+        var boton = $id('btn-guardar-clave');
+        var cuerpo = {
+            proveedor: $id('clave-proveedor').value,
+            clave: $id('clave-valor').value.trim(),
+            url_base: $id('clave-url').value.trim(),
+            workspace_id: $id('clave-workspace').value.trim(),
+            activa: $id('clave-activa').checked,
+            forzar: !!forzar
+        };
+        boton.disabled = true;
+        boton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Probando…';
+        return postJson(URLS.guardarClave, cuerpo).then(function (data) {
+            if (data.ok) {
+                $id('clave-valor').value = '';
+                modal('modalClave').hide();
+                pintar(data.estado, true);
+                avisar('success', 'Listo', data.mensaje);
+                return;
+            }
+            if (data.puede_forzar) {
+                return confirmar('La prueba falló', data.error + '\n\n¿Guardar la clave igual?', 'Guardar igual', true)
+                    .then(function (si) { if (si) { return guardarClave(true); } });
+            }
+            avisar('error', 'No se pudo guardar', data.error || 'Error');
+        }).catch(function (err) {
+            avisar('error', 'No se pudo guardar', err.message);
+        }).finally(function () {
+            boton.disabled = false;
+            boton.innerHTML = '<i class="ri-save-line me-1"></i>Probar y guardar';
+        });
+    }
+
+    function quitarClave() {
+        var p = proveedor($id('clave-proveedor').value);
+        if (!p) { return; }
+        confirmar('Quitar la clave de ' + p.nombre, 'Se borra de la pantalla. Si el servidor tiene la variable ' +
+            p.variable + ', se vuelve a usar esa; si no, las tareas con ' + p.nombre + ' pasan a su respaldo.', 'Quitar', true)
+            .then(function (si) {
+                if (!si) { return; }
+                return postJson(URLS.guardarClave, { proveedor: p.codigo, quitar: true }).then(function (data) {
+                    modal('modalClave').hide();
+                    pintar(data.estado, true);
+                    avisar('success', 'Listo', data.mensaje);
+                });
+            }).catch(function (err) { avisar('error', 'No se pudo quitar', err.message); });
+    }
+
+    function probarClave(codigo, boton) {
+        var original = boton.innerHTML;
+        boton.disabled = true;
+        boton.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        postJson(URLS.probarClave, { proveedor: codigo }).then(function (data) {
+            pintar(data.estado, true);
+            avisar(data.ok ? 'success' : 'error', data.ok ? 'Clave válida' : 'La prueba falló', data.detalle);
+        }).catch(function (err) {
+            avisar('error', 'No se pudo probar', err.message);
+        }).finally(function () {
+            boton.disabled = false;
+            boton.innerHTML = original;
+        });
+    }
+
+    // ---------- modelos ----------
+    function marcarError(codigo, texto) {
+        var el = document.querySelector('[data-error-tarea="' + codigo + '"]');
+        if (el) { el.textContent = texto; el.classList.remove('d-none'); }
+    }
+
+    function guardarModelos() {
+        var tareas = {};
+        var faltaPrincipal = false;
+        document.querySelectorAll('[data-error-tarea]').forEach(function (el) { el.classList.add('d-none'); el.textContent = ''; });
+        ESTADO.tareas.forEach(function (t) {
+            var sel = function (campo) {
+                var el = document.querySelector('[data-tarea="' + t.codigo + '"][data-campo="' + campo + '"]');
+                return el ? el.value.trim() : '';
+            };
+            if (t.lista) {
+                tareas[t.codigo] = sel('lista');
+                return;
+            }
+            // Un respaldo solo no se guarda: pasaría a ser el ÚNICO modelo de la tarea.
+            if (!sel('principal') && sel('respaldo')) {
+                marcarError(t.codigo, 'Escribe el modelo principal (o deja también vacío el respaldo para volver al por defecto).');
+                faltaPrincipal = true;
+            }
+            tareas[t.codigo] = [sel('principal'), sel('respaldo')].filter(Boolean).join(',');
+        });
+        if (faltaPrincipal) {
+            avisar('error', 'Revisa los modelos', 'Hay tareas con respaldo pero sin modelo principal.');
+            return;
+        }
+        var boton = $id('btn-guardar-modelos');
+        boton.disabled = true;
+        postJson(URLS.guardarModelos, { tareas: tareas }).then(function (data) {
+            if (!data.ok) {
+                Object.keys(data.errores || {}).forEach(function (codigo) {
+                    marcarError(codigo, data.errores[codigo].join(' '));
+                });
+                avisar('error', 'Revisa los modelos', data.error || 'Hay modelos con errores.');
+                return;
+            }
+            pintar(data.estado);
+            if (data.avisos && data.avisos.length) {
+                avisar('warning', 'Modelos guardados, con avisos', data.avisos.join('\n'));
+            } else {
+                avisar('success', 'Listo', data.mensaje);
+            }
+        }).catch(function (err) {
+            avisar('error', 'No se pudo guardar', err.message);
+        }).finally(function () { boton.disabled = false; });
+    }
+
+    // ---------- eventos ----------
+    document.addEventListener('click', function (ev) {
+        var btn = ev.target.closest('[data-accion]');
+        if (!btn) { return; }
+        var accion = btn.dataset.accion;
+        if (accion === 'editar-clave') { abrirClave(btn.dataset.proveedor); return; }
+        if (accion === 'probar-clave') { probarClave(btn.dataset.proveedor, btn); return; }
+        if (accion === 'quitar-clave') { quitarClave(); return; }
+        if (accion === 'guardar-modelos') { guardarModelos(); return; }
+    });
+
+    $id('formClave').addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        guardarClave(false);
+    });
+
+    $id('clave-toggle').addEventListener('click', function () {
+        var input = $id('clave-valor');
+        input.type = input.type === 'password' ? 'text' : 'password';
+    });
+
+    pintar();
+})();
+</script>

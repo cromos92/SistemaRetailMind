@@ -4767,8 +4767,10 @@ def dte_documentos_vinculados_api(request, dte_id):
         elif not ya_recibido:
             efecto = 'pre_recepcion'
             efecto_texto = (
-                f'El documento original SIGUE contando estas {unidades} uds. '
-                f'Al recepcionar no deberían ingresar al stock.'
+                f'El documento original sigue listando estas {unidades} uds. '
+                f'Al recepcionar vienen marcadas como no recibidas: no entran al '
+                f'stock del destino y vuelven solas al origen (la línea se cierra '
+                f'sin pasar por Por resolver).'
             )
         elif ingresadas > 0:
             efecto = 'ingresada'

@@ -38,6 +38,7 @@
 {% puede_ver_opcion_tag 'gestion_vendedores' as permiso_gestion_vendedores %}
 {% puede_ver_opcion_tag 'gestionar_requerimientos' as permiso_gestionar_requerimientos %}
 {% puede_ver_opcion_tag 'integraciones_ecommerce' as permiso_integraciones_ecommerce %}
+{% puede_ver_opcion_tag 'inteligencia_artificial' as permiso_inteligencia_artificial %}
 {% puede_ver_opcion_tag 'interfaz_acepta' as permiso_interfaz_acepta %}
 {% puede_ver_opcion_tag 'lista_requerimientos' as permiso_lista_requerimientos %}
 {% puede_ver_opcion_tag 'modificacion_precios_costos' as permiso_modificacion_precios_costos %}
@@ -3130,6 +3131,13 @@
                                     <li class="nav-item">
                                         <a href="{% url 'integraciones_ecommerce' %}" class="nav-link" data-key="t-integraciones-ecommerce">
                                             <i class="ri-image-line"></i> Integraciones Ecommerce
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if permiso_inteligencia_artificial %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'inteligencia_artificial' %}" class="nav-link" data-key="t-inteligencia-artificial">
+                                            <i class="ri-robot-line"></i> Inteligencia Artificial
                                         </a>
                                     </li>
                                     {% endif %}

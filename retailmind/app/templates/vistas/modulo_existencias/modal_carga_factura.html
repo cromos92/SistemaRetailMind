@@ -211,6 +211,10 @@
                             <option value="3">2 completas (cuesta el doble)</option>
                         </select>
                     </label>
+                    <!-- Solo aparece si el servidor tiene más de un modelo con clave (CARGA_FACTURA_MODELOS) -->
+                    <label class="cf-param d-none" id="cfModeloWrap"><span>Modelo</span>
+                        <select id="cfModelo" class="form-select form-select-sm" title="Qué modelo de IA lee la factura. Uno barato alcanza para el PDF del SII; para escaneos con precios escritos a mano conviene el más preciso."></select>
+                    </label>
                 </div>
                 <!-- Fila 2: escribirle al agente (con vista previa corrige/pregunta; antes de leer, son
                      indicaciones para el lector) y enviar el PDF -->

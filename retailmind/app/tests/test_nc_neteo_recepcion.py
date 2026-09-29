@@ -314,6 +314,141 @@ class NeteoNCEnRecepcionTest(TestCase):
         # No bloquea (la mercadería pudo venir igual), pero deja el rastro.
         self.assertEqual(data['unidades_con_nc_ingresadas'], 4)
 
+    # ------------------------------------------------------------------
+    # 4. Lo que tiene NC no se actualiza en el destino y cierra la línea
+    # ------------------------------------------------------------------
+    def _nc_sin_reducir(self, dte, uds, numero):
+        """NC total/por monto: no toca las líneas ni devuelve stock al origen."""
+        nc = Dte.objects.create(
+            emisor=self.empresa, receptor=self.empresa,
+            numero_documento=numero, tipo_documento='NOTA DE CREDITO',
+            monto_neto=Decimal(uds * 1000), monto_con_iva=Decimal(uds * 1190),
+            estado_pago='PAGADO', estado_dte='EMITIDO', responsable='tester',
+            fecha_emision='2026-07-02', fecha_vencimiento='2026-07-02',
+            diasCredito=0, bultos=0, unidades_productos=uds,
+            tipo_transaccion='ANULACION', sucursal=self.origen,
+            es_nota_credito=True, documento_afectado=dte,
+            redujo_lineas_documento=False,
+        )
+        Dte_Productos.objects.create(
+            dte=nc, productoTalla=self.talla_origen, descripcion='NC',
+            costo=100, sobreprecio=0, precio=1000, stock=uds, activo=True,
+        )
+        return nc
+
+    def _recepcionar(self, dte, linea, esperada, recibida, observaciones=''):
+        self._sesion(self.destino)
+        p1, p2 = _patch_permisos()
+        with p1, p2:
+            resp = self.client.post(
+                '/app/dte/confirmar_recepcion/',
+                data=json.dumps({
+                    'dte_id': dte.id,
+                    'productos': [{
+                        'dte_producto_id': linea.id,
+                        'cantidad_esperada': esperada,
+                        'cantidad_recepcionada': recibida,
+                        'cantidad_danada': 0,
+                        'estado': 'RECEPCIONADO_OK' if recibida == esperada else 'RECEPCIONADO_PARCIAL',
+                        'observaciones': observaciones,
+                    }],
+                }),
+                content_type='application/json',
+            )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        self.assertTrue(data['success'], data)
+        return data
+
+    def test_listado_informa_folio_de_la_nc_por_linea(self):
+        dte, _ = _crear_traspaso(
+            self.origen, self.destino, [(self.talla_origen, 10)], numero=2700,
+        )
+        self._nc_sin_reducir(dte, 4, numero=9101)
+        self._sesion(self.destino)
+        item = self._item_del_endpoint(dte)
+        self.assertEqual(item['detalle'][0]['nc_folios'], [9101])
+
+    def test_recibir_el_neto_cierra_la_linea_y_devuelve_la_nc_al_origen(self):
+        """Factura 10 uds con NC por 4: se reciben las 6 netas. Las 4 con NC
+        no entran al destino, vuelven al origen y la línea queda cerrada
+        (antes quedaba FALTANTE en Por resolver con el stock en el aire)."""
+        from app.models import Productos_Recepcionados
+
+        dte, lineas = _crear_traspaso(
+            self.origen, self.destino, [(self.talla_origen, 10)], numero=2800,
+        )
+        self._nc_sin_reducir(dte, 4, numero=9102)
+        stock_origen_antes = Producto_Talla.objects.get(id=self.talla_origen.id).stock
+
+        data = self._recepcionar(dte, lineas[0], esperada=10, recibida=6)
+
+        # Recibir exactamente el neto NO es "ingresar unidades con NC".
+        self.assertEqual(data['unidades_con_nc_ingresadas'], 0)
+        self.assertEqual(data['productos_cubiertos_nc'], 1)
+        self.assertEqual(data['unidades_cubiertas_nc'], 4)
+        self.assertEqual(data['productos_problemas'], 0)
+        self.assertEqual(data['detalle_cubierto_nc'][0]['notas_credito'], '#9102')
+        self.assertEqual(data['estado_dte'], 'RECEPCIONADO_COMPLETO')
+
+        rec = Productos_Recepcionados.objects.get(dte=dte)
+        self.assertEqual(rec.estado, 'REGULARIZADO')
+        self.assertEqual(rec.cantidad_faltante, 4)
+        self.assertIn('Cubierto por NC #9102', rec.observaciones)
+
+        self.assertEqual(Producto_Talla.objects.get(id=self.talla_destino.id).stock, 6)
+        self.assertEqual(
+            Producto_Talla.objects.get(id=self.talla_origen.id).stock,
+            stock_origen_antes + 4,
+        )
+        self.assertTrue(Movimientos_Producto.objects.filter(
+            dte=dte, concepto='REGULARIZACION_TRASPASO',
+            ProductoTalla=self.talla_origen, cantidad=4,
+        ).exists())
+
+    def test_nc_total_nada_entra_y_todo_vuelve_al_origen(self):
+        dte, lineas = _crear_traspaso(
+            self.origen, self.destino, [(self.talla_origen, 5)], numero=2900,
+        )
+        self._nc_sin_reducir(dte, 5, numero=9103)
+        stock_origen_antes = Producto_Talla.objects.get(id=self.talla_origen.id).stock
+
+        data = self._recepcionar(dte, lineas[0], esperada=5, recibida=0)
+
+        self.assertEqual(data['unidades_cubiertas_nc'], 5)
+        self.assertEqual(data['estado_dte'], 'RECEPCIONADO_COMPLETO')
+        self.assertEqual(Producto_Talla.objects.get(id=self.talla_destino.id).stock, 0)
+        self.assertEqual(
+            Producto_Talla.objects.get(id=self.talla_origen.id).stock,
+            stock_origen_antes + 5,
+        )
+
+    def test_faltante_mayor_que_la_nc_queda_por_resolver(self):
+        """10 uds, NC por 4, llegan 3: 3 faltantes de verdad además de las 4
+        con NC. La línea sigue abierta (factura) y no se devuelve nada solo."""
+        from app.models import Productos_Recepcionados
+
+        dte, lineas = _crear_traspaso(
+            self.origen, self.destino, [(self.talla_origen, 10)], numero=3000,
+        )
+        self._nc_sin_reducir(dte, 4, numero=9104)
+        stock_origen_antes = Producto_Talla.objects.get(id=self.talla_origen.id).stock
+
+        data = self._recepcionar(
+            dte, lineas[0], esperada=10, recibida=3, observaciones='faltó una caja',
+        )
+
+        self.assertEqual(data['productos_cubiertos_nc'], 0)
+        self.assertEqual(data['unidades_nc_en_lineas_abiertas'], 4)
+        self.assertEqual(data['estado_dte'], 'RECEPCIONADO_PARCIAL')
+        rec = Productos_Recepcionados.objects.get(dte=dte)
+        self.assertEqual(rec.estado, 'RECEPCIONADO_PARCIAL')
+        self.assertIn('4 und ya acreditadas por NC #9104', rec.observaciones)
+        self.assertEqual(
+            Producto_Talla.objects.get(id=self.talla_origen.id).stock,
+            stock_origen_antes,
+        )
+
     def test_recepcion_sin_nc_no_reporta_unidades_acreditadas(self):
         dte, lineas = _crear_traspaso(
             self.origen, self.destino, [(self.talla_origen, 7)], numero=2600,

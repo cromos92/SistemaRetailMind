@@ -183,6 +183,21 @@ CATALOGO = {
         'notas': 'La pantalla y sus acciones (guardar, eliminar, probar, sincronizar, verificar) exigen rol '
                  'Administrador, Jefe de Local o Maestro, no este permiso: sin el check igual se entra por URL.',
     },
+    'inteligencia_artificial': {
+        'pantalla': 'Inteligencia Artificial',
+        'ruta': '/app/configuracion/inteligencia-artificial/',
+        'resumen': 'Claves de API de los proveedores de IA (cifradas) y el modelo de cada tarea: lectura de '
+                   'facturas, verificación, chat de la carga, búsqueda en internet y asistente.',
+        'permisos': {
+            'puede_ver': 'Entrar a la pantalla y verla en el menú: qué proveedores tienen clave (solo los '
+                         'últimos 4 caracteres), qué modelo rige cada tarea y el gasto estimado.',
+            'puede_editar': 'Guardar, probar y quitar claves de API y cambiar el modelo de cada tarea.',
+        },
+        'depende_de': [],
+        'notas': 'Por defecto solo el Maestro (ningún rol la recibe al inicializar ni al aplicar perfiles). '
+                 'Las claves cuestan plata: delegarla con cuidado. Sin nada guardado rigen las variables de '
+                 'entorno del servidor.',
+    },
 
     # ------------------------------------------------------------------ Ecommerce
     'ecommerce_pedidos_pendientes': {

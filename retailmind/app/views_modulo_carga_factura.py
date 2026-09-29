@@ -14,14 +14,15 @@ del usuario.
 import json
 import logging
 
-from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
+from . import utils_ia
 from .models import CargaFacturaPdf, PermisoRol, Sucursal
 from .services.carga_factura import chat as svc_chat
+from .services.carga_factura import lectura as svc_lectura
 from .services.carga_factura import web as svc_web
 from .services.carga_factura.facturas import ErrorCarga
 from .utils_permisos import obtener_sucursales_usuario
@@ -71,10 +72,11 @@ def _resumen(sesion):
 @login_required
 def api_carga_factura_opciones(request):
     """Listas para los editores de la vista previa + si la lectura está configurada."""
+    catalogo = svc_web.opciones_catalogo(request.user)
     return JsonResponse({
         'success': True,
-        'configurada': bool(getattr(settings, 'ANTHROPIC_API_KEY', '')),
-        **svc_web.opciones_catalogo(request.user),
+        'configurada': bool(catalogo.get('modelos')),
+        **catalogo,
     })
 
 
@@ -92,9 +94,13 @@ def api_carga_factura_lista(request):
 @login_required
 def api_carga_factura_subir(request):
     """Recibe el PDF y arranca la lectura en segundo plano."""
-    if not getattr(settings, 'ANTHROPIC_API_KEY', ''):
-        return _error('La lectura de facturas no está configurada en este servidor: falta '
-                      'ANTHROPIC_API_KEY en las variables de entorno.', status=503)
+    # Lector elegido en la pantalla (solo uno de los configurados; si no, el de siempre).
+    modelo = svc_lectura.elegir_modelo(request.POST.get('modelo'))
+    if not modelo:
+        return _error('La lectura de facturas no está configurada en este servidor: falta la clave '
+                      'del proveedor de IA. Agrégala en Configuración → Inteligencia Artificial (o en '
+                      'las variables de entorno ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY…).',
+                      status=503)
     archivo = request.FILES.get('archivo')
     if archivo is None:
         return _error('Adjunta la factura en PDF.')
@@ -121,6 +127,10 @@ def api_carga_factura_subir(request):
     sesion = CargaFacturaPdf.objects.create(
         creado_por=request.user, sucursal=sucursal, marca=marca, archivo=archivo,
         nombre_archivo=str(archivo.name)[:255], lecturas=lecturas,
+        # El campo guarda 60 caracteres: una cadena de respaldo más larga se
+        # guarda vacía si es la de siempre (se lee con MODELO) o solo su primer modelo.
+        modelo=modelo if len(modelo) <= 60 else (
+            '' if modelo == svc_lectura.modelo_lectura() else utils_ia.cadena(modelo)[0][:60]),
         estado='LEYENDO', progreso='En cola…',
     )
     sesion.agregar_mensaje(
@@ -129,7 +139,9 @@ def api_carga_factura_subir(request):
         + (f', marca {marca}' if marca else '') + '.', tipo='subida',
         # Lo que se envió, tal cual, para que la pantalla lo muestre como tarjeta.
         envio={'archivo': sesion.nombre_archivo, 'bytes': archivo.size, 'bodega': sucursal.alias,
-               'marca': marca, 'lecturas': lecturas,
+               'marca': marca, 'lecturas': lecturas, 'modelo': utils_ia.etiqueta(modelo),
+               # Tal cual, para el hilo de lectura (sesion.modelo guarda 60 caracteres).
+               'modelo_id': modelo,
                **({'indicaciones': indicaciones} if indicaciones else {})})
     if indicaciones:
         # Van al lector como pistas (ver web.leer_en_segundo_plano).

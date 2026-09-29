@@ -594,6 +594,9 @@ def recepciones_pendientes_api(request):
         # `redujo_lineas_documento=False`: las otras ya redujeron `dp.stock`
         # y restarlas de nuevo sería contar dos veces la misma devolución.
         nc_pendientes_por_talla = {}
+        # Folios de esas NC por (dte_padre, productoTalla): el modal de
+        # recepción dice "NC #975" en la línea, no solo "tiene NC".
+        nc_folios_por_talla = {}
         # Unidades que REALMENTE entraron al stock del destino, por
         # (dte, productoTalla). Es lo que convierte la alerta de NC en un dato
         # accionable: una NC "aún contada" sobre un documento ya recepcionado
@@ -651,6 +654,10 @@ def recepciones_pendientes_api(request):
                     row['id']: row['documento_afectado_id']
                     for row in docs_vinculados_qs
                 }
+                folio_de_nc = {
+                    row['id']: row['numero_documento']
+                    for row in docs_vinculados_qs
+                }
                 for row in (
                     Dte_Productos.objects
                     .filter(dte_id__in=ids_nc_pendientes, productoTalla__isnull=False)
@@ -664,6 +671,7 @@ def recepciones_pendientes_api(request):
                     nc_pendientes_por_talla[clave] = (
                         nc_pendientes_por_talla.get(clave, 0) + int(row['total'] or 0)
                     )
+                    nc_folios_por_talla.setdefault(clave, set()).add(folio_de_nc.get(row['dte_id']))
 
                 # Lo efectivamente ingresado al destino: lo arribado menos lo
                 # dañado (el daño no suma stock vendible). Solo hace falta para
@@ -835,6 +843,10 @@ def recepciones_pendientes_api(request):
                     # por NC que nadie descontó. Es lo que debería entrar a stock.
                     'cantidad_nc_pendiente': nc_pendiente_linea,
                     'cantidad_neta': max(0, int(cantidad) - nc_pendiente_linea),
+                    'nc_folios': sorted(
+                        f for f in nc_folios_por_talla.get((dte.id, detalle.productoTalla_id), ())
+                        if f is not None
+                    ) if nc_pendiente_linea else [],
                     'precio': precio,
                 })
 
@@ -1366,6 +1378,10 @@ def confirmar_recepcion_api(request):
             # no faltante— pero sí quedan registradas para poder auditar
             # después cuántas unidades ya acreditadas entraron igual a stock.
             nc_pendiente_por_talla = {}
+            # Folios de las NC que cubren cada talla: van en la observación de
+            # la línea y en la respuesta, para que el operador sepa QUÉ NC la
+            # dejó fuera y no solo "tiene NC".
+            nc_folios_por_talla = {}
             for row in (
                 Dte_Productos.objects
                 .filter(
@@ -1375,11 +1391,35 @@ def confirmar_recepcion_api(request):
                     dte__redujo_lineas_documento=False,
                     productoTalla__isnull=False,
                 )
-                .values('productoTalla_id')
+                .values('productoTalla_id', 'dte__numero_documento')
                 .annotate(total=Sum('stock'))
             ):
-                nc_pendiente_por_talla[row['productoTalla_id']] = int(row['total'] or 0)
+                talla_nc = row['productoTalla_id']
+                nc_pendiente_por_talla[talla_nc] = (
+                    nc_pendiente_por_talla.get(talla_nc, 0) + int(row['total'] or 0)
+                )
+                nc_folios_por_talla.setdefault(talla_nc, set()).add(row['dte__numero_documento'])
+            # Reparto por LÍNEA con la misma regla que recepciones_pendientes_api
+            # (mismo orden de líneas, min(cantidad, saldo)): así lo que el modal
+            # mostró como "con NC" es exactamente lo que se trata como tal acá.
+            nc_por_linea = {}
+            _saldo_nc = dict(nc_pendiente_por_talla)
+            for det in lineas_activas:
+                disponible_nc = _saldo_nc.get(det.productoTalla_id, 0)
+                if disponible_nc > 0:
+                    imputado = min(max(0, int(det.stock or 0)), disponible_nc)
+                    nc_por_linea[det.id] = imputado
+                    _saldo_nc[det.productoTalla_id] = disponible_nc - imputado
             unidades_nc_ingresadas = 0
+            # Líneas cuyo faltante es EXACTAMENTE lo que ya acreditó la NC: se
+            # cierran solas (ver más abajo) y se informan aparte.
+            productos_cubiertos_nc = 0
+            unidades_cubiertas_nc = 0
+            detalle_cubierto_nc = []
+            # Unidades con NC que quedaron dentro de una línea que además tiene
+            # otra diferencia (faltante extra, daño o sobrante): esa línea sigue
+            # abierta en Por resolver.
+            unidades_nc_en_lineas_abiertas = 0
 
             for prod_data in productos_recepcion:
                 dte_producto_id = prod_data.get('dte_producto_id')
@@ -1418,18 +1458,33 @@ def confirmar_recepcion_api(request):
                 cantidad_recepcionada = min(cantidad_recepcionada_raw, cantidad_esperada)
                 cantidad_faltante = max(0, cantidad_esperada - cantidad_recepcionada)
 
-                # ¿Estamos ingresando unidades que ya tienen nota de crédito?
-                saldo_nc = nc_pendiente_por_talla.get(dte_producto.productoTalla_id, 0)
-                if saldo_nc > 0 and cantidad_recepcionada > 0:
-                    imputadas = min(saldo_nc, cantidad_recepcionada)
-                    nc_pendiente_por_talla[dte_producto.productoTalla_id] = saldo_nc - imputadas
-                    unidades_nc_ingresadas += imputadas
-                    logger.warning(
-                        "Recepción DTE %s: la línea %s (SKU %s) ingresa %s uds y %s de ellas "
-                        "ya tienen NC que nunca se descontó del documento.",
-                        dte.numero_documento, dte_producto.id,
-                        producto_talla.sku, cantidad_recepcionada, imputadas,
-                    )
+                # Unidades de la línea que ya tienen NC y que el documento sigue
+                # contando. Lo que corresponde ingresar es el NETO (esperada -
+                # NC): solo lo que se reciba POR ENCIMA del neto son unidades
+                # acreditadas que entran igual. Antes se imputaba la NC contra
+                # lo recibido a secas, y recibir exactamente el neto se
+                # reportaba como "ingresó unidades con NC" (falso positivo).
+                nc_linea = min(nc_por_linea.get(dte_producto.id, 0), cantidad_esperada)
+                nc_ingresadas_linea = 0
+                nc_no_ingresadas_linea = 0
+                folios_nc_linea = ''
+                if nc_linea > 0:
+                    neto_linea = cantidad_esperada - nc_linea
+                    nc_ingresadas_linea = min(nc_linea, max(0, cantidad_recepcionada - neto_linea))
+                    nc_no_ingresadas_linea = nc_linea - nc_ingresadas_linea
+                    folios_nc_linea = ', '.join(
+                        f'#{f}' for f in sorted(
+                            nc_folios_por_talla.get(dte_producto.productoTalla_id, set())
+                        )
+                    ) or '(sin folio)'
+                    if nc_ingresadas_linea > 0:
+                        unidades_nc_ingresadas += nc_ingresadas_linea
+                        logger.warning(
+                            "Recepción DTE %s: la línea %s (SKU %s) ingresa %s uds con NC %s "
+                            "que nunca se descontó del documento (el operador confirmó que llegaron).",
+                            dte.numero_documento, dte_producto.id,
+                            producto_talla.sku, nc_ingresadas_linea, folios_nc_linea,
+                        )
 
                 # Lo dañado no puede exceder lo que efectivamente llegó: sin este
                 # tope, recepcionada=2 con danada=5 daba cantidad_a_ingresar=-3.
@@ -1439,6 +1494,31 @@ def confirmar_recepcion_api(request):
                 total_esperado += cantidad_esperada
                 total_recepcionado += cantidad_recepcionada
 
+                # Línea "cubierta por NC": lo único que no llegó son unidades
+                # que el emisor YA anuló con nota de crédito. No es un problema
+                # por resolver: la NC ya se emitió, así que no hay nada que
+                # regularizar ni otra NC que emitir. Esas unidades salieron del
+                # origen al despachar (la NC total/por monto no revierte el
+                # despacho), no llegan al destino, y vuelven solas al origen —
+                # igual que el faltante de una guía—. Antes, en facturas, la
+                # línea quedaba FALTANTE en «Por resolver» con el stock fuera
+                # de toda sucursal, y ahí «Regularizar con NC» la rechazaba por
+                # NC previa: solo se podía cerrar "sin NC" a mano.
+                cubierta_por_nc = (
+                    nc_no_ingresadas_linea > 0
+                    and cantidad_faltante == nc_no_ingresadas_linea
+                    and cantidad_sobrante == 0
+                    and cantidad_danada == 0
+                )
+                if nc_no_ingresadas_linea > 0 and not cubierta_por_nc:
+                    unidades_nc_en_lineas_abiertas += nc_no_ingresadas_linea
+                    observaciones = (
+                        (observaciones + '\n') if observaciones else ''
+                    ) + (
+                        f'[{ahora_local.strftime("%Y-%m-%d %H:%M")}] Incluye {nc_no_ingresadas_linea} und '
+                        f'ya acreditadas por NC {folios_nc_linea}: al regularizar, esas no requieren otra NC.'
+                    )
+
                 tiene_problemas = (
                     estado != 'RECEPCIONADO_OK' or
                     cantidad_danada > 0 or
@@ -1447,7 +1527,53 @@ def confirmar_recepcion_api(request):
                     cantidad_recepcionada != cantidad_esperada
                 )
 
-                if tiene_problemas:
+                if cubierta_por_nc:
+                    estado_final = 'REGULARIZADO'
+                    productos_cubiertos_nc += 1
+                    unidades_cubiertas_nc += nc_no_ingresadas_linea
+                    detalle_cubierto_nc.append({
+                        'sku': producto_talla.sku,
+                        'descripcion': producto_talla.producto.descripcion if producto_talla.producto else '',
+                        'articulo': producto_talla.producto.articulo if producto_talla.producto else '',
+                        'talla': producto_talla.talla,
+                        'cantidad_esperada': cantidad_esperada,
+                        'cantidad_recepcionada': cantidad_recepcionada,
+                        'cantidad_nc': nc_no_ingresadas_linea,
+                        'notas_credito': folios_nc_linea,
+                    })
+                    ids_origen_a_actualizar[producto_talla.id] = (
+                        ids_origen_a_actualizar.get(producto_talla.id, 0) + nc_no_ingresadas_linea
+                    )
+                    # Mismo concepto que la auto-devolución de guías: así el
+                    # lote FIFO del origen se repone en la FASE 3 y «Cancelar
+                    # regularización» lo sabe revertir.
+                    movimientos_a_crear.append(Movimientos_Producto(
+                        dte=dte,
+                        ProductoTalla=producto_talla,
+                        sucursal_origen=sucursal_destino,
+                        sucursal_destino=dte.sucursal,
+                        cantidad=nc_no_ingresadas_linea,
+                        costo=producto_talla.producto.costo if producto_talla.producto else 0,
+                        sobreprecio=producto_talla.producto.sobreprecio if producto_talla.producto else 0,
+                        precio=producto_talla.producto.precioventa if producto_talla.producto else 0,
+                        concepto='REGULARIZACION_TRASPASO',
+                        tipo_movimiento='INGRESO',
+                        estado='COMPLETADO',
+                        responsable=usuario,
+                        observaciones=(
+                            f'Unidades con NC {folios_nc_linea}: {nc_no_ingresadas_linea} und no se '
+                            f'recepcionan y vuelven al origen ({dte.sucursal.alias}) '
+                            f'- Recepción DTE #{dte.numero_documento}'
+                        )[:500],
+                    ))
+                    observaciones = (
+                        (observaciones + '\n') if observaciones else ''
+                    ) + (
+                        f'[{ahora_local.strftime("%Y-%m-%d %H:%M")}] Cubierto por NC {folios_nc_linea}: '
+                        f'{nc_no_ingresadas_linea} und no ingresan a {sucursal_destino.alias} y vuelven '
+                        f'automáticamente a {dte.sucursal.alias}. Línea cerrada.'
+                    )
+                elif tiene_problemas:
                     productos_problemas += 1
                     # Al origen vuelve SOLO el faltante: es mercadería que nunca
                     # salió físicamente de la bodega emisora.
@@ -1545,11 +1671,13 @@ def confirmar_recepcion_api(request):
                     cantidad_faltante=cantidad_faltante,
                     cantidad_sobrante=cantidad_sobrante,
                     estado=estado_final,
+                    # La línea cubierta por NC ya trae su propia nota (con el
+                    # folio); el sufijo genérico es el de la guía.
                     observaciones=(
                         observaciones + (
                             f'\n[{ahora_local.strftime("%Y-%m-%d %H:%M")}] Auto-devolución a origen: '
                             f'{cantidad_faltante} und faltantes.'
-                        ) if es_auto_regularizado else observaciones
+                        ) if (es_auto_regularizado and not cubierta_por_nc) else observaciones
                     ),
                     fecha_recepcion=hoy,
                     recepcionado_por=usuario,
@@ -1896,7 +2024,8 @@ def confirmar_recepcion_api(request):
                     )
                 )
 
-            # Stock origen (guías con auto-devolución de faltantes/dañados)
+            # Stock origen: auto-devolución de faltantes de guías y de las
+            # unidades con NC que no se recepcionaron.
             if ids_origen_a_actualizar:
                 whens_origen = [
                     When(id=pt_id, then=Value(cant))
@@ -1919,7 +2048,10 @@ def confirmar_recepcion_api(request):
 
             if productos_problemas == 0:
                 dte.estado_dte = 'RECEPCIONADO_COMPLETO'
-                mensaje = 'Recepción completada. Todos los productos OK.'
+                mensaje = (
+                    'Recepción completada.' if productos_cubiertos_nc
+                    else 'Recepción completada. Todos los productos OK.'
+                )
             elif productos_faltantes_danados == 0 and productos_sobrantes == 0 and productos_auto_regularizados > 0:
                 # Guía con faltantes/dañados auto-devueltos al origen: queda cerrada.
                 dte.estado_dte = 'RECEPCIONADO_COMPLETO'
@@ -1941,12 +2073,22 @@ def confirmar_recepcion_api(request):
                 if productos_auto_regularizados > 0:
                     msg_parts.append(f'{productos_auto_regularizados} devueltos al origen')
                 mensaje = f'Recepción procesada. {", ".join(msg_parts)} requieren atención.'
-            
+            if productos_cubiertos_nc > 0:
+                # Las líneas cubiertas por NC no cuentan como problema (no hay
+                # nada que resolver), pero el operador tiene que leer qué pasó
+                # con esas unidades.
+                mensaje += (
+                    f' {unidades_cubiertas_nc} und con nota de crédito no ingresaron a '
+                    f'{sucursal_destino.alias} y volvieron al stock de {dte.sucursal.alias}.'
+                )
+
             # Cierre canónico derivado de las líneas ya persistidas (fuente única).
             _recalcular_estado_dte(dte, guardar=False)
             dte.fecha_recepcion = ahora_local.date()
             dte.hora = ahora_local.time()
             registro = f"\nRecepción: {usuario} {ahora_local.strftime('%Y-%m-%d %H:%M')} - OK:{productos_ok} Problemas:{productos_problemas}"
+            if productos_cubiertos_nc:
+                registro += f" ConNC:{productos_cubiertos_nc} ({unidades_cubiertas_nc} und al origen)"
             if observaciones_generales:
                 registro += f" - {observaciones_generales}"
             dte.referencias = ((dte.referencias or '') + registro).strip()
@@ -1993,6 +2135,14 @@ def confirmar_recepcion_api(request):
             # documento nunca descontó. Sirve para avisar al operador en el
             # momento, no para bloquear (pueden ser sobrante físico legítimo).
             'unidades_con_nc_ingresadas': unidades_nc_ingresadas,
+            # Lo que NO se actualizó en el destino por tener NC: líneas
+            # cerradas solas, con sus unidades de vuelta en el origen.
+            'productos_cubiertos_nc': productos_cubiertos_nc,
+            'unidades_cubiertas_nc': unidades_cubiertas_nc,
+            'detalle_cubierto_nc': detalle_cubierto_nc,
+            'unidades_nc_en_lineas_abiertas': unidades_nc_en_lineas_abiertas,
+            'sucursal_origen': dte.sucursal.alias if dte.sucursal else '',
+            'sucursal_destino': sucursal_destino.alias,
         })
 
     except Exception:
@@ -4598,21 +4748,20 @@ def ajustar_dte_emisor_api(request):
                         }],
                     }
 
-                    for linea in lineas_para_documento:
-                        talla_obj = linea['productoTalla']
-                        datos_txt['detalle'].append({
-                            'codigo': limpiar_texto(str(talla_obj.sku) if talla_obj else ''),
-                            'sku': limpiar_texto(str(talla_obj.sku) if talla_obj else ''),
-                            'nombre': limpiar_texto(talla_obj.producto.articulo if (talla_obj and talla_obj.producto) else ''),
-                            'descripcion': limpiar_texto(linea['descripcion'] or ''),
-                            'cantidad': int(linea['cantidad_ajustada']),
-                            'unidad': 'UN',
-                            'precio_unitario': _monto_entero(linea['precio']),
+                    # Detalle agrupado como la factura del traspaso (artículo +
+                    # marca + color con desglose de tallas), no una línea por SKU.
+                    datos_txt['detalle'] = _detalle_txt_nc_traspaso([
+                        {
+                            'producto_talla': linea['productoTalla'],
+                            'cantidad': int(linea['cantidad_ajustada'] or 0),
+                            'precio': _monto_entero(linea['precio']),
+                            'costo': linea['costo'],
                             'monto_item': _monto_entero(
                                 Decimal(str(linea['cantidad_ajustada'] or 0)) * Decimal(str(linea['precio'] or 0))
                             ),
-                            'indicador_exencion': '',
-                        })
+                        }
+                        for linea in lineas_para_documento
+                    ])
 
                     contenido_txt = generar_txt_dte_acepta(datos_txt)
 
@@ -6771,6 +6920,94 @@ def buscar_productos_emisor(request):
         }, status=500)
 
 
+def _es_nc_de_traspaso(nc):
+    """¿La NC se emitió sobre un traspaso (Recepción DTE)?
+
+    Se mira el documento que anula: las NC de `anular_factura_dte` no llevan
+    tipo_transaccion='TRASPASO' propio, las de regularización sí.
+    """
+    afectado = getattr(nc, 'documento_afectado', None)
+    if afectado is not None:
+        return afectado.tipo_transaccion == 'TRASPASO'
+    return getattr(nc, 'tipo_transaccion', None) == 'TRASPASO'
+
+
+def _detalle_txt_nc_traspaso(items):
+    """Detalle del TXT Acepta de una NC de traspaso, agrupado IGUAL que la
+    factura de emisionDTE: una línea por variante (artículo + marca + color +
+    costo + precio) con el desglose de tallas "2:38 1:39", sin SKU.
+
+    Usa `agrupar_lineas_detalle_txt` — la misma función que arma el TXT de la
+    factura del traspaso (`construir_detalle_txt_desde_dte_productos`) —, así la
+    NC se lee línea contra línea con el documento que corrige. Antes cada flujo
+    de Recepción DTE armaba su propio detalle: el ajuste del emisor y la
+    regularización salían una línea por SKU (una factura de 40 tallas daba una
+    NC de 40 renglones), y la descarga agrupaba solo por artículo, mezclando
+    colores bajo la marca/color del primero.
+
+    `items`: dicts con `producto_talla`, `cantidad`, `precio` (unitario, en la
+    misma base que el documento original: NETO en traspasos), `costo` y
+    opcionalmente `monto_item` y `descripcion`. Los ítems con cantidad <= 0 se
+    omiten; uno sin talla (ficha perdida) sale como línea suelta con su
+    `descripcion`, para no dejar la NC sin detalle.
+    """
+    from decimal import Decimal, ROUND_HALF_UP
+    from .views_modulo_documentos import agrupar_lineas_detalle_txt, limpiar_texto
+
+    sueltas = []
+    lineas = []
+    for it in items:
+        talla = it.get('producto_talla')
+        cantidad = int(it.get('cantidad') or 0)
+        if cantidad <= 0:
+            continue
+        precio = int(Decimal(str(it.get('precio') or 0)).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+        monto_item = it.get('monto_item')
+        if talla is None:
+            sueltas.append({
+                'nombre': limpiar_texto(it.get('descripcion') or 'Devolucion'),
+                'descripcion': '',
+                'cantidad': cantidad,
+                'unidad': 'UN',
+                'precio_unitario': precio,
+                'descuento_pct': 0,
+                'monto_descuento': 0,
+                'monto_item': int(monto_item) if monto_item else cantidad * precio,
+                'codigo': 'DEVOLUCION',
+            })
+            continue
+        producto = talla.producto
+        lineas.append({
+            'articulo': (producto.articulo if producto else '') or '',
+            'marca': producto.atributo1.valor if (producto and producto.atributo1) else '',
+            'color': producto.atributo2.valor if (producto and producto.atributo2) else '',
+            'costo': int(it.get('costo') or 0),
+            'precio_unitario': precio,
+            'talla': str(talla.talla) if getattr(talla, 'talla', None) else 'U',
+            'sku': getattr(talla, 'sku', None),
+            'cantidad': cantidad,
+            'monto_item': int(monto_item) if monto_item else cantidad * precio,
+            'descuento_monto': 0,
+            'descuento_pct': 0,
+        })
+    return sueltas + agrupar_lineas_detalle_txt(lineas, incluir_sku=False)
+
+
+def _items_txt_desde_dte_productos(dte_productos):
+    """Normaliza líneas `Dte_Productos` (con talla) para `_detalle_txt_nc_traspaso`."""
+    return [
+        {
+            'producto_talla': dp.productoTalla,
+            'cantidad': dp.stock,
+            'precio': dp.precio_unitario or dp.precio,
+            'costo': dp.costo,
+            'monto_item': dp.monto_item,
+        }
+        for dp in dte_productos
+        if dp.productoTalla is not None
+    ]
+
+
 def _construir_datos_txt_nc(nc):
     """Dado un objeto Dte que es NC, arma el dict `datos` que espera la
     función `generar_txt_nota_credito_acepta`. Reusa la misma estructura
@@ -6781,13 +7018,18 @@ def _construir_datos_txt_nc(nc):
     import json as _json
 
     iva_calculado = int(nc.monto_con_iva - nc.monto_neto)
+    # NC de Recepción DTE: detalle agrupado como la factura del traspaso.
+    es_nc_traspaso = _es_nc_de_traspaso(nc)
+    dps_producto = []
 
     productos_agrupados = defaultdict(lambda: {
         'tallas': [], 'cantidad_total': 0, 'precio': 0,
         'monto_total': 0, 'articulo': '', 'marca': '', 'color': ''
     })
     lineas_conceptuales = []
-    for dp in nc.dte_productos.select_related('productoTalla__producto'):
+    for dp in nc.dte_productos.select_related(
+        'productoTalla__producto__atributo1', 'productoTalla__producto__atributo2',
+    ):
         if dp.productoTalla is None:
             lineas_conceptuales.append({
                 'nombre': limpiar_texto(dp.descripcion or 'Devolución'),
@@ -6800,6 +7042,9 @@ def _construir_datos_txt_nc(nc):
                 'monto_item': int((dp.stock or 1) * (dp.precio or 0)),
                 'codigo': 'DEVOLUCION',
             })
+            continue
+        if es_nc_traspaso:
+            dps_producto.append(dp)
             continue
         producto = dp.productoTalla.producto
         key = producto.articulo
@@ -6817,6 +7062,8 @@ def _construir_datos_txt_nc(nc):
             g['color'] = producto.atributo2.valor
 
     detalle = list(lineas_conceptuales)
+    if es_nc_traspaso:
+        detalle.extend(_detalle_txt_nc_traspaso(_items_txt_desde_dte_productos(dps_producto)))
     for articulo, g in productos_agrupados.items():
         tallas_str = ' '.join(g['tallas'])
         marca_limpia = limpiar_texto(g['marca'] or '')
@@ -8130,17 +8377,16 @@ def regularizar_producto_api(request):
                                 'iva': int(iva),
                                 'monto_total': int(total_con_iva)
                             },
-                            'detalle': [{
-                                'codigo': limpiar_texto(str(recepcion.producto_talla.sku) if recepcion.producto_talla else ''),
-                                'sku': limpiar_texto(str(recepcion.producto_talla.sku) if recepcion.producto_talla else ''),
-                                'nombre': limpiar_texto(recepcion.producto_talla.producto.articulo if recepcion.producto_talla else ''),
-                                'descripcion': limpiar_texto(recepcion.dte_producto.descripcion if recepcion.dte_producto else ''),
+                            # Mismo formato que la factura del traspaso:
+                            # artículo + marca + color + "cant:talla", sin SKU.
+                            'detalle': _detalle_txt_nc_traspaso([{
+                                'producto_talla': recepcion.producto_talla,
                                 'cantidad': cantidad_nc,
-                                'unidad': 'UN',
-                                'precio_unitario': int(precio_unitario),
+                                'precio': int(precio_unitario),
+                                'costo': recepcion.dte_producto.costo if recepcion.dte_producto else 0,
                                 'monto_item': int(cantidad_nc * precio_unitario),
-                                'indicador_exencion': ''
-                            }],
+                                'descripcion': recepcion.dte_producto.descripcion if recepcion.dte_producto else '',
+                            }]),
                             'referencias': [{
                                 'tipo_documento': '33',
                                 'folio': str(dte_original.numero_documento),
@@ -9141,23 +9387,21 @@ def regularizar_dte_masivo(request):
                     }]
                 }
                 
-                # Agregar detalle de productos - ✅ Aplicar limpiar_texto
-                for prod_nc in productos_nc:
-                    recepcion = prod_nc['recepcion']
-                    cantidad = prod_nc['cantidad']
-                    precio_unitario = int(prod_nc['precio_unitario'])
-                    
-                    datos_txt['detalle'].append({
-                        'codigo': limpiar_texto(str(recepcion.producto_talla.sku) if recepcion.producto_talla else ''),
-                        'sku': limpiar_texto(str(recepcion.producto_talla.sku) if recepcion.producto_talla else ''),
-                        'nombre': limpiar_texto(recepcion.producto_talla.producto.articulo if recepcion.producto_talla else ''),
-                        'descripcion': limpiar_texto(recepcion.dte_producto.descripcion if recepcion.dte_producto else ''),
-                        'cantidad': cantidad,
-                        'unidad': 'UN',
-                        'precio_unitario': precio_unitario,
-                        'monto_item': cantidad * precio_unitario,
-                        'indicador_exencion': ''
-                    })
+                # Detalle agrupado como la factura del traspaso: artículo +
+                # marca + color con desglose "cant:talla", no una línea por SKU.
+                datos_txt['detalle'] = _detalle_txt_nc_traspaso([
+                    {
+                        'producto_talla': prod_nc['recepcion'].producto_talla,
+                        'cantidad': prod_nc['cantidad'],
+                        'precio': int(prod_nc['precio_unitario']),
+                        'costo': (prod_nc['recepcion'].dte_producto.costo
+                                  if prod_nc['recepcion'].dte_producto else 0),
+                        'monto_item': int(prod_nc['cantidad']) * int(prod_nc['precio_unitario']),
+                        'descripcion': (prod_nc['recepcion'].dte_producto.descripcion
+                                        if prod_nc['recepcion'].dte_producto else ''),
+                    }
+                    for prod_nc in productos_nc
+                ])
 
                 # NC tipo 61: las líneas deben ir NETAS y sumar el MntNeto.
                 normalizar_detalle_para_tipo(datos_txt['detalle'], datos_txt['totales'], 61)
@@ -24242,22 +24486,33 @@ def verificar_producto_existente(request):
     # 🔍 BUSCAR PRODUCTOS SIMILARES POR NOMBRE (solo en sucursal activa)
     productos_similares_nombre = []
     if articulo and articulo.strip():
-        filtro_nombre = {'articulo__icontains': articulo.strip()}
+        art = articulo.strip()
+        # Además de los códigos que CONTIENEN lo tecleado, los de la misma
+        # FAMILIA (44544-3 → 44544-2, HQ6034-001 → HQ6034-002): el caso «llegó
+        # el mismo modelo en otro color», donde se copia la ficha hermana y se
+        # cambia solo lo que difiere.
+        familia = _familia_codigo(art)
+        condicion = Q(articulo__icontains=art)
+        if familia:
+            condicion |= Q(articulo__istartswith=familia)
+        filtro_nombre = {}
         if sucursal_id:
             filtro_nombre['sucursal_id'] = sucursal_id
-            
+
         productos_nombre = Producto.objects.filter(
-            **filtro_nombre
+            condicion, **filtro_nombre
         ).select_related(
             'atributo1', 'atributo2', 'atributo3', 'categoria'
-        ).exclude(id=producto.id if producto else 0)[:10]
-        
+        ).exclude(id=producto.id if producto else 0).order_by('-id')[:12]
+
         for p in productos_nombre:
             primera_talla = Producto_Talla.objects.filter(producto=p).first()
             tallas_producto = list(Producto_Talla.objects.filter(producto=p).values_list('talla', flat=True))
             productos_similares_nombre.append({
                 'id': p.id,
                 'articulo': p.articulo,
+                'descripcion': (p.descripcion or '')[:80],
+                'familia': bool(familia) and art.upper() not in (p.articulo or '').upper(),
                 'marca': p.atributo1.valor if p.atributo1 else '-',
                 'marca_id': p.atributo1_id,
                 'color': p.atributo2.valor if p.atributo2 else '-',
@@ -28285,6 +28540,22 @@ def sugerencias_por_proveedor(request):
     except Exception as e:
         logger.exception("Error en sugerencias_por_proveedor")
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def _familia_codigo(codigo):
+    """Prefijo «familia» de un código de artículo, para ofrecer las fichas
+    hermanas al crear una variante: '44544-3' → '44544', 'HQ6034-001' →
+    'HQ6034', '12-REBI-1' → '12-REBI'; sin separador y ≥ 6 caracteres se
+    recortan los 2 últimos ('F35556' → 'F355'). None si no hay familia útil."""
+    c = str(codigo or '').strip().upper()
+    m = re.match(r'^(.+?)[-/._ ]+[A-Z0-9]{1,4}$', c)
+    if m:
+        base = m.group(1).strip()
+    elif len(c) >= 6 and c.isalnum():
+        base = c[:-2]
+    else:
+        base = None
+    return base if base and len(base) >= 3 else None
 
 
 @require_GET
@@ -36245,7 +36516,13 @@ def anular_factura_dte(request):
     # representar "Devolución parcial" con el monto exacto de la NC. Van
     # directo al detalle, sin agrupación por artículo/talla.
     lineas_conceptuales = []
-    for dp in nc.dte_productos.select_related('productoTalla__producto'):
+    # NC de un traspaso (Recepción DTE): detalle agrupado como la factura del
+    # traspaso en emisionDTE. Las NC de venta siguen con su formato.
+    es_nc_traspaso = dte.tipo_transaccion == 'TRASPASO'
+    dps_producto = []
+    for dp in nc.dte_productos.select_related(
+        'productoTalla__producto__atributo1', 'productoTalla__producto__atributo2',
+    ):
         if dp.productoTalla is None:
             lineas_conceptuales.append({
                 'nombre': limpiar_texto(dp.descripcion or 'Devolución'),
@@ -36258,6 +36535,9 @@ def anular_factura_dte(request):
                 'monto_item': int((dp.stock or 1) * (dp.precio or 0)),
                 'codigo': 'DEVOLUCION',
             })
+            continue
+        if es_nc_traspaso:
+            dps_producto.append(dp)
             continue
         producto = dp.productoTalla.producto
         key = producto.articulo
@@ -36280,6 +36560,8 @@ def anular_factura_dte(request):
             g['color'] = producto.atributo2.valor
 
     detalle = list(lineas_conceptuales)
+    if es_nc_traspaso:
+        detalle.extend(_detalle_txt_nc_traspaso(_items_txt_desde_dte_productos(dps_producto)))
     for articulo, g in productos_agrupados.items():
         tallas_str = ' '.join(g['tallas'])
         marca_limpia = limpiar_texto(g['marca'] or '')

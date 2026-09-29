@@ -10,18 +10,23 @@ Usa la herramienta de búsqueda web del servidor de Anthropic
 (web_search_20260209): no hay nada que ejecutar de este lado. Cada búsqueda
 tiene costo aparte de los tokens, por eso el tope de búsquedas por artículo
 es bajo y se usa un modelo más barato que el de la lectura
-(CARGA_FACTURA_MODELO_BUSQUEDA, default claude-sonnet-5).
+(CARGA_FACTURA_MODELO_BUSQUEDA, default claude-sonnet-5). También busca con
+OpenAI (openai:gpt-5.4-mini, herramienta web_search de su Responses API) u
+OpenRouter (plugin web); Gemini, DeepSeek y la API compatible no buscan desde
+aquí: ponlos con un respaldo que sí, p. ej. "gemini:…,claude-sonnet-5".
 """
 import json
 import logging
-import os
+
+from app import utils_ia
 
 from . import lectura as svc_lectura
 from .facturas import ErrorCarga
 
 logger = logging.getLogger('app')
 
-MODELO_BUSQUEDA = os.environ.get('CARGA_FACTURA_MODELO_BUSQUEDA', 'claude-sonnet-5')
+# Respaldo de la pantalla (Configuración → Inteligencia Artificial, tarea «busqueda»).
+MODELO_BUSQUEDA = utils_ia.modelo_env('busqueda')
 # Cada búsqueda cuesta aparte (US$10 por mil): con 3 alcanza para «código +
 # marca», «código sin sufijo de color» y «descripción»; lo encontrado queda
 # aprendido y no se vuelve a buscar (web.investigar_en_segundo_plano).
@@ -102,7 +107,8 @@ def investigar_articulo(marca, articulo, descripcion, catalogo):
     for _vuelta in range(_MAX_VUELTAS):
         try:
             respuesta = svc_lectura._pedir(
-                cliente, modelo=MODELO_BUSQUEDA, max_tokens=6000, tools=[_HERRAMIENTA],
+                cliente, modelo=utils_ia.modelo_tarea('busqueda', MODELO_BUSQUEDA), max_tokens=6000,
+                tools=[_HERRAMIENTA],
                 messages=mensajes, cachear=False,
                 output_config=({'effort': 'medium', 'format': {'type': 'json_schema', 'schema': esquema}}
                                if con_formato else {'effort': 'medium'}))

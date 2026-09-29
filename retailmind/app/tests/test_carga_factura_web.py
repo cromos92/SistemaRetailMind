@@ -13,6 +13,7 @@ from unittest import mock
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 
+from app import utils_ia
 from app.middleware_permisos import URL_PERMISO_MAP
 from app.models import (
     AtributoOpcion, CargaFacturaPdf, Categoria, Dte, GuiaTalla, GuiaTallaItem,
@@ -432,7 +433,8 @@ class TestAgenteCargaFactura(TestCase):
         self.assertEqual(primero['tipo'], 'subida')
         self.assertEqual(primero['envio'], {
             'archivo': 'Factura 555.pdf', 'bytes': len(b'%PDF-1.4 prueba'), 'bodega': 'EDEL',
-            'marca': 'NIKE', 'lecturas': 1})
+            'marca': 'NIKE', 'lecturas': 1, 'modelo': utils_ia.etiqueta(svc_lectura.MODELO),
+            'modelo_id': svc_lectura.MODELO})
 
     def test_chat_recibe_lo_leido_en_cargas_anteriores(self):
         """«¿A cuánto compré el HQ6034-001 antes?»: el agente recibe la línea de la carga

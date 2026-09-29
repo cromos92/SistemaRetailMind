@@ -15,6 +15,7 @@ Diseño:
     de la misma Empresa que el producto, y como fallback el de mayor
     ``prioridad``.
 """
+from django.conf import settings
 from django.db import models
 
 from .organizacion import Empresa
@@ -118,3 +119,107 @@ class FotoPortadaArticulo(models.Model):
 
     def __str__(self):
         return f'{self.articulo} ← {self.origen.codigo}'
+
+
+# ---------------------------------------------------------------------------
+# Inteligencia Artificial (Configuración → Inteligencia Artificial)
+#
+# Claves de API y modelo por tarea de los agentes de IA (lectura de facturas,
+# chat de la carga, búsqueda en internet, asistente). Lo guardado aquí manda
+# sobre las variables de entorno (ANTHROPIC_API_KEY, OPENAI_API_KEY,
+# CARGA_FACTURA_MODELO…), que quedan de respaldo: sin nada guardado, todo
+# funciona como antes. Ver app/utils_ia.py.
+
+PROVEEDOR_IA_CHOICES = [
+    ('anthropic', 'Anthropic (Claude)'),
+    ('openai', 'OpenAI (ChatGPT)'),
+    ('gemini', 'Google Gemini'),
+    ('deepseek', 'DeepSeek'),
+    ('openrouter', 'OpenRouter'),
+    ('compatible', 'API compatible (Ollama, vLLM, Groq…)'),
+]
+
+TAREA_IA_CHOICES = [
+    ('lectura', 'Lectura de facturas PDF'),
+    ('lectura_opciones', 'Otros lectores que se ofrecen al subir'),
+    ('verificacion', 'Verificación de líneas dudosas'),
+    ('rapido', 'Enderezar páginas escaneadas'),
+    ('chat', 'Chat de la carga por factura'),
+    ('busqueda', 'Búsqueda en internet'),
+    ('asistente', 'Asistente'),
+]
+
+
+class ClaveProveedorIA(models.Model):
+    """Clave de API de un proveedor de IA, CIFRADA en reposo (Fernet, ver
+    services/mp_credenciales.py: la clave de cifrado vive en el entorno,
+    nunca en la BD). Escribir SIEMPRE con ``set_clave`` y leer con
+    ``get_clave``; jamás asignar ``clave_cifrada`` a mano con texto plano.
+    La pantalla solo muestra ``ultimos4``."""
+
+    proveedor = models.CharField(max_length=20, choices=PROVEEDOR_IA_CHOICES, unique=True)
+    clave_cifrada = models.TextField(blank=True, help_text='Clave de API CIFRADA — usar set_clave()')
+    ultimos4 = models.CharField(max_length=8, blank=True,
+                                help_text='Últimos caracteres, para reconocerla en pantalla.')
+    url_base = models.CharField(
+        max_length=255, blank=True,
+        help_text='Solo «API compatible»: URL base (p. ej. http://localhost:11434/v1 para Ollama).')
+    workspace_id = models.CharField(
+        max_length=100, blank=True,
+        help_text='Solo Anthropic: id del workspace (wrkspc_…) si la clave es de organización.')
+    activa = models.BooleanField(default=True, help_text='Apagada = se usa la variable de entorno (si hay).')
+    modelos = models.JSONField(default=list, blank=True,
+                               help_text='Modelos que listó el proveedor en la última prueba.')
+    probada_en = models.DateTimeField(null=True, blank=True)
+    prueba_ok = models.BooleanField(null=True, blank=True)
+    prueba_detalle = models.CharField(max_length=300, blank=True)
+    actualizado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='claves_ia_actualizadas')
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Clave de proveedor de IA'
+        verbose_name_plural = 'Claves de proveedores de IA'
+        ordering = ['proveedor']
+
+    def __str__(self):
+        if self.ultimos4:
+            return f'{self.get_proveedor_display()} (…{self.ultimos4})'
+        return self.get_proveedor_display()
+
+    def set_clave(self, valor):
+        from app.services.mp_credenciales import cifrar
+        valor = (valor or '').strip()
+        self.clave_cifrada = cifrar(valor)
+        # Solo si la clave es larga: en una corta, 4 caracteres dirían demasiado.
+        self.ultimos4 = valor[-4:] if len(valor) >= 16 else ''
+
+    def get_clave(self):
+        from app.services.mp_credenciales import descifrar
+        return descifrar(self.clave_cifrada, donde='IA',
+                         como_rearmar='Volver a guardar la clave en Configuración → Inteligencia Artificial')
+
+
+class ModeloTareaIA(models.Model):
+    """Modelo (o cadena de respaldo «a,b») que usa una tarea de IA. Sin fila
+    para una tarea = variable de entorno o el modelo por defecto."""
+
+    tarea = models.CharField(max_length=30, choices=TAREA_IA_CHOICES, unique=True)
+    modelo = models.CharField(
+        max_length=255,
+        help_text='«proveedor:modelo»; varios separados por coma = respaldo en orden '
+                  '(en «otros lectores», cada lector separado por punto y coma).')
+    actualizado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='modelos_ia_actualizados')
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Modelo de IA por tarea'
+        verbose_name_plural = 'Modelos de IA por tarea'
+        ordering = ['tarea']
+
+    def __str__(self):
+        return f'{self.get_tarea_display()}: {self.modelo}'

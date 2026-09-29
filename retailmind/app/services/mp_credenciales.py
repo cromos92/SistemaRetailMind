@@ -42,9 +42,11 @@ def cifrar(texto):
     return _PREFIJO + Fernet(_clave_fernet()).encrypt(texto.encode()).decode()
 
 
-def descifrar(texto):
+def descifrar(texto, donde='MP', como_rearmar='Re-guardar el token en el admin'):
     """Devuelve el secreto en claro. Tolerante: texto plano legacy pasa tal
-    cual; cifrado con otra clave devuelve '' (con error en el log)."""
+    cual; cifrado con otra clave devuelve '' (con error en el log).
+    `donde` / `como_rearmar` solo cambian el mensaje del log (lo usan también
+    las claves de IA de Configuración → Inteligencia Artificial)."""
     if not texto:
         return ''
     if not texto.startswith(_PREFIJO):
@@ -54,8 +56,8 @@ def descifrar(texto):
         return Fernet(_clave_fernet()).decrypt(texto[len(_PREFIJO):].encode()).decode()
     except InvalidToken:
         logger.error(
-            'MP: no se pudo descifrar una credencial guardada en BD '
-            '(¿cambió SECRET_KEY o MP_CRED_KEY? Re-guardar el token en el admin)'
+            '%s: no se pudo descifrar una credencial guardada en BD '
+            '(¿cambió SECRET_KEY o MP_CRED_KEY? %s)', donde, como_rearmar
         )
         return ''
 

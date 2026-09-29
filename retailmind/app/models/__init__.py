@@ -255,8 +255,12 @@ from .ecommerce import (  # noqa: F401
 )
 
 from .configuracion import (  # noqa: F401
+    PROVEEDOR_IA_CHOICES,
+    TAREA_IA_CHOICES,
+    ClaveProveedorIA,
     CredencialesEcommerce,
     FotoPortadaArticulo,
+    ModeloTareaIA,
 )
 
 from .giftcards import (  # noqa: F401

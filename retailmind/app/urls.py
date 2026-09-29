@@ -4,6 +4,7 @@ from django.shortcuts import render
 from . import views_modulo_compras
 from . import views_modulo_compras_xml
 from . import views_modulo_configuracion
+from . import views_modulo_inteligencia_artificial
 from . import views_modulo_reportes
 from . import views_modulo_reportes_diferencias
 from . import views_modulo_reportes_tallas
@@ -1456,6 +1457,20 @@ urlpatterns = [
     path('configuracion/integraciones-ecommerce/<int:pk>/fotos/',
          views_modulo_configuracion.fotos_integracion_ecommerce,
          name='fotos_integracion_ecommerce'),
+
+    # ========== MÓDULO CONFIGURACIÓN — INTELIGENCIA ARTIFICIAL ==========
+    path('configuracion/inteligencia-artificial/',
+         views_modulo_inteligencia_artificial.inteligencia_artificial,
+         name='inteligencia_artificial'),
+    path('configuracion/inteligencia-artificial/clave/',
+         views_modulo_inteligencia_artificial.guardar_clave_ia,
+         name='guardar_clave_ia'),
+    path('configuracion/inteligencia-artificial/probar/',
+         views_modulo_inteligencia_artificial.probar_clave_ia,
+         name='probar_clave_ia'),
+    path('configuracion/inteligencia-artificial/modelos/',
+         views_modulo_inteligencia_artificial.guardar_modelos_ia,
+         name='guardar_modelos_ia'),
 
     # ========== MÓDULO DE GENERACIÓN DE ARCHIVOS TXT ACEPTA ==========
     path('configuracion/interfaz-prueba-acepta/', views_modulo_documentos.interfaz_prueba_acepta, name='interfaz_prueba_acepta'),

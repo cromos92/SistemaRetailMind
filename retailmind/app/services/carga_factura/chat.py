@@ -12,9 +12,9 @@ desde aquí: para eso está el botón «Cargar» de la tarjeta.
 """
 import json
 import logging
-import os
 import re
 
+from app import utils_ia
 from app.models import CargaFacturaPdf
 
 from . import lectura as svc_lectura
@@ -24,8 +24,11 @@ from .facturas import ErrorCarga
 logger = logging.getLogger('app')
 
 # Traducir un mensaje a correcciones es una tarea acotada: un modelo más
-# barato que el de la lectura alcanza (y responde más rápido).
-MODELO_CHAT = os.environ.get('CARGA_FACTURA_MODELO_CHAT', 'claude-sonnet-5')
+# barato que el de la lectura alcanza (y responde más rápido). Acepta otros
+# proveedores y cadena de respaldo, p. ej. "openai:gpt-5.4-mini,claude-sonnet-5"
+# (ver app/utils_ia.py). Respaldo de la pantalla (Configuración → Inteligencia
+# Artificial, tarea «chat»).
+MODELO_CHAT = utils_ia.modelo_env('chat')
 _HISTORIAL = 8       # mensajes recientes que ve Claude
 _MAX_TEXTO = 2000
 
@@ -270,7 +273,7 @@ def _preguntar(catalogo, previa, historial, texto, anteriores=None):
         'mensaje_de_la_persona': texto,
     }
     respuesta = svc_lectura._pedir(
-        cliente, modelo=MODELO_CHAT, max_tokens=8000, cachear=False,
+        cliente, modelo=utils_ia.modelo_tarea('chat', MODELO_CHAT), max_tokens=8000, cachear=False,
         system=[{'type': 'text', 'text': _INSTRUCCIONES + '\n\n' + json.dumps(estable, ensure_ascii=False),
                  'cache_control': svc_lectura.CACHE}],
         messages=[{'role': 'user', 'content': [

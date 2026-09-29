@@ -399,3 +399,43 @@ class TallasRepetidasVerificacionTest(BaseModalManual):
         t = data['tallas_existentes'][0]
         self.assertFalse(t['talla_repetida'])
         self.assertFalse(t['recomendada'])
+
+
+class CodigosDeLaMismaFamiliaTest(BaseModalManual):
+    """Llegó 44544-3 y ya existe 44544-2 (mismo modelo, otro color): el panel
+    debe ofrecer a la hermana para «Copiar datos» aunque lo tecleado no esté
+    contenido en su código."""
+
+    URL = '/app/verificar_producto_existente/'
+
+    def setUp(self):
+        super().setUp()
+        self.hermana, _ = crear_producto_con_talla(
+            self.sucursal_a, articulo='44544-2', sku=1000002, stock=3,
+        )
+        self.hermana.atributo1 = self.op_marca
+        self.hermana.categoria = self.categoria
+        self.hermana.descripcion = 'ZAPATILLA URBANA'
+        self.hermana.save()
+
+    def test_ofrece_la_hermana_al_teclear_la_variante_nueva(self):
+        status, data = self._get(self.user_a, self.URL, articulo='44544-3')
+        self.assertEqual(status, 200)
+        self.assertFalse(data['existe'])
+        similares = {s['articulo']: s for s in data['productos_similares_nombre']}
+        self.assertIn('44544-2', similares)
+        hermana = similares['44544-2']
+        self.assertTrue(hermana['familia'])
+        self.assertEqual(hermana['descripcion'], 'ZAPATILLA URBANA')
+        self.assertEqual(hermana['marca_id'], self.op_marca.id)
+        self.assertEqual(hermana['categoria_id'], self.categoria.id)
+
+    def test_familia_codigo(self):
+        from app.views import _familia_codigo
+        self.assertEqual(_familia_codigo('44544-3'), '44544')
+        self.assertEqual(_familia_codigo('HQ6034-001'), 'HQ6034')
+        self.assertEqual(_familia_codigo('12-REBI-1'), '12-REBI')
+        self.assertEqual(_familia_codigo('F35556'), 'F355')
+        self.assertIsNone(_familia_codigo('PREDATOR ELITE'))
+        self.assertIsNone(_familia_codigo('A-1'))
+        self.assertIsNone(_familia_codigo(''))

@@ -32,11 +32,19 @@ cache_control explícito y la verificación las reutiliza; (3) el cuadre lo
 hace Python, no el modelo; (4) las rotaciones vienen del /Rotate del PDF
 cuando existe.
 
-Configuración (variables de entorno):
+Claves y modelos: Configuración → Inteligencia Artificial (utils_ia.TAREAS);
+lo guardado ahí manda sobre estas variables de entorno, que quedan de respaldo:
   ANTHROPIC_API_KEY (settings) · CARGA_FACTURA_MODELO (claude-opus-5) ·
   CARGA_FACTURA_MODELO_RAPIDO (claude-sonnet-5, enderezar) ·
-  CARGA_FACTURA_ESFUERZO (high) · CARGA_FACTURA_ESFUERZO_VERIFICACION (medium) ·
-  CARGA_FACTURA_CUADRANTES (1; 0 = mandar solo la página entera, como antes).
+  CARGA_FACTURA_MODELO_VERIFICACION (vacío = el mismo de la lectura) ·
+  CARGA_FACTURA_MODELOS (otros lectores que la pantalla ofrece, separados por
+  «;») · CARGA_FACTURA_ESFUERZO (high) · CARGA_FACTURA_ESFUERZO_VERIFICACION
+  (medium) · CARGA_FACTURA_CUADRANTES (1; 0 = mandar solo la página entera).
+
+Otros proveedores (ChatGPT, Gemini, DeepSeek, OpenRouter): cada variable de
+modelo acepta «proveedor:modelo» y una cadena de respaldo separada por comas,
+p. ej. CARGA_FACTURA_MODELO="gemini:gemini-3.8-flash,claude-opus-5" (ver
+app/utils_ia.py; claves OPENAI_API_KEY, GEMINI_API_KEY…).
 """
 import base64
 import io
@@ -48,8 +56,8 @@ import threading
 import zlib
 from decimal import ROUND_HALF_UP, Decimal
 
-from django.conf import settings
 
+from app import utils_ia
 from app.models import AtributoOpcion, Categoria
 from app.utils_anthropic import explicar_error_anthropic, opciones_cliente_anthropic
 
@@ -58,10 +66,39 @@ from .perfiles import perfil_para
 
 logger = logging.getLogger('app')
 
-MODELO = os.environ.get('CARGA_FACTURA_MODELO', 'claude-opus-5')
+# Constantes = variable de entorno o default (utils_ia.TAREAS); lo que se usa
+# de verdad lo dicen modelo_lectura() & cía., que antes miran la pantalla.
+MODELO = utils_ia.modelo_env('lectura')
 # Tareas triviales (¿cuántos grados está girada la página?) con un modelo más
 # barato; la lectura propiamente tal sigue con MODELO.
-MODELO_RAPIDO = os.environ.get('CARGA_FACTURA_MODELO_RAPIDO', 'claude-sonnet-5')
+MODELO_RAPIDO = utils_ia.modelo_env('rapido')
+# Verificación dirigida de las líneas con dudas; vacío = el mismo modelo de la
+# lectura (reutiliza las páginas desde la caché). Otro modelo (p. ej. leer con
+# uno barato y verificar con Opus) vuelve a pagar las páginas completas.
+MODELO_VERIFICACION = utils_ia.modelo_env('verificacion')
+# Lectores adicionales que la pantalla ofrece al subir (además de MODELO),
+# separados por «;» (la coma separa la cadena de respaldo de cada uno):
+# "gemini:gemini-3.8-flash;openai:gpt-5.4-mini,claude-opus-5".
+MODELOS_OPCIONALES = [m.strip() for m in utils_ia.modelo_env('lectura_opciones').split(';') if m.strip()]
+
+
+def modelo_lectura():
+    """Lector por defecto: el de la pantalla o MODELO."""
+    return utils_ia.modelo_tarea('lectura', MODELO)
+
+
+def modelo_rapido():
+    return utils_ia.modelo_tarea('rapido', MODELO_RAPIDO)
+
+
+def modelo_verificacion():
+    """'' = el mismo modelo de la lectura."""
+    return utils_ia.modelo_tarea('verificacion', MODELO_VERIFICACION)
+
+
+def modelos_opcionales():
+    valor = utils_ia.modelo_tarea('lectura_opciones', ';'.join(MODELOS_OPCIONALES))
+    return [m.strip() for m in valor.split(';') if m.strip()]
 # Esfuerzo de razonamiento de la lectura y de la verificación dirigida.
 ESFUERZO = os.environ.get('CARGA_FACTURA_ESFUERZO', 'high')
 ESFUERZO_VERIFICACION = os.environ.get('CARGA_FACTURA_ESFUERZO_VERIFICACION', 'medium')
@@ -90,18 +127,30 @@ _CAMPOS_USO = ('llamadas', 'entrada', 'salida', 'cache_leida', 'cache_escrita', 
 
 def uso_iniciar():
     _USO.datos = {k: 0 for k in _CAMPOS_USO}
+    _USO.modelos = []
 
 
 def uso_actual():
+    """Totales del paso; 'modelo' (texto) dice qué modelo(s) respondieron."""
     datos = dict(getattr(_USO, 'datos', None) or {})
     if 'costo_usd' in datos:
         datos['costo_usd'] = round(float(datos['costo_usd']), 4)
+    modelos = getattr(_USO, 'modelos', None)
+    if datos and modelos:
+        datos['modelo'] = ', '.join(modelos)
     return datos
+
+
+def ultimo_modelo():
+    """El modelo que dio la última respuesta en este hilo (o None)."""
+    return getattr(_USO, 'ultimo', None)
 
 
 def _precios(modelo):
     """(entrada, salida, caché leída, caché escrita) del modelo, por prefijo más largo."""
-    nombre = str(modelo or '')
+    if not utils_ia.es_claude(modelo):
+        return utils_ia.precios(modelo) or utils_ia.PRECIO_DESCONOCIDO
+    nombre = utils_ia.separar(modelo)[1]
     mejor = ''
     for prefijo in PRECIOS_USD_POR_MILLON:
         if nombre.startswith(prefijo) and len(prefijo) > len(mejor):
@@ -117,10 +166,15 @@ def costo_estimado(modelo, entrada=0, salida=0, cache_leida=0, cache_escrita=0, 
 
 
 def _registrar_uso(respuesta):
+    modelo = getattr(respuesta, 'model', None) or MODELO
+    _USO.ultimo = modelo
     datos = getattr(_USO, 'datos', None)
     u = getattr(respuesta, 'usage', None)
     if datos is None or u is None:
         return
+    modelos = getattr(_USO, 'modelos', None)
+    if modelos is not None and modelo not in modelos:
+        modelos.append(modelo)
     entrada = int(getattr(u, 'input_tokens', 0) or 0)
     salida = int(getattr(u, 'output_tokens', 0) or 0)
     leida = int(getattr(u, 'cache_read_input_tokens', 0) or 0)
@@ -133,8 +187,11 @@ def _registrar_uso(respuesta):
     datos['cache_leida'] += leida
     datos['cache_escrita'] += escrita
     datos['busquedas'] += busquedas
-    datos['costo_usd'] = float(datos.get('costo_usd') or 0) + costo_estimado(
-        getattr(respuesta, 'model', None) or MODELO, entrada, salida, leida, escrita, busquedas)
+    # OpenRouter informa el costo real de cada respuesta; el resto se estima.
+    real = getattr(u, 'costo_usd', None)
+    datos['costo_usd'] = float(datos.get('costo_usd') or 0) + (
+        float(real) if isinstance(real, (int, float)) else
+        costo_estimado(modelo, entrada, salida, leida, escrita, busquedas))
 _BETA_FALLBACK = 'server-side-fallback-2026-07-01'
 # La API reduce toda imagen a ≤ 1568 px de lado mayor y ≈ 1,15 megapíxeles;
 # mandar más grande solo cuesta ancho de banda. Una página escaneada (2200 ×
@@ -299,7 +356,8 @@ def _cliente():
         import anthropic
     except ImportError:
         raise ErrorLectura('Falta el paquete "anthropic" en este entorno (pip install anthropic).')
-    clave = getattr(settings, 'ANTHROPIC_API_KEY', '') or None
+    # La de Configuración → Inteligencia Artificial o ANTHROPIC_API_KEY.
+    clave = utils_ia.clave_anthropic()
     # Cabecera del workspace si la clave es de organización (ver utils_anthropic).
     extra = opciones_cliente_anthropic()
     return anthropic.Anthropic(api_key=clave, **extra) if clave else anthropic.Anthropic(**extra)
@@ -309,26 +367,32 @@ CACHE = {'type': 'ephemeral'}
 
 
 def _pedir(cliente, modelo=None, cachear=True, **kwargs):
-    """Una respuesta de Claude (streaming, con respaldo de modelo si la rechaza).
+    """Una respuesta del modelo (o de su cadena de respaldo, ver utils_ia).
 
+    Claude va por streaming con respaldo de modelo del servidor si la rechaza;
+    ChatGPT, Gemini, etc. por utils_ia.crear_mensaje con la misma petición.
     `cachear`: cache_control a nivel de petición (la API marca el último
     bloque): sirve cuando la conversación CRECE y la próxima petición repite
     esta entera (las vueltas de zoom). Para una petición suelta (enderezar,
     búsqueda) o cuando el final cambia en cada turno (chat) solo paga el
     recargo de escritura sin que nadie lo lea: ahí va False y los bloques
-    estables llevan su propio cache_control (ver _una_lectura y chat)."""
+    estables llevan su propio cache_control (ver _una_lectura y chat). Los
+    otros proveedores cachean solos el prefijo repetido."""
     import anthropic
 
-    if cachear:
-        kwargs['cache_control'] = CACHE
-    try:
+    def claude(nombre, peticion):
+        if cachear:
+            peticion['cache_control'] = CACHE
         with cliente.beta.messages.stream(
-            model=modelo or MODELO,
+            model=nombre,
             betas=[_BETA_FALLBACK],
             extra_body={'fallbacks': 'default'},
-            **kwargs,
+            **peticion,
         ) as stream:
-            respuesta = stream.get_final_message()
+            return stream.get_final_message()
+
+    try:
+        respuesta = utils_ia.responder(modelo or modelo_lectura(), claude, **kwargs)
     except anthropic.APIStatusError as exc:
         # Errores de configuración (clave, workspace, permisos) con un mensaje
         # que diga qué arreglar; el resto sube tal cual.
@@ -336,10 +400,13 @@ def _pedir(cliente, modelo=None, cachear=True, **kwargs):
         if explicacion:
             raise ErrorLectura(explicacion) from exc
         raise
+    except utils_ia.ErrorProveedor as exc:
+        raise ErrorLectura(str(exc)) from exc
     _registrar_uso(respuesta)
     if respuesta.stop_reason == 'refusal':
         detalle = getattr(respuesta, 'stop_details', None)
-        raise ErrorLectura(f'Claude no quiso leer el documento ({getattr(detalle, "category", "")}).')
+        raise ErrorLectura(f'El modelo ({getattr(respuesta, "model", "")}) no quiso leer el documento '
+                           f'({getattr(detalle, "category", "")}).')
     if respuesta.stop_reason == 'max_tokens':
         raise ErrorLectura('La respuesta se cortó por largo; divide el PDF y vuelve a intentar.')
     return respuesta
@@ -363,7 +430,7 @@ _ESQUEMA_ROTACION = {
 def _enderezar(cliente, img):
     """Imagen derecha: Claude dice cuántos grados girarla en sentido horario."""
     respuesta = _pedir(
-        cliente, modelo=MODELO_RAPIDO, max_tokens=4000, cachear=False, output_config={
+        cliente, modelo=modelo_rapido(), max_tokens=4000, cachear=False, output_config={
             'effort': 'low', 'format': {'type': 'json_schema', 'schema': _ESQUEMA_ROTACION}},
         messages=[{'role': 'user', 'content': [
             _bloque_imagen(img, 1000),
@@ -676,7 +743,8 @@ def _ejecutar_zoom(entrada, paginas):
 
 
 def _una_lectura(cliente, contenido, paginas, instrucciones, esquema, orden,
-                 etiqueta='Leyendo el documento', progreso=None, pedido=None, esfuerzo=None):
+                 etiqueta='Leyendo el documento', progreso=None, pedido=None, esfuerzo=None,
+                 modelo=None):
     """Una lectura (con su propio bucle de zoom). Devuelve el dict del esquema.
 
     Las instrucciones van como `system` con cache_control y `contenido` (las
@@ -698,8 +766,8 @@ def _una_lectura(cliente, contenido, paginas, instrucciones, esquema, orden,
     for turno in range(_MAX_TURNOS):
         if progreso:
             progreso(f'{etiqueta}…' if turno == 0 else f'{etiqueta}: ampliando detalles (vuelta {turno})…')
-        respuesta = _pedir(cliente, max_tokens=64000, system=sistema, tools=herramientas,
-                           messages=mensajes,
+        respuesta = _pedir(cliente, modelo=modelo, max_tokens=64000, system=sistema,
+                           tools=herramientas, messages=mensajes,
                            output_config={'effort': esfuerzo or ESFUERZO,
                                           'format': {'type': 'json_schema', 'schema': esquema}})
         if respuesta.stop_reason != 'tool_use':
@@ -770,20 +838,25 @@ def _pedido_verificacion(dudosas):
             f'agrupadas por folio, con el código tal como está impreso:\n{lineas}')
 
 
-def _verificar_lineas(cliente, contenido, paginas, instrucciones, esquema, dudosas, progreso=None):
+def _verificar_lineas(cliente, contenido, paginas, instrucciones, esquema, dudosas, progreso=None,
+                      modelo=None):
     """Segunda mirada dirigida: misma conversación base (instrucciones y páginas
     desde la caché), solo las líneas con dudas y un esquema chico. Devuelve un
     dict de lectura PARCIAL (marcado con _parcial) para combinar_lecturas."""
     otra = _una_lectura(cliente, contenido, paginas, instrucciones, _esquema_verificacion(esquema), 2,
                         etiqueta=f'Verificando {len(dudosas)} línea(s) con dudas', progreso=progreso,
-                        pedido=_pedido_verificacion(dudosas), esfuerzo=ESFUERZO_VERIFICACION)
+                        pedido=_pedido_verificacion(dudosas), esfuerzo=ESFUERZO_VERIFICACION,
+                        modelo=modelo)
     otra['_parcial'] = True
     return otra
 
 
-def leer_pdf(pdf_bytes, marca=None, lecturas=2, progreso=None, pistas=''):
+def leer_pdf(pdf_bytes, marca=None, lecturas=2, progreso=None, pistas='', modelo=None):
     """Lee el PDF. Devuelve {'lecturas': [dict, ...], 'modo': 'escaneo'|'pdf',
-    'segunda': por qué hubo (o no) segunda pasada, 'verificadas': n líneas}.
+    'segunda': por qué hubo (o no) segunda pasada, 'verificadas': n líneas,
+    'modelo': el modelo que respondió la lectura}.
+
+    `modelo`: lector (o cadena de respaldo, ver utils_ia); None = modelo_lectura().
 
     `lecturas`: 1 = una sola; 2 = lectura + verificación dirigida de las líneas
     que dejan dudas (default); 3 = dos lecturas completas que se comparan.
@@ -827,26 +900,64 @@ def leer_pdf(pdf_bytes, marca=None, lecturas=2, progreso=None, pistas=''):
     # pasada las lee desde la caché y solo paga el texto de su pedido.
     contenido[-1]['cache_control'] = CACHE
 
+    modelo = modelo or modelo_lectura()
     modo_lecturas = max(1, min(3, int(lecturas or 2)))
     primera = _una_lectura(cliente, contenido, paginas, instrucciones, esquema, 1,
-                           etiqueta='Leyendo el documento', progreso=progreso)
+                           etiqueta='Leyendo el documento', progreso=progreso, modelo=modelo)
+    modelo_usado = ultimo_modelo() or modelo
     resultado = [_limpiar_lectura(primera, categorias, especialidades, colores)]
     segunda, verificadas = 'no pedida', 0
     if modo_lecturas == 3:
         otra = _una_lectura(cliente, contenido, paginas, instrucciones, esquema, 2,
-                            etiqueta='Segunda lectura completa', progreso=progreso)
+                            etiqueta='Segunda lectura completa', progreso=progreso, modelo=modelo)
         resultado.append(_limpiar_lectura(otra, categorias, especialidades, colores))
         segunda = 'siempre'
     elif modo_lecturas == 2:
         dudosas = _lineas_dudosas(resultado[0])
         if dudosas:
             otra = _verificar_lineas(cliente, contenido, paginas, instrucciones, esquema, dudosas,
-                                     progreso=progreso)
+                                     progreso=progreso, modelo=modelo_verificacion() or modelo)
             resultado.append(_limpiar_lectura(otra, categorias, especialidades, colores))
             segunda, verificadas = 'verificación', len(dudosas)
         else:
             segunda = 'no hizo falta'
-    return {'lecturas': resultado, 'modo': modo, 'segunda': segunda, 'verificadas': verificadas}
+    return {'lecturas': resultado, 'modo': modo, 'segunda': segunda, 'verificadas': verificadas,
+            'modelo': modelo_usado}
+
+
+# ------------------------------------------------------ qué lector se usa
+
+
+def _nota_precio(modelo):
+    p_in, p_out = _precios(utils_ia.cadena(modelo)[0])[:2]
+
+    def fmt(v):
+        return f'{v:.2f}'.rstrip('0').rstrip('.').replace('.', ',')
+    return f'US${fmt(p_in)} / {fmt(p_out)} por millón de tokens (entrada / salida)'
+
+
+def opciones_modelo():
+    """Lectores que se pueden elegir al subir (los que tienen clave en este
+    servidor): [{'id', 'etiqueta', 'nota', 'defecto'}]; el primero es el de
+    siempre (modelo_lectura())."""
+    principal = modelo_lectura()
+    opciones, vistos = [], set()
+    for m in [principal] + modelos_opcionales():
+        if m in vistos or not utils_ia.configurado(m):
+            continue
+        vistos.add(m)
+        opciones.append({'id': m, 'etiqueta': utils_ia.etiqueta(m), 'nota': _nota_precio(m),
+                         'defecto': m == principal})
+    return opciones
+
+
+def elegir_modelo(pedido=None):
+    """El lector para una carga nueva: el pedido si es una de las opciones,
+    si no la primera disponible; None si ningún proveedor está configurado."""
+    ids = [o['id'] for o in opciones_modelo()]
+    if pedido and str(pedido).strip() in ids:
+        return str(pedido).strip()
+    return ids[0] if ids else None
 
 
 # ------------------------------------------------------ comparar y convertir
@@ -1045,7 +1156,7 @@ def a_json_de_carga(factura, sucursal, marca=None, fuente=''):
         lineas.append(linea)
     con_mano = any(l['precioventa'] for l in lineas)
     return {
-        '_fuente': fuente or f'Leída con {MODELO}',
+        '_fuente': fuente or f'Leída con {modelo_lectura()}',
         '_revisar': list(factura.get('_revisar') or []) + revisar_cuadre(factura),
         'proveedor_rut': factura['proveedor_rut'],
         'proveedor_nombre': factura.get('proveedor_nombre'),

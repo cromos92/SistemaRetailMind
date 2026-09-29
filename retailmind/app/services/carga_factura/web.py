@@ -112,6 +112,8 @@ def _sumar_uso(sesion_id, paso, uso):
     sesion = CargaFacturaPdf.objects.get(id=sesion_id)
     total = dict(sesion.uso or {})
     for k, v in uso.items():
+        if not isinstance(v, (int, float)):
+            continue    # 'modelo' (texto): queda solo en el paso
         if k == 'costo_usd':
             total[k] = round(float(total.get(k) or 0) + float(v or 0), 4)
         else:
@@ -187,8 +189,15 @@ def leer_en_segundo_plano(sesion_id):
         pistas = next((m.get('texto', '') for m in reversed(sesion.mensajes or [])
                        if m.get('tipo') == 'indicaciones'), '')
         svc_lectura.uso_iniciar()
-        leido = svc_lectura.leer_pdf(pdf, marca=sesion.marca or None,
-                                     lecturas=sesion.lecturas, progreso=avisar, pistas=pistas)
+        # El lector elegido al subir (completo en el mensaje de subida; en
+        # sesion.modelo, recortado a 60); las sesiones anteriores a poder
+        # elegir no lo traen y usan el de siempre.
+        elegido = next(((m.get('envio') or {}).get('modelo_id') for m in reversed(sesion.mensajes or [])
+                        if m.get('tipo') == 'subida'), '')
+        modelo = elegido or sesion.modelo or svc_lectura.modelo_lectura()
+        leido = svc_lectura.leer_pdf(pdf, marca=sesion.marca or None, lecturas=sesion.lecturas,
+                                     progreso=avisar, pistas=pistas, modelo=modelo)
+        modelo_usado = str(leido.get('modelo') or modelo)
         avisar('Comparando las lecturas…')
         consolidada = svc_lectura.combinar_lecturas(leido['lecturas'])
         facturas = consolidada.get('facturas', [])
@@ -198,7 +207,7 @@ def leer_en_segundo_plano(sesion_id):
         for factura in facturas:
             d = svc_lectura.a_json_de_carga(
                 factura, sesion.sucursal.alias, marca=sesion.marca or None,
-                fuente=f'{sesion.nombre_archivo}, leída con {svc_lectura.MODELO} '
+                fuente=f'{sesion.nombre_archivo}, leída con {modelo_usado} '
                        f'({len(leido["lecturas"])} lectura(s))')
             d['_estado'] = 'PENDIENTE'
             # Lo confirmado en cargas anteriores del mismo código (género,
@@ -212,7 +221,7 @@ def leer_en_segundo_plano(sesion_id):
         sesion.refresh_from_db()
         sesion.facturas = datos
         sesion.estado = 'LEIDA'
-        sesion.modelo = svc_lectura.MODELO
+        sesion.modelo = modelo_usado[:60]
         sesion.leida_en = timezone.now()
         sesion.progreso = ''
         sesion.error = ''
@@ -1193,5 +1202,7 @@ def opciones_catalogo(user):
         'categorias': categorias, 'especialidades': especialidades, 'guias': guias,
         'sucursales': [{'id': s.id, 'alias': s.alias}
                        for s in obtener_sucursales_usuario(user)],
-        'modelo': svc_lectura.MODELO,
+        'modelo': svc_lectura.modelo_lectura(),
+        # Lectores con clave en este servidor (el selector de la pantalla).
+        'modelos': svc_lectura.opciones_modelo(),
     }

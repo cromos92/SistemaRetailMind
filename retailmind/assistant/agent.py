@@ -9,9 +9,9 @@ import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
-from django.conf import settings
 from django.utils import timezone
 
+from app import utils_ia
 from app.utils_anthropic import opciones_cliente_anthropic
 
 # Anthropic SDK
@@ -49,7 +49,10 @@ class AssistantAgent:
     Langfuse para observabilidad y tracing.
     """
     
-    MODEL = "claude-sonnet-4-5-20250929"
+    # Respaldo de Configuración → Inteligencia Artificial (tarea «asistente»):
+    # ASISTENTE_MODELO o el default. Acepta otros proveedores y cadena de
+    # respaldo, p. ej. "openai:gpt-5.4-mini,claude-sonnet-5" (ver app/utils_ia.py).
+    MODEL = utils_ia.modelo_env('asistente')
     MAX_TOKENS = 4096
     MAX_TOOL_CALLS = 10  # Máximo de llamadas a tools por turno
     
@@ -68,14 +71,11 @@ class AssistantAgent:
         self.tools = AssistantTools(user)
         self.tools_definitions = AssistantTools.get_tools_definitions()
         
-        # Inicializar cliente de Anthropic
+        # Cliente de Anthropic: se arma al llamar (_cliente_claude), con la
+        # clave vigente (Configuración → Inteligencia Artificial o
+        # ANTHROPIC_API_KEY); si cambia en la pantalla, se rearma.
         self.client = None
-        if ANTHROPIC_AVAILABLE:
-            api_key = getattr(settings, 'ANTHROPIC_API_KEY', None)
-            if api_key:
-                # Cabecera del workspace si la clave es de organización
-                # (ANTHROPIC_WORKSPACE_ID, ver app/utils_anthropic.py).
-                self.client = anthropic.Anthropic(api_key=api_key, **opciones_cliente_anthropic())
+        self._clave_cliente = None
         
         # Historial de conversación
         self.conversation_history: List[Dict[str, Any]] = []
@@ -134,7 +134,7 @@ class AssistantAgent:
         Returns:
             Dict con respuesta, historial y metadata
         """
-        if not self.client:
+        if not utils_ia.configurado(self._modelo()):
             return {
                 "response": "⚠️ El servicio de asistente no está configurado. Contacta al administrador.",
                 "error": True
@@ -169,6 +169,13 @@ class AssistantAgent:
                 "error": False
             }
             
+        except utils_ia.ErrorProveedor as e:
+            logger.error(f"Error del proveedor de IA: {str(e)}")
+            return {
+                "response": "😔 Hubo un error al procesar tu consulta. Por favor, intenta de nuevo.",
+                "error": True,
+                "error_detail": str(e)
+            }
         except anthropic.APIError as e:
             logger.error(f"Error de API Anthropic: {str(e)}")
             return {
@@ -186,15 +193,38 @@ class AssistantAgent:
     
     @observe(name="claude_call")
     def _call_claude(self) -> Any:
-        """Realiza la llamada a Claude"""
-        return self.client.messages.create(
-            model=self.MODEL,
+        """Llama al modelo (Claude u otro proveedor, ver utils_ia).
+
+        El system va con cache_control: en Claude cachea herramientas + system
+        (igual en cada vuelta del bucle de herramientas y en cada turno) y solo
+        se paga completo la primera vez; OpenAI y Gemini cachean solos."""
+        def claude(nombre, peticion):
+            return self._cliente_claude().messages.create(model=nombre, **peticion)
+
+        return utils_ia.responder(
+            self._modelo(), claude,
             max_tokens=self.MAX_TOKENS,
-            system=self.system_prompt,
+            system=[{'type': 'text', 'text': self.system_prompt, 'cache_control': {'type': 'ephemeral'}}],
             tools=self.tools_definitions,
-            messages=self.conversation_history
+            messages=self.conversation_history,
         )
     
+    def _modelo(self) -> str:
+        """Modelo vigente: el de la pantalla o self.MODEL (variable de entorno)."""
+        return utils_ia.modelo_tarea('asistente', self.MODEL)
+
+    def _cliente_claude(self):
+        """Cliente de Anthropic con la clave vigente (se rearma si cambió la clave o el workspace)."""
+        if not ANTHROPIC_AVAILABLE:
+            raise utils_ia.ErrorProveedor('Falta el paquete "anthropic" en este servidor.')
+        clave = utils_ia.clave_anthropic()
+        firma = (clave, utils_ia.workspace_anthropic())
+        if self.client is None or firma != self._clave_cliente:
+            # Cabecera del workspace si la clave es de organización (ver app/utils_anthropic.py).
+            self.client = anthropic.Anthropic(api_key=clave, **opciones_cliente_anthropic())
+            self._clave_cliente = firma
+        return self.client
+
     def _process_response(self, response) -> tuple:
         """
         Procesa la respuesta de Claude, ejecutando tools si es necesario.

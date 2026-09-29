@@ -150,6 +150,7 @@
             ['bi-tag', 'Marca', e.marca ? esc(e.marca) : '<span class="cf-muted">la detecta el lector</span>'],
             ['bi-arrow-repeat', 'Lecturas', ({ 1: '1 (rápida, sin verificación)', 2: 'auto: verifica con zoom solo las líneas con dudas', 3: '2 completas (se comparan; cuesta el doble)' })[Number(e.lecturas)] || esc(e.lecturas)],
         ];
+        if (e.modelo) filas.push(['bi-cpu', 'Modelo', esc(e.modelo)]);
         if (e.indicaciones) filas.push(['bi-chat-left-text', 'Indicaciones', esc(e.indicaciones)]);
         return '<div class="cf-envio"><div class="cf-envio-titulo"><i class="bi bi-cloud-arrow-up me-1"></i>Factura enviada a leer</div>' +
             filas.map(f => '<div class="cf-envio-fila"><i class="bi ' + f[0] + '"></i><span>' + f[1] + '</span><b>' + f[2] + '</b></div>').join('') +
@@ -190,7 +191,8 @@
             (u.cache_leida ? ' (' + k(u.cache_leida) + ' desde caché)' : '') +
             ' · ' + k(u.salida || 0) + ' de salida' +
             (u.busquedas ? ' · ' + u.busquedas + ' búsqueda(s) web' : '') +
-            (costo ? ' · <b>' + costo + '</b>' : '') + '</div>';
+            (costo ? ' · <b>' + costo + '</b>' : '') +
+            (u.modelo ? ' · <span class="cf-muted">' + esc(u.modelo) + '</span>' : '') + '</div>';
     }
 
     /** Lo que quedó (o venía) aprendido: chips moradas. */
@@ -374,7 +376,7 @@
         } else {
             $texto.placeholder = 'Indicaciones para leer la factura (opcional): «marca CHALADA, tallas CL, el color va en la descripción»';
             if (st.opciones && !configurada) {
-                ayuda = 'La lectura no está configurada en este servidor (falta la clave de Anthropic).';
+                ayuda = 'La lectura no está configurada en este servidor (falta la clave del proveedor de IA).';
             } else if (archivo) {
                 ayuda = 'Listo: «Enviar PDF» sube ' + archivo.name + ' (' + kb(archivo.size) + ') a la bodega ' + bodega +
                     ($texto.value.trim() ? ' con tus indicaciones' : '') + ' y empieza la lectura.';
@@ -424,9 +426,15 @@
         const actual = (window.SUCURSAL_ACTUAL_ID || '').toString();
         if (actual && data.sucursales.some(s => String(s.id) === actual)) $suc.value = actual;
         document.getElementById('cfMarcas').innerHTML = data.marcas.map(m => '<option value="' + esc(m) + '">').join('');
+        // Selector de modelo: solo si hay más de uno con clave en el servidor.
+        const modelos = data.modelos || [];
+        document.getElementById('cfModelo').innerHTML = modelos.map(m =>
+            '<option value="' + esc(m.id) + '" title="' + esc(m.nota) + '">' + esc(m.etiqueta) + '</option>').join('');
+        document.getElementById('cfModeloWrap').classList.toggle('d-none', modelos.length < 2);
         if (!data.configurada) {
-            burbuja('agente', esc('En este servidor falta configurar ANTHROPIC_API_KEY: puedo mostrar cargas ' +
-                'anteriores, pero no leer facturas nuevas hasta que se configure.'), 'cf-error');
+            burbuja('agente', esc('En este servidor falta la clave de IA (Configuración → Inteligencia ' +
+                'Artificial, o la variable ANTHROPIC_API_KEY): puedo mostrar cargas anteriores, pero no leer ' +
+                'facturas nuevas hasta que se configure.'), 'cf-error');
             document.getElementById('cfBtnEnviar').disabled = true;
         }
         return data;
@@ -489,6 +497,8 @@
         if (!archivo) { avisar('Falta la factura', 'Adjunta el PDF de la factura.', 'warning'); return; }
         const $suc = document.getElementById('cfSucursal');
         const $texto = document.getElementById('cfTexto');
+        const $modelo = document.getElementById('cfModelo');
+        const modeloElegido = $modelo && $modelo.options[$modelo.selectedIndex];
         const envio = {
             archivo: archivo.name, bytes: archivo.size,
             bodega: $suc.options[$suc.selectedIndex] ? $suc.options[$suc.selectedIndex].text : '',
@@ -496,6 +506,7 @@
             lecturas: parseInt(document.getElementById('cfLecturas').value, 10) || 2,
             // Lo escrito en la caja del chat va como indicaciones para el lector.
             indicaciones: $texto.value.trim(),
+            modelo: modeloElegido ? modeloElegido.text : '',
         };
         const fd = new FormData();
         fd.append('archivo', archivo);
@@ -503,6 +514,7 @@
         fd.append('marca', envio.marca);
         fd.append('lecturas', envio.lecturas);
         fd.append('indicaciones', envio.indicaciones);
+        if (modeloElegido) fd.append('modelo', modeloElegido.value);
         st.enviando = true;
         pintarEstado();
         actualizarComposer();

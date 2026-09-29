@@ -1291,6 +1291,72 @@
     .kpi-tile--rechazo { background: rgba(74, 74, 90, .10); }
     .kpi-tile--neutral { background: var(--nexo-gray-100); }
 
+    /* ===== Unidades con Nota de Crédito en el modal de recepción =====
+       Lo que el documento sigue listando pero el emisor ya anuló con NC: no
+       entra al stock del destino. Tiene su propio panel y su propio color de
+       fila para no confundirse con un faltante que hay que resolver. */
+    .nc-panel {
+        border: 1px solid rgba(255, 77, 77, .30);
+        border-left: 4px solid var(--nexo-error);
+        border-radius: var(--nexo-radius-md);
+        background: rgba(255, 77, 77, .05);
+        padding: 10px 12px;
+    }
+    .nc-panel__titulo { font-size: 14px; font-weight: 700; color: var(--rd-error-text); }
+    .nc-panel__pasos { font-size: 12.5px; line-height: 1.4; margin: 6px 0 0; padding-left: 18px; }
+    .nc-panel__pasos li + li { margin-top: 2px; }
+    .nc-panel__tabla {
+        max-height: 170px;
+        overflow: auto;
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        background: var(--nexo-white);
+    }
+    .nc-panel__tabla .table { font-size: 12px; }
+    .nc-panel__tabla .table th {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--nexo-gray-700);
+        background: var(--nexo-gray-100);
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+    .nc-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: 999px;
+        padding: 1px 8px;
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+        background: rgba(255, 77, 77, .14);
+        color: var(--rd-error-text);
+    }
+    .nc-chip--ok { background: rgba(0, 212, 170, .15); color: var(--rd-success-text); }
+    .nc-chip--warn { background: rgba(255, 176, 32, .20); color: var(--rd-warning-text); }
+    #productosVerificacionBody tr.fila-con-nc { --bs-table-bg: rgba(255, 77, 77, .06); }
+    #productosVerificacionBody tr.fila-con-nc > td:first-child { border-left: 3px solid var(--nexo-error); }
+    .impacto-bar #impactoConNc { color: var(--rd-error-text); }
+    .ayuda-item.ayuda-nc { border-left-color: var(--nexo-error); }
+
+    /* Celda de acciones de la lista: mismos espacios entre botones sin
+       depender de un ms-1 en cada uno. */
+    .acciones-dte {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        justify-content: center;
+        align-items: center;
+    }
+    .acciones-dte .btn { white-space: nowrap; }
+    .acciones-dte .badge-nc-accion {
+        font-size: 10px;
+        padding: 2px 5px;
+        vertical-align: 1px;
+    }
+
     /* ===== Responsive <= 768px (un solo bloque) ===== */
     @media (max-width: 768px) {
         .recepcion-header { padding: 16px; }
@@ -1386,13 +1452,13 @@
                         <button type="button" class="btn-close btn-sm" id="btnCerrarAyudaProceso" aria-label="Cerrar"></button>
                     </div>
                     <div class="row g-3">
-                        <div class="col-md-3">
+                        <div class="col-sm-6 col-lg">
                             <div class="ayuda-item ayuda-ok">
                                 <strong class="d-block">Recibido (OK)</strong>
                                 Entra al stock de tu sucursal al confirmar. Es lo único que suma inventario.
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-sm-6 col-lg">
                             <div class="ayuda-item ayuda-falta">
                                 <strong class="d-block">Faltante</strong>
                                 No entra al stock. En <strong>guías</strong> vuelve automáticamente al origen y la línea se cierra,
@@ -1400,14 +1466,22 @@
                                 En <strong>facturas</strong> queda en <em>Por resolver</em> hasta emitir la Nota de Crédito.
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-sm-6 col-lg">
                             <div class="ayuda-item ayuda-sobra">
                                 <strong class="d-block">Sobrante</strong>
                                 Llegó más de lo documentado. <strong>No entra al stock</strong>: queda pendiente de decisión
                                 de bodega en <em>Por resolver → Sobrantes</em>.
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-sm-6 col-lg">
+                            <div class="ayuda-item ayuda-nc">
+                                <strong class="d-block">Con Nota de Crédito</strong>
+                                Unidades que el emisor ya anuló con NC pero el documento sigue listando.
+                                Vienen marcadas como <strong>no recibidas</strong>: no entran a tu stock, vuelven solas al origen
+                                y la línea se cierra (no hay que emitir otra NC). Si llegaron igual, márcalas OK.
+                            </div>
+                        </div>
+                        <div class="col-sm-6 col-lg">
                             <div class="ayuda-item ayuda-rechazo">
                                 <strong class="d-block">Rechazar recepción</strong>
                                 Devuelve la mercadería al stock del origen al instante. El documento vuelve al emisor,
@@ -2300,12 +2374,52 @@
                     <div id="barraProgresoVerif" class="progress-bar bg-success" role="progressbar" aria-label="Progreso de verificación" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="width:0%;transition:width 0.3s ease;"></div>
                 </div>
 
+                <!-- Panel: lo que NO se actualiza porque ya tiene Nota de Crédito.
+                     Lo llena _renderPanelNcRecepcion() y se recalcula con cada
+                     cambio de las líneas (si el operador fuerza el ingreso de
+                     una unidad con NC, la fila lo dice). -->
+                <div id="panelNcRecepcion" class="nc-panel d-none mb-2" role="region" aria-labelledby="panelNcTitulo">
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                        <div class="nc-panel__titulo" id="panelNcTitulo">
+                            <i class="bi bi-receipt-cutoff me-1"></i><span id="panelNcTituloTexto">Unidades con Nota de Crédito</span>
+                        </div>
+                        <div class="d-flex flex-wrap gap-1 align-items-center">
+                            <span class="nc-chip" id="panelNcChipDoc" title="Unidades que dice el documento">Documento: 0</span>
+                            <span class="nc-chip" id="panelNcChipNc" title="Unidades ya anuladas por NC">Con NC: 0</span>
+                            <span class="nc-chip nc-chip--ok" id="panelNcChipNeto" title="Lo que corresponde que entre a tu stock">Deben entrar: 0</span>
+                        </div>
+                    </div>
+                    <ul class="nc-panel__pasos" id="panelNcExplicacion"></ul>
+                    <div class="nc-panel__tabla mt-2">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Producto</th>
+                                    <th class="text-center">Talla</th>
+                                    <th class="text-center" title="Unidades que lista el documento">Documento</th>
+                                    <th class="text-center" title="Unidades que el emisor ya anuló con nota de crédito">Con NC</th>
+                                    <th class="text-center" title="Unidades que entrarán a tu stock con lo que tienes marcado">Entran</th>
+                                    <th>Nota de crédito</th>
+                                    <th>Qué pasa al confirmar</th>
+                                </tr>
+                            </thead>
+                            <tbody id="panelNcBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-2">
+                        <small class="text-muted"><i class="bi bi-hand-index me-1"></i>¿Llegaron igual en el bulto? Marca la línea <strong>OK</strong> o sube <strong>Recibido</strong>: el sistema te pedirá confirmarlo y esas unidades sí entrarán.</small>
+                        <button type="button" class="btn btn-sm btn-outline-danger btn-ver-vinculados" id="panelNcVerNc">
+                            <i class="bi bi-box-arrow-up-right me-1"></i>Ver la nota de crédito
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Banner: ajuste previo del emisor -->
                 <div id="bannerAjustePrevio" class="alert alert-warning d-none mb-2 py-2" style="border-left: 4px solid var(--rd-warning-dark);">
                     <div class="d-flex align-items-start">
-                        <i class="bi bi-exclamation-triangle-fill fs-4 me-2 text-warning"></i>
+                        <i class="bi bi-pencil-square fs-5 me-2 text-warning"></i>
                         <div class="flex-grow-1">
-                            <strong>Atención: este DTE fue ajustado por el emisor antes del despacho.</strong>
+                            <strong>Documentos que corrigieron este traspaso</strong>
                             <div class="small mt-1" id="bannerAjustePrevioDetalle"></div>
                         </div>
                     </div>
@@ -2352,6 +2466,10 @@
                             <div class="impacto-valor text-success" id="impactoIngresa">0</div>
                             <span class="impacto-label">Entra al stock de <strong id="impactoDestino">tu sucursal</strong></span>
                         </div>
+                        <div class="col-6 col-md impacto-col d-none" id="impactoConNcCol">
+                            <div class="impacto-valor" id="impactoConNc">0</div>
+                            <span class="impacto-label">Con NC — no entran, vuelven al origen</span>
+                        </div>
                         <div class="col-6 col-md impacto-col">
                             <div class="impacto-valor text-secondary" id="impactoNoIngresa">0</div>
                             <span class="impacto-label">No llega (faltante/dañado)</span>
@@ -2379,6 +2497,7 @@
                         <button type="button" class="btn btn-outline-success filtro-rapido" data-filtro="ok">OK</button>
                         <button type="button" class="btn btn-outline-warning filtro-rapido" data-filtro="problemas">Problemas</button>
                         <button type="button" class="btn btn-outline-info filtro-rapido" data-filtro="sobrantes">Sobrantes</button>
+                        <button type="button" class="btn btn-outline-danger filtro-rapido d-none" data-filtro="connc" id="filtroRapidoConNc">Con NC</button>
                         <button type="button" class="btn btn-outline-secondary filtro-rapido" data-filtro="sinrevisar">Sin revisar</button>
                     </div>
                 </div>
@@ -2395,6 +2514,7 @@
                             <div><span class="badge bg-warning text-dark me-1">2</span> Si algo no llegó o llegó dañado → <strong>desmarca</strong> la línea y escribe en <strong>«Recibido»</strong> solo las unidades buenas. La diferencia queda como faltante y <strong>no entra al stock</strong>.</div>
                             <div><span class="badge bg-info text-dark me-1">3</span> Si llegó de más → botón <strong><i class="bi bi-exclamation-circle"></i> Detallar problema</strong> de la línea y carga el <strong>sobrante</strong>: no ingresa al stock, queda para que bodega decida.</div>
                             <div><span class="badge bg-primary me-1">4</span> Toda línea desmarcada necesita <strong>observación</strong> (botón <strong><i class="bi bi-exclamation-circle"></i> Detallar problema</strong> u <strong>Obs. Masiva</strong>); si falta, el botón de confirmar queda bloqueado.</div>
+                            <div><span class="badge bg-danger me-1">5</span> Las líneas en <span class="text-danger fw-semibold">rojo con «NC»</span> ya fueron anuladas por el emisor con nota de crédito: vienen con lo que corresponde recibir y <strong>no hay que tocarlas</strong>. Esas unidades no entran a tu stock y vuelven solas al origen.</div>
                         </div>
                     </div>
                 </div>
@@ -4928,59 +5048,72 @@ function renderTablaRecepciones() {
         };
         const rolBadge = ROL_BADGE[rol] || ROL_BADGE.otro;
 
-        // Acciones según (rol, estado)
+        // Acciones según (rol, estado). Se arman como lista y se envuelven en
+        // .acciones-dte (flex + gap): mismo espaciado en todas las filas, la
+        // acción principal primero y con texto, las secundarias como ícono
+        // con title y aria-label (antes cada botón traía su propio ms-1 y las
+        // filas quedaban desalineadas según qué botones aparecían).
         // numSafe: string JS dentro de onclick="..."; numUrl: para el href.
         const numSafe = _jsStrAttr(doc.numero_documento || '');
         const numUrl = encodeURIComponent(String(doc.numero_documento ?? ''));
-        let botonesHtml = '';
+        const numTxt = _escapeHtmlDte(doc.numero_documento ?? '');
+        const ncPendAccion = Number(doc.total_unidades_nc_pendiente) || 0;
+        const btnVer = (clase, conTexto) => `<button type="button" class="btn ${clase} btn-sm" onclick="verDTERecepcionado(${doc.id})"
+                title="Ver el detalle del documento" aria-label="Ver detalle del documento ${numTxt}">
+                <i class="bi bi-eye${conTexto ? ' me-1' : ''}"></i>${conTexto ? 'Ver' : ''}</button>`;
+        const btnPorResolver = (clase, conTexto) => `<a href="/app/recepcion-dte/?vista=regularizar&tab=todos&buscar=${numUrl}" class="btn ${clase} btn-sm"
+                title="Ver y resolver las diferencias de este documento en Por resolver" aria-label="Diferencias del documento ${numTxt} en Por resolver">
+                <i class="bi bi-tools${conTexto ? ' me-1' : ''}"></i>${conTexto ? 'Por resolver' : ''}</a>`;
+        const acciones = [];
         if (rol === 'destino' || rol === 'ambos') {
             if (estado === 'EMITIDO' || estado === 'ACEPTADO') {
-                botonesHtml = PUEDE_RECEPCIONAR_DTE
-                    ? `<button class="btn btn-primary btn-sm" onclick="verDetalle(${doc.id})" title="Recepcionar documento">
-                        <i class="bi bi-box-arrow-in-down me-1"></i>Recepcionar</button>`
-                    : `<button class="btn btn-outline-secondary btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
-                        <i class="bi bi-eye me-1"></i>Ver</button>`;
+                if (PUEDE_RECEPCIONAR_DTE) {
+                    // Si trae unidades con NC, el botón lo avisa antes de abrir:
+                    // el modal explica cuáles no entrarán al stock.
+                    const tituloRecep = ncPendAccion > 0
+                        ? `Recepcionar. ${ncPendAccion} uds ya tienen nota de crédito: no entrarán a tu stock (el modal te muestra cuáles)`
+                        : 'Verificar y recepcionar este documento';
+                    acciones.push(`<button type="button" class="btn btn-primary btn-sm" onclick="verDetalle(${doc.id})" title="${tituloRecep}">
+                        <i class="bi bi-box-arrow-in-down me-1"></i>Recepcionar${ncPendAccion > 0 ? ` <span class="badge bg-danger badge-nc-accion">${ncPendAccion} NC</span>` : ''}</button>`);
+                } else {
+                    acciones.push(btnVer('btn-outline-secondary', true));
+                }
             } else if (estado === 'RECEPCIONADO_PARCIAL' || estado === 'EN_REGULARIZACION') {
-                botonesHtml = `<button class="btn btn-outline-warning btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
-                    <i class="bi bi-eye me-1"></i>Ver</button>
-                    ${PUEDE_REGULARIZAR_DTE ? `<a href="/app/recepcion-dte/?vista=regularizar&tab=todos&buscar=${numUrl}" class="btn btn-warning btn-sm ms-1" title="Ir a regularizar este DTE">
-                    <i class="bi bi-tools"></i></a>` : ''}`;
+                acciones.push(btnVer('btn-outline-warning', true));
+                if (PUEDE_REGULARIZAR_DTE) acciones.push(btnPorResolver('btn-warning', false));
             } else {
-                botonesHtml = `<button class="btn btn-outline-secondary btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
-                    <i class="bi bi-eye me-1"></i>Ver</button>`;
+                acciones.push(btnVer('btn-outline-secondary', true));
             }
         } else if (rol === 'origen') {
             if (estado === 'RECHAZADO' && PUEDE_AJUSTAR_EMITIDOS) {
                 const tipoSafe = _jsStrAttr(doc.tipo_documento || '');
-                botonesHtml = `${PUEDE_EDITAR_RECEPCION_DTE ? `<button class="btn btn-success btn-sm" onclick="rehabilitarDTE(${doc.id}, '${numSafe}')" title="Reactivar DTE rechazado">
-                        <i class="bi bi-arrow-clockwise me-1"></i>Rehabilitar</button>` : ''}
-                    <button class="btn btn-danger btn-sm ms-1" ${_ncTraspasoBloqueada(doc.tipo_documento) ? `disabled title="${TITULO_SIN_PERMISO_NC}"` : `onclick="anularDteRechazadoSegunTipo(${doc.id}, '${numSafe}', '${tipoSafe}')" title="Anular (genera NC si es factura)"`}>
-                        <i class="bi bi-x-circle"></i></button>
-                    <button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
-                        <i class="bi bi-eye"></i></button>`;
+                if (PUEDE_EDITAR_RECEPCION_DTE) {
+                    acciones.push(`<button type="button" class="btn btn-success btn-sm" onclick="rehabilitarDTE(${doc.id}, '${numSafe}')" title="Reactivar el documento rechazado para reenviarlo">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Rehabilitar</button>`);
+                }
+                acciones.push(`<button type="button" class="btn btn-danger btn-sm" aria-label="Anular documento ${numTxt}" ${_ncTraspasoBloqueada(doc.tipo_documento) ? `disabled title="${TITULO_SIN_PERMISO_NC}"` : `onclick="anularDteRechazadoSegunTipo(${doc.id}, '${numSafe}', '${tipoSafe}')" title="Anular (genera NC si es factura)"`}>
+                        <i class="bi bi-x-circle"></i></button>`);
+                acciones.push(btnVer('btn-outline-secondary', false));
             } else if ((estado === 'EMITIDO' || estado === 'ACEPTADO') && PUEDE_AJUSTAR_EMITIDOS) {
                 // "Cambiar talla" solo mientras nadie haya recepcionado: mueve
                 // unidades entre tallas del mismo folio sin mover los totales.
                 const puedeCambiarTalla = !doc.fecha_recepcion;
-                botonesHtml = `<button class="btn btn-outline-warning btn-sm" ${_ncTraspasoBloqueada(doc.tipo_documento) ? `disabled title="${TITULO_SIN_PERMISO_NC}"` : `onclick="abrirModalAjusteEmisor(${doc.id})" title="Ajustar antes de recepción"`}>
-                        <i class="bi bi-pencil-square me-1"></i>Ajustar</button>
-                    ${puedeCambiarTalla ? `<button class="btn btn-outline-primary btn-sm ms-1 btn-abrir-cambio-talla" data-dte-id="${doc.id}" title="Mover unidades de una talla a otra dentro de este mismo documento">
-                        <i class="bi bi-arrow-left-right me-1"></i>Corregir talla</button>` : ''}
-                    <button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
-                        <i class="bi bi-eye"></i></button>`;
+                acciones.push(`<button type="button" class="btn btn-outline-warning btn-sm" ${_ncTraspasoBloqueada(doc.tipo_documento) ? `disabled title="${TITULO_SIN_PERMISO_NC}"` : `onclick="abrirModalAjusteEmisor(${doc.id})" title="Quitar unidades antes de que el destino recepcione (emite el ajuste/NC)"`}>
+                        <i class="bi bi-pencil-square me-1"></i>Ajustar</button>`);
+                if (puedeCambiarTalla) {
+                    acciones.push(`<button type="button" class="btn btn-outline-primary btn-sm btn-abrir-cambio-talla" data-dte-id="${doc.id}" title="Mover unidades de una talla a otra dentro de este mismo documento" aria-label="Corregir talla del documento ${numTxt}">
+                        <i class="bi bi-arrow-left-right me-1"></i>Talla</button>`);
+                }
+                acciones.push(btnVer('btn-outline-secondary', false));
             } else if (estado === 'RECEPCIONADO_PARCIAL' || estado === 'EN_REGULARIZACION') {
-                botonesHtml = `<a href="/app/recepcion-dte/?vista=regularizar&tab=todos&buscar=${numUrl}" class="btn btn-outline-info btn-sm" title="Ver regularizaciones de este DTE">
-                        <i class="bi bi-tools me-1"></i>Ver regularizaciones</a>
-                    <button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
-                        <i class="bi bi-eye"></i></button>`;
+                acciones.push(btnPorResolver('btn-outline-info', true));
+                acciones.push(btnVer('btn-outline-secondary', false));
             } else {
-                botonesHtml = `<button class="btn btn-outline-secondary btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
-                        <i class="bi bi-eye me-1"></i>Ver</button>`;
+                acciones.push(btnVer('btn-outline-secondary', true));
             }
         } else {
             // 'otro': DTE de otra sucursal (visible solo en vista global) → solo lectura
-            botonesHtml = `<button class="btn btn-outline-secondary btn-sm" onclick="verDTERecepcionado(${doc.id})" title="Ver detalle">
-                    <i class="bi bi-eye me-1"></i>Ver</button>`;
+            acciones.push(btnVer('btn-outline-secondary', true));
         }
 
         // Motivo de rechazo si aplica
@@ -5051,9 +5184,14 @@ function renderTablaRecepciones() {
                         `<i class="bi bi-check-circle-fill"></i> ${ncPendiente} uds con NC — no ingresaron (OK)</small>`
                     );
                 } else {
+                    // Todavía sin recepcionar: se dice qué va a pasar, desde
+                    // el punto de vista de quien mira la fila.
+                    const textoPre = (rol === 'origen')
+                        ? `${ncPendiente} uds con NC: el destino no las ingresará, vuelven a tu stock`
+                        : `${ncPendiente} uds con NC: no entrarán a tu stock`;
                     leyendas.push(
-                        `<small class="text-danger fw-semibold" title="Estas unidades tienen NC pero el documento las sigue contando. Al recepcionar NO deberían entrar al stock.">` +
-                        `<i class="bi bi-exclamation-triangle-fill"></i> ${ncPendiente} uds con NC AÚN contadas</small>`
+                        `<small class="text-danger fw-semibold" title="El emisor anuló estas unidades con nota de crédito pero el documento las sigue listando. Al recepcionar vienen marcadas como no recibidas, no suman al destino y vuelven solas al origen.">` +
+                        `<i class="bi bi-receipt-cutoff"></i> ${textoPre}</small>`
                     );
                 }
             }
@@ -5062,8 +5200,8 @@ function renderTablaRecepciones() {
             // Acceso directo desde Acciones al documento que anula/corrige.
             // Es la primera pregunta cuando aparece el badge "N NC", y hasta
             // ahora había que salir del módulo a buscarlo en Gestión DTE.
-            botonesHtml += `<button class="btn btn-outline-danger btn-sm ms-1 btn-ver-vinculados" data-dte-id="${doc.id}" title="Ver las notas de crédito y ajustes de este documento">
-                <i class="bi bi-receipt-cutoff"></i></button>`;
+            acciones.push(`<button type="button" class="btn btn-outline-danger btn-sm btn-ver-vinculados" data-dte-id="${doc.id}" title="Ver las notas de crédito y ajustes de este documento" aria-label="Notas de crédito y ajustes del documento ${numTxt}">
+                <i class="bi bi-receipt-cutoff"></i></button>`);
         }
 
         // Total del documento; si hay NC no descontadas, mostrar también el neto.
@@ -5071,10 +5209,11 @@ function renderTablaRecepciones() {
         const ncSituacionDoc = doc.nc_situacion || 'sin_nc';
         const tituloNeto = ncSituacionDoc === 'no_ingresada'
             ? `Documento: ${doc.total_unidades} uds · Realmente válidas tras la NC: ${doc.total_unidades_neto} uds`
-            : `Total del documento menos las ${ncPendienteDoc} uds con NC`;
+            : `Lo que corresponde recibir: el documento (${doc.total_unidades}) menos las ${ncPendienteDoc} uds con NC`;
         const totalUnidadesHtml = ncPendienteDoc > 0
             ? `<span class="badge bg-secondary text-decoration-line-through" title="Unidades que dice el documento">${doc.total_unidades}</span>
-               <div class="mt-1"><span class="badge ${ncSituacionDoc === 'no_ingresada' ? 'bg-success' : 'bg-dark'}" title="${tituloNeto}">${doc.total_unidades_neto}</span></div>`
+               <div class="mt-1"><span class="badge ${ncSituacionDoc === 'no_ingresada' ? 'bg-success' : 'bg-dark'}" title="${tituloNeto}">${doc.total_unidades_neto}</span>
+                   <small class="d-block text-muted" style="font-size:10px;">sin NC</small></div>`
             : `<span class="badge bg-dark">${doc.total_unidades}</span>`;
 
         // Origen → Destino: horizontal, resalto la sucursal que soy yo
@@ -5134,7 +5273,7 @@ function renderTablaRecepciones() {
                     ${config.badge}${motivoRechazo}${difRecepcionHtml}
                 </td>
                 <td class="text-center">
-                    ${botonesHtml}
+                    <div class="acciones-dte">${acciones.join('')}</div>
                 </td>
             </tr>
         `);
@@ -5526,7 +5665,9 @@ function llenarDetalleDocumento(doc) {
     // La guía de verificación arranca plegada: en 15" el alto es escaso.
     $('#guiaVerificacionBody').removeClass('show');
 
-    // Banner de ajuste previo del emisor
+    // Banner con los documentos que corrigieron el traspaso (NC y ajustes).
+    // Lo que NO va a entrar al stock por NC vive en su propio panel
+    // (#panelNcRecepcion), que se arma con las líneas más abajo.
     const ajustes = Array.isArray(doc.ajustes_previos) ? doc.ajustes_previos : [];
     const ncPendienteDoc = Number(doc.total_unidades_nc_pendiente) || 0;
     if (ajustes.length > 0) {
@@ -5542,29 +5683,21 @@ function llenarDetalleDocumento(doc) {
             // Sin esto el operador no puede saber si tiene que restar las
             // unidades a mano o si el documento ya viene neteado.
             const estadoStr = a.ya_descontada
-                ? ' <span class="badge bg-success-subtle text-success border border-success">ya descontadas del documento</span>'
-                : ' <span class="badge bg-danger">AÚN contadas en el documento</span>';
+                ? ' <span class="badge bg-success-subtle text-success border border-success" title="Las líneas del documento ya vienen con estas unidades restadas: no tienes que hacer nada">ya restadas del documento</span>'
+                : ' <span class="badge bg-danger" title="El documento todavía las lista: mira el panel rojo de arriba">el documento aún las lista · ver panel NC</span>';
             return `<div class="mb-1">
                 ${tipoBadge} <strong>${_escapeHtmlDte(a.tipo_documento)} #${_escapeHtmlDte(a.numero_documento)}</strong>
                 <span class="text-muted">${_escapeHtmlDte(a.fecha_emision)}</span>
-                · ${Number(a.unidades) || 0} uds retiradas${montoStr}${motivoStr}${estadoStr}
+                · ${Number(a.unidades) || 0} uds${montoStr}${motivoStr}${estadoStr}
             </div>`;
         }).join('');
-        const resumenHtml = ncPendienteDoc > 0
-            ? `<div class="mt-2 pt-2 border-top">
-                   <strong class="text-danger">Ya te dejé marcadas ${ncPendienteDoc} unidad(es) como no recibidas</strong>
-                   porque tienen NC y el documento igual las sigue pidiendo.
-                   El documento dice <strong>${Number(doc.total_unidades) || 0}</strong>; al stock deberían entrar
-                   <strong>${Number(doc.total_unidades_neto) || 0}</strong>.
-                   Si la mercadería igual llegó físicamente y debe entrar al stock, marca la línea como OK
-                   o sube la cantidad recibida: el sistema te pedirá confirmarlo, porque esas unidades ya tienen NC.
-               </div>`
-            : '';
-        $('#bannerAjustePrevioDetalle').html(detalleHtml + resumenHtml);
+        $('#bannerAjustePrevioDetalle').html(detalleHtml);
         $('#bannerAjustePrevio').removeClass('d-none');
     } else {
         $('#bannerAjustePrevio').addClass('d-none');
     }
+    $('#panelNcVerNc').attr('data-dte-id', doc.id).data('dte-id', doc.id);
+    $('#filtroRapidoConNc').toggleClass('d-none', ncPendienteDoc <= 0);
 
     // Limpiar búsqueda y observaciones
     $('#buscarProductoModal').val('');
@@ -5596,6 +5729,8 @@ function llenarDetalleDocumento(doc) {
         const neto = (item.cantidad_neta !== undefined && item.cantidad_neta !== null)
             ? Number(item.cantidad_neta)
             : item.cantidad;
+        const ncFolios = Array.isArray(item.nc_folios) ? item.nc_folios : [];
+        const obsNc = ncPendiente > 0 ? _obsNcAuto({ nc_folios: ncFolios }, ncPendiente) : '';
         return {
             dte_producto_id: item.dte_producto_id,
             sku: item.sku,
@@ -5613,12 +5748,14 @@ function llenarDetalleDocumento(doc) {
             cantidad_esperada: item.cantidad,
             cantidad_recepcionada: ncPendiente > 0 ? neto : item.cantidad,
             cantidad_nc_pendiente: ncPendiente,
+            nc_folios: ncFolios,
+            // Nota automática de la NC: explica la línea sola, pero si el
+            // operador marca OTRA diferencia no alcanza (ver _necesitaObservacion).
+            _obs_nc_auto: obsNc,
             cantidad_danada: 0,
             cantidad_faltante: ncPendiente > 0 ? ncPendiente : 0,
-            estado: ncPendiente > 0 ? 'RECEPCIONADO_PARCIAL' : 'RECEPCIONADO_OK',
-            observaciones: ncPendiente > 0
-                ? `${ncPendiente} uds con nota de crédito emitida — no ingresan al stock.`
-                : '',
+            estado: ncPendiente > 0 ? (neto > 0 ? 'RECEPCIONADO_PARCIAL' : 'FALTANTE') : 'RECEPCIONADO_OK',
+            observaciones: obsNc,
             marcado_ok: ncPendiente === 0,
             precio: item.precio || 0
         };
@@ -5654,23 +5791,30 @@ function renderizarProductosVerificacion() {
 
         if (!coincide) return;
 
+        // Línea cuya única diferencia son unidades ya anuladas por NC: no es
+        // un problema, se cierra sola al confirmar.
+        const soloNc = _esLineaSoloNc(prod);
+        const ncInfo = _ncLinea(prod);
+
         // Filtro rápido por estado
         if (filtroRapido !== 'todos') {
             if (filtroRapido === 'ok' && !prod.marcado_ok) return;
-            if (filtroRapido === 'problemas' && (prod.marcado_ok || prod.estado === 'RECEPCIONADO_SOBRANTE')) return;
+            if (filtroRapido === 'problemas' && (prod.marcado_ok || soloNc || prod.estado === 'RECEPCIONADO_SOBRANTE')) return;
             if (filtroRapido === 'sobrantes' && prod.estado !== 'RECEPCIONADO_SOBRANTE') return;
-            if (filtroRapido === 'sinrevisar' && prod.marcado_ok) return;
+            if (filtroRapido === 'connc' && !(ncInfo.nc > 0)) return;
+            if (filtroRapido === 'sinrevisar' && (prod.marcado_ok || soloNc)) return;
         }
-        
+
         productosVisibles++;
-        
+
         // ✅ MEJORADO: Determinar color de fila basado en checkbox y observaciones
-        const estaDesmarcado = !prod.marcado_ok;
-        const sinObservaciones = estaDesmarcado && (!prod.observaciones || prod.observaciones.trim() === '');
-        
+        const sinObservaciones = _necesitaObservacion(prod);
+
         let rowClass = '';
         if (prod.marcado_ok) {
             rowClass = 'table-success';  // Verde si está marcado OK
+        } else if (soloNc) {
+            rowClass = 'fila-con-nc';    // Rojo suave + borde: resuelto por NC
         } else if (prod.estado === 'RECEPCIONADO_SOBRANTE') {
             rowClass = 'table-info';     // Azul/info si tiene sobrante
         } else if (sinObservaciones) {
@@ -5678,8 +5822,10 @@ function renderizarProductosVerificacion() {
         } else {
             rowClass = 'table-warning';  // Amarillo si está desmarcado CON observaciones
         }
-        
-        const estadoBadge = getEstadoBadge(prod.estado);
+
+        const estadoBadge = soloNc
+            ? `<span class="badge bg-danger" title="Estas unidades ya están anuladas por nota de crédito: no entran a tu stock y vuelven solas al origen"><i class="bi bi-receipt-cutoff me-1"></i>Con NC · no ingresa</span>`
+            : getEstadoBadge(prod.estado);
         
         // Indicador de observaciones faltantes
         const alertaObservaciones = sinObservaciones ? 
@@ -5709,16 +5855,18 @@ function renderizarProductosVerificacion() {
         // Unidades de esta línea ya acreditadas por NC que el documento sigue
         // pidiendo: se marcan en la columna Esperado para que el operador no
         // las cuente como mercadería que debe llegar.
-        const ncPendienteLinea = Number(prod.cantidad_nc_pendiente) || 0;
+        const ncPendienteLinea = ncInfo.nc;
+        const foliosLinea = _foliosNc(prod);
 
         // Diferencia por línea: lo pedido que NO va a entrar al stock, más el
-        // sobrante que llegó de más (tampoco entra).
-        const faltanLinea = Math.max(0, (prod.cantidad_esperada || 0) - (prod.cantidad_recepcionada || 0));
+        // sobrante que llegó de más (tampoco entra). Lo que no entra por NC va
+        // aparte del faltante real: uno se cierra solo, el otro hay que resolverlo.
         const sobraLinea = prod.cantidad_sobrante || 0;
         let diferenciaHtml = '<span class="text-muted">—</span>';
-        if (faltanLinea > 0 || sobraLinea > 0) {
+        if (ncInfo.ncNoIngresan > 0 || ncInfo.faltaReal > 0 || sobraLinea > 0) {
             const partes = [];
-            if (faltanLinea > 0) partes.push(`<span class="badge bg-warning text-dark" title="Unidades que no entran al stock">-${faltanLinea}</span>`);
+            if (ncInfo.ncNoIngresan > 0) partes.push(`<span class="badge bg-danger" title="Unidades con nota de crédito${foliosLinea ? ' ' + _escapeHtmlDte(foliosLinea) : ''}: no entran a tu stock y vuelven al origen">-${ncInfo.ncNoIngresan} NC</span>`);
+            if (ncInfo.faltaReal > 0) partes.push(`<span class="badge bg-warning text-dark" title="Faltante: unidades que no llegaron y no entran al stock">-${ncInfo.faltaReal}</span>`);
             if (sobraLinea > 0) partes.push(prod.es_no_listado
                 ? `<span class="badge bg-info text-dark" title="Producto no listado: solo se anota en las observaciones del documento; no crea un pendiente">+${sobraLinea}</span>`
                 : `<span class="badge bg-info text-dark" title="Unidades de más: no entran al stock, quedan por resolver">+${sobraLinea}</span>`);
@@ -5741,7 +5889,7 @@ function renderizarProductosVerificacion() {
                 <td class="text-center"><span class="badge bg-secondary">${tallaMostrar}</span></td>
                 <td class="text-center">
                     <strong>${prod.cantidad_esperada}</strong>
-                    ${ncPendienteLinea > 0 ? `<div><span class="badge bg-danger" title="${ncPendienteLinea} de estas unidades ya tienen nota de crédito y el documento las sigue pidiendo. No deben entrar al stock.">NC -${ncPendienteLinea}</span></div>` : ''}
+                    ${ncPendienteLinea > 0 ? `<div><span class="badge bg-danger" title="${ncPendienteLinea} de estas unidades ya están anuladas por nota de crédito${foliosLinea ? ' ' + _escapeHtmlDte(foliosLinea) : ''} y el documento las sigue listando. Corresponde recibir ${Math.max(0, (prod.cantidad_esperada || 0) - ncPendienteLinea)}.">NC ${_escapeHtmlDte(foliosLinea)} −${ncPendienteLinea}</span></div>` : ''}
                 </td>
                 <td class="text-center">
                     <input type="number" class="form-control form-control-sm text-center cantidad-recepcionada"
@@ -5813,22 +5961,90 @@ function _udsNcQueIngresan(prod, cantidad) {
     return Math.max(0, Math.min(nc, (Number(cantidad) || 0) - neto));
 }
 
+// ── Unidades con NC dentro de una línea del modal ─────────────────────────
+// Misma cuenta que confirmar_recepcion_api: lo que corresponde recibir es el
+// NETO (esperado − NC). Si llega menos que lo esperado, las primeras unidades
+// que "no llegan" son las que ya están anuladas por NC; el resto es faltante
+// real, que sí hay que resolver.
+function _ncLinea(prod) {
+    const esperada = Number(prod.cantidad_esperada) || 0;
+    const nc = Math.min(Number(prod.cantidad_nc_pendiente) || 0, esperada);
+    const recibida = Math.min(Number(prod.cantidad_recepcionada) || 0, esperada);
+    const falta = Math.max(0, esperada - recibida);
+    const ncNoIngresan = Math.min(nc, falta);
+    return {
+        nc,
+        ncIngresan: nc - ncNoIngresan,
+        ncNoIngresan,
+        faltaReal: falta - ncNoIngresan,
+    };
+}
+
+// Línea cuya ÚNICA diferencia son unidades anuladas por NC. El backend la
+// cierra sola al confirmar (vuelven al origen): no es un problema por
+// resolver ni necesita observación del operador.
+function _esLineaSoloNc(prod) {
+    if (!prod || prod.marcado_ok || prod.es_no_listado) return false;
+    const n = _ncLinea(prod);
+    return n.ncNoIngresan > 0 && n.faltaReal === 0
+        && !(Number(prod.cantidad_sobrante) > 0) && !(Number(prod.cantidad_danada) > 0);
+}
+
+function _foliosNc(prod) {
+    const folios = (prod && Array.isArray(prod.nc_folios)) ? prod.nc_folios : [];
+    return folios.length ? folios.map(f => '#' + f).join(', ') : '';
+}
+
+function _obsNcAuto(prod, uds) {
+    const folios = _foliosNc(prod);
+    return `${uds} und anuladas por NC${folios ? ' ' + folios : ''}: no ingresan al stock y vuelven al origen.`;
+}
+
+// ¿La línea desmarcada todavía necesita que el operador explique qué pasó?
+// Una línea solo-NC no (la NC es la explicación). Si además tiene otra
+// diferencia, la nota automática de la NC no alcanza.
+function _necesitaObservacion(prod) {
+    if (prod.marcado_ok || _esLineaSoloNc(prod)) return false;
+    const obs = (prod.observaciones || '').trim();
+    return !obs || (!!prod._obs_nc_auto && obs === prod._obs_nc_auto);
+}
+
+// Vuelve una línea con NC a su estado inicial: recibe el neto y las unidades
+// con NC quedan fuera, con la nota automática.
+function _restaurarNetoNc(prod) {
+    const nc = Math.min(Number(prod.cantidad_nc_pendiente) || 0, Number(prod.cantidad_esperada) || 0);
+    const neto = Math.max(0, (Number(prod.cantidad_esperada) || 0) - nc);
+    prod.marcado_ok = false;
+    prod.cantidad_recepcionada = neto;
+    prod.cantidad_danada = 0;
+    prod.cantidad_faltante = nc;
+    prod.cantidad_sobrante = 0;
+    prod.estado = neto > 0 ? 'RECEPCIONADO_PARCIAL' : 'FALTANTE';
+    prod.observaciones = prod._obs_nc_auto || _obsNcAuto(prod, nc);
+}
+
 // Pide confirmación antes de meter al stock unidades que ya tienen NC.
 // Resuelve true si el operador confirma que llegaron físicamente.
 function _confirmarIngresoConNc(prod, udsNc) {
+    const folios = _foliosNc(prod);
     return Swal.fire({
         icon: 'warning',
-        title: 'Unidades con nota de crédito',
+        title: 'Estas unidades ya están anuladas por NC',
         html: `<div class="text-start">
                   <p><strong>${udsNc}</strong> unidad(es) de <strong>${_escapeHtmlDte(prod.descripcion || prod.sku || '')}</strong>
-                     (talla ${_escapeHtmlDte(prod.talla || '-')}) ya tienen nota de crédito.</p>
-                  <p class="mb-0">¿Llegaron físicamente e igual deben <strong>entrar al stock</strong>?
-                     Si no llegaron, deja la línea con el neto.</p>
+                     (talla ${_escapeHtmlDte(prod.talla || '-')}) ya fueron anuladas por la
+                     nota de crédito <strong>${_escapeHtmlDte(folios || '')}</strong>.</p>
+                  <ul class="small mb-2">
+                      <li><strong>Si NO llegaron</strong> (lo normal): deja la línea como está. No entran a tu stock y vuelven solas al origen.</li>
+                      <li><strong>Si llegaron igual en el bulto</strong>: confirma y entrarán a tu stock. Avisa al emisor: la NC ya las anuló y el documento no cuadrará con lo recibido.</li>
+                  </ul>
+                  <p class="mb-0 small text-muted">¿Llegaron físicamente?</p>
                </div>`,
         showCancelButton: true,
         confirmButtonText: 'Sí, llegaron: ingresarlas',
-        cancelButtonText: 'No, dejar el neto',
+        cancelButtonText: 'No llegaron: dejar como está',
         confirmButtonColor: '#f7b84b',
+        reverseButtons: true,
     }).then(r => !!r.isConfirmed);
 }
 
@@ -5854,6 +6070,15 @@ function _aplicarToggleProductoOK(index) {
     prod.marcado_ok = !prod.marcado_ok;
     
     if (!prod.marcado_ok) {
+        // Una línea con NC que se había forzado a OK vuelve a su neto: lo
+        // natural al desmarcarla es "las de la NC no llegaron", no "no llegó nada".
+        if ((Number(prod.cantidad_nc_pendiente) || 0) > 0
+            && prod.cantidad_recepcionada === prod.cantidad_esperada) {
+            _restaurarNetoNc(prod);
+            renderizarProductosVerificacion();
+            actualizarResumenVerificacion();
+            return;
+        }
         // ✅ MEJORADO: Si se desmarca, NO limpiar observaciones previas
         // Solo ajustar estado a FALTANTE si cantidad_recepcionada es 0
         if (prod.cantidad_recepcionada === 0 || prod.cantidad_recepcionada === prod.cantidad_esperada) {
@@ -5926,8 +6151,11 @@ function _aplicarCantidadRecepcionada(index, cantidad) {
     // Solo limpiar observaciones si pasa a OK
     if (prod.estado === 'RECEPCIONADO_OK') {
         prod.observaciones = '';
+    } else if (_esLineaSoloNc(prod) && !(prod.observaciones || '').trim()) {
+        // Volvió exactamente al neto: la nota de la NC vuelve a explicarla.
+        prod.observaciones = prod._obs_nc_auto || _obsNcAuto(prod, _ncLinea(prod).ncNoIngresan);
     }
-    
+
     renderizarProductosVerificacion();
     actualizarResumenVerificacion();
 }
@@ -5941,16 +6169,12 @@ function marcarTodosOK() {
     let lineasConNC = 0;
 
     productosVerificacion.forEach(prod => {
+        if (prod.es_no_listado) return;  // se anotan aparte, no se "marcan OK"
         const ncPendiente = Number(prod.cantidad_nc_pendiente) || 0;
         if (ncPendiente > 0) {
             lineasConNC++;
-            unidadesRespetadasNC += ncPendiente;
-            prod.marcado_ok = false;
-            prod.cantidad_recepcionada = Math.max(0, prod.cantidad_esperada - ncPendiente);
-            prod.cantidad_danada = 0;
-            prod.cantidad_faltante = ncPendiente;
-            prod.estado = 'RECEPCIONADO_PARCIAL';
-            prod.observaciones = `${ncPendiente} uds con nota de crédito emitida — no ingresan al stock.`;
+            unidadesRespetadasNC += Math.min(ncPendiente, prod.cantidad_esperada || 0);
+            _restaurarNetoNc(prod);
             return;
         }
         prod.marcado_ok = true;
@@ -5979,7 +6203,7 @@ function marcarTodosOK() {
     Toast.fire({
         icon: lineasConNC > 0 ? 'warning' : 'success',
         title: lineasConNC > 0
-            ? `${totalProductos - lineasConNC} productos OK (${totalUnidades} uds). Dejé ${lineasConNC} línea(s) sin marcar: ${unidadesRespetadasNC} uds tienen NC.`
+            ? `${totalProductos - lineasConNC} productos OK (${totalUnidades} uds entran). ${lineasConNC} línea(s) con NC quedan con lo que corresponde: ${unidadesRespetadasNC} uds anuladas no entran a tu stock.`
             : `✅ ${totalProductos} productos (${totalUnidades} unidades) marcados como OK`
     });
     
@@ -5989,9 +6213,10 @@ function marcarTodosOK() {
 }
 
 function abrirObservacionMasiva() {
-    // ✅ MEJORADO: Solo obtener productos DESMARCADOS (no marcado_ok)
-    const productosDesmarcados = productosVerificacion.filter(p => !p.marcado_ok);
-    const productosSinObs = productosDesmarcados.filter(p => !p.observaciones || p.observaciones.trim() === '');
+    // Solo productos DESMARCADOS que son un problema de verdad: las líneas con
+    // NC ya traen su explicación y una observación masiva la pisaría.
+    const productosDesmarcados = productosVerificacion.filter(p => !p.marcado_ok && !_esLineaSoloNc(p));
+    const productosSinObs = productosDesmarcados.filter(p => _necesitaObservacion(p));
     
     if (productosDesmarcados.length === 0) {
         Swal.fire({
@@ -6066,7 +6291,7 @@ function abrirObservacionMasiva() {
 
                     let contador = 0;
                     productosVerificacion.forEach(prod => {
-                        if (!prod.marcado_ok) {
+                        if (!prod.marcado_ok && !_esLineaSoloNc(prod)) {
                             prod.observaciones = observacion;
                             contador++;
                         }
@@ -6196,24 +6421,32 @@ function limpiarBusqueda() {
 
 function actualizarResumenVerificacion() {
     let ok = 0, faltante = 0, sobrante = 0, esperadoTotal = 0, noListados = 0;
+    let conNcNoEntran = 0, conNcEntran = 0, lineasSoloNc = 0;
     let verificados = 0;
     let productosSinObservaciones = 0;
 
     productosVerificacion.forEach(prod => {
-        if (prod.marcado_ok) verificados++;
+        const soloNc = _esLineaSoloNc(prod);
+        // Una línea resuelta por NC ya está "verificada": no hay nada que mirar.
+        if (prod.marcado_ok || soloNc) verificados++;
+        if (soloNc) lineasSoloNc++;
 
-        if (!prod.marcado_ok && (!prod.observaciones || prod.observaciones.trim() === '')) {
+        if (_necesitaObservacion(prod)) {
             productosSinObservaciones++;
         }
 
         const recepcionada = prod.cantidad_recepcionada || 0;
         const esperada = prod.cantidad_esperada || 0;
         const cantSobrante = prod.cantidad_sobrante || 0;
-        const cantFaltante = Math.max(0, esperada - recepcionada);
         const cantBuena = Math.min(recepcionada, esperada);
+        const nc = _ncLinea(prod);
 
         ok += cantBuena;
-        faltante += cantFaltante;
+        // Lo que no entra por NC se cuenta aparte del faltante: no es mercadería
+        // perdida, es mercadería que el emisor ya anuló.
+        faltante += nc.faltaReal;
+        conNcNoEntran += nc.ncNoIngresan;
+        conNcEntran += nc.ncIngresan;
         // Un "producto no listado" no queda como sobrante por resolver: solo
         // se anota en las observaciones del documento. Se cuenta aparte.
         if (prod.es_no_listado) noListados += cantSobrante;
@@ -6221,12 +6454,18 @@ function actualizarResumenVerificacion() {
         esperadoTotal += esperada;
     });
 
-    const lineasConProblema = productosVerificacion.filter(p => p.estado !== 'RECEPCIONADO_OK').length;
+    const lineasConProblema = productosVerificacion.filter(
+        p => p.estado !== 'RECEPCIONADO_OK' && !_esLineaSoloNc(p)
+    ).length;
 
     $('#contadorProductos').text(`${verificados} de ${productosVerificacion.length}`);
 
     // Barra de impacto: qué se va a mover realmente al confirmar.
+    const origenAlias = documentoSeleccionado ? (documentoSeleccionado.sucursal_origen || 'el origen') : 'el origen';
     $('#impactoIngresa').text(ok);
+    $('#impactoConNc').text(conNcNoEntran);
+    $('#impactoConNcCol').toggleClass('d-none', conNcNoEntran <= 0)
+        .attr('title', `Unidades anuladas por nota de crédito: no entran a tu stock y vuelven a ${origenAlias}`);
     $('#impactoNoIngresa').text(faltante);
     $('#impactoSobrante').text(sobrante);
     $('#impactoEsperado').text(esperadoTotal);
@@ -6237,11 +6476,14 @@ function actualizarResumenVerificacion() {
     $('#footerHintUnidades').text(ok);
     $('#footerHintRecepcion').html(
         `<i class="bi bi-info-circle me-1"></i>Al confirmar entran al stock <strong>${ok}</strong> de <strong>${esperadoTotal}</strong> unidades` +
+        (conNcNoEntran > 0 ? ` · <span class="text-danger fw-semibold">${conNcNoEntran} con NC no entran (vuelven a ${_escapeHtmlDte(origenAlias)})</span>` : '') +
         (faltante > 0 ? ` · <span class="text-warning fw-semibold">${faltante} no llegan</span>` : '') +
         (sobrante > 0 ? ` · <span class="text-info fw-semibold">${sobrante} sobrante(s) quedan por resolver</span>` : '') +
         (noListados > 0 ? ` · <span class="text-muted">${noListados} no listado(s): solo se anotan</span>` : '')
     );
-    
+
+    _renderPanelNcRecepcion();
+
     // Actualizar barra de progreso
     const total = productosVerificacion.length;
     const porcentaje = total > 0 ? (verificados / total) * 100 : 0;
@@ -6249,8 +6491,9 @@ function actualizarResumenVerificacion() {
     $('#barraProgresoVerif').css('width', Math.round(porcentaje) + '%').attr('aria-valuenow', Math.round(porcentaje));
     $('#textoProgresoVerif').text(verificados + ' / ' + total + ' productos');
 
-    // ✅ MEJORADO: Detectar productos desmarcados (con problemas)
-    const productosDesmarcados = productosVerificacion.filter(p => !p.marcado_ok).length;
+    // Desmarcados que son un problema real (las líneas resueltas por NC no:
+    // no piden observación ni convierten la recepción en "con problemas").
+    const productosDesmarcados = productosVerificacion.filter(p => !p.marcado_ok && !_esLineaSoloNc(p)).length;
     const hayProductosDesmarcados = productosDesmarcados > 0;
     const hayProductosDesmarcadosSinObs = productosSinObservaciones > 0;
     
@@ -6281,13 +6524,93 @@ function actualizarResumenVerificacion() {
                 .html('<i class="bi bi-exclamation-triangle me-1"></i>Confirmar con Problemas');
         }
     } else {
-        // NO hay productos desmarcados - todo OK
+        // NO hay productos desmarcados - todo OK (salvo, a lo más, líneas con NC)
         $('#btnConfirmarRecepcion')
             .removeClass('btn-warning btn-secondary')
             .addClass('btn-success')
             .prop('disabled', false)
-            .html('<i class="bi bi-check-circle me-1"></i>Confirmar Recepción Completa');
+            .html(lineasSoloNc > 0
+                ? `<i class="bi bi-check-circle me-1"></i>Confirmar recepción <span class="badge bg-light text-danger ms-1">${conNcNoEntran} con NC no entran</span>`
+                : '<i class="bi bi-check-circle me-1"></i>Confirmar Recepción Completa');
     }
+}
+
+// Panel "lo que NO se actualiza por NC" del modal de recepción. Se arma con
+// las líneas vivas del modal, así que si el operador fuerza el ingreso de una
+// unidad con NC, la fila lo refleja en el momento.
+function _renderPanelNcRecepcion() {
+    const $panel = $('#panelNcRecepcion');
+    const lineas = productosVerificacion.filter(p => !p.es_no_listado && _ncLinea(p).nc > 0);
+    if (!lineas.length || !documentoSeleccionado) {
+        $panel.addClass('d-none');
+        return;
+    }
+    const doc = documentoSeleccionado;
+    const origen = _escapeHtmlDte(doc.sucursal_origen || 'la bodega origen');
+    const destino = _escapeHtmlDte(doc.sucursal_destino || (sucursalDestinoInfo ? sucursalDestinoInfo.alias : 'tu sucursal'));
+    // Misma regla que el backend para una línea con NC + otra diferencia: en
+    // guías, sin sobrante, TODO el faltante vuelve solo al origen.
+    const esGuia = _esGuiaTraspaso(doc.tipo_documento);
+
+    let udsDoc = 0, udsNc = 0, udsNoEntran = 0, udsEntranNc = 0, lineasAbiertas = 0;
+    const folios = new Set();
+    const filas = lineas.map(p => {
+        const n = _ncLinea(p);
+        const soloNc = _esLineaSoloNc(p);
+        const esperada = Number(p.cantidad_esperada) || 0;
+        const entran = Math.min(Number(p.cantidad_recepcionada) || 0, esperada);
+        udsDoc += esperada;
+        udsNc += n.nc;
+        udsNoEntran += n.ncNoIngresan;
+        udsEntranNc += n.ncIngresan;
+        (p.nc_folios || []).forEach(f => folios.add(f));
+
+        let efecto;
+        if (n.ncIngresan > 0) {
+            efecto = `<span class="nc-chip nc-chip--warn" title="Confirmaste que llegaron físicamente">
+                         <i class="bi bi-exclamation-triangle"></i>${n.ncIngresan} con NC entrarán igual</span>`;
+        } else if (soloNc || (esGuia && !(Number(p.cantidad_sobrante) > 0))) {
+            efecto = `<span class="nc-chip" title="No suman a ${destino}; vuelven al stock de ${origen} y la línea se cierra">
+                         <i class="bi bi-arrow-return-left"></i>No entran · vuelven a ${origen}</span>`;
+        } else {
+            lineasAbiertas++;
+            efecto = `<span class="nc-chip nc-chip--warn" title="La línea tiene además otra diferencia: queda en Por resolver">
+                         <i class="bi bi-tools"></i>No entran · línea con otra diferencia</span>`;
+        }
+        const detalle = [p.articulo, p.color, p.marca].filter(v => v && v !== '-').map(_escapeHtmlDte).join(' · ');
+        return `<tr>
+            <td><small class="fw-semibold d-block">${_escapeHtmlDte(p.descripcion || p.sku || '-')}</small>
+                <small class="text-muted"><span class="font-monospace">${_escapeHtmlDte(p.sku || '')}</span>${detalle ? ' · ' + detalle : ''}</small></td>
+            <td class="text-center"><span class="badge bg-secondary">${_escapeHtmlDte(p.talla || '-')}</span></td>
+            <td class="text-center">${esperada}</td>
+            <td class="text-center text-danger fw-bold">−${n.nc}</td>
+            <td class="text-center text-success fw-bold">${entran}</td>
+            <td><small>${_escapeHtmlDte(_foliosNc(p) || '—')}</small></td>
+            <td>${efecto}</td>
+        </tr>`;
+    }).join('');
+
+    const foliosTxt = Array.from(folios).map(f => '#' + _escapeHtmlDte(f)).join(', ');
+    $('#panelNcTituloTexto').html(udsNoEntran > 0
+        ? `${udsNoEntran} unidad(es) NO se actualizarán en tu stock: ya tienen Nota de Crédito ${foliosTxt}`
+        : `Unidades con Nota de Crédito ${foliosTxt}: confirmaste que llegaron igual`);
+    $('#panelNcChipDoc').text(`Documento: ${udsDoc}`);
+    $('#panelNcChipNc').text(`Con NC: ${udsNc}`);
+    $('#panelNcChipNeto').text(`Deben entrar: ${Math.max(0, udsDoc - udsNc)}`);
+
+    const pasos = [
+        `El emisor (<strong>${origen}</strong>) anuló estas unidades con la nota de crédito <strong>${foliosTxt || ''}</strong>, pero el documento todavía las lista. Por eso la columna <em>Recibido</em> ya viene con lo que corresponde (el documento menos la NC).`,
+        `Al confirmar, <strong>no suman al stock de ${destino}</strong> y <strong>vuelven solas al stock de ${origen}</strong>. La línea queda cerrada: no aparece en <em>Por resolver</em> y <strong>no hay que emitir otra NC</strong>.`,
+    ];
+    if (lineasAbiertas > 0) {
+        pasos.push(`<span class="text-warning-emphasis">${lineasAbiertas} línea(s) tienen además otra diferencia (faltante extra o sobrante): esas sí quedan en <em>Por resolver</em>, con la NC anotada.</span>`);
+    }
+    if (udsEntranNc > 0) {
+        pasos.push(`<span class="text-danger fw-semibold">${udsEntranNc} unidad(es) con NC entrarán igual porque confirmaste que llegaron físicamente. Avisa al emisor: la NC ya las anuló.</span>`);
+    }
+    $('#panelNcExplicacion').html(pasos.map(t => `<li>${t}</li>`).join(''));
+    $('#panelNcBody').html(filas);
+    $panel.removeClass('d-none');
 }
 
 function abrirModalProblema(index) {
@@ -6378,14 +6701,26 @@ function calcularFaltanteAutomatico() {
     const origenDoc = _escapeHtmlDte(documentoSeleccionado ? (documentoSeleccionado.sucursal_origen || 'la bodega origen') : 'la bodega origen');
     const impacto = [];
     impacto.push(`<strong class="text-success">${recepcionada}</strong> unidad(es) entran a tu stock`);
-    if (faltante > 0) {
+    // Unidades de esta línea ya anuladas por NC: lo primero que "falta" son
+    // esas. Si no hay otra diferencia, la línea se cierra sola al confirmar.
+    const prodEditando = (productoEditandoIndex !== null) ? productosVerificacion[productoEditandoIndex] : null;
+    const ncLinea = prodEditando ? Math.min(Number(prodEditando.cantidad_nc_pendiente) || 0, esperada) : 0;
+    const ncNoEntran = Math.min(ncLinea, faltante);
+    const faltanteReal = faltante - ncNoEntran;
+    if (ncNoEntran > 0) {
+        const folios = _foliosNc(prodEditando);
+        impacto.push(faltanteReal === 0 && sobrante === 0
+            ? `<strong class="text-danger">${ncNoEntran}</strong> con NC ${_escapeHtmlDte(folios)} no entran y vuelven a <strong>${origenDoc}</strong> (línea cerrada)`
+            : `<strong class="text-danger">${ncNoEntran}</strong> con NC ${_escapeHtmlDte(folios)} no entran (ya acreditadas)`);
+    }
+    if (faltanteReal > 0) {
         // Misma regla que el backend: la guía devuelve sola el faltante solo
         // si la línea no trae también sobrante.
         impacto.push(!esGuiaDoc
-            ? `<strong class="text-warning">${faltante}</strong> quedan pendientes de Nota de Crédito`
+            ? `<strong class="text-warning">${faltanteReal}</strong> faltante(s) quedan en <em>Por resolver</em> hasta regularizarlos`
             : (sobrante > 0
-                ? `<strong class="text-warning">${faltante}</strong> faltante(s) quedan en <em>Por resolver</em> junto con el sobrante (la línea no se cierra sola)`
-                : `<strong class="text-warning">${faltante}</strong> vuelven automáticamente a <strong>${origenDoc}</strong> (guía)`));
+                ? `<strong class="text-warning">${faltanteReal}</strong> faltante(s) quedan en <em>Por resolver</em> junto con el sobrante (la línea no se cierra sola)`
+                : `<strong class="text-warning">${faltanteReal}</strong> vuelven automáticamente a <strong>${origenDoc}</strong> (guía)`));
     }
     if (sobrante > 0) {
         impacto.push(`<strong class="text-info">${sobrante}</strong> sobrante(s) NO entran al stock: quedan por resolver`);
@@ -6430,8 +6765,12 @@ function guardarProblema() {
         $('#problemaCantidadSobranteInput').addClass('is-invalid');
     }
 
-    const tieneProblema = faltante > 0 || sobrante > 0;
-    if (tieneProblema && !observaciones) {
+    // Si lo único que falta son las unidades con NC, la NC ya es la
+    // explicación: no se exige observación.
+    const ncGuardar = Math.min(Number(prod.cantidad_nc_pendiente) || 0, esperada);
+    const soloNcGuardar = sobrante === 0 && faltante > 0 && faltante <= ncGuardar;
+    const tieneProblema = (faltante > 0 || sobrante > 0) && !soloNcGuardar;
+    if (tieneProblema && (!observaciones || observaciones === prod._obs_nc_auto)) {
         errores.push('Debes ingresar observaciones cuando hay faltante o sobrante.');
         $('#problemaObservaciones').addClass('is-invalid');
     }
@@ -6469,6 +6808,9 @@ function _aplicarProblema(prod, recepcionada, faltante, sobrante, observaciones)
     prod.estado = $('#problemaEstado').val();
     prod.observaciones = observaciones;
     prod.marcado_ok = (prod.estado === 'RECEPCIONADO_OK');
+    if (!prod.observaciones && _esLineaSoloNc(prod)) {
+        prod.observaciones = prod._obs_nc_auto || _obsNcAuto(prod, _ncLinea(prod).ncNoIngresan);
+    }
     
     // Cerrar modal
     modalProblema.hide();
@@ -6484,14 +6826,14 @@ function confirmarRecepcion() {
         return;
     }
     
-    // ✅ MEJORADO: Filtrar productos por marcado_ok (no por estado)
-    const productosMarcadosOK = productosVerificacion.filter(p => p.marcado_ok);
-    const productosDesmarcados = productosVerificacion.filter(p => !p.marcado_ok);
+    // Desmarcados que son un problema real: las líneas resueltas por NC ya
+    // traen su explicación y no piden observación.
+    const productosDesmarcados = productosVerificacion.filter(p => !p.marcado_ok && !_esLineaSoloNc(p));
     const hayProductosDesmarcados = productosDesmarcados.length > 0;
-    
+
     // 🔍 VALIDACIÓN: Verificar que productos DESMARCADOS tengan observaciones
     if (hayProductosDesmarcados) {
-        const sinObservaciones = productosDesmarcados.filter(p => !p.observaciones || p.observaciones.trim() === '');
+        const sinObservaciones = productosDesmarcados.filter(p => _necesitaObservacion(p));
         
         if (sinObservaciones.length > 0) {
             const productosSinObs = sinObservaciones.map(p =>
@@ -6572,8 +6914,10 @@ function _recargarDetalleCambiado(fresco) {
 
 function _mostrarResumenPrevioRecepcion() {
     if (!documentoSeleccionado) return;
+    // Problemas reales: las líneas cuya única diferencia es la NC se cierran
+    // solas en el backend y no convierten la recepción en "con problemas".
+    const hayProblemas = productosVerificacion.some(p => !p.marcado_ok && !_esLineaSoloNc(p));
     const productosMarcadosOK = productosVerificacion.filter(p => p.marcado_ok);
-    const hayProductosDesmarcados = productosVerificacion.some(p => !p.marcado_ok);
 
     // Resumen previo: qué entra al stock, qué se devuelve y qué queda abierto.
     // Misma regla que el backend: solo GUIA devuelve sola el faltante.
@@ -6582,24 +6926,38 @@ function _mostrarResumenPrevioRecepcion() {
         || (sucursalDestinoInfo ? sucursalDestinoInfo.alias : 'tu sucursal'));
     const origenDoc = _escapeHtmlDte(documentoSeleccionado.sucursal_origen || 'la bodega origen');
 
-    const totalEsperado = productosVerificacion.reduce((s, p) => s + (p.cantidad_esperada || 0), 0);
-    const totalIngresa = productosVerificacion.reduce((s, p) => s + Math.min(p.cantidad_recepcionada || 0, p.cantidad_esperada || 0), 0);
-    const totalNoIngresa = productosVerificacion.reduce((s, p) => s + Math.max(0, (p.cantidad_esperada || 0) - (p.cantidad_recepcionada || 0)), 0);
-    // Los "no listados" no son sobrantes por resolver: solo se anotan.
-    const totalSobrante = productosVerificacion.filter(p => !p.es_no_listado).reduce((s, p) => s + (p.cantidad_sobrante || 0), 0);
-    const totalNoListados = productosVerificacion.filter(p => p.es_no_listado).reduce((s, p) => s + (p.cantidad_sobrante || 0), 0);
+    const faltaDe = p => Math.max(0, (p.cantidad_esperada || 0) - (p.cantidad_recepcionada || 0));
+    const sumar = (lista, fn) => lista.reduce((s, p) => s + fn(p), 0);
+
+    const totalEsperado = sumar(productosVerificacion, p => p.cantidad_esperada || 0);
+    const totalIngresa = sumar(productosVerificacion, p => Math.min(p.cantidad_recepcionada || 0, p.cantidad_esperada || 0));
+
+    // ── Nota de crédito ──────────────────────────────────────────────────
+    const lineasNc = productosVerificacion.filter(p => !p.es_no_listado && _ncLinea(p).nc > 0);
+    const lineasSoloNc = productosVerificacion.filter(p => _esLineaSoloNc(p));
+    // Unidades con NC de líneas que se cierran solas: no entran y vuelven al origen.
+    const totalNcCerradas = sumar(lineasSoloNc, p => _ncLinea(p).ncNoIngresan);
+    // Unidades con NC que entrarán igual (el operador confirmó que llegaron).
+    const totalNcIngresan = sumar(productosVerificacion, p => _ncLinea(p).ncIngresan);
+
+    // ── Faltantes y sobrantes del resto de las líneas ───────────────────
+    const lineasResto = productosVerificacion.filter(p => !_esLineaSoloNc(p));
+    const totalNoIngresa = sumar(lineasResto, faltaDe);
     // En guías el faltante vuelve solo al origen únicamente si la línea no
     // trae también sobrante; si trae, queda abierto en "Por resolver".
-    const faltaDe = p => Math.max(0, (p.cantidad_esperada || 0) - (p.cantidad_recepcionada || 0));
-    const faltaAuto = productosVerificacion.filter(p => !(p.cantidad_sobrante > 0)).reduce((s, p) => s + faltaDe(p), 0);
+    const faltaAuto = sumar(lineasResto.filter(p => !(p.cantidad_sobrante > 0)), faltaDe);
     const faltaAbierta = totalNoIngresa - faltaAuto;
-    // Unidades con NC que entrarán igual al stock (el operador lo confirmó).
-    const totalNcIngresan = productosVerificacion.reduce((s, p) => s + _udsNcQueIngresan(p, Math.min(p.cantidad_recepcionada || 0, p.cantidad_esperada || 0)), 0);
-    const avisoNc = totalNcIngresan > 0
+    // Unidades con NC que quedaron dentro de una línea con otra diferencia.
+    const ncEnLineasResto = sumar(lineasResto, p => _ncLinea(p).ncNoIngresan);
+    // Los "no listados" no son sobrantes por resolver: solo se anotan.
+    const totalSobrante = sumar(productosVerificacion.filter(p => !p.es_no_listado), p => p.cantidad_sobrante || 0);
+    const totalNoListados = sumar(productosVerificacion.filter(p => p.es_no_listado), p => p.cantidad_sobrante || 0);
+
+    const avisoNcIngresan = totalNcIngresan > 0
         ? `<div class="alert alert-danger mb-2 py-2 text-start small">
                <i class="bi bi-exclamation-octagon me-1"></i>
-               <strong>${totalNcIngresan}</strong> unidad(es) que ya tienen nota de crédito <strong>entrarán al stock</strong>
-               (confirmaste que llegaron físicamente).
+               <strong>${totalNcIngresan}</strong> unidad(es) que ya tienen nota de crédito <strong>entrarán igual a tu stock</strong>
+               (confirmaste que llegaron físicamente). Avisa al emisor: la NC ya las anuló.
            </div>`
         : '';
     const avisoNoListados = totalNoListados > 0
@@ -6610,14 +6968,59 @@ function _mostrarResumenPrevioRecepcion() {
            </div>`
         : '';
 
-    // Detalle línea a línea de lo que NO cuadra (talla incluida).
-    const lineasConDiferencia = productosVerificacion.filter(p => {
-        const falta = Math.max(0, (p.cantidad_esperada || 0) - (p.cantidad_recepcionada || 0));
-        return falta > 0 || (p.cantidad_sobrante || 0) > 0;
-    });
+    // Bloque "lo que NO se actualiza por NC": qué, cuánto, qué NC y qué pasa.
+    let bloqueNc = '';
+    if (lineasNc.length) {
+        const filasNc = lineasNc.map(p => {
+            const n = _ncLinea(p);
+            const esperada = p.cantidad_esperada || 0;
+            const resultado = n.ncIngresan > 0
+                ? `<span class="nc-chip nc-chip--warn">${n.ncIngresan} entran igual</span>`
+                : (_esLineaSoloNc(p) || (esGuiaDoc && !(p.cantidad_sobrante > 0)))
+                    ? `<span class="nc-chip">Vuelven a ${origenDoc}</span>`
+                    : `<span class="nc-chip nc-chip--warn">Por resolver</span>`;
+            return `<tr>
+                <td class="text-start"><small>${_escapeHtmlDte(p.descripcion || p.sku || '-')}</small><br><small class="text-muted font-monospace">${_escapeHtmlDte(p.sku || '')}</small></td>
+                <td class="text-center"><span class="badge bg-secondary">${_escapeHtmlDte(p.talla || '-')}</span></td>
+                <td class="text-center">${esperada}</td>
+                <td class="text-center text-danger fw-bold">−${n.nc}</td>
+                <td class="text-center text-success fw-bold">${Math.min(p.cantidad_recepcionada || 0, esperada)}</td>
+                <td class="text-center"><small>${_escapeHtmlDte(_foliosNc(p) || '—')}</small></td>
+                <td class="text-center">${resultado}</td>
+            </tr>`;
+        }).join('');
+        const foliosNc = Array.from(new Set(lineasNc.flatMap(p => p.nc_folios || [])))
+            .map(f => '#' + _escapeHtmlDte(f)).join(', ');
+        bloqueNc = `
+            <div class="nc-panel text-start mb-2">
+                <div class="nc-panel__titulo">
+                    <i class="bi bi-receipt-cutoff me-1"></i>No se actualizan en tu stock por Nota de Crédito ${foliosNc}
+                </div>
+                <ul class="nc-panel__pasos">
+                    <li>${totalNcCerradas > 0
+                        ? `<strong>${totalNcCerradas}</strong> unidad(es) ya anuladas por el emisor <strong>no suman a ${destinoDoc}</strong> y <strong>vuelven solas a ${origenDoc}</strong>.`
+                        : `Las unidades con NC de estas líneas siguen la regla de la línea (ver columna <em>Resultado</em>).`}</li>
+                    ${lineasSoloNc.length ? `<li>${lineasSoloNc.length} línea(s) quedan <strong>cerradas</strong>: no pasan a <em>Por resolver</em> y <strong>no hay que emitir otra NC</strong>.</li>` : ''}
+                    ${ncEnLineasResto > 0 ? `<li>${ncEnLineasResto} unidad(es) con NC están en líneas que además tienen otra diferencia: esas líneas siguen la regla del faltante (abajo) y la NC queda anotada.</li>` : ''}
+                </ul>
+                <div class="nc-panel__tabla mt-2">
+                    <table class="table table-sm mb-0">
+                        <thead><tr>
+                            <th class="text-start">Producto</th><th class="text-center">Talla</th>
+                            <th class="text-center">Documento</th><th class="text-center">Con NC</th>
+                            <th class="text-center">Entran</th><th class="text-center">NC</th><th class="text-center">Resultado</th>
+                        </tr></thead>
+                        <tbody>${filasNc}</tbody>
+                    </table>
+                </div>
+            </div>`;
+    }
+
+    // Detalle línea a línea de lo que NO cuadra (sin las líneas resueltas por NC).
+    const lineasConDiferencia = lineasResto.filter(p => faltaDe(p) > 0 || (p.cantidad_sobrante || 0) > 0);
 
     const filasDetalle = lineasConDiferencia.map(p => {
-        const falta = Math.max(0, (p.cantidad_esperada || 0) - (p.cantidad_recepcionada || 0));
+        const falta = faltaDe(p);
         const sobra = p.cantidad_sobrante || 0;
         return `<tr>
             <td class="text-start"><small>${_escapeHtmlDte(p.descripcion || p.sku || '-')}</small><br><small class="text-muted">${_escapeHtmlDte(p.sku || '')}</small></td>
@@ -6631,6 +7034,7 @@ function _mostrarResumenPrevioRecepcion() {
 
     const tablaDetalle = lineasConDiferencia.length ? `
         <div class="mt-2" style="max-height:190px;overflow:auto;">
+            <div class="small fw-semibold text-start mb-1"><i class="bi bi-exclamation-triangle text-warning me-1"></i>Diferencias por resolver</div>
             <table class="table table-sm table-bordered mb-0" style="font-size:12px;">
                 <thead>
                     <tr>
@@ -6646,6 +7050,13 @@ function _mostrarResumenPrevioRecepcion() {
             </table>
         </div>` : '';
 
+    const tileNc = totalNcCerradas > 0 ? `
+            <div class="col">
+                <div class="border rounded py-2 border-danger-subtle">
+                    <div class="fw-bold text-danger" style="font-size:20px;">${totalNcCerradas}</div>
+                    <small class="text-muted">Con NC: no entran,<br>vuelven a <strong>${origenDoc}</strong></small>
+                </div>
+            </div>` : '';
     const bloqueTotales = `
         <div class="row text-center g-2 mb-2">
             <div class="col">
@@ -6654,10 +7065,11 @@ function _mostrarResumenPrevioRecepcion() {
                     <small class="text-muted">Entran al stock de<br><strong>${destinoDoc}</strong></small>
                 </div>
             </div>
+            ${tileNc}
             <div class="col">
                 <div class="border rounded py-2">
                     <div class="fw-bold text-warning" style="font-size:20px;">${esGuiaDoc ? faltaAuto : totalNoIngresa}</div>
-                    <small class="text-muted">${esGuiaDoc ? `Vuelven a<br><strong>${origenDoc}</strong>` : 'Quedan por<br>Nota de Crédito'}</small>
+                    <small class="text-muted">${esGuiaDoc ? `Faltantes: vuelven a<br><strong>${origenDoc}</strong>` : 'Faltantes: quedan<br>en Por resolver'}</small>
                     ${esGuiaDoc && faltaAbierta > 0 ? `<div class="small text-warning mt-1">+${faltaAbierta} faltante(s) quedan en Por resolver</div>` : ''}
                 </div>
             </div>
@@ -6675,11 +7087,21 @@ function _mostrarResumenPrevioRecepcion() {
             </div>
         </div>`;
 
-    // Si hay productos desmarcados con observaciones, procesarlos
-    if (hayProductosDesmarcados) {
+    const cabecera = `
+        <p class="mb-2">
+            Documento <strong>Nº ${_escapeHtmlDte(documentoSeleccionado.numero_documento)}</strong> ·
+            ${origenDoc} <i class="bi bi-arrow-right"></i> <strong>${destinoDoc}</strong>
+            ${lineasConDiferencia.length ? ` · <strong>${lineasConDiferencia.length}</strong> línea(s) con diferencia` : ''}
+            ${lineasSoloNc.length ? ` · <strong>${lineasSoloNc.length}</strong> con NC` : ''}
+        </p>`;
+
+    if (hayProblemas) {
         // Lo que hace confirmar_recepcion_api: en guías devuelve solo al
         // origen el faltante de las líneas SIN sobrante y las cierra; una línea
         // con faltante y sobrante queda abierta en "Por resolver".
+        const notaNcEnResto = ncEnLineasResto > 0
+            ? ` (incluyen <strong>${ncEnLineasResto}</strong> ya acreditadas por NC: por esas no hay que emitir otra)`
+            : '';
         const notaDestino = esGuiaDoc
             ? `<div class="alert alert-warning mb-0 py-2 text-start small">
                    <i class="bi bi-arrow-return-left me-1"></i>
@@ -6690,21 +7112,20 @@ function _mostrarResumenPrevioRecepcion() {
                </div>`
             : `<div class="alert alert-warning mb-0 py-2 text-start small">
                    <i class="bi bi-file-earmark-text me-1"></i>
-                   Es una <strong>factura</strong>: las <strong>${totalNoIngresa}</strong> unidades faltantes
-                   quedan en <em>Por resolver</em> hasta que se emita la Nota de Crédito. El stock del origen no se devuelve solo.
+                   Es una <strong>factura</strong>:
+                   ${totalNoIngresa > 0 ? `las <strong>${totalNoIngresa}</strong> unidades faltantes${notaNcEnResto}
+                   quedan en <em>Por resolver</em> hasta que se regularicen. El stock del origen no se devuelve solo.` : ''}
+                   ${totalSobrante > 0 ? `El sobrante (<strong>${totalSobrante}</strong>) queda pendiente en <em>Por resolver</em>.` : ''}
                </div>`;
 
         Swal.fire({
             title: 'Revisa antes de confirmar',
             html: `
                 <div class="text-start">
-                    <p class="mb-2">
-                        Documento <strong>Nº ${_escapeHtmlDte(documentoSeleccionado.numero_documento)}</strong> ·
-                        ${origenDoc} <i class="bi bi-arrow-right"></i> <strong>${destinoDoc}</strong> ·
-                        <strong>${lineasConDiferencia.length}</strong> línea(s) con diferencia.
-                    </p>
+                    ${cabecera}
                     ${bloqueTotales}
-                    ${avisoNc}${avisoNoListados}
+                    ${bloqueNc}
+                    ${avisoNcIngresan}${avisoNoListados}
                     ${tablaDetalle}
                     <div class="mt-2">${notaDestino}</div>
                 </div>
@@ -6714,7 +7135,7 @@ function _mostrarResumenPrevioRecepcion() {
             confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Sí, recepcionar con estas cantidades',
             cancelButtonText: '<i class="bi bi-x-circle me-1"></i>Revisar de nuevo',
             confirmButtonColor: '#ffc107',
-            width: '760px'
+            width: '800px'
         }).then(result => {
             if (result.isConfirmed) {
                 // Recepcionar TODO con las cantidades ingresadas por el usuario
@@ -6722,22 +7143,28 @@ function _mostrarResumenPrevioRecepcion() {
             }
         });
     } else {
-        // No hay productos desmarcados, recepción normal completa
+        // Sin problemas por resolver: todo OK o, a lo más, líneas con NC.
+        const resumenOk = lineasSoloNc.length
+            ? `<div class="alert alert-success mb-0 py-2 small">
+                   <i class="bi bi-check-circle-fill me-1"></i>
+                   Entran <strong>${totalIngresa}</strong> unidades al stock de <strong>${destinoDoc}</strong>
+                   (${productosMarcadosOK.length} línea(s) OK). Las <strong>${totalNcCerradas}</strong> con nota de crédito
+                   vuelven a <strong>${origenDoc}</strong> y el documento queda cerrado: <strong>no queda nada pendiente</strong>.
+               </div>`
+            : `<div class="alert alert-success mb-0 py-2 small">
+                   <i class="bi bi-check-circle-fill me-1"></i>
+                   Las <strong>${productosMarcadosOK.length}</strong> líneas están marcadas OK:
+                   entran <strong>${totalIngresa}</strong> unidades al stock de <strong>${destinoDoc}</strong>.
+               </div>`;
         Swal.fire({
-            title: 'Confirmar recepción completa',
+            title: lineasSoloNc.length ? 'Confirmar recepción (con NC)' : 'Confirmar recepción completa',
             html: `
                 <div class="text-start">
-                    <p class="mb-2">
-                        Documento <strong>Nº ${_escapeHtmlDte(documentoSeleccionado.numero_documento)}</strong> ·
-                        ${origenDoc} <i class="bi bi-arrow-right"></i> <strong>${destinoDoc}</strong>
-                    </p>
+                    ${cabecera}
                     ${bloqueTotales}
-                    ${avisoNc}
-                    <div class="alert alert-success mb-0 py-2 small">
-                        <i class="bi bi-check-circle-fill me-1"></i>
-                        Las <strong>${productosMarcadosOK.length}</strong> líneas están marcadas OK:
-                        entran <strong>${totalIngresa}</strong> unidades al stock de <strong>${destinoDoc}</strong>.
-                    </div>
+                    ${bloqueNc}
+                    ${avisoNcIngresan}
+                    ${resumenOk}
                 </div>
             `,
             icon: 'success',
@@ -6745,7 +7172,7 @@ function _mostrarResumenPrevioRecepcion() {
             confirmButtonText: '<i class="bi bi-check-circle me-1"></i>Sí, confirmar recepción',
             cancelButtonText: 'Cancelar',
             confirmButtonColor: '#28a745',
-            width: '700px'
+            width: lineasNc.length ? '800px' : '700px'
         }).then(result => {
             if (!result.isConfirmed) return;
             procesarRecepcion(true);  // true = incluir todos (que están OK)
@@ -6937,9 +7364,9 @@ function procesarRecepcion(incluirProblemas) {
         recepcion_completa: !incluirProblemas
     };
     
-    // Unidades con NC que el operador confirmó que entran (lo calcula el
-    // front: el contador del backend también cuenta las del neto).
-    const ncIngresadas = productosDTE.reduce(
+    // Unidades con NC que el operador confirmó que entran. Respaldo por si
+    // la respuesta no trae el dato (el backend ya lo calcula sobre el neto).
+    const ncIngresadasFront = productosDTE.reduce(
         (s, p) => s + _udsNcQueIngresan(p, Math.min(p.cantidad_recepcionada || 0, p.cantidad_esperada || 0)), 0);
 
     const $btn = $('#btnConfirmarRecepcion');
@@ -6959,6 +7386,40 @@ function procesarRecepcion(incluirProblemas) {
     }).done(response => {
         const esCompleto = response.estado_dte === 'RECEPCIONADO_COMPLETO';
         const sucursalOrigen = _escapeHtmlDte(documentoSeleccionado ? documentoSeleccionado.sucursal_origen : 'la bodega emisora');
+        const sucursalDestinoResp = _escapeHtmlDte(response.sucursal_destino
+            || (documentoSeleccionado ? documentoSeleccionado.sucursal_destino : '') || 'tu sucursal');
+        const ncIngresadas = (response.unidades_con_nc_ingresadas !== undefined)
+            ? (Number(response.unidades_con_nc_ingresadas) || 0) : ncIngresadasFront;
+
+        // Lo que NO se actualizó por nota de crédito, tal como lo registró el
+        // servidor: qué líneas, cuántas unidades y a dónde fueron.
+        const cubiertoNc = Array.isArray(response.detalle_cubierto_nc) ? response.detalle_cubierto_nc : [];
+        const udsCubiertasNc = Number(response.unidades_cubiertas_nc) || 0;
+        const udsNcAbiertas = Number(response.unidades_nc_en_lineas_abiertas) || 0;
+        const bloqueCubiertoNc = cubiertoNc.length ? `
+            <div class="nc-panel mb-2">
+                <div class="nc-panel__titulo"><i class="bi bi-receipt-cutoff me-1"></i>No se actualizó por Nota de Crédito</div>
+                <ul class="nc-panel__pasos">
+                    <li><strong>${udsCubiertasNc}</strong> unidad(es) no entraron a <strong>${sucursalDestinoResp}</strong>
+                        y volvieron al stock de <strong>${sucursalOrigen}</strong>.</li>
+                    <li>${cubiertoNc.length} línea(s) quedaron cerradas: no hay nada que regularizar ni otra NC que emitir.</li>
+                </ul>
+                <div class="nc-panel__tabla mt-2">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Producto</th><th class="text-center">Talla</th>
+                            <th class="text-center">Documento</th><th class="text-center">Recibidas</th>
+                            <th class="text-center">Con NC</th><th>NC</th></tr></thead>
+                        <tbody>${cubiertoNc.map(l => `<tr>
+                            <td><small>${_escapeHtmlDte(l.descripcion || l.articulo || l.sku)}</small><br><small class="text-muted font-monospace">${_escapeHtmlDte(l.sku)}</small></td>
+                            <td class="text-center"><span class="badge bg-secondary">${_escapeHtmlDte(l.talla || '-')}</span></td>
+                            <td class="text-center">${Number(l.cantidad_esperada) || 0}</td>
+                            <td class="text-center text-success fw-bold">${Number(l.cantidad_recepcionada) || 0}</td>
+                            <td class="text-center text-danger fw-bold">−${Number(l.cantidad_nc) || 0}</td>
+                            <td><small>${_escapeHtmlDte(l.notas_credito || '')}</small></td>
+                        </tr>`).join('')}</tbody>
+                    </table>
+                </div>
+            </div>` : '';
 
         Swal.fire({
             icon: esCompleto ? 'success' : 'warning',
@@ -6966,9 +7427,13 @@ function procesarRecepcion(incluirProblemas) {
             html: `
                 <div class="text-start">
                     <p>${_escapeHtmlDte(response.message || '')}</p>
-                    ${ncIngresadas > 0 ? `<div class="alert alert-danger py-2 small mb-2"><i class="bi bi-exclamation-octagon me-1"></i><strong>${ncIngresadas}</strong> unidad(es) con nota de crédito ingresaron al stock por tu confirmación.</div>` : ''}
+                    ${bloqueCubiertoNc}
+                    ${udsNcAbiertas > 0 ? `<div class="alert alert-warning py-2 small mb-2"><i class="bi bi-info-circle me-1"></i><strong>${udsNcAbiertas}</strong> unidad(es) con NC quedaron dentro de líneas con otra diferencia: al regularizarlas, esas ya están acreditadas.</div>` : ''}
+                    ${ncIngresadas > 0 ? `<div class="alert alert-danger py-2 small mb-2"><i class="bi bi-exclamation-octagon me-1"></i><strong>${ncIngresadas}</strong> unidad(es) con nota de crédito ingresaron al stock por tu confirmación. Avisa al emisor.</div>` : ''}
                     <ul class="list-unstyled mt-3">
                         <li class="text-success">Productos OK: ${response.productos_ok}</li>
+                        ${Number(response.productos_cubiertos_nc) > 0 ?
+                            `<li class="text-danger">Cerrados por NC: ${response.productos_cubiertos_nc}</li>` : ''}
                         ${response.productos_problemas > 0 ?
                             `<li class="text-warning">Con problemas: ${response.productos_problemas}</li>` : ''}
                         ${response.productos_sobrantes > 0 ?
@@ -6994,7 +7459,7 @@ function procesarRecepcion(incluirProblemas) {
                 </div>
             `,
             confirmButtonText: 'Entendido',
-            width: '650px'
+            width: cubiertoNc.length ? '780px' : '650px'
         });
 
         modalDetalle.hide();
@@ -7568,7 +8033,7 @@ function hideGlobalLoader() {
 // traspaso ya recibido— esas unidades entraron igual al stock.
 const DOCS_VINC_EFECTO = {
     descontada:    { clase: 'alert-secondary',   icono: 'bi-scissors',                  titulo: 'Ya descontada del documento' },
-    pre_recepcion: { clase: 'alert-danger',      icono: 'bi-exclamation-triangle-fill', titulo: 'El documento aún las cuenta' },
+    pre_recepcion: { clase: 'alert-warning',     icono: 'bi-receipt-cutoff',            titulo: 'No entrarán al stock al recepcionar' },
     ingresada:     { clase: 'alert-danger',      icono: 'bi-exclamation-octagon-fill',  titulo: 'Entraron al stock igual' },
     no_ingresada:  { clase: 'alert-success',     icono: 'bi-check-circle-fill',         titulo: 'No ingresaron al stock (cuadrado)' },
     anulado:       { clase: 'alert-light border', icono: 'bi-slash-circle',             titulo: 'Documento anulado' },
@@ -7693,9 +8158,22 @@ $(document).on('click', '.btn-ver-vinculados', function() {
     if (modalPadre && modalPadre.id !== 'modalDocsVinculados') {
         const instancia = bootstrap.Modal.getInstance(modalPadre);
         if (instancia) {
+            // Desde la verificación de recepción se vuelve a ella al cerrar la
+            // NC, con lo marcado intacto (el modal no resetea nada al ocultarse):
+            // antes había que reabrir el documento y verificar de nuevo.
+            const volverARecepcion = modalPadre.id === 'modalDetalleDocumento';
             modalPadre.addEventListener(
                 'hidden.bs.modal',
-                () => verDocumentosVinculados(dteId),
+                () => {
+                    if (volverARecepcion) {
+                        document.getElementById('modalDocsVinculados').addEventListener(
+                            'hidden.bs.modal',
+                            () => { if (documentoSeleccionado && modalDetalle) modalDetalle.show(); },
+                            { once: true }
+                        );
+                    }
+                    verDocumentosVinculados(dteId);
+                },
                 { once: true }
             );
             instancia.hide();
@@ -7786,7 +8264,9 @@ function _verDteRenderTabla() {
                 <td class="text-center">${falt > 0 ? `<strong class="text-danger">${falt}</strong>` : '<span class="text-muted">-</span>'}</td>
                 <td class="text-center">${dan > 0 ? `<strong class="text-danger">${dan}</strong>` : '<span class="text-muted">-</span>'}</td>
                 <td class="text-center">${sob > 0 ? `<strong class="text-primary">+${sob}</strong>` : '<span class="text-muted">-</span>'}</td>
-                <td>${getEstadoBadge(prod.estado)}</td>
+                <td>${(prod.estado === 'REGULARIZADO' && /Cubierto por NC/i.test(obs))
+                    ? '<span class="badge bg-danger" title="Estas unidades ya estaban anuladas por nota de crédito: no entraron al destino y volvieron al origen al recepcionar"><i class="bi bi-receipt-cutoff me-1"></i>Con NC · volvió al origen</span>'
+                    : getEstadoBadge(prod.estado)}</td>
                 <td style="min-width: 220px;">${obsHtml}</td>
             </tr>
         `);
