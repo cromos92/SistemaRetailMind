@@ -67,6 +67,16 @@ class HerenciaFechaSenalTest(TestCase):
         nueva.refresh_from_db()
         self.assertGreaterEqual(nueva.fecha_creacion, antes)
 
+    def test_codigo_debil_no_hereda(self):
+        # '0', '10', 'A6': comodines para productos sin código real. Agrupar por
+        # ellos juntaría productos sin relación → la ficha vale por sí sola.
+        debil, _ = crear_producto_con_talla(self.suc1, articulo='0', sku=7770010)
+        _fijar_fecha(debil, 900)
+        antes = timezone.now()
+        nueva, _ = crear_producto_con_talla(self.suc2, articulo='0', sku=7770011)
+        nueva.refresh_from_db()
+        self.assertGreaterEqual(nueva.fecha_creacion, antes)
+
     def test_editar_una_ficha_existente_no_toca_la_fecha(self):
         nueva, _ = crear_producto_con_talla(self.suc2, articulo='MOD-1', sku=7770007)
         _fijar_fecha(nueva, 10)   # más nueva que la hermana
@@ -96,7 +106,7 @@ class CorregirFechaCreacionComandoTest(TestCase):
         return out.getvalue()
 
     def test_baja_a_min_de_movimientos_reales(self):
-        prod, pt = crear_producto_con_talla(self.suc1, articulo='A-1', sku=8880001)
+        prod, pt = crear_producto_con_talla(self.suc1, articulo='ART-1', sku=8880001)
         self._mov(pt, 500)
         self._mov(pt, 100)
         self._correr('--apply', '--backup-dir', self.tmp)
@@ -105,7 +115,7 @@ class CorregirFechaCreacionComandoTest(TestCase):
                          timezone.localdate() - timedelta(days=500))
 
     def test_excluye_saldo_sintetico_de_la_migracion(self):
-        prod, pt = crear_producto_con_talla(self.suc1, articulo='A-2', sku=8880002)
+        prod, pt = crear_producto_con_talla(self.suc1, articulo='ART-2', sku=8880002)
         _fijar_fecha(prod, 5)
         self._mov(pt, 250, ref=REF_SALDO_INICIAL_SINTETICO)   # 2026-01-22 en prod
         self._correr('--apply', '--backup-dir', self.tmp)
@@ -115,9 +125,9 @@ class CorregirFechaCreacionComandoTest(TestCase):
                          timezone.localdate() - timedelta(days=5))
 
     def test_herencia_por_modelo_repara_ficha_recreada(self):
-        vieja, pt_v = crear_producto_con_talla(self.suc1, articulo='A-3', sku=8880003)
+        vieja, pt_v = crear_producto_con_talla(self.suc1, articulo='ART-3', sku=8880003)
         _fijar_fecha(vieja, 700)
-        recreada, pt_r = crear_producto_con_talla(self.suc2, articulo='A-3', sku=8880004)
+        recreada, pt_r = crear_producto_con_talla(self.suc2, articulo='ART-3', sku=8880004)
         _fijar_fecha(recreada, 0)        # simula ficha creada hoy sin la señal
         self._mov(pt_r, 0)               # su único movimiento es de hoy
 
@@ -128,17 +138,27 @@ class CorregirFechaCreacionComandoTest(TestCase):
         self.assertIn('[modelo]', salida)
 
     def test_sin_herencia_no_toca_la_recreada(self):
-        vieja, _ = crear_producto_con_talla(self.suc1, articulo='A-4', sku=8880005)
+        vieja, _ = crear_producto_con_talla(self.suc1, articulo='ART-4', sku=8880005)
         _fijar_fecha(vieja, 700)
-        recreada, pt_r = crear_producto_con_talla(self.suc2, articulo='A-4', sku=8880006)
+        recreada, pt_r = crear_producto_con_talla(self.suc2, articulo='ART-4', sku=8880006)
         _fijar_fecha(recreada, 0)
         self._mov(pt_r, 0)
         self._correr('--apply', '--sin-herencia', '--backup-dir', self.tmp)
         recreada.refresh_from_db()
         self.assertEqual(timezone.localtime(recreada.fecha_creacion).date(), timezone.localdate())
 
+    def test_codigo_debil_no_hereda_por_modelo(self):
+        vieja, _ = crear_producto_con_talla(self.suc1, articulo='10', sku=8880010)
+        _fijar_fecha(vieja, 700)
+        otra, pt_o = crear_producto_con_talla(self.suc2, articulo='10', sku=8880011)
+        _fijar_fecha(otra, 0)
+        self._mov(pt_o, 0)
+        self._correr('--apply', '--backup-dir', self.tmp)
+        otra.refresh_from_db()
+        self.assertEqual(timezone.localtime(otra.fecha_creacion).date(), timezone.localdate())
+
     def test_nunca_sube_una_fecha(self):
-        prod, pt = crear_producto_con_talla(self.suc1, articulo='A-5', sku=8880007)
+        prod, pt = crear_producto_con_talla(self.suc1, articulo='ART-5', sku=8880007)
         _fijar_fecha(prod, 900)
         self._mov(pt, 30)
         self._correr('--apply', '--backup-dir', self.tmp)
@@ -147,7 +167,7 @@ class CorregirFechaCreacionComandoTest(TestCase):
                          timezone.localdate() - timedelta(days=900))
 
     def test_dry_run_no_escribe(self):
-        prod, pt = crear_producto_con_talla(self.suc1, articulo='A-6', sku=8880008)
+        prod, pt = crear_producto_con_talla(self.suc1, articulo='ART-6', sku=8880008)
         self._mov(pt, 400)
         salida = self._correr()
         prod.refresh_from_db()
@@ -156,7 +176,7 @@ class CorregirFechaCreacionComandoTest(TestCase):
         self.assertEqual(os.listdir(self.tmp), [])
 
     def test_apply_es_idempotente_y_deja_respaldo(self):
-        prod, pt = crear_producto_con_talla(self.suc1, articulo='A-7', sku=8880009)
+        prod, pt = crear_producto_con_talla(self.suc1, articulo='ART-7', sku=8880009)
         self._mov(pt, 400)
         self._correr('--apply', '--backup-dir', self.tmp)
         archivos = os.listdir(self.tmp)

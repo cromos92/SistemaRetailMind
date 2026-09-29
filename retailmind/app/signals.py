@@ -270,11 +270,12 @@ def heredar_fecha_creacion_del_modelo(sender, instance, created, raw=False, **kw
     if not created or raw or not instance.fecha_creacion:
         return
     try:
-        from .utils_producto_match import normalizar_articulo
+        from .utils_producto_match import clave_modelo, normalizar_articulo
         articulo = (instance.articulo or '').strip()
+        if clave_modelo(articulo, instance.atributo1_id, instance.atributo2_id,
+                        instance.atributo3_id) is None:
+            return   # código débil ('0', '10'): no se agrupa con nadie
         clave = normalizar_articulo(articulo)
-        if not clave:
-            return
         # Atributos por id en la BD; el artículo se compara normalizado en
         # Python sobre el conjunto chico que devuelve el iexact (misma idea que
         # utils_producto_match.fichas_por_identidad).

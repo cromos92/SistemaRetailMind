@@ -1341,6 +1341,57 @@
     .impacto-bar #impactoConNc { color: var(--rd-error-text); }
     .ayuda-item.ayuda-nc { border-left-color: var(--nexo-error); }
 
+    /* ===== Modal "Ajustar DTE emitido" =====
+       Más ancho que modal-xl, tabla alta y barras de scroll gruesas: con
+       facturas de 80+ líneas la barra global de 8px gris claro casi no se
+       veía y la tabla mostraba pocas filas. */
+    .modal-ajuste-emisor { max-width: min(1440px, 96vw); }
+    #modalAjustarDteEmisor .ajuste-scroll { max-height: 60vh; }
+    #modalAjustarDteEmisor .ajuste-resumen-scroll { max-height: calc(60vh - 118px); overflow-y: auto; }
+    #modalAjustarDteEmisor .modal-body::-webkit-scrollbar,
+    #modalAjustarDteEmisor .ajuste-scroll::-webkit-scrollbar,
+    #modalAjustarDteEmisor .ajuste-resumen-scroll::-webkit-scrollbar { width: 14px; height: 14px; }
+    #modalAjustarDteEmisor .modal-body::-webkit-scrollbar-thumb,
+    #modalAjustarDteEmisor .ajuste-scroll::-webkit-scrollbar-thumb,
+    #modalAjustarDteEmisor .ajuste-resumen-scroll::-webkit-scrollbar-thumb {
+        background: var(--nexo-gray-500);
+        border-radius: 7px;
+        border: 3px solid var(--nexo-gray-100);
+    }
+    #modalAjustarDteEmisor .modal-body::-webkit-scrollbar-thumb:hover,
+    #modalAjustarDteEmisor .ajuste-scroll::-webkit-scrollbar-thumb:hover,
+    #modalAjustarDteEmisor .ajuste-resumen-scroll::-webkit-scrollbar-thumb:hover { background: var(--nexo-gray-700); }
+    #modalAjustarDteEmisor .modal-body,
+    #modalAjustarDteEmisor .ajuste-scroll,
+    #modalAjustarDteEmisor .ajuste-resumen-scroll { scrollbar-width: auto; scrollbar-color: var(--nexo-gray-500) var(--nexo-gray-100); }
+    /* Fila en la que se está escribiendo: se ve dónde va el cursor. */
+    #ajusteProductosBody tr:focus-within > td { background-color: var(--nexo-primary-light); }
+    #ajusteProductosBody .input-ajuste-cantidad { width: 90px; display: inline-block; font-weight: 600; }
+    .ajuste-resumen-panel {
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        background: var(--nexo-gray-100);
+        padding: 8px;
+        height: 100%;
+    }
+    .ajuste-resumen-tabla { font-size: 12px; background: var(--nexo-white); }
+    .ajuste-resumen-tabla th { font-size: 11px; color: var(--nexo-gray-700); }
+    .ajuste-resumen-tabla tfoot th { font-size: 12px; color: var(--nexo-gray-900); border-top: 2px solid var(--nexo-gray-300); }
+    .ajuste-talla-chip {
+        display: inline-block;
+        border: 1px solid var(--nexo-gray-300);
+        border-radius: 999px;
+        padding: 0 6px;
+        margin: 1px 2px 1px 0;
+        font-size: 11px;
+        white-space: nowrap;
+        background: var(--nexo-white);
+    }
+    @media (max-height: 800px) {
+        #modalAjustarDteEmisor .ajuste-scroll { max-height: 50vh; }
+        #modalAjustarDteEmisor .ajuste-resumen-scroll { max-height: calc(50vh - 118px); }
+    }
+
     /* Celda de acciones de la lista: mismos espacios entre botones sin
        depender de un ms-1 en cada uno. */
     .acciones-dte {
@@ -2042,7 +2093,7 @@
 
 <!-- Modal AJUSTAR DTE EMISOR (solo reducir / anular productos) -->
 <div class="modal fade" id="modalAjustarDteEmisor" tabindex="-1" aria-labelledby="modalAjustarDteEmisorLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable modal-ajuste-emisor">
         <div class="modal-content">
             <div class="modal-header bg-warning">
                 <div>
@@ -2054,19 +2105,16 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-warning border-0 mb-3">
-                    <i class="bi bi-exclamation-triangle me-2"></i>
+                <div class="alert alert-warning border-0 py-2 mb-2 small">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
                     <strong>Modo emisor:</strong> esto afecta el DTE <span id="ajusteTipoDocTexto">-</span> <span id="ajusteNumeroRef">-</span>.
-                    Al confirmar se genera un documento de trazabilidad automáticamente:
-                    <ul class="mb-0 mt-1">
-                        <li>Si el DTE original es <strong>Factura/Boleta</strong> → se emite <strong>Nota de Crédito</strong> por el diferencial.</li>
-                        <li>Si es <strong>Guía u otro no-facturable</strong> → se registra un <strong>Ajuste Traspaso</strong> interno.</li>
-                    </ul>
+                    Al confirmar se genera el documento de trazabilidad por lo que devuelvas:
+                    <strong>Nota de Crédito</strong> si es Factura/Boleta, o <strong>Ajuste Traspaso</strong> interno si es Guía.
                 </div>
 
-                <div class="row mb-3">
+                <div class="row mb-2 g-2">
                     <div class="col-md-6">
-                        <div class="card bg-light">
+                        <div class="card bg-light mb-0">
                             <div class="card-body py-2">
                                 <div class="row">
                                     <div class="col-6"><small class="text-muted">Tipo:</small> <strong id="ajusteTipoDoc">-</strong></div>
@@ -2083,61 +2131,84 @@
                     </div>
                 </div>
 
-                <div class="table-responsive scroll-box scroll-box--md">
-                    <table class="table table-hover mb-0">
-                        <thead class="sticky-top">
-                            <tr>
-                                <th style="width: 110px;">SKU</th>
-                                <th>Producto</th>
-                                <th style="width: 70px;">Talla</th>
-                                <th style="width: 90px;" class="text-center">Original</th>
-                                <th style="width: 110px;" class="text-center text-danger">Devolver (NC)</th>
-                                <th style="width: 105px;" class="text-end text-danger">Monto NC</th>
-                                <th style="width: 70px;" class="text-center">Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody id="ajusteProductosBody">
-                            <tr><td colspan="7" class="text-center text-muted py-3">Seleccione un DTE para cargar productos...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+                <div class="row g-2">
+                    <!-- Líneas del documento: se escribe cuánto se devuelve -->
+                    <div class="col-lg-8">
+                        <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                            <div class="input-group input-group-sm" style="max-width: 360px;">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text" id="ajusteBuscarLinea" class="form-control" autocomplete="off"
+                                       placeholder="Filtrar por SKU, artículo o talla" aria-label="Filtrar líneas del documento">
+                            </div>
+                            <small class="text-muted">
+                                <i class="bi bi-keyboard me-1"></i><kbd>Tab</kbd> / <kbd>Enter</kbd> / <kbd>&darr;</kbd> siguiente línea · <kbd>&uarr;</kbd> anterior
+                            </small>
+                        </div>
+                        <div class="table-responsive scroll-box ajuste-scroll">
+                            <table class="table table-hover mb-0">
+                                <thead class="sticky-top">
+                                    <tr>
+                                        <th style="width: 110px;">SKU</th>
+                                        <th>Producto</th>
+                                        <th style="width: 70px;">Talla</th>
+                                        <th style="width: 90px;" class="text-center">Original</th>
+                                        <th style="width: 120px;" class="text-center text-danger">Devolver (NC)</th>
+                                        <th style="width: 105px;" class="text-end text-danger">Monto NC</th>
+                                        <th style="width: 70px;" class="text-center">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ajusteProductosBody">
+                                    <tr><td colspan="7" class="text-center text-muted py-3">Seleccione un DTE para cargar productos...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="small text-muted mt-2">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Escribe en <strong>Devolver (NC)</strong> cuántas unidades retiras de cada línea — la NC/ajuste se emite exactamente por ese número.
+                            Si devuelves todas las unidades, la línea se quita del DTE. Para aumentar cantidades, emite otro DTE.
+                        </div>
+                    </div>
 
-                <div class="small text-muted mt-2">
-                    <i class="bi bi-info-circle me-1"></i>
-                    Escribe en <strong>Devolver (NC)</strong> cuántas unidades retiras de cada línea — la NC/ajuste se emite exactamente por ese número.
-                    Si devuelves todas las unidades, la línea se quita del DTE. Para aumentar cantidades, emite otro DTE.
-                </div>
-                <!-- Footer financiero sticky -->
-                <div class="border-top pt-2 mt-2" id="ajusteFooterFinanciero">
-                    <div class="row g-2">
-                        <div class="col-4">
-                            <div class="card border-0 bg-light">
-                                <div class="card-body py-1 px-2 text-center">
-                                    <small class="text-muted d-block label-xs">Unidades NC</small>
-                                    <strong id="ajusteDiferencialUnidades" class="text-danger fs-6">0</strong>
+                    <!-- Resumen en vivo: totales y lo devuelto agrupado por artículo -->
+                    <div class="col-lg-4">
+                        <div class="ajuste-resumen-panel">
+                            <div id="ajusteFooterFinanciero">
+                                <div class="row g-2">
+                                    <div class="col-4">
+                                        <div class="card border-0 mb-0">
+                                            <div class="card-body py-1 px-2 text-center">
+                                                <small class="text-muted d-block label-xs">Unidades NC</small>
+                                                <strong id="ajusteDiferencialUnidades" class="text-danger fs-6">0</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="card border-0 mb-0">
+                                            <div class="card-body py-1 px-2 text-center">
+                                                <small class="text-muted d-block label-xs">Monto neto NC</small>
+                                                <strong id="ajusteDiferencialNeto" class="text-danger fs-6">$0</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="card border-danger mb-0">
+                                            <div class="card-body py-1 px-2 text-center">
+                                                <small class="text-muted d-block label-xs">Total con IVA</small>
+                                                <strong id="ajusteDiferencialTotal" class="text-danger fs-6">$0</strong>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="col-4">
-                            <div class="card border-0 bg-light">
-                                <div class="card-body py-1 px-2 text-center">
-                                    <small class="text-muted d-block label-xs">Monto neto NC</small>
-                                    <strong id="ajusteDiferencialNeto" class="text-danger fs-6">$0</strong>
-                                </div>
+                            <div class="d-flex justify-content-between align-items-center mt-2 mb-1">
+                                <strong class="small"><i class="bi bi-list-check me-1"></i>Resumen por artículo</strong>
+                                <small class="text-muted" id="ajusteResumenConteo"></small>
                             </div>
-                        </div>
-                        <div class="col-4">
-                            <div class="card border-danger">
-                                <div class="card-body py-1 px-2 text-center">
-                                    <small class="text-muted d-block label-xs">Total con IVA</small>
-                                    <strong id="ajusteDiferencialTotal" class="text-danger fs-6">$0</strong>
-                                </div>
+                            <div id="ajusteResumenCambios" class="ajuste-resumen-scroll small">
+                                <div class="text-muted text-center py-3">Sin cambios seleccionados.</div>
                             </div>
                         </div>
                     </div>
-                </div>
-                <div id="ajusteResumenCambios" class="alert alert-light border mt-2 mb-0 small">
-                    Sin cambios seleccionados.
                 </div>
             </div>
             <!-- Panel resultado persistente (oculto hasta que el ajuste se confirme) -->
@@ -9365,6 +9436,9 @@ function abrirModalAjusteEmisor(dteId, opciones) {
     $('#ajusteFecha').text(dte.fecha_emision || '-');
     $('#ajusteUnidades').text(dte.unidades_productos || 0);
     $('#ajusteMotivo').val('').removeClass('is-invalid');
+    $('#ajusteBuscarLinea').val('');
+    $('#ajusteResumenConteo').text('');
+    $('#ajusteResumenCambios').html('<div class="text-muted text-center py-3">Sin cambios seleccionados.</div>');
 
     // Banner contextual según fase
     let bannerFase = '';
@@ -9456,30 +9530,47 @@ function abrirModalAjusteEmisor(dteId, opciones) {
                        </td>`
                     : '';
 
+                // Artículo y color: agrupan el resumen (como la factura y el
+                // TXT de la NC) y distinguen dos colores del mismo modelo.
+                const articulo = p.producto || nombre;
+                const color = p.color || '';
+
                 // sku / nombre / talla vienen de la ficha (editable): escapados
                 // tanto en los data-* como en las celdas.
+                //
+                // La cantidad es type="text" + inputmode="numeric", no
+                // type="number": con number, la flecha ↓ (o la rueda del mouse)
+                // cambiaba el valor de la línea en vez de bajar a la siguiente.
+                // El botón "devolver todo" va con tabindex=-1 para que Tab
+                // salte de cantidad en cantidad.
                 return `
                     <tr data-dp-id="${dpId}"
                         data-cantidad-original="${cantidad}"
                         data-precio="${precio}"
                         data-sku="${_escapeHtmlDte(sku)}"
                         data-nombre="${_escapeHtmlDte(nombre)}"
+                        data-articulo="${_escapeHtmlDte(articulo)}"
+                        data-color="${_escapeHtmlDte(color)}"
                         data-talla="${_escapeHtmlDte(talla)}"
                         data-stock-destino="${stockDestino == null ? '' : stockDestino}"
                         data-max-devolver="${maxDevolver}">
                         <td><small class="font-monospace">${_escapeHtmlDte(sku)}</small></td>
-                        <td><small>${_escapeHtmlDte(nombre)}${warningStock}</small></td>
+                        <td><small>${_escapeHtmlDte(nombre)}${warningStock}</small>
+                            ${color ? `<small class="d-block text-muted">${_escapeHtmlDte(color)}</small>` : ''}</td>
                         <td class="text-center"><span class="badge bg-secondary">${_escapeHtmlDte(talla)}</span></td>
                         ${colStockDestino}
                         <td class="text-center"><strong>${cantidad}</strong></td>
                         <td class="text-center">
-                            <input type="number" class="form-control form-control-sm text-center input-ajuste-cantidad"
-                                   min="0" max="${maxDevolver}" value="0" style="width: 95px; display:inline-block;">
+                            <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off"
+                                   class="form-control form-control-sm text-center input-ajuste-cantidad"
+                                   data-max="${maxDevolver}" value="0"
+                                   aria-label="Unidades a devolver de ${_escapeHtmlDte(sku)} talla ${_escapeHtmlDte(talla)} (máximo ${maxDevolver})">
                             <div class="small text-muted">Queda: <span class="ajuste-cantidad-queda">${cantidad}</span></div>
                         </td>
                         <td class="text-end ajuste-monto-nc-celda text-danger fw-bold small">$0</td>
                         <td class="text-center">
-                            <button class="btn btn-sm btn-outline-danger btn-poner-cero" title="Devolver todo (máximo permitido: ${maxDevolver})">
+                            <button type="button" class="btn btn-sm btn-outline-danger btn-poner-cero" tabindex="-1"
+                                    title="Devolver todo (máximo permitido: ${maxDevolver})" aria-label="Devolver todo de ${_escapeHtmlDte(sku)}">
                                 <i class="bi bi-x-circle"></i>
                             </button>
                         </td>
@@ -9528,14 +9619,7 @@ function actualizarDiferencialAjuste() {
         if (dif > 0) {
             difUnidades += dif;
             difNeto += montoNcFila;
-            resumen.push({
-                sku: $tr.data('sku') || '-',
-                nombre: $tr.data('nombre') || '-',
-                talla: $tr.data('talla') || '-',
-                original: cantOriginal,
-                nueva: nuevaCant,
-                nc: dif,
-            });
+            resumen.push(_ajusteItemDeFila($tr, dif, montoNcFila));
         }
     });
     const difTotal = Math.round(difNeto * 1.19);
@@ -9543,27 +9627,78 @@ function actualizarDiferencialAjuste() {
     $('#ajusteDiferencialUnidades').text(difUnidades);
     $('#ajusteDiferencialTotal').text(_ajusteFormatearPesos(difTotal));
     if (!resumen.length) {
-        $('#ajusteResumenCambios')
-            .removeClass('alert-warning alert-danger')
-            .addClass('alert-light')
-            .html('Sin cambios seleccionados.');
+        $('#ajusteResumenConteo').text('');
+        $('#ajusteResumenCambios').html('<div class="text-muted text-center py-3">Sin cambios seleccionados.</div>');
         return;
     }
-    $('#ajusteResumenCambios')
-        .removeClass('alert-light')
-        .addClass('alert-warning')
-        .html(`
-            <strong>Resumen de NC/Ajuste:</strong>
-            <div class="mt-1">
-                ${resumen.map(r => `
-                    <div>
-                        <code>${_escapeHtmlDte(r.sku)}</code> ${_escapeHtmlDte(r.nombre)} · T${_escapeHtmlDte(r.talla)}:
-                        original <strong>${r.original}</strong> → nueva <strong>${r.nueva}</strong>
-                        <span class="text-danger fw-bold">(NC ${r.nc})</span>
-                    </div>
-                `).join('')}
-            </div>
-        `);
+    // Agrupado por artículo (+ color), igual que la factura y el TXT de la
+    // NC: una fila por artículo con sus tallas y el total que se va sumando.
+    const grupos = _ajusteAgruparPorArticulo(resumen);
+    $('#ajusteResumenConteo').text(`${grupos.length} artículo(s) · ${difUnidades} uds`);
+    $('#ajusteResumenCambios').html(_ajusteTablaResumenHtml(grupos, difUnidades, difNeto));
+}
+
+// Datos de una fila del modal de ajuste para los resúmenes. attr() y no
+// data(): jQuery convierte "12345" en número y "001" perdería los ceros.
+function _ajusteItemDeFila($tr, nc, monto) {
+    const cantOriginal = parseInt($tr.attr('data-cantidad-original'), 10) || 0;
+    return {
+        sku: $tr.attr('data-sku') || '-',
+        nombre: $tr.attr('data-nombre') || '-',
+        articulo: $tr.attr('data-articulo') || $tr.attr('data-nombre') || '-',
+        color: $tr.attr('data-color') || '',
+        talla: $tr.attr('data-talla') || '-',
+        original: cantOriginal,
+        nueva: cantOriginal - nc,
+        nc: nc,
+        monto: monto,
+    };
+}
+
+// Agrupa por artículo + color conservando el orden del documento. Cada grupo
+// suma sus unidades y su monto y lista las tallas devueltas.
+function _ajusteAgruparPorArticulo(items) {
+    const grupos = new Map();
+    items.forEach(it => {
+        const clave = `${it.articulo}\u0000${it.color}`;
+        if (!grupos.has(clave)) {
+            grupos.set(clave, { articulo: it.articulo, color: it.color, tallas: [], uds: 0, monto: 0 });
+        }
+        const g = grupos.get(clave);
+        g.tallas.push({ talla: it.talla, nc: it.nc, original: it.original });
+        g.uds += it.nc;
+        g.monto += it.monto || 0;
+    });
+    return Array.from(grupos.values());
+}
+
+function _ajusteTablaResumenHtml(grupos, totalUds, totalNeto) {
+    const filas = grupos.map(g => `
+        <tr>
+            <td>
+                <strong>${_escapeHtmlDte(g.articulo)}</strong>
+                ${g.color ? `<small class="d-block text-muted">${_escapeHtmlDte(g.color)}</small>` : ''}
+                <div class="mt-1">${g.tallas.map(t =>
+                    `<span class="ajuste-talla-chip" title="Original ${t.original} → queda ${t.original - t.nc}">${_escapeHtmlDte(t.talla)}: <strong>${t.nc}</strong></span>`
+                ).join('')}</div>
+            </td>
+            <td class="text-end text-danger fw-bold">${g.uds}</td>
+            <td class="text-end">${_ajusteFormatearPesos(g.monto)}</td>
+        </tr>`).join('');
+    return `
+        <table class="table table-sm align-middle mb-0 ajuste-resumen-tabla">
+            <thead class="sticky-top">
+                <tr><th>Artículo · tallas devueltas</th><th class="text-end">Uds</th><th class="text-end">Neto</th></tr>
+            </thead>
+            <tbody>${filas}</tbody>
+            <tfoot>
+                <tr>
+                    <th>Total (${grupos.length} artículo${grupos.length !== 1 ? 's' : ''})</th>
+                    <th class="text-end text-danger">${totalUds}</th>
+                    <th class="text-end">${_ajusteFormatearPesos(totalNeto)}</th>
+                </tr>
+            </tfoot>
+        </table>`;
 }
 
 function confirmarAjusteEmisor() {
@@ -9576,6 +9711,7 @@ function confirmarAjusteEmisor() {
     }
 
     const ajustes = [];
+    const itemsResumen = [];
     $('#ajusteProductosBody tr[data-dp-id]').each(function () {
         const $tr = $(this);
         const dpId = parseInt($tr.data('dp-id'), 10);
@@ -9597,6 +9733,7 @@ function confirmarAjusteEmisor() {
                 nombre: $tr.data('nombre') || '-',
                 talla: $tr.data('talla') || '-',
             });
+            itemsResumen.push(_ajusteItemDeFila($tr, devolver, devolver * (parseFloat($tr.attr('data-precio')) || 0)));
         }
     });
 
@@ -9608,32 +9745,13 @@ function confirmarAjusteEmisor() {
     const esPost = !!(window.ajusteDteActual && window.ajusteDteActual.es_post_recepcion);
     const totalDevolver = ajustes.reduce((s, a) => s + a.cantidad_nc, 0);
     const tituloConfirm = esPost ? '¿Emitir NC post-recepción?' : '¿Confirmar ajuste del DTE?';
+    // Mismo agrupado que el resumen del modal (y que el TXT de la NC): una
+    // fila por artículo con sus tallas, en vez de una por SKU.
+    const gruposConfirm = _ajusteAgruparPorArticulo(itemsResumen);
+    const netoConfirm = itemsResumen.reduce((s, it) => s + (it.monto || 0), 0);
     const resumenAjusteHtml = `
-        <div class="table-responsive mt-2">
-            <table class="table table-sm table-bordered align-middle mb-2">
-                <thead>
-                    <tr>
-                        <th>SKU</th>
-                        <th>Producto</th>
-                        <th class="text-center">Talla</th>
-                        <th class="text-end">Original</th>
-                        <th class="text-end">Nueva</th>
-                        <th class="text-end text-danger">NC/Ajuste</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${ajustes.map(a => `
-                        <tr>
-                            <td><code>${_escapeHtmlDte(a.sku)}</code></td>
-                            <td><small>${_escapeHtmlDte(a.nombre)}</small></td>
-                            <td class="text-center">${_escapeHtmlDte(a.talla)}</td>
-                            <td class="text-end">${a.cantidad_original}</td>
-                            <td class="text-end"><strong>${a.nueva_cantidad}</strong></td>
-                            <td class="text-end text-danger fw-bold">${a.cantidad_nc}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
+        <div class="table-responsive mt-2 text-start" style="max-height: 45vh; overflow-y: auto;">
+            ${_ajusteTablaResumenHtml(gruposConfirm, totalDevolver, netoConfirm)}
         </div>`;
     const htmlConfirm = esPost
         ? `<p><strong>Se emitirá NC por ${totalDevolver} unidad(es) devuelta(s)</strong>, vinculada al DTE original.</p>
@@ -9651,6 +9769,7 @@ function confirmarAjusteEmisor() {
         confirmButtonColor: esPost ? '#dc3545' : '#e69a00',
         confirmButtonText: esPost ? 'Sí, emitir NC' : 'Sí, ajustar',
         cancelButtonText: 'Cancelar',
+        width: '720px',
     }).then(result => {
         if (!result.isConfirmed) return;
 
@@ -10419,6 +10538,39 @@ $(document).ready(function () {
 
     // Input cantidad -> recalcular diferencial
     $(document).on('input', '#ajusteProductosBody .input-ajuste-cantidad', actualizarDiferencialAjuste);
+
+    // Teclado en "Devolver (NC)": ↓ / Enter bajan a la línea siguiente y ↑
+    // sube, SIN tocar la cantidad (antes el input era type=number y la flecha
+    // sumaba o restaba 1 a la línea en la que estabas). Tab ya salta de
+    // cantidad en cantidad porque el botón de la fila no entra en el orden.
+    $(document).on('keydown', '#ajusteProductosBody .input-ajuste-cantidad', function (e) {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter') {
+            e.preventDefault();
+            _ajusteMoverFoco(this, e.key === 'ArrowUp' ? -1 : 1);
+        }
+    });
+    // Al entrar a la celda se selecciona el valor: escribir reemplaza el 0.
+    $(document).on('focus', '#ajusteProductosBody .input-ajuste-cantidad', function () {
+        const el = this;
+        setTimeout(() => { try { el.select(); } catch (err) { /* sin selección */ } }, 0);
+    });
+
+    // Filtro de líneas por SKU / artículo / color / talla.
+    $(document).on('input', '#ajusteBuscarLinea', function () {
+        const q = String(this.value || '').trim().toLowerCase();
+        $('#ajusteProductosBody tr[data-dp-id]').each(function () {
+            const d = this.dataset;
+            const texto = `${d.sku} ${d.nombre} ${d.articulo} ${d.color} ${d.talla}`.toLowerCase();
+            this.classList.toggle('d-none', !!q && !texto.includes(q));
+        });
+    });
+    // Enter en el filtro: salta a la primera cantidad visible.
+    $(document).on('keydown', '#ajusteBuscarLinea', function (e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const primero = $('#ajusteProductosBody tr[data-dp-id]:not(.d-none) .input-ajuste-cantidad').get(0);
+        if (primero) primero.focus();
+    });
 
     // Botón X -> devolver el máximo permitido (respeta stock destino)
     $(document).on('click', '#ajusteProductosBody .btn-poner-cero', function () {

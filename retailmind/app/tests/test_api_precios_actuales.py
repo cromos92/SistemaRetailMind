@@ -344,3 +344,14 @@ class PreciosActualesModeloTest(TestCase):
         data = self._por_sku()
         self.assertIsNone(data['6660001']['ultima_venta_articulo'])
         self.assertEqual(data['6660001']['dias_sin_venta_articulo'], VENTANA_ROTACION_DIAS)
+
+    def test_codigo_debil_no_agrupa(self):
+        # Dos fichas con código '0' (comodín) no son el mismo modelo.
+        a, _ = crear_producto_con_talla(self.suc1, articulo='0', sku=6660020, stock=1)
+        b, _ = crear_producto_con_talla(self.suc2, articulo='0', sku=6660021, stock=1)
+        self._fecha(a, 1500)
+        self._fecha(b, 3)
+        data = self._por_sku()
+        self.assertEqual(data['6660021']['fecha_creacion_articulo'], self._hace(3))
+        self.assertEqual(data['6660021']['fecha_creacion_articulo_holding'], self._hace(3))
+

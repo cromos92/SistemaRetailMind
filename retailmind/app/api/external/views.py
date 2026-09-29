@@ -962,7 +962,7 @@ class PreciosActualesView(APIView):
         from datetime import timedelta
         from django.db.models import Max
         from app.models import Movimientos_Producto
-        from app.utils_producto_match import normalizar_articulo
+        from app.utils_producto_match import clave_modelo
 
         rut = request.query_params.get('rut_empresa', '').strip()
         if not rut:
@@ -1039,8 +1039,11 @@ class PreciosActualesView(APIView):
                     'fecha_creacion', 'sucursal__empresa__rut')
             .iterator(chunk_size=5000)
         ):
-            clave = (normalizar_articulo(p['articulo']), p['atributo1_id'],
-                     p['atributo2_id'], p['atributo3_id'])
+            clave = clave_modelo(p['articulo'], p['atributo1_id'],
+                                 p['atributo2_id'], p['atributo3_id'])
+            if clave is None:
+                # Código débil ('0', '10'): la ficha es su propio modelo.
+                clave = ('__ficha__', p['id'])
             es_de_la_empresa = p['sucursal__empresa__rut'] == rut
             if es_de_la_empresa:
                 clave_por_producto[p['id']] = clave

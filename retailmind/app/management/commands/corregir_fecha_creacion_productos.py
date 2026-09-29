@@ -47,7 +47,7 @@ from django.utils import timezone
 
 from app.constants_kardex import REF_SALDO_INICIAL_SINTETICO
 from app.models import Movimientos_Producto, Producto
-from app.utils_producto_match import normalizar_articulo
+from app.utils_producto_match import clave_modelo
 
 logger = logging.getLogger('app')
 
@@ -159,8 +159,10 @@ class Command(BaseCommand):
                         'atributo3_id', 'fecha_creacion')
                 .iterator(chunk_size=5000)
             ):
-                clave = (normalizar_articulo(p['articulo']), p['atributo1_id'],
-                         p['atributo2_id'], p['atributo3_id'])
+                clave = clave_modelo(p['articulo'], p['atributo1_id'],
+                                     p['atributo2_id'], p['atributo3_id'])
+                if clave is None:
+                    continue   # código débil: sin identidad de modelo, no hereda ni cede
                 clave_por_producto[p['id']] = clave
                 candidatas = []
                 if p['fecha_creacion']:

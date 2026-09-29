@@ -11,6 +11,7 @@ en el código (bug reportado: "creó un código nuevo agregándole una variante"
 son FKs (se comparan por id). Estas funciones son la fuente única de verdad
 para "¿este producto ya existe?" en creación manual y por recepción.
 """
+import re
 import unicodedata
 
 from django.db.models import F
@@ -48,6 +49,30 @@ def normalizar_articulo(valor):
                 if unicodedata.category(c) != 'Mn')
     s = ' '.join(s.split())
     return s
+
+
+# Códigos "débiles": menos de MIN_LARGO_CODIGO_MODELO caracteres alfanuméricos
+# ('0', '10', 'A6', '-'). Son comodines para productos sin código real (663
+# fichas, 0,5 % del catálogo): agrupar por ellos junta productos que no tienen
+# nada que ver. Para la identidad de MODELO esas fichas no se agrupan con nadie.
+_NO_ALFANUM = re.compile(r'[^A-Z0-9]')
+MIN_LARGO_CODIGO_MODELO = 3
+
+
+def clave_modelo(articulo, atributo1_id, atributo2_id, atributo3_id):
+    """Identidad de MODELO entre sucursales y empresas del holding: artículo
+    normalizado + marca + color + género. SIN sucursal (una ficha por tienda es
+    el mismo modelo) y SIN categoría (la recategorización 2026 la cambió).
+
+    Es la identidad que usan la fecha de alta y la rotación por modelo (API
+    precios-actuales, señal de herencia de fecha_creacion y el comando
+    corregir_fecha_creacion_productos). Devuelve None si el código es débil:
+    la ficha vale por sí sola y no hereda ni cede fecha.
+    """
+    codigo = normalizar_articulo(articulo)
+    if len(_NO_ALFANUM.sub('', codigo)) < MIN_LARGO_CODIGO_MODELO:
+        return None
+    return (codigo, atributo1_id, atributo2_id, atributo3_id)
 
 
 def fichas_por_identidad(articulo, atributo1_id, atributo2_id, atributo3_id,
