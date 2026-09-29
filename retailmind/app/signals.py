@@ -4,7 +4,7 @@ Se encargan de crear notificaciones automáticamente cuando ocurren ciertos even
 """
 import logging
 
-from django.db.models import F
+from django.db.models import F, Q
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.utils import timezone
@@ -12,7 +12,7 @@ from django.utils import timezone
 from .models import (
     Dte, NotificacionDTE, Ticket, Ticket_Productos, TicketDetallePago,
     Movimientos_Producto, Compras_Producto_Talla,
-    ArqueoCaja, CambioDevolucion, DepositoBancario,
+    ArqueoCaja, CambioDevolucion, DepositoBancario, Producto,
 )
 from .models.predicciones import PendienteReevaluacion, StockInicialTemporada
 from .cache_utils import invalidate_ventas_cache
@@ -249,3 +249,59 @@ def _invalidate_on_deposito_change(sender, instance, **kwargs):
                 "Error recalculando cache depositos para arqueo %s",
                 getattr(arqueo, 'pk', None),
             )
+
+
+@receiver(post_save, sender=Producto)
+def heredar_fecha_creacion_del_modelo(sender, instance, created, raw=False, **kwargs):
+    """Una ficha NUEVA de un modelo que ya existe hereda la fecha de alta más
+    antigua de sus fichas hermanas (misma identidad: artículo normalizado +
+    marca + color + género, en cualquier sucursal o empresa del holding).
+
+    Por qué: Producto es una ficha por (modelo × sucursal) con auto_now_add.
+    Cada traspaso a una sucursal donde el modelo no existía, cada recepción y
+    cada consolidación (consolidar_cueca) crean una ficha fechada HOY, y la API
+    de precios (fecha_creacion = MIN entre las fichas que contienen el SKU) hace
+    ver nuevo a stock viejo → AllConnected le aplica el techo de descuento de un
+    producto 2026. Auditoría 09/2026: ~240 SKU con stock rejuvenecidos así.
+
+    Solo BAJA la fecha (nunca sube) y solo en la creación. Escribe con update()
+    para no volver a disparar la señal. Un fallo acá no debe romper el alta.
+    """
+    if not created or raw or not instance.fecha_creacion:
+        return
+    try:
+        from .utils_producto_match import normalizar_articulo
+        articulo = (instance.articulo or '').strip()
+        clave = normalizar_articulo(articulo)
+        if not clave:
+            return
+        # Atributos por id en la BD; el artículo se compara normalizado en
+        # Python sobre el conjunto chico que devuelve el iexact (misma idea que
+        # utils_producto_match.fichas_por_identidad).
+        hermanas = (
+            Producto.objects
+            .filter(
+                atributo1_id=instance.atributo1_id,
+                atributo2_id=instance.atributo2_id,
+                atributo3_id=instance.atributo3_id,
+                fecha_creacion__isnull=False,
+                fecha_creacion__lt=instance.fecha_creacion,
+            )
+            .filter(Q(articulo__iexact=articulo) | Q(articulo__iexact=clave))
+            .exclude(pk=instance.pk)
+            .values_list('articulo', 'fecha_creacion')
+        )
+        fechas = [f for art, f in hermanas if normalizar_articulo(art) == clave]
+        if not fechas:
+            return
+        mas_antigua = min(fechas)
+        Producto.objects.filter(pk=instance.pk).update(fecha_creacion=mas_antigua)
+        instance.fecha_creacion = mas_antigua
+        logger.info(
+            'Producto %s (%s): fecha_creacion heredada del modelo -> %s',
+            instance.pk, articulo, mas_antigua.date(),
+        )
+    except Exception:
+        logger.exception(
+            'No se pudo heredar fecha_creacion del modelo para Producto %s', instance.pk
+        )

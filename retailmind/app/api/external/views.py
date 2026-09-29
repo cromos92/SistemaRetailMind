@@ -846,6 +846,12 @@ from app.constants_kardex import REF_SALDO_INICIAL_SINTETICO  # noqa: E402
 # "llegada de mercadería nueva" y la antigüedad FIFO lo excluye a propósito.
 CONCEPTOS_INGRESO_MERCADERIA = CONCEPTOS_RECEPCION_STOCK + ('TRASPASO_SUCURSAL',)
 
+# Ventana (días) para la última venta por MODELO. Pasado ese lapso el tramo de
+# descuento de AllConnected ya es el máximo (>365 días), así que el día exacto
+# no cambia nada y acotar por fecha deja la consulta sobre el índice por fecha
+# en vez de barrer todas las ventas migradas de la empresa.
+VENTANA_ROTACION_DIAS = 400
+
 
 class PreciosActualesView(APIView):
     """
@@ -902,6 +908,27 @@ class PreciosActualesView(APIView):
                               fiable (las ventas migradas conservan fecha real).
                               AllConnected debe usar ESTE campo. null si no aplica.
 
+    Campos por MODELO (09/2026). Identidad de modelo = artículo normalizado +
+    marca + color + género (sin sucursal ni categoría):
+
+    `fecha_creacion_articulo`         = MIN(fecha_creacion) entre TODAS las fichas
+                              del modelo en la empresa, tengan o no este SKU.
+                              `fecha_creacion` solo mira las fichas que contienen
+                              el SKU y pierde la gemela más vieja (auditoría
+                              09/2026: 4,4-4,7 % de los SKU con stock parecían
+                              más nuevos de lo que son).
+    `fecha_creacion_articulo_holding` = idem entre todas las empresas (la bodega
+                              EDEL suele tener la ficha más antigua).
+    `ultima_venta_articulo`  = MAX(fecha) de VENTA_* de cualquier talla del modelo
+                              en la empresa, CON o SIN stock, dentro de los
+                              últimos VENTANA_ROTACION_DIAS. null si no vendió en
+                              ese lapso.
+    `dias_sin_venta_articulo`= days(today - ultima_venta_articulo). Sin venta en
+                              la ventana: days(today - fecha_creacion_articulo)
+                              acotado a VENTANA_ROTACION_DIAS (= "al menos esa
+                              cantidad"). Permite medir la rotación por MODELO:
+                              `dias_sin_venta` ignora las tallas agotadas.
+
     Nota de consolidación: todo se agrupa por SKU (pooled entre sucursales),
     coherente con un SKU = una fila de ecommerce.
 
@@ -932,8 +959,10 @@ class PreciosActualesView(APIView):
     permission_classes = [ApiKeyPermission]
 
     def get(self, request):
+        from datetime import timedelta
         from django.db.models import Max
         from app.models import Movimientos_Producto
+        from app.utils_producto_match import normalizar_articulo
 
         rut = request.query_params.get('rut_empresa', '').strip()
         if not rut:
@@ -952,7 +981,7 @@ class PreciosActualesView(APIView):
             Producto_Talla.objects
             .filter(producto__sucursal__empresa__rut=rut)
             .values(
-                'sku', 'stock',
+                'sku', 'stock', 'producto_id',
                 'producto__articulo', 'producto__costo',
                 'producto__precioventa', 'producto__precioSugerido',
                 'producto__fecha_creacion',
@@ -979,17 +1008,52 @@ class PreciosActualesView(APIView):
                     'precio_sugerido': precio_sugerido,
                     'stock_actual': stock,
                     '_fecha_creacion': fecha_creacion,
+                    '_producto_ids': {row['producto_id']},
                 }
             else:
                 base['precio_venta'] = max(base['precio_venta'], precio_venta)
                 base['precio_costo'] = max(base['precio_costo'], costo)
                 base['precio_sugerido'] = max(base['precio_sugerido'], precio_sugerido)
                 base['stock_actual'] += stock
+                base['_producto_ids'].add(row['producto_id'])
                 # fecha_creacion: la MÁS ANTIGUA entre sucursales (alta original del SKU)
                 if fecha_creacion and (
                     not base['_fecha_creacion'] or fecha_creacion < base['_fecha_creacion']
                 ):
                     base['_fecha_creacion'] = fecha_creacion
+
+        # ── 1b. Fecha de alta del MODELO (todas sus fichas, no solo las del SKU) ──
+        # `_fecha_creacion` de arriba mira solo las fichas que contienen ese SKU.
+        # Si el modelo tiene una ficha gemela más vieja con otros SKU (otra
+        # sucursal, o la bodega EDEL, que es otra empresa del holding), esa fecha
+        # se pierde y el modelo parece nuevo. Identidad de modelo = artículo
+        # normalizado + marca + color + género; sin sucursal y sin categoría (la
+        # recategorización 2026 la cambió). Una pasada liviana sobre Producto de
+        # todo el holding (values, sin objetos) alcanza: ~140k filas.
+        fecha_modelo_empresa: dict = {}   # clave -> MIN fecha_creacion (este rut)
+        fecha_modelo_holding: dict = {}   # clave -> MIN fecha_creacion (todo el holding)
+        clave_por_producto: dict = {}     # producto_id (de este rut) -> clave
+        for p in (
+            Producto.objects
+            .values('id', 'articulo', 'atributo1_id', 'atributo2_id', 'atributo3_id',
+                    'fecha_creacion', 'sucursal__empresa__rut')
+            .iterator(chunk_size=5000)
+        ):
+            clave = (normalizar_articulo(p['articulo']), p['atributo1_id'],
+                     p['atributo2_id'], p['atributo3_id'])
+            es_de_la_empresa = p['sucursal__empresa__rut'] == rut
+            if es_de_la_empresa:
+                clave_por_producto[p['id']] = clave
+            fc = p['fecha_creacion']
+            if not fc:
+                continue
+            prev = fecha_modelo_holding.get(clave)
+            if prev is None or fc < prev:
+                fecha_modelo_holding[clave] = fc
+            if es_de_la_empresa:
+                prev = fecha_modelo_empresa.get(clave)
+                if prev is None or fc < prev:
+                    fecha_modelo_empresa[clave] = fc
 
         # Solo los SKU con stock > 0 son relevantes para antigüedad/descuento.
         skus_con_stock = [
@@ -1065,11 +1129,36 @@ class PreciosActualesView(APIView):
             ):
                 ultima_venta_por_sku[str(v['ProductoTalla__sku'])] = v['ultima']
 
-        # ── 4. Armar respuesta con la antigüedad FIFO del stock en mano ──
+        # ── 3b. Última venta por MODELO, con o sin stock (rotación por modelo) ──
+        # El bloque 3 se acota a SKU con stock: una talla agotada que vendió ayer
+        # no cuenta y el modelo parece estancado (AllConnected liquidaba de más).
+        # Se agrega por ficha en la BD y por identidad de modelo en Python.
+        # Acotado a VENTANA_ROTACION_DIAS por rendimiento (ver la constante).
         hoy = timezone.localdate()
+        ultima_venta_modelo: dict = {}
+        for r in (
+            Movimientos_Producto.objects
+            .filter(
+                concepto__startswith='VENTA_',
+                fecha__gte=hoy - timedelta(days=VENTANA_ROTACION_DIAS),
+                ProductoTalla__producto__sucursal__empresa__rut=rut,
+            )
+            .values('ProductoTalla__producto_id')
+            .annotate(ultima=Max('fecha'))
+        ):
+            clave = clave_por_producto.get(r['ProductoTalla__producto_id'])
+            if clave is None or not r['ultima']:
+                continue
+            prev = ultima_venta_modelo.get(clave)
+            if prev is None or r['ultima'] > prev:
+                ultima_venta_modelo[clave] = r['ultima']
+
+        # ── 4. Armar respuesta con la antigüedad FIFO del stock en mano ──
         data = []
         for sku, info in consolidado.items():
             fecha_creacion = info.pop('_fecha_creacion', None)
+            claves_modelo = {clave_por_producto.get(pid) for pid in info.pop('_producto_ids', ())}
+            claves_modelo.discard(None)
             stock = info['stock_actual']
             ingresos = ingresos_por_sku.get(sku, [])  # ya ordenado desc por fecha
 
@@ -1137,6 +1226,46 @@ class PreciosActualesView(APIView):
             info['dias_sin_venta'] = (
                 (hoy - ref_estancamiento).days if ref_estancamiento else None
             )
+
+            # ── Campos por MODELO ──
+            # La fecha del modelo nunca es posterior a la de la ficha del SKU, y
+            # la del holding nunca posterior a la de la empresa.
+            f_articulo = min(
+                (fecha_modelo_empresa[c] for c in claves_modelo if c in fecha_modelo_empresa),
+                default=None,
+            )
+            if fecha_creacion and (f_articulo is None or fecha_creacion < f_articulo):
+                f_articulo = fecha_creacion
+            f_holding = min(
+                (fecha_modelo_holding[c] for c in claves_modelo if c in fecha_modelo_holding),
+                default=None,
+            )
+            if f_articulo and (f_holding is None or f_articulo < f_holding):
+                f_holding = f_articulo
+            f_articulo_local = timezone.localtime(f_articulo).date() if f_articulo else None
+            f_holding_local = timezone.localtime(f_holding).date() if f_holding else None
+            info['fecha_creacion_articulo'] = (
+                f_articulo_local.strftime('%Y-%m-%d') if f_articulo_local else None
+            )
+            info['fecha_creacion_articulo_holding'] = (
+                f_holding_local.strftime('%Y-%m-%d') if f_holding_local else None
+            )
+            venta_modelo = max(
+                (ultima_venta_modelo[c] for c in claves_modelo if c in ultima_venta_modelo),
+                default=None,
+            )
+            info['ultima_venta_articulo'] = (
+                venta_modelo.strftime('%Y-%m-%d') if venta_modelo else None
+            )
+            if venta_modelo:
+                info['dias_sin_venta_articulo'] = (hoy - venta_modelo).days
+            elif f_articulo_local:
+                # Sin venta en la ventana: "al menos" min(edad del modelo, ventana).
+                info['dias_sin_venta_articulo'] = min(
+                    (hoy - f_articulo_local).days, VENTANA_ROTACION_DIAS
+                )
+            else:
+                info['dias_sin_venta_articulo'] = None
             data.append(info)
 
         logger.info(f"[external/precios-actuales] rut={rut} → {len(data)} SKUs (consolidados)")

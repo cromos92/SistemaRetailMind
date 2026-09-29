@@ -248,3 +248,99 @@ class PreciosActualesFechasTest(TestCase):
     def test_sin_api_key_rechaza(self):
         resp = self.client.get(self.url, {'rut_empresa': self.empresa.rut})
         self.assertIn(resp.status_code, (401, 403))
+
+
+@override_settings(
+    RETAILMIND_API_KEY=API_KEY,
+    STATICFILES_STORAGE=STATICFILES_STORAGE_TEST,
+)
+class PreciosActualesModeloTest(TestCase):
+    """Campos por MODELO (09/2026): fecha_creacion_articulo[_holding],
+    ultima_venta_articulo y dias_sin_venta_articulo.
+
+    Las fechas se fijan con update() DESPUÉS de crear (auto_now_add ignora el
+    valor en create y la señal de herencia iguala fechas al crear), así que acá
+    se prueba la lógica de la API, no la de la señal.
+    """
+
+    def setUp(self):
+        self.empresa = crear_empresa(rut='76.111.222-3')
+        self.suc1 = crear_sucursal(empresa=self.empresa, alias='SUC-1')
+        self.suc2 = crear_sucursal(empresa=self.empresa, alias='SUC-2')
+        # Misma identidad (artículo, atributos None) en dos sucursales, SKU distintos.
+        self.prod1, self.pt1 = crear_producto_con_talla(
+            self.suc1, articulo='MOD-1', sku=6660001, stock=10)
+        self.prod2, self.pt2 = crear_producto_con_talla(
+            self.suc2, articulo='mod-1', sku=6660002, stock=5)
+        # Otro modelo, para comprobar que no se mezcla.
+        self.prod3, self.pt3 = crear_producto_con_talla(
+            self.suc1, articulo='OTRO', sku=6660003, stock=3)
+        self._fecha(self.prod1, 900)
+        self._fecha(self.prod2, 30)
+        self._fecha(self.prod3, 10)
+        self.url = reverse('external-precios-actuales')
+        self.auth = {'HTTP_AUTHORIZATION': f'Bearer {API_KEY}'}
+
+    def _fecha(self, producto, dias_atras):
+        from app.models import Producto
+        Producto.objects.filter(pk=producto.pk).update(
+            fecha_creacion=timezone.now() - timedelta(days=dias_atras))
+
+    def _por_sku(self, rut=None):
+        resp = self.client.get(self.url, {'rut_empresa': rut or self.empresa.rut}, **self.auth)
+        self.assertEqual(resp.status_code, 200, resp.content)
+        return {row['codigo_sku']: row for row in resp.json()['data']}
+
+    def _hace(self, dias):
+        return (timezone.localdate() - timedelta(days=dias)).strftime('%Y-%m-%d')
+
+    def test_fecha_articulo_es_la_minima_entre_fichas_gemelas(self):
+        data = self._por_sku()
+        # Campo viejo: cada SKU conserva la fecha de SU ficha.
+        self.assertEqual(data['6660001']['fecha_creacion'], self._hace(900))
+        self.assertEqual(data['6660002']['fecha_creacion'], self._hace(30))
+        # Campo nuevo: la gemela más vieja manda para las dos.
+        self.assertEqual(data['6660001']['fecha_creacion_articulo'], self._hace(900))
+        self.assertEqual(data['6660002']['fecha_creacion_articulo'], self._hace(900))
+        # Otro modelo no se contamina.
+        self.assertEqual(data['6660003']['fecha_creacion_articulo'], self._hace(10))
+
+    def test_holding_mira_otras_empresas_y_empresa_no(self):
+        otra = crear_empresa(rut='76.999.888-7', nombre='Bodega')
+        suc_otra = crear_sucursal(empresa=otra, alias='EDEL')
+        prod_edel, _pt = crear_producto_con_talla(suc_otra, articulo='MOD-1', sku=6660009, stock=1)
+        self._fecha(prod_edel, 2000)
+
+        data = self._por_sku()
+        self.assertEqual(data['6660002']['fecha_creacion_articulo'], self._hace(900))
+        self.assertEqual(data['6660002']['fecha_creacion_articulo_holding'], self._hace(2000))
+        # La otra empresa no aparece en la respuesta de esta.
+        self.assertNotIn('6660009', data)
+
+    def test_venta_de_talla_agotada_cuenta_para_el_modelo(self):
+        from app.models import Producto_Talla
+        agotada = Producto_Talla.objects.create(producto=self.prod1, sku=6660004, stock=0, talla='41')
+        Movimientos_Producto.objects.create(
+            ProductoTalla=agotada, tipo_movimiento='EGRESO', concepto='VENTA_PUBLICO',
+            cantidad=-1, fecha=timezone.localdate() - timedelta(days=5))
+
+        data = self._por_sku()
+        # Campo viejo: el SKU con stock nunca vendió.
+        self.assertIsNone(data['6660001']['ultima_fecha_venta'])
+        self.assertEqual(data['6660001']['dias_sin_venta'], 900)
+        # Campo nuevo: la venta de la talla agotada rota al modelo entero.
+        self.assertEqual(data['6660001']['ultima_venta_articulo'], self._hace(5))
+        self.assertEqual(data['6660001']['dias_sin_venta_articulo'], 5)
+        self.assertEqual(data['6660002']['dias_sin_venta_articulo'], 5)
+        # El otro modelo sigue sin venta: "al menos" min(edad, ventana).
+        self.assertIsNone(data['6660003']['ultima_venta_articulo'])
+        self.assertEqual(data['6660003']['dias_sin_venta_articulo'], 10)
+
+    def test_sin_venta_en_la_ventana_se_acota_a_la_ventana(self):
+        from app.api.external.views import VENTANA_ROTACION_DIAS
+        Movimientos_Producto.objects.create(
+            ProductoTalla=self.pt1, tipo_movimiento='EGRESO', concepto='VENTA_PUBLICO',
+            cantidad=-1, fecha=timezone.localdate() - timedelta(days=VENTANA_ROTACION_DIAS + 50))
+        data = self._por_sku()
+        self.assertIsNone(data['6660001']['ultima_venta_articulo'])
+        self.assertEqual(data['6660001']['dias_sin_venta_articulo'], VENTANA_ROTACION_DIAS)
