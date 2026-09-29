@@ -568,9 +568,12 @@ def _documentos_en_transito(request, dias, sucursal_origen_id=None, sucursal_des
 
     origen_filtro = [sucursal_origen_id] if sucursal_origen_id else suc_ids
 
+    # Además del estado del DTE se filtra el estado de la LÍNEA: un DTE
+    # EMITIDO puede tener una salida CANCELADO por NC/ajuste pre-recepción
+    # (esas unidades ya volvieron al origen) y se listaba como "no recibido".
     dte_ids = list(
         Movimientos_Producto.objects
-        .filter(concepto='TRASPASO_SALIDA', dte__isnull=False,
+        .filter(concepto='TRASPASO_SALIDA', dte__isnull=False, estado='COMPLETADO',
                 sucursal_origen_id__in=origen_filtro, fecha__gte=desde)
         .exclude(dte__descartado=True)
         .exclude(dte__estado_dte__in=ESTADOS_DTE_EXCLUIDOS)
@@ -580,7 +583,7 @@ def _documentos_en_transito(request, dias, sucursal_origen_id=None, sucursal_des
         return [], hoy, False
 
     movs_salida = Movimientos_Producto.objects.filter(
-        concepto='TRASPASO_SALIDA', dte_id__in=dte_ids,
+        concepto='TRASPASO_SALIDA', dte_id__in=dte_ids, estado='COMPLETADO',
         sucursal_origen_id__in=origen_filtro,
     )
 

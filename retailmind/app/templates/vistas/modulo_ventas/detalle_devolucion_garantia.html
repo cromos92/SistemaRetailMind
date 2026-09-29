@@ -61,9 +61,13 @@
             <table class="table table-sm">
                 <thead><tr><th>Producto</th><th>Modo</th><th>Cantidad</th><th>Precio unit.</th><th>Subtotal</th></tr></thead>
                 <tbody>
-                    {% for detalle in devolucion.detalles.all %}
+                    {% for detalle in detalles %}
                     <tr>
-                        <td>{{ detalle.dte_producto.descripcion }}</td>
+                        <td>
+                            {{ detalle.dte_producto.descripcion }}
+                            {# Marcado por el solicitante: no vuelve a stock al aprobar #}
+                            {% if detalle.no_apto %}<span class="badge bg-danger ms-1" title="Producto fallado: no vuelve al inventario">No apto para la venta</span>{% endif %}
+                        </td>
                         <td>{{ detalle.get_modo_display }}</td>
                         {% if detalle.modo == 'MONTO' %}
                         <td class="text-muted">—</td>
@@ -80,9 +84,35 @@
             </table>
         </div>
 
+        {% if inventario %}
+        {# Qué pasó con el producto al aprobar: leído del kardex ligado a la NC #}
+        <div class="detalle-card">
+            <h6><i class="ri-archive-line me-1"></i> Inventario</h6>
+            {% if not inventario.reingresos and not inventario.no_aptas %}
+            <p class="mb-0 text-muted">Sin movimiento de inventario (devolución por monto o NC anterior a la política de reingreso).</p>
+            {% endif %}
+            {% for r in inventario.reingresos %}
+            <p class="mb-1">
+                <span class="badge bg-success">Reingresó</span>
+                <strong>{{ r.cantidad }} u.</strong> SKU {{ r.sku }}{% if r.talla %} (talla {{ r.talla }}){% endif %}
+                {% if r.sucursal %} → {{ r.sucursal }}{% endif %}
+                <span class="text-muted">— stock, lote FIFO y kardex ligados a la NC</span>
+                {% if r.cambio %}<br><small class="text-muted">{{ r.observaciones }}</small>{% endif %}
+            </p>
+            {% endfor %}
+            {% for r in inventario.no_aptas %}
+            <p class="mb-1">
+                <span class="badge bg-danger">No apto</span>
+                <strong>{{ r.cantidad }} u.</strong> SKU {{ r.sku }}{% if r.talla %} (talla {{ r.talla }}){% endif %}
+                <span class="text-muted">— no entró a stock (kardex documental DEVOLUCION_NO_APTA)</span>
+            </p>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         <div class="detalle-card">
             <h6><i class="ri-price-tag-3-line me-1"></i> Motivo y estado</h6>
-            <p class="mb-1"><strong>Motivo:</strong> {{ devolucion.motivo }}</p>
+            <p class="mb-1"><strong>Motivo:</strong> {{ motivo }}</p>
             <p class="mb-1"><strong>Estado:</strong> {{ devolucion.get_estado_display }}</p>
             <p class="mb-1"><strong>Solicitado por:</strong> {{ devolucion.solicitado_por.username|default:"—" }} <span class="text-muted">({{ devolucion.created_at|date:"d/m/Y H:i" }})</span></p>
             {% if devolucion.metodo_solicitado %}

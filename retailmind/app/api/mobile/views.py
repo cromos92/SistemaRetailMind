@@ -60,7 +60,12 @@ from app.api.desktop.serializers import (
 )
 from app.utils_producto_match import normalizar_articulo
 from app.utils_tallas import clave_orden_talla
-from app.views import registrar_movimiento_producto
+from app.views import (
+    CONCEPTOS_AJUSTE_RAPIDO_EGRESO,
+    CONCEPTOS_AJUSTE_RAPIDO_INGRESO,
+    CONCEPTOS_AJUSTE_RAPIDO_LEGACY,
+    registrar_movimiento_producto,
+)
 
 from .serializers import (
     ActualizarProductoSerializer,
@@ -241,28 +246,18 @@ class AjusteStockRapidoView(APIView):
         except (TypeError, ValueError):
             cantidad = 0
 
-        conceptos_permitidos = [
-            "INGRESO_INICIAL",
-            "DEVOLUCION_CLIENTE",
-            "DEVOLUCION_PROVEEDOR",
-            "REGULARIZACION_TRASPASO",
-            "AJUSTE_POSITIVO",
-            "AJUSTE_NEGATIVO",
-            "PERDIDA_ROBO",
-            "PERDIDA_DETERIORO",
-            "DONACION_RECIBIDA",
-            "DONACION_ENTREGADA",
-            "CAMBIO_PRODUCTO_ENTRADA",
-            "CAMBIO_PRODUCTO_SALIDA",
-        ]
-        conceptos_egreso = {
-            "AJUSTE_NEGATIVO",
-            "PERDIDA_ROBO",
-            "PERDIDA_DETERIORO",
-            "DONACION_ENTREGADA",
-            "DEVOLUCION_PROVEEDOR",
-            "CAMBIO_PRODUCTO_SALIDA",
-        }
+        # Misma lista que la página web (auditoría tomas 29-09, H10: sin
+        # INGRESO_INICIAL ni DEVOLUCION_CLIENTE). Una app sin actualizar que
+        # los siga mandando no se rechaza: se reclasifican a AJUSTE_POSITIVO
+        # dejando constancia en observaciones.
+        conceptos_permitidos = CONCEPTOS_AJUSTE_RAPIDO_INGRESO + CONCEPTOS_AJUSTE_RAPIDO_EGRESO
+        conceptos_egreso = set(CONCEPTOS_AJUSTE_RAPIDO_EGRESO)
+        if concepto in CONCEPTOS_AJUSTE_RAPIDO_LEGACY:
+            observaciones = (
+                f"{observaciones} [concepto {concepto} reclasificado a "
+                f"{CONCEPTOS_AJUSTE_RAPIDO_LEGACY[concepto]}]"
+            ).strip()
+            concepto = CONCEPTOS_AJUSTE_RAPIDO_LEGACY[concepto]
 
         if not sku_raw:
             return Response({"success": False, "error": "Debe ingresar un SKU"}, status=status.HTTP_400_BAD_REQUEST)
@@ -292,62 +287,67 @@ class AjusteStockRapidoView(APIView):
             f"AJUSTE_STOCK_RAPIDO:{request_id}" if request_id else "AJUSTE_STOCK_RAPIDO"
         )
 
-        # Idempotencia: si el mismo request_id ya se registró (reintento tras
-        # timeout de red), devolver el movimiento existente sin duplicar.
-        if request_id:
-            existente = (
-                Movimientos_Producto.objects.filter(referencia_externa=referencia)
-                .select_related("ProductoTalla", "ProductoTalla__producto")
-                .first()
-            )
-            if existente:
-                pt = existente.ProductoTalla
-                return Response(
-                    {
-                        "success": True,
-                        "message": "Ajuste ya registrado (reintento ignorado)",
-                        "idempotente": True,
-                        "movimiento_id": existente.id,
-                        "sku": pt.sku if pt else sku,
-                        "producto": pt.producto.articulo if pt else "",
-                        "nuevo_stock": pt.stock_sucursal(sucursal.id) if pt else None,
-                    },
-                    status=status.HTTP_200_OK,
-                )
-
-        producto_talla = (
-            Producto_Talla.objects.select_related("producto", "producto__sucursal")
-            .filter(sku=sku, producto__sucursal_id=sucursal.id)
-            .first()
-        )
-        if not producto_talla:
-            return Response(
-                {"success": False, "error": f"No se encontró SKU {sku} en la sucursal actual"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
         es_egreso = concepto in conceptos_egreso
         cantidad_mov = -cantidad if es_egreso else cantidad
+        responsable = request.user.get_full_name() or request.user.username
 
-        if es_egreso:
-            stock_disponible = producto_talla.stock_sucursal(sucursal.id)
-            if stock_disponible < cantidad:
+        # Una sola transacción (H9): la verificación de idempotencia, el lock de
+        # la talla, la validación de stock y la escritura (stock F() + lote +
+        # kardex vía inventario_service) van juntas.
+        with transaction.atomic():
+            # Idempotencia: si el mismo request_id ya se registró (reintento tras
+            # timeout de red), devolver el movimiento existente sin duplicar.
+            if request_id:
+                existente = (
+                    Movimientos_Producto.objects.filter(referencia_externa=referencia)
+                    .select_related("ProductoTalla", "ProductoTalla__producto")
+                    .first()
+                )
+                if existente:
+                    pt = existente.ProductoTalla
+                    return Response(
+                        {
+                            "success": True,
+                            "message": "Ajuste ya registrado (reintento ignorado)",
+                            "idempotente": True,
+                            "movimiento_id": existente.id,
+                            "sku": pt.sku if pt else sku,
+                            "producto": pt.producto.articulo if pt else "",
+                            "nuevo_stock": pt.stock_sucursal(sucursal.id) if pt else None,
+                        },
+                        status=status.HTTP_200_OK,
+                    )
+
+            producto_talla = (
+                Producto_Talla.objects.select_for_update()
+                .select_related("producto", "producto__sucursal")
+                .filter(sku=sku, producto__sucursal_id=sucursal.id)
+                .first()
+            )
+            if not producto_talla:
                 return Response(
-                    {"success": False, "error": f"Stock insuficiente. Disponible: {stock_disponible}"},
-                    status=status.HTTP_400_BAD_REQUEST,
+                    {"success": False, "error": f"No se encontró SKU {sku} en la sucursal actual"},
+                    status=status.HTTP_404_NOT_FOUND,
                 )
 
-        responsable = request.user.get_full_name() or request.user.username
-        movimiento = registrar_movimiento_producto(
-            producto_talla=producto_talla,
-            concepto=concepto,
-            cantidad=cantidad_mov,
-            responsable=responsable,
-            sucursal_origen=sucursal,
-            sucursal_destino=sucursal,
-            observaciones=observaciones,
-            referencia_externa=referencia,
-        )
+            if es_egreso:
+                stock_disponible = producto_talla.stock_sucursal(sucursal.id)
+                if stock_disponible < cantidad:
+                    return Response(
+                        {"success": False, "error": f"Stock insuficiente. Disponible: {stock_disponible}"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+            movimiento = registrar_movimiento_producto(
+                producto_talla=producto_talla,
+                concepto=concepto,
+                cantidad=cantidad_mov,
+                responsable=responsable,
+                sucursal_origen=sucursal,
+                sucursal_destino=sucursal,
+                observaciones=observaciones,
+                referencia_externa=referencia,
+            )
 
         return Response(
             {

@@ -61,7 +61,18 @@ CONCEPTOS_REINGRESO = (
     'ANULACION',
     'ANULACION_TICKET',
     'REPARACION_STOCK_HISTORICO',
+    # 'DEVOLUCION_NO_APTA' NO va acá a propósito: es documental (ver abajo).
 )
+
+# Registros DOCUMENTALES del kardex: cantidad=0, tipo AJUSTE, sin lote. Dejan
+# huella de una unidad que el cliente devolvió pero que NO entra a ningún
+# stock porque está fallada / no apta para la venta (Cambios y Devoluciones
+# y Devolución de Dinero, auditoría de caminos 29-09-2026). La cantidad
+# física va en `observaciones` y el documento que la originó en `dte`/`ticket`.
+# SUM(cantidad) los ignora solo, pero un COUNT de "devoluciones" o de
+# reingresos vendibles NO debe verlos: por eso están fuera de
+# CONCEPTOS_REINGRESO y cualquier reporte debe excluirlos con este set.
+CONCEPTOS_SIN_STOCK = ('DEVOLUCION_NO_APTA',)
 
 # Ajustes y correcciones (ambas direcciones; clasificar por signo).
 CONCEPTOS_AJUSTE = (

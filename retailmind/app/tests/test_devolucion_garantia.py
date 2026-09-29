@@ -2337,3 +2337,303 @@ class DevolucionDineroCorreoRobustezTest(DevolucionDineroCorreoTest):
         self.user.save(update_fields=['email'])
         self._post()
         self.assertIn('jefe@tienda.cl', mail.outbox[0].reply_to)
+
+
+@override_settings(STATICFILES_STORAGE=STATICFILES_STORAGE_TEST)
+class DevolucionGarantiaInventarioTest(TestCase):
+    """Auditoría de caminos 29-09-2026 (H4): al aprobar, el producto devuelto
+    vuelve al inventario si está APTO (stock + lote FIFO + kardex DEVOLUCION_NC
+    ligado a la NC, vía ReingresoVenta) y, si es NO APTO, no entra a stock y
+    queda kardex documental DEVOLUCION_NO_APTA. Por monto no mueve nada."""
+
+    def setUp(self):
+        from .factories import crear_lote_fifo
+        self.env = setup_entorno_completo()
+        self.user = self.env['user']
+        self.sucursal = self.env['sucursal']
+        self.pt = self.env['producto_talla']  # stock 10, 1 lote de 10
+        crear_correlativo(self.sucursal, tipo_dte='NOTA DE CREDITO')
+        self.hoy = timezone.localdate()
+        self.crear_lote_fifo = crear_lote_fifo
+
+    def _solicitud(self, dte, detalles, **kw):
+        return service.crear_solicitud_devolucion(
+            dte_original=dte, sucursal=self.sucursal, receptor=_receptor(self.env),
+            motivo='Garantía', usuario=self.user, detalles=detalles, **kw,
+        )
+
+    def _aprobar(self, dev, **kw):
+        return service.aprobar_devolucion(
+            devolucion_id=dev.id, aprobador=self.user,
+            metodo_devolucion='NO_AFECTA_CAJA', **kw,
+        )
+
+    def _stock(self, pt):
+        pt.refresh_from_db()
+        return pt.stock
+
+    def _lotes(self, pt):
+        from app.models import LoteProducto
+        return sum(LoteProducto.objects.filter(
+            producto_talla=pt, activo=True, agotado=False).values_list('cantidad_disponible', flat=True))
+
+    def _kardex_nc(self, nc, concepto):
+        from app.models import Movimientos_Producto
+        return list(Movimientos_Producto.objects.filter(dte=nc, concepto=concepto).order_by('id'))
+
+    def test_apto_reingresa_stock_lote_y_kardex_ligado_a_la_nc(self):
+        from app.models import LoteProducto
+        boleta = _crear_documento(self.env, 6001, [(self.pt, 2, 11900)])
+        dev = self._solicitud(boleta, [{'dte_producto_id': boleta.dte_productos.first().id,
+                                        'modo': 'CANTIDAD', 'cantidad': 1}])
+        dev, nc, _t, _w = self._aprobar(dev)
+
+        self.assertEqual(self._stock(self.pt), 11)
+        self.assertEqual(self._lotes(self.pt), 11)
+        movs = self._kardex_nc(nc, 'DEVOLUCION_NC')
+        self.assertEqual(len(movs), 1)
+        mov = movs[0]
+        self.assertEqual(mov.cantidad, 1)
+        self.assertEqual(mov.tipo_movimiento, 'INGRESO')
+        self.assertEqual(mov.ProductoTalla_id, self.pt.id)
+        self.assertEqual(mov.sucursal_destino_id, self.sucursal.id)  # dueña del SKU
+        self.assertEqual(mov.costo, 15000)  # costo del producto (la línea venía en 0)
+        self.assertEqual(mov.referencia_externa, dev.numero_operacion)
+        lote = LoteProducto.objects.get(movimiento=mov)
+        self.assertEqual(lote.cantidad_disponible, 1)
+        self.assertEqual(lote.costo_unitario, 15000)
+        # Resultado visible para la vista y persistido en las observaciones.
+        self.assertEqual(dev.inventario['reingresos'][0]['sku'], self.pt.sku)
+        self.assertEqual(dev.inventario['no_aptas'], [])
+        self.assertIn('Reingresó a inventario', dev.observaciones_aprobacion)
+        self.assertNotIn('NO APTO', dev.observaciones_aprobacion)
+        # Y se puede reconstruir desde el kardex (detalle en otra sesión).
+        inv = service.inventario_de_devolucion(dev)
+        self.assertEqual(inv['reingresos'][0]['cantidad'], 1)
+        self.assertEqual(inv['no_aptas'], [])
+
+    def test_no_apto_marcado_por_el_solicitante_no_reingresa(self):
+        boleta = _crear_documento(self.env, 6002, [(self.pt, 2, 11900)])
+        dp = boleta.dte_productos.first()
+        dev = self._solicitud(boleta, [{'dte_producto_id': dp.id, 'modo': 'CANTIDAD',
+                                        'cantidad': 1, 'no_apto': True}])
+        # La marca vive en el motivo, pero no se muestra.
+        self.assertEqual(service.lineas_no_aptas_de(dev), (False, {dp.id}))
+        self.assertEqual(service.motivo_limpio(dev.motivo), 'Garantía')
+
+        dev, nc, _t, _w = self._aprobar(dev)
+
+        self.assertEqual(self._stock(self.pt), 10)
+        self.assertEqual(self._lotes(self.pt), 10)
+        self.assertEqual(self._kardex_nc(nc, 'DEVOLUCION_NC'), [])
+        movs = self._kardex_nc(nc, 'DEVOLUCION_NO_APTA')
+        self.assertEqual(len(movs), 1)
+        self.assertEqual(movs[0].cantidad, 0)
+        self.assertEqual(movs[0].tipo_movimiento, 'AJUSTE')
+        self.assertEqual(movs[0].sucursal_destino_id, self.sucursal.id)
+        self.assertIn('NO APTA: 1 u.', movs[0].observaciones)
+        self.assertIn(f'NC #{nc.numero_documento}', movs[0].observaciones)
+        # La marca interna no llega a la NC (va al SII/TXT).
+        self.assertNotIn('[NO_APTO', nc.motivo_nc)
+        self.assertIn('Motivo: Garantía', nc.motivo_nc)
+        self.assertEqual(dev.inventario['no_aptas'][0]['cantidad'], 1)
+        self.assertIn('NO APTO, sin ingreso a stock', dev.observaciones_aprobacion)
+        inv = service.inventario_de_devolucion(dev)
+        self.assertEqual(inv['no_aptas'][0]['cantidad'], 1)
+        self.assertEqual(inv['reingresos'], [])
+
+    def test_aprobador_manda_sobre_la_marca_del_solicitante(self):
+        boleta = _crear_documento(self.env, 6003, [(self.pt, 2, 11900)])
+        dp = boleta.dte_productos.first()
+        # El solicitante lo marcó no apto; el aprobador lo revisa y lo deja apto.
+        dev = self._solicitud(boleta, [{'dte_producto_id': dp.id, 'modo': 'CANTIDAD', 'cantidad': 1}],
+                              no_apto=True)
+        self.assertEqual(service.lineas_no_aptas_de(dev), (True, set()))
+        dev, nc, _t, _w = self._aprobar(dev, lineas_no_aptas=[])
+        self.assertEqual(self._stock(self.pt), 11)
+        self.assertEqual(len(self._kardex_nc(nc, 'DEVOLUCION_NC')), 1)
+
+        # Y al revés: global no_apto=True al aprobar aunque nadie lo marcó antes.
+        boleta2 = _crear_documento(self.env, 6004, [(self.pt, 2, 11900)])
+        dev2 = self._solicitud(boleta2, [{'dte_producto_id': boleta2.dte_productos.first().id,
+                                          'modo': 'CANTIDAD', 'cantidad': 2}])
+        dev2, nc2, _t, _w = self._aprobar(dev2, no_apto=True)
+        self.assertEqual(self._stock(self.pt), 11)
+        self.assertEqual(len(self._kardex_nc(nc2, 'DEVOLUCION_NO_APTA')), 1)
+        self.assertIn('NO APTA: 2 u.', self._kardex_nc(nc2, 'DEVOLUCION_NO_APTA')[0].observaciones)
+
+    def test_modo_monto_no_mueve_inventario(self):
+        from app.models import Movimientos_Producto
+        boleta = _crear_documento(self.env, 6005, [(self.pt, 1, 39990)])
+        dev = self._solicitud(boleta, [{'dte_producto_id': boleta.dte_productos.first().id,
+                                        'modo': 'MONTO', 'monto': 10000}])
+        dev, nc, _t, _w = self._aprobar(dev)
+        self.assertEqual(self._stock(self.pt), 10)
+        self.assertFalse(Movimientos_Producto.objects.filter(dte=nc).exists())
+        self.assertEqual(dev.inventario, {'reingresos': [], 'no_aptas': [], 'sin_reingreso': [], 'avisos': []})
+        self.assertEqual(dev.observaciones_aprobacion, '')
+
+    def test_nc_posterior_de_gestion_dte_no_vuelve_a_reingresar_lo_devuelto(self):
+        from app.services.reingreso_devolucion import ReingresoVenta
+        boleta = _crear_documento(self.env, 6006, [(self.pt, 2, 11900)])
+        self.assertEqual(ReingresoVenta(boleta).pendientes(self.pt.id, 2), 2)
+        dev = self._solicitud(boleta, [{'dte_producto_id': boleta.dte_productos.first().id,
+                                        'modo': 'CANTIDAD', 'cantidad': 1}])
+        self._aprobar(dev)
+        self.assertEqual(self._stock(self.pt), 11)
+        # Gestión DTE solo podrá reingresar la unidad que falta.
+        self.assertEqual(ReingresoVenta(boleta).pendientes(self.pt.id, 2), 1)
+
+    def test_boleta_con_cambio_previo_reingresa_la_talla_entregada(self):
+        """Vendida L (pt), cambiada por M (pt_m) en Cambios: la DG reingresa M
+        (lo que el cliente trae), con lote, y avisa. L ya volvió con el cambio."""
+        from app.models import (
+            CambioDevolucion, CambioDevolucionDetalle, LoteProducto, Ticket, Ticket_Productos,
+        )
+        _, pt_m = crear_producto_con_talla(self.sucursal, articulo='Zapatilla Test', talla='43',
+                                           sku=1000002, stock=10)
+        self.crear_lote_fifo(pt_m, cantidad=10, costo_unitario=15000)
+        vendedor = self.env['vendedor']
+
+        def _ticket(correlativo, pt):
+            t = Ticket.objects.create(
+                vendedor=vendedor, sucursal=self.sucursal, correlativo=correlativo,
+                estado='PAGADO', subTotal=20000, descuento=0, total=20000,
+                responsable=self.user.username,
+            )
+            Ticket_Productos.objects.create(
+                idTicket=t, ProductoTalla=pt, stock=1, precio=20000, precio_original=20000,
+                descuento_unitario=0, subtotal=20000,
+            )
+            return t
+
+        venta = _ticket(700, self.pt)
+        boleta = _crear_documento(self.env, 6007, [(self.pt, 1, 20000)])
+        boleta.referencias = f'TICKET-{venta.correlativo}'
+        boleta.save(update_fields=['referencias'])
+        cambio = CambioDevolucion.objects.create(
+            ticket_original=venta, ticket_nuevo=_ticket(701, pt_m),
+            sucursal=self.sucursal, tipo_operacion='CAMBIO_SIMPLE', estado='COMPLETADO',
+            monto_original=20000, monto_nuevo=20000, motivo_principal='TALLA_INCORRECTA',
+            solicitado_por=self.user, fecha_limite_cambio=self.hoy, fecha_ejecucion=timezone.now(),
+        )
+        CambioDevolucionDetalle.objects.create(
+            cambio_devolucion=cambio, producto_original=venta.ticket_productos.get(),
+            cantidad_original=1, producto_nuevo=pt_m, cantidad_nueva=1,
+            precio_nuevo=20000, precio_original_unitario=20000,
+            condicion_producto='PERFECTO', apto_para_venta=True,
+        )
+
+        dev = self._solicitud(boleta, [{'dte_producto_id': boleta.dte_productos.first().id,
+                                        'modo': 'CANTIDAD', 'cantidad': 1}])
+        dev, nc, _t, _w = self._aprobar(dev)
+
+        self.assertEqual(self._stock(self.pt), 10)   # L no se duplica
+        self.assertEqual(self._stock(pt_m), 11)      # vuelve la M del cliente
+        self.assertEqual(self._lotes(pt_m), 11)
+        movs = self._kardex_nc(nc, 'DEVOLUCION_NC')
+        self.assertEqual([(m.ProductoTalla_id, m.cantidad) for m in movs], [(pt_m.id, 1)])
+        self.assertTrue(LoteProducto.objects.filter(movimiento=movs[0]).exists())
+        self.assertEqual(dev.inventario['reingresos'][0]['cambio'], cambio.numero_operacion)
+        self.assertTrue(dev.inventario['avisos'])
+        self.assertIn(cambio.numero_operacion, dev.observaciones_aprobacion)
+
+        # Mismo caso NO APTO: el registro documental apunta a la M entregada.
+        boleta2 = _crear_documento(self.env, 6008, [(self.pt, 1, 20000)])
+        boleta2.referencias = f'TICKET-{venta.correlativo}'
+        boleta2.save(update_fields=['referencias'])
+        dev2 = self._solicitud(boleta2, [{'dte_producto_id': boleta2.dte_productos.first().id,
+                                          'modo': 'CANTIDAD', 'cantidad': 1, 'no_apto': True}])
+        dev2, nc2, _t, _w = self._aprobar(dev2)
+        self.assertEqual(self._stock(pt_m), 11)
+        doc = self._kardex_nc(nc2, 'DEVOLUCION_NO_APTA')
+        self.assertEqual([(m.ProductoTalla_id, m.cantidad) for m in doc], [(pt_m.id, 0)])
+        self.assertIn('se había cambiado', doc[0].observaciones)
+
+    def test_endpoint_aprobar_recibe_lineas_no_aptas_y_devuelve_inventario(self):
+        boleta = _crear_documento(self.env, 6009, [(self.pt, 2, 11900)])
+        dp = boleta.dte_productos.first()
+        dev = self._solicitud(boleta, [{'dte_producto_id': dp.id, 'modo': 'CANTIDAD', 'cantidad': 1}])
+        modulo, _ = ModuloSistema.objects.get_or_create(codigo='ventas', defaults={'nombre': 'Ventas', 'orden': 2})
+        opcion, _ = OpcionMenu.objects.get_or_create(
+            codigo='devolucion_garantia', defaults={'modulo': modulo, 'nombre': 'DG', 'orden': 3})
+        PermisoRol.objects.update_or_create(
+            rol='administrador', opcion_menu=opcion, defaults={'puede_ver': True, 'puede_aprobar': True})
+        user = crear_usuario(username='admin_inv', rol='administrador')
+        client = Client()
+        client.force_login(user)
+        session = client.session
+        session['idSucursalActual'] = self.sucursal.id
+        session.save()
+
+        # El detalle expone qué líneas mueven stock y la propuesta del solicitante.
+        det = client.get(reverse('api_detalle_solicitud_devolucion_garantia', args=[dev.id])).json()
+        self.assertTrue(det['data']['lineas'][0]['mueve_stock'])
+        self.assertFalse(det['data']['lineas'][0]['no_apto'])
+        self.assertEqual(det['data']['lineas'][0]['dte_producto_id'], dp.id)
+
+        import json as _json
+        resp = client.post(
+            reverse('api_aprobar_devolucion_garantia', args=[dev.id]),
+            data=_json.dumps({'metodo_devolucion': 'NO_AFECTA_CAJA', 'lineas_no_aptas': [dp.id]}),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        inv = resp.json()['data']['inventario']
+        self.assertEqual(inv['reingresos'], [])
+        self.assertEqual(inv['no_aptas'][0]['cantidad'], 1)
+        self.assertEqual(self._stock(self.pt), 10)
+
+    def test_endpoint_crear_persiste_no_apto_por_linea(self):
+        boleta = _crear_documento(self.env, 6010, [(self.pt, 2, 11900)])
+        dp = boleta.dte_productos.first()
+        modulo = ModuloSistema.objects.create(codigo='ventas_inv', nombre='Ventas', orden=1)
+        opcion = OpcionMenu.objects.create(
+            modulo=modulo, codigo='devolucion_garantia', nombre='DG',
+            url_name='modulo_devolucion_garantia', orden=1)
+        PermisoRol.objects.create(rol='jefe_local', opcion_menu=opcion, puede_ver=True, puede_crear=True)
+        user = crear_usuario(username='jefe_inv', rol='jefe_local')
+        client = Client()
+        client.force_login(user)
+        session = client.session
+        session['idSucursalActual'] = self.sucursal.id
+        session.save()
+        import json as _json
+        resp = client.post(
+            reverse('api_generar_devolucion_garantia'),
+            data=_json.dumps({
+                'folio_dte': boleta.numero_documento,
+                'productos': [{'dte_producto_id': dp.id, 'modo': 'CANTIDAD', 'cantidad': 1, 'no_apto': True}],
+                'rut': '13013448-3', 'nombre': 'Paola Tebes', 'metodo_solicitado': 'EFECTIVO_CAJA',
+                'motivo': 'Suela despegada',
+            }),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
+        dev = DevolucionGarantia.objects.get(id=resp.json()['data']['devolucion_id'])
+        self.assertEqual(service.lineas_no_aptas_de(dev), (False, {dp.id}))
+        self.assertEqual(service.motivo_limpio(dev.motivo), 'Suela despegada')
+        # El comprobante muestra el motivo limpio y marca la línea.
+        td = client.get(reverse('api_ticket_devolucion_garantia', args=[dev.id])).json()['data']
+        self.assertEqual(td['motivo'], 'Suela despegada')
+        self.assertTrue(td['productos'][0]['no_apto'])
+
+    def test_detalle_html_muestra_inventario_y_motivo_limpio(self):
+        boleta = _crear_documento(self.env, 6011, [(self.pt, 2, 11900)])
+        dev = self._solicitud(boleta, [{'dte_producto_id': boleta.dte_productos.first().id,
+                                        'modo': 'CANTIDAD', 'cantidad': 1, 'no_apto': True}])
+        self._aprobar(dev)
+        from unittest import mock
+        client = Client()
+        client.force_login(self.user)
+        session = client.session
+        session['idSucursalActual'] = self.sucursal.id
+        session.save()
+        with mock.patch('app.decorators.PermisoRol.tiene_permiso', return_value=True), \
+                mock.patch('app.middleware_permisos.PermisoRol.tiene_permiso', return_value=True):
+            resp = client.get(reverse('detalle_devolucion_garantia', args=[dev.id]))
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode('utf-8')
+        self.assertIn('No apto para la venta', html)
+        self.assertIn('kardex documental DEVOLUCION_NO_APTA', html)
+        self.assertNotIn('[NO_APTO', html)

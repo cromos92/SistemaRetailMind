@@ -617,6 +617,23 @@ class AnularTraspasoPreRecepcionSinDespachoTest(_Base):
         self.assertEqual(resp.status_code, 200, resp.content)
         self.assertEqual(len(resp.json()['lineas_sin_reversa_stock']), 1)
         self.assertEqual(self._stock(self.t_origen), stock0)
+        # R-08: la NC por el total sobre un rechazado cierra el documento
+        # (antes quedaba RECHAZADO con una NC colgada hasta cancelarlo) y no
+        # reescribe la fila CANCELADO, que es la evidencia del rechazo.
+        dte.refresh_from_db()
+        self.assertEqual(dte.estado_dte, 'CANCELADO')
+        salida = Movimientos_Producto.objects.get(dte=dte, concepto='TRASPASO_SALIDA')
+        self.assertEqual((salida.estado, salida.cantidad), ('CANCELADO', -4))
+
+    def test_rechazado_con_stock_ya_devuelto_bloquea_nc_parcial_por_linea(self):
+        """R-03/R-08: una NC parcial por línea sobre stock ya devuelto no tiene
+        contrapartida física y sólo reescribía la fila CANCELADO → 409."""
+        dte, dp = self._traspaso(cantidad=4, tipo_documento='FACTURA ELECTRONICA',
+                                 estado='RECHAZADO', estado_salida='CANCELADO')
+        resp = self._nc(dte, dp, 2)
+        self.assertEqual(resp.status_code, 409, resp.content)
+        self.assertTrue(resp.json().get('stock_ya_devuelto'))
+        self.assertFalse(Dte.objects.filter(documento_afectado=dte).exists())
 
     def test_con_despacho_vigente_sigue_acreditando(self):
         dte, dp = self._traspaso(cantidad=4, tipo_documento='FACTURA ELECTRONICA')

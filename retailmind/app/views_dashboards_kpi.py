@@ -1260,8 +1260,11 @@ def api_dashboard_despachos(request):
         d['estado_label'] = ESTADO_LABELS.get(d['estado_dte'], d['estado_dte'])
 
     # --- Flujo origen→destino (matriz de traspasos) ---
+    # estado='COMPLETADO': las salidas CANCELADO (rechazo, cancelación, ajuste
+    # o NC pre-recepción) ya devolvieron el stock al origen y no son flujo real.
     flujo_qs = Movimientos_Producto.objects.filter(
         concepto='TRASPASO_SALIDA',
+        estado='COMPLETADO',
         dte__tipo_transaccion='TRASPASO',
         dte__descartado=False,
         dte__fecha_emision__range=[inicio, fin],

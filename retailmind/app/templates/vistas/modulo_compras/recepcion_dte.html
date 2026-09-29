@@ -3356,6 +3356,22 @@ const SUCURSAL_ACTUAL_ID = {{ request.session.idSucursalActual|default:"null" }}
 // recepción) devuelven el alias del origen pero no su id.
 const SUCURSAL_ACTUAL_ALIAS = "{{ request.session.alias|default:''|escapejs }}";
 
+// Comprobante PDF del rechazo (quién, cuándo, motivo, unidades devueltas al
+// origen y firmas). Lo pueden bajar origen y destino; el backend valida.
+function abrirComprobanteRechazo(dteId) {
+    const id = Number(dteId) || 0;
+    if (!id) return;
+    window.open(`/app/dte/${id}/comprobante-rechazo/`, '_blank', 'noopener');
+}
+
+function _btnComprobanteRechazo(dteId, conTexto) {
+    const id = Number(dteId) || 0;
+    if (!id) return '';
+    return `<button type="button" class="btn btn-outline-danger btn-sm${conTexto ? '' : ' ms-1'}" onclick="abrirComprobanteRechazo(${id})"
+                title="Comprobante PDF del rechazo (stock devuelto al origen)" aria-label="Comprobante de rechazo">
+                <i class="bi bi-file-earmark-pdf${conTexto ? ' me-1' : ''}"></i>${conTexto ? 'Comprobante' : ''}</button>`;
+}
+
 // ¿El DTE lo emitió la sucursal activa? Rehabilitar / anular guía / ajustar
 // exigen ser la emisora: sobre un DTE ajeno (vista "todas") solo daban 403.
 // Si la fila no trae con qué decidir, no se esconde nada (el backend valida).
@@ -4245,6 +4261,7 @@ function renderRegularizaciones(productos, dtesRechazadosSinRecepcion) {
                     <td class="text-end text-nowrap">
                         ${btnRehabilitar}
                         ${btnAnular}
+                        ${_btnComprobanteRechazo(dte.dte_id, false)}
                         <button class="btn btn-outline-secondary btn-sm ms-1" onclick="verDTERecepcionado(${Number(dte.dte_id) || 0})" title="Ver DTE">
                             <i class="bi bi-eye"></i>
                         </button>
@@ -5153,7 +5170,9 @@ function renderTablaRecepciones() {
                 acciones.push(btnVer('btn-outline-warning', true));
                 if (PUEDE_REGULARIZAR_DTE) acciones.push(btnPorResolver('btn-warning', false));
             } else {
-                acciones.push(btnVer('btn-outline-secondary', true));
+                // La sucursal que rechazó puede reimprimir el comprobante.
+                if (estado === 'RECHAZADO') acciones.push(_btnComprobanteRechazo(doc.id, true));
+                acciones.push(btnVer('btn-outline-secondary', estado !== 'RECHAZADO'));
             }
         } else if (rol === 'origen') {
             if (estado === 'RECHAZADO' && PUEDE_AJUSTAR_EMITIDOS) {
@@ -5164,6 +5183,7 @@ function renderTablaRecepciones() {
                 }
                 acciones.push(`<button type="button" class="btn btn-danger btn-sm" aria-label="Anular documento ${numTxt}" ${_ncTraspasoBloqueada(doc.tipo_documento) ? `disabled title="${TITULO_SIN_PERMISO_NC}"` : `onclick="anularDteRechazadoSegunTipo(${doc.id}, '${numSafe}', '${tipoSafe}')" title="Anular (genera NC si es factura)"`}>
                         <i class="bi bi-x-circle"></i></button>`);
+                acciones.push(_btnComprobanteRechazo(doc.id, false));
                 acciones.push(btnVer('btn-outline-secondary', false));
             } else if ((estado === 'EMITIDO' || estado === 'ACEPTADO') && PUEDE_AJUSTAR_EMITIDOS) {
                 // "Cambiar talla" solo mientras nadie haya recepcionado: mueve
@@ -7371,6 +7391,10 @@ function procesarRechazo(motivo) {
         },
         data: JSON.stringify(payload)
     }).done(response => {
+        // El backend devuelve la URL del comprobante PDF del rechazo: se
+        // ofrece aquí mismo (firma en destino / archivo en origen) y queda
+        // disponible en la fila del rechazado.
+        const comprobanteUrl = response.comprobante_url || '';
         Swal.fire({
             icon: 'success',
             title: '❌ Recepción Rechazada',
@@ -7383,7 +7407,14 @@ function procesarRechazo(motivo) {
                     </div>
                 </div>
             `,
-            confirmButtonText: 'Entendido'
+            confirmButtonText: 'Entendido',
+            showDenyButton: !!comprobanteUrl,
+            denyButtonText: '<i class="bi bi-file-earmark-pdf me-1"></i>Comprobante PDF',
+            denyButtonColor: '#dc3545',
+        }).then(result => {
+            if (result.isDenied && comprobanteUrl) {
+                window.open(comprobanteUrl, '_blank', 'noopener');
+            }
         });
 
         modalDetalle.hide();
@@ -7712,6 +7743,7 @@ function verDTEsRechazados() {
                         <button class="btn btn-outline-secondary btn-sm" onclick="verDTERecepcionado(${Number(item.id) || 0})" title="Ver detalle">
                             <i class="bi bi-eye"></i>
                         </button>
+                        ${_btnComprobanteRechazo(item.id, false)}
                         ${btnRehabilitar}
                         ${btnAnular}
                     </td>
@@ -9015,6 +9047,7 @@ function renderTablaEmitidos() {
                 ${(esMio || esTributario) ? `<button class="btn btn-sm btn-danger" ${_ncTraspasoBloqueada(d.tipo_documento) ? `disabled title="${TITULO_SIN_PERMISO_NC}"` : `onclick="anularDteRechazadoSegunTipo(${dteIdNum}, '${numAttr}', '${tipoEsc}')" title="Anular (genera NC si es factura)"`}>
                     <i class="bi bi-x-circle"></i>
                 </button>` : ''}
+                ${_btnComprobanteRechazo(dteIdNum, false)}
                 <button class="btn btn-sm btn-outline-secondary" onclick="verDTERecepcionado(${dteIdNum})" title="Ver detalle">
                     <i class="bi bi-eye"></i>
                 </button>`;
@@ -9636,6 +9669,16 @@ function actualizarDiferencialAjuste() {
     const grupos = _ajusteAgruparPorArticulo(resumen);
     $('#ajusteResumenConteo').text(`${grupos.length} artículo(s) · ${difUnidades} uds`);
     $('#ajusteResumenCambios').html(_ajusteTablaResumenHtml(grupos, difUnidades, difNeto));
+}
+
+// Mueve el foco a la cantidad de la línea siguiente (paso 1) o anterior (-1)
+// entre las filas visibles (respeta el filtro), dejando el valor seleccionado.
+function _ajusteMoverFoco(input, paso) {
+    const inputs = $('#ajusteProductosBody tr[data-dp-id]:not(.d-none) .input-ajuste-cantidad').toArray();
+    const destino = inputs[inputs.indexOf(input) + paso];
+    if (!destino) return;
+    destino.focus();
+    destino.scrollIntoView({ block: 'nearest' });
 }
 
 // Datos de una fila del modal de ajuste para los resúmenes. attr() y no
@@ -10553,6 +10596,13 @@ $(document).ready(function () {
     $(document).on('focus', '#ajusteProductosBody .input-ajuste-cantidad', function () {
         const el = this;
         setTimeout(() => { try { el.select(); } catch (err) { /* sin selección */ } }, 0);
+    });
+    // Celda vacía al salir = 0 (no devolver nada de esa línea).
+    $(document).on('blur', '#ajusteProductosBody .input-ajuste-cantidad', function () {
+        if (String(this.value).trim() === '') {
+            this.value = '0';
+            actualizarDiferencialAjuste();
+        }
     });
 
     // Filtro de líneas por SKU / artículo / color / talla.

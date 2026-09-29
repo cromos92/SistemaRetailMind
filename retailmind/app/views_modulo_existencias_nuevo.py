@@ -985,122 +985,159 @@ def api_crear_despacho_masivo(request):
         return _sin_acceso('Tu sucursal activa no pertenece a una empresa habilitada para ti.')
 
     sucursal_origen = get_object_or_404(Sucursal, id=sucursal_origen_id)
-    usuario = request.user
-    traspasos_creados = []
 
-    try:
-        with transaction.atomic():
-            for despacho in despachos:
-                suc_destino_id = despacho.get('sucursal_destino_id')
-                items = despacho.get('items', [])
-                if not items or not suc_destino_id:
-                    continue
-
-                try:
-                    suc_destino_id = int(suc_destino_id)
-                except (TypeError, ValueError):
-                    raise ValueError(f'Sucursal destino inválida: {suc_destino_id!r}.')
-                if suc_destino_id not in suc_ids_usuario:
-                    raise PermissionError(
-                        f'La sucursal destino {suc_destino_id} no pertenece a tus empresas.'
-                    )
-
-                sucursal_destino = get_object_or_404(Sucursal, id=suc_destino_id)
-
-                ultimo_num = Traspaso.objects.filter(
-                    sucursal_origen=sucursal_origen,
-                ).order_by('-numero_traspaso').values_list('numero_traspaso', flat=True).first() or 0
-
-                traspaso = Traspaso.objects.create(
-                    sucursal_origen=sucursal_origen,
-                    sucursal_destino=sucursal_destino,
-                    numero_traspaso=ultimo_num + 1,
-                    estado='PENDIENTE',
-                    solicitante=f"{usuario.first_name} {usuario.last_name}".strip() or usuario.username,
-                    observaciones_solicitud=observaciones,
-                )
-
-                for item in items:
-                    pt_id = item.get('producto_talla_id')
-                    cantidad = int(item.get('cantidad', 0))
-                    if cantidad <= 0:
-                        continue
-
-                    pt = get_object_or_404(Producto_Talla, id=pt_id)
-
-                    # El SKU debe vivir en la bodega desde la que se despacha:
-                    # si no, se estaría descontando stock de otra sucursal
-                    # (potencialmente de otra empresa) con un id arbitrario.
-                    if pt.producto.sucursal_id != sucursal_origen.id:
-                        raise PermissionError(
-                            f'El SKU {pt.sku} no pertenece a la bodega de origen '
-                            f'{sucursal_origen.alias}.'
-                        )
-
-                    if pt.stock < cantidad:
-                        raise ValueError(
-                            f'Stock insuficiente para SKU {pt.sku} '
-                            f'(disponible: {pt.stock}, solicitado: {cantidad})'
-                        )
-
-                    Traspaso_Detalle.objects.create(
-                        traspaso=traspaso,
-                        producto_talla=pt,
-                        cantidad_solicitada=cantidad,
-                        costo=pt.producto.costo,
-                        sobreprecio=pt.producto.sobreprecio,
-                        costo_destino=pt.producto.costo + pt.producto.sobreprecio,
-                        precio_venta=pt.producto.precioventa,
-                    )
-
-                    Movimientos_Producto.objects.create(
-                        ProductoTalla=pt,
-                        sucursal_origen=sucursal_origen,
-                        sucursal_destino=sucursal_destino,
-                        cantidad=-cantidad,
-                        costo=pt.producto.costo,
-                        precio=pt.producto.precioventa,
-                        concepto='TRASPASO_SALIDA',
-                        tipo_movimiento='EGRESO',
-                        estado='COMPLETADO',
-                        responsable=f"{usuario.first_name} {usuario.last_name}".strip() or usuario.username,
-                        observaciones=f"Despacho masivo #{traspaso.numero_traspaso} → {sucursal_destino.alias}",
-                    )
-
-                    # Consumir lotes FIFO disponibles (mejor esfuerzo) para mantener
-                    # LoteProducto alineado con el stock plano, que sigue siendo la
-                    # fuente de verdad. No bloquea el despacho si no hay lotes.
-                    from .views_edicion_productos import _consumir_lotes_fifo_ajuste
-                    try:
-                        _consumir_lotes_fifo_ajuste(pt, cantidad)
-                    except Exception:
-                        logger.exception(
-                            "No se pudieron bajar lotes FIFO en despacho masivo, sku=%s", pt.sku
-                        )
-
-                    pt.stock = F('stock') - cantidad
-                    pt.save(update_fields=['stock'])
-
-                traspasos_creados.append({
-                    'id': traspaso.id,
-                    'numero': traspaso.numero_traspaso,
-                    'destino': sucursal_destino.alias,
-                    'items': len(items),
-                })
-
-    except PermissionError as e:
-        logger.warning(
-            "Despacho masivo denegado a %s: %s", request.user.username, e
-        )
-        return _sin_acceso(str(e))
-    except ValueError as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=400)
-
+    # BLOQUEADO (auditoría 29-09, H9): este despacho creaba Traspaso +
+    # Traspaso_Detalle, escribía TRASPASO_SALIDA en estado COMPLETADO sin DTE,
+    # consumía lotes y bajaba el stock del ORIGEN... y no existe en el código
+    # ningún escritor que reciba un `Traspaso` (nadie escribe cantidad_recibida
+    # ni pasa el estado a RECIBIDO; las FBV recibir_traspaso/aprobar_traspaso
+    # se borraron el 2026-07-28 por mover stock sin login). La mercadería salía
+    # de la bodega y jamás entraba a la tienda: traspaso de UNA pierna. El
+    # circuito real es la guía por Emisión DTE (emitir_dte tipo TRASPASO →
+    # TRASPASO_SALIDA PENDIENTE_RECEPCION → confirmar_recepcion_api en la
+    # tienda). Hasta que exista una recepción para este modelo, se rechaza sin
+    # tocar stock. El cuerpo original queda comentado más abajo como referencia
+    # para reescribirlo sobre inventario_service.egresar cuando haya recepción.
+    n_items = sum(len(d.get('items') or []) for d in despachos if isinstance(d, dict))
+    logger.warning(
+        "Despacho masivo por modelo Traspaso bloqueado (sin recepción): usuario=%s "
+        "origen=%s despachos=%s items=%s",
+        request.user.username, sucursal_origen.alias, len(despachos), n_items,
+    )
     return JsonResponse({
-        'success': True,
-        'mensaje': f'Se crearon {len(traspasos_creados)} despachos exitosamente.',
-        'traspasos': traspasos_creados,
-    })
+        'success': False,
+        'error': (
+            'El despacho masivo por traspaso interno está deshabilitado: la tienda '
+            'destino no tiene forma de recepcionarlo y la mercadería quedaba fuera '
+            'de ambos inventarios. Emite el despacho como guía de traspaso desde '
+            'Emisión DTE (Documentos → Emisión DTE, tipo Traspaso); la tienda lo '
+            'recibe en Recepción DTE.'
+        ),
+        'bloqueado': True,
+        'alternativa': 'emision_dte',
+    }, status=409)
+
+    # ---- Cuerpo original (2026-09-29), conservado comentado: -----------------
+    # usuario = request.user
+    # traspasos_creados = []
+    #
+    # try:
+    #     with transaction.atomic():
+    #         for despacho in despachos:
+    #             suc_destino_id = despacho.get('sucursal_destino_id')
+    #             items = despacho.get('items', [])
+    #             if not items or not suc_destino_id:
+    #                 continue
+    #
+    #             try:
+    #                 suc_destino_id = int(suc_destino_id)
+    #             except (TypeError, ValueError):
+    #                 raise ValueError(f'Sucursal destino inválida: {suc_destino_id!r}.')
+    #             if suc_destino_id not in suc_ids_usuario:
+    #                 raise PermissionError(
+    #                     f'La sucursal destino {suc_destino_id} no pertenece a tus empresas.'
+    #                 )
+    #
+    #             sucursal_destino = get_object_or_404(Sucursal, id=suc_destino_id)
+    #
+    #             ultimo_num = Traspaso.objects.filter(
+    #                 sucursal_origen=sucursal_origen,
+    #             ).order_by('-numero_traspaso').values_list('numero_traspaso', flat=True).first() or 0
+    #
+    #             traspaso = Traspaso.objects.create(
+    #                 sucursal_origen=sucursal_origen,
+    #                 sucursal_destino=sucursal_destino,
+    #                 numero_traspaso=ultimo_num + 1,
+    #                 estado='PENDIENTE',
+    #                 solicitante=f"{usuario.first_name} {usuario.last_name}".strip() or usuario.username,
+    #                 observaciones_solicitud=observaciones,
+    #             )
+    #
+    #             for item in items:
+    #                 pt_id = item.get('producto_talla_id')
+    #                 cantidad = int(item.get('cantidad', 0))
+    #                 if cantidad <= 0:
+    #                     continue
+    #
+    #                 pt = get_object_or_404(Producto_Talla, id=pt_id)
+    #
+    #                 # El SKU debe vivir en la bodega desde la que se despacha:
+    #                 # si no, se estaría descontando stock de otra sucursal
+    #                 # (potencialmente de otra empresa) con un id arbitrario.
+    #                 if pt.producto.sucursal_id != sucursal_origen.id:
+    #                     raise PermissionError(
+    #                         f'El SKU {pt.sku} no pertenece a la bodega de origen '
+    #                         f'{sucursal_origen.alias}.'
+    #                     )
+    #
+    #                 if pt.stock < cantidad:
+    #                     raise ValueError(
+    #                         f'Stock insuficiente para SKU {pt.sku} '
+    #                         f'(disponible: {pt.stock}, solicitado: {cantidad})'
+    #                     )
+    #
+    #                 Traspaso_Detalle.objects.create(
+    #                     traspaso=traspaso,
+    #                     producto_talla=pt,
+    #                     cantidad_solicitada=cantidad,
+    #                     costo=pt.producto.costo,
+    #                     sobreprecio=pt.producto.sobreprecio,
+    #                     costo_destino=pt.producto.costo + pt.producto.sobreprecio,
+    #                     precio_venta=pt.producto.precioventa,
+    #                 )
+    #
+    #                 # Cuando exista recepción, reemplazar el trío manual
+    #                 # (kardex + _consumir_lotes_fifo_ajuste + F()) por:
+    #                 # inventario_service.egresar(pt, cantidad, 'TRASPASO_SALIDA',
+    #                 #     usuario, sucursal_origen=sucursal_origen,
+    #                 #     sucursal_destino=sucursal_destino,
+    #                 #     referencia_externa=f'TRASPASO_{traspaso.numero_traspaso}')
+    #                 # y en la recepción ingresar(pt_destino, cant, 'TRASPASO_ENTRADA', ...).
+    #                 Movimientos_Producto.objects.create(
+    #                     ProductoTalla=pt,
+    #                     sucursal_origen=sucursal_origen,
+    #                     sucursal_destino=sucursal_destino,
+    #                     cantidad=-cantidad,
+    #                     costo=pt.producto.costo,
+    #                     precio=pt.producto.precioventa,
+    #                     concepto='TRASPASO_SALIDA',
+    #                     tipo_movimiento='EGRESO',
+    #                     estado='COMPLETADO',
+    #                     responsable=f"{usuario.first_name} {usuario.last_name}".strip() or usuario.username,
+    #                     observaciones=f"Despacho masivo #{traspaso.numero_traspaso} → {sucursal_destino.alias}",
+    #                 )
+    #
+    #                 from .views_edicion_productos import _consumir_lotes_fifo_ajuste
+    #                 try:
+    #                     _consumir_lotes_fifo_ajuste(pt, cantidad)
+    #                 except Exception:
+    #                     logger.exception(
+    #                         "No se pudieron bajar lotes FIFO en despacho masivo, sku=%s", pt.sku
+    #                     )
+    #
+    #                 pt.stock = F('stock') - cantidad
+    #                 pt.save(update_fields=['stock'])
+    #
+    #             traspasos_creados.append({
+    #                 'id': traspaso.id,
+    #                 'numero': traspaso.numero_traspaso,
+    #                 'destino': sucursal_destino.alias,
+    #                 'items': len(items),
+    #             })
+    #
+    # except PermissionError as e:
+    #     logger.warning(
+    #         "Despacho masivo denegado a %s: %s", request.user.username, e
+    #     )
+    #     return _sin_acceso(str(e))
+    # except ValueError as e:
+    #     return JsonResponse({'success': False, 'error': str(e)}, status=400)
+    #
+    # return JsonResponse({
+    #     'success': True,
+    #     'mensaje': f'Se crearon {len(traspasos_creados)} despachos exitosamente.',
+    #     'traspasos': traspasos_creados,
+    # })
 
 
 _ESTADOS_TRASPASO_VALIDOS = {'PENDIENTE', 'APROBADO', 'EN_TRANSITO', 'RECIBIDO', 'RECHAZADO', 'ANULADO'}
@@ -1157,16 +1194,20 @@ def _historial_despachos_reales(request, sucursal_id):
     #    DTE tiene movimientos repartidos en varios días (se despacha por
     #    partes) y sumar únicamente los que caen dentro de la ventana daba
     #    "enviadas" mutiladas — llegaba a mostrar más recibidas que enviadas.
+    # Solo despachos vigentes (estado COMPLETADO): un TRASPASO_SALIDA en
+    # CANCELADO es un egreso ya revertido (rechazo, cancelación, ajuste o NC
+    # pre-recepción devolvieron el stock al origen) y sumarlo mostraba
+    # "enviadas 3 / recibidas 0" para documentos que nunca salieron.
     dte_ids = list(
         Movimientos_Producto.objects
-        .filter(concepto='TRASPASO_SALIDA', dte__isnull=False,
+        .filter(concepto='TRASPASO_SALIDA', dte__isnull=False, estado='COMPLETADO',
                 sucursal_origen_id=sucursal_id, fecha__gte=desde)
         .order_by().values_list('dte_id', flat=True).distinct()[:_HISTORIAL_MAX_DOCUMENTOS]
     )
 
     salidas = list(
         Movimientos_Producto.objects
-        .filter(concepto='TRASPASO_SALIDA', dte_id__in=dte_ids,
+        .filter(concepto='TRASPASO_SALIDA', dte_id__in=dte_ids, estado='COMPLETADO',
                 sucursal_origen_id=sucursal_id)
         .values('dte_id', 'sucursal_destino_id', 'sucursal_destino__alias',
                 'dte__tipo_documento', 'dte__numero_documento', 'dte__estado_dte')

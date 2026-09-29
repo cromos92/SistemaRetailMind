@@ -168,8 +168,10 @@ class SegmentacionTest(BaseTomaInventarioTest):
         self.assertEqual(TomaInventario.objects.count(), 0)
 
     def test_solo_con_stock_deja_fuera_stock_cero(self):
-        """Default solo_con_stock=True: un SKU en 0 no entra a la toma, y si la
-        pistola lo escanea (sobrante físico real) vuelve como no_encontrado."""
+        """Default solo_con_stock=True: un SKU en 0 no entra a la toma. Si la
+        pistola lo escanea (sobrante físico real) se AGREGA a la toma como línea
+        con stock_sistema 0 y se cuenta (H4); antes se descartaba como
+        no_encontrado y el sobrante se perdía."""
         _, pt_cero = self._producto('ZAPATILLA AGOTADA', sku=5000001, stock=0)
         self._producto('ZAPATILLA VIVA', sku=5000002, stock=5)
 
@@ -180,8 +182,17 @@ class SegmentacionTest(BaseTomaInventarioTest):
         resultado = self._importar_pistola(
             data['inventario_id'], 'sku;cantidad\n5000001;2\n'
         )
-        self.assertEqual(resultado['no_encontrados'], [str(pt_cero.sku)])
-        self.assertEqual(resultado['actualizados'], 0)
+        self.assertEqual(resultado['no_encontrados'], [])
+        self.assertEqual(resultado['agregados'], [str(pt_cero.sku)])
+        self.assertEqual(resultado['actualizados'], 1)
+        detalle = TomaInventarioDetalle.objects.get(
+            toma_inventario_id=data['inventario_id'], producto_talla=pt_cero
+        )
+        self.assertEqual(detalle.stock_sistema, 0)
+        self.assertEqual(detalle.stock_fisico, 2)
+        self.assertEqual(detalle.diferencia, 2)
+        toma = TomaInventario.objects.get(id=data['inventario_id'])
+        self.assertEqual(toma.total_productos_esperados, 2)
 
     def test_solo_con_stock_false_incluye_stock_cero(self):
         self._producto('ZAPATILLA AGOTADA', sku=5000010, stock=0)
@@ -239,13 +250,11 @@ class CargaPistolaDiferidaTest(BaseTomaInventarioTest):
         self.assertEqual(detalle.stock_sistema_ajustado, 10)
         self.assertEqual(detalle.diferencia, 0)
 
-    def test_carga_despues_de_venta_matutina_genera_falso_sobrante(self):
-        """GAP DOCUMENTADO: la fecha de conteo es el momento de la CARGA, no del
-        conteo físico. Si la tienda vendió antes de subir el archivo, la venta de
-        la mañana aparece como sobrante (+2) aunque anoche todo cuadraba.
-
-        Este test fija el comportamiento ACTUAL; si se implementa el campo
-        "fecha real del conteo" (plan), debe actualizarse para esperar diff 0.
+    def test_carga_despues_de_venta_matutina_sin_declarar_fecha_genera_falso_sobrante(self):
+        """Sin declarar cuándo se contó, la fecha de conteo sigue siendo el
+        momento de la CARGA (escáner en vivo): la venta de la mañana aparece como
+        sobrante (+2). Es el comportamiento por defecto para el conteo en vivo;
+        el caso «conté anoche y cargo hoy» se cubre en el test siguiente (N1).
         """
         ahora = timezone.localtime()
         corte = ahora - timedelta(hours=3)      # anoche: se contaron 10 físicas
@@ -258,15 +267,48 @@ class CargaPistolaDiferidaTest(BaseTomaInventarioTest):
         detalle = TomaInventarioDetalle.objects.get(toma_inventario_id=data['inventario_id'])
         self.assertEqual(detalle.stock_sistema, 10)  # snapshot de anoche: correcto
 
-        # Se sube HOY el archivo con lo contado ANOCHE (10 unidades)
+        # Se sube HOY el archivo con lo contado ANOCHE (10 unidades) sin decir cuándo
         self._importar_pistola(data['inventario_id'], 'sku;cantidad\n2100010;10\n')
         detalle.refresh_from_db()
 
         self.assertEqual(detalle.stock_movimientos_post_corte, -2)
         self.assertEqual(detalle.stock_sistema_ajustado, 8)
-        # Falso sobrante: si se aprueba y aplica, el sistema sumaría 2 unidades
-        # que en realidad se vendieron esta mañana.
         self.assertEqual(detalle.diferencia, 2)
+
+    def test_carga_con_tienda_cerrada_no_genera_falso_sobrante(self):
+        """N1: la toma se marcó «conté con la tienda cerrada»: el conteo físico
+        vale al corte y las ventas entre el corte y la carga no se descuentan del
+        sistema → diferencia 0 (antes +2, que al aplicar creaba stock inexistente)."""
+        ahora = timezone.localtime()
+        corte = ahora - timedelta(hours=3)
+        venta = ahora - timedelta(hours=1)
+
+        _, pt = self._producto('ZAPATILLA RUN', sku=2100011, stock=8)
+        self._mov(pt, -2, venta)
+
+        payload = {
+            'nombre': 'Toma nocturna', 'tipo_inventario': 'COMPLETO', 'filtros': {},
+            'fecha_corte': corte.strftime('%Y-%m-%dT%H:%M'), 'conteo_tienda_cerrada': True,
+        }
+        data = self.client.post(
+            reverse('api_crear_inventario'), data=json.dumps(payload), content_type='application/json'
+        ).json()
+        self.assertTrue(data['success'], data.get('error'))
+        toma = TomaInventario.objects.get(id=data['inventario_id'])
+        self.assertTrue(toma.conteo_tienda_cerrada)
+
+        resultado = self._importar_pistola(toma.id, 'sku;cantidad\n2100011;10\n')
+        self.assertEqual(resultado['actualizados'], 1)
+        detalle = toma.detalles.get()
+        self.assertEqual(detalle.stock_sistema, 10)
+        self.assertEqual(detalle.stock_movimientos_post_corte, 0)
+        self.assertEqual(detalle.stock_sistema_ajustado, 10)
+        self.assertEqual(detalle.diferencia, 0)
+        # fecha_conteo guardada = el corte (a resolución de minuto)
+        self.assertEqual(
+            timezone.localtime(detalle.fecha_conteo).strftime('%Y-%m-%dT%H:%M'),
+            corte.strftime('%Y-%m-%dT%H:%M'),
+        )
 
     def test_venta_posterior_al_conteo_registrado_no_altera_la_diferencia(self):
         """Una vez REGISTRADO el conteo, las ventas siguientes mueven por igual

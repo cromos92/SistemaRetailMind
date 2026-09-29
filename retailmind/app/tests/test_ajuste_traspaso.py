@@ -948,17 +948,23 @@ class AnularFacturaDteTraspasoTest(TestCase):
         self.assertEqual(dp.stock, 3)
         self.assertTrue(dp.activo)
 
-        # DTE NO se marca ANULADO.
+        # DTE NO se marca ANULADO (siguen 3 u activas para el receptor).
         dte.refresh_from_db()
-        self.assertNotEqual(dte.estado_dte, 'ANULADO')
+        self.assertEqual(dte.estado_dte, 'EMITIDO')
 
-        # NC creada con movimiento DEVOLUCION_NC.
+        # NC creada. Auditoría R-02: NO se escribe un ingreso DEVOLUCION_NC
+        # (sumado a la reducción del egreso dejaba +N fantasma en el kardex
+        # COMPLETADO); la reversa es stock + lote en el origen y el
+        # TRASPASO_SALIDA reducido a lo que sigue afuera.
         nc = Dte.objects.filter(documento_afectado=dte, es_nota_credito=True).first()
         self.assertIsNotNone(nc)
-        movs = Movimientos_Producto.objects.filter(
-            dte=nc, concepto='DEVOLUCION_NC',
-        )
-        self.assertEqual(movs.count(), 1)
+        self.assertFalse(Movimientos_Producto.objects.filter(dte=nc, concepto='DEVOLUCION_NC').exists())
+        salida = Movimientos_Producto.objects.get(dte=dte, concepto='TRASPASO_SALIDA')
+        self.assertEqual((salida.estado, salida.cantidad), ('COMPLETADO', -3))
+        from app.models import LoteProducto
+        lote = LoteProducto.objects.get(dte=nc, producto_talla=self.talla_origen)
+        self.assertEqual(lote.cantidad_disponible, 2)
+        self.assertIsNone(lote.movimiento_id)
 
 
 # =========================================================================

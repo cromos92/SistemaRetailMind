@@ -226,8 +226,19 @@ def detalle_devolucion_garantia(request, devolucion_id):
     )
     from .views_modulo_ventas import _get_qz_config
 
+    # Condición marcada por línea (no apto = no volvió/volverá a stock).
+    todas_no_aptas, ids_no_aptos = service.lineas_no_aptas_de(devolucion)
+    detalles = list(devolucion.detalles.all())
+    for det in detalles:
+        det.no_apto = (det.modo == 'CANTIDAD' and bool(det.dte_producto.productoTalla_id)
+                       and (todas_no_aptas or det.dte_producto_id in ids_no_aptos))
+
     context = {
         'devolucion': devolucion,
+        'detalles': detalles,
+        'motivo': service.motivo_limpio(devolucion.motivo),
+        # Qué pasó con el producto al aprobar (kardex ligado a la NC).
+        'inventario': service.inventario_de_devolucion(devolucion),
         # N° de operación / medio de Mercado Pago (None si no es por MP).
         'mercadopago': service.mercadopago_de_devolucion(devolucion),
         # Comprobantes mandados al cliente (bitácora de correo).
@@ -343,6 +354,13 @@ def api_generar_devolucion_garantia(request):
     motivo = _txt(body.get('motivo')) or 'Garantía aprobada'
     requerimiento_id = body.get('requerimiento_id')
     directa = body.get('directa') in (True, 1, '1', 'true')
+    # Producto NO APTO para la venta (global o `no_apto` por línea en
+    # `productos`): al aprobar no vuelve a stock. Default: apto, reingresa.
+    no_apto_global = body.get('no_apto') in (True, 1, '1', 'true')
+    lineas_no_aptas = [
+        p.get('dte_producto_id') for p in productos
+        if isinstance(p, dict) and p.get('no_apto') in (True, 1, '1', 'true')
+    ]
 
     if not folio:
         return JsonResponse({'success': False, 'error': 'folio_dte es requerido'}, status=400)
@@ -472,6 +490,8 @@ def api_generar_devolucion_garantia(request):
                 tipo_cuenta=body.get('tipo_cuenta', ''),
                 numero_cuenta=body.get('numero_cuenta', ''),
                 cuenta_titular_rut=body.get('cuenta_titular_rut', ''),
+                lineas_no_aptas=lineas_no_aptas,
+                no_apto=no_apto_global,
             )
 
             if directa:
@@ -492,6 +512,11 @@ def api_generar_devolucion_garantia(request):
                     numero_operacion_mp=_txt(body.get('numero_operacion_mp')),
                     devolver_mp_api=devolver_mp_api,
                     refund_ctx=refund_ctx,
+                    # En la directa quien firma no revisa línea por línea: vale
+                    # lo que marcó el cajero en el wizard (ya persistido en la
+                    # solicitud, se pasa explícito por claridad).
+                    lineas_no_aptas=lineas_no_aptas,
+                    no_apto=no_apto_global,
                 )
                 RegistroAutorizacion.objects.create(
                     codigo_usado=codigo_obj,
@@ -575,6 +600,8 @@ def api_generar_devolucion_garantia(request):
         'txt_generado': contenido_txt is not None,
         'txt_warnings': txt_warnings or [],
         'nc_txt_url': reverse('descargar_txt_nc_api', args=[nc.id]),
+        # Qué pasó con el producto: reingresos (stock+lote+kardex) y no aptos.
+        'inventario': getattr(devolucion, 'inventario', None),
     })
     return JsonResponse({
         'success': True,
@@ -722,6 +749,7 @@ def _payload_comprobante(devolucion):
     suc, emp, dte = devolucion.sucursal, devolucion.sucursal.empresa, devolucion.dte_original
     receptor, solicitante = devolucion.receptor, devolucion.solicitado_por
 
+    todas_no_aptas, ids_no_aptos = service.lineas_no_aptas_de(devolucion)
     productos = []
     for det in devolucion.detalles.all():
         dp = det.dte_producto
@@ -730,6 +758,9 @@ def _payload_comprobante(devolucion):
             'descripcion': dp.descripcion or '',
             'sku': str(pt.sku) if pt else '',
             'talla': (pt.talla or '') if pt else '',
+            # Marcado como no apto para la venta (no vuelve a stock al aprobar).
+            'no_apto': det.modo == 'CANTIDAD' and pt is not None
+                       and (todas_no_aptas or dp.id in ids_no_aptos),
             'modo': det.modo,
             'cantidad': int(det.cantidad or 0),
             'precio_unitario': int(det.precio_unitario or 0),
@@ -758,7 +789,7 @@ def _payload_comprobante(devolucion):
         'estado_display': devolucion.get_estado_display(),
         'fecha': creado.strftime('%d/%m/%Y'),
         'hora': creado.strftime('%H:%M'),
-        'motivo': devolucion.motivo or '',
+        'motivo': service.motivo_limpio(devolucion.motivo),
         'solicitante': (solicitante.get_full_name() or solicitante.username) if solicitante else '',
         'sucursal': {
             'empresa': emp.razon_social or emp.nombre or '',
@@ -926,6 +957,8 @@ def api_detalle_solicitud_devolucion_garantia(request, devolucion_id):
     )
 
     dte = devolucion.dte_original
+    # Lo que el solicitante marcó como no apto (el aprobador puede corregirlo).
+    todas_no_aptas, ids_no_aptos = service.lineas_no_aptas_de(devolucion)
     lineas = []
     for det in devolucion.detalles.all():
         dp = det.dte_producto
@@ -936,9 +969,15 @@ def api_detalle_solicitud_devolucion_garantia(request, devolucion_id):
         else:
             solicitado = int(det.cantidad or 0)
             conflicto = solicitado > disp['cantidad_disponible']
+        mueve_stock = det.modo == 'CANTIDAD' and bool(dp.productoTalla_id)
         lineas.append({
+            'dte_producto_id': dp.id,
             'descripcion': dp.descripcion,
             'sku': dp.productoTalla.sku if dp.productoTalla else '',
+            # Solo las líneas por cantidad con talla reingresan al inventario;
+            # `no_apto` es la propuesta del solicitante para esa línea.
+            'mueve_stock': mueve_stock,
+            'no_apto': mueve_stock and (todas_no_aptas or dp.id in ids_no_aptos),
             'modo': det.modo,
             'cantidad': det.cantidad,
             'precio_unitario': float(det.precio_unitario or 0),
@@ -957,7 +996,7 @@ def api_detalle_solicitud_devolucion_garantia(request, devolucion_id):
             'id': devolucion.id,
             'numero_operacion': devolucion.numero_operacion,
             'estado': devolucion.estado,
-            'motivo': devolucion.motivo,
+            'motivo': service.motivo_limpio(devolucion.motivo),
             'monto_total': float(devolucion.monto_total),
             'solicitado_por': devolucion.solicitado_por.username if devolucion.solicitado_por else '',
             'fecha_solicitud': timezone.localtime(devolucion.created_at).strftime('%d/%m/%Y %H:%M'),
@@ -1060,6 +1099,15 @@ def api_aprobar_devolucion_garantia(request, devolucion_id):
                       'de Mercado Pago con su N° de operación.'),
         }, status=403)
 
+    # Condición del producto decidida por el aprobador: `lineas_no_aptas`
+    # (ids de Dte_Productos; lista vacía = todas aptas) o `no_apto` global.
+    # Si el modal no manda nada (cliente viejo), vale la marca del solicitante.
+    lineas_no_aptas = body.get('lineas_no_aptas')
+    if lineas_no_aptas is not None and not isinstance(lineas_no_aptas, list):
+        return JsonResponse({'success': False, 'error': 'lineas_no_aptas debe ser una lista'}, status=400)
+    no_apto = body.get('no_apto')
+    no_apto = (no_apto in (True, 1, '1', 'true')) if no_apto is not None else None
+
     # Refunds por API hechos en este intento (para registrarlos si la
     # transacción se revierte después de que MP devolvió).
     refund_ctx = {'refunds': [], 'numero_operacion': ''}
@@ -1075,6 +1123,8 @@ def api_aprobar_devolucion_garantia(request, devolucion_id):
             numero_operacion_mp=_txt(body.get('numero_operacion_mp')),
             devolver_mp_api=devolver_mp_api,
             refund_ctx=refund_ctx,
+            lineas_no_aptas=lineas_no_aptas,
+            no_apto=no_apto,
         )
     except service.DevolucionGarantiaError as e:
         # La solicitud queda PENDIENTE: el aprobador decide rechazar o reintentar.
@@ -1103,6 +1153,8 @@ def api_aprobar_devolucion_garantia(request, devolucion_id):
             'txt_generado': contenido_txt is not None,
             'txt_warnings': txt_warnings or [],
             'nc_txt_url': reverse('descargar_txt_nc_api', args=[nc.id]),
+            # Qué pasó con el producto: reingresos (stock+lote+kardex) y no aptos.
+            'inventario': getattr(devolucion, 'inventario', None),
         },
     })
 

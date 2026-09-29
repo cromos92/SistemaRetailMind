@@ -1484,6 +1484,24 @@ def construir_nombre_item_con_sku(item, max_len=80):
     return nmb
 
 
+def _partir_nombre_en_palabra(texto, limite):
+    """Divide `texto` en (lo que cabe en `limite`, el resto) cortando en un
+    espacio, no a mitad de una palabra.
+
+    El overflow del NmbItem se imprime en el DscItem, debajo del nombre. Con
+    el corte a los 80 chars exactos, un desglose de tallas largo salía como
+    "... 2:5.5" / "Y 2:6Y": la talla 5.5Y quedaba partida en dos líneas del
+    documento y se leía como talla 5.5 más una "Y" suelta. Si en el tramo
+    no hay ningún espacio (una sola palabra enorme), se corta igual que antes.
+    """
+    if len(texto) <= limite:
+        return texto, ''
+    corte = texto.rfind(' ', 0, limite + 1)
+    if corte <= 0:
+        return texto[:limite], texto[limite:]
+    return texto[:corte].rstrip(), texto[corte:].lstrip()
+
+
 def construir_nombre_y_descripcion_item(item, max_nmb=80, max_dsc=1000):
     """
     Construye los dos campos del detalle del DTE:
@@ -1527,8 +1545,7 @@ def construir_nombre_y_descripcion_item(item, max_nmb=80, max_dsc=1000):
         # `articulo` cargado). El nombre YA identifica el ítem: anteponerle el
         # literal 'Item' sólo ensuciaba el documento impreso ("Item ACME AZUL
         # 2:42") y comía 5 de los 80 chars del campo.
-        nombre_que_cabe = nombre_full[:max_nmb]
-        nombre_overflow = nombre_full[max_nmb:]
+        nombre_que_cabe, nombre_overflow = _partir_nombre_en_palabra(nombre_full, max_nmb)
         nmb = nombre_que_cabe
     else:
         espacio_nombre_en_nmb = max_nmb - len(sku) - 1  # -1 por el espacio separador
@@ -1537,8 +1554,7 @@ def construir_nombre_y_descripcion_item(item, max_nmb=80, max_dsc=1000):
             nombre_que_cabe = ''
             nombre_overflow = nombre_full
         else:
-            nombre_que_cabe = nombre_full[:espacio_nombre_en_nmb]
-            nombre_overflow = nombre_full[espacio_nombre_en_nmb:]
+            nombre_que_cabe, nombre_overflow = _partir_nombre_en_palabra(nombre_full, espacio_nombre_en_nmb)
             if nombre_que_cabe:
                 nmb = f"{sku} {nombre_que_cabe}".strip()[:max_nmb]
             else:

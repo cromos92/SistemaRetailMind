@@ -2844,42 +2844,52 @@ def revertir_sku_despachado(request):
                     )
                 }, status=400)
 
+            # El SKU tiene que ser de la sucursal de la cotización (mismo guard
+            # que asignar_sku_pendiente): reintegrar a una talla de otra bodega
+            # sumaría stock a un inventario que nunca lo despachó. Se valida
+            # ANTES de mover nada, porque un return dentro del atomic no
+            # revierte lo ya reingresado en filas anteriores.
+            for fila in filas_sku:
+                pt = fila.producto_talla
+                if pt and pt.producto and pt.producto.sucursal_id != cotizacion.sucursal_id:
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            f'El SKU {pt.sku} pertenece a otra sucursal '
+                            f'({pt.producto.sucursal.alias if pt.producto.sucursal else "?"}), '
+                            f'no a la de la cotización ({cotizacion.sucursal.alias}): '
+                            'no se puede reintegrar su stock desde aquí.'
+                        )
+                    }, status=400)
+
+            # Reingreso por inventario_service: stock plano + lote FIFO + kardex
+            # en una transacción con lock. Antes se sumaba el stock y se escribía
+            # el kardex sin crear lote (H6): la capa FIFO quedaba por debajo del
+            # stock para siempre. Origen y destino = sucursal de la cotización,
+            # para que el resumen de existencias (que corta por sucursal_origen)
+            # netee la reversa contra el despacho.
+            from .services import inventario_service
             reintegrados = []
             for fila in filas_sku:
                 pt = fila.producto_talla
                 if not pt:
                     continue
 
-                pt_lock = (
-                    Producto_Talla.objects
-                    .select_for_update()
-                    .select_related('producto')
-                    .get(pk=pt.pk)
-                )
-                pt_lock.stock = (pt_lock.stock or 0) + fila.cantidad
-                pt_lock.save(update_fields=['stock'])
-
-                Movimientos_Producto.objects.create(
-                    ProductoTalla=pt_lock,
-                    dte=cotizacion.dte,
+                inventario_service.ingresar(
+                    pt, fila.cantidad, 'DESPACHO_COTIZACION', request.user.username,
                     sucursal_destino=cotizacion.sucursal,
-                    cantidad=fila.cantidad,
-                    costo=int(fila.costo_unitario or 0),
-                    precio=int(fila.precio_unitario or 0),
-                    concepto='DESPACHO_COTIZACION',
-                    tipo_movimiento='INGRESO',
-                    estado='COMPLETADO',
-                    responsable=request.user.get_full_name() or request.user.username,
-                    referencia_externa=cotizacion.numero_cotizacion,
+                    sucursal_origen=cotizacion.sucursal,
+                    dte=cotizacion.dte,
+                    costo_unitario=int(fila.costo_unitario or 0),
+                    precio_unitario=int(fila.precio_unitario or 0),
                     observaciones=(
                         f'Reversa de despacho diferido cotización '
                         f'{cotizacion.numero_cotizacion} - {detalle.descripcion[:60]} - '
                         f'Motivo: {motivo[:80]}'
                     ),
-                    fecha=timezone.localdate(),
-                    hora=timezone.localtime().time(),
+                    referencia_externa=cotizacion.numero_cotizacion,
                 )
-                reintegrados.append({'sku': str(pt_lock.sku), 'cantidad': fila.cantidad})
+                reintegrados.append({'sku': str(pt.sku), 'cantidad': fila.cantidad})
 
             # Volver la línea del DTE a "pendiente de despacho".
             # Se hace SIEMPRE que se revierta algo: la línea se completa (con

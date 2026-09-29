@@ -2107,7 +2107,11 @@ def confirmar_recepcion_api(request):
         # ============================================
         # FASE 6: Notificación (FUERA de la transacción principal)
         # ============================================
-        if productos_problemas > 0:
+        # `productos_problemas` cuenta también las líneas de GUÍA cuyo faltante
+        # ya volvió solo al origen (REGULARIZADO): avisar "Regularización
+        # requerida" por ellas mandaba al emisor a regularizar un DTE que quedó
+        # RECEPCIONADO_COMPLETO. Sólo se notifica lo que de verdad queda abierto.
+        if (productos_faltantes_danados + productos_sobrantes) > 0:
             try:
                 from .models import NotificacionDTE
                 detalle_lines = [f"- {p['sku']}: {p['estado']} - {p['observaciones']}" for p in productos_con_problemas_data]
@@ -2466,6 +2470,20 @@ def rechazar_recepcion_api(request):
     if not motivo_rechazo:
         return JsonResponse({'success': False, 'error': 'Debes ingresar un motivo del rechazo.'}, status=400)
 
+    # `Dte.motivo_rechazo` es CharField(100): con más largo PostgreSQL rechaza
+    # el UPDATE y el operador veía un 500 genérico (el input web ya limita a
+    # 100, pero el cliente Tauri u otro llamador no). Se valida ANTES del
+    # atomic para que el error sea claro y no se toque nada.
+    MAX_MOTIVO_RECHAZO = Dte._meta.get_field('motivo_rechazo').max_length
+    if len(motivo_rechazo) > MAX_MOTIVO_RECHAZO:
+        return JsonResponse({
+            'success': False,
+            'error': (
+                f'El motivo del rechazo no puede superar {MAX_MOTIVO_RECHAZO} caracteres '
+                f'(tiene {len(motivo_rechazo)}).'
+            ),
+        }, status=400)
+
     try:
         dte = Dte.objects.select_related('sucursal').get(id=dte_id)
     except Dte.DoesNotExist:
@@ -2550,9 +2568,14 @@ def rechazar_recepcion_api(request):
                       'precio', 'fecha', 'hora')
             )
 
+            from django.db.models.functions import Concat, Coalesce
+            from django.db.models import Value, TextField
+            from .services.pdf_comprobante_rechazo import MARCA_RECHAZO_JSON
+
             unidades_devueltas = 0
             for mov in movimientos_salida:
                 cantidad_revertir = abs(mov.cantidad or 0)
+                lote = None
                 if cantidad_revertir > 0 and mov.ProductoTalla_id:
                     Producto_Talla.objects.filter(id=mov.ProductoTalla_id).update(
                         stock=F('stock') + cantidad_revertir
@@ -2563,7 +2586,7 @@ def rechazar_recepcion_api(request):
                     # agrandar el drift stock↔lotes. movimiento=None: si el
                     # DTE se rehabilita y luego se ajusta a 0, el
                     # TRASPASO_SALIDA se borra y el CASCADE se llevaría el lote.
-                    _reponer_lote_traspaso(
+                    lote = _reponer_lote_traspaso(
                         mov.ProductoTalla, cantidad_revertir,
                         costo=mov.costo, sobreprecio=mov.sobreprecio, precio=mov.precio,
                         dte=dte, movimiento=None,
@@ -2571,20 +2594,30 @@ def rechazar_recepcion_api(request):
                         observaciones=f'Devolución por rechazo DTE #{dte.numero_documento}',
                     )
 
-            if movimientos_salida:
-                from django.db.models.functions import Concat, Coalesce
-                from django.db.models import Value, TextField
-                Movimientos_Producto.objects.filter(
-                    id__in=[m.id for m in movimientos_salida]
-                ).update(
+                # Evidencia estructurada del rechazo POR LÍNEA (quién, cuándo,
+                # motivo, unidades devueltas y lote de reposición). No hay
+                # modelo de eventos de rechazo y no se crean migraciones acá,
+                # así que viaja como una línea JSON dentro de `observaciones`;
+                # de ella sale el comprobante (comprobante_rechazo_dte_api) aun
+                # después de cancelar/rehabilitar, que borran `motivo_rechazo`.
+                # Coalesce: en PostgreSQL CONCAT(NULL, x) es NULL y el
+                # observaciones original podía venir vacío.
+                marca = json.dumps({
+                    'usuario': usuario,
+                    'fecha': hoy.strftime('%Y-%m-%dT%H:%M:%S'),
+                    'motivo': motivo_rechazo,
+                    'cantidad': cantidad_revertir,
+                    'lote_id': getattr(lote, 'id', None),
+                    'sucursal_destino_id': int(sucursal_destino_id),
+                })
+                Movimientos_Producto.objects.filter(id=mov.id).update(
                     estado='CANCELADO',
-                    # Coalesce: en PostgreSQL CONCAT(NULL, x) es NULL y el
-                    # observaciones original podía venir vacío.
                     observaciones=Concat(
                         Coalesce(F('observaciones'), Value('')),
                         Value(
                             f'\n❌ RECHAZADO por {usuario} {hoy.strftime("%Y-%m-%d %H:%M")}: '
                             f'{motivo_rechazo} — stock devuelto al origen.'
+                            f'\n{MARCA_RECHAZO_JSON} {marca}'
                         ),
                         output_field=TextField(),
                     ),
@@ -2642,6 +2675,11 @@ def rechazar_recepcion_api(request):
             ),
             'motivo': motivo_rechazo,
             'unidades_devueltas': unidades_devueltas,
+            'rechazado_por': usuario,
+            'fecha_rechazo': hoy.strftime('%Y-%m-%d %H:%M'),
+            # PDF del rechazo (firma en destino / recibe en origen): el front
+            # lo ofrece en el aviso de éxito y en la fila del rechazado.
+            'comprobante_url': f'/app/dte/{dte.id}/comprobante-rechazo/',
         })
 
     except Exception:
@@ -2651,6 +2689,58 @@ def rechazar_recepcion_api(request):
             'success': False,
             'error': 'Error al rechazar la recepción. No se registró ningún cambio.'
         }, status=500)
+
+
+@login_required
+@requiere_permiso('recepcion_dte', 'puede_ver')
+@require_GET
+def comprobante_rechazo_dte_api(request, dte_id):
+    """PDF A4 del comprobante de rechazo de un traspaso (R-05).
+
+    Lo pueden bajar la sucursal ORIGEN (recibe la mercadería de vuelta) y la
+    DESTINO (la que rechazó); cualquier otra recibe 403 aunque tenga la
+    pantalla. El detalle sale de la marca JSON que `rechazar_recepcion_api`
+    deja en cada TRASPASO_SALIDA y del bloque de `referencias`, así que sigue
+    disponible después de cancelar o rehabilitar el documento.
+    """
+    from .utils_permisos import puede_ver_sucursal
+    from .services.pdf_comprobante_rechazo import (
+        payload_comprobante_rechazo, generar_comprobante_rechazo_pdf,
+    )
+
+    try:
+        dte = Dte.objects.select_related('emisor', 'receptor', 'sucursal__empresa').get(id=dte_id)
+    except Dte.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'DTE no encontrado.'}, status=404)
+    if dte.tipo_transaccion != 'TRASPASO':
+        return JsonResponse({'success': False, 'error': 'El DTE no es un traspaso.'}, status=400)
+
+    destino = _sucursal_destino_traspaso(dte)
+    partes = [sid for sid in (dte.sucursal_id, getattr(destino, 'id', None)) if sid]
+    if not any(puede_ver_sucursal(request.user, sid) for sid in partes):
+        return JsonResponse(
+            {'success': False, 'error': 'Solo las sucursales origen o destino del traspaso pueden ver este comprobante.'},
+            status=403,
+        )
+
+    payload = payload_comprobante_rechazo(dte, destino, impreso_por=request.user.username)
+    if payload is None:
+        return JsonResponse(
+            {'success': False, 'error': 'Este documento no registra un rechazo de recepción.'},
+            status=404,
+        )
+    try:
+        pdf = generar_comprobante_rechazo_pdf(payload)
+    except Exception:
+        logger.exception("No se pudo generar el comprobante de rechazo del DTE %s", dte.id)
+        return JsonResponse({'success': False, 'error': 'No se pudo generar el comprobante.'}, status=500)
+
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = (
+        f'inline; filename="comprobante_rechazo_{dte.tipo_documento}_{dte.numero_documento}.pdf"'
+        .replace(' ', '_')
+    )
+    return response
 
 
 @login_required
@@ -3446,10 +3536,14 @@ def cancelar_dte_traspaso_api(request):
                     )
                     unidades_revertidas += cantidad_revertir
                     # Repone la capa FIFO que consumió el despacho.
+                    # movimiento=None (como rechazar/ajustar): LoteProducto.
+                    # movimiento es CASCADE y una NC por línea posterior podía
+                    # borrar este TRASPASO_SALIDA llevándose el lote (stock
+                    # plano 18 vs lotes 15, auditoría R-03).
                     _reponer_lote_traspaso(
                         mov.ProductoTalla, cantidad_revertir,
                         costo=mov.costo, sobreprecio=mov.sobreprecio, precio=mov.precio,
-                        dte=dte, movimiento=mov,
+                        dte=dte, movimiento=None,
                         fecha_original=mov.fecha, hora_original=mov.hora,
                         observaciones=f'Devolución por cancelación DTE #{dte.numero_documento}',
                     )
@@ -4392,13 +4486,26 @@ def ajustar_dte_emisor_api(request):
                         observaciones=f'Ajuste emisor pre-recepción DTE #{dte.numero_documento}',
                     )
                     if mov_salida is not None:
+                        nota_ajuste = (
+                            f' [AJUSTE {hoy.strftime("%Y-%m-%d %H:%M")} por {usuario}: '
+                            f'{cantidad_original}->{nueva_cant}]'
+                        )
                         if nueva_cant == 0:
-                            mov_salida.delete()
+                            # Nunca se borra kardex: la fila queda CANCELADO
+                            # con su cantidad original (igual que rechazar y
+                            # cancelar). Borrarla arrastraba en CASCADE los
+                            # lotes colgados de ella y los reportes de saldos
+                            # ya ignoran CANCELADO (auditoría R-03).
+                            mov_salida.estado = 'CANCELADO'
+                            mov_salida.observaciones = (
+                                (mov_salida.observaciones or '')
+                                + nota_ajuste + ' — stock devuelto al origen'
+                            )[:500]
+                            mov_salida.save(update_fields=['estado', 'observaciones'])
                         else:
                             mov_salida.cantidad = -nueva_cant
                             mov_salida.observaciones = (
-                                (mov_salida.observaciones or '')
-                                + f' [AJUSTE {hoy.strftime("%Y-%m-%d %H:%M")} por {usuario}: {cantidad_original}->{nueva_cant}]'
+                                (mov_salida.observaciones or '') + nota_ajuste
                             )[:500]
                             mov_salida.save(update_fields=['cantidad', 'observaciones'])
 
@@ -4463,8 +4570,20 @@ def ajustar_dte_emisor_api(request):
                     f" -{diferencial_unidades} uds"
                     f" (-${int(diferencial_neto):,} neto). Motivo: {motivo}"
                 )
+                campos_dte = ['monto_neto', 'monto_con_iva', 'unidades_productos', 'referencias']
+                # Si el ajuste dejó el documento en 0 unidades ya no hay nada
+                # que recepcionar: se cierra CANCELADO (estado terminal que
+                # emitidos_pendientes, rechazar y cancelar ya entienden). Antes
+                # quedaba EMITIDO con 0 u, visible como "pendiente" para siempre.
+                if int(nuevas_unidades) == 0 and dte.estado_dte in ('EMITIDO', 'ACEPTADO', 'RECHAZADO'):
+                    dte.estado_dte = 'CANCELADO'
+                    registro += (
+                        f"\n❌ DTE CANCELADO por {usuario} el {hoy.strftime('%Y-%m-%d %H:%M')}: "
+                        f"el ajuste dejó el documento sin unidades."
+                    )
+                    campos_dte.append('estado_dte')
                 dte.referencias = ((dte.referencias or '') + registro).strip()
-                dte.save(update_fields=['monto_neto', 'monto_con_iva', 'unidades_productos', 'referencias'])
+                dte.save(update_fields=campos_dte)
 
             tipo_doc_original = (dte.tipo_documento or '').upper()
             es_facturable = tipo_doc_original in (
@@ -5309,6 +5428,9 @@ def cambiar_talla_dte_traspaso_api(request):
                 # nunca es un 500 en este repo; queda para reconciliación).
                 try:
                     consumir_lotes_fifo(talla_destino, cantidad)
+                    # movimiento=None: ligado a `mov_origen`, un ajuste a 0 de
+                    # la línea origen que borrara el TRASPASO_SALIDA se llevaba
+                    # el lote en CASCADE (M: stock 18 vs lotes 17, auditoría R-03).
                     lote_reingreso = crear_lote(
                         talla_origen,
                         cantidad,
@@ -5316,7 +5438,7 @@ def cambiar_talla_dte_traspaso_api(request):
                         sobreprecio_unitario=dp_origen.sobreprecio,
                         precio_venta_unitario=dp_origen.precio,
                         dte=dte,
-                        movimiento=mov_origen,
+                        movimiento=None,
                         observaciones=f'CAMBIO TALLA reingreso DTE #{dte.numero_documento}',
                     )
                     # LoteProducto.fecha_ingreso es auto_now_add: el kwarg
@@ -8672,6 +8794,10 @@ def regularizar_producto_api(request):
                     Producto_Talla.objects.filter(id=producto_cambio.id).update(
                         stock=F('stock') - cantidad_envio
                     )
+                    # Auditoría caminos 29-09 (H8): a diferencia de emitir_dte,
+                    # esta guía no bajaba la capa FIFO del emisor (lotes > stock
+                    # por cada cambio enviado). Mismo helper que rehabilitar.
+                    _consumir_lotes_traspaso(producto_cambio, cantidad_envio, dte=dte_cambio)
 
                     # 4. Crear movimiento de salida
                     Movimientos_Producto.objects.create(
@@ -10465,23 +10591,35 @@ def registrar_movimiento_producto(producto_talla, concepto, cantidad, responsabl
                                 dte=None, ticket=None, sucursal_origen=None,
                                 sucursal_destino=None, observaciones=None,
                                 referencia_externa=None, crear_lote_fifo=True,
-                                consumir_lotes=True):
+                                consumir_lotes=True, costo_unitario=None,
+                                sobreprecio_unitario=None, precio_unitario=None):
     """
-    Función centralizada para registrar movimientos de productos
-    Ahora incluye soporte para FIFO automático.
+    Escritor legacy de stock + kardex, hoy FACHADA de `inventario_service`
+    (auditoría 29-09-2026, H13): el `stock += n; save()` sin lock perdía ventas
+    concurrentes del POS, los ingresos con concepto fuera de una lista fija
+    (REGULARIZACION_TRASPASO, CORRECCION_STOCK, DEVOLUCION_NC…) subían stock y
+    kardex sin lote, y los egresos consumían lotes best-effort. Ahora
+    `ingresar`/`egresar` bloquean la fila, usan F() y dejan lote + kardex en la
+    misma transacción, y los 12 llamadores no cambian de contrato:
 
-    consumir_lotes=False es para llamadores que ya gestionaron los lotes por
-    su cuenta (aplicar_salida_stock_producto, ajustar_lote, consumir_stock_fifo
-    de views_modulo_productos) — si no, un egreso consumiría lotes dos veces.
+    - crear_lote_fifo=False: el llamador ya creó el lote a mano y lo enlaza
+      después (gestión-inventarios sobrante, crear_lote_manual, ajustar_lote).
+    - consumir_lotes=False: el llamador ya bajó los lotes (aplicar_salida_stock,
+      ajustar_lote, consumir_stock_fifo de views_modulo_productos).
+    - Nunca valida stock (permitir_stock_insuficiente): cada vista valida antes.
+    - sucursal_origen/destino por defecto = producto.sucursal (ambas, como antes);
+      costo/sobreprecio/precio por defecto = ficha del producto, o los kwargs
+      nuevos (costo del DTE en reparaciones / modal producto existente).
     """
     from .models import Movimientos_Producto
-    
+    from .services import inventario_service
+
     # Determinar sucursales si no se proporcionan
     if not sucursal_origen:
         sucursal_origen = producto_talla.producto.sucursal
     if not sucursal_destino:
         sucursal_destino = producto_talla.producto.sucursal
-    
+
     # Si no hay movimientos previos, crear saldo inicial con el stock legacy.
     #
     # `Movimientos_Producto.fecha` tiene default=django_date_today, así que este
@@ -10514,64 +10652,56 @@ def registrar_movimiento_producto(producto_talla, concepto, cantidad, responsabl
             fecha=fecha_saldo_inicial,
         )
 
-    # Crear el movimiento
-    movimiento = Movimientos_Producto.objects.create(
-        ProductoTalla=producto_talla,
+    if cantidad == 0:
+        # Registro documental (p.ej. ajustar_lote sin diferencia): el kardex
+        # legacy lo aceptaba y no toca stock; el servicio exige cantidad > 0.
+        return Movimientos_Producto.objects.create(
+            ProductoTalla=producto_talla,
+            dte=dte,
+            ticket=ticket,
+            sucursal_origen=sucursal_origen,
+            sucursal_destino=sucursal_destino,
+            cantidad=0,
+            costo=int(costo_unitario or producto_talla.producto.costo or 0),
+            sobreprecio=int(sobreprecio_unitario or producto_talla.producto.sobreprecio or 0),
+            precio=int(precio_unitario or producto_talla.producto.precioventa or 0),
+            concepto=concepto,
+            responsable=inventario_service._nombre_responsable(responsable),
+            observaciones=observaciones,
+            referencia_externa=referencia_externa,
+        )
+
+    comunes = dict(
         dte=dte,
         ticket=ticket,
         sucursal_origen=sucursal_origen,
         sucursal_destino=sucursal_destino,
-        cantidad=cantidad,
-        costo=producto_talla.producto.costo,
-        sobreprecio=producto_talla.producto.sobreprecio,
-        precio=producto_talla.producto.precioventa,
-        concepto=concepto,
-        responsable=responsable,
         observaciones=observaciones,
-        referencia_externa=referencia_externa
+        referencia_externa=referencia_externa,
     )
-    
-    # Actualizar stock del producto
-    producto_talla.stock += cantidad
-    producto_talla.save()
+    if cantidad > 0:
+        # Ingreso: stock F() + lote (salvo crear_lote_fifo=False) + kardex, con
+        # lock. Costo/precio: kwargs explícitos o, si vienen en None/0, la ficha.
+        return inventario_service.ingresar(
+            producto_talla, cantidad, concepto, responsable,
+            costo_unitario=costo_unitario or 0,
+            sobreprecio_unitario=sobreprecio_unitario or 0,
+            precio_unitario=precio_unitario or 0,
+            crear_lote=crear_lote_fifo,
+            **comunes,
+        )
 
-    # Consumir lotes FIFO en egresos (best-effort): sin esto, traspasos vía
-    # modelo Traspaso y ajustes negativos bajaban el stock plano dejando los
-    # lotes inflados (drift crónico detectado en la auditoría jul-2026).
-    if consumir_lotes and cantidad < 0:
-        try:
-            from app.services.inventario_service import consumir_lotes_fifo
-            consumir_lotes_fifo(producto_talla, -cantidad, usar_lock=False)
-        except Exception as e_lotes:
-            import logging
-            logging.getLogger('app').warning(
-                'registrar_movimiento_producto: lotes FIFO no consumidos sku=%s cantidad=%s: %s',
-                producto_talla.sku, cantidad, e_lotes,
-            )
-
-    # Crear lote FIFO para ingresos (solo si es positivo y se solicita)
-    # Lista de conceptos que generan lotes FIFO automáticamente
-    if crear_lote_fifo and cantidad > 0 and concepto in [
-        'INGRESO_INICIAL', 'INGRESO_MANUAL', 'RECEPCION_COMPRA', 'REPOSICION_STOCK',
-        'DEVOLUCION_CLIENTE', 'TRASPASO_ENTRADA', 'AJUSTE_POSITIVO', 'DONACION_RECIBIDA',
-        'CAMBIO_PRODUCTO_ENTRADA'
-    ]:
-        try:
-            crear_lote_producto(
-                producto_talla=producto_talla,
-                cantidad=cantidad,
-                costo_unitario=producto_talla.producto.costo,
-                sobreprecio_unitario=producto_talla.producto.sobreprecio,
-                precio_venta_unitario=producto_talla.producto.precioventa,
-                dte=dte,
-                movimiento=movimiento,
-                observaciones=f"Lote automático - {concepto} - {observaciones or ''}"
-            )
-        except Exception as e:
-            import logging
-            logging.getLogger('app').warning("Error creando lote FIFO: %s", e)
-    
-    return movimiento
+    # Egreso: consume lotes FIFO (salvo consumir_lotes=False) y baja stock con
+    # lock. `permitir_stock_insuficiente=True` porque esta función nunca validó
+    # stock: revertir-a-pendiente, ajustar_lote, aplicar_salida y la app móvil
+    # dependen de que no lance; el negativo queda VISIBLE (nunca clamp a 0).
+    return inventario_service.egresar(
+        producto_talla, -cantidad, concepto, responsable,
+        precio_unitario=precio_unitario or 0,
+        permitir_stock_insuficiente=True,
+        consumir_lotes=consumir_lotes,
+        **comunes,
+    )
 
 def obtener_siguiente_correlativo(sucursal, tipo):
     """
@@ -10951,14 +11081,23 @@ def crear_ajuste_inventario(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
+# Auditoría tomas 29-09 (H10): INGRESO_INICIAL y DEVOLUCION_CLIENTE ya no se
+# ofrecen. Un "saldo inicial" fechado hoy entra a los reportes como
+# abastecimiento y una "devolución de cliente" sin ticket ni NC como reingreso
+# post-venta sin documento (eso lo cubre el módulo de cambios/NC). Si un cliente
+# viejo (app móvil sin actualizar) los sigue mandando, se reclasifican a
+# AJUSTE_POSITIVO dejando constancia en observaciones.
 CONCEPTOS_AJUSTE_RAPIDO_INGRESO = [
-    'INGRESO_INICIAL',
-    'DEVOLUCION_CLIENTE',
     'REGULARIZACION_TRASPASO',
     'AJUSTE_POSITIVO',
     'DONACION_RECIBIDA',
     'CAMBIO_PRODUCTO_ENTRADA',
 ]
+
+CONCEPTOS_AJUSTE_RAPIDO_LEGACY = {
+    'INGRESO_INICIAL': 'AJUSTE_POSITIVO',
+    'DEVOLUCION_CLIENTE': 'AJUSTE_POSITIVO',
+}
 
 CONCEPTOS_AJUSTE_RAPIDO_EGRESO = [
     'AJUSTE_NEGATIVO',
@@ -11077,12 +11216,22 @@ def ajuste_stock_rapido(request):
     sku_raw = str(data.get('sku', '')).strip()
     concepto = str(data.get('concepto', '')).strip()
     observaciones = str(data.get('observaciones', '')).strip()
+    # Clave de idempotencia (misma convención que la app móvil): el template
+    # puede mandar un UUID por formulario; un reintento de red o doble click
+    # con el mismo request_id devuelve el movimiento ya registrado.
+    request_id = str(data.get('request_id') or '').strip()[:64]
 
     try:
         cantidad = int(data.get('cantidad', 0))
     except (TypeError, ValueError):
         cantidad = 0
     cantidad = abs(cantidad)
+
+    if concepto in CONCEPTOS_AJUSTE_RAPIDO_LEGACY:
+        # H10: concepto retirado del formulario; se reclasifica sin rechazar.
+        observaciones = (f'{observaciones} [concepto {concepto} reclasificado a '
+                         f'{CONCEPTOS_AJUSTE_RAPIDO_LEGACY[concepto]}]').strip()
+        concepto = CONCEPTOS_AJUSTE_RAPIDO_LEGACY[concepto]
 
     if not sku_raw:
         return JsonResponse({'success': False, 'error': 'Debe ingresar un SKU'}, status=400)
@@ -11132,26 +11281,60 @@ def ajuste_stock_rapido(request):
 
     es_egreso = concepto in conceptos_egreso
     cantidad_mov = -cantidad if es_egreso else cantidad
-
-    if es_egreso:
-        stock_disponible = producto_talla.stock_sucursal(sucursal.id)
-        if stock_disponible < cantidad:
-            return JsonResponse({
-                'success': False,
-                'error': f'Stock insuficiente. Disponible: {stock_disponible}, intentaste restar {cantidad}.'
-            }, status=400)
-
+    referencia = f'AJUSTE_STOCK_RAPIDO:{request_id}' if request_id else 'AJUSTE_STOCK_RAPIDO'
     responsable = request.user.get_full_name() or request.user.username
-    movimiento = registrar_movimiento_producto(
-        producto_talla=producto_talla,
-        concepto=concepto,
-        cantidad=cantidad_mov,
-        responsable=responsable,
-        sucursal_origen=sucursal,
-        sucursal_destino=sucursal,
-        observaciones=observaciones,
-        referencia_externa='AJUSTE_STOCK_RAPIDO'
-    )
+
+    # Auditoría tomas 29-09 (H9): antes kardex, stock y lote se escribían en
+    # tres pasos sin transacción ni lock (dos clicks = dos ajustes; el
+    # read-modify-write pisaba ventas concurrentes del POS). Ahora: una
+    # transacción, fila bloqueada, validación de stock sobre la fila bloqueada
+    # e idempotencia por request_id, y la escritura pasa por inventario_service
+    # vía registrar_movimiento_producto (stock F() + lote + kardex juntos).
+    with transaction.atomic():
+        if request_id:
+            existente = (
+                Movimientos_Producto.objects.filter(referencia_externa=referencia)
+                .select_related('ProductoTalla', 'ProductoTalla__producto')
+                .first()
+            )
+            if existente:
+                pt_prev = existente.ProductoTalla
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Ajuste ya registrado (reintento ignorado)',
+                    'idempotente': True,
+                    'movimiento_id': existente.id,
+                    'sku': pt_prev.sku,
+                    'producto': pt_prev.producto.articulo,
+                    'talla': pt_prev.talla or 'Sin talla',
+                    'tipo': 'EGRESO' if existente.cantidad < 0 else 'INGRESO',
+                    'cantidad': abs(existente.cantidad),
+                    'nuevo_stock': pt_prev.stock_sucursal(sucursal.id),
+                })
+
+        producto_talla = (
+            Producto_Talla.objects.select_for_update()
+            .select_related('producto', 'producto__sucursal')
+            .get(id=producto_talla.id)
+        )
+        if es_egreso:
+            stock_disponible = producto_talla.stock_sucursal(sucursal.id)
+            if stock_disponible < cantidad:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Stock insuficiente. Disponible: {stock_disponible}, intentaste restar {cantidad}.'
+                }, status=400)
+
+        movimiento = registrar_movimiento_producto(
+            producto_talla=producto_talla,
+            concepto=concepto,
+            cantidad=cantidad_mov,
+            responsable=responsable,
+            sucursal_origen=sucursal,
+            sucursal_destino=sucursal,
+            observaciones=observaciones,
+            referencia_externa=referencia,
+        )
 
     return JsonResponse({
         'success': True,
@@ -20419,7 +20602,9 @@ def api_detalle_dte_completo(request, dte_id):
 
         # Obtener productos del DTE
         productos = []
-        dte_productos_qs = Dte_Productos.objects.filter(dte=dte).select_related('productoTalla__producto')
+        dte_productos_qs = Dte_Productos.objects.filter(dte=dte).select_related(
+            'productoTalla__producto__atributo1', 'productoTalla__producto__atributo2',
+        )
 
         # Pre-cargar stock por SKU en origen y destino (si aplica).
         skus = [
@@ -20469,6 +20654,11 @@ def api_detalle_dte_completo(request, dte_id):
                 productos.append({
                     'id': detalle.id,
                     'producto': producto.articulo if producto else detalle.descripcion,
+                    # Marca/color: el modal "Ajustar DTE emitido" agrupa su
+                    # resumen por artículo + color (dos colores del mismo
+                    # modelo no se mezclan). Aditivos.
+                    'marca': producto.atributo1.valor if (producto and producto.atributo1) else '',
+                    'color': producto.atributo2.valor if (producto and producto.atributo2) else '',
                     'sku': sku,
                     'talla': detalle.productoTalla.talla if detalle.productoTalla else None,
                     # PKs necesarios para el selector de talla del modal
@@ -22573,8 +22763,16 @@ def api_reparar_traspaso_manual(request, dte_id):
                     return JsonResponse({'success': False, 'error': 'Cada item debe incluir dte_producto_id, producto_talla_id y cantidad_recepcionada.'}, status=400)
 
                 crear_entrada = bool(raw.get('crear_entrada', True))
-                actualizar_stock_destino = bool(raw.get('actualizar_stock_destino', crear_entrada))
-                crear_movimiento_entrada = bool(raw.get('crear_movimiento_entrada', crear_entrada))
+                # Auditoría caminos 29-09 (H15): antes `actualizar_stock_destino`
+                # y `crear_movimiento_entrada` eran independientes (stock sin
+                # kardex o kardex sin stock por diseño) y ninguno creaba el lote.
+                # Ahora cualquiera de los dos marcado = entrada COMPLETA (stock +
+                # lote + kardex por inventario_service); los nombres se aceptan
+                # por compatibilidad con los modales que ya los envían.
+                aplicar_entrada = crear_entrada and (
+                    bool(raw.get('actualizar_stock_destino', True))
+                    or bool(raw.get('crear_movimiento_entrada', True))
+                )
                 reconstruir_salida = bool(raw.get('reconstruir_salida', False))
 
                 dp = (
@@ -22659,29 +22857,18 @@ def api_reparar_traspaso_manual(request, dte_id):
                 else:
                     cantidad_para_stock = cantidad
 
-                if actualizar_stock_destino and cantidad_para_stock > 0:
-                    Producto_Talla.objects.filter(id=talla_destino.id).update(stock=F('stock') + cantidad_para_stock)
-
-                if crear_movimiento_entrada and cantidad_para_stock > 0:
-                    Movimientos_Producto.objects.create(
-                        dte=dte,
-                        ProductoTalla=talla_destino,
+                if aplicar_entrada and cantidad_para_stock > 0:
+                    from .services import inventario_service
+                    inventario_service.ingresar(
+                        talla_destino, cantidad_para_stock, 'TRASPASO_ENTRADA', usuario,
                         sucursal_origen=dte.sucursal,
                         sucursal_destino=sucursal_destino,
-                        cantidad=cantidad_para_stock,
-                        costo=dp.costo,
-                        sobreprecio=dp.sobreprecio,
-                        precio=dp.precio,
-                        concepto='TRASPASO_ENTRADA',
-                        tipo_movimiento='INGRESO',
-                        estado='COMPLETADO',
-                        responsable=usuario,
-                        fecha=timezone.localdate(),
-                        hora=timezone.localtime().time(),
+                        dte=dte,
+                        costo_unitario=dp.costo,
+                        sobreprecio_unitario=dp.sobreprecio,
+                        precio_unitario=dp.precio,
                         observaciones=f'Reparación manual DTE #{dte.numero_documento} línea {dp.id}. Motivo: {motivo}'[:500],
                     )
-
-                if (actualizar_stock_destino or crear_movimiento_entrada) and cantidad_para_stock > 0:
                     total_delta_destino += cantidad_para_stock
 
                 if reconstruir_salida and cantidad > 0:
@@ -22700,9 +22887,13 @@ def api_reparar_traspaso_manual(request, dte_id):
                         responsable=usuario,
                         fecha=timezone.localdate(),
                         hora=timezone.localtime().time(),
+                        # Registro documental: asume que el stock y los lotes del
+                        # origen YA bajaron al despachar y solo faltaba el kardex.
+                        # Si el despacho nunca se hizo, no usar este flag.
                         observaciones=(
-                            f'Reconstrucción manual de trazabilidad DTE #{dte.numero_documento} '
-                            f'línea {dp.id}; no descuenta stock origen. Motivo: {motivo}'
+                            f'Reconstrucción DOCUMENTAL de trazabilidad DTE #{dte.numero_documento} '
+                            f'línea {dp.id}; no descuenta stock ni lotes del origen '
+                            f'(se asume ya descontados al despachar). Motivo: {motivo}'
                         )[:500],
                     )
 
@@ -22710,8 +22901,8 @@ def api_reparar_traspaso_manual(request, dte_id):
                     'dte_producto_id': dp.id,
                     'sku': talla_origen.sku,
                     'cantidad': cantidad,
-                    'entrada_stock': cantidad_para_stock if actualizar_stock_destino else 0,
-                    'movimiento_entrada': cantidad_para_stock if crear_movimiento_entrada else 0,
+                    'entrada_stock': cantidad_para_stock if aplicar_entrada else 0,
+                    'movimiento_entrada': cantidad_para_stock if aplicar_entrada else 0,
                     'reconstruyo_salida': reconstruir_salida,
                 })
 
@@ -23628,36 +23819,51 @@ def asignar_guia_talla_producto(request):
                 'error': f'Las tallas {faltantes} no existen en la guía seleccionada'
             }, status=400)
 
-        # EGRESO de talla '00' por el total a migrar
-        registrar_movimiento_producto(
-            producto_talla=pt_00,
-            concepto='AJUSTE_NEGATIVO',
-            cantidad=total,
-            responsable=usuario,
-            dte=None,
-            sucursal_origen=producto.sucursal,
-            sucursal_destino=producto.sucursal,
-            observaciones=f'Migración talla "00" → guía {nueva_guia.nombre if nueva_guia else "—"}',
-            referencia_externa=f'REASIGNAR_GUIA_{producto.id}',
-            crear_lote_fifo=False,
-        )
-        movimientos_creados += 1
-
-        # INGRESO a cada nueva talla
-        for d in distribucion_norm:
-            pt = tallas_map[d['talla']]
-            registrar_movimiento_producto(
-                producto_talla=pt,
-                concepto='AJUSTE_POSITIVO',
-                cantidad=d['stock'],
-                responsable=usuario,
-                dte=None,
+        # Auditoría caminos 29-09 (H2): el "egreso" de la 00 se registraba con
+        # cantidad POSITIVA (+total): la talla 00 SUBÍA, el kardex quedaba como
+        # INGRESO y no se consumía ningún lote (producto con 2×total de más).
+        # Ahora la 00 sale por egresar() (valida stock sobre la fila bloqueada,
+        # consume lotes FIFO, kardex -total) y cada talla entra por ingresar().
+        from .services import inventario_service
+        referencia_guia = f'REASIGNAR_GUIA_{producto.id}'
+        nombre_guia = nueva_guia.nombre if nueva_guia else "—"
+        try:
+            _mov_00, lotes_00 = inventario_service.egresar(
+                pt_00, total, 'AJUSTE_NEGATIVO', usuario,
                 sucursal_origen=producto.sucursal,
                 sucursal_destino=producto.sucursal,
-                observaciones=f'Reparto de talla "00" por asignación de guía {nueva_guia.nombre if nueva_guia else "—"}',
-                referencia_externa=f'REASIGNAR_GUIA_{producto.id}',
-                crear_lote_fifo=True,
+                observaciones=f'Migración talla "00" → guía {nombre_guia}',
+                referencia_externa=referencia_guia,
+                devolver_lotes=True,
             )
+        except ValueError as e:
+            # Carrera con una venta entre el chequeo de arriba y el lock.
+            transaction.set_rollback(True)
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        movimientos_creados += 1
+
+        # Es un re-etiquetado, no una compra: las tallas nuevas conservan la
+        # antigüedad FIFO y el costo del lote más viejo que salió de la 00.
+        fecha_lote_00 = min((l['fecha_ingreso_lote'] for l in lotes_00), default=None)
+        costo_lote_00 = lotes_00[0]['costo_unitario'] if lotes_00 else None
+
+        # INGRESO a cada nueva talla (stock F() + lote + kardex, atómico)
+        for d in distribucion_norm:
+            pt = tallas_map[d['talla']]
+            mov_talla = inventario_service.ingresar(
+                pt, d['stock'], 'AJUSTE_POSITIVO', usuario,
+                sucursal_origen=producto.sucursal,
+                sucursal_destino=producto.sucursal,
+                costo_unitario=costo_lote_00 or producto.costo,
+                sobreprecio_unitario=producto.sobreprecio,
+                precio_unitario=producto.precioventa,
+                observaciones=f'Reparto de talla "00" por asignación de guía {nombre_guia}',
+                referencia_externa=referencia_guia,
+            )
+            if fecha_lote_00:
+                # LoteProducto.fecha_ingreso es auto_now_add: se fija con
+                # update() después de crear (mismo criterio que cambiar_talla).
+                LoteProducto.objects.filter(movimiento=mov_talla).update(fecha_ingreso=fecha_lote_00)
             movimientos_creados += 1
 
     return JsonResponse({
@@ -28035,21 +28241,40 @@ def crear_producto_manual(request):
 
 @require_POST
 @login_required
+@transaction.atomic
 def actualizar_producto_existente(request):
     """
-    Actualiza un producto existente con nuevos precios y/o agrega nuevas tallas
+    Actualiza un producto existente con nuevos precios y/o agrega nuevas tallas.
+
+    Auditoría caminos 29-09 (H1): la vista hacía `stock += n; save()` y además
+    registrar_movimiento_producto volvía a sumar n (stock doble, kardex y lote
+    una vez); la talla nueva nacía con stock=n y sin DTE no dejaba kardex ni
+    lote. Ahora es atómica, la talla nueva se crea con stock=0 y TODO ingreso
+    (con o sin DTE) pasa por inventario_service (stock F() + lote + kardex).
+    No es idempotente: cada POST suma (el modal deshabilita el botón).
     """
     try:
         data = json.loads(request.body) if request.content_type == 'application/json' else request.POST
-        
+
         producto_id = data.get('producto_id')
         actualizar_precios = data.get('actualizar_precios', False)
         agregar_tallas = data.get('agregar_tallas', False)
-        
+
         # Obtener producto existente
         producto = get_object_or_404(Producto, id=producto_id)
         responsable = _responsable_request(request, max_len=50)  # B14-04
-        
+
+        # El stock que se agrega es de la sucursal dueña del SKU: desde una
+        # sesión en otra tienda se estaría inflando el inventario ajeno.
+        sucursal_sesion = request.session.get('idSucursalActual')
+        if sucursal_sesion and producto.sucursal_id != int(sucursal_sesion):
+            alias = producto.sucursal.alias if producto.sucursal else '—'
+            return JsonResponse({
+                'success': False,
+                'error': (f'El producto pertenece a la sucursal {alias}; cambia a esa '
+                          'sucursal para actualizarlo o agregarle stock.'),
+            }, status=400)
+
         cambios_realizados = []
         tallas_agregadas = []
         
@@ -28158,17 +28383,19 @@ def actualizar_producto_existente(request):
                     if producto_talla:
                         stock_adicional = talla_data['stock']
                         if stock_adicional > 0:
-                            # Sumar stock adicional al existente
-                            producto_talla.stock += stock_adicional
-                            producto_talla.save()
-                            
-                            # Registrar movimiento de ingreso
+                            # Un solo escritor: la fachada bloquea la fila, suma
+                            # con F(), crea el lote (costo de la ficha, ya
+                            # actualizado con el del DTE si el modal marcó
+                            # "actualizar precios") y deja el kardex. Si la talla
+                            # es legacy sin kardex, inyecta antes el saldo inicial.
                             registrar_movimiento_producto(
                                 producto_talla=producto_talla,
                                 concepto='INGRESO_MANUAL',
                                 cantidad=stock_adicional,
                                 responsable=responsable,
                                 dte=dte,
+                                sucursal_origen=producto.sucursal,
+                                sucursal_destino=producto.sucursal,
                                 observaciones=f'Actualización manual - DTE: {dte.numero_documento if dte else "N/A"}',
                                 referencia_externa=f'Manual-{dte.numero_documento if dte else "N/A"}'
                             )
@@ -28194,25 +28421,29 @@ def actualizar_producto_existente(request):
                     while Producto_Talla.objects.filter(sku=sku).exists():
                         sku = _next_sku()
                     
+                    # La talla nace con stock=0 (como crear_producto_manual) y el
+                    # stock entra por el escritor único, con o sin DTE: antes sin
+                    # DTE quedaba stock sin kardex ni lote.
                     producto_talla = Producto_Talla.objects.create(
                         producto=producto,
                         talla=talla,
-                        stock=stock,
+                        stock=0,
                         sku=sku
                     )
-                    
-                    # Registrar movimiento de ingreso
-                    if dte:
+
+                    if stock > 0:
                         registrar_movimiento_producto(
                             producto_talla=producto_talla,
                             concepto='INGRESO_MANUAL',
                             cantidad=stock,
                             responsable=responsable,
                             dte=dte,
-                            observaciones=f'Creación manual - DTE: {dte.numero_documento}',
-                            referencia_externa=f'Manual-{dte.numero_documento}'
+                            sucursal_origen=producto.sucursal,
+                            sucursal_destino=producto.sucursal,
+                            observaciones=f'Creación manual - DTE: {dte.numero_documento if dte else "N/A"}',
+                            referencia_externa=f'Manual-{dte.numero_documento if dte else "N/A"}'
                         )
-                    
+
                     tallas_agregadas.append(talla)
                     cambios_realizados.append(f'Talla {talla}: Agregada (Stock: {stock}, SKU: {sku})')
         
@@ -28223,11 +28454,14 @@ def actualizar_producto_existente(request):
             'cambios': cambios_realizados,
             'tallas_agregadas': tallas_agregadas
         })
-        
+
     except Exception as e:
+        # Con @transaction.atomic, devolver un 500 sin marcar rollback dejaría
+        # comprometidas las tallas/precios escritos antes del error.
+        transaction.set_rollback(True)
         import traceback
         return JsonResponse({
-            'success': False, 
+            'success': False,
             'error': str(e),
             'traceback': traceback.format_exc()
         }, status=500)
@@ -35585,6 +35819,38 @@ def anular_factura_dte(request):
                 ),
             }, status=400)
 
+        # Traspaso cuyo stock YA volvió al origen (cancelado, o rechazado
+        # después del fix de jul-2026 con la salida en CANCELADO): una NC por
+        # línea PARCIAL no tiene contrapartida física (nada salió) y sólo
+        # reescribía la fila CANCELADO del kardex — la evidencia del rechazo —
+        # y arrastraba en CASCADE los lotes de reposición (auditoría R-03/R-08).
+        # Se bloquea con 409. La NC por el TOTAL sí pasa (documental, para el
+        # SII: la factura cancelada igual necesita su NC) y cierra el DTE.
+        stock_ya_devuelto = dte.estado_dte == 'CANCELADO' or (
+            dte.estado_dte == 'RECHAZADO'
+            and Movimientos_Producto.objects.filter(
+                dte=dte, concepto='TRASPASO_SALIDA', estado='CANCELADO',
+            ).exists()
+        )
+        if stock_ya_devuelto and not es_post_recepcion_traspaso and productos_afectados_input:
+            try:
+                unidades_pedidas = sum(int(a.get('cantidad') or 0) for a in productos_afectados_input)
+            except (TypeError, ValueError, AttributeError):
+                unidades_pedidas = 0
+            unidades_activas = int(
+                dte.dte_productos.filter(activo=True).aggregate(s=Sum('stock'))['s'] or 0
+            )
+            if unidades_pedidas < unidades_activas:
+                verbo = 'cancelar' if dte.estado_dte == 'CANCELADO' else 'rechazar'
+                return JsonResponse({
+                    'error': (
+                        f'El stock de este traspaso ya volvió al origen al {verbo}: no se puede '
+                        'emitir una NC parcial por línea. Emite la NC por el total del documento '
+                        '(sólo documental, no mueve stock).'
+                    ),
+                    'stock_ya_devuelto': True,
+                }, status=409)
+
     # Calcular cuánto ya se ha creditado con NCs anteriores
     total_nc_previas = Dte.objects.filter(
         documento_afectado=dte,
@@ -36091,6 +36357,26 @@ def anular_factura_dte(request):
             # sin crear un doc trazador adicional (la NC ya se creó arriba).
             # No marca el DTE original como ANULADO ni desactiva líneas en
             # post-recepción → el receptor sigue viendo la trayectoria.
+            #
+            # NC TOTAL sin líneas (Consulta Documentos, razón 1) sobre un
+            # traspaso PRE-recepción: antes `lineas_afectadas` venía vacía y
+            # el bucle no hacía nada — la factura quedaba anulada ante el SII
+            # pero el TRASPASO_SALIDA seguía COMPLETADO, el origen sin su
+            # stock y el receptor podía ingresar las unidades (N-02). Se
+            # recorren las líneas activas con la misma reversa que la NC por
+            # línea, y la NC pasa a `redujo_lineas_documento=True` para que
+            # confirmar_recepcion no la trate como NC pendiente.
+            if (not es_post_recepcion_traspaso and es_anulacion_total
+                    and not usa_productos_afectados and not lineas_afectadas):
+                lineas_afectadas = [
+                    (dp, int(dp.stock or 0))
+                    for dp in dte.dte_productos.filter(activo=True, stock__gt=0)
+                    .select_related('productoTalla__producto')
+                ]
+                if lineas_afectadas:
+                    nc.redujo_lineas_documento = True
+                    nc.save(update_fields=['redujo_lineas_documento'])
+
             for dp, cantidad in lineas_afectadas:
                 talla = dp.productoTalla
                 if talla is None:
@@ -36194,33 +36480,59 @@ def anular_factura_dte(request):
                     )
                     # Solo se acredita al origen si el stock SALIÓ y sigue
                     # afuera. Sin TRASPASO_SALIDA (traspaso legacy) el sistema
-                    # no sabe qué salió; con la salida CANCELADO el rechazo ya
-                    # lo devolvió. Sumar igual creaba stock fantasma sin
-                    # respaldo (mismo caso que B7-03 en ajustar_dte_emisor_api).
-                    # La NC se emite igual (documental) para esa línea.
+                    # no sabe qué salió; con la salida CANCELADO el rechazo o
+                    # la cancelación ya lo devolvieron. Sumar igual creaba
+                    # stock fantasma sin respaldo (mismo caso que B7-03 en
+                    # ajustar_dte_emisor_api). La NC se emite igual
+                    # (documental) para esa línea.
                     if mov_salida is not None and mov_salida.estado != 'CANCELADO':
-                        # Con lote FIFO (inventario_service), igual que la
-                        # anulación de guía y el ajuste de traspaso.
-                        from .services import inventario_service as _inv_nc
-                        _inv_nc.ingresar(
-                            talla, cantidad, 'DEVOLUCION_NC', usuario,
-                            sucursal_destino=dte.sucursal,
-                            dte=nc,
-                            costo_unitario=dp.costo,
-                            sobreprecio_unitario=dp.sobreprecio,
-                            precio_unitario=dp.precio,
-                            observaciones=(
-                                f'NC #{nc.numero_documento} sobre DTE #{dte.numero_documento} '
-                                f'({dte.tipo_documento}): reversa pre-recepción a {dte.sucursal.alias}'
-                            )[:500],
+                        # Misma convención que rechazar/cancelar/ajustar
+                        # pre-recepción: el stock vuelve al origen (F() + lote
+                        # con la antigüedad del despacho) y el propio
+                        # TRASPASO_SALIDA sale del set COMPLETADO (CANCELADO si
+                        # la NC lo cubre, reducido si no). NO se escribe un
+                        # ingreso DEVOLUCION_NC: sumado al egreso borrado dejaba
+                        # +N fantasma en el kardex COMPLETADO con stock neto 0
+                        # (auditoría R-02). movimiento=None en el lote por el
+                        # CASCADE de LoteProducto.movimiento (R-03).
+                        Producto_Talla.objects.filter(id=talla.id).update(
+                            stock=F('stock') + cantidad
                         )
+                        _reponer_lote_traspaso(
+                            talla, cantidad,
+                            costo=dp.costo, sobreprecio=dp.sobreprecio, precio=dp.precio,
+                            dte=nc, movimiento=None,
+                            fecha_original=mov_salida.fecha, hora_original=mov_salida.hora,
+                            observaciones=(
+                                f'NC #{nc.numero_documento} pre-recepción DTE #{dte.numero_documento}'
+                            ),
+                        )
+                        nota_nc = f' [NC #{nc.numero_documento}: -{cantidad}]'
+                        nueva_cant_salida = abs(mov_salida.cantidad) - cantidad
+                        if nueva_cant_salida <= 0:
+                            # Nunca se borra kardex (R-03): queda CANCELADO con
+                            # su cantidad original como evidencia del despacho.
+                            mov_salida.estado = 'CANCELADO'
+                            mov_salida.observaciones = (
+                                (mov_salida.observaciones or '')
+                                + nota_nc + ' — stock devuelto al origen'
+                            )[:500]
+                            mov_salida.save(update_fields=['estado', 'observaciones'])
+                        else:
+                            mov_salida.cantidad = -nueva_cant_salida
+                            mov_salida.observaciones = (
+                                (mov_salida.observaciones or '') + nota_nc
+                            )[:500]
+                            mov_salida.save(update_fields=['cantidad', 'observaciones'])
                     else:
+                        # Una fila ya CANCELADO no se toca: es la evidencia de
+                        # "N u devueltas" del rechazo/cancelación (R-08).
                         lineas_nc_sin_reversa_stock.append({
                             'dte_producto_id': dp.id,
                             'sku': talla.sku,
                             'cantidad': cantidad,
                             'motivo': (
-                                'stock ya devuelto al rechazar' if mov_salida is not None
+                                'stock ya devuelto al cancelar/rechazar' if mov_salida is not None
                                 else 'traspaso sin movimiento de despacho (legacy)'
                             ),
                         })
@@ -36230,19 +36542,6 @@ def anular_factura_dte(request):
                             nc.numero_documento, dte.numero_documento, dte.id, talla.sku,
                             cantidad, 'salida CANCELADO' if mov_salida is not None else 'sin TRASPASO_SALIDA',
                         )
-                    # Ajustar el movimiento TRASPASO_SALIDA original para que
-                    # refleje las nuevas cantidades efectivamente despachadas.
-                    if mov_salida is not None:
-                        nueva_cant_salida = abs(mov_salida.cantidad) - cantidad
-                        if nueva_cant_salida <= 0:
-                            mov_salida.delete()
-                        else:
-                            mov_salida.cantidad = -nueva_cant_salida
-                            mov_salida.observaciones = (
-                                (mov_salida.observaciones or '')
-                                + f' [NC #{nc.numero_documento}: -{cantidad}]'
-                            )[:500]
-                            mov_salida.save(update_fields=['cantidad', 'observaciones'])
                     # Reducir stock en la línea del DTE original.
                     nuevo_stock = int(dp.stock or 0) - cantidad
                     dp.stock = max(0, nuevo_stock)
@@ -36263,9 +36562,23 @@ def anular_factura_dte(request):
                 dte.monto_neto = Decimal(nuevo_neto)
                 dte.monto_con_iva = nuevo_con_iva
                 dte.unidades_productos = int(nuevas_unidades)
-                dte.save(update_fields=[
-                    'monto_neto', 'monto_con_iva', 'unidades_productos'
-                ])
+                campos_dte = ['monto_neto', 'monto_con_iva', 'unidades_productos']
+                # Sin unidades activas no queda nada que recepcionar: el DTE
+                # cierra CANCELADO (terminal para emitidos_pendientes,
+                # rechazar y cancelar). Antes quedaba EMITIDO con 0 u como
+                # zombie en "emitidos pendientes" (R-02) y un RECHAZADO con NC
+                # total seguía RECHAZADO hasta que alguien lo cancelara (R-08).
+                if (lineas_afectadas and int(nuevas_unidades) == 0
+                        and dte.estado_dte in ('EMITIDO', 'ACEPTADO', 'RECHAZADO')):
+                    ahora_nc = timezone.localtime()
+                    dte.estado_dte = 'CANCELADO'
+                    dte.referencias = (
+                        (dte.referencias or '').strip()
+                        + f"\n❌ DTE CANCELADO por {usuario} el {ahora_nc.strftime('%Y-%m-%d %H:%M')}: "
+                        f"anulado por NC #{nc.numero_documento} (sin unidades vigentes)."
+                    ).strip()
+                    campos_dte += ['estado_dte', 'referencias']
+                dte.save(update_fields=campos_dte)
             # IMPORTANTE: TRASPASO nunca se marca como ANULADO automáticamente
             # — eso lo sacaba del listado del receptor. La trazabilidad queda
             # en la NC y en el campo `referencias` del DTE.

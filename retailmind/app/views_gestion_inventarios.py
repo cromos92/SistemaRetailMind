@@ -20,13 +20,14 @@ from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse, HttpResponse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
-from django.db.models import Sum, F, Q, Count, Case, When, Prefetch, Value, CharField, DecimalField, ExpressionWrapper
+from django.db.models import Sum, F, Q, Count, Case, When, Prefetch, Value, CharField, DecimalField, ExpressionWrapper, Max
 from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.db import transaction, connection
 from django.core.exceptions import ValidationError, PermissionDenied
 import threading
+from datetime import datetime, timedelta
 from decimal import Decimal
 import csv
 import io
@@ -49,11 +50,94 @@ logger = logging.getLogger('app')
 # ==============================================================================
 
 BATCH_SIZE = 500  # Tamaño de lote para operaciones masivas
-DIFERENCIA_RECONTEO_PORCENTAJE = 10  # % de diferencia para requerir reconteo
-DIFERENCIA_RECONTEO_UNIDADES = 5  # Unidades de diferencia para requerir reconteo
+# (los umbrales de reconteo viven en app/models/inventario.py, donde se aplican)
 
 # Estados en los que el inventario todavía se está contando
 ESTADOS_EN_PROCESO = ['BORRADOR', 'EN_CONTEO', 'CONTEO_FINALIZADO', 'EN_REVISION']
+
+# Una tarea de aplicación EN_PROCESO sin avance en este lapso se considera huérfana
+# (el worker de gunicorn murió a mitad del bucle: deploy, OOM, reinicio).
+TAREA_HUERFANA_MINUTOS = 30
+
+# Tolerancia para fechas que manda el navegador (resolución de minuto + reloj del PC)
+TOLERANCIA_RELOJ = timedelta(minutes=2)
+
+
+def _normalizar_sku(valor):
+    """
+    SKU tal como viene del archivo/escáner → clave comparable con la toma.
+
+    `Producto_Talla.sku` es BigInteger, así que la toma guarda '4805622'. Un CSV
+    exportado desde Excel trae '4805622.0' y openpyxl puede devolver 4805622.0:
+    sin normalizar caían en no_encontrados y el conteo se perdía en silencio.
+    """
+    if valor is None:
+        return ''
+    texto = str(valor).strip()
+    if not texto:
+        return ''
+    try:
+        numero = float(texto.replace(',', '.'))
+        if numero.is_integer():
+            return str(int(numero))
+    except ValueError:
+        pass
+    return texto
+
+
+def _reconteos_pendientes(inventario):
+    """
+    Líneas que todavía esperan reconteo. ÚNICO criterio para finalizar, enviar,
+    aprobar y el análisis: antes finalizar/enviar no filtraban las excluidas y
+    una línea excluida con diferencia grande bloqueaba el flujo sin aparecer en
+    ninguna pantalla (deadlock de INV-6).
+    """
+    return inventario.reconteos_pendientes()
+
+
+def _parsear_fecha_local(valor):
+    """'YYYY-MM-DDTHH:MM' (datetime-local, hora America/Santiago) → aware o None."""
+    if not valor:
+        return None
+    texto = str(valor).strip()
+    for formato in ('%Y-%m-%dT%H:%M', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d %H:%M:%S'):
+        try:
+            naive = datetime.strptime(texto, formato)
+            break
+        except ValueError:
+            continue
+    else:
+        raise ValidationError(f'Fecha inválida: {texto} (use AAAA-MM-DDTHH:MM)')
+    return timezone.make_aware(naive) if timezone.is_naive(naive) else naive
+
+
+def _resolver_fecha_conteo(inventario, fecha_conteo_str=None, tienda_cerrada=False):
+    """
+    Momento hasta el cual se consideran movimientos post-corte (N1).
+
+    - Se declara explícitamente (`fecha_conteo`), o
+    - «conté con la tienda cerrada»: el conteo físico ocurrió al corte, así que las
+      ventas entre el corte y la CARGA del archivo no deben restarse del sistema
+      (antes generaban un sobrante falso por cada venta), o
+    - escáner en vivo: ahora.
+    Se valida corte <= fecha_conteo <= ahora (con tolerancia de reloj).
+    """
+    ahora = timezone.now()
+    if fecha_conteo_str:
+        fecha_conteo = _parsear_fecha_local(fecha_conteo_str)
+    elif tienda_cerrada:
+        fecha_conteo = inventario.fecha_corte
+    else:
+        return ahora
+
+    if fecha_conteo < inventario.fecha_corte:
+        raise ValidationError(
+            'La fecha del conteo físico no puede ser anterior a la fecha de corte '
+            f'({timezone.localtime(inventario.fecha_corte):%d/%m/%Y %H:%M})'
+        )
+    if fecha_conteo > ahora + TOLERANCIA_RELOJ:
+        raise ValidationError('La fecha del conteo físico no puede ser futura')
+    return min(fecha_conteo, ahora)
 
 
 def _inventario_del_usuario(request, inventario_id):
@@ -99,6 +183,10 @@ def detalle_inventario(request, inventario_id):
     return render(request, 'vistas/modulo_existencias/detalle_inventario.html', {
         'inventario': inventario,
         'puede_aplicar_ajustes': inventario.estado in ('APROBADO', 'APLICANDO'),
+        'conteo_tienda_cerrada': inventario.conteo_tienda_cerrada,
+        # Para precargar «¿cuándo se contó?» en el modal de importación (hora local)
+        'fecha_corte_local': timezone.localtime(inventario.fecha_corte).strftime('%Y-%m-%dT%H:%M'),
+        'ahora_local': timezone.localtime().strftime('%Y-%m-%dT%H:%M'),
     })
 
 
@@ -207,14 +295,26 @@ def obtener_inventarios(request):
             .annotate(lineas=Count('id'), contados=Count('id', filter=Q(contado=True)))
         }
 
+        # Tareas de aplicación de las tomas APLICANDO de la página: para ofrecer
+        # «Reanudar» solo cuando el hilo se dio por muerto (ver _tarea_huerfana).
+        tareas_map = {
+            t.inventario_id: t
+            for t in TareaAplicacionAjustes.objects.filter(
+                inventario__in=[i for i in inventarios_page.object_list if i.estado == 'APLICANDO']
+            )
+        }
+
         # Serializar datos
         inventarios_data = []
         for inv in inventarios_page:
             conteo = skus_map.get(inv.id) or {}
+            tarea = tareas_map.get(inv.id)
             inventarios_data.append({
                 'skus_contados': conteo.get('contados', 0),
                 'skus_esperados': conteo.get('lineas', inv.total_productos_esperados),
                 'unidades_contadas': inv.total_productos_contados,
+                'ajustes_aplicados': inv.ajustes_aplicados().count() if inv.estado in ('APROBADO', 'APLICANDO') else 0,
+                'tarea_huerfana': bool(tarea and _tarea_huerfana(tarea, inv)),
                 'id': inv.id,
                 'numero_inventario': inv.numero_inventario,
                 'nombre': inv.nombre,
@@ -223,7 +323,9 @@ def obtener_inventarios(request):
                 'tipo_inventario_display': inv.get_tipo_inventario_display(),
                 'estado': inv.estado,
                 'estado_display': inv.get_estado_display(),
-                'fecha_corte': inv.fecha_corte.strftime('%d/%m/%Y %H:%M'),
+                # DateTimeField llega en UTC: sin localtime() el listado mostraba el
+                # corte 3-4 h corrido («16/01 00:27» para una toma del 15/01 21:27).
+                'fecha_corte': timezone.localtime(inv.fecha_corte).strftime('%d/%m/%Y %H:%M'),
                 'progreso_conteo': float(inv.progreso_conteo),
                 'total_productos_esperados': inv.total_productos_esperados,
                 'total_productos_contados': inv.total_productos_contados,
@@ -231,7 +333,7 @@ def obtener_inventarios(request):
                 'total_diferencias_negativas': inv.total_diferencias_negativas,
                 'valor_diferencias': float(inv.valor_diferencias_positivas - inv.valor_diferencias_negativas),
                 'creado_por': inv.creado_por.get_full_name() if inv.creado_por else '',
-                'created_at': inv.created_at.strftime('%d/%m/%Y %H:%M')
+                'created_at': timezone.localtime(inv.created_at).strftime('%d/%m/%Y %H:%M')
             })
         
         return JsonResponse({
@@ -260,14 +362,8 @@ def obtener_filtros_disponibles(request):
     Devuelve marcas, categorías y atributos activos.
     """
     try:
-        empresa_user = EmpresaUser.objects.filter(
-            user=request.user, 
-            active=True
-        ).select_related('empresa').first()
-        
-        if not empresa_user:
-            return JsonResponse({'success': False, 'error': 'Usuario sin empresa asignada'})
-        
+        # Los filtros dependen de la SUCURSAL activa, no de la primera EmpresaUser
+        # del usuario (con multi-empresa eso podía ser una empresa ajena a la tienda).
         sucursal_id = request.session.get('idSucursalActual')
 
         # Marcas y categorías ACOTADAS a la sucursal activa y con stock: antes se
@@ -369,15 +465,6 @@ def crear_inventario(request):
                 'error': 'Debe seleccionar al menos un atributo para este tipo de inventario'
             })
 
-        # Obtener empresa y sucursal
-        empresa_user = EmpresaUser.objects.filter(
-            user=request.user,
-            active=True
-        ).select_related('empresa', 'sucursal').first()
-
-        if not empresa_user:
-            return JsonResponse({'success': False, 'error': 'Usuario sin empresa asignada'})
-
         sucursal_id = request.session.get('idSucursalActual')
         if not sucursal_id:
             return JsonResponse({'success': False, 'error': 'Debe seleccionar una sucursal'})
@@ -385,24 +472,46 @@ def crear_inventario(request):
         if not puede_ver_sucursal(request.user, sucursal_id):
             return JsonResponse({'success': False, 'error': 'No tiene acceso a la sucursal activa'})
 
-        sucursal = get_object_or_404(Sucursal, id=sucursal_id)
+        sucursal = get_object_or_404(Sucursal.objects.select_related('empresa'), id=sucursal_id)
 
-        # Procesar fecha de corte
-        if fecha_corte_str:
-            from datetime import datetime
-            fecha_corte = datetime.strptime(fecha_corte_str, '%Y-%m-%dT%H:%M')
-            fecha_corte = timezone.make_aware(fecha_corte) if timezone.is_naive(fecha_corte) else fecha_corte
-        else:
-            fecha_corte = timezone.now()
-        
+        # La empresa de la toma es la DUEÑA de la sucursal. Antes se tomaba la
+        # primera EmpresaUser activa del usuario: una toma de NICK1 (1320) quedaba
+        # con empresa EDEL (1802) y un usuario de 1320 sin 1802 no la veía.
+        if not sucursal.empresa_id:
+            return JsonResponse({'success': False, 'error': 'La sucursal activa no tiene empresa asociada'})
+        empresa = sucursal.empresa
+
+        # Procesar fecha de corte (llega en hora local desde el datetime-local)
+        ahora = timezone.now()
+        fecha_corte = _parsear_fecha_local(fecha_corte_str) if fecha_corte_str else ahora
+        corte_recortado = False
+        if fecha_corte > ahora + TOLERANCIA_RELOJ:
+            # Un corte futuro (el modal viejo mandaba UTC = +3/4 h) deja fuera del
+            # post-corte todas las ventas hasta esa hora: cada una era un faltante
+            # falso que después se rebajaba dos veces. Se recorta a ahora y se deja
+            # constancia en el log en vez de rechazar (compatibilidad con clientes
+            # que aún manden el valor antiguo).
+            logger.warning(
+                'crear_inventario: fecha de corte futura %s recortada a %s (sucursal %s)',
+                timezone.localtime(fecha_corte), timezone.localtime(ahora), sucursal_id,
+            )
+            fecha_corte = ahora
+            corte_recortado = True
+        elif fecha_corte > ahora:
+            fecha_corte = ahora
+
+        # «Conté con la tienda cerrada»: el conteo físico corresponde al corte;
+        # queda en filtros_aplicados (sin migración) y lo lee TomaInventario.conteo_tienda_cerrada.
+        filtros['conteo_tienda_cerrada'] = bool(data.get('conteo_tienda_cerrada') or filtros.get('conteo_tienda_cerrada'))
+
         # Crear inventario
         numero_inventario = TomaInventario.generar_numero_inventario(sucursal)
-        
+
         inventario = TomaInventario.objects.create(
             numero_inventario=numero_inventario,
             nombre=nombre,
             sucursal=sucursal,
-            empresa=empresa_user.empresa,
+            empresa=empresa,
             tipo_inventario=tipo_inventario,
             filtros_aplicados=filtros,
             fecha_corte=fecha_corte,
@@ -424,21 +533,31 @@ def crear_inventario(request):
         inventario.total_productos_esperados = total_productos
         inventario.save()
 
+        corte_local = timezone.localtime(fecha_corte).strftime('%d/%m/%Y %H:%M')
+
         # Registrar log
         _registrar_log(
             inventario=inventario,
             tipo_accion='CREACION',
-            descripcion=f'Inventario creado con {total_productos} productos a contar',
+            descripcion=(
+                f'Inventario creado con {total_productos} productos a contar. Corte: {corte_local}'
+                + (' (la fecha enviada era futura y se recortó a la hora actual)' if corte_recortado else '')
+            ),
             usuario=request.user,
-            datos={'filtros': filtros, 'total_productos': total_productos}
+            datos={
+                'filtros': filtros, 'total_productos': total_productos,
+                'fecha_corte_local': corte_local, 'corte_recortado': corte_recortado,
+            }
         )
-        
+
         return JsonResponse({
             'success': True,
             'message': f'Inventario {numero_inventario} creado exitosamente',
             'inventario_id': inventario.id,
             'numero_inventario': numero_inventario,
-            'total_productos': total_productos
+            'total_productos': total_productos,
+            'fecha_corte': corte_local,
+            'corte_recortado': corte_recortado,
         })
         
     except json.JSONDecodeError:
@@ -513,35 +632,8 @@ def _generar_detalles_inventario(inventario, filtros, sucursal_id):
         costo_map = _obtener_costo_promedio_batch(ids)
 
         for pt in batch_items:
-            # Stock del sistema en la fecha de corte.
-            # OJO: la base SIEMPRE parte del stock plano (Producto_Talla.stock),
-            # que es el número que usa el resto del ERP (POS, reportes, ecommerce).
-            # Antes se usaba la suma del kardex y, como kardex y stock plano no
-            # cuadran en 126k SKUs, el ajuste dejaba el stock distinto de lo contado.
-            stock_sistema = (pt.stock or 0) - posteriores_map.get(pt.id, 0)
-
-            # Calcular costo promedio FIFO
-            costo_promedio = costo_map.get(pt.id)
-            if costo_promedio is None:
-                costo_promedio = Decimal(pt.producto.costo or 0)
-
-            # Obtener nombres desnormalizados
-            marca_nombre = pt.producto.atributo1.valor if pt.producto.atributo1 else ''
-            categoria_nombre = pt.producto.categoria.nombre if pt.producto.categoria else ''
-
-            detalles.append(TomaInventarioDetalle(
-                toma_inventario=inventario,
-                producto_talla=pt,
-                sku=str(pt.sku),
-                producto_nombre=pt.producto.articulo,
-                talla_nombre=pt.talla if pt.talla else '',
-                marca_nombre=marca_nombre,
-                categoria_nombre=categoria_nombre,
-                stock_sistema=stock_sistema,
-                stock_movimientos_post_corte=0,
-                stock_sistema_ajustado=stock_sistema,
-                costo_unitario_sistema=costo_promedio,
-                precio_venta_sistema=Decimal(pt.producto.precioventa or 0)
+            detalles.append(_nuevo_detalle_desde_pt(
+                inventario, pt, posteriores_map.get(pt.id, 0), costo_map.get(pt.id)
             ))
 
         if len(detalles) >= BATCH_SIZE:
@@ -561,6 +653,105 @@ def _generar_detalles_inventario(inventario, filtros, sucursal_id):
         TomaInventarioDetalle.objects.bulk_create(detalles, ignore_conflicts=True)
 
     return inventario.detalles.count()
+
+
+def _nuevo_detalle_desde_pt(inventario, pt, movimientos_posteriores=0, costo_promedio=None):
+    """
+    Línea de la toma (sin guardar) para un Producto_Talla, con el snapshot al corte.
+
+    Stock del sistema en la fecha de corte.
+    OJO: la base SIEMPRE parte del stock plano (Producto_Talla.stock), que es el
+    número que usa el resto del ERP (POS, reportes, ecommerce). Antes se usaba la
+    suma del kardex y, como kardex y stock plano no cuadran en 126k SKUs, el
+    ajuste dejaba el stock distinto de lo contado.
+    """
+    stock_sistema = (pt.stock or 0) - (movimientos_posteriores or 0)
+
+    # Costo promedio FIFO; si no hay lotes, el costo del producto
+    if costo_promedio is None:
+        costo_promedio = Decimal(pt.producto.costo or 0)
+
+    marca_nombre = pt.producto.atributo1.valor if pt.producto.atributo1 else ''
+    categoria_nombre = pt.producto.categoria.nombre if pt.producto.categoria else ''
+
+    return TomaInventarioDetalle(
+        toma_inventario=inventario,
+        producto_talla=pt,
+        sku=str(pt.sku),
+        producto_nombre=pt.producto.articulo,
+        talla_nombre=pt.talla if pt.talla else '',
+        marca_nombre=marca_nombre,
+        categoria_nombre=categoria_nombre,
+        stock_sistema=stock_sistema,
+        stock_movimientos_post_corte=0,
+        stock_sistema_ajustado=stock_sistema,
+        costo_unitario_sistema=costo_promedio,
+        precio_venta_sistema=Decimal(pt.producto.precioventa or 0)
+    )
+
+
+def _agregar_detalles_al_vuelo(inventario, skus):
+    """
+    SKUs contados que NO tienen línea en la toma (típicamente stock 0 en sistema,
+    fuera de una toma «solo con stock»): si el SKU existe en la sucursal se agrega
+    como línea con stock_sistema reconstruido al corte (stock actual − movimientos
+    posteriores) y costo FIFO, para que el sobrante se ajuste en vez de perderse
+    en no_encontrados. Justo el caso que motiva contar: físico sin sistema.
+
+    Devuelve (detalles_por_sku_agregados, no_encontrados, ambiguos).
+    `ambiguos` son SKUs con más de un Producto_Talla en la sucursal (duplicados
+    históricos del catálogo, 379 en EDEL): no se puede saber cuál copia se contó.
+    """
+    agregados, no_encontrados, ambiguos = {}, [], []
+    numericos = {}
+    for sku in skus:
+        clave = _normalizar_sku(sku)
+        if clave.isdigit():
+            numericos[clave] = sku
+        else:
+            no_encontrados.append(sku)
+    if not numericos:
+        return agregados, no_encontrados, ambiguos
+
+    candidatos = list(
+        Producto_Talla.objects.filter(
+            producto__sucursal_id=inventario.sucursal_id,
+            sku__in=[int(k) for k in numericos],
+        ).select_related('producto', 'producto__atributo1', 'producto__categoria')
+    )
+    por_sku = {}
+    for pt in candidatos:
+        por_sku.setdefault(str(pt.sku), []).append(pt)
+
+    ya_en_toma = set(
+        inventario.detalles.filter(
+            producto_talla_id__in=[pt.id for pt in candidatos]
+        ).values_list('producto_talla_id', flat=True)
+    )
+
+    a_crear = []
+    for clave, original in numericos.items():
+        pts = [pt for pt in por_sku.get(clave, []) if pt.id not in ya_en_toma]
+        if not pts:
+            no_encontrados.append(original)
+        elif len(pts) > 1:
+            ambiguos.append(original)
+        else:
+            a_crear.append(pts[0])
+
+    if a_crear:
+        ids = [pt.id for pt in a_crear]
+        posteriores = _obtener_movimientos_desde_corte_batch(ids, inventario.fecha_corte, inventario.sucursal_id)
+        costos = _obtener_costo_promedio_batch(ids)
+        nuevos = [
+            _nuevo_detalle_desde_pt(inventario, pt, posteriores.get(pt.id, 0), costos.get(pt.id))
+            for pt in a_crear
+        ]
+        TomaInventarioDetalle.objects.bulk_create(nuevos, ignore_conflicts=True)
+        for det in inventario.detalles.filter(producto_talla_id__in=ids).select_related('producto_talla'):
+            agregados[_normalizar_sku(det.sku)] = det
+
+    return agregados, no_encontrados, ambiguos
 
 
 def _fecha_hora_local(momento):
@@ -797,33 +988,65 @@ def registrar_conteo(request, inventario_id):
         
         data = json.loads(request.body)
         conteos = data.get('conteos', [])
-        
+
         if not conteos:
             return JsonResponse({'success': False, 'error': 'No hay conteos para registrar'})
-        
+
+        # Momento del conteo físico (N1): por defecto AHORA (escáner / tabla en vivo);
+        # `fecha_conteo` explícita o `conteo_tienda_cerrada` → la fecha de corte.
+        fecha_conteo = _resolver_fecha_conteo(
+            inventario, data.get('fecha_conteo'), bool(data.get('conteo_tienda_cerrada'))
+        )
+
         # Actualizar estado si es el primer conteo
         if inventario.estado == 'BORRADOR':
             inventario.estado = 'EN_CONTEO'
             inventario.fecha_inicio_conteo = timezone.now()
             inventario.save()
-        
+
         # Procesar conteos
         conteos_realizados = 0
         errores = []
-        fecha_conteo = timezone.now()
+        agregados = []
 
         conteos_map = {
             c.get('detalle_id'): c for c in conteos if c.get('detalle_id') is not None
         }
         detalle_ids = list(conteos_map.keys())
-        detalles = inventario.detalles.filter(id__in=detalle_ids).select_related('producto_talla')
+        detalles = list(inventario.detalles.filter(id__in=detalle_ids).select_related('producto_talla'))
+        detalles_por_id = {d.id: d for d in detalles}
 
-        producto_talla_ids = [d.producto_talla_id for d in detalles]
+        # Conteos por SKU sin línea en la toma (escáner sobre un SKU con stock 0):
+        # se agrega la línea al vuelo si el SKU existe en la sucursal (H4).
+        por_sku = {
+            _normalizar_sku(c.get('sku')): c
+            for c in conteos if c.get('detalle_id') is None and _normalizar_sku(c.get('sku'))
+        }
+        if por_sku:
+            existentes = {
+                _normalizar_sku(d.sku): d
+                for d in inventario.detalles.filter(sku__in=list(por_sku.keys())).select_related('producto_talla')
+            }
+            faltan = [s for s in por_sku if s not in existentes]
+            nuevos, no_encontrados, ambiguos = _agregar_detalles_al_vuelo(inventario, faltan)
+            existentes.update(nuevos)
+            for sku in no_encontrados:
+                errores.append(f'SKU {sku} no existe en esta sucursal (créelo o tráigalo por traspaso)')
+            for sku in ambiguos:
+                errores.append(f'SKU {sku} ambiguo: hay más de un producto con ese código en la sucursal')
+            for sku, conteo in por_sku.items():
+                det = existentes.get(sku)
+                if det is None:
+                    continue
+                if sku in nuevos:
+                    agregados.append(sku)
+                detalles_por_id[det.id] = det
+                conteos_map[det.id] = conteo
+
+        producto_talla_ids = [d.producto_talla_id for d in detalles_por_id.values()]
         movimientos_map = _obtener_movimientos_post_corte_batch(
             producto_talla_ids, inventario.fecha_corte, fecha_conteo, inventario.sucursal_id
         )
-
-        detalles_por_id = {d.id: d for d in detalles}
 
         for detalle_id, conteo in conteos_map.items():
             detalle = detalles_por_id.get(detalle_id)
@@ -836,10 +1059,16 @@ def registrar_conteo(request, inventario_id):
             observaciones = conteo.get('observaciones', '')
 
             try:
+                cantidad = int(stock_fisico)
+                if cantidad < 0:
+                    # Un −5 tipeado por error producía un faltante mayor que el stock y
+                    # después «dejaría el stock en negativo» al aplicar.
+                    errores.append(f"SKU {detalle.sku}: cantidad negativa ({cantidad}) no permitida")
+                    continue
                 movimientos_post_corte = movimientos_map.get(detalle.producto_talla_id, 0)
                 detalle.stock_movimientos_post_corte = movimientos_post_corte
                 detalle.stock_sistema_ajustado = detalle.stock_sistema + movimientos_post_corte
-                detalle.stock_fisico = int(stock_fisico)
+                detalle.stock_fisico = cantidad
                 detalle.contado = True
                 detalle.fecha_conteo = fecha_conteo
                 detalle.usuario_conteo = request.user
@@ -847,32 +1076,46 @@ def registrar_conteo(request, inventario_id):
                 detalle.observaciones = observaciones
                 detalle.save()  # El save() calcula diferencia automáticamente
                 conteos_realizados += 1
+            except (TypeError, ValueError):
+                errores.append(f"SKU {detalle.sku}: cantidad inválida ({stock_fisico!r})")
             except Exception as e:
                 errores.append(f"Error en detalle {detalle_id}: {str(e)}")
-        
+
         # Recalcular métricas del inventario
         inventario.calcular_metricas()
-        
+
         # Registrar log
         _registrar_log(
             inventario=inventario,
             tipo_accion='REGISTRO_CONTEO',
-            descripcion=f'{conteos_realizados} productos contados',
+            descripcion=(
+                f'{conteos_realizados} productos contados'
+                + (f', {len(agregados)} SKU agregados a la toma' if agregados else '')
+            ),
             usuario=request.user,
-            datos={'conteos_realizados': conteos_realizados, 'errores': errores}
+            datos={
+                'conteos_realizados': conteos_realizados, 'errores': errores,
+                'agregados': agregados,
+                'fecha_conteo': timezone.localtime(fecha_conteo).strftime('%d/%m/%Y %H:%M'),
+            }
         )
-        
+
         return JsonResponse({
             'success': True,
             'message': f'{conteos_realizados} conteos registrados',
             'conteos_realizados': conteos_realizados,
+            'agregados': agregados,
             'errores': errores if errores else None,
             'progreso': float(inventario.progreso_conteo)
         })
-        
+
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'})
+    except ValidationError as e:
+        transaction.set_rollback(True)
+        return JsonResponse({'success': False, 'error': '; '.join(e.messages)})
     except Exception as e:
+        transaction.set_rollback(True)
         logger.error(f"Error al registrar conteo: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
 
@@ -932,24 +1175,111 @@ def _leer_archivo_conteo(archivo, nombre_hoja='', max_rows=None, read_only=False
     return filas, None
 
 
-def _detectar_indices_conteo(filas):
-    encabezado = [str(c).strip().lower() for c in filas[0]]
-    tiene_encabezado = any('sku' in c or 'codigo' in c or 'cantidad' in c or 'stock' in c for c in encabezado)
+def _sin_tildes(texto):
+    import unicodedata
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', str(texto)) if unicodedata.category(c) != 'Mn'
+    ).lower().strip()
 
-    sku_idx = 0
-    cantidad_idx = 1
-    if tiene_encabezado:
-        mapa = {c: i for i, c in enumerate(encabezado)}
-        for key in ['sku', 'codigo', 'codigo_barra', 'codigo_barras', 'barra', 'barcode']:
-            if key in mapa:
-                sku_idx = mapa[key]
-                break
-        for key in ['cantidad', 'conteo', 'stock', 'stock_fisico', 'cant', 'qty']:
-            if key in mapa:
-                cantidad_idx = mapa[key]
-                break
 
-    return sku_idx, cantidad_idx, tiene_encabezado
+# Encabezados que identifican la columna del CONTEO FÍSICO, en orden de prioridad
+# («fisico contado» gana a «cantidad»; «stock» solo si no dice «sistema»).
+_CLAVES_CONTEO = ['fisico', 'contado', 'conteo', 'pistola', 'cantidad', 'cant', 'qty', 'unidades']
+_CLAVES_SKU = ['sku', 'codigo_barra', 'codigo de barra', 'codigo', 'barcode', 'barra', 'ean']
+# Un encabezado con estas palabras es el stock del SISTEMA, nunca el conteo.
+_CLAVES_SISTEMA = ['sistema', 'teorico', 'erp', 'diferencia', 'dif']
+
+
+def _detectar_indices_conteo(filas, sku_col=None, cantidad_col=None):
+    """
+    Decide qué columna es el SKU y cuál el conteo físico.
+
+    Devuelve (sku_idx, cantidad_idx, tiene_encabezado, encabezados, error).
+
+    El Excel de la tienda es «Sucursal | SKU | Artículo | ... | Stock sistema |
+    ... | Físico contado». El detector antiguo solo casaba claves EXACTAS
+    ('cantidad', 'stock', ...) y, al no casar ninguna, tomaba la columna 1: el
+    conteo se importaba desde «Stock sistema», la toma salía perfecta y no
+    ajustaba nada. Ahora se busca por «contiene», se descarta todo lo que diga
+    «sistema» y, si no se identifica la columna de conteo, se devuelve error en
+    vez de adivinar. `sku_col` / `cantidad_col` (índice 0-based o nombre de la
+    columna) los fija el usuario desde el modal y mandan sobre la heurística.
+    """
+    encabezado_raw = [str(c).strip() for c in filas[0]]
+    encabezado = [_sin_tildes(c) for c in encabezado_raw]
+    tiene_encabezado = any(
+        any(k in c for k in ('sku', 'codigo', 'cantidad', 'stock', 'fisico', 'conteo', 'articulo'))
+        for c in encabezado
+    )
+
+    def _resolver_col(valor):
+        """Índice explícito (0-based) o nombre de columna → índice, o None."""
+        if valor is None or str(valor).strip() == '':
+            return None
+        texto = str(valor).strip()
+        if texto.lstrip('-').isdigit():
+            idx = int(texto)
+            return idx if 0 <= idx < len(encabezado_raw) else None
+        buscado = _sin_tildes(texto)
+        for i, c in enumerate(encabezado):
+            if c == buscado:
+                return i
+        return None
+
+    sku_idx = _resolver_col(sku_col)
+    cantidad_idx = _resolver_col(cantidad_col)
+
+    if not tiene_encabezado:
+        # Formato de pistola sin encabezado: sku,cantidad
+        return (0 if sku_idx is None else sku_idx), (1 if cantidad_idx is None else cantidad_idx), False, encabezado_raw, None
+
+    if sku_idx is None:
+        for key in _CLAVES_SKU:
+            sku_idx = next((i for i, c in enumerate(encabezado) if key in c), None)
+            if sku_idx is not None:
+                break
+        if sku_idx is None:
+            sku_idx = 0
+
+    if cantidad_idx is None:
+        candidatas = [
+            i for i, c in enumerate(encabezado)
+            if i != sku_idx and not any(s in c for s in _CLAVES_SISTEMA)
+        ]
+        for key in _CLAVES_CONTEO:
+            encontrados = [i for i in candidatas if key in encabezado[i]]
+            if len(encontrados) == 1:
+                cantidad_idx = encontrados[0]
+                break
+            if len(encontrados) > 1:
+                nombres = ', '.join(f'"{encabezado_raw[i]}"' for i in encontrados)
+                return sku_idx, None, True, encabezado_raw, (
+                    f'Varias columnas podrían ser el conteo físico ({nombres}). '
+                    f'Seleccione cuál usar.'
+                )
+        if cantidad_idx is None:
+            # Solo «stock» a secas (sin «sistema»), y solo si es única
+            solo_stock = [i for i in candidatas if 'stock' in encabezado[i]]
+            if len(solo_stock) == 1:
+                cantidad_idx = solo_stock[0]
+        if cantidad_idx is None:
+            return sku_idx, None, True, encabezado_raw, (
+                'No se identificó la columna del conteo físico en el encabezado '
+                f'({", ".join(encabezado_raw)}). Seleccione la columna a importar.'
+            )
+
+    if cantidad_idx == sku_idx:
+        return sku_idx, None, True, encabezado_raw, 'La columna de SKU y la de conteo no pueden ser la misma'
+
+    return sku_idx, cantidad_idx, True, encabezado_raw, None
+
+
+def _parsear_cantidad(cantidad_raw):
+    """'4', '4.0', '4,0' → 4. Lanza ValueError si no es número o es negativa."""
+    cantidad = int(float(str(cantidad_raw).strip().replace(',', '.')))
+    if cantidad < 0:
+        raise ValueError('cantidad negativa')
+    return cantidad
 
 
 def _extraer_preview_conteo(filas, sku_idx, cantidad_idx, limite=20):
@@ -961,12 +1291,12 @@ def _extraer_preview_conteo(filas, sku_idx, cantidad_idx, limite=20):
             break
         if len(fila) <= max(sku_idx, cantidad_idx):
             continue
-        sku = str(fila[sku_idx]).strip()
+        sku = _normalizar_sku(fila[sku_idx])
         cantidad_raw = str(fila[cantidad_idx]).strip()
         if not sku:
             continue
         try:
-            cantidad = int(float(cantidad_raw.replace(',', '.')))
+            cantidad = _parsear_cantidad(cantidad_raw)
             preview.append({'sku': sku, 'cantidad': cantidad, 'valido': True})
         except ValueError:
             preview.append({'sku': sku, 'cantidad': cantidad_raw, 'valido': False})
@@ -1000,19 +1330,25 @@ def importar_conteo_pistola(request, inventario_id):
         })
 
     try:
-        # Actualizar estado si es el primer conteo
-        if inventario.estado == 'BORRADOR':
-            inventario.estado = 'EN_CONTEO'
-            inventario.fecha_inicio_conteo = inventario.fecha_inicio_conteo or timezone.now()
-            inventario.save()
-
         nombre_hoja = request.POST.get('nombre_hoja', '').strip()
+
+        # Momento del conteo físico (N1). Para un archivo el default es el corte si
+        # la toma (o este envío) declara «conté con la tienda cerrada»; si no, ahora.
+        tienda_cerrada = (
+            str(request.POST.get('conteo_tienda_cerrada', '')).lower() in ('1', 'true', 'on', 'si', 'sí')
+            or (not request.POST.get('fecha_conteo') and inventario.conteo_tienda_cerrada)
+        )
+        fecha_conteo = _resolver_fecha_conteo(inventario, request.POST.get('fecha_conteo'), tienda_cerrada)
 
         filas, error = _leer_archivo_conteo(archivo, nombre_hoja)
         if error:
             return JsonResponse({'success': False, 'error': error})
 
-        sku_idx, cantidad_idx, tiene_encabezado = _detectar_indices_conteo(filas)
+        sku_idx, cantidad_idx, tiene_encabezado, encabezados, error_cols = _detectar_indices_conteo(
+            filas, request.POST.get('sku_col'), request.POST.get('cantidad_col')
+        )
+        if error_cols:
+            return JsonResponse({'success': False, 'error': error_cols, 'encabezados': encabezados})
         if tiene_encabezado:
             filas = filas[1:]
 
@@ -1021,12 +1357,12 @@ def importar_conteo_pistola(request, inventario_id):
         for fila in filas:
             if len(fila) <= max(sku_idx, cantidad_idx):
                 continue
-            sku = str(fila[sku_idx]).strip()
+            sku = _normalizar_sku(fila[sku_idx])
             cantidad_raw = str(fila[cantidad_idx]).strip()
             if not sku:
                 continue
             try:
-                cantidad = int(float(cantidad_raw.replace(',', '.')))
+                cantidad = _parsear_cantidad(cantidad_raw)
             except ValueError:
                 errores.append(f"Cantidad inválida para SKU {sku}: {cantidad_raw}")
                 continue
@@ -1035,25 +1371,50 @@ def importar_conteo_pistola(request, inventario_id):
         if not conteos_por_sku:
             return JsonResponse({'success': False, 'error': 'No se encontraron conteos válidos'})
 
-        detalles = inventario.detalles.filter(sku__in=conteos_por_sku.keys()).select_related('producto_talla')
-        detalles_por_sku = {d.sku: d for d in detalles}
+        # Actualizar estado si es el primer conteo (después de validar el archivo:
+        # un archivo inválido no debe mover la toma de BORRADOR)
+        if inventario.estado == 'BORRADOR':
+            inventario.estado = 'EN_CONTEO'
+            inventario.fecha_inicio_conteo = inventario.fecha_inicio_conteo or timezone.now()
+            inventario.save()
 
-        fecha_conteo = timezone.now()
+        detalles = inventario.detalles.filter(sku__in=conteos_por_sku.keys()).select_related('producto_talla')
+        detalles_por_sku = {}
+        skus_repetidos = set()
+        for d in detalles:
+            clave = _normalizar_sku(d.sku)
+            if clave in detalles_por_sku:
+                skus_repetidos.add(clave)  # dos Producto_Talla con el mismo sku (N8)
+            detalles_por_sku[clave] = d
+
+        # SKUs contados que no están en la toma: se agregan al vuelo si existen en
+        # la sucursal (sobrantes de SKUs con stock 0), H4.
+        faltan = [s for s in conteos_por_sku if s not in detalles_por_sku]
+        nuevos, no_encontrados, ambiguos = _agregar_detalles_al_vuelo(inventario, faltan)
+        detalles_por_sku.update(nuevos)
+        agregados = sorted(nuevos.keys())
+        for sku in skus_repetidos:
+            ambiguos.append(sku)
+            detalles_por_sku.pop(sku, None)
+        for sku in ambiguos:
+            errores.append(f'SKU {sku} ambiguo: hay más de un producto con ese código en la sucursal; cuéntelo desde la tabla')
+
         movimientos_map = _obtener_movimientos_post_corte_batch(
-            [d.producto_talla_id for d in detalles],
+            [d.producto_talla_id for d in detalles_por_sku.values()],
             inventario.fecha_corte,
             fecha_conteo,
             inventario.sucursal_id
         )
 
         actualizados = 0
-        no_encontrados = []
+        sobreescritos = []
         for sku, cantidad in conteos_por_sku.items():
             detalle = detalles_por_sku.get(sku)
             if not detalle:
-                no_encontrados.append(sku)
                 continue
 
+            if detalle.contado and detalle.stock_fisico != cantidad:
+                sobreescritos.append({'sku': sku, 'anterior': detalle.stock_fisico, 'nuevo': cantidad})
             movimientos_post_corte = movimientos_map.get(detalle.producto_talla_id, 0)
             detalle.stock_movimientos_post_corte = movimientos_post_corte
             detalle.stock_sistema_ajustado = detalle.stock_sistema + movimientos_post_corte
@@ -1066,22 +1427,42 @@ def importar_conteo_pistola(request, inventario_id):
 
         inventario.calcular_metricas()
 
+        fecha_conteo_local = timezone.localtime(fecha_conteo).strftime('%d/%m/%Y %H:%M')
         _registrar_log(
             inventario=inventario,
             tipo_accion='REGISTRO_CONTEO',
-            descripcion=f'Importación de pistola: {actualizados} productos actualizados',
+            descripcion=(
+                f'Importación de archivo: {actualizados} productos actualizados'
+                + (f', {len(agregados)} SKU agregados a la toma' if agregados else '')
+                + f'. Conteo físico al {fecha_conteo_local}'
+                + f' (columnas: SKU={encabezados[sku_idx] if tiene_encabezado else sku_idx}, '
+                  f'conteo={encabezados[cantidad_idx] if tiene_encabezado else cantidad_idx})'
+            ),
             usuario=request.user,
-            datos={'actualizados': actualizados, 'no_encontrados': no_encontrados, 'errores': errores}
+            datos={
+                'actualizados': actualizados, 'agregados': agregados,
+                'no_encontrados': no_encontrados, 'ambiguos': ambiguos, 'errores': errores,
+                'sobreescritos': sobreescritos[:200], 'fecha_conteo': fecha_conteo_local,
+                'archivo': archivo.name,
+            }
         )
 
         return JsonResponse({
             'success': True,
             'actualizados': actualizados,
+            'agregados': agregados,
             'no_encontrados': no_encontrados,
+            'ambiguos': ambiguos,
+            'sobreescritos': sobreescritos,
+            'fecha_conteo': fecha_conteo_local,
             'errores': errores if errores else None,
             'progreso': float(inventario.progreso_conteo)
         })
+    except ValidationError as e:
+        transaction.set_rollback(True)
+        return JsonResponse({'success': False, 'error': '; '.join(e.messages)})
     except Exception as e:
+        transaction.set_rollback(True)
         logger.error(f"Error al importar conteo: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
 
@@ -1109,6 +1490,9 @@ def actualizar_exclusion_detalle(request, inventario_id, detalle_id):
         excluir = bool(data.get('excluir'))
         detalle = inventario.detalles.get(id=detalle_id)
         detalle.excluir_de_analisis = excluir
+        # Una línea excluida no se recuenta: save() limpia reconteo_requerido (y lo
+        # vuelve a evaluar si se reincluye). Antes quedaba marcada y bloqueaba
+        # finalizar/enviar sin aparecer en ninguna pantalla.
         detalle.save()
         inventario.calcular_metricas()
 
@@ -1137,7 +1521,16 @@ def actualizar_exclusion_detalle(request, inventario_id, detalle_id):
 def preview_conteo_pistola(request, inventario_id):
     """
     Previsualiza los primeros registros del archivo de conteo.
+
+    Devuelve además los encabezados y las columnas detectadas (o elegidas con
+    sku_col/cantidad_col) para que el modal deje elegirlas, y compara las
+    cantidades con el stock del sistema de la toma: si TODAS coinciden lo más
+    probable es que se esté leyendo la columna «Stock sistema» y no el conteo.
     """
+    inventario = _inventario_del_usuario(request, inventario_id)
+    if inventario is None:
+        return _error_sin_acceso()
+
     archivo = request.FILES.get('archivo')
     if not archivo:
         return JsonResponse({'success': False, 'error': 'Debe adjuntar un archivo'})
@@ -1147,15 +1540,58 @@ def preview_conteo_pistola(request, inventario_id):
     if error:
         return JsonResponse({'success': False, 'error': error})
 
-    sku_idx, cantidad_idx, tiene_encabezado = _detectar_indices_conteo(filas)
+    sku_idx, cantidad_idx, tiene_encabezado, encabezados, error_cols = _detectar_indices_conteo(
+        filas, request.POST.get('sku_col'), request.POST.get('cantidad_col')
+    )
+    columnas = {
+        'encabezados': encabezados,
+        'tiene_encabezado': tiene_encabezado,
+        'sku_col': sku_idx,
+        'cantidad_col': cantidad_idx,
+    }
+    if error_cols:
+        return JsonResponse({'success': False, 'error': error_cols, 'columnas': columnas})
+
     filas_data = filas[1:] if tiene_encabezado else filas
     preview, errores = _extraer_preview_conteo(filas_data, sku_idx, cantidad_idx, limite=100)
+
+    # Comparación contra el sistema (solo las filas del preview)
+    sistema_por_sku = {
+        _normalizar_sku(d['sku']): d['stock_sistema_ajustado']
+        for d in inventario.detalles.filter(
+            sku__in=[p['sku'] for p in preview]
+        ).values('sku', 'stock_sistema_ajustado')
+    }
+    coincidencias = 0
+    en_toma = 0
+    for p in preview:
+        sistema = sistema_por_sku.get(p['sku'])
+        p['en_toma'] = sistema is not None
+        p['stock_sistema'] = sistema
+        if sistema is not None:
+            en_toma += 1
+            if p['valido'] and p['cantidad'] == sistema:
+                coincidencias += 1
+
+    advertencia = None
+    if en_toma >= 5 and coincidencias == en_toma:
+        advertencia = (
+            f'Las {en_toma} cantidades del preview coinciden exactamente con el stock del '
+            f'sistema. ¿Seguro que la columna "{encabezados[cantidad_idx] if tiene_encabezado else cantidad_idx}" '
+            f'es el conteo físico y no el stock del sistema?'
+        )
 
     return JsonResponse({
         'success': True,
         'preview': preview,
         'errores': errores[:10],
-        'total_filas': len(filas_data)
+        'total_filas': len(filas_data),
+        'columnas': columnas,
+        'coincidencias_sistema': coincidencias,
+        'en_toma': en_toma,
+        'advertencia': advertencia,
+        'conteo_tienda_cerrada': inventario.conteo_tienda_cerrada,
+        'fecha_corte_local': timezone.localtime(inventario.fecha_corte).strftime('%Y-%m-%dT%H:%M'),
     })
 
 
@@ -1179,9 +1615,10 @@ def registrar_reconteo(request, inventario_id):
         
         data = json.loads(request.body)
         reconteos = data.get('reconteos', [])
-        
+
         reconteos_realizados = 0
-        
+        errores = []
+
         for rec in reconteos:
             detalle_id = rec.get('detalle_id')
             stock_reconteo = rec.get('stock_reconteo')
@@ -1189,8 +1626,12 @@ def registrar_reconteo(request, inventario_id):
             
             try:
                 detalle = inventario.detalles.get(id=detalle_id, reconteo_requerido=True)
-                
-                detalle.stock_reconteo = int(stock_reconteo)
+
+                cantidad = int(stock_reconteo)
+                if cantidad < 0:
+                    errores.append(f'SKU {detalle.sku}: el reconteo no puede ser negativo ({cantidad})')
+                    continue
+                detalle.stock_reconteo = cantidad
                 detalle.fecha_reconteo = timezone.now()
                 detalle.usuario_reconteo = request.user
                 
@@ -1207,25 +1648,29 @@ def registrar_reconteo(request, inventario_id):
                 detalle.save()
                 
                 reconteos_realizados += 1
-                
+
             except TomaInventarioDetalle.DoesNotExist:
-                pass
-        
+                errores.append(f'Detalle {detalle_id} no requiere reconteo o no existe')
+            except (TypeError, ValueError):
+                errores.append(f'Detalle {detalle_id}: cantidad inválida ({stock_reconteo!r})')
+
         # Recalcular métricas
         inventario.calcular_metricas()
-        
+
         # Registrar log
         _registrar_log(
             inventario=inventario,
             tipo_accion='RECONTEO',
             descripcion=f'{reconteos_realizados} productos recontados',
-            usuario=request.user
+            usuario=request.user,
+            datos={'errores': errores}
         )
-        
+
         return JsonResponse({
             'success': True,
             'message': f'{reconteos_realizados} reconteos registrados',
-            'reconteos_realizados': reconteos_realizados
+            'reconteos_realizados': reconteos_realizados,
+            'errores': errores if errores else None,
         })
         
     except Exception as e:
@@ -1301,12 +1746,8 @@ def obtener_analisis_inventario(request, inventario_id):
             valor_diferencias=Sum(F('diferencia') * F('costo_unitario_sistema'))
         ).order_by('-valor_diferencias')
         
-        # === PRODUCTOS QUE REQUIEREN RECONTEO ===
-        requieren_reconteo = inventario.detalles.filter(
-            reconteo_requerido=True,
-            stock_reconteo__isnull=True,
-            excluir_de_analisis=False
-        ).count()
+        # === PRODUCTOS QUE REQUIEREN RECONTEO (mismo criterio que finalizar/enviar/aprobar) ===
+        requieren_reconteo = _reconteos_pendientes(inventario).count()
         
         # === INDICADORES DE PRECISIÓN ===
         total_contados = detalles.count()
@@ -1320,6 +1761,8 @@ def obtener_analisis_inventario(request, inventario_id):
         )
         total_lineas = detalles_analisis.count()
         pendientes_contar = detalles_analisis.filter(contado=False).count()
+        pendientes_con_stock = detalles_analisis.filter(contado=False, stock_sistema__gt=0).count()
+        ajustes_aplicados = inventario.ajustes_aplicados().count()
 
         # === SEGMENTOS (para los filtros del detalle) ===
         segmentos_marcas = list(
@@ -1373,6 +1816,9 @@ def obtener_analisis_inventario(request, inventario_id):
                 'total_esperados': total_lineas,
                 'total_contados': total_contados,
                 'pendientes_contar': pendientes_contar,
+                'pendientes_con_stock': pendientes_con_stock,
+                'pendientes_sin_stock': pendientes_contar - pendientes_con_stock,
+                'ajustes_aplicados': ajustes_aplicados,
                 'unidades_fisicas': unidades['fisicas'] or 0,
                 'unidades_sistema': unidades['sistema'] or 0,
                 'progreso': float(inventario.progreso_conteo),
@@ -1420,16 +1866,25 @@ def obtener_analisis_inventario(request, inventario_id):
             },
             'estado': inventario.estado,
             'estado_display': inventario.get_estado_display(),
-            # puede_aprobar() del modelo compara unidades contra líneas; se sustituye por
-            # la condición real: nada pendiente de contar ni de recontar.
-            'puede_aprobar': (
-                inventario.estado == 'PENDIENTE_APROBACION' and
-                requieren_reconteo == 0 and
-                pendientes_contar == 0
-            ),
+            'conteo_tienda_cerrada': inventario.conteo_tienda_cerrada,
+            'fecha_corte_local': timezone.localtime(inventario.fecha_corte).strftime('%Y-%m-%dT%H:%M'),
+            # Mismo criterio que TomaInventario.puede_aprobar(): nada pendiente de
+            # contar ni de recontar (líneas excluidas fuera).
+            'puede_aprobar': inventario.puede_aprobar(),
             'puede_enviar_aprobacion': (
                 inventario.estado in ('CONTEO_FINALIZADO', 'EN_REVISION') and
                 requieren_reconteo == 0
+            ),
+            'puede_finalizar': (
+                inventario.estado == 'EN_CONTEO' or
+                (inventario.estado == 'BORRADOR' and total_contados > 0)
+            ),
+            'puede_rechazar': inventario.estado == 'PENDIENTE_APROBACION',
+            # Con ajustes aplicados ya hay stock movido con referencia a esta toma:
+            # cancelarla la dejaría «Cancelada» con kardex vigente (N3).
+            'puede_cancelar': (
+                inventario.estado not in ('COMPLETADO', 'APLICANDO', 'CANCELADO') and
+                ajustes_aplicados == 0
             ),
             'puede_aplicar_ajustes': inventario.estado == 'APROBADO',
         }
@@ -1480,7 +1935,7 @@ def exportar_inventario(request, inventario_id):
         ws_resumen.append(['Número:', inventario.numero_inventario])
         ws_resumen.append(['Nombre:', inventario.nombre])
         ws_resumen.append(['Sucursal:', inventario.sucursal.alias])
-        ws_resumen.append(['Fecha Corte:', inventario.fecha_corte.strftime('%d/%m/%Y %H:%M')])
+        ws_resumen.append(['Fecha Corte:', timezone.localtime(inventario.fecha_corte).strftime('%d/%m/%Y %H:%M')])
         ws_resumen.append(['Estado:', inventario.get_estado_display()])
         ws_resumen.append([])
         ws_resumen.append(['MÉTRICAS'])
@@ -1651,29 +2106,42 @@ def finalizar_conteo(request, inventario_id):
         if inventario is None:
             return _error_sin_acceso()
         
+        # Una toma BORRADOR con conteos (importados por una versión anterior, que no
+        # cambiaba el estado) mostraba «Finalizar» y el backend la rechazaba: es la
+        # trampa en que cayó INV-6 (4.301 contados). Si tiene conteos, se acepta.
+        if inventario.estado == 'BORRADOR' and inventario.detalles.filter(contado=True).exists():
+            inventario.estado = 'EN_CONTEO'
+            inventario.fecha_inicio_conteo = inventario.fecha_inicio_conteo or timezone.now()
+            inventario.save(update_fields=['estado', 'fecha_inicio_conteo', 'updated_at'])
+
         if inventario.estado not in ['EN_CONTEO']:
             return JsonResponse({
-                'success': False, 
+                'success': False,
                 'error': 'El inventario no está en estado de conteo'
             })
-        
+
         # Verificar que se hayan contado todas las LÍNEAS (no unidades: el campo
         # total_productos_contados del modelo acumula stock_fisico, así que una tienda
         # con más unidades que SKUs podía cerrar un conteo a medias).
         detalles_analisis = inventario.detalles.filter(excluir_de_analisis=False)
         pendientes = detalles_analisis.filter(contado=False).count()
         if pendientes > 0:
+            # Desglose para que la pantalla ofrezca «Resolver no contados» con criterio
+            con_stock = detalles_analisis.filter(contado=False, stock_sistema__gt=0).aggregate(
+                lineas=Count('id'), unidades=Coalesce(Sum('stock_sistema'), 0)
+            )
             return JsonResponse({
                 'success': False,
-                'error': f'Faltan {pendientes} productos por contar'
+                'error': f'Faltan {pendientes} productos por contar',
+                'pendientes': pendientes,
+                'pendientes_con_stock': con_stock['lineas'],
+                'pendientes_sin_stock': pendientes - con_stock['lineas'],
+                'unidades_sin_contar': con_stock['unidades'],
             })
 
-        # Verificar si hay reconteos pendientes
-        reconteos_pendientes = inventario.detalles.filter(
-            reconteo_requerido=True,
-            stock_reconteo__isnull=True
-        ).count()
-        
+        # Verificar si hay reconteos pendientes (sin las líneas excluidas)
+        reconteos_pendientes = _reconteos_pendientes(inventario).count()
+
         if reconteos_pendientes > 0:
             inventario.estado = 'EN_REVISION'
             mensaje = f'Inventario en revisión. {reconteos_pendientes} productos requieren reconteo.'
@@ -1721,12 +2189,9 @@ def enviar_aprobacion(request, inventario_id):
                 'error': 'El inventario no está en un estado válido para enviar a aprobación'
             })
         
-        # Verificar que no haya reconteos pendientes
-        reconteos_pendientes = inventario.detalles.filter(
-            reconteo_requerido=True,
-            stock_reconteo__isnull=True
-        ).count()
-        
+        # Verificar que no haya reconteos pendientes (sin las líneas excluidas)
+        reconteos_pendientes = _reconteos_pendientes(inventario).count()
+
         if reconteos_pendientes > 0:
             return JsonResponse({
                 'success': False,
@@ -1781,9 +2246,7 @@ def aprobar_inventario(request, inventario_id):
                          f'Cuéntelos o exclúyalos del análisis.'
             })
 
-        reconteos_pendientes = inventario.detalles.filter(
-            reconteo_requerido=True, stock_reconteo__isnull=True, excluir_de_analisis=False
-        ).count()
+        reconteos_pendientes = _reconteos_pendientes(inventario).count()
         if reconteos_pendientes > 0:
             return JsonResponse({
                 'success': False,
@@ -1870,12 +2333,90 @@ def rechazar_inventario(request, inventario_id):
 # API: APLICACIÓN DE AJUSTES (BACKGROUND THREAD + PROGRESS TRACKING)
 # ==============================================================================
 
-def _ejecutar_ajustes_background(inventario_id, usuario_id):
+def _ultimo_ajuste_aplicado_en(inventario):
+    """Fecha del último detalle ajustado (heartbeat implícito del worker)."""
+    return inventario.detalles.filter(ajuste_aplicado=True).aggregate(
+        ultimo=Max('fecha_ajuste')
+    )['ultimo']
+
+
+def _tarea_huerfana(tarea, inventario, ahora=None):
     """
-    Worker que corre en un thread separado para aplicar ajustes de inventario.
+    ¿La tarea EN_PROCESO se quedó sin worker? No hay heartbeat en el modelo (sería
+    una migración), así que se usa lo que ya existe: `iniciada_en` y la fecha del
+    último ajuste aplicado. Huérfana = EN_PROCESO hace más de TAREA_HUERFANA_MINUTOS
+    y sin ningún detalle aplicado en ese mismo lapso. Un worker vivo pero lento
+    aplica al menos un detalle cada pocos segundos, así que 30 min sin avance es
+    un hilo muerto (deploy, OOM, reinicio del contenedor).
+    """
+    if tarea is None or tarea.estado != 'EN_PROCESO':
+        return False
+    ahora = ahora or timezone.now()
+    limite = ahora - timedelta(minutes=TAREA_HUERFANA_MINUTOS)
+    if tarea.iniciada_en and tarea.iniciada_en > limite:
+        return False
+    ultimo = _ultimo_ajuste_aplicado_en(inventario)
+    if ultimo and ultimo > limite:
+        return False
+    return True
+
+
+def _iniciar_tarea_ajustes(inventario, usuario, reanudar=False):
+    """
+    Toma el «lock» de la aplicación de ajustes de una toma (N2/H6).
+
+    Devuelve (tarea, iniciada). Si `iniciada` es False la tarea ya estaba EN_PROCESO
+    (y no huérfana, o no se pidió reanudar): el llamador NO debe lanzar un worker.
+
+    Con gunicorn 2 workers × 2 threads, dos clics que llegaran antes de que el
+    primero grabara EN_PROCESO lanzaban dos hilos con la misma lista de detalles y
+    cada uno registraba kardex + lote + stock otra vez. Ahora la fila de la tarea
+    se bloquea con select_for_update y el cambio a EN_PROCESO es un UPDATE
+    condicional: solo un llamador ve rows == 1. La guarda de segundo nivel está en
+    _aplicar_ajuste_individual (relee el detalle bajo lock y sale si ya se aplicó).
+    """
+    with transaction.atomic():
+        tarea = (
+            TareaAplicacionAjustes.objects.select_for_update()
+            .filter(inventario=inventario).first()
+        )
+        if tarea is None:
+            tarea = TareaAplicacionAjustes.objects.create(inventario=inventario, creada_por=usuario)
+            tarea = TareaAplicacionAjustes.objects.select_for_update().get(pk=tarea.pk)
+
+        ahora = timezone.now()
+        if tarea.estado == 'EN_PROCESO':
+            if not (reanudar and _tarea_huerfana(tarea, inventario, ahora)):
+                return tarea, False
+            # Reanudar una tarea huérfana: UPDATE condicional sobre iniciada_en para
+            # que dos «Reanudar» simultáneos no ganen los dos.
+            filas = TareaAplicacionAjustes.objects.filter(
+                pk=tarea.pk, estado='EN_PROCESO', iniciada_en=tarea.iniciada_en,
+            ).update(iniciada_en=ahora, finalizada_en=None, creada_por=usuario)
+        else:
+            filas = TareaAplicacionAjustes.objects.filter(
+                pk=tarea.pk,
+            ).exclude(estado='EN_PROCESO').update(
+                estado='EN_PROCESO', procesados=0, total=0, errores=[],
+                iniciada_en=ahora, finalizada_en=None, creada_por=usuario,
+            )
+        if filas != 1:
+            return tarea, False
+
+        TomaInventario.objects.filter(pk=inventario.pk).update(estado='APLICANDO')
+        inventario.estado = 'APLICANDO'
+        tarea.refresh_from_db()
+        return tarea, True
+
+
+def _ejecutar_ajustes_background(inventario_id, usuario_id, cerrar_conexion=True):
+    """
+    Worker que aplica los ajustes de una toma (en un thread desde la vista, o de
+    forma síncrona desde el command `aplicar_ajustes_toma`).
     Actualiza TareaAplicacionAjustes cada PROGRESS_UPDATE_INTERVAL SKUs para
     que el frontend pueda hacer polling del progreso.
-    La conexión de BD se cierra al finalizar para evitar leaks.
+    `cerrar_conexion`: el thread cierra su conexión al terminar (evita leaks); el
+    command y los tests, que comparten la conexión del llamador, pasan False.
     """
     PROGRESS_UPDATE_INTERVAL = 25
 
@@ -1907,12 +2448,15 @@ def _ejecutar_ajustes_background(inventario_id, usuario_id):
             return
 
         ajustes_aplicados = 0
+        omitidos = 0  # ya aplicados por otro worker (guarda N2)
         errores = []
 
         for i, detalle in enumerate(detalles_pendientes):
             try:
-                _aplicar_ajuste_individual(detalle, inventario, usuario)
-                ajustes_aplicados += 1
+                if _aplicar_ajuste_individual(detalle, inventario, usuario):
+                    ajustes_aplicados += 1
+                else:
+                    omitidos += 1
             except Exception as e:
                 errores.append({'sku': detalle.sku, 'error': str(e)})
                 logger.error(f"Error al aplicar ajuste para {detalle.sku}: {str(e)}")
@@ -1933,15 +2477,19 @@ def _ejecutar_ajustes_background(inventario_id, usuario_id):
             inventario=inventario,
             tipo_accion='APLICACION_AJUSTES',
             descripcion=(
-                f'{ajustes_aplicados} ajustes aplicados'
+                f'{ajustes_aplicados} ajustes aplicados de {len(detalles_pendientes)} esperados'
+                + (f', {omitidos} ya estaban aplicados' if omitidos else '')
                 + (f', {len(errores)} con error (inventario queda en Aprobado para reintentar)'
                    if errores else '')
             ),
             usuario=usuario,
-            datos={'ajustes_aplicados': ajustes_aplicados, 'errores': errores}
+            datos={
+                'ajustes_aplicados': ajustes_aplicados, 'esperados': len(detalles_pendientes),
+                'omitidos': omitidos, 'errores': errores,
+            }
         )
 
-        tarea.procesados = ajustes_aplicados
+        tarea.procesados = ajustes_aplicados + omitidos
         tarea.errores = errores
         tarea.estado = 'COMPLETADO' if not errores else 'ERROR'
         tarea.finalizada_en = timezone.now()
@@ -1962,7 +2510,8 @@ def _ejecutar_ajustes_background(inventario_id, usuario_id):
         except Exception:
             pass
     finally:
-        connection.close()
+        if cerrar_conexion:
+            connection.close()
 
 
 @require_POST
@@ -1972,6 +2521,9 @@ def aplicar_ajustes_inventario(request, inventario_id):
     Inicia la aplicación de ajustes de inventario en un thread background.
     Retorna inmediatamente con el task_id para que el frontend haga polling
     al endpoint estado_tarea_ajustes.
+
+    Body opcional {"reanudar": true}: relanza una tarea EN_PROCESO solo si está
+    huérfana (ver _tarea_huerfana); los detalles ya aplicados se saltan.
 
     IMPORTANTE: Esta función modifica el stock real del sistema.
     Solo debe ejecutarse después de la aprobación.
@@ -1987,43 +2539,40 @@ def aplicar_ajustes_inventario(request, inventario_id):
                 'error': 'El inventario debe estar aprobado para aplicar ajustes'
             })
 
-        # Verificar si ya hay un proceso en curso
-        tarea, created = TareaAplicacionAjustes.objects.get_or_create(
-            inventario=inventario,
-            defaults={'creada_por': request.user}
-        )
+        try:
+            data = json.loads(request.body) if request.body else {}
+        except json.JSONDecodeError:
+            data = {}
+        reanudar = bool(data.get('reanudar'))
 
-        if tarea.estado == 'EN_PROCESO':
+        tarea, iniciada = _iniciar_tarea_ajustes(inventario, request.user, reanudar=reanudar)
+        if not iniciada:
             return JsonResponse({
                 'success': True,
                 'task_id': tarea.id,
                 'already_running': True,
+                'huerfana': _tarea_huerfana(tarea, inventario),
                 'message': 'El proceso ya está en ejecución'
             })
 
-        # Reiniciar tarea si es reintento
-        tarea.estado = 'EN_PROCESO'
-        tarea.procesados = 0
-        tarea.total = 0
-        tarea.errores = []
-        tarea.iniciada_en = timezone.now()
-        tarea.finalizada_en = None
-        tarea.creada_por = request.user
-        tarea.save()
+        # El hilo arranca SOLO después del commit: si se lanzara antes podría leer
+        # la tarea/toma sin el estado nuevo (otra conexión) o correr sobre datos que
+        # luego se revierten.
+        usuario_id = request.user.id
 
-        inventario.estado = 'APLICANDO'
-        inventario.save()
+        def _lanzar():
+            threading.Thread(
+                target=_ejecutar_ajustes_background,
+                args=(inventario_id, usuario_id),
+                daemon=True
+            ).start()
 
-        thread = threading.Thread(
-            target=_ejecutar_ajustes_background,
-            args=(inventario_id, request.user.id),
-            daemon=True
-        )
-        thread.start()
+        transaction.on_commit(_lanzar)
 
         return JsonResponse({
             'success': True,
             'task_id': tarea.id,
+            'reanudada': reanudar,
             'message': 'Proceso de ajustes iniciado. Usa el endpoint de estado para monitorear el progreso.'
         })
 
@@ -2040,13 +2589,20 @@ def estado_tarea_ajustes(request, inventario_id):
     El frontend consulta este endpoint cada ~2s para actualizar la barra de progreso.
     """
     try:
-        tarea = TareaAplicacionAjustes.objects.filter(inventario_id=inventario_id).first()
+        # Antes no verificaba pertenencia: cualquier usuario del módulo podía leer el
+        # progreso y los SKUs con error de la toma de otra empresa (H13).
+        inventario = _inventario_del_usuario(request, inventario_id)
+        if inventario is None:
+            return _error_sin_acceso()
+
+        tarea = TareaAplicacionAjustes.objects.filter(inventario_id=inventario.id).first()
         if not tarea:
             return JsonResponse({
                 'success': False,
                 'error': 'No se encontró tarea para este inventario'
             })
 
+        ultimo_ajuste = _ultimo_ajuste_aplicado_en(inventario)
         return JsonResponse({
             'success': True,
             'estado': tarea.estado,
@@ -2056,6 +2612,9 @@ def estado_tarea_ajustes(request, inventario_id):
             'errores': tarea.errores,
             'iniciada_en': tarea.iniciada_en.isoformat() if tarea.iniciada_en else None,
             'finalizada_en': tarea.finalizada_en.isoformat() if tarea.finalizada_en else None,
+            'ultimo_ajuste_en': ultimo_ajuste.isoformat() if ultimo_ajuste else None,
+            'huerfana': _tarea_huerfana(tarea, inventario),
+            'estado_inventario': inventario.estado,
         })
     except Exception as e:
         logger.error(f"Error al obtener estado de tarea: {str(e)}")
@@ -2080,22 +2639,36 @@ def _aplicar_ajuste_individual(detalle, inventario, usuario):
       que el movimiento no se podía rastrear hasta la toma que lo originó.
     - Se toma lock de fila sobre el Producto_Talla: el stock se actualiza con un
       read-modify-write y el proceso corre en un thread en paralelo con las ventas del POS.
+    - Guarda contra doble aplicación (N2): el detalle se RELEE bajo select_for_update
+      y, si otro worker ya lo aplicó (dos POST casi simultáneos, «reanudar» con el
+      hilo original todavía vivo), se sale sin tocar nada. La idempotencia ya no
+      depende de que un solo hilo haya leído `ajuste_aplicado=False` en memoria.
+
+    Devuelve True si aplicó el ajuste, False si no había nada que hacer.
     """
     from .views import registrar_movimiento_producto
     from .views_modulo_productos import crear_lote_producto
 
-    diferencia = detalle.diferencia
-    if diferencia == 0:
-        return
+    if detalle.diferencia == 0:
+        return False
 
     referencia = inventario.numero_inventario
     observaciones = f'Ajuste inventario {referencia}'
 
     with transaction.atomic():
+        det = TomaInventarioDetalle.objects.select_for_update().get(pk=detalle.pk)
+        if det.ajuste_aplicado:
+            detalle.ajuste_aplicado = True
+            detalle.fecha_ajuste = det.fecha_ajuste
+            return False
+        diferencia = det.diferencia
+        if diferencia == 0 or det.excluir_de_analisis:
+            return False
+
         producto_talla = (
             Producto_Talla.objects.select_for_update()
             .select_related('producto')
-            .get(pk=detalle.producto_talla_id)
+            .get(pk=det.producto_talla_id)
         )
 
         if diferencia > 0:
@@ -2147,10 +2720,13 @@ def _aplicar_ajuste_individual(detalle, inventario, usuario):
                 consumir_lotes=True,
             )
 
-        # Marcar como aplicado solo si el ajuste efectivamente se registró
+        # Marcar como aplicado solo si el ajuste efectivamente se registró (sobre la
+        # fila bloqueada; el objeto del llamador se actualiza para que no la reintente)
+        ahora = timezone.now()
+        TomaInventarioDetalle.objects.filter(pk=det.pk).update(ajuste_aplicado=True, fecha_ajuste=ahora)
         detalle.ajuste_aplicado = True
-        detalle.fecha_ajuste = timezone.now()
-        detalle.save(update_fields=['ajuste_aplicado', 'fecha_ajuste'])
+        detalle.fecha_ajuste = ahora
+        return True
 
 
 # ==============================================================================
@@ -2178,10 +2754,21 @@ def cancelar_inventario(request, inventario_id):
         
         if inventario.estado == 'APLICANDO':
             return JsonResponse({
-                'success': False, 
+                'success': False,
                 'error': 'No se puede cancelar mientras se aplican ajustes'
             })
-        
+
+        # Tras una aplicación con errores la toma vuelve a APROBADO con parte de los
+        # ajustes ya en el kardex/stock. Cancelarla dejaría movimientos vigentes
+        # referenciando una toma «Cancelada», sin reversa (N3).
+        aplicados = inventario.ajustes_aplicados().count()
+        if aplicados > 0:
+            return JsonResponse({
+                'success': False,
+                'error': f'La toma ya aplicó {aplicados} ajuste(s) al stock y no se puede cancelar. '
+                         f'Reintente la aplicación para completar los pendientes.'
+            })
+
         data = json.loads(request.body)
         motivo = data.get('motivo', '')
         
@@ -2209,6 +2796,166 @@ def cancelar_inventario(request, inventario_id):
         
     except Exception as e:
         logger.error(f"Error al cancelar inventario: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ==============================================================================
+# API: NO CONTADOS EN BLOQUE (cerrar tomas parciales)
+# ==============================================================================
+
+def _resolver_no_contados(inventario, usuario, accion, solo_stock_cero=False, previsualizar=False):
+    """
+    Resuelve en bloque las líneas sin contar (no excluidas) para poder cerrar una
+    toma parcial. Antes solo se podían excluir de a una (INV-6: 33.070 requests).
+
+    accion:
+      'excluir'        → excluir_de_analisis=True (no se ajustan, no bloquean).
+      'sin_diferencia' → contado=True con stock_fisico = stock del sistema al
+                         momento (corte + movimientos posteriores): diferencia 0,
+                         no mueven stock. Es la lectura «lo no contado está bien»;
+                         NUNCA se pone en 0 (sería un ajuste negativo masivo: en
+                         INV-6, 1.313 unidades).
+    solo_stock_cero: limitar a las líneas con stock_sistema <= 0 (las que más
+      abundan en una toma creada sin filtro de stock; un negativo tampoco es
+      «algo que contar»).
+    previsualizar: solo devuelve el impacto (líneas, unidades, $ a costo; las
+      unidades y el valor consideran solo stock > 0).
+    """
+    if accion not in ('excluir', 'sin_diferencia'):
+        raise ValidationError('Acción no válida: use "excluir" o "sin_diferencia"')
+
+    pendientes = inventario.detalles.filter(excluir_de_analisis=False, contado=False)
+    if solo_stock_cero:
+        pendientes = pendientes.filter(stock_sistema__lte=0)
+
+    impacto = pendientes.aggregate(
+        lineas=Count('id'),
+        unidades=Coalesce(Sum('stock_sistema', filter=Q(stock_sistema__gt=0)), 0),
+        valor=Coalesce(
+            Sum(ExpressionWrapper(
+                F('stock_sistema') * F('costo_unitario_sistema'),
+                output_field=DecimalField(max_digits=18, decimal_places=2),
+            ), filter=Q(stock_sistema__gt=0)),
+            Value(0), output_field=DecimalField(max_digits=18, decimal_places=2)
+        ),
+    )
+    resultado = {
+        'accion': accion,
+        'solo_stock_cero': bool(solo_stock_cero),
+        'lineas': impacto['lineas'],
+        'unidades': impacto['unidades'],
+        'valor_costo': float(impacto['valor'] or 0),
+        'excluidas_por_stock_negativo': 0,
+    }
+    if previsualizar or impacto['lineas'] == 0:
+        return resultado
+
+    ahora = timezone.now()
+    if accion == 'excluir':
+        pendientes.update(excluir_de_analisis=True, reconteo_requerido=False)
+    else:
+        # Contar «igual al sistema»: hay que fijar el post-corte por línea, como
+        # hace registrar_conteo, para que diferencia quede en 0 de verdad.
+        ids = list(pendientes.values_list('id', flat=True))
+        negativas = []
+        for inicio in range(0, len(ids), BATCH_SIZE):
+            lote = list(
+                inventario.detalles.filter(id__in=ids[inicio:inicio + BATCH_SIZE])
+            )
+            movimientos = _obtener_movimientos_post_corte_batch(
+                [d.producto_talla_id for d in lote], inventario.fecha_corte, ahora, inventario.sucursal_id
+            )
+            a_contar = []
+            for d in lote:
+                post = movimientos.get(d.producto_talla_id, 0)
+                ajustado = d.stock_sistema + post
+                if ajustado < 0:
+                    # Un físico negativo no existe: la línea con stock del sistema
+                    # bajo cero se excluye (queda para revisión) en vez de «contarse».
+                    negativas.append(d.id)
+                    continue
+                d.stock_movimientos_post_corte = post
+                d.stock_sistema_ajustado = ajustado
+                d.stock_fisico = ajustado
+                d.diferencia = 0
+                d.reconteo_requerido = False
+                d.contado = True
+                d.fecha_conteo = ahora
+                d.usuario_conteo = usuario
+                d.observaciones = ((d.observaciones or '') + '\nNo contado: se asume igual al sistema').strip()
+                a_contar.append(d)
+            TomaInventarioDetalle.objects.bulk_update(a_contar, [
+                'stock_movimientos_post_corte', 'stock_sistema_ajustado', 'stock_fisico',
+                'diferencia', 'reconteo_requerido', 'contado', 'fecha_conteo',
+                'usuario_conteo', 'observaciones',
+            ], batch_size=BATCH_SIZE)
+        if negativas:
+            TomaInventarioDetalle.objects.filter(id__in=negativas).update(
+                excluir_de_analisis=True, reconteo_requerido=False
+            )
+            resultado['excluidas_por_stock_negativo'] = len(negativas)
+
+        if inventario.estado == 'BORRADOR':
+            inventario.estado = 'EN_CONTEO'
+            inventario.fecha_inicio_conteo = inventario.fecha_inicio_conteo or ahora
+            inventario.save(update_fields=['estado', 'fecha_inicio_conteo', 'updated_at'])
+
+    inventario.calcular_metricas()
+    _registrar_log(
+        inventario=inventario,
+        tipo_accion='MODIFICACION',
+        descripcion=(
+            f'{impacto["lineas"]} líneas sin contar '
+            + ('excluidas del análisis' if accion == 'excluir' else 'marcadas como sin diferencia (igual al sistema)')
+            + (' (solo stock 0)' if solo_stock_cero else '')
+            + f'; {impacto["unidades"]} u. / ${float(impacto["valor"] or 0):,.0f} a costo'
+        ),
+        usuario=usuario,
+        datos=resultado,
+    )
+    return resultado
+
+
+@require_POST
+@login_required
+@transaction.atomic
+def resolver_no_contados(request, inventario_id):
+    """
+    POST gestion-inventarios/api/no-contados/<id>/
+    Body: {"accion": "excluir"|"sin_diferencia", "solo_stock_cero": bool,
+           "previsualizar": bool}
+    Con previsualizar=true solo devuelve el impacto (para la confirmación).
+    """
+    inventario = _inventario_del_usuario(request, inventario_id)
+    if inventario is None:
+        return _error_sin_acceso()
+    if inventario.estado not in ['BORRADOR', 'EN_CONTEO']:
+        return JsonResponse({
+            'success': False,
+            'error': f'El inventario está en estado {inventario.get_estado_display()} y ya no admite conteos'
+        })
+    try:
+        data = json.loads(request.body) if request.body else {}
+        resultado = _resolver_no_contados(
+            inventario, request.user,
+            accion=data.get('accion', 'excluir'),
+            solo_stock_cero=bool(data.get('solo_stock_cero')),
+            previsualizar=bool(data.get('previsualizar')),
+        )
+        return JsonResponse({
+            'success': True,
+            'resultado': resultado,
+            'estado': inventario.estado,
+            'progreso': float(inventario.progreso_conteo),
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Datos JSON inválidos'})
+    except ValidationError as e:
+        transaction.set_rollback(True)
+        return JsonResponse({'success': False, 'error': '; '.join(e.messages)})
+    except Exception as e:
+        transaction.set_rollback(True)
+        logger.error(f"Error al resolver no contados: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -2263,29 +3010,7 @@ def obtener_historial_inventario(request, inventario_id):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
-def registrar_movimiento_producto(producto_talla, concepto, cantidad, responsable, 
-                                  sucursal_origen=None, sucursal_destino=None,
-                                  ticket=None, observaciones=None, referencia_externa=None):
-    """
-    Registra un movimiento de producto.
-    Wrapper para mantener compatibilidad con el sistema existente.
-    """
-    tipo_movimiento = 'INGRESO' if cantidad > 0 else 'EGRESO'
-    
-    movimiento = Movimientos_Producto.objects.create(
-        ProductoTalla=producto_talla,
-        concepto=concepto,
-        tipo_movimiento=tipo_movimiento,
-        cantidad=cantidad,
-        responsable=str(responsable) if responsable else '',
-        sucursal_origen=sucursal_origen,
-        sucursal_destino=sucursal_destino,
-        ticket=ticket,
-        observaciones=observaciones or '',
-        referencia_externa=referencia_externa or '',
-        estado='COMPLETADO',
-        fecha=timezone.localdate(),
-        hora=timezone.localtime().time()
-    )
-    
-    return movimiento
+# NOTA: se eliminó el wrapper `registrar_movimiento_producto` que vivía al final
+# de este archivo. Estaba muerto (la aplicación de ajustes importa el de views.py,
+# que además actualiza stock plano y lotes) y era un tercer camino de escritura
+# del kardex que NO tocaba el stock.

@@ -69,9 +69,11 @@
             const det = [];
             if (p.sku) { det.push('SKU:' + _escDG(p.sku)); }
             if (p.talla) { det.push('T:' + _escDG(p.talla)); }
-            const nota = esMonto
+            const nota = (esMonto
                 ? '<div class="sub">ABONO PARCIAL (sin retiro de producto)</div>'
-                : (p.precio_unitario ? `<div class="sub">P/U: ${_clpDG(p.precio_unitario)}</div>` : '');
+                : (p.precio_unitario ? `<div class="sub">P/U: ${_clpDG(p.precio_unitario)}</div>` : ''))
+                // Producto fallado: no vuelve al inventario (queda en el papel para la tienda).
+                + (p.no_apto ? '<div class="sub b">PRODUCTO NO APTO PARA LA VENTA</div>' : '');
             return `<tr>
                 <td class="c">${esMonto ? '&mdash;' : (p.cantidad || 0)}</td>
                 <td>${_escDG(p.descripcion).toUpperCase()}

@@ -292,6 +292,8 @@
                     <div class="alert alert-info py-1 px-2 small mb-2">
                         <i class="ri-information-line me-1"></i> Elige <strong>Por cantidad</strong> (devuelves unidades completas) o
                         <strong>Por monto</strong> (acreditas un monto parcial sin devolver el producto físico).
+                        Por cantidad, el producto <strong>vuelve al inventario al aprobar</strong>; si viene fallado
+                        márcalo <strong>No apto para la venta</strong> y no entrará a stock.
                     </div>
                     <div id="dg-lista-productos"></div>
                     <div id="dg-error-total" class="text-danger small mt-1 d-none"></div>
@@ -1056,6 +1058,14 @@
                                 <input type="number" min="1" max="${p.monto_disponible}" class="form-control form-control-sm" style="width:130px;" id="dg-monto-${id}" placeholder="Monto $" oninput="dgActualizarLinea(${id})">
                             </div>
                             <div class="col text-end text-white" style="font-size:0.82rem;">Subtotal: <span id="dg-subtotal-${id}">$0</span></div>
+                            <div class="col-12 ${sinCantidad ? 'd-none' : ''}" id="dg-wrap-noapto-${id}">
+                                <div class="form-check form-check-inline mb-0">
+                                    <input class="form-check-input" type="checkbox" id="dg-noapto-${id}" onchange="dgToggleNoApto(${id}, this.checked)">
+                                    <label class="form-check-label text-warning small" for="dg-noapto-${id}">
+                                        <i class="ri-forbid-line me-1"></i>No apto para la venta (fallado: <strong>no vuelve a stock</strong>)
+                                    </label>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 `);
@@ -1109,11 +1119,19 @@
             // los botones/inputs quedaban desincronizados del estado nuevo).
             $(`#dg-cant-${id}`).val(1);
             $(`#dg-monto-${id}`).val('');
+            $(`#dg-noapto-${id}`).prop('checked', false);
             dgCambiarModo(id, meta.modo_inicial);
         } else {
             delete dgWizard.seleccion[id];
         }
         dgTotalNC();
+    }
+
+    // Producto fallado: la NC se emite igual, pero la unidad NO vuelve a stock
+    // (queda kardex documental). Solo aplica al modo Por cantidad.
+    function dgToggleNoApto(id, checked) {
+        if (!dgWizard.seleccion[id]) { return; }
+        dgWizard.seleccion[id].no_apto = !!checked;
     }
 
     function dgCambiarModo(id, modo) {
@@ -1123,6 +1141,12 @@
         $(`#dg-modobtn-monto-${id}`).toggleClass('active', modo === 'MONTO');
         $(`#dg-wrap-cant-${id}`).toggleClass('d-none', modo !== 'CANTIDAD');
         $(`#dg-wrap-monto-${id}`).toggleClass('d-none', modo !== 'MONTO');
+        // Por monto no hay producto que reingresar: el flag no aplica.
+        $(`#dg-wrap-noapto-${id}`).toggleClass('d-none', modo !== 'CANTIDAD');
+        if (modo !== 'CANTIDAD') {
+            dgWizard.seleccion[id].no_apto = false;
+            $(`#dg-noapto-${id}`).prop('checked', false);
+        }
         dgActualizarLinea(id);
     }
 
@@ -1234,7 +1258,8 @@
         let filas = '';
         Object.values(dgWizard.seleccion).forEach(function (s) {
             if (s.modo === 'CANTIDAD') {
-                filas += `<div>• ${esc(s.articulo)} — <span class="text-info">${s.cantidad} u</span> × ${clp(s.precio_unitario_con_iva)} = ${clp(s.cantidad * s.precio_unitario_con_iva)}</div>`;
+                filas += `<div>• ${esc(s.articulo)} — <span class="text-info">${s.cantidad} u</span> × ${clp(s.precio_unitario_con_iva)} = ${clp(s.cantidad * s.precio_unitario_con_iva)}` +
+                    (s.no_apto ? ` <span class="badge bg-danger">No apto: no vuelve a stock</span>` : ` <span class="text-secondary">(vuelve al inventario)</span>`) + `</div>`;
             } else {
                 filas += `<div>• ${esc(s.articulo)} — <span class="text-warning">monto parcial</span> ${clp(s.monto)}</div>`;
             }
@@ -1256,6 +1281,8 @@
             dte_producto_id: s.dte_producto_id, modo: s.modo,
             cantidad: s.modo === 'CANTIDAD' ? s.cantidad : 0,
             monto: s.modo === 'MONTO' ? s.monto : 0,
+            // Fallado: al aprobar no vuelve a stock (kardex documental).
+            no_apto: s.modo === 'CANTIDAD' && !!s.no_apto,
         }));
         if (!productos.length) { return; }
 
@@ -1366,6 +1393,27 @@
         });
     }
 
+    // Qué pasó con el producto al aprobar (reingresos con lote FIFO / no aptos
+    // sin stock / avisos de cambios previos). Lo devuelve el backend en
+    // `data.inventario` de la aprobación y de la devolución directa.
+    function dgHtmlInventario(inv) {
+        if (!inv) { return ''; }
+        const skuTxt = r => `${r.cantidad} u. SKU ${esc(String(r.sku))}${r.talla ? ' (talla ' + esc(String(r.talla)) + ')' : ''}`;
+        let html = '';
+        if ((inv.reingresos || []).length) {
+            html += `<p class="mb-1 text-start small"><i class="ri-archive-line me-1 text-success"></i><strong>Volvió al inventario:</strong> ` +
+                    inv.reingresos.map(skuTxt).join(', ') + ` (stock, lote FIFO y kardex ligados a la NC).</p>`;
+        }
+        if ((inv.no_aptas || []).length) {
+            html += `<p class="mb-1 text-start small"><i class="ri-forbid-line me-1 text-danger"></i><strong>No apto, sin ingreso a stock:</strong> ` +
+                    inv.no_aptas.map(skuTxt).join(', ') + `.</p>`;
+        }
+        (inv.avisos || []).forEach(a => {
+            html += `<div class="alert alert-warning text-start small mt-2 mb-0"><i class="ri-alert-line me-1"></i>${esc(a)}</div>`;
+        });
+        return html;
+    }
+
     function dgMostrarResultadoDirecta(d) {
         const warns = d.txt_warnings || [];
         const avisos = d.avisos_caja || [];
@@ -1379,6 +1427,7 @@
                       ? `<p class="mb-1 text-success"><i class="ri-refund-2-line me-1"></i>Mercado Pago devolvió la plata a la tarjeta/cuenta del cliente` +
                         ((d.refunds_mp || []).length ? ` (refund ${esc((d.refunds_mp || []).join(', '))})` : '') + `.</p>`
                       : '') +
+                  dgHtmlInventario(d.inventario) +
                   `<p class="small text-muted mb-2">Autorizó ${esc(d.autorizado_por)}. ${esc(d.descripcion_caja || '')}</p>` +
                   `<a href="${d.nc_txt_url}" class="btn btn-sm btn-outline-primary"><i class="ri-download-line me-1"></i> Descargar TXT Acepta</a>` +
                   avisos.map(a => `<div class="alert alert-warning text-start small mt-2 mb-0"><i class="ri-alert-line me-1"></i>${esc(a)}</div>`).join('') +
@@ -1518,7 +1567,15 @@
                 const detalle = l.modo === 'CANTIDAD'
                     ? `${l.cantidad} u × ${clp(l.precio_unitario)} = ${clp(l.subtotal)}`
                     : `monto parcial ${clp(l.subtotal)}`;
-                lineas += `<div>• ${esc(l.descripcion)} — ${detalle}${l.conflicto ? ' <span class="text-danger">⚠ disponibilidad cambió</span>' : ''}</div>`;
+                // Líneas por cantidad con SKU: el aprobador decide si el producto
+                // vuelve a stock (default) o queda NO APTO (propuesta del solicitante
+                // pre-marcada). Por monto no hay producto que reingresar.
+                const noApto = l.mueve_stock
+                    ? `<div class="form-check form-check-inline ms-3 mb-0">` +
+                      `<input class="form-check-input apr-noapto" type="checkbox" id="apr-noapto-${l.dte_producto_id}" value="${l.dte_producto_id}" ${l.no_apto ? 'checked' : ''}>` +
+                      `<label class="form-check-label text-warning small" for="apr-noapto-${l.dte_producto_id}">No apto para la venta (no vuelve a stock)</label></div>`
+                    : '';
+                lineas += `<div>• ${esc(l.descripcion)} — ${detalle}${l.conflicto ? ' <span class="text-danger">⚠ disponibilidad cambió</span>' : ''}${noApto}</div>`;
             });
             let metodoHtml = '';
             if (d.metodo_solicitado_display) {
@@ -1666,13 +1723,26 @@
             $('#apr-mp-operacion').trigger('focus');
             return;
         }
+        // Condición del producto: ids marcados como no aptos (lista vacía =
+        // todo vuelve al inventario). Se manda siempre para que mande el
+        // aprobador y no la propuesta del solicitante.
+        const lineasNoAptas = $('.apr-noapto:checked').map(function () { return parseInt(this.value, 10); }).get();
+        const nMueven = $('.apr-noapto').length;
+        const invTxt = nMueven
+            ? (lineasNoAptas.length === nMueven
+                ? `<br><small class="text-warning">Producto marcado <strong>no apto</strong>: no vuelve a stock.</small>`
+                : lineasNoAptas.length
+                    ? `<br><small class="text-warning">${lineasNoAptas.length} línea(s) <strong>no apta(s)</strong> sin ingreso a stock; el resto vuelve al inventario.</small>`
+                    : `<br><small class="text-muted">El producto devuelto <strong>vuelve al inventario</strong> (stock + lote FIFO).</small>`)
+            : '';
         Swal.fire({
             title: apiMP ? 'Devolver a la tarjeta y generar NC' : 'Aprobar y generar NC',
             html: (apiMP
                     ? `RetailMind le pedirá a <strong>Mercado Pago</strong> el reembolso a la tarjeta/cuenta del cliente y luego generará la Nota de Crédito y el TXT Acepta. Si Mercado Pago rechaza, la NC no se emite.<br>`
                     : `Se generará la Nota de Crédito y el TXT Acepta.<br>`) +
                   `<small class="text-muted">${esc($('#apr-impacto').text())}</small>` +
-                  (numeroMP ? `<br><small>N° de operación Mercado Pago: <strong>${esc(numeroMP)}</strong></small>` : ''),
+                  (numeroMP ? `<br><small>N° de operación Mercado Pago: <strong>${esc(numeroMP)}</strong></small>` : '') +
+                  invTxt,
             icon: 'question', showCancelButton: true, confirmButtonColor: '#00A080',
             confirmButtonText: apiMP ? 'Devolver y aprobar' : 'Aprobar', cancelButtonText: 'Cancelar',
         }).then(function (r) {
@@ -1682,7 +1752,8 @@
                 url: urlCon(URLS_DG.aprobar, aprActual), method: 'POST', contentType: 'application/json',
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
                 data: JSON.stringify({ metodo_devolucion: metodo, fecha_imputacion: fecha, observaciones: $('#apr-observaciones').val().trim(),
-                                       numero_operacion_mp: numeroMP, devolver_mp_api: apiMP }),
+                                       numero_operacion_mp: numeroMP, devolver_mp_api: apiMP,
+                                       lineas_no_aptas: lineasNoAptas }),
                 success: function (resp) {
                     $('#apr-btn-aprobar').prop('disabled', false);
                     if (resp.success) {
@@ -1699,6 +1770,7 @@
                                       ? `<p class="mb-2 text-success"><i class="ri-refund-2-line me-1"></i>Mercado Pago devolvió la plata a la tarjeta/cuenta del cliente` +
                                         ((dd.refunds_mp || []).length ? ` (refund ${esc((dd.refunds_mp || []).join(', '))})` : '') + `.</p>`
                                       : '') +
+                                  dgHtmlInventario(dd.inventario) +
                                   `<a href="${dd.nc_txt_url}" class="btn btn-sm btn-outline-primary"><i class="ri-download-line me-1"></i> Descargar TXT Acepta</a>` +
                                   (warns.length
                                       ? `<div class="alert alert-warning text-start small mt-3 mb-0">` +

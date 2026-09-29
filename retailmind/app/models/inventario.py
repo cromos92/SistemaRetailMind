@@ -17,8 +17,39 @@ from .dte import Dte
 # donde se aplica la marca, para que las vistas puedan importarlas
 # (`from app.models.inventario import DIFERENCIA_RECONTEO_UNIDADES`) en lugar de
 # redefinirlas.
-DIFERENCIA_RECONTEO_UNIDADES = 5   # diferencia absoluta en unidades
+#
+# Regla vigente (auditoría 29-09-2026): en una zapatería el SKU típico tiene 1-4
+# unidades, así que «10 % o 5 u» exigía recontar casi toda diferencia (69 % de
+# las diferencias de INV-6 quedaron en reconteo) y duplicaba el trabajo. Ahora:
+#   - |dif| >= DIFERENCIA_RECONTEO_UNIDADES (3): tres pares perdidos/sobrantes
+#     ya no es un error de digitación, se vuelve a contar;
+#   - |dif| >= DIFERENCIA_RECONTEO_UNIDADES_STOCK_BAJO (2) cuando el stock del
+#     sistema es <= DIFERENCIA_RECONTEO_STOCK_BAJO (2): con base 1-2 una
+#     diferencia de 2 es toda la línea (contó 0 de 2, o 3 de 1) y conviene
+#     confirmarla; una diferencia de 1 sobre 1-2 unidades es lo habitual y se
+#     acepta sin reconteo;
+#   - el porcentaje solo cuenta desde DIFERENCIA_RECONTEO_BASE_MINIMA (20)
+#     unidades: bajo eso, 1 unidad ya supera el 10 % y la regla no discrimina.
+DIFERENCIA_RECONTEO_UNIDADES = 3
+DIFERENCIA_RECONTEO_UNIDADES_STOCK_BAJO = 2
+DIFERENCIA_RECONTEO_STOCK_BAJO = 2
 DIFERENCIA_RECONTEO_PORCENTAJE = 10  # % sobre el stock del sistema
+DIFERENCIA_RECONTEO_BASE_MINIMA = 20
+
+
+def requiere_reconteo(diferencia, base_stock):
+    """¿La diferencia (físico − sistema) amerita un segundo conteo? Ver constantes."""
+    abs_dif = abs(diferencia or 0)
+    base = base_stock or 0
+    if abs_dif == 0:
+        return False
+    if abs_dif >= DIFERENCIA_RECONTEO_UNIDADES:
+        return True
+    if base <= DIFERENCIA_RECONTEO_STOCK_BAJO and abs_dif >= DIFERENCIA_RECONTEO_UNIDADES_STOCK_BAJO:
+        return True
+    if base >= DIFERENCIA_RECONTEO_BASE_MINIMA and abs_dif * 100 / base > DIFERENCIA_RECONTEO_PORCENTAJE:
+        return True
+    return False
 
 
 def django_date_today():
@@ -595,12 +626,32 @@ class TomaInventario(models.Model):
             not self.detalles.filter(
                 excluir_de_analisis=False, contado=False
             ).exists() and
-            not self.detalles.filter(
-                excluir_de_analisis=False,
-                reconteo_requerido=True,
-                stock_reconteo__isnull=True,
-            ).exists()
+            not self.reconteos_pendientes().exists()
         )
+
+    def reconteos_pendientes(self):
+        """Líneas marcadas para reconteo que aún no se recontaron, sin las
+        excluidas del análisis: nadie va a recontar una línea excluida, así que
+        no puede bloquear finalizar/enviar/aprobar. Es el único criterio que
+        usan la vista y este modelo (views_gestion_inventarios._reconteos_pendientes)."""
+        return self.detalles.filter(
+            excluir_de_analisis=False,
+            reconteo_requerido=True,
+            stock_reconteo__isnull=True,
+        )
+
+    def ajustes_aplicados(self):
+        """Líneas cuyo ajuste ya movió stock (idempotencia de la aplicación y
+        guarda de cancelación: una toma con ajustes aplicados no se cancela)."""
+        return self.detalles.filter(ajuste_aplicado=True)
+
+    @property
+    def conteo_tienda_cerrada(self):
+        """La toma se contó con la tienda cerrada, al momento del corte: la
+        fecha del conteo físico por defecto es el corte y no la hora de carga.
+        Se guarda en filtros_aplicados para no exigir migración."""
+        filtros = self.filtros_aplicados or {}
+        return bool(filtros.get('conteo_tienda_cerrada'))
 
 
 class TomaInventarioDetalle(models.Model):
@@ -767,15 +818,15 @@ class TomaInventarioDetalle(models.Model):
             base_stock = self.stock_sistema_ajustado if self.stock_sistema_ajustado is not None else self.stock_sistema
             self.diferencia = self.stock_fisico - base_stock
 
-            # Marcar para reconteo si la diferencia supera el umbral en unidades
-            # o en porcentaje (constantes del módulo, antes hardcodeadas acá).
-            supera_umbral = (
-                abs(self.diferencia) > DIFERENCIA_RECONTEO_UNIDADES or
-                (base_stock > 0 and
-                 abs(self.diferencia) * 100 / base_stock > DIFERENCIA_RECONTEO_PORCENTAJE)
-            )
+            # Marcar para reconteo si la diferencia supera el umbral (regla y
+            # constantes al inicio de este archivo).
+            supera_umbral = requiere_reconteo(self.diferencia, base_stock)
 
-            if supera_umbral:
+            if self.excluir_de_analisis:
+                # Excluida del análisis: no se ajusta ni se recuenta. Si se vuelve
+                # a incluir, este mismo save() la marca otra vez cuando corresponda.
+                self.reconteo_requerido = False
+            elif supera_umbral:
                 # `stock_reconteo is not None` = ya se recontó y el reconteo
                 # confirmó la diferencia: no se vuelve a pedir reconteo.
                 if not self.reconteo_requerido and self.stock_reconteo is None:

@@ -920,6 +920,7 @@ urlpatterns = [
     path('dte/historial_recepciones/', views.historial_recepciones_api, name='historial_recepciones_api'),
     path('dte/confirmar_recepcion/', views.confirmar_recepcion_api, name='confirmar_recepcion_api'),
     path('dte/rechazar_recepcion/', views.rechazar_recepcion_api, name='rechazar_recepcion_api'),
+    path('dte/<int:dte_id>/comprobante-rechazo/', views.comprobante_rechazo_dte_api, name='comprobante_rechazo_dte_api'),
     path('dte/decidir_sobrante/', views.decidir_sobrante_api, name='decidir_sobrante_api'),
     path('dte/rehabilitar_rechazado/', views.rehabilitar_dte_rechazado_api, name='rehabilitar_dte_rechazado_api'),
     path('dte/obtener_rechazados/', views.obtener_dtes_rechazados_api, name='obtener_dtes_rechazados_api'),

@@ -218,9 +218,28 @@ class TicketSyncService:
                 porcentaje_descuento=item_data.get('porcentaje_descuento', 0),
             )
             
-            # Descontar stock
-            self._descontar_stock(producto_talla, item_data['cantidad'], ticket)
-        
+            # Descontar stock (la venta ya ocurrió offline: nunca se rechaza,
+            # pero si deja stock negativo el ticket queda marcado para revisión).
+            _, quedo_negativo = self._descontar_stock(
+                producto_talla, item_data['cantidad'], ticket,
+                precio_unitario=item_data.get('precio_unitario', 0),
+            )
+            if quedo_negativo:
+                aviso = (
+                    f'Stock negativo tras sync para SKU {producto_talla.sku}: '
+                    f'quedó en {producto_talla.stock} (vendido={item_data["cantidad"]})'
+                )
+                if aviso not in warnings:
+                    warnings.append(aviso)
+                requiere_revision = True
+
+        if requiere_revision and (
+            not ticket.requiere_revision or ticket.notas_sync != '\n'.join(warnings)
+        ):
+            ticket.requiere_revision = True
+            ticket.notas_sync = '\n'.join(warnings)
+            ticket.save(update_fields=['requiere_revision', 'notas_sync'])
+
         # Crear pagos
         for pago_data in ticket_data['pagos']:
             TicketDetallePago.objects.create(
@@ -266,39 +285,41 @@ class TicketSyncService:
             return ultimo.correlativo + 1
         return 1
     
-    def _descontar_stock(self, producto_talla, cantidad, ticket):
+    def _descontar_stock(self, producto_talla, cantidad, ticket, precio_unitario=0):
         """
-        Descuenta stock, consume lotes FIFO (mejor esfuerzo) y crea movimiento de inventario.
+        Descuenta stock, consume lotes FIFO y crea el movimiento de inventario
+        por `inventario_service.egresar` (una sola transacción con lock).
+
+        La venta ya ocurrió offline, así que NUNCA se rechaza por stock
+        (`permitir_stock_insuficiente=True`): si queda negativo, queda negativo
+        de forma visible (el kardex baja exactamente lo vendido) y se avisa
+        por log y al llamador, que marca el ticket `requiere_revision`.
+
+        El kardex nace ligado al ticket (`ticket=` + referencia `TICKET_<n>`):
+        sin eso anular_ticket_pendiente / ReingresoVenta no encontraban el
+        egreso y los reportes por ticket no lo cruzaban (H10).
+
+        Devuelve `(movimiento, quedo_negativo)`.
         """
-        # Consumir lotes FIFO disponibles (mejor esfuerzo) antes de tocar el stock
-        # plano, que sigue siendo la fuente de verdad. No bloquea la sincronización
-        # de la venta si no hay lotes suficientes.
-        from app.views_edicion_productos import _consumir_lotes_fifo_ajuste
-        try:
-            _consumir_lotes_fifo_ajuste(producto_talla, cantidad)
-        except Exception:
-            logger.exception("No se pudieron bajar lotes FIFO en sync, sku=%s", producto_talla.sku)
+        from app.services import inventario_service
 
-        # Descontar del campo stock directo
-        producto_talla.stock = F('stock') - cantidad
-        producto_talla.save(update_fields=['stock'])
-        producto_talla.refresh_from_db()
-
-        # Crear movimiento de inventario (si el modelo existe)
-        try:
-            Movimientos_Producto.objects.create(
-                ProductoTalla=producto_talla,
-                sucursal_origen=self.sucursal,
-                tipo_movimiento='EGRESO',
-                concepto='VENTA_PUBLICO',
-                cantidad=-cantidad,  # Negativo porque es salida
-                estado='COMPLETADO',
-                responsable=self.usuario.username if self.usuario else 'SYNC',
-                observaciones=f'Venta sincronizada - Ticket {ticket.correlativo}',
-                dte=None,
+        movimiento = inventario_service.egresar(
+            producto_talla, int(cantidad), 'VENTA_PUBLICO',
+            self.usuario.username if self.usuario else 'SYNC',
+            sucursal_origen=self.sucursal,
+            ticket=ticket,
+            precio_unitario=int(precio_unitario or 0),
+            observaciones=f'Venta sincronizada - Ticket {ticket.correlativo}',
+            referencia_externa=f'TICKET_{ticket.correlativo}',
+            permitir_stock_insuficiente=True,
+        )
+        quedo_negativo = (producto_talla.stock or 0) < 0
+        if quedo_negativo:
+            logger.warning(
+                "Sync offline: SKU %s quedó con stock negativo (%s) tras el ticket %s",
+                producto_talla.sku, producto_talla.stock, ticket.correlativo,
             )
-        except Exception as e:
-            logger.warning(f"No se pudo crear movimiento de inventario: {e}")
+        return movimiento, quedo_negativo
 
 
 class ProductoSyncService:

@@ -13,13 +13,19 @@ Flujo en dos pasos:
      afecta) y ahí recién se genera la Nota de Crédito (DTE 61) + TXT Acepta.
      `anular_solicitud` permite al solicitante retirar una pendiente.
 
-Este módulo NUNCA mueve stock: es devolución de DINERO por garantía; el
-producto fallado se gestiona aparte (vía Requerimiento al proveedor). El
-modo MONTO reusa el patrón "corrige montos" de `anular_factura_dte`
-(línea conceptual sin talla, razón SII 3).
+Inventario (auditoría de caminos 29-09-2026, hallazgo H4): al aprobar, el
+producto que el cliente devuelve vuelve al inventario si está APTO para la
+venta (default) — stock plano + lote FIFO + kardex DEVOLUCION_NC ligado a la
+NC, vía `ReingresoVenta` (respeta cambios previos y lo que otras NC ya
+acreditaron). Si el operador lo marca NO APTO, no entra a ningún stock y
+queda un kardex documental DEVOLUCION_NO_APTA (cantidad 0, tipo AJUSTE, la
+cantidad en la observación), igual que en Cambios y Devoluciones. El modo
+MONTO (sin unidades) no mueve nada y reusa el patrón "corrige montos" de
+`anular_factura_dte` (línea conceptual sin talla, razón SII 3).
 """
 import json
 import logging
+import re
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
@@ -29,6 +35,7 @@ from django.utils import timezone
 from app.models import (
     Dte, Dte_Productos, Dte_Detalle_Pago, Empresa,
     DevolucionGarantia, DevolucionGarantiaDetalle,
+    Movimientos_Producto, Producto_Talla,
     METODO_DEVOLUCION_DG_CHOICES, TIPO_CUENTA_DG_CHOICES,
     rol_efectivo,
 )
@@ -87,6 +94,60 @@ METODO_PAGO_NC_POR_DG = {
 # BOLETA_ELECTRONICA no encontraba nunca la venta.
 TIPOS_TICKET_BOLETA = ['BOLETA_ELECTRONICA', 'BOLETA', 'TICKET']
 TIPOS_TICKET_FACTURA = ['FACTURA_ELECTRONICA', 'FACTURA_EXENTA']
+
+# === CONDICIÓN DEL PRODUCTO DEVUELTO (apto / no apto para la venta) ===
+# La solicitud recuerda qué líneas vienen NO APTAS con una marca al final de
+# `motivo`: `[NO_APTO:todas]` o `[NO_APTO:12,15]` (ids de Dte_Productos).
+# DevolucionGarantiaDetalle no tiene columna para esto y agregarla exige
+# migración (pendiente: `condicion_producto`); mientras tanto la marca vive
+# acá, `motivo_limpio` la quita de todo lo que se muestra o va a la NC, y el
+# aprobador puede corregirla al aprobar (checkbox por línea).
+MARCA_NO_APTO_RE = re.compile(r'\s*\[NO_APTO:([^\]]*)\]\s*$')
+MARCA_NO_APTO_TODAS = 'todas'
+
+
+def motivo_limpio(motivo):
+    """Motivo sin la marca interna de líneas no aptas (para UI, comprobante y NC)."""
+    return MARCA_NO_APTO_RE.sub('', motivo or '').strip()
+
+
+def _marcar_no_apto(motivo, ids_no_aptos=(), todas=False):
+    """Agrega (o reemplaza) la marca de líneas no aptas al final del motivo."""
+    base = motivo_limpio(motivo)
+    if todas:
+        return f'{base} [NO_APTO:{MARCA_NO_APTO_TODAS}]'.strip()
+    ids = sorted({int(i) for i in ids_no_aptos if str(i).strip().isdigit()})
+    if not ids:
+        return base
+    return f"{base} [NO_APTO:{','.join(str(i) for i in ids)}]".strip()
+
+
+def lineas_no_aptas_de(devolucion):
+    """(todas, {dte_producto_id}) marcadas como NO APTAS en la solicitud."""
+    m = MARCA_NO_APTO_RE.search(devolucion.motivo or '')
+    if not m:
+        return False, set()
+    valor = (m.group(1) or '').strip().lower()
+    if valor == MARCA_NO_APTO_TODAS:
+        return True, set()
+    return False, {int(v) for v in valor.split(',') if v.strip().isdigit()}
+
+
+def _ids_no_aptos_de_detalles(detalles, lineas_no_aptas=None):
+    """Une el `no_apto` por línea del wizard con la lista explícita del body."""
+    ids = set()
+    for item in detalles or []:
+        if isinstance(item, dict) and item.get('no_apto') in (True, 1, '1', 'true'):
+            try:
+                ids.add(int(item.get('dte_producto_id')))
+            except (TypeError, ValueError):
+                pass
+    for i in lineas_no_aptas or []:
+        try:
+            ids.add(int(i))
+        except (TypeError, ValueError):
+            pass
+    return ids
 
 
 def _tipos_ticket_de(dte):
@@ -1233,15 +1294,182 @@ def _validar_datos_transferencia(metodo_solicitado, banco, tipo_cuenta,
 
 
 @transaction.atomic
+# ===================== INVENTARIO =====================
+
+def _mover_inventario_devolucion(devolucion, nc, lineas, aprobador, todas_no_aptas, ids_no_aptos):
+    """Reingresa (o registra como no apto) el producto de cada línea CANTIDAD.
+
+    Devuelve un dict serializable:
+      reingresos    [{producto_talla_id, sku, talla, cantidad, cambio}]  entraron a stock
+      no_aptas      [{producto_talla_id, sku, talla, cantidad, cambio}]  kardex documental
+      sin_reingreso [{producto_talla_id, cantidad, cambio}]  ya devueltas en un cambio sin reemplazo
+      avisos        [str]  textos de ReingresoVenta para el operador
+
+    Las aptas van primero: `ReingresoVenta` lleva la cuenta de lo acreditado
+    por talla y las no aptas se reparten (`repartir`) desde donde quedó, para
+    que el kardex documental apunte al SKU que el cliente trae de verdad si
+    hubo un cambio previo. La cantidad de un mismo SKU en dos líneas no aptas
+    de la MISMA solicitud se reparte desde el mismo punto (caso raro: el
+    documento tendría dos líneas del mismo SKU); es solo documental.
+    """
+    from app.services.reingreso_devolucion import ReingresoVenta, repartir
+
+    dte = devolucion.dte_original
+    responsable = aprobador.username
+    doc = f'{dte.get_tipo_documento_display()} #{dte.numero_documento}'
+    reingreso = ReingresoVenta(dte, excluir_nc_id=nc.id)
+    inventario = {'reingresos': [], 'no_aptas': [], 'sin_reingreso': [], 'avisos': []}
+
+    aptas, no_aptas = [], []
+    for linea in lineas:
+        dp = linea['dte_producto']
+        if linea['modo'] != 'CANTIDAD' or not dp.productoTalla_id:
+            continue  # MONTO (sin unidades) y líneas sin talla no mueven nada
+        destino = no_aptas if (todas_no_aptas or dp.id in ids_no_aptos) else aptas
+        destino.append((dp, int(linea['cantidad']), int(linea.get('precio_nc') or dp.precio or 0)))
+
+    for dp, cantidad, precio in aptas:
+        pt = dp.productoTalla
+        # Costo del kardex/lote: el de la línea vendida y, si venía en 0, el
+        # del producto (regla: costo = producto.costo o costo del lote).
+        costo = int(dp.costo or 0) or int(getattr(pt.producto, 'costo', 0) or 0)
+        reingreso.reingresar(
+            pt.id, cantidad, 'DEVOLUCION_NC', responsable,
+            dte_movimiento=nc,
+            # Receptor del INGRESO = sucursal dueña del SKU (regla del kardex).
+            sucursal_destino=pt.producto.sucursal or devolucion.sucursal,
+            costo_unitario=costo,
+            sobreprecio_unitario=int(dp.sobreprecio or 0),
+            precio_unitario=precio,
+            observaciones=(
+                f'Devolución de dinero {devolucion.numero_operacion}: {cantidad} u. '
+                f'vuelven al inventario aptas para la venta (NC #{nc.numero_documento} sobre {doc}).'
+            ),
+            referencia_externa=devolucion.numero_operacion,
+        )
+
+    for dp, cantidad, precio in no_aptas:
+        partes, _ambiguo = repartir(
+            dp.productoTalla_id, reingreso.ya_acreditadas(dp.productoTalla_id),
+            cantidad, reingreso.tickets,
+        )
+        for pt_id, unidades, numero_cambio in partes:
+            if pt_id is None:
+                inventario['sin_reingreso'].append({
+                    'producto_talla_id': dp.productoTalla_id, 'cantidad': unidades,
+                    'cambio': numero_cambio,
+                })
+                continue
+            pt = Producto_Talla.objects.select_related('producto__sucursal').get(id=pt_id)
+            obs = (
+                f'Devolución de dinero {devolucion.numero_operacion} NO APTA: {unidades} u. '
+                f'del SKU {pt.sku} NO entran a stock (producto fallado). '
+                f'NC #{nc.numero_documento} sobre {doc}.'
+            )
+            if pt_id != dp.productoTalla_id:
+                obs += (f' El SKU {dp.productoTalla.sku} vendido se había cambiado en '
+                        f'{numero_cambio}: lo devuelto es lo entregado en su lugar.')
+            # Registro documental, mismo formato que Cambios (cantidad 0, tipo
+            # AJUSTE): no toca stock ni lotes. Pendiente de política: si la
+            # empresa tuviera sucursal de fallados, acá iría un ingresar() al
+            # clon del SKU en esa sucursal (ver constants_kardex.CONCEPTOS_SIN_STOCK).
+            Movimientos_Producto.objects.create(
+                ProductoTalla=pt,
+                dte=nc,
+                tipo_movimiento='AJUSTE',
+                concepto='DEVOLUCION_NO_APTA',
+                cantidad=0,
+                costo=int(dp.costo or 0) or int(getattr(pt.producto, 'costo', 0) or 0),
+                precio=precio,
+                responsable=responsable,
+                sucursal_destino=pt.producto.sucursal or devolucion.sucursal,
+                estado='COMPLETADO',
+                referencia_externa=devolucion.numero_operacion,
+                observaciones=obs[:500],
+            )
+            inventario['no_aptas'].append({
+                'producto_talla_id': pt_id, 'sku': pt.sku, 'talla': pt.talla or '',
+                'cantidad': unidades,
+                'cambio': numero_cambio if pt_id != dp.productoTalla_id else None,
+            })
+
+    tallas = dict(Producto_Talla.objects.filter(
+        id__in=[r['producto_talla_id'] for r in reingreso.resumen['reingresos']]
+    ).values_list('id', 'talla'))
+    for r in reingreso.resumen['reingresos']:
+        inventario['reingresos'].append({
+            'producto_talla_id': r['producto_talla_id'], 'sku': r['sku'],
+            'talla': tallas.get(r['producto_talla_id']) or '',
+            'cantidad': r['cantidad'], 'cambio': r['cambio'],
+        })
+    inventario['sin_reingreso'].extend(reingreso.resumen['sin_reingreso'])
+    inventario['avisos'] = reingreso.avisos()
+    return inventario
+
+
+def texto_inventario_devolucion(inventario):
+    """Resumen en una línea de lo que pasó con el producto (va a
+    `observaciones_aprobacion` y a los avisos de la UI). '' si no hubo nada."""
+    if not inventario:
+        return ''
+    partes = []
+    if inventario.get('reingresos'):
+        partes.append('Reingresó a inventario: ' + ', '.join(
+            f"{r['cantidad']} u. SKU {r['sku']}" + (f" (talla {r['talla']})" if r.get('talla') else '')
+            for r in inventario['reingresos']) + '.')
+    if inventario.get('no_aptas'):
+        partes.append('NO APTO, sin ingreso a stock: ' + ', '.join(
+            f"{r['cantidad']} u. SKU {r['sku']}" + (f" (talla {r['talla']})" if r.get('talla') else '')
+            for r in inventario['no_aptas']) + '.')
+    for aviso in inventario.get('avisos') or []:
+        partes.append(aviso)
+    return ('Inventario — ' + ' '.join(partes)) if partes else ''
+
+
+def inventario_de_devolucion(devolucion):
+    """Qué pasó con el producto al aprobar, leído del kardex ligado a la NC
+    (persistente: sirve para el detalle aunque la aprobación fuera en otra
+    sesión). None si la devolución no tiene NC."""
+    if not devolucion.nota_credito_id:
+        return None
+    movs = Movimientos_Producto.objects.filter(
+        dte_id=devolucion.nota_credito_id,
+        concepto__in=('DEVOLUCION_NC', 'DEVOLUCION_NO_APTA'),
+    ).select_related('ProductoTalla', 'sucursal_destino').order_by('id')
+    inventario = {'reingresos': [], 'no_aptas': [], 'sin_reingreso': [], 'avisos': []}
+    for m in movs:
+        pt = m.ProductoTalla
+        fila = {
+            'producto_talla_id': pt.id, 'sku': pt.sku, 'talla': pt.talla or '',
+            'sucursal': m.sucursal_destino.alias if m.sucursal_destino else '',
+            'observaciones': m.observaciones or '',
+        }
+        if m.concepto == 'DEVOLUCION_NC':
+            fila['cantidad'] = int(m.cantidad or 0)
+            fila['cambio'] = 'se había cambiado' in (m.observaciones or '')
+            inventario['reingresos'].append(fila)
+        else:
+            # La cantidad física de un registro documental va en la observación.
+            n = re.search(r'NO APTA: (\d+) u\.', m.observaciones or '')
+            fila['cantidad'] = int(n.group(1)) if n else 0
+            inventario['no_aptas'].append(fila)
+    return inventario
+
+
 def crear_solicitud_devolucion(*, dte_original, sucursal, receptor, motivo,
                                usuario, detalles, requerimiento=None,
                                metodo_solicitado='', banco='', tipo_cuenta='',
-                               numero_cuenta='', cuenta_titular_rut=''):
+                               numero_cuenta='', cuenta_titular_rut='',
+                               lineas_no_aptas=None, no_apto=False):
     """
     Registra una SOLICITUD de devolución en estado PENDIENTE. NO consume folio
     de NC, NO genera documento ni TXT: eso ocurre al aprobar.
 
-    `detalles`: lista de dicts {dte_producto_id, modo, cantidad?, monto?}.
+    `detalles`: lista de dicts {dte_producto_id, modo, cantidad?, monto?,
+        no_apto?}. `no_apto` por línea (o `lineas_no_aptas` = ids, o `no_apto`
+        global) marca que el producto devuelto NO está apto para la venta: al
+        aprobar no vuelve a stock (queda kardex documental). Se persiste como
+        marca al final de `motivo` (ver MARCA_NO_APTO_RE).
     `requerimiento`: instancia opcional de Requerimiento (puente de UI).
     `metodo_solicitado` + datos bancarios: cómo quiere el cliente recibir la
         devolución (efectivo o transferencia con banco/cuenta/titular).
@@ -1257,6 +1485,11 @@ def crear_solicitud_devolucion(*, dte_original, sucursal, receptor, motivo,
     _validar_cobro_transbank_no_anulado(dte_original)
 
     lineas, monto_total = _validar_lineas(dte_original, detalles, lock=True)
+
+    # Marca de líneas no aptas: solo ids que de verdad están en la solicitud.
+    ids_solicitud = {l['dte_producto'].id for l in lineas}
+    ids_no_aptos = _ids_no_aptos_de_detalles(detalles, lineas_no_aptas) & ids_solicitud
+    motivo = _marcar_no_apto(motivo or 'Garantía aprobada', ids_no_aptos, todas=bool(no_apto))
 
     saldo = saldo_documento(dte_original)
     if monto_total > saldo['monto_restante']:
@@ -1348,7 +1581,8 @@ def crear_solicitud_devolucion(*, dte_original, sucursal, receptor, motivo,
 @transaction.atomic
 def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
                        fecha_imputacion=None, observaciones='', numero_operacion_mp='',
-                       devolver_mp_api=False, refund_ctx=None):
+                       devolver_mp_api=False, refund_ctx=None,
+                       lineas_no_aptas=None, no_apto=None):
     """
     Aprueba una solicitud PENDIENTE: genera la NC 61 + TXT Acepta con el
     impacto en caja elegido por el aprobador. Re-valida disponibilidad bajo
@@ -1358,6 +1592,15 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
     `numero_operacion_mp`: solo para MERCADO_PAGO — N° de operación de Mercado
     Pago de la devolución; si viene vacío se usa el del cobro original y, si el
     sistema no lo conoce, se exige.
+
+    Inventario: las líneas CANTIDAD con talla reingresan al stock (lote FIFO +
+    kardex DEVOLUCION_NC ligado a la NC) salvo las NO APTAS, que dejan solo un
+    kardex documental DEVOLUCION_NO_APTA. Qué es no apto lo decide, en este
+    orden: `no_apto=True` (todas), `lineas_no_aptas` (ids de Dte_Productos que
+    manda el aprobador; una lista vacía = todas aptas) o, si ninguno viene, la
+    marca que dejó el solicitante en `motivo`. El resultado queda en
+    `devolucion.inventario` (dict, ver `_mover_inventario_devolucion`) y
+    resumido en `observaciones_aprobacion`.
 
     Devuelve (devolucion, nc, contenido_txt_o_None, txt_warnings).
     """
@@ -1487,9 +1730,10 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
         'razon': razon,
     }])
 
+    # La marca interna [NO_APTO:...] del motivo no va al SII ni al TXT.
     motivo_nc = (
         f"Devolución de dinero {devolucion.numero_operacion}. "
-        f"Motivo: {devolucion.motivo or 'Garantía aprobada'}"
+        f"Motivo: {motivo_limpio(devolucion.motivo) or 'Garantía aprobada'}"
     )
     if lineas_monto and razon == '3':
         motivo_nc += " [Corrige montos]"
@@ -1536,6 +1780,7 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
             # factura neto. No usar el monto_con_iva del detalle DG.
             mi_eff = monto_real_linea_dte(dp, cantidad)
             p_eff = int(round(mi_eff / cantidad)) if cantidad and mi_eff else int(dp.precio or 0)
+            linea['precio_nc'] = p_eff  # lo lee el reingreso a inventario
             Dte_Productos.objects.create(
                 dte=nc,
                 productoTalla=dp.productoTalla,
@@ -1571,6 +1816,26 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
                 stock=1,
                 activo=True,
             )
+
+    # === INVENTARIO (mismo atomic que la NC) ===
+    # Va DESPUÉS de las líneas de la NC (ReingresoVenta la excluye por id para
+    # no contar como ya acreditado lo que esta misma NC devuelve) y ANTES del
+    # pago. Es un ingreso: no puede fallar por stock. Si el refund MP por API
+    # ya salió y algo revienta acá, el atomic revierte la NC y la vista deja
+    # los refunds registrados (`persistir_refunds_sin_nc`), como hasta ahora.
+    if no_apto is True:
+        todas_no_aptas, ids_no_aptos = True, set()
+    elif lineas_no_aptas is not None:
+        todas_no_aptas, ids_no_aptos = False, _ids_no_aptos_de_detalles(None, lineas_no_aptas)
+    else:
+        todas_no_aptas, ids_no_aptos = lineas_no_aptas_de(devolucion)
+    inventario = _mover_inventario_devolucion(
+        devolucion, nc, lineas, aprobador, todas_no_aptas, ids_no_aptos,
+    )
+    devolucion.inventario = inventario
+    texto_inventario = texto_inventario_devolucion(inventario)
+    if texto_inventario:
+        observaciones = f'{observaciones} {texto_inventario}'.strip() if observaciones else texto_inventario
 
     # `fecha_pago` = día al que la cuadratura imputa el egreso. El
     # `metodo_pago` decide de qué teórico se descuenta:

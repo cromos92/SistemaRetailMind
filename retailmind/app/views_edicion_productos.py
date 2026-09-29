@@ -854,14 +854,32 @@ def ajustar_stock(request, variacion_id):
             }, status=400)
         
         cantidad = int(cantidad)
-        
-        # Obtener sucursal actual
+
+        # El ajuste se registra SIEMPRE sobre la sucursal dueña del SKU
+        # (producto.sucursal): antes la rama ENTRADA atribuía el kardex a la
+        # sucursal de la SESIÓN, y con sesión en otra tienda el ingreso
+        # aparecía en la bodega equivocada (H12). Mismo criterio que
+        # api_sumar_stock_rapido: si la sesión está en otra sucursal, se
+        # rechaza con un mensaje claro en vez de mover stock ajeno.
         sucursal_id = request.session.get('idSucursalActual')
-        if sucursal_id:
-            sucursal = get_object_or_404(Sucursal, id=sucursal_id)
-        else:
-            sucursal = variacion.producto.sucursal
-        
+        producto = variacion.producto
+        if producto is None or producto.sucursal_id is None:
+            return JsonResponse({
+                'success': False,
+                'error': 'La variación no tiene producto o sucursal asociada.'
+            }, status=400)
+        if sucursal_id and producto.sucursal_id != int(sucursal_id):
+            return JsonResponse({
+                'success': False,
+                'error': (
+                    f'Esta variación pertenece a la sucursal '
+                    f'{producto.sucursal.alias}: cámbiate a esa sucursal para ajustar su stock.'
+                )
+            }, status=400)
+        sucursal = producto.sucursal
+
+        from .services import inventario_service
+
         # ===== AJUSTE DE ENTRADA =====
         if tipo_ajuste == 'ENTRADA':
             # Validar que se proporcionen los costos
@@ -893,92 +911,58 @@ def ajustar_stock(request, variacion_id):
             if not numero_lote:
                 import uuid
                 numero_lote = f"AJUSTE-{uuid.uuid4().hex[:8].upper()}"
-            
-            # Crear lote FIFO
-            from .views_modulo_productos import crear_lote_producto
-            lote = crear_lote_producto(
-                producto_talla=variacion,
-                cantidad=cantidad,
-                costo_unitario=costo_unitario,
-                sobreprecio_unitario=sobreprecio_unitario,
-                precio_venta_unitario=precio_venta_unitario,
-                numero_lote=numero_lote,
-                fecha_vencimiento=data.get('fecha_vencimiento'),
-                observaciones=f'Ajuste manual: {motivo}'
-            )
-            
-            # Registrar movimiento
-            movimiento = Movimientos_Producto.objects.create(
-                ProductoTalla=variacion,
-                sucursal_origen=sucursal,
+
+            # Stock plano + lote FIFO + kardex en una transacción con lock.
+            # Antes: lote creado a mano (movimiento=None), kardex con la
+            # sucursal de sesión y `stock += ; save()` completo sobre una
+            # instancia leída sin lock (pisaba otros campos y perdía
+            # concurrencia). Ahora el lote queda enlazado al movimiento.
+            movimiento = inventario_service.ingresar(
+                variacion, cantidad, 'AJUSTE_POSITIVO', request.user.username,
                 sucursal_destino=sucursal,
-                cantidad=cantidad,
-                costo=int(costo_unitario),
-                sobreprecio=int(sobreprecio_unitario),
-                precio=int(precio_venta_unitario),
-                concepto='AJUSTE_POSITIVO',
-                responsable=request.user.username,
+                sucursal_origen=sucursal,
+                costo_unitario=int(costo_unitario),
+                sobreprecio_unitario=int(sobreprecio_unitario),
+                precio_unitario=int(precio_venta_unitario),
                 observaciones=motivo,
-                estado='COMPLETADO',
+                referencia_externa=numero_lote,
+                numero_lote=numero_lote,
+                fecha_vencimiento=data.get('fecha_vencimiento') or None,
             )
-            
-            # Actualizar stock en Producto_Talla
-            variacion.stock += cantidad
-            variacion.save()
-            
+            lote = movimiento.lotes_generados.order_by('id').first()
+
             return JsonResponse({
                 'success': True,
                 'message': f'Entrada de {cantidad} unidades registrada exitosamente',
                 'nuevo_stock': variacion.stock,
                 'movimiento_id': movimiento.id,
-                'lote_id': lote.id,
-                'numero_lote': lote.numero_lote
+                'lote_id': lote.id if lote else None,
+                'numero_lote': lote.numero_lote if lote else numero_lote,
             })
-        
+
         # ===== AJUSTE DE SALIDA =====
         elif tipo_ajuste == 'SALIDA':
-            # Validar stock disponible
-            stock_disponible = sum(
-                lote.cantidad_disponible 
-                for lote in LoteProducto.objects.filter(
-                    producto_talla=variacion,
-                    activo=True,
-                    cantidad_disponible__gt=0
+            # egresar() valida contra el stock plano (fuente de verdad), consume
+            # los lotes FIFO que existan, baja el stock con F() y escribe el
+            # kardex AJUSTE_NEGATIVO con la sucursal dueña del SKU. Devuelve el
+            # movimiento: ya no hay que "adivinar" el último por responsable.
+            try:
+                movimiento, lotes_consumidos = inventario_service.egresar(
+                    variacion, cantidad, 'AJUSTE_NEGATIVO', request.user.username,
+                    sucursal_origen=sucursal,
+                    sucursal_destino=sucursal,
+                    observaciones=motivo,
+                    referencia_externa=f'AJUSTE_MANUAL_{timezone.now().strftime("%Y%m%d%H%M%S")}',
+                    devolver_lotes=True,
                 )
-            )
-            
-            if cantidad > stock_disponible:
-                return JsonResponse({
-                    'success': False,
-                    'error': f'Stock insuficiente. Disponible: {stock_disponible}, solicitado: {cantidad}'
-                }, status=400)
-            
-            # Consumir stock FIFO
-            from .views_modulo_productos import consumir_stock_fifo
-            lotes_consumidos = consumir_stock_fifo(
-                producto_talla=variacion,
-                cantidad_requerida=cantidad,
-                responsable=request.user.username,
-                observaciones=motivo,
-                referencia_externa=f'AJUSTE_MANUAL_{timezone.now().strftime("%Y%m%d%H%M%S")}'
-            )
+            except ValueError as e:
+                return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
-            # El consumir_stock_fifo ya crea el movimiento, pero vamos a obtenerlo
-            # para retornar su ID
-            ultimo_movimiento = Movimientos_Producto.objects.filter(
-                ProductoTalla=variacion,
-                responsable=request.user.username
-            ).order_by('-id').first()
-
-            # consumir_stock_fifo (via registrar_movimiento_producto) ya
-            # descontó el stock plano; solo refrescar para responder el valor.
-            variacion.refresh_from_db(fields=['stock'])
-            
             return JsonResponse({
                 'success': True,
                 'message': f'Salida de {cantidad} unidades registrada exitosamente',
                 'nuevo_stock': variacion.stock,
-                'movimiento_id': ultimo_movimiento.id if ultimo_movimiento else None,
+                'movimiento_id': movimiento.id,
                 'lotes_consumidos': len(lotes_consumidos)
             })
         

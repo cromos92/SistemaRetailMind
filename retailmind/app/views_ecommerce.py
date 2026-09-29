@@ -2266,14 +2266,15 @@ def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMM
 
     Devuelve el Ticket creado.
     """
-    # Usar la consumir_stock_fifo del POS (views.py): crea el Movimientos_Producto
-    # con tipo_movimiento='EGRESO' y concepto='VENTA_PUBLICO' explícitos y actualiza
-    # Producto_Talla.stock atómicamente con F(). La variante de views_modulo_productos
-    # delega en registrar_movimiento_producto sin pasar tipo_movimiento, lo que dejaba
-    # el default 'INGRESO' del modelo y etiquetaba mal los egresos de internet.
-    from app.views import consumir_stock_fifo
+    # El egreso va por inventario_service.egresar (stock plano + lotes FIFO +
+    # kardex en una transacción con lock). Antes se usaba consumir_stock_fifo
+    # del POS y, si los lotes no alcanzaban, un fallback que escribía el kardex
+    # completo pero recortaba el stock a 0 (H11): 2.012 movimientos / -2.196 u
+    # en prod con "FIFO no disponible" y SUM(kardex) < stock para siempre.
+    from app.services import inventario_service
 
     sucursal = sucursal or pedido.sucursal
+    skus_en_negativo = []
     total = int(pedido.total or 0)
     subtotal = int(pedido.subtotal or total)
     dr = datos_receptor or {}
@@ -2347,53 +2348,44 @@ def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMM
                 precio_rm_linea = 0
             lineas_producto.append({'tp': tp_obj, 'qty': cantidad, 'precio_rm': precio_rm_linea})
 
-        # Descontar stock y registrar movimiento de EGRESO
+        # Descontar stock y registrar movimiento de EGRESO.
+        # El pedido YA está pagado en el marketplace y el ticket+DTE se crean
+        # en el mismo atomic del llamador, así que no se rechaza por stock
+        # (rechazar dejaría pedidos cobrados sin boleta; el bloqueo SIN_STOCK
+        # va en la ingesta/matching, no aquí). Si el stock no alcanza, queda
+        # NEGATIVO de forma visible: el kardex baja exactamente lo vendido, los
+        # lotes se consumen hasta donde existan y se avisa por log + marca en
+        # el ticket. Nunca más recortar a 0 con kardex completo.
         if producto_talla:
-            try:
-                costo_total_fifo, lotes_fifo = consumir_stock_fifo(
-                    producto_talla=producto_talla,
-                    cantidad_requerida=cantidad,
-                    responsable=responsable,
-                    ticket=ticket,
-                    observaciones=f'Venta ecommerce {pedido.canal_origen} #{pedido.numero_pedido_canal} | RM: {pedido.numero_ticket_rm}',
-                )
-                # Trazabilidad: guardar de qué lotes (y DTE de compra) salió la línea.
-                persistir_costeo_fifo(tp_obj, costo_total_fifo, lotes_fifo)
-            except Exception as fifo_err:
-                # Si FIFO falla (stock insuficiente en lotes), descuento manual
+            stock_previo = int(producto_talla.stock or 0)
+            movimiento_egreso, lotes_fifo = inventario_service.egresar(
+                producto_talla, cantidad, 'VENTA_PUBLICO', responsable,
+                sucursal_origen=sucursal,
+                ticket=ticket,
+                precio_unitario=precio or int(producto_talla.producto.precioventa or 0),
+                observaciones=f'Venta ecommerce {pedido.canal_origen} #{pedido.numero_pedido_canal} | RM: {pedido.numero_ticket_rm}',
+                referencia_externa=f'TICKET_{ticket.correlativo}',
+                permitir_stock_insuficiente=True,
+                devolver_lotes=True,
+            )
+            # Trazabilidad: guardar de qué lotes (y DTE de compra) salió la línea.
+            # Las unidades que no alcanzó a cubrir la capa FIFO se costean al
+            # costo de la ficha para no subestimar el costo unitario de la línea.
+            consumido_fifo = sum(int(l.get('cantidad_consumida') or 0) for l in lotes_fifo)
+            costo_total_fifo = sum(int(l.get('costo_total') or 0) for l in lotes_fifo)
+            if consumido_fifo < cantidad:
+                costo_total_fifo += (cantidad - consumido_fifo) * int(producto_talla.producto.costo or 0)
+            persistir_costeo_fifo(tp_obj, costo_total_fifo, lotes_fifo)
+            if stock_previo < cantidad:
                 logger.warning(
-                    'FIFO falló para SKU %s en pedido %s: %s — descuento manual',
-                    sku, pedido.numero_ticket_rm, fifo_err,
+                    'Ecommerce: SKU %s del pedido %s vendido sin stock suficiente '
+                    '(stock previo=%s, pedido=%s, queda=%s) — stock negativo visible',
+                    sku, pedido.numero_ticket_rm, stock_previo, cantidad, producto_talla.stock,
                 )
-                from app.models import Movimientos_Producto
-                Movimientos_Producto.objects.create(
-                    ticket=ticket,
-                    ProductoTalla=producto_talla,
-                    sucursal_origen=sucursal,
-                    cantidad=-cantidad,
-                    costo=producto_talla.producto.costo,
-                    precio=precio,
-                    sobreprecio=getattr(producto_talla.producto, 'sobreprecio', 0),
-                    concepto='VENTA_PUBLICO',
-                    tipo_movimiento='EGRESO',
-                    responsable=responsable,
-                    observaciones=f'Venta ecommerce {pedido.canal_origen} #{pedido.numero_pedido_canal} — FIFO no disponible',
-                    referencia_externa=f'RM_{pedido.numero_ticket_rm}',
-                    fecha=timezone.localdate(),
-                    hora=timezone.localtime().time(),
+                skus_en_negativo.append(
+                    f'SKU {producto_talla.sku}: stock {stock_previo} < pedido {cantidad}, '
+                    f'queda {producto_talla.stock}'
                 )
-                producto_talla.stock = max(0, producto_talla.stock - cantidad)
-                producto_talla.save(update_fields=['stock'])
-                # Consumir los lotes que existan aunque el FIFO completo haya
-                # fallado (evita dejar la capa de lotes inflada).
-                try:
-                    from app.services.inventario_service import consumir_lotes_fifo
-                    consumir_lotes_fifo(producto_talla, cantidad, usar_lock=False)
-                except Exception as e_lotes:
-                    logger.warning(
-                        'Ecommerce fallback: lotes FIFO no consumidos sku=%s cantidad=%s: %s',
-                        sku, cantidad, e_lotes,
-                    )
         else:
             logger.warning(
                 'SKU %s del pedido %s no encontrado en sucursal %s — sin rebaje de stock',
@@ -2466,7 +2458,15 @@ def _crear_ticket_desde_pedido(pedido, vendedor, correlativo, responsable='ECOMM
     ticket.subTotal = final_total
     ticket.total = final_total
     ticket.descuento = 0
-    ticket.save(update_fields=['subTotal', 'total', 'descuento'])
+    campos_ticket = ['subTotal', 'total', 'descuento']
+    if skus_en_negativo:
+        # Marca visible para quien revisa: el pedido se facturó (ya estaba
+        # pagado) pero dejó stock negativo. Mismos campos que usa el sync
+        # offline para el mismo caso.
+        ticket.requiere_revision = True
+        ticket.notas_sync = 'Facturado sin stock suficiente:\n' + '\n'.join(skus_en_negativo)
+        campos_ticket += ['requiere_revision', 'notas_sync']
+    ticket.save(update_fields=campos_ticket)
 
     return ticket
 

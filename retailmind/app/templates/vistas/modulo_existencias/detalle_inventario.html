@@ -558,6 +558,9 @@ button.kpi-card:focus-visible {
                     <button type="button" class="btn btn-light btn-sm fw-semibold" onclick="exportarDiferencias()" id="btnExportarDiferencias" title="Exportar solo las diferencias a Excel">
                         <i class="bi bi-file-earmark-excel me-1"></i>Exportar diferencias
                     </button>
+                    <button type="button" class="btn btn-light btn-sm text-danger" onclick="cancelarToma()" id="btnCancelarToma" style="display: none;" title="Cancelar esta toma (motivo obligatorio)">
+                        <i class="bi bi-x-circle me-1"></i>Cancelar toma
+                    </button>
                 </div>
             </div>
 
@@ -571,7 +574,7 @@ button.kpi-card:focus-visible {
                     </div>
                     <div class="meta-item">
                         <span class="label">Fecha de corte:</span>
-                        <span class="value">{{ inventario.fecha_corte|date:"d/m/Y H:i" }}</span>
+                        <span class="value">{{ inventario.fecha_corte|date:"d/m/Y H:i" }}{% if conteo_tienda_cerrada %} <span class="badge bg-light text-dark" title="El conteo físico se hizo con la tienda cerrada, al momento del corte">tienda cerrada</span>{% endif %}</span>
                     </div>
                     <div class="meta-item">
                         <span class="label">Sucursal:</span>
@@ -809,11 +812,17 @@ button.kpi-card:focus-visible {
     <button type="button" class="nexo-btn nexo-btn-primary" onclick="guardarConteos()" id="btnGuardar" style="display: none;">
         <i class="bi bi-save"></i> Guardar Conteos
     </button>
+    <button type="button" class="nexo-btn nexo-btn-warning" onclick="resolverNoContados()" id="btnResolverNoContados" style="display: none;" title="Excluir en bloque las líneas sin contar o marcarlas como iguales al sistema">
+        <i class="bi bi-list-check"></i> Resolver no contados <span class="badge bg-dark ms-1" id="badgeNoContados">0</span>
+    </button>
     <button type="button" class="nexo-btn nexo-btn-success" onclick="finalizarConteo()" id="btnFinalizar" style="display: none;">
         <i class="bi bi-check-circle"></i> Finalizar Conteo
     </button>
     <button type="button" class="nexo-btn nexo-btn-primary" onclick="enviarAprobacionDesdeDetalle()" id="btnEnviarAprobacion" style="display: none;">
         <i class="bi bi-send"></i> Enviar a Aprobación
+    </button>
+    <button type="button" class="nexo-btn nexo-btn-outline" onclick="rechazarDesdeDetalle()" id="btnRechazar" style="display: none;" title="Devolver la toma a conteo (motivo obligatorio)">
+        <i class="bi bi-arrow-counterclockwise"></i> Rechazar
     </button>
     <button type="button" class="nexo-btn nexo-btn-danger" onclick="aplicarAjustesDesdeDetalle()" id="btnAplicarAjustes" style="display: none;">
         <i class="bi bi-arrow-right-circle"></i> Aplicar Ajustes al Stock
@@ -833,16 +842,40 @@ button.kpi-card:focus-visible {
                     <label class="form-label" for="archivoConteo">Archivo (CSV/TXT/XLSX)</label>
                     <input type="file" class="form-control" id="archivoConteo" accept=".csv,.txt,.xlsx" />
                     <small class="text-muted d-block mt-2">
-                        Formato esperado: <code>sku,cantidad</code> (con o sin encabezados).
+                        Sirve el archivo de la pistola (<code>sku,cantidad</code>, con o sin encabezado) o el Excel de la tienda
+                        (<code>SKU | ... | Stock sistema | ... | Físico contado</code>): se importa la columna del <strong>conteo físico</strong>,
+                        nunca la del stock del sistema. Previsualice para confirmar las columnas.
                     </small>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label" for="nombreHojaConteo">Nombre de hoja (opcional)</label>
-                    <input type="text" class="form-control" id="nombreHojaConteo" placeholder="Ej: Conteo Enero" />
-                    <small class="text-muted d-block mt-2">
-                        Si se deja vacío se usa la primera hoja.
-                    </small>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="nombreHojaConteo">Nombre de hoja (opcional)</label>
+                        <input type="text" class="form-control" id="nombreHojaConteo" placeholder="Primera hoja si se deja vacío" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="fechaConteoImport">¿Cuándo se contó físicamente?</label>
+                        <input type="datetime-local" class="form-control" id="fechaConteoImport" min="{{ fecha_corte_local }}" placeholder="Vacío = ahora" />
+                        <div class="form-check mt-1">
+                            <input class="form-check-input" type="checkbox" id="importTiendaCerrada" {% if conteo_tienda_cerrada %}checked{% endif %}>
+                            <label class="form-check-label small" for="importTiendaCerrada">Conté con la tienda cerrada (usar la fecha de corte)</label>
+                        </div>
+                        <small class="text-muted d-block">Vacío = se está contando ahora. Las ventas posteriores a ese momento no se descuentan del stock a comparar.</small>
+                    </div>
                 </div>
+                <div class="row g-2 mb-3" id="columnasSection" style="display: none;">
+                    <div class="col-md-6">
+                        <label class="form-label" for="selectSkuCol">Columna del SKU</label>
+                        <select class="form-select form-select-sm" id="selectSkuCol"></select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="selectCantidadCol">Columna del conteo físico</label>
+                        <select class="form-select form-select-sm" id="selectCantidadCol"></select>
+                    </div>
+                    <div class="col-12">
+                        <small class="text-muted">Detectadas automáticamente; cámbielas y vuelva a previsualizar si no corresponden.</small>
+                    </div>
+                </div>
+                <div class="alert alert-warning py-2 small mb-3" id="previewAdvertencia" style="display: none;"></div>
                 <div class="mb-3" id="previewSection" style="display: none;">
                     <div class="form-label">Preview</div>
                     <div class="table-responsive">
@@ -850,7 +883,8 @@ button.kpi-card:focus-visible {
                             <thead>
                                 <tr>
                                     <th>SKU</th>
-                                    <th>Cantidad</th>
+                                    <th class="text-end">Sistema</th>
+                                    <th class="text-end">Conteo</th>
                                     <th>Estado</th>
                                 </tr>
                             </thead>
@@ -890,6 +924,10 @@ let estadoInventario = '{{ inventario.estado }}';
 let segmentosCargados = false;
 let signoDiferencia = ''; // positiva | negativa | cero (tarjetas del dashboard)
 let productosCache = {}; // {detalle_id: producto} de la página actual
+let pendientesNoContados = { total: 0, con_stock: 0, sin_stock: 0 }; // del último análisis
+const fechaCorteLocal = '{{ fecha_corte_local }}';
+const ahoraLocal = '{{ ahora_local }}';
+const tomaTiendaCerrada = {% if conteo_tienda_cerrada %}true{% else %}false{% endif %};
 
 function formatNumber(num) {
     return new Intl.NumberFormat('es-CL').format(Math.round(num || 0));
@@ -1041,9 +1079,23 @@ function actualizarPasosYAcciones(analisis) {
     }
 
     const enConteo = ['BORRADOR', 'EN_CONTEO'].includes(estadoInventario);
-    $('#btnFinalizar').toggle(enConteo);
+    const pendientes = (analisis.resumen && analisis.resumen.pendientes_contar) || 0;
+    pendientesNoContados = {
+        total: pendientes,
+        con_stock: (analisis.resumen && analisis.resumen.pendientes_con_stock) || 0,
+        sin_stock: (analisis.resumen && analisis.resumen.pendientes_sin_stock) || 0
+    };
+    // Finalizar: EN_CONTEO, o BORRADOR con conteos (el backend ya lo acepta)
+    const puedeFinalizar = analisis.puede_finalizar !== undefined
+        ? !!analisis.puede_finalizar
+        : (estadoInventario === 'EN_CONTEO' || (estadoInventario === 'BORRADOR' && (analisis.resumen?.total_contados || 0) > 0));
+    $('#btnFinalizar').toggle(puedeFinalizar);
+    $('#btnResolverNoContados').toggle(enConteo && pendientes > 0);
+    $('#badgeNoContados').text(formatNumber(pendientes));
     $('#btnGuardar').toggle(enConteo && Object.keys(conteosPendientes).length > 0);
     $('#btnEnviarAprobacion').toggle(!!analisis.puede_enviar_aprobacion);
+    $('#btnRechazar').toggle(!!analisis.puede_rechazar);
+    $('#btnCancelarToma').toggle(!!analisis.puede_cancelar);
     $('#btnAplicarAjustes').toggle(!!analisis.puede_aplicar_ajustes);
     $('#inputEscaner').prop('disabled', !enConteo);
 }
@@ -1272,12 +1324,187 @@ function finalizarConteo() {
                         }).then(() => {
                             window.location.href = '/app/gestion-inventarios/';
                         });
+                    } else if (response.pendientes) {
+                        // Quedan líneas sin contar: ofrecer resolverlas en bloque
+                        pendientesNoContados = {
+                            total: response.pendientes,
+                            con_stock: response.pendientes_con_stock || 0,
+                            sin_stock: response.pendientes_sin_stock || 0
+                        };
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Faltan productos por contar',
+                            html: `<p>${formatNumber(response.pendientes)} líneas sin contar:
+                                   <strong>${formatNumber(response.pendientes_con_stock)}</strong> con stock
+                                   (${formatNumber(response.unidades_sin_contar)} u.) y
+                                   <strong>${formatNumber(response.pendientes_sin_stock)}</strong> con stock 0.</p>
+                                   <p class="small text-muted">Puede contarlas, o resolverlas en bloque (excluir / marcar sin diferencia).</p>`,
+                            showCancelButton: true,
+                            confirmButtonText: 'Resolver no contados',
+                            cancelButtonText: 'Seguir contando'
+                        }).then(r => { if (r.isConfirmed) resolverNoContados(); });
                     } else {
                         Swal.fire('Error', response.error, 'error');
                     }
                 }
             });
         }
+    });
+}
+
+// === NO CONTADOS EN BLOQUE ===
+// Antes lo no contado bloqueaba finalizar/aprobar y solo se podía excluir de a una
+// (INV-6: 33.070 líneas). Dos salidas, ambas con confirmación e impacto visible:
+//   excluir        → fuera del análisis, no se ajustan;
+//   sin_diferencia → contadas «igual al sistema» (diferencia 0), no se ajustan.
+// Nunca se ponen en 0 (sería un ajuste negativo masivo).
+function resolverNoContados() {
+    const p = pendientesNoContados;
+    if (!p.total) {
+        Swal.fire('Sin pendientes', 'No hay líneas sin contar', 'info');
+        return;
+    }
+    Swal.fire({
+        title: 'Resolver líneas no contadas',
+        html: `
+            <p class="mb-2">${formatNumber(p.total)} líneas sin contar
+               (<strong>${formatNumber(p.con_stock)}</strong> con stock, <strong>${formatNumber(p.sin_stock)}</strong> con stock 0).</p>
+            <div class="text-start">
+                <label class="form-label small mb-1" for="accionNoContados">Qué hacer con ellas</label>
+                <select id="accionNoContados" class="form-select mb-2">
+                    <option value="excluir">Excluir del análisis (no se ajustan)</option>
+                    <option value="sin_diferencia">Marcar como sin diferencia (contadas = sistema)</option>
+                </select>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="soloStockCero" ${p.sin_stock > 0 && p.con_stock > 0 ? 'checked' : ''}>
+                    <label class="form-check-label small" for="soloStockCero">Solo las que tienen stock 0 en el sistema</label>
+                </div>
+            </div>`,
+        showCancelButton: true,
+        confirmButtonText: 'Ver impacto',
+        cancelButtonText: 'Cancelar',
+        preConfirm: () => ({
+            accion: document.getElementById('accionNoContados').value,
+            solo_stock_cero: document.getElementById('soloStockCero').checked
+        })
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        const payload = result.value;
+        // Primero el impacto (previsualizar), luego la confirmación definitiva
+        $.ajax({
+            url: `/app/gestion-inventarios/api/no-contados/${inventarioId}/`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ ...payload, previsualizar: true }),
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                if (!response.success) { Swal.fire('Error', response.error, 'error'); return; }
+                const r = response.resultado;
+                if (!r.lineas) { Swal.fire('Sin líneas', 'Ningún pendiente cumple el criterio elegido', 'info'); return; }
+                const accionTxt = payload.accion === 'excluir'
+                    ? 'se <strong>excluirán del análisis</strong>'
+                    : 'se marcarán como <strong>contadas igual al sistema</strong> (diferencia 0)';
+                Swal.fire({
+                    icon: 'warning',
+                    title: '¿Confirmar?',
+                    html: `<p>${formatNumber(r.lineas)} líneas ${accionTxt}${payload.solo_stock_cero ? ' (solo stock 0)' : ''}.</p>
+                           <p>Unidades en sistema afectadas: <strong>${formatNumber(r.unidades)}</strong>
+                              (≈ $${formatNumber(r.valor_costo)} a costo).</p>
+                           <p class="small text-muted">Ninguna de estas líneas moverá stock al aplicar la toma.</p>`,
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, aplicar',
+                    cancelButtonText: 'Cancelar'
+                }).then(conf => {
+                    if (!conf.isConfirmed) return;
+                    $.ajax({
+                        url: `/app/gestion-inventarios/api/no-contados/${inventarioId}/`,
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify(payload),
+                        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                        success: function(resp) {
+                            if (resp.success) {
+                                Swal.fire('Listo', `${formatNumber(resp.resultado.lineas)} líneas resueltas`, 'success');
+                                cargarProductos(1);
+                            } else {
+                                Swal.fire('Error', resp.error, 'error');
+                            }
+                        },
+                        error: function() { Swal.fire('Error', 'No se pudieron resolver los no contados', 'error'); }
+                    });
+                });
+            },
+            error: function() { Swal.fire('Error', 'No se pudo calcular el impacto', 'error'); }
+        });
+    });
+}
+
+// Rechazar (PENDIENTE_APROBACION → EN_CONTEO) con motivo obligatorio
+function rechazarDesdeDetalle() {
+    Swal.fire({
+        title: '¿Rechazar y devolver a conteo?',
+        html: `<textarea id="motivoRechazoDet" class="form-control mt-2" placeholder="Motivo del rechazo (obligatorio)" rows="2"></textarea>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, rechazar',
+        cancelButtonText: 'Volver',
+        preConfirm: () => {
+            const motivo = (document.getElementById('motivoRechazoDet').value || '').trim();
+            if (!motivo) { Swal.showValidationMessage('Indique el motivo'); return false; }
+            return { motivo };
+        }
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        $.ajax({
+            url: `/app/gestion-inventarios/api/rechazar/${inventarioId}/`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ motivo: result.value.motivo }),
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                if (response.success) {
+                    Swal.fire('Rechazado', response.message, 'success').then(() => window.location.reload());
+                } else {
+                    Swal.fire('Error', response.error, 'error');
+                }
+            },
+            error: function() { Swal.fire('Error', 'No se pudo rechazar', 'error'); }
+        });
+    });
+}
+
+// Cancelar la toma (motivo obligatorio; el backend rechaza si ya aplicó ajustes)
+function cancelarToma() {
+    Swal.fire({
+        title: '¿Cancelar esta toma?',
+        html: `<p>Queda <strong>Cancelada</strong> y no se puede deshacer.</p>
+               <textarea id="motivoCancelDet" class="form-control mt-2" placeholder="Motivo (obligatorio)" rows="2"></textarea>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, cancelar toma',
+        cancelButtonText: 'Volver',
+        preConfirm: () => {
+            const motivo = (document.getElementById('motivoCancelDet').value || '').trim();
+            if (!motivo) { Swal.showValidationMessage('Indique el motivo'); return false; }
+            return { motivo };
+        }
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        $.ajax({
+            url: `/app/gestion-inventarios/api/cancelar/${inventarioId}/`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ motivo: result.value.motivo }),
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                if (response.success) {
+                    Swal.fire('Cancelada', response.message, 'success').then(() => { window.location.href = '/app/gestion-inventarios/'; });
+                } else {
+                    Swal.fire('No se pudo cancelar', response.error, 'error');
+                }
+            },
+            error: function() { Swal.fire('Error', 'No se pudo cancelar la toma', 'error'); }
+        });
     });
 }
 
@@ -1388,25 +1615,66 @@ function abrirModalImportarConteo() {
     $('#previewSection').hide();
     $('#previewBody').empty();
     $('#previewInfo').text('');
+    $('#previewAdvertencia').hide().text('');
+    $('#columnasSection').hide();
+    $('#selectSkuCol, #selectCantidadCol').empty();
     $('#importStatus').text('');
     $('#importProgress').hide();
     $('#importProgressBar').css('width', '0%');
+    // Fecha del conteo físico: el corte si la toma es «tienda cerrada»; si no, vacío
+    // (= el instante exacto de la importación, sin perder los segundos del minuto)
+    $('#importTiendaCerrada').prop('checked', tomaTiendaCerrada);
+    $('#fechaConteoImport').val(tomaTiendaCerrada ? fechaCorteLocal : '').prop('disabled', tomaTiendaCerrada);
     new bootstrap.Modal(document.getElementById('modalImportarConteo')).show();
+}
+
+$('#importTiendaCerrada').on('change', function() {
+    $('#fechaConteoImport').prop('disabled', this.checked);
+    $('#fechaConteoImport').val(this.checked ? fechaCorteLocal : '');
+});
+
+// Campos comunes de preview e importación (hoja, columnas elegidas, fecha del conteo)
+function _formDataImportacion(archivo) {
+    const formData = new FormData();
+    formData.append('archivo', archivo);
+    const nombreHoja = document.getElementById('nombreHojaConteo').value.trim();
+    if (nombreHoja) formData.append('nombre_hoja', nombreHoja);
+    if ($('#columnasSection').is(':visible')) {
+        const skuCol = $('#selectSkuCol').val();
+        const cantCol = $('#selectCantidadCol').val();
+        if (skuCol !== null && skuCol !== '') formData.append('sku_col', skuCol);
+        if (cantCol !== null && cantCol !== '') formData.append('cantidad_col', cantCol);
+    }
+    if ($('#importTiendaCerrada').is(':checked')) {
+        formData.append('conteo_tienda_cerrada', '1');
+    } else if ($('#fechaConteoImport').val()) {
+        formData.append('fecha_conteo', $('#fechaConteoImport').val());
+    }
+    return formData;
+}
+
+// Llena los selectores de columna con los encabezados que devolvió el preview
+function _poblarSelectoresColumna(columnas) {
+    if (!columnas || !columnas.tiene_encabezado) {
+        $('#columnasSection').hide();
+        return;
+    }
+    const encabezados = columnas.encabezados || [];
+    const opciones = (sel) => encabezados.map((h, i) =>
+        `<option value="${i}" ${i === sel ? 'selected' : ''}>${i + 1}. ${h || '(sin nombre)'}</option>`).join('');
+    $('#selectSkuCol').html(opciones(columnas.sku_col));
+    $('#selectCantidadCol').html(`<option value="">— elegir —</option>` + opciones(columnas.cantidad_col));
+    $('#columnasSection').show();
 }
 
 function previsualizarConteoPistola() {
     const archivo = document.getElementById('archivoConteo').files[0];
-    const nombreHoja = document.getElementById('nombreHojaConteo').value.trim();
     if (!archivo) {
         Swal.fire('Error', 'Selecciona un archivo', 'warning');
         return;
     }
 
-    const formData = new FormData();
-    formData.append('archivo', archivo);
-    if (nombreHoja) {
-        formData.append('nombre_hoja', nombreHoja);
-    }
+    const formData = _formDataImportacion(archivo);
 
     $('#importStatus').text('Generando preview...');
     $('#importProgress').show();
@@ -1432,26 +1700,44 @@ function previsualizarConteoPistola() {
             return xhr;
         },
         success: function(response) {
+            // Si no se identificó la columna del conteo, el backend igual devuelve
+            // los encabezados para que el usuario la elija y vuelva a previsualizar
+            if (response.columnas) _poblarSelectoresColumna(response.columnas);
             if (!response.success) {
-                Swal.fire('Error', response.error, 'error');
+                $('#previewSection').hide();
+                $('#importStatus').text('');
+                Swal.fire('Revise las columnas', response.error, 'warning');
                 return;
             }
 
             const tbody = $('#previewBody');
             tbody.empty();
             response.preview.forEach(row => {
-                const estado = row.valido ? 'OK' : 'Error';
-                const badgeClass = row.valido ? 'bg-success' : 'bg-danger';
+                let estado, badgeClass;
+                if (!row.valido) { estado = 'Error'; badgeClass = 'bg-danger'; }
+                else if (row.en_toma === false) { estado = 'Fuera de la toma (se agrega si existe en la sucursal)'; badgeClass = 'bg-warning text-dark'; }
+                else { estado = 'OK'; badgeClass = 'bg-success'; }
                 tbody.append(`
                     <tr>
                         <td><code>${row.sku}</code></td>
-                        <td>${row.cantidad}</td>
+                        <td class="text-end text-muted">${row.stock_sistema !== null && row.stock_sistema !== undefined ? row.stock_sistema : '—'}</td>
+                        <td class="text-end fw-bold">${row.cantidad}</td>
                         <td><span class="badge ${badgeClass}">${estado}</span></td>
                     </tr>
                 `);
             });
 
-            $('#previewInfo').text(`Total filas: ${response.total_filas}`);
+            if (response.advertencia) {
+                $('#previewAdvertencia').html(`<i class="bi bi-exclamation-triangle me-1"></i>${response.advertencia}`).show();
+            } else {
+                $('#previewAdvertencia').hide().text('');
+            }
+            const cols = response.columnas || {};
+            const nombreCol = (i) => (cols.tiene_encabezado && cols.encabezados) ? `"${cols.encabezados[i]}"` : `columna ${i + 1}`;
+            $('#previewInfo').text(
+                `Total filas: ${response.total_filas} · SKU: ${nombreCol(cols.sku_col)} · Conteo: ${nombreCol(cols.cantidad_col)}` +
+                (response.en_toma ? ` · ${response.coincidencias_sistema}/${response.en_toma} iguales al sistema` : '')
+            );
             $('#previewSection').show();
             $('#importStatus').text('Preview listo.');
         },
@@ -1466,17 +1752,12 @@ function previsualizarConteoPistola() {
 
 function importarConteoPistola() {
     const archivo = document.getElementById('archivoConteo').files[0];
-    const nombreHoja = document.getElementById('nombreHojaConteo').value.trim();
     if (!archivo) {
         Swal.fire('Error', 'Selecciona un archivo', 'warning');
         return;
     }
 
-    const formData = new FormData();
-    formData.append('archivo', archivo);
-    if (nombreHoja) {
-        formData.append('nombre_hoja', nombreHoja);
-    }
+    const formData = _formDataImportacion(archivo);
 
     $('#importStatus').text('Subiendo archivo...');
     $('#importProgress').show();
@@ -1503,18 +1784,30 @@ function importarConteoPistola() {
         headers: { 'X-CSRFToken': getCookie('csrftoken') },
         success: function(response) {
             if (response.success) {
-                const noEncontrados = response.no_encontrados?.length || 0;
+                const noEncontrados = response.no_encontrados || [];
+                const agregados = response.agregados || [];
+                const ambiguos = response.ambiguos || [];
+                const sobreescritos = response.sobreescritos || [];
+                const lista = (arr) => arr.length ? `<div class="small text-muted text-start mt-1"><code>${arr.slice(0, 15).join('</code>, <code>')}</code>${arr.length > 15 ? ` … (+${arr.length - 15})` : ''}</div>` : '';
                 $('#importStatus').text('Procesando datos... ok');
                 Swal.fire({
                     icon: 'success',
                     title: 'Conteo Importado',
-                    html: `<p>Actualizados: <strong>${response.actualizados}</strong></p>
-                           <p>No encontrados: <strong>${noEncontrados}</strong></p>`
+                    html: `<p>Actualizados: <strong>${response.actualizados}</strong>
+                           ${response.fecha_conteo ? `<span class="text-muted small">(conteo físico al ${response.fecha_conteo})</span>` : ''}</p>
+                           ${agregados.length ? `<p class="mb-0">Agregados a la toma (no estaban, stock 0): <strong>${agregados.length}</strong></p>${lista(agregados)}` : ''}
+                           ${sobreescritos.length ? `<p class="mb-0 mt-2">Conteos anteriores reemplazados: <strong>${sobreescritos.length}</strong></p>${lista(sobreescritos.map(s => `${s.sku}: ${s.anterior}→${s.nuevo}`))}` : ''}
+                           ${ambiguos.length ? `<p class="mb-0 mt-2 text-warning">SKU ambiguos (más de un producto en la sucursal): <strong>${ambiguos.length}</strong></p>${lista(ambiguos)}` : ''}
+                           ${noEncontrados.length ? `<p class="mb-0 mt-2 text-danger">No existen en esta sucursal: <strong>${noEncontrados.length}</strong></p>${lista(noEncontrados)}` : ''}
+                           ${(response.errores || []).length ? `<p class="mb-0 mt-2 text-danger">Filas con error: <strong>${response.errores.length}</strong></p>${lista(response.errores)}` : ''}`
                 });
                 bootstrap.Modal.getInstance(document.getElementById('modalImportarConteo'))?.hide();
                 cargarProductos(currentPage);
             } else {
-                Swal.fire('Error', response.error, 'error');
+                if (response.encabezados) {
+                    _poblarSelectoresColumna({ tiene_encabezado: true, encabezados: response.encabezados, sku_col: 0, cantidad_col: null });
+                }
+                Swal.fire('No se importó', response.error, 'warning');
             }
         },
         error: function() {
@@ -1575,11 +1868,13 @@ function procesarEscaneo(sku) {
 
     // Fuera de la página actual: se consulta al backend y se guarda directo
     $.get(`/app/gestion-inventarios/api/productos-conteo/${inventarioId}/?search=${encodeURIComponent(sku)}&per_page=5`, function(resp) {
-        if (!resp.success || !resp.productos.length) {
-            mostrarFeedbackEscaneo(`SKU ${sku} no pertenece a esta toma de inventario`, false);
+        const exacto = resp.success ? resp.productos.find(p => String(p.sku) === sku) : null;
+        if (!exacto) {
+            // No está en la toma (típicamente stock 0 en sistema): el backend la agrega
+            // al vuelo si el SKU existe en la sucursal; si no, informa el motivo.
+            guardarConteoDirecto(null, paso, `${sku} (nuevo en la toma)`, sku);
             return;
         }
-        const exacto = resp.productos.find(p => String(p.sku) === sku) || resp.productos[0];
         const nuevo = (exacto.contado ? exacto.stock_fisico : 0) + paso;
         guardarConteoDirecto(exacto.id, nuevo, `${sku} · ${exacto.producto_nombre}`);
     }).fail(function() {
@@ -1587,17 +1882,21 @@ function procesarEscaneo(sku) {
     });
 }
 
-function guardarConteoDirecto(detalleId, cantidad, etiqueta) {
+function guardarConteoDirecto(detalleId, cantidad, etiqueta, sku) {
+    const conteo = detalleId ? { detalle_id: detalleId, stock_fisico: cantidad } : { sku: sku, stock_fisico: cantidad };
     $.ajax({
         url: `/app/gestion-inventarios/api/registrar-conteo/${inventarioId}/`,
         method: 'POST',
         contentType: 'application/json',
-        data: JSON.stringify({ conteos: [{ detalle_id: detalleId, stock_fisico: cantidad }] }),
+        data: JSON.stringify({ conteos: [conteo] }),
         headers: { 'X-CSRFToken': getCookie('csrftoken') },
         success: function(response) {
-            if (response.success) {
+            if (response.success && response.conteos_realizados > 0) {
                 mostrarFeedbackEscaneo(`${etiqueta}: ${cantidad} u. guardado`, true);
                 actualizarEstadisticas();
+                if (!detalleId) cargarProductos(currentPage);
+            } else if (response.success) {
+                mostrarFeedbackEscaneo((response.errores && response.errores[0]) || `SKU ${sku || ''} no se pudo contar`, false);
             } else {
                 mostrarFeedbackEscaneo(response.error, false);
             }
@@ -1796,7 +2095,12 @@ function _iniciarPollingAjustes() {
                     const texto = document.getElementById('swal-det-texto');
                     const detalle = document.getElementById('swal-det-detalle');
                     if (bar) { bar.style.width = pct + '%'; bar.textContent = pct + '%'; }
-                    if (data.estado === 'EN_PROCESO') {
+                    if (data.estado === 'EN_PROCESO' && data.huerfana) {
+                        // Más de 30 min sin avance: el hilo murió (deploy/reinicio). Ofrecer reanudar.
+                        clearInterval(pollingInterval);
+                        Swal.close();
+                        _ofrecerReanudar(data);
+                    } else if (data.estado === 'EN_PROCESO') {
                         if (texto) texto.textContent = 'Procesando ajustes de stock...';
                         if (detalle) detalle.textContent = `${data.procesados} / ${data.total} SKUs`;
                     } else if (data.estado === 'COMPLETADO') {
@@ -1818,6 +2122,40 @@ function _iniciarPollingAjustes() {
                 });
             }, 1500);
         }
+    });
+}
+
+// La aplicación quedó huérfana: el backend solo acepta {reanudar:true} en ese caso y
+// los detalles ya aplicados se saltan (guarda por detalle bajo lock).
+function _ofrecerReanudar(data) {
+    Swal.fire({
+        icon: 'warning',
+        title: 'La aplicación de ajustes se detuvo',
+        html: `<p>Lleva más de 30 minutos sin avance (${data.procesados || 0} / ${data.total || 0} procesados).</p>
+               <p>Puede reanudarla: lo ya aplicado <strong>no se repite</strong>. También puede correr
+               <code>python manage.py aplicar_ajustes_toma {{ inventario.numero_inventario }} --aplicar --reanudar</code> en el servidor.</p>`,
+        showCancelButton: true,
+        confirmButtonText: 'Reanudar ahora',
+        cancelButtonText: 'Cerrar'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        $.ajax({
+            url: `/app/gestion-inventarios/api/aplicar-ajustes/${inventarioId}/`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ reanudar: true }),
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                if (response.success && !response.already_running) {
+                    _iniciarPollingAjustes();
+                } else if (response.success) {
+                    Swal.fire('En ejecución', 'La aplicación sigue avanzando; no hace falta reanudar.', 'info');
+                } else {
+                    Swal.fire('Error', response.error, 'error');
+                }
+            },
+            error: function() { Swal.fire('Error', 'No se pudo reanudar', 'error'); }
+        });
     });
 }
 

@@ -2332,35 +2332,41 @@ def anular_ticket_pendiente(request):
                         ProductoTalla=item.ProductoTalla,
                         tipo_movimiento='EGRESO',
                     ).aggregate(t=Sum('cantidad'))['t'] or 0)
-                    if egresado <= 0:
+                    # ✅ Usar DTE si está disponible, si no usar correlativo del ticket
+                    referencia = f'ANULACION_DTE_{ticket.folio_dte}' if ticket.folio_dte else f'ANULACION_TICKET_{ticket.correlativo}'
+                    # Lo que ya volvió por este mismo ticket (reintento tras un
+                    # fallo a medias) no se reingresa dos veces.
+                    reingresado = int(Movimientos_Producto.objects.filter(
+                        Q(ticket=ticket) | Q(referencia_externa=referencia),
+                        ProductoTalla=item.ProductoTalla,
+                        tipo_movimiento='INGRESO',
+                        concepto__in=('ANULACION_TICKET', 'DEVOLUCION_CLIENTE'),
+                    ).aggregate(t=Sum('cantidad'))['t'] or 0)
+                    cantidad_reingreso = min(int(item.stock or 0), egresado - reingresado)
+                    if cantidad_reingreso <= 0:
                         logger.debug(
-                            "Anulacion ticket=%s sku=%s sin salida de stock: no se reingresa",
+                            "Anulacion ticket=%s sku=%s sin salida de stock pendiente: no se reingresa",
                             ticket.correlativo, item.ProductoTalla.sku,
                         )
                         continue
                     producto = item.ProductoTalla.producto
-                    # Crear movimiento de devolución de stock
-                    # ✅ Usar DTE si está disponible, si no usar correlativo del ticket
-                    referencia = f'ANULACION_DTE_{ticket.folio_dte}' if ticket.folio_dte else f'ANULACION_TICKET_{ticket.correlativo}'
-                    Movimientos_Producto.objects.create(
-                        ProductoTalla=item.ProductoTalla,
-                        ticket=ticket,
-                        cantidad=min(int(item.stock or 0), egresado),  # Positivo para devolver al inventario
-                        costo=int((producto.costo if producto else 0) or 0),
-                        precio=int(item.precio),
+                    # Reingreso por el servicio canónico: stock plano + lote FIFO +
+                    # kardex en la misma transacción. Antes era un create suelto al
+                    # kardex (+n) que dejaba stock y lotes rebajados para siempre
+                    # (auditoría de caminos 29-09-2026, H3). La sucursal receptora
+                    # de un INGRESO es SIEMPRE la dueña del SKU (regla canónica del
+                    # kardex — ver _mapa_entrada en views_modulo_reportes).
+                    ingresar_inventario(
+                        producto_talla=item.ProductoTalla,
+                        cantidad=cantidad_reingreso,
                         concepto='ANULACION_TICKET',
-                        tipo_movimiento='INGRESO',
                         responsable=request.user.username,
+                        sucursal_destino=producto.sucursal if producto else ticket.sucursal,
+                        ticket=ticket,
+                        costo_unitario=int((producto.costo if producto else 0) or 0),
+                        precio_unitario=int(item.precio),
                         observaciones=f'Anulación de ticket #{ticket.correlativo} - Motivo: {motivo}',
                         referencia_externa=referencia,
-                        # La sucursal receptora de un INGRESO es SIEMPRE la dueña
-                        # del SKU (regla canónica del kardex — ver _mapa_entrada en
-                        # views_modulo_reportes). Este writer era el ÚNICO activo
-                        # que seguía dejando sucursal_destino=NULL (medido en prod
-                        # jul-ago 2026: 412 movimientos / 439 u, todos de este
-                        # flujo), lo que cegaba el filtro por sucursal de
-                        # diferencias-recepción y los cortes del resumen.
-                        sucursal_destino=producto.sucursal if producto else None,
                     )
             
             # Cambiar estado del ticket a ANULADO
@@ -20098,21 +20104,38 @@ def aprobar_cambio_generar_ticket(request):
                             referencia_externa=cambio.numero_operacion,
                         )
                     else:
+                        # Producto fallado: NO entra a stock ni a lotes. Queda un
+                        # registro DOCUMENTAL (constants_kardex.CONCEPTOS_SIN_STOCK:
+                        # cantidad 0, tipo AJUSTE) con la cantidad física en la
+                        # observación, para poder contarlo/devolverlo al proveedor.
+                        # Política pendiente (auditoría H5): si la empresa tiene
+                        # sucursal de fallados (en prod solo 'EDEL FALLADOS', id 11,
+                        # empresa 1802; NICK y PAO no tienen), acá iría
+                        # ingresar_inventario() al clon del SKU en esa sucursal
+                        # (get_or_create Producto por articulo+atributos, patrón de
+                        # corregir_recepcion_emisor_api) con sucursal_origen=sucursal
+                        # y sucursal_destino=suc_fallados, y revertir_cambio_devolucion
+                        # lo egresaría de ahí. Requiere flag en Sucursal para que
+                        # existencias/AllConnected no lo cuenten como vendible.
                         Movimientos_Producto.objects.create(
                             ProductoTalla=producto_talla,
                             tipo_movimiento='AJUSTE',
                             concepto='DEVOLUCION_NO_APTA',
                             cantidad=0,
                             responsable=request.user.username,
-                            sucursal_destino=sucursal,
+                            # Dueña del SKU (regla del kardex), no la de sesión.
+                            sucursal_destino=producto_talla.producto.sucursal or sucursal,
                             ticket=cambio.ticket_original,
                             precio=int(item.precio_original_unitario),
-                            costo=0,
+                            costo=int(producto_talla.producto.costo or 0),
                             estado='COMPLETADO',
                             referencia_externa=cambio.numero_operacion,
                             observaciones=(
-                                f'Devolucion NO APTA - Cambio #{cambio.numero_operacion}. '
-                                'No se suma al inventario.'
+                                f'Devolucion NO APTA - Cambio #{cambio.numero_operacion}: '
+                                f'{item.cantidad_original} u. del SKU {producto_talla.sku} '
+                                f'NO entran a stock (condicion: '
+                                f'{item.get_condicion_producto_display()}). '
+                                'Registro documental, cantidad 0.'
                             ),
                         )
 

@@ -26,7 +26,85 @@ Existen 3 modos según la decisión del emisor:
 Los 3 modos son usados desde `ajustar_dte_emisor_api` y
 `confirmar_devolucion_fisica_api` en views.py.
 """
+import logging
+
+from django.db import transaction
 from django.db.models import F
+from django.utils import timezone
+
+logger = logging.getLogger('app')
+
+
+def _fecha_hora_despacho(dte_original, sku=None):
+    """(fecha, hora) del TRASPASO_SALIDA del SKU en el traspaso original.
+
+    Es la antigüedad real de las unidades que vuelven al origen: el lote que
+    las repone debe conservarla (mismo criterio que `_fecha_salida_traspaso`
+    en views.py, que no se importa desde acá para no cerrar un ciclo).
+    """
+    if dte_original is None:
+        return None, None
+    from app.models import Movimientos_Producto
+    qs = Movimientos_Producto.objects.filter(dte=dte_original, concepto='TRASPASO_SALIDA')
+    fila = None
+    if sku:
+        fila = (qs.filter(ProductoTalla__sku=sku)
+                .order_by('fecha', 'hora', 'id').values_list('fecha', 'hora').first())
+    if fila is None:
+        fila = qs.order_by('fecha', 'hora', 'id').values_list('fecha', 'hora').first()
+    if fila is None or not fila[0]:
+        return getattr(dte_original, 'fecha_emision', None), None
+    return fila[0], fila[1]
+
+
+def _sincronizar_lotes_devolucion(*, talla_destino, talla_origen, cantidad,
+                                  dte_original, dte_hijo, movimiento_ingreso=None,
+                                  costo=0, sobreprecio=0, precio=0, observaciones=''):
+    """Capa FIFO de una devolución post-recepción destino → origen.
+
+    El stock plano y el kardex ya se mueven en este módulo con update(F()) y
+    las filas DEVOLUCION_NC_POST_RECEPCION / SOBRANTE_ABSORBIDO_ORIGEN; sin
+    esto los lotes no se tocaban y quedaba drift ±N en las dos sucursales
+    (auditoría R-01). Se conservan las filas actuales y sólo se agrega la
+    capa de lotes: consumir FIFO en el destino y, si hay origen, crear el lote
+    de reposición con la antigüedad del despacho original.
+
+    Best-effort en SAVEPOINT (mismo criterio que `_reponer_lote_traspaso`):
+    un fallo de lotes nunca tumba la transacción de stock.
+    """
+    if cantidad <= 0 or talla_destino is None:
+        return None
+    from datetime import datetime as _dt, time as _time
+    from app.models import LoteProducto
+    from app.services.inventario_service import consumir_lotes_fifo, crear_lote
+    try:
+        with transaction.atomic():
+            consumir_lotes_fifo(talla_destino, cantidad)
+            if talla_origen is None:
+                return None
+            lote = crear_lote(
+                talla_origen, cantidad,
+                costo_unitario=int(costo or 0),
+                sobreprecio_unitario=int(sobreprecio or 0),
+                precio_venta_unitario=int(precio or 0),
+                dte=dte_hijo, movimiento=movimiento_ingreso,
+                observaciones=observaciones,
+            )
+            # fecha_ingreso es auto_now_add: se fija con update() después.
+            fecha, hora = _fecha_hora_despacho(dte_original, getattr(talla_origen, 'sku', None))
+            if fecha:
+                fecha_ingreso = _dt.combine(fecha, hora or _time(0, 0))
+                if timezone.is_naive(fecha_ingreso):
+                    fecha_ingreso = timezone.make_aware(fecha_ingreso)
+                LoteProducto.objects.filter(id=lote.id).update(fecha_ingreso=fecha_ingreso)
+            return lote
+    except Exception:
+        logger.warning(
+            "limbo_dte: no se pudo sincronizar la capa FIFO (destino=%s origen=%s cantidad=%s)",
+            getattr(talla_destino, 'id', None), getattr(talla_origen, 'id', None), cantidad,
+            exc_info=True,
+        )
+        return None
 
 
 def buscar_talla_en_sucursal(talla_origen, sucursal):
@@ -127,7 +205,7 @@ def aplicar_movimientos_devolucion_completados(*, dte_original, dte_hijo,
     Producto_Talla.objects.filter(id=talla_origen.id).update(
         stock=F('stock') + cantidad
     )
-    Movimientos_Producto.objects.create(
+    ingreso = Movimientos_Producto.objects.create(
         dte=dte_hijo if dte_hijo else dte_original,
         ProductoTalla=talla_origen,
         sucursal_origen=None,
@@ -142,6 +220,12 @@ def aplicar_movimientos_devolucion_completados(*, dte_original, dte_hijo,
             f'NC post-recepción DTE #{dte_original.numero_documento}: '
             f'reingreso a {dte_original.sucursal.alias}. {observaciones}'
         )[:500],
+    )
+    _sincronizar_lotes_devolucion(
+        talla_destino=talla_destino, talla_origen=talla_origen, cantidad=cantidad,
+        dte_original=dte_original, dte_hijo=dte_hijo or dte_original,
+        movimiento_ingreso=ingreso, costo=costo, sobreprecio=sobreprecio, precio=precio,
+        observaciones=f'Devolución post-recepción DTE #{dte_original.numero_documento}',
     )
 
 
@@ -178,6 +262,11 @@ def absorber_sin_retorno(*, dte, dte_hijo, talla_destino, cantidad,
             f'mercadería absorbida por {sucursal_destino.alias}. '
             f'Origen ({dte.sucursal.alias}) asume baja. {motivo_corto}'
         )[:500],
+    )
+    # El egreso baja el stock plano del destino: la capa FIFO también.
+    _sincronizar_lotes_devolucion(
+        talla_destino=talla_destino, talla_origen=None, cantidad=cantidad,
+        dte_original=dte, dte_hijo=dte_hijo,
     )
 
 
@@ -273,6 +362,17 @@ def completar_movimientos_pendientes(*, dte_hijo, mapping_cantidades, usuario):
             + f' [Confirmado por {usuario}: +{cant_a_despachar} unidades]'
         )[:500]
         ingreso.save(update_fields=['cantidad', 'concepto', 'estado', 'observaciones'])
+
+        # Lotes: consume FIFO en destino y repone en origen con la antigüedad
+        # del despacho original (las filas de kardex de arriba se conservan).
+        _sincronizar_lotes_devolucion(
+            talla_destino=talla_destino, talla_origen=talla_origen,
+            cantidad=cant_a_despachar,
+            dte_original=getattr(dte_hijo, 'documento_afectado', None), dte_hijo=dte_hijo,
+            movimiento_ingreso=ingreso,
+            costo=ingreso.costo, sobreprecio=ingreso.sobreprecio, precio=ingreso.precio,
+            observaciones=f'Devolución física confirmada NC #{dte_hijo.numero_documento}',
+        )
 
         aplicados.append({'sku': sku, 'cantidad': cant_a_despachar,
                           'cantidad_pedida': cant_pedida})

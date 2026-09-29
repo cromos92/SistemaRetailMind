@@ -695,8 +695,6 @@
                                 <option value="POR_MARCA">Por Marca</option>
                                 <option value="POR_CATEGORIA">Por Departamento/Categoría</option>
                                 <option value="POR_ATRIBUTO">Por Atributo</option>
-                                <option value="SELECTIVO">Selectivo</option>
-                                <option value="CICLICO">Cíclico (ABC)</option>
                             </select>
                         </div>
                         <div class="col-lg-2 col-md-4">
@@ -793,7 +791,17 @@
                         <div class="col-md-6">
                             <label class="form-label" for="fechaCorteInventario">Fecha de Corte <span class="text-danger">*</span></label>
                             <input type="datetime-local" class="form-control" id="fechaCorteInventario" required>
-                            <div class="form-text">Momento en que se congela el stock del sistema para comparación</div>
+                            <div class="form-text">Momento (hora local) en que se congela el stock del sistema. No puede ser futura.</div>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="conteoTiendaCerrada">
+                                <label class="form-check-label" for="conteoTiendaCerrada">
+                                    Conté (o contaré) con la tienda cerrada, al momento del corte
+                                </label>
+                            </div>
+                            <div class="form-text">
+                                Si el archivo se carga después de abrir, las ventas entre el corte y la carga
+                                no se descuentan del stock a comparar (evita sobrantes falsos).
+                            </div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label" for="observacionesInventario">Observaciones <span class="text-muted fw-normal">(opcional)</span></label>
@@ -807,8 +815,9 @@
                                 </label>
                             </div>
                             <div class="form-text">
-                                Recomendado. Sin este filtro la toma incluye todas las tallas históricas de la sucursal.
-                                Los sobrantes de productos en cero se registran igual con la carga de pistola, pero deben agregarse aparte.
+                                Recomendado. Sin este filtro la toma incluye todas las tallas históricas de la sucursal
+                                (desmárquelo para incluir los SKUs con stock 0).
+                                Los sobrantes de productos en cero se agregan solos a la toma cuando la pistola o el archivo los cuentan.
                                 <i class="bi bi-info-circle ms-1" title="Por ejemplo en EDEL: 341.945 líneas para 275 SKUs con stock."></i>
                             </div>
                         </div>
@@ -966,12 +975,19 @@ function cargarInventarios(page = 1) {
                             <i class="bi bi-arrow-right-circle"></i> Aplicar
                         </button>`;
                 } else if (inv.estado === 'APLICANDO') {
-                    accionPrincipal = `
+                    // «Reanudar» solo cuando la tarea lleva > 30 min sin avance (el hilo murió)
+                    accionPrincipal = inv.tarea_huerfana ? `
+                        <button type="button" class="btn btn-sm btn-warning" onclick="event.stopPropagation(); reanudarAjustes(${inv.id})" title="La aplicación se detuvo sin terminar: reanudar (lo ya aplicado no se repite)">
+                            <i class="bi bi-arrow-clockwise"></i> Reanudar
+                        </button>` : `
                         <button type="button" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); _mostrarProgresoAjustes(${inv.id})" title="Ver Progreso">
                             <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Progreso...
                         </button>`;
                 }
-                
+
+                // Cancelar: cualquier estado salvo completado/aplicando/cancelado y sin ajustes aplicados
+                const puedeCancelar = !['COMPLETADO', 'APLICANDO', 'CANCELADO'].includes(inv.estado) && !(inv.ajustes_aplicados > 0);
+
                 tbody.append(`
                     <tr onclick="verDetalleInventario(${inv.id})" style="cursor: pointer;" class="${rowClass}">
                         <td>
@@ -1016,6 +1032,11 @@ function cargarInventarios(page = 1) {
                                 ${tieneDiferencias ? `
                                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); exportarDiferenciasInventario(${inv.id})" title="Exportar diferencias" aria-label="Exportar diferencias">
                                         <i class="bi bi-file-earmark-excel"></i>
+                                    </button>
+                                ` : ''}
+                                ${puedeCancelar ? `
+                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); cancelarInventario(${inv.id}, '${inv.numero_inventario}')" title="Cancelar toma" aria-label="Cancelar toma">
+                                        <i class="bi bi-x-circle"></i>
                                     </button>
                                 ` : ''}
                             </div>
@@ -1186,10 +1207,13 @@ function abrirModalNuevoInventario() {
     $('#formNuevoInventario')[0].reset();
     $('#seccionFiltros').hide();
     
-    // Establecer fecha de corte por defecto (ahora)
+    // Fecha de corte por defecto: AHORA en hora local. toISOString() devuelve UTC
+    // (3-4 h más tarde) y el backend lo leía como hora de Santiago: cada venta entre
+    // la creación y el conteo aparecía como faltante falso.
     const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     const fechaCorte = now.toISOString().slice(0, 16);
-    $('#fechaCorteInventario').val(fechaCorte);
+    $('#fechaCorteInventario').val(fechaCorte).attr('max', fechaCorte);
     
     // Cargar filtros disponibles
     cargarFiltrosDisponibles();
@@ -1309,6 +1333,7 @@ function crearInventario() {
         nombre: nombre,
         tipo_inventario: tipo,
         fecha_corte: fechaCorte,
+        conteo_tienda_cerrada: $('#conteoTiendaCerrada').is(':checked'),
         filtros: filtros,
         observaciones: $('#observacionesInventario').val()
     };
@@ -1335,7 +1360,8 @@ function crearInventario() {
                     icon: 'success',
                     title: 'Inventario Creado',
                     html: `<p>Se creó el inventario <strong>${response.numero_inventario}</strong></p>
-                           <p>Total de productos a contar: <strong>${response.total_productos}</strong></p>`,
+                           <p>Total de productos a contar: <strong>${response.total_productos}</strong></p>
+                           <p class="text-muted small">Fecha de corte: ${response.fecha_corte || ''}${response.corte_recortado ? ' (la fecha enviada era futura y se ajustó a la hora actual)' : ''}</p>`,
                     confirmButtonText: 'Ir al Inventario'
                 }).then(() => {
                     bootstrap.Modal.getInstance(document.getElementById('modalNuevoInventario')).hide();
@@ -1479,6 +1505,15 @@ function verAnalisis(inventarioId) {
             `;
         }
 
+        // Rechazar (devolver a conteo) existía como endpoint pero ningún botón lo llamaba
+        if (analisis.puede_rechazar) {
+            footerHtml += `
+                <button type="button" class="btn btn-outline-danger" onclick="rechazarInventario(${inventarioId})">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i> Rechazar (volver a conteo)
+                </button>
+            `;
+        }
+
         if (analisis.puede_aprobar) {
             footerHtml += `
                 <button type="button" class="btn btn-primary" onclick="aprobarInventario(${inventarioId})">
@@ -1537,6 +1572,121 @@ function aprobarInventario(inventarioId) {
                 }
             });
         }
+    });
+}
+
+// Rechazar: el aprobador devuelve la toma a conteo con motivo obligatorio
+function rechazarInventario(inventarioId) {
+    Swal.fire({
+        title: '¿Rechazar y devolver a conteo?',
+        html: `<p>La toma vuelve a <strong>En conteo</strong> para corregir y volver a enviar.</p>
+               <textarea id="motivoRechazo" class="form-control mt-2" placeholder="Motivo del rechazo (obligatorio)" rows="2"></textarea>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, rechazar',
+        cancelButtonText: 'Volver',
+        confirmButtonColor: _nexoColor('--nexo-error', '#FF4D4D'),
+        preConfirm: () => {
+            const motivo = (document.getElementById('motivoRechazo').value || '').trim();
+            if (!motivo) {
+                Swal.showValidationMessage('Indique el motivo del rechazo');
+                return false;
+            }
+            return { motivo };
+        }
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        $.ajax({
+            url: `/app/gestion-inventarios/api/rechazar/${inventarioId}/`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ motivo: result.value.motivo }),
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                if (response.success) {
+                    Swal.fire('Rechazado', response.message, 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('modalAnalisis'))?.hide();
+                    cargarInventarios(currentPage);
+                } else {
+                    Swal.fire('Error', response.error, 'error');
+                }
+            },
+            error: function() { Swal.fire('Error', 'No se pudo rechazar la toma', 'error'); }
+        });
+    });
+}
+
+// Cancelar: motivo obligatorio; el backend rechaza tomas con ajustes ya aplicados
+function cancelarInventario(inventarioId, numero) {
+    Swal.fire({
+        title: `¿Cancelar la toma ${numero || ''}?`,
+        html: `<p>La toma queda <strong>Cancelada</strong> y sale de los indicadores. No se puede deshacer.</p>
+               <textarea id="motivoCancelacion" class="form-control mt-2" placeholder="Motivo de la cancelación (obligatorio)" rows="2"></textarea>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, cancelar toma',
+        cancelButtonText: 'Volver',
+        confirmButtonColor: _nexoColor('--nexo-error', '#FF4D4D'),
+        preConfirm: () => {
+            const motivo = (document.getElementById('motivoCancelacion').value || '').trim();
+            if (!motivo) {
+                Swal.showValidationMessage('Indique el motivo de la cancelación');
+                return false;
+            }
+            return { motivo };
+        }
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        $.ajax({
+            url: `/app/gestion-inventarios/api/cancelar/${inventarioId}/`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ motivo: result.value.motivo }),
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                if (response.success) {
+                    Swal.fire('Cancelada', response.message, 'success');
+                    cargarInventarios(currentPage);
+                } else {
+                    Swal.fire('No se pudo cancelar', response.error, 'error');
+                }
+            },
+            error: function() { Swal.fire('Error', 'No se pudo cancelar la toma', 'error'); }
+        });
+    });
+}
+
+// Reanudar una aplicación de ajustes huérfana (hilo muerto). El backend solo lo
+// acepta si la tarea lleva > 30 min sin avance; lo ya aplicado no se repite.
+function reanudarAjustes(inventarioId) {
+    Swal.fire({
+        title: '¿Reanudar la aplicación de ajustes?',
+        html: `<p>La aplicación anterior se detuvo sin terminar (más de 30 minutos sin avance).</p>
+               <p>Se continúa desde donde quedó: los ajustes ya aplicados <strong>no se repiten</strong>.</p>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, reanudar',
+        cancelButtonText: 'Cancelar'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        $.ajax({
+            url: `/app/gestion-inventarios/api/aplicar-ajustes/${inventarioId}/`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ reanudar: true }),
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                if (response.success && !response.already_running) {
+                    _mostrarProgresoAjustes(inventarioId);
+                } else if (response.success) {
+                    Swal.fire('En ejecución', 'La aplicación sigue avanzando; no hace falta reanudar.', 'info');
+                    cargarInventarios(currentPage);
+                } else {
+                    Swal.fire('Error', response.error, 'error');
+                }
+            },
+            error: function() { Swal.fire('Error', 'No se pudo reanudar', 'error'); }
+        });
     });
 }
 
@@ -1644,7 +1794,12 @@ function _mostrarProgresoAjustes(inventarioId) {
                         bar.textContent = pct + '%';
                     }
 
-                    if (data.estado === 'EN_PROCESO') {
+                    if (data.estado === 'EN_PROCESO' && data.huerfana) {
+                        // El hilo murió: ofrecer reanudar en vez de esperar para siempre
+                        clearInterval(pollingInterval);
+                        Swal.close();
+                        reanudarAjustes(inventarioId);
+                    } else if (data.estado === 'EN_PROCESO') {
                         if (texto) texto.textContent = 'Procesando ajustes de stock...';
                         if (detalle) detalle.textContent = `${data.procesados} / ${data.total} SKUs procesados`;
                     } else if (data.estado === 'COMPLETADO') {
