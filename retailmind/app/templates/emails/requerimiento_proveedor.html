@@ -139,19 +139,19 @@ después, para el que quiera revisarlo.
                                         <p style="margin:0 0 14px;color:#555555;font-size:13px;">
                                             Responda con una de estas opciones{% if fecha_limite_respuesta %} antes del <strong>{{ fecha_limite_respuesta|date:"d/m/Y" }}</strong>{% endif %}.
                                         </p>
-                                        {% if usuario.email %}
+                                        {% if correo_respuesta %}
                                         <table role="presentation" align="center" cellpadding="0" cellspacing="0">
                                             <tr>
                                                 <td style="padding:0 4px;">
-                                                    <a href="mailto:{{ usuario.email }}?subject=APRUEBA%20{{ requerimiento.numero_requerimiento }}%20-%20SKU%20{{ requerimiento.sku }}&amp;body=Aprobamos%20el%20requerimiento.%20N%C2%B0%20de%20autorizaci%C3%B3n%3A%20"
+                                                    <a href="mailto:{{ correo_respuesta }}?subject=APRUEBA%20{{ requerimiento.numero_requerimiento }}%20-%20SKU%20{{ requerimiento.sku }}&amp;body=Aprobamos%20el%20requerimiento.%20N%C2%B0%20de%20autorizaci%C3%B3n%3A%20"
                                                        style="display:inline-block;background-color:#0ab39c;color:#ffffff;text-decoration:none;padding:11px 18px;border-radius:6px;font-weight:600;font-size:13px;">✔ Aprobar</a>
                                                 </td>
                                                 <td style="padding:0 4px;">
-                                                    <a href="mailto:{{ usuario.email }}?subject=RECHAZA%20{{ requerimiento.numero_requerimiento }}%20-%20SKU%20{{ requerimiento.sku }}&amp;body=Rechazamos%20el%20requerimiento.%20Motivo%3A%20"
+                                                    <a href="mailto:{{ correo_respuesta }}?subject=RECHAZA%20{{ requerimiento.numero_requerimiento }}%20-%20SKU%20{{ requerimiento.sku }}&amp;body=Rechazamos%20el%20requerimiento.%20Motivo%3A%20"
                                                        style="display:inline-block;background-color:#f06548;color:#ffffff;text-decoration:none;padding:11px 18px;border-radius:6px;font-weight:600;font-size:13px;">✖ Rechazar</a>
                                                 </td>
                                                 <td style="padding:0 4px;">
-                                                    <a href="mailto:{{ usuario.email }}?subject=INFO%20{{ requerimiento.numero_requerimiento }}%20-%20SKU%20{{ requerimiento.sku }}&amp;body=Necesitamos%20la%20siguiente%20informaci%C3%B3n%3A%20"
+                                                    <a href="mailto:{{ correo_respuesta }}?subject=INFO%20{{ requerimiento.numero_requerimiento }}%20-%20SKU%20{{ requerimiento.sku }}&amp;body=Necesitamos%20la%20siguiente%20informaci%C3%B3n%3A%20"
                                                        style="display:inline-block;background-color:#405189;color:#ffffff;text-decoration:none;padding:11px 18px;border-radius:6px;font-weight:600;font-size:13px;">❓ Pedir info</a>
                                                 </td>
                                             </tr>
@@ -249,7 +249,7 @@ después, para el que quiera revisarlo.
                                 <tr>
                                     <td style="padding:12px 14px;font-size:13px;">
                                         <strong style="color:#405189;">Contacto para esta gestión</strong><br>
-                                        {{ usuario.get_full_name }}{% if usuario.email %} — <a href="mailto:{{ usuario.email }}" style="color:#405189;">{{ usuario.email }}</a>{% endif %}<br>
+                                        {% if usuario %}{{ usuario.get_full_name }}{% endif %}{% if correo_respuesta %}{% if usuario %} — {% endif %}<a href="mailto:{{ correo_respuesta }}" style="color:#405189;">{{ correo_respuesta }}</a>{% endif %}<br>
                                         <span style="color:#777777;">{{ empresa.nombre }}{% if empresa.rut %} · RUT {{ empresa.rut }}{% endif %}</span>
                                     </td>
                                 </tr>

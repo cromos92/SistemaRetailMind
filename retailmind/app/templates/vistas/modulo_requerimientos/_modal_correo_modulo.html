@@ -1,0 +1,149 @@
+{% comment %}
+Correo FIJO del módulo de Requerimientos: modal para verlo/cambiarlo y el
+objeto ReqCorreoModulo que usan el listado y la ficha.
+
+Ese correo recibe la copia de cada envío y es a donde responden los
+proveedores ("Responder" y los botones Aprobar/Rechazar del correo). Antes era
+el correo personal de quien apretaba "Enviar"; ahora es uno solo y no depende
+del usuario. Solo un administrador lo cambia.
+{% endcomment %}
+<div class="modal fade req-modal" id="modalCorreoModulo" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="req-modal-header">
+                <div class="req-modal-icon"><i class="ri-mail-settings-line"></i></div>
+                <div>
+                    <h6>Correo del módulo</h6>
+                    <div class="req-modal-sub">El mismo para todos los envíos, los haga quien los haga</div>
+                </div>
+                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body py-3">
+                <div class="req-resumen mb-3" style="font-size:.8rem">
+                    <div class="fw-semibold mb-1" style="color:#405189">Para qué sirve</div>
+                    <ul class="mb-0 ps-3">
+                        <li>Recibe una <strong>copia de control</strong> de cada requerimiento enviado.</li>
+                        <li>Es a donde llegan las <strong>respuestas del proveedor</strong> (botón "Responder" y botones Aprobar / Rechazar del correo).</li>
+                        <li>Aparece como <strong>contacto</strong> en el correo y en el PDF.</li>
+                    </ul>
+                </div>
+
+                <label class="form-label" for="cm-correo">Correo <span class="text-danger">*</span></label>
+                <input type="email" class="form-control" id="cm-correo" placeholder="requerimientos@miempresa.cl" autocomplete="email">
+                <div class="small mt-1" id="cm-estado" style="font-size:.74rem"></div>
+                <div class="text-muted mt-2" style="font-size:.72rem" id="cm-remitente"></div>
+            </div>
+            <div class="req-modal-footer justify-content-end">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary btn-sm" id="cm-btn-guardar" onclick="ReqCorreoModulo.guardarDesdeModal()">
+                    <i class="ri-save-line me-1"></i>Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const ReqCorreoModulo = (function () {
+    const URL = '/app/api/requerimientos/configuracion-correo/';
+    let config = null;
+    const oyentes = [];
+
+    function csrf() {
+        const campo = document.querySelector('[name=csrfmiddlewaretoken]');
+        return campo ? campo.value : '';
+    }
+
+    function avisar() { oyentes.forEach(fn => { try { fn(config); } catch (e) { console.error(e); } }); }
+
+    function cargar() {
+        return fetch(URL).then(r => r.json()).then(d => {
+            if (d.success) { config = d.config; avisar(); }
+            return config;
+        });
+    }
+
+    // Guarda el correo y avisa a quien esté mostrándolo. Devuelve la promesa
+    // con la respuesta del servidor (success/error) para que cada pantalla
+    // decida cómo mostrar el resultado.
+    function guardar(correo) {
+        return fetch(URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+            body: JSON.stringify({ correo_modulo: correo }),
+        }).then(r => r.json()).then(d => {
+            if (d.success) { config = d.config; avisar(); }
+            return d;
+        });
+    }
+
+    function pintarModal() {
+        const c = config || {};
+        const input = document.getElementById('cm-correo');
+        input.value = c.correo_modulo || '';
+        input.readOnly = !c.puede_editar;
+        document.getElementById('cm-btn-guardar').style.display = c.puede_editar ? '' : 'none';
+
+        let estado = '';
+        if (c.origen === 'configurado') {
+            estado = `<span class="text-success"><i class="ri-checkbox-circle-line me-1"></i>En uso para todos los envíos${
+                c.actualizado_por ? ` · lo definió ${reqEsc(c.actualizado_por)} el ${reqEsc(c.actualizado_en)}` : ''}</span>`;
+        } else if (c.origen === 'entorno') {
+            estado = `<span class="text-info"><i class="ri-information-line me-1"></i>Viene de la configuración del servidor.
+                      Guárdelo aquí para poder cambiarlo desde la pantalla.</span>`;
+        } else {
+            estado = `<span class="text-danger"><i class="ri-error-warning-line me-1"></i>Sin definir: hoy la copia y las
+                      respuestas llegan al correo personal de quien envía.</span>`;
+        }
+        if (!c.puede_editar) {
+            estado += '<div class="text-muted mt-1">Solo un administrador puede cambiarlo.</div>';
+        }
+        document.getElementById('cm-estado').innerHTML = estado;
+        document.getElementById('cm-remitente').innerHTML = c.from_email
+            ? `<i class="ri-send-plane-line me-1"></i>Los correos salen desde <strong>${reqEsc(c.from_email)}</strong>
+               (remitente del sistema); las respuestas vuelven al correo de arriba.`
+            : '';
+    }
+
+    function abrir() {
+        const modalEl = document.getElementById('modalCorreoModulo');
+        const mostrar = () => {
+            pintarModal();
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            setTimeout(() => document.getElementById('cm-correo').focus(), 350);
+        };
+        if (config) { mostrar(); cargar().then(pintarModal).catch(() => {}); }
+        else cargar().then(mostrar).catch(() => Swal.fire('Error', 'No se pudo leer la configuración', 'error'));
+    }
+
+    function guardarDesdeModal() {
+        const correo = document.getElementById('cm-correo').value.trim();
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correo)) {
+            Swal.fire('', 'Escriba un correo válido', 'warning');
+            return;
+        }
+        const btn = document.getElementById('cm-btn-guardar');
+        btn.disabled = true;
+        guardar(correo).then(d => {
+            btn.disabled = false;
+            if (!d.success) { Swal.fire('No se guardó', d.error, 'error'); return; }
+            bootstrap.Modal.getInstance(document.getElementById('modalCorreoModulo')).hide();
+            Swal.fire({ icon: 'success', title: 'Correo guardado', text: d.message, timer: 2600, showConfirmButton: false });
+        }).catch(() => { btn.disabled = false; Swal.fire('Error', 'No se pudo guardar', 'error'); });
+    }
+
+    return {
+        cargar, guardar, abrir, guardarDesdeModal,
+        get config() { return config; },
+        alCambiar(fn) { oyentes.push(fn); if (config) fn(config); },
+    };
+})();
+
+document.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('cm-correo');
+    if (input) input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); ReqCorreoModulo.guardarDesdeModal(); }
+    });
+    ReqCorreoModulo.cargar().catch(() => {});
+});
+</script>

@@ -30,12 +30,19 @@ ve ningún mensaje.
                     <div class="col-6 col-md-3"><div class="tipo-card" data-tipo="PRODUCTO_FALLADO" onclick="seleccionarTipo(this)"><div class="tipo-card-inner text-center p-3"><i class="ri-error-warning-line text-danger"></i><div class="fw-semibold mt-1" style="font-size:.78rem;line-height:1.2">Producto fallado</div><div class="text-muted" style="font-size:.68rem">Defecto de fábrica</div></div></div></div>
                     <div class="col-6 col-md-3"><div class="tipo-card" data-tipo="GARANTIA" onclick="seleccionarTipo(this)"><div class="tipo-card-inner text-center p-3"><i class="ri-shield-check-line text-info"></i><div class="fw-semibold mt-1" style="font-size:.78rem;line-height:1.2">Garantía</div><div class="text-muted" style="font-size:.68rem">Falla dentro del plazo</div></div></div></div>
                     <div class="col-6 col-md-3"><div class="tipo-card" data-tipo="ERROR_DESPACHO" onclick="seleccionarTipo(this)"><div class="tipo-card-inner text-center p-3"><i class="ri-exchange-line text-warning"></i><div class="fw-semibold mt-1" style="font-size:.78rem;line-height:1.2">Error de despacho</div><div class="text-muted" style="font-size:.68rem">Llegó otro producto</div></div></div></div>
-                    <div class="col-6 col-md-3"><div class="tipo-card" data-tipo="DEVOLUCION" onclick="seleccionarTipo(this)"><div class="tipo-card-inner text-center p-3"><i class="ri-arrow-go-back-line text-primary"></i><div class="fw-semibold mt-1" style="font-size:.78rem;line-height:1.2">Devolución</div><div class="text-muted" style="font-size:.68rem">Se devuelve al proveedor</div></div></div></div>
+                    <div class="col-6 col-md-3"><div class="tipo-card" data-tipo="DEVOLUCION" onclick="seleccionarTipo(this)"><div class="tipo-card-inner text-center p-3"><i class="ri-arrow-go-back-line text-primary"></i><div class="fw-semibold mt-1" style="font-size:.78rem;line-height:1.2">Devolución a proveedor</div><div class="text-muted" style="font-size:.68rem">Mercadería que vuelve al proveedor</div></div></div></div>
                     <div class="col-6 col-md-3"><div class="tipo-card" data-tipo="RECLAMO" onclick="seleccionarTipo(this)"><div class="tipo-card-inner text-center p-3"><i class="ri-chat-delete-line text-secondary"></i><div class="fw-semibold mt-1" style="font-size:.78rem;line-height:1.2">Reclamo</div><div class="text-muted" style="font-size:.68rem">Queja del cliente</div></div></div></div>
                     <div class="col-6 col-md-3"><div class="tipo-card" data-tipo="CONSULTA" onclick="seleccionarTipo(this)"><div class="tipo-card-inner text-center p-3"><i class="ri-questionnaire-line text-success"></i><div class="fw-semibold mt-1" style="font-size:.78rem;line-height:1.2">Consulta</div><div class="text-muted" style="font-size:.68rem">Duda técnica</div></div></div></div>
                     <div class="col-6 col-md-3"><div class="tipo-card" data-tipo="OTROS" onclick="seleccionarTipo(this)"><div class="tipo-card-inner text-center p-3"><i class="ri-more-line text-dark"></i><div class="fw-semibold mt-1" style="font-size:.78rem;line-height:1.2">Otros</div><div class="text-muted" style="font-size:.68rem">No calza en los demás</div></div></div></div>
                 </div>
                 <div id="tipo-error" class="text-danger small mt-2" style="display:none;"><i class="ri-error-warning-line me-1"></i>Seleccione un tipo para continuar</div>
+                <!-- Este módulo le reclama al PROVEEDOR. La plata del cliente no
+                     se mueve desde acá: tiene su propio circuito en Ventas. -->
+                <div class="alert alert-light border py-2 px-3 mt-2 mb-0" style="font-size:.74rem">
+                    <i class="ri-information-line me-1 text-primary"></i>Aquí se le reclama al <strong>proveedor</strong>.
+                    Si el cliente pide que le devuelvan su dinero, eso se hace en
+                    <strong>Ventas → Devolución de Dinero</strong>, no en este módulo.
+                </div>
             </div>
 
             <div class="req-bloque" id="bloque-origen" style="display:none;">
@@ -201,11 +208,59 @@ ve ningún mensaje.
                         <h6 class="req-bloque-titulo">
                             <i class="ri-user-line"></i>Cliente
                             <span class="badge bg-secondary ms-1" id="badge-cliente-opcional" style="display:none;font-size:.6rem">Opcional</span>
-                            <button type="button" class="btn btn-soft-success btn-sm py-0 px-2 ms-auto" style="font-size:.72rem" onclick="abrirModalCrearCliente()"><i class="ri-user-add-line me-1"></i>Nuevo</button>
+                            <button type="button" class="btn btn-soft-success btn-sm py-0 px-2 ms-auto" style="font-size:.72rem" onclick="abrirModalCrearCliente()" id="btn-nuevo-cliente"><i class="ri-user-add-line me-1"></i>Registrar cliente nuevo</button>
                         </h6>
                         <div class="alert alert-warning border-0 py-1 px-2 mb-2 small" id="aviso-cliente-stock" style="display:none;font-size:.72rem">
                             <i class="ri-information-line me-1"></i>Sin cliente se enviará como falla detectada en tienda. Si hay un cliente afectado, cárgalo: el proveedor resuelve más rápido.
                         </div>
+                        <!-- Alta de cliente en línea -->
+                        <div id="panel-nuevo-cliente" class="req-resumen mb-2" style="display:none;">
+                            <div class="d-flex align-items-center mb-2">
+                                <strong style="font-size:.78rem;color:#405189"><i class="ri-user-add-line me-1"></i>Cliente nuevo</strong>
+                                <span class="text-muted ms-2" style="font-size:.7rem">Queda en la ficha de clientes</span>
+                                <button type="button" class="btn-close btn-sm ms-auto" onclick="cerrarPanelCliente()" aria-label="Cerrar"></button>
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-md-4">
+                                    <label class="form-label" for="modal-cliente-rut">RUT <small class="text-muted">(opcional)</small></label>
+                                    <input type="text" class="form-control form-control-sm" id="modal-cliente-rut" placeholder="12345678-9" onblur="validarRUTModal()">
+                                    <small class="text-muted" id="modal-rut-validacion" style="font-size:.7rem"></small>
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <label class="form-label" for="modal-cliente-nombre">Nombre <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control form-control-sm" id="modal-cliente-nombre">
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <label class="form-label" for="modal-cliente-apellido">Apellido <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control form-control-sm" id="modal-cliente-apellido">
+                                </div>
+                                <div class="col-6 col-md-4">
+                                    <label class="form-label" for="modal-cliente-telefono">Teléfono</label>
+                                    <input type="tel" class="form-control form-control-sm" id="modal-cliente-telefono" placeholder="+56 9 ...">
+                                </div>
+                                <div class="col-6 col-md-8">
+                                    <label class="form-label" for="modal-cliente-email">Email</label>
+                                    <input type="email" class="form-control form-control-sm" id="modal-cliente-email">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="modal-cliente-direccion">Dirección</label>
+                                    <input type="text" class="form-control form-control-sm" id="modal-cliente-direccion">
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label" for="modal-cliente-comuna">Comuna</label>
+                                    <input type="text" class="form-control form-control-sm" id="modal-cliente-comuna">
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <label class="form-label" for="modal-cliente-ciudad">Ciudad</label>
+                                    <input type="text" class="form-control form-control-sm" id="modal-cliente-ciudad">
+                                </div>
+                                <div class="col-12 d-flex justify-content-end gap-1">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cerrarPanelCliente()">Cancelar</button>
+                                    <button type="button" class="btn btn-success btn-sm" onclick="guardarNuevoCliente()" id="btn-guardar-cliente"><i class="ri-save-line me-1"></i>Guardar cliente</button>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="row g-2">
                             <div class="col-md-5">
                                 <label class="form-label">RUT</label>
@@ -246,11 +301,14 @@ ve ningún mensaje.
                 <div class="col-lg-5">
                     <div class="req-bloque" id="seccion-fotos">
                         <h6 class="req-bloque-titulo">
-                            <i class="ri-camera-line"></i>Evidencia
+                            <i class="ri-camera-line"></i>Fotos de evidencia
                             <span class="badge bg-light text-secondary ms-auto" style="font-size:.65rem" id="badge-max-fotos">Máx: 5</span>
                         </h6>
+                        <div id="fotos-sin-tipo" class="text-muted small" style="font-size:.74rem">
+                            <i class="ri-arrow-left-line me-1"></i>Elija el tipo de requerimiento en el paso 1 para ver qué fotos pedir.
+                        </div>
                         <div id="guia-fotos" class="text-muted small mb-2" style="display:none;font-size:.72rem">
-                            <i class="ri-information-line me-1"></i>Las marcadas <span class="badge bg-danger" style="font-size:.5rem">REQ</span> son necesarias para enviar al proveedor. Pasa el cursor por cada una para ver qué debe mostrar.
+                            <i class="ri-information-line me-1"></i>Las marcadas <span class="badge bg-danger" style="font-size:.5rem">REQ</span> son necesarias para enviar al proveedor. El ícono <i class="ri-question-line"></i> de cada una explica qué debe mostrar.
                         </div>
                         <div class="row g-2" id="fotos-slots-container"></div>
                         <div id="fotos-adicionales-container" class="mt-2"></div>
@@ -275,7 +333,7 @@ ve ningún mensaje.
         <i class="ri-arrow-left-line me-1"></i>Atrás
     </button>
     {% if modo_embebido %}
-    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal" id="btn-cancelar-req">Cancelar</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cerrarAsistente()" id="btn-cancelar-req">Cancelar</button>
     {% else %}
     <a href="{% url 'modulo_requerimientos' %}" class="btn btn-outline-secondary btn-sm">Volver</a>
     {% endif %}
@@ -286,63 +344,4 @@ ve ningún mensaje.
     <button type="button" class="btn btn-success btn-sm" id="btn-guardar" onclick="intentarCrear()" style="display:none;">
         <i class="ri-check-line me-1"></i>Crear requerimiento
     </button>
-</div>
-
-<!-- ══════════ Modal Nuevo Cliente ══════════ -->
-<div class="modal fade req-modal" id="modalCrearCliente" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="req-modal-header">
-                <div class="req-modal-icon"><i class="ri-user-add-line"></i></div>
-                <div>
-                    <h6>Nuevo cliente</h6>
-                    <div class="req-modal-sub">Queda en la ficha de clientes para futuras ventas</div>
-                </div>
-                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body py-3">
-                <form id="form-crear-cliente">
-                    <div class="row g-2">
-                        <div class="col-12">
-                            <label class="form-label">RUT <small class="text-muted">(opcional)</small></label>
-                            <input type="text" class="form-control form-control-sm" id="modal-cliente-rut" placeholder="12345678-9" onblur="validarRUTModal()">
-                            <small class="text-muted" id="modal-rut-validacion" style="font-size:.7rem"></small>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label">Nombre <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control form-control-sm" id="modal-cliente-nombre" required>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label">Apellido <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control form-control-sm" id="modal-cliente-apellido" required>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label">Teléfono</label>
-                            <input type="tel" class="form-control form-control-sm" id="modal-cliente-telefono" placeholder="+56 9 ...">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label">Email</label>
-                            <input type="email" class="form-control form-control-sm" id="modal-cliente-email">
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">Dirección</label>
-                            <input type="text" class="form-control form-control-sm" id="modal-cliente-direccion">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label">Comuna</label>
-                            <input type="text" class="form-control form-control-sm" id="modal-cliente-comuna">
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label">Ciudad</label>
-                            <input type="text" class="form-control form-control-sm" id="modal-cliente-ciudad">
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="req-modal-footer justify-content-end">
-                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-success btn-sm" onclick="guardarNuevoCliente()"><i class="ri-save-line me-1"></i>Guardar</button>
-            </div>
-        </div>
-    </div>
 </div>

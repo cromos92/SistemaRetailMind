@@ -16,7 +16,7 @@ from django.db.models import (
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import transaction, DatabaseError
 from django.core.mail import send_mail, EmailMessage, EmailMultiAlternatives, get_connection
 from django.core.validators import validate_email
 from django.conf import settings
@@ -36,12 +36,20 @@ from .models import (
     ORIGEN_REQUERIMIENTO_CHOICES, ETAPA_POR_ESTADO, ESTADOS_CERRADOS,
     Ticket, Dte, Dte_Productos, Movimientos_Producto, LoteProducto,
     DocumentoCompraLegacy, rol_efectivo,
+    ConfiguracionRequerimientos,
 )
 from .services.pdf_requerimiento_proveedor import (
     generar_pdf_requerimiento, nombre_archivo_pdf,
 )
 from .services.correo_service import enviar_correo_trazado, CorreoError
 from .services.fotos_evidencia import comprimir_para_adjunto
+from .services.correo_requerimientos import (
+    correo_modulo_requerimientos,
+    correos_guardados as _correos_guardados,
+    correo_ficha_proveedor as _correo_ficha_proveedor,
+    correo_proveedor as _correo_proveedor,
+    recordar_correo_proveedor as _recordar_correo_proveedor,
+)
 
 logger = logging.getLogger('app')
 
@@ -163,7 +171,9 @@ TRANSICIONES_PERMITIDAS = {
     'ESPERANDO_RESPUESTA': ['APROBADO', 'RECHAZADO', 'EN_REVISION'],
     'APROBADO': ['EN_PROCESO', 'COMPLETADO'],
     # Que el proveedor rechace no cierra el caso hacia el cliente: la tienda
-    # todavía tiene que resolverlo (asumirlo, devolver el dinero, etc.).
+    # todavía tiene que resolverlo (asumirlo, cambiar el producto…). Si al
+    # cliente hay que devolverle plata, eso se hace en Ventas → Devolución de
+    # Dinero, no en este módulo.
     'RECHAZADO': ['EN_PROCESO', 'COMPLETADO'],
     'EN_PROCESO': ['COMPLETADO'],
     'RECHAZADO_INTERNO': ['EN_REVISION'],  # reapertura si aparecen antecedentes
@@ -193,31 +203,14 @@ def puede_cambiar_estado(estado_actual, estado_nuevo):
 
 # ========== HELPERS DE CORREO ==========
 
-def _correo_proveedor(empresa):
-    """Primer correo configurado de la ficha del proveedor.
-
-    La ficha de Empresa tiene 4 campos de correo; el envío histórico solo
-    miraba correoVendedor y fallaba con proveedores que solo tienen `email`.
-    """
-    if not empresa:
-        return None
-    for campo in ('correoVendedor', 'email', 'correoIntercambio'):
-        valor = (getattr(empresa, campo, '') or '').strip()
-        if valor:
-            return valor
-    return None
-
-
 def _correo_copia_default(user):
-    """Correo de control que recibe el resumen (sin fotos) de cada envío.
+    """Correo que recibe la copia-resumen (sin fotos) de cada envío.
 
-    Configurable con la env var REQUERIMIENTOS_CORREO_COPIA; si no está
-    definida se usa el correo del usuario que envía.
+    Es el correo del módulo. Solo si nadie lo configuró todavía se cae al
+    correo del usuario, para no dejar el envío sin copia de control.
     """
-    return (
-        os.environ.get('REQUERIMIENTOS_CORREO_COPIA', '').strip()
-        or (user.email or '').strip()
-    )
+    correo, _ = correo_modulo_requerimientos()
+    return correo or (user.email or '').strip()
 
 
 # Cómo se pinta cada estado de entrega. `indicativo` marca los estados que NO
@@ -527,51 +520,8 @@ def crear_requerimiento(request):
                 usuario=request.user
             )
 
-            # Procesar fotos por tipo (foto_FOTO_GENERAL, foto_FOTO_DEFECTO, etc.)
-            max_fotos = MAX_FOTOS_POR_TIPO.get(tipo_req, 5)
-            orden_counter = 1
-            if request.FILES:
-                # Fotos con tipo definido
-                tipos_foto_db = {
-                    tf.codigo: tf for tf in TipoFotoRequerimiento.objects.filter(activo=True)
-                }
-                # Las guiadas van PRIMERO: `request.FILES` no garantiza orden y
-                # el corte por `max_fotos` estaba descartando fotos obligatorias
-                # cuando el usuario adjuntaba muchas adicionales.
-                claves = sorted(
-                    request.FILES.keys(),
-                    key=lambda k: (0 if k.startswith('foto_FOTO_') else 1, k),
-                )
-                for key in claves:
-                    if orden_counter > max_fotos:
-                        logger.info(
-                            'Requerimiento %s: se omitió la foto %s por superar el '
-                            'máximo de %s para el tipo %s',
-                            requerimiento.numero_requerimiento, key, max_fotos, tipo_req,
-                        )
-                        continue
-                    tipo_foto_obj = None
-                    if key.startswith('foto_FOTO_'):
-                        codigo = key.replace('foto_', '', 1)
-                        tipo_foto_obj = tipos_foto_db.get(codigo)
-                    elif key.startswith('foto_adicional_'):
-                        tipo_foto_obj = tipos_foto_db.get('FOTO_ADICIONAL')
-                    elif key.startswith('foto_'):
-                        # Retrocompatibilidad: foto_1, foto_2, etc.
-                        pass
-                    else:
-                        continue
-
-                    desc_key = f'descripcion_{key}'
-                    FotoRequerimiento.objects.create(
-                        requerimiento=requerimiento,
-                        imagen=request.FILES[key],
-                        tipo_foto=tipo_foto_obj,
-                        descripcion=data.get(desc_key, '') or '',
-                        orden=orden_counter,
-                        usuario=request.user
-                    )
-                    orden_counter += 1
+            # Fotos por tipo (foto_FOTO_GENERAL, foto_FOTO_DEFECTO, etc.)
+            _guardar_fotos(requerimiento, request.FILES, data, request.user)
 
             # Verificar completitud de fotos obligatorias
             requerimiento.fotos_completas = requerimiento.verificar_fotos_completas()
@@ -590,6 +540,285 @@ def crear_requerimiento(request):
             'success': False,
             'error': f'Error al crear requerimiento: {str(e)}'
         }, status=500)
+
+
+def _guardar_fotos(requerimiento, archivos, data, usuario, reemplazar_guiadas=False):
+    """Guarda las fotos de un POST multipart. Devuelve ``(guardadas, omitidas)``.
+
+    Claves que entiende: ``foto_FOTO_<CODIGO>`` (foto guiada de ese tipo),
+    ``foto_adicional_<n>`` y ``foto_<n>`` (retrocompatibilidad), cada una con
+    su ``descripcion_<clave>`` opcional.
+
+    Las guiadas van PRIMERO: `request.FILES` no garantiza orden y el corte por
+    el máximo del tipo descartaba fotos obligatorias cuando se adjuntaban
+    muchas adicionales. Con `reemplazar_guiadas`, una foto guiada nueva
+    reemplaza a la que ya había de ese mismo tipo (es el "Reemplazar" de la
+    ficha: el tope no debería impedir corregir una foto mal sacada).
+    """
+    if not archivos:
+        return [], []
+    max_fotos = MAX_FOTOS_POR_TIPO.get(requerimiento.tipo, 5)
+    tipos_foto_db = {
+        tf.codigo: tf for tf in TipoFotoRequerimiento.objects.filter(activo=True)
+    }
+    claves = sorted(
+        archivos.keys(),
+        key=lambda k: (0 if k.startswith('foto_FOTO_') else 1, k),
+    )
+    existentes = list(requerimiento.fotos.all())
+    orden = max((f.orden for f in existentes), default=0) + 1
+    guardadas, omitidas = [], []
+
+    for key in claves:
+        tipo_foto_obj = None
+        if key.startswith('foto_FOTO_'):
+            tipo_foto_obj = tipos_foto_db.get(key.replace('foto_', '', 1))
+        elif key.startswith('foto_adicional_'):
+            tipo_foto_obj = tipos_foto_db.get('FOTO_ADICIONAL')
+        elif not key.startswith('foto_'):
+            continue
+
+        archivo = archivos[key]
+        tipo_mime = (getattr(archivo, 'content_type', '') or '').lower()
+        if tipo_mime and not tipo_mime.startswith('image/'):
+            omitidas.append(f'{archivo.name}: no es una imagen')
+            continue
+
+        reemplaza = []
+        if (reemplazar_guiadas and tipo_foto_obj
+                and tipo_foto_obj.codigo != 'FOTO_ADICIONAL'):
+            reemplaza = [f for f in existentes if f.tipo_foto_id == tipo_foto_obj.id]
+
+        if len(existentes) - len(reemplaza) + 1 > max_fotos:
+            logger.info(
+                'Requerimiento %s: se omitió la foto %s por superar el máximo de %s '
+                'para el tipo %s', requerimiento.numero_requerimiento, key, max_fotos,
+                requerimiento.tipo,
+            )
+            omitidas.append(f'{archivo.name}: supera el máximo de {max_fotos} fotos')
+            continue
+
+        for vieja in reemplaza:
+            vieja.delete()
+            existentes.remove(vieja)
+
+        foto = FotoRequerimiento.objects.create(
+            requerimiento=requerimiento,
+            imagen=archivo,
+            tipo_foto=tipo_foto_obj,
+            descripcion=(data.get(f'descripcion_{key}', '') or '')[:255],
+            orden=orden,
+            usuario=usuario,
+        )
+        existentes.append(foto)
+        guardadas.append(foto)
+        orden += 1
+
+    return guardadas, omitidas
+
+
+ESTADOS_CON_FOTOS_EDITABLES = ('PENDIENTE', 'EN_REVISION', 'VALIDADO', 'ESPERANDO_RESPUESTA')
+
+
+def _puede_gestionar_fotos(user, requerimiento):
+    """Quién agrega o quita evidencia: los que pueden editar, y solo mientras
+    el caso sigue abierto. Una vez resuelto, la evidencia es la que se usó."""
+    return (requerimiento.estado in ESTADOS_CON_FOTOS_EDITABLES
+            and usuario_puede_realizar_accion(user, requerimiento, 'editar'))
+
+
+@login_required
+@require_POST
+def subir_fotos_requerimiento(request, requerimiento_id):
+    """Agregar (o reemplazar) fotos de un requerimiento ya creado.
+
+    No existía: un caso creado sin fotos quedaba marcado "falta fotos" para
+    siempre, porque la única forma de cargarlas era en el alta. El aviso
+    mandaba a "Completar datos" y ese modal no tenía dónde subirlas.
+    """
+    requerimiento = get_object_or_404(Requerimiento, id=requerimiento_id)
+    if not _puede_gestionar_fotos(request.user, requerimiento):
+        return JsonResponse({
+            'success': False,
+            'error': 'No puede cambiar la evidencia de este requerimiento '
+                     f'(está "{requerimiento.get_estado_display()}" o no es suyo).'
+        }, status=403)
+    if not request.FILES:
+        return JsonResponse({'success': False, 'error': 'No llegó ninguna foto'}, status=400)
+
+    with transaction.atomic():
+        guardadas, omitidas = _guardar_fotos(
+            requerimiento, request.FILES, request.POST, request.user,
+            reemplazar_guiadas=True)
+        requerimiento.fotos_completas = requerimiento.verificar_fotos_completas()
+        requerimiento.save(update_fields=['fotos_completas', 'fecha_actualizacion'])
+        if guardadas:
+            nombres = ', '.join(
+                (f.tipo_foto.nombre if f.tipo_foto else 'foto') for f in guardadas)
+            HistorialRequerimiento.objects.create(
+                requerimiento=requerimiento,
+                accion='FOTOS_AGREGADAS',
+                comentario=f'{len(guardadas)} foto(s): {nombres}'[:2000],
+                usuario=request.user,
+            )
+
+    if not guardadas:
+        return JsonResponse({
+            'success': False,
+            'error': 'No se guardó ninguna foto. ' + '; '.join(omitidas),
+        }, status=400)
+    return JsonResponse({
+        'success': True,
+        'message': f'{len(guardadas)} foto(s) agregada(s)',
+        'omitidas': omitidas,
+        'fotos_completas': requerimiento.fotos_completas,
+    })
+
+
+@login_required
+@require_POST
+def eliminar_foto_requerimiento(request, requerimiento_id, foto_id):
+    """Quitar una foto mal sacada o equivocada. Queda en el historial."""
+    requerimiento = get_object_or_404(Requerimiento, id=requerimiento_id)
+    if not _puede_gestionar_fotos(request.user, requerimiento):
+        return JsonResponse({
+            'success': False,
+            'error': 'No puede cambiar la evidencia de este requerimiento.'
+        }, status=403)
+    foto = get_object_or_404(
+        FotoRequerimiento.objects.select_related('tipo_foto'),
+        id=foto_id, requerimiento=requerimiento)
+    nombre = foto.tipo_foto.nombre if foto.tipo_foto else 'Foto adicional'
+
+    with transaction.atomic():
+        # Solo la fila: el archivo queda en el almacenamiento como respaldo de
+        # lo que se llegó a mandar.
+        foto.delete()
+        requerimiento.fotos_completas = requerimiento.verificar_fotos_completas()
+        requerimiento.save(update_fields=['fotos_completas', 'fecha_actualizacion'])
+        HistorialRequerimiento.objects.create(
+            requerimiento=requerimiento,
+            accion='FOTO_ELIMINADA',
+            comentario=f'Se quitó la foto "{nombre}"',
+            usuario=request.user,
+        )
+    return JsonResponse({'success': True, 'message': f'Foto "{nombre}" eliminada'})
+
+
+def _serializar_config_correo(user):
+    correo, origen = correo_modulo_requerimientos()
+    datos = {
+        'correo_modulo': correo,
+        'origen': origen,
+        'puede_editar': obtener_rol_usuario(user) == 'administrador',
+        'from_email': (getattr(settings, 'REQUERIMIENTOS_FROM_EMAIL', '')
+                       or settings.DEFAULT_FROM_EMAIL or ''),
+        'actualizado_por': '',
+        'actualizado_en': '',
+    }
+    if origen == 'configurado':
+        config = ConfiguracionRequerimientos.objects.select_related(
+            'actualizado_por').filter(pk=1).first()
+        if config:
+            datos['actualizado_por'] = (config.actualizado_por.get_full_name()
+                                        if config.actualizado_por_id else '')
+            datos['actualizado_en'] = _fmt(config.actualizado_en)
+    return datos
+
+
+@login_required
+@require_http_methods(['GET', 'POST'])
+def configuracion_correo_requerimientos(request):
+    """Ver / cambiar el correo FIJO del módulo.
+
+    Es el que recibe la copia de cada envío y las respuestas de los
+    proveedores, y el que aparece como contacto. Lo cambia un administrador;
+    desde ese momento se usa en todos los envíos, los haga quien los haga.
+    """
+    if request.method == 'GET':
+        return JsonResponse({'success': True, 'config': _serializar_config_correo(request.user)})
+
+    if obtener_rol_usuario(request.user) != 'administrador':
+        return JsonResponse({
+            'success': False,
+            'error': 'Solo un administrador puede cambiar el correo del módulo'
+        }, status=403)
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Cuerpo inválido'}, status=400)
+
+    correo = (data.get('correo_modulo') or '').strip()
+    if not correo:
+        return JsonResponse({
+            'success': False,
+            'error': 'Escriba el correo. Sin él, la copia y las respuestas vuelven '
+                     'a caer en el correo personal de quien envía.'
+        }, status=400)
+    try:
+        validate_email(correo)
+    except ValidationError:
+        return JsonResponse({'success': False, 'error': f'El correo no es válido: {correo}'},
+                            status=400)
+
+    try:
+        with transaction.atomic():
+            config = ConfiguracionRequerimientos.obtener()
+            anterior = config.correo_modulo
+            config.correo_modulo = correo
+            config.actualizado_por = request.user
+            config.save()
+    except DatabaseError:
+        logger.exception('No se pudo guardar el correo del módulo de requerimientos')
+        return JsonResponse({
+            'success': False,
+            'error': 'La configuración todavía no está disponible en el servidor '
+                     '(falta aplicar la migración 0242).'
+        }, status=503)
+
+    logger.info('Correo del módulo de requerimientos: %s -> %s (por %s)',
+                anterior or '—', correo, request.user)
+    return JsonResponse({
+        'success': True,
+        'message': f'Desde ahora la copia y las respuestas llegan a {correo}',
+        'config': _serializar_config_correo(request.user),
+    })
+
+
+@login_required
+@require_POST
+def guardar_correo_proveedor_requerimientos(request, proveedor_id):
+    """Fija el correo al que se le mandan los requerimientos a un proveedor."""
+    if obtener_rol_usuario(request.user) != 'administrador':
+        return JsonResponse({
+            'success': False,
+            'error': 'Solo un administrador puede cambiar el correo del proveedor'
+        }, status=403)
+    proveedor = get_object_or_404(Empresa, id=proveedor_id)
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Cuerpo inválido'}, status=400)
+
+    correo = (data.get('correo') or '').strip()
+    try:
+        validate_email(correo)
+    except ValidationError:
+        return JsonResponse({'success': False, 'error': f'El correo no es válido: {correo or "(vacío)"}'},
+                            status=400)
+
+    _recordar_correo_proveedor(proveedor, correo, request.user)
+    guardado = _correos_guardados([proveedor.id]).get(proveedor.id)
+    if (guardado or '').lower() != correo.lower():
+        return JsonResponse({
+            'success': False,
+            'error': 'No se pudo guardar (¿falta aplicar la migración 0242?)'
+        }, status=503)
+    return JsonResponse({
+        'success': True,
+        'message': f'Los requerimientos a {proveedor.nombre} se enviarán a {correo}',
+        'correo': correo,
+    })
 
 
 @login_required
@@ -750,6 +979,10 @@ def listar_requerimientos(request):
                 # del mismo requerimiento son reenvíos anteriores.
                 envio_por_req.setdefault(envio.objeto_id, envio)
 
+        # Correos recordados de los proveedores de la página, en una consulta:
+        # el recordatorio rápido tiene que decir a qué correo va DE VERDAD.
+        correos_guardados = _correos_guardados([r.proveedor_id for r in page_obj])
+
         # Serializar resultados
         requerimientos_data = []
         for req in page_obj:
@@ -790,6 +1023,8 @@ def listar_requerimientos(request):
                 # Para que la lista pueda decir A QUIÉN y CUÁNDO salió el
                 # correo, no solo que salió.
                 'correo_proveedor_destino': req.correo_proveedor_destino or '',
+                'correo_recordatorio': (correos_guardados.get(req.proveedor_id)
+                                        or req.correo_proveedor_destino or ''),
                 'fecha_envio_proveedor': (
                     req.fecha_envio_proveedor.strftime('%d/%m/%Y %H:%M')
                     if req.fecha_envio_proveedor else ''),
@@ -820,6 +1055,14 @@ def listar_requerimientos(request):
         }, status=500)
 
 
+def _enumerar(items):
+    """['a', 'b', 'c'] -> 'a, b y c' (para que los avisos se lean como frase)."""
+    items = list(items)
+    if len(items) < 2:
+        return ''.join(items)
+    return f"{', '.join(items[:-1])} y {items[-1]}"
+
+
 def _siguiente_paso(requerimiento, permisos):
     """Qué corresponde hacer ahora con este requerimiento, en una frase.
 
@@ -839,8 +1082,18 @@ def _siguiente_paso(requerimiento, permisos):
 
     if estado in ('PENDIENTE', 'EN_REVISION'):
         if faltantes:
+            # Las fotos no se cargan en "Completar datos": mandar ahí a quien
+            # le faltan fotos era un callejón sin salida.
+            solo_fotos = all(f.startswith('fotos') for f in faltantes)
+            if solo_fotos:
+                return {
+                    'titulo': f'Faltan {_enumerar(faltantes)}',
+                    'detalle': 'Sin la evidencia el proveedor puede rechazar el reclamo.',
+                    'accion': 'fotos' if permisos.get('puede_gestionar_fotos') else None,
+                    'tono': 'warning',
+                }
             return {
-                'titulo': f'Falta {" y ".join(faltantes)}',
+                'titulo': f'Falta {_enumerar(faltantes)}',
                 'detalle': 'Complete los datos que la tienda no puede saber antes de decidir.',
                 'accion': 'editar' if permisos.get('puede_editar') else None,
                 'tono': 'warning',
@@ -888,7 +1141,7 @@ def _siguiente_paso(requerimiento, permisos):
             'titulo': ('El proveedor aprobó: falta resolverlo con el cliente' if aprobado
                        else 'El proveedor rechazó: falta cerrar el caso'
                        if estado == 'RECHAZADO' else 'En proceso de resolución'),
-            'detalle': requerimiento.motivo_resolucion or '',
+            'detalle': requerimiento.motivo_resolucion or 'Cuando esté resuelto, ciérrelo con "Completar".',
             'accion': 'completar' if permisos.get('puede_completar') else None,
             'tono': 'success' if aprobado else 'warning',
         }
@@ -918,6 +1171,10 @@ def detalle_requerimiento(request, requerimiento_id):
         
         # Obtener rol del usuario actual
         rol_usuario = obtener_rol_usuario(request.user)
+        correo_modulo, origen_correo_modulo = correo_modulo_requerimientos()
+        correo_guardado = _correos_guardados(
+            [requerimiento.proveedor_id]).get(requerimiento.proveedor_id)
+        puede_gestionar_fotos = _puede_gestionar_fotos(request.user, requerimiento)
         
         # Serializar fotos con tipo
         fotos = []
@@ -1022,10 +1279,18 @@ def detalle_requerimiento(request, requerimiento_id):
             'proveedor': {
                 'id': requerimiento.proveedor.id if requerimiento.proveedor else None,
                 'nombre': requerimiento.proveedor.nombre if requerimiento.proveedor else '',
+                # A dónde se le manda: el recordado para requerimientos o, si
+                # no hay, el de la ficha.
                 'correo': _correo_proveedor(requerimiento.proveedor) or '',
+                'correo_guardado': correo_guardado or '',
+                'correo_ficha': _correo_ficha_proveedor(requerimiento.proveedor) or '',
                 'correo_administrador': (requerimiento.proveedor.correoAdministrador or '') if requerimiento.proveedor else '',
             },
-            'correo_copia_default': _correo_copia_default(request.user),
+            # Correo FIJO del módulo (copia + "Responder"). Si nadie lo
+            # configuró, `correo_copia_default` avisa a qué correo cae hoy.
+            'correo_modulo': correo_modulo,
+            'correo_modulo_origen': origen_correo_modulo,
+            'correo_copia_default': correo_modulo or (request.user.email or '').strip(),
             'correo_enviado_proveedor': requerimiento.correo_enviado_proveedor,
             'fecha_envio_proveedor': requerimiento.fecha_envio_proveedor.strftime('%d/%m/%Y %H:%M') if requerimiento.fecha_envio_proveedor else '',
             'correo_proveedor_destino': requerimiento.correo_proveedor_destino or '',
@@ -1103,6 +1368,8 @@ def detalle_requerimiento(request, requerimiento_id):
                 'puede_completar': usuario_puede_realizar_accion(request.user, requerimiento, 'completar'),
                 'puede_cancelar': usuario_puede_realizar_accion(request.user, requerimiento, 'cancelar'),
                 'puede_ver_notas': rol_usuario in ('administrador', 'jefe_local'),
+                'puede_gestionar_fotos': puede_gestionar_fotos,
+                'puede_configurar_correo': rol_usuario == 'administrador',
             },
             'rol_usuario': rol_usuario,
         }
@@ -1463,9 +1730,11 @@ def editar_requerimiento(request, requerimiento_id):
 def enviar_a_proveedor(request, requerimiento_id):
     """Enviar requerimiento al proveedor por correo (con fotos adjuntas).
 
-    Además despacha una copia-resumen SIN fotos a un correo de control para
-    certificar que el envío al proveedor ocurrió (env REQUERIMIENTOS_CORREO_COPIA,
-    campo correo_copia del POST, o el correo del usuario que envía).
+    Además despacha una copia-resumen SIN fotos al correo del módulo para
+    certificar que el envío al proveedor ocurrió. Ese mismo correo es el
+    "Responder" y el contacto del correo y del PDF: es fijo (Configuración del
+    módulo) y NO depende de quién aprieta el botón. Solo si nunca se configuró
+    se cae al `correo_copia` del POST o al correo del usuario, como antes.
     """
     try:
         data = json.loads(request.body) if request.body else {}
@@ -1501,19 +1770,24 @@ def enviar_a_proveedor(request, requerimiento_id):
                      f'y ya no corresponde enviarlo al proveedor'
         }, status=400)
 
-    # Correo destino: manual > último envío > correoVendedor > email > correoIntercambio.
-    # El "último envío" importa para el recordatorio rápido de la lista (que no
-    # manda correo en el POST): sin él, el reenvío se iba al correo de la ficha
-    # aunque el envío original se hubiera hecho a un correo tipeado a mano.
+    # Correo destino: manual > el recordado para este proveedor > último envío
+    # de este caso > ficha del proveedor. El recordado va antes que el último
+    # envío: si alguien corrigió el correo del proveedor (por un rebote, por
+    # ejemplo), el recordatorio tiene que ir al correo nuevo, no al que falló.
+    correo_manual = (data.get('correo_destino') or '').strip()
+    correo_guardado = _correos_guardados([requerimiento.proveedor_id]).get(
+        requerimiento.proveedor_id)
     correo_destino = (
-        (data.get('correo_destino') or '').strip()
+        correo_manual
+        or correo_guardado
         or (requerimiento.correo_proveedor_destino or '').strip()
-        or _correo_proveedor(requerimiento.proveedor)
+        or _correo_ficha_proveedor(requerimiento.proveedor)
     )
     if not correo_destino:
         return JsonResponse({
             'success': False,
-            'error': 'El proveedor no tiene ningún correo configurado en su ficha. Ingrese uno manualmente.'
+            'error': 'El proveedor no tiene correo para requerimientos. Escríbalo en '
+                     'el envío: queda guardado para las próximas veces.'
         }, status=400)
     try:
         validate_email(correo_destino)
@@ -1523,8 +1797,14 @@ def enviar_a_proveedor(request, requerimiento_id):
             'error': f'El correo destino no es válido: {correo_destino}'
         }, status=400)
 
-    # Correo de copia (resumen sin fotos)
-    correo_copia = (data.get('correo_copia') or '').strip() or _correo_copia_default(request.user)
+    # Correo del módulo: copia de control + "Responder" + contacto. Configurado
+    # manda sobre todo lo demás para que no dependa de quién envía.
+    correo_modulo, _origen_correo = correo_modulo_requerimientos()
+    correo_copia = (
+        correo_modulo
+        or (data.get('correo_copia') or '').strip()
+        or (request.user.email or '').strip()
+    )
     if correo_copia:
         try:
             validate_email(correo_copia)
@@ -1563,6 +1843,7 @@ def enviar_a_proveedor(request, requerimiento_id):
         pdf_bytes = generar_pdf_requerimiento(
             requerimiento, usuario=request.user, plazo_dias=PLAZO_RESPUESTA_DIAS,
             fotos_bytes=fotos_bytes,
+            correo_contacto=correo_modulo or (request.user.email or '').strip(),
         )
     except Exception:
         # Si el formato falla, el correo igual sale: perder el envío por un
@@ -1610,6 +1891,8 @@ def enviar_a_proveedor(request, requerimiento_id):
         # Su archivo ya no está en el servidor: no van en ninguna parte.
         'fotos_no_disponibles': fotos_registradas - len(fotos_adjuntables),
         'usuario': request.user,
+        # A dónde responde el proveedor (botones Aprobar/Rechazar y contacto).
+        'correo_respuesta': correo_modulo or (request.user.email or '').strip(),
         'empresa': requerimiento.sucursal.empresa,
         'mensaje_adicional': mensaje_adicional,
         'es_reenvio': es_reenvio,
@@ -1645,7 +1928,8 @@ def enviar_a_proveedor(request, requerimiento_id):
         f'{"Se adjunta el formato del requerimiento en PDF con la evidencia fotográfica. " if pdf_bytes else ""}'
         f'Se adjuntan {fotos_enviadas} foto(s) de la evidencia en alta resolución.\n'
         f'Por favor responda indicando si procede.\n'
-        f'Contacto: {request.user.get_full_name()} - {requerimiento.sucursal.empresa.nombre}'
+        f'Contacto: {correo_modulo or request.user.email or request.user.get_full_name()} '
+        f'- {requerimiento.sucursal.empresa.nombre}'
     )
 
     # CC al administrador del proveedor (si existe y no es el mismo destino)
@@ -1659,13 +1943,15 @@ def enviar_a_proveedor(request, requerimiento_id):
     # usuario pagaba dos handshakes completos por envío.
     connection = get_connection(timeout=EMAIL_TIMEOUT_SEGUNDOS)
 
-    # Reply-To adicional: el usuario que envía y la casilla de control. La
-    # casilla genérica con el token la antepone `enviar_correo_trazado` cuando
-    # está configurada (CORREO_BUZON_RESPUESTAS), de modo que la respuesta del
-    # proveedor pueda pegarse sola en esta ficha en vez de morir en el correo
-    # personal de quien lo mandó.
+    # Reply-To: el correo del módulo, y SOLO ese cuando está configurado. Antes
+    # iba también el correo personal de quien enviaba, así que cada proveedor
+    # le respondía a una persona distinta. La casilla genérica con el token la
+    # antepone `enviar_correo_trazado` cuando está configurada
+    # (CORREO_BUZON_RESPUESTAS), para que la respuesta se pegue sola en la ficha.
     reply_to = []
-    for direccion in ((request.user.email or '').strip(), correo_copia):
+    candidatos = ((correo_modulo,) if correo_modulo
+                  else ((request.user.email or '').strip(), correo_copia))
+    for direccion in candidatos:
         if direccion and direccion.lower() not in (d.lower() for d in reply_to):
             reply_to.append(direccion)
 
@@ -1742,6 +2028,14 @@ def enviar_a_proveedor(request, requerimiento_id):
             'error': f'Error al enviar correo al proveedor: {ultimo_error}'
         }, status=500)
 
+    # El correo escrito a mano queda como el del proveedor para las próximas
+    # veces (si se pidió): así el siguiente envío, lo haga quien lo haga, no
+    # obliga a buscarlo de nuevo.
+    correo_recordado = False
+    if data.get('recordar_correo') and correo_manual:
+        correo_recordado = _recordar_correo_proveedor(
+            requerimiento.proveedor, correo_manual, request.user)
+
     # Actualizar requerimiento + historial
     estado_anterior = requerimiento.estado
     with transaction.atomic():
@@ -1765,6 +2059,7 @@ def enviar_a_proveedor(request, requerimiento_id):
                 f'- {"con" if pdf_bytes else "SIN"} formato PDF '
                 f'- {fotos_enviadas} foto(s) adjuntas'
                 + (f' [envio #{envio.id}]' if envio else '')
+                + (' · correo guardado como el del proveedor' if correo_recordado else '')
             ),
             usuario=request.user
         )
@@ -1851,6 +2146,8 @@ def enviar_a_proveedor(request, requerimiento_id):
         'correo_copia': correo_copia or '',
         'fotos_adjuntas': fotos_enviadas,
         'fotos_omitidas': len(fotos_omitidas),
+        'correo_recordado': correo_recordado,
+        'correo_respuesta': reply_to[0] if reply_to else '',
         'formato_pdf_adjunto': bool(pdf_bytes),
         # Para que la ficha pueda mostrar después si llegó, si rebotó o si lo
         # abrieron, sin tener que volver a buscar el envío.
@@ -2679,8 +2976,11 @@ def descargar_formato_requerimiento(request, requerimiento_id):
         }, status=403)
 
     try:
+        # Mismo contacto que el PDF que se adjunta al enviar: la vista previa
+        # tiene que mostrar exactamente lo que va a recibir el proveedor.
         pdf = generar_pdf_requerimiento(
             requerimiento, usuario=request.user, plazo_dias=PLAZO_RESPUESTA_DIAS,
+            correo_contacto=_correo_copia_default(request.user),
         )
     except Exception as e:
         logger.exception('Error al generar el formato PDF del requerimiento %s',

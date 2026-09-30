@@ -87,11 +87,17 @@ function reqFlujo(estado) {
     }).join('') + `</div>`;
 }
 
+/* 'a, b y c': los avisos se leen como frase, no como "a y b y c". */
+function reqEnumerar(lista) {
+    const l = (lista || []).filter(Boolean);
+    return l.length < 2 ? l.join('') : `${l.slice(0, -1).join(', ')} y ${l[l.length - 1]}`;
+}
+
 /* Chip con lo que le falta al caso para poder salir al proveedor. */
 function reqChipFaltantes(faltantes) {
     if (!faltantes || !faltantes.length) return '';
     return `<span class="req-falta" title="No se puede enviar al proveedor sin esto">
-        <i class="ri-error-warning-line"></i>falta ${reqEsc(faltantes.join(' y '))}</span>`;
+        <i class="ri-error-warning-line"></i>falta ${reqEsc(reqEnumerar(faltantes))}</span>`;
 }
 
 /* ══════════ Visor de fotos con zoom adaptativo ══════════

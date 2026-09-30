@@ -391,6 +391,10 @@ from .views_modulo_requerimientos import (
     buscar_compras_producto,
     buscar_dte_compra_por_numero,
     obtener_tipos_foto,
+    subir_fotos_requerimiento,
+    eliminar_foto_requerimiento,
+    configuracion_correo_requerimientos,
+    guardar_correo_proveedor_requerimientos,
 )
 from .views_modulo_giftcards import (
     # Vistas HTML
@@ -1683,6 +1687,12 @@ urlpatterns = [
     path('api/requerimientos/estadisticas/', obtener_estadisticas_requerimientos, name='api_estadisticas_requerimientos'),
     path('api/requerimientos/exportar/', exportar_requerimientos, name='api_exportar_requerimientos'),
     path('api/requerimientos/tipos-foto/', obtener_tipos_foto, name='api_tipos_foto_requerimiento'),
+    # Evidencia después del alta (antes solo se podía cargar al crear) y el
+    # correo FIJO del módulo / del proveedor, que no dependen de quién envía.
+    path('api/requerimientos/<int:requerimiento_id>/fotos/', subir_fotos_requerimiento, name='api_subir_fotos_requerimiento'),
+    path('api/requerimientos/<int:requerimiento_id>/fotos/<int:foto_id>/eliminar/', eliminar_foto_requerimiento, name='api_eliminar_foto_requerimiento'),
+    path('api/requerimientos/configuracion-correo/', configuracion_correo_requerimientos, name='api_configuracion_correo_requerimientos'),
+    path('api/requerimientos/proveedor/<int:proveedor_id>/correo/', guardar_correo_proveedor_requerimientos, name='api_correo_proveedor_requerimientos'),
 
     # ========== MÓDULO GIFT CARDS ==========
     # Vistas HTML
@@ -1843,6 +1853,9 @@ urlpatterns = [
     path('gestion-inventarios/api/importar-conteo/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.importar_conteo_pistola), name='api_importar_conteo_pistola'),
     path('gestion-inventarios/api/importar-conteo/preview/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.preview_conteo_pistola), name='api_preview_conteo_pistola'),
     path('gestion-inventarios/api/excluir-detalle/<int:inventario_id>/<int:detalle_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.actualizar_exclusion_detalle), name='api_excluir_detalle_inventario'),
+    # Acción masiva sobre las líneas sin contar (excluir / marcar sin diferencia):
+    # sin ella una toma parcial no se podía cerrar (se excluían de a una).
+    path('gestion-inventarios/api/no-contados/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.resolver_no_contados), name='api_resolver_no_contados'),
     
     # APIs de análisis
     path('gestion-inventarios/api/analisis/<int:inventario_id>/', views_gestion_inventarios.obtener_analisis_inventario, name='api_analisis_inventario'),

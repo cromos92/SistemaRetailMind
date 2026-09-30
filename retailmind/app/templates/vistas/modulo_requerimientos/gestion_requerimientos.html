@@ -10,191 +10,202 @@
 <div class="page-content">
     <div class="container-fluid">
 
-        <!-- Encabezado en una sola línea: en un notebook de 15" el
-             page-title-box de dos filas se comía la primera fila de la tabla. -->
-        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-            <div class="d-flex align-items-center gap-2">
-                <h4 class="mb-0 fs-5">Requerimientos</h4>
-                <span class="text-muted small d-none d-md-inline">Reclamos a proveedor por producto fallado, garantía o error de despacho</span>
-            </div>
-            <div class="hstack gap-1">
-                <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalCrearRequerimiento">
-                    <i class="ri-add-fill me-1"></i>Nuevo
-                </button>
-                <button type="button" class="btn btn-soft-secondary btn-sm" onclick="alternarFiltros()" id="btn-filtros">
-                    <i class="ri-filter-3-line me-1"></i>Filtros
-                </button>
-                <button type="button" class="btn btn-soft-secondary btn-sm" onclick="exportarRequerimientos()" title="Exportar a Excel">
-                    <i class="ri-file-excel-2-line"></i>
-                </button>
-            </div>
-        </div>
-
-        <!-- Avisos de gestión. Se pintan solos según lo que devuelvan las
-             estadísticas: sin respuesta del proveedor y casos incompletos. -->
-        <div id="avisos-gestion" class="mb-2"></div>
-
-        <input type="hidden" id="rol-usuario" value="{{ rol_usuario }}">
-
-        <!-- ══════════ KPIs por ETAPA ══════════
-             La pregunta real del que gestiona no es "cuántos hay" sino
-             "quién tiene la pelota". Antes los KPIs mezclaban estado y
-             etapa: "Pendientes" contaba solo PENDIENTE y dejaba fuera los
-             que estaban en revisión, que también están esperando a alguien. -->
-        <div class="row g-2 mb-2">
-            <div class="col-6 col-lg-3">
-                <div class="req-kpi" id="kpi-empresa" onclick="filtrarPorEtapa('EMPRESA', this)" title="Casos que dependen de la empresa: revisar, completar datos o validar">
-                    <div>
-                        <p class="req-kpi-label">En la empresa</p>
-                        <p class="req-kpi-valor text-dark" id="kpi-valor-empresa">0</p>
+        <div class="card req-shell">
+            <!-- Encabezado estándar del módulo (ESTILOS_MODULOS.md), compacto
+                 para que en un 15" no se coma la tabla. -->
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon"><i class="ri-customer-service-2-line"></i></div>
+                    <div class="module-header-info">
+                        <h5>Requerimientos a proveedor</h5>
+                        <div class="module-header-status">
+                            Productos fallados, garantías y errores de despacho que se le reclaman al proveedor
+                        </div>
                     </div>
-                    <span class="req-kpi-icono" style="background:rgba(64,81,137,.12);color:#405189"><i class="ri-user-star-line"></i></span>
+                </div>
+                <div class="module-header-actions">
+                    <button type="button" class="btn btn-light text-primary fw-semibold" data-bs-toggle="modal" data-bs-target="#modalCrearRequerimiento">
+                        <i class="ri-add-circle-line me-1"></i>Nuevo requerimiento
+                    </button>
+                    <button type="button" class="btn btn-glass" onclick="ReqCorreoModulo.abrir()" id="btn-correo-modulo"
+                            title="Correo que recibe la copia de cada envío y las respuestas de los proveedores">
+                        <i class="ri-mail-settings-line me-1"></i><span class="req-correo-chip" id="txt-correo-modulo">Correo del módulo</span>
+                    </button>
+                    <button type="button" class="btn btn-glass" onclick="exportarRequerimientos()" title="Exportar a Excel lo que está en pantalla">
+                        <i class="ri-file-excel-2-line me-1"></i>Excel
+                    </button>
                 </div>
             </div>
-            <div class="col-6 col-lg-3">
-                <div class="req-kpi" id="kpi-proveedor" onclick="filtrarPorEtapa('PROVEEDOR', this)" title="Enviados al proveedor, esperando su respuesta">
-                    <div>
-                        <p class="req-kpi-label">En el proveedor</p>
-                        <p class="req-kpi-valor text-primary" id="kpi-valor-proveedor">0</p>
-                    </div>
-                    <span class="req-kpi-icono" style="background:rgba(0,102,255,.12);color:#0066FF"><i class="ri-building-line"></i></span>
-                </div>
-            </div>
-            <div class="col-6 col-lg-3">
-                <div class="req-kpi" id="kpi-resolucion" onclick="filtrarPorEtapa('RESOLUCION', this)" title="El proveedor ya respondió: falta resolver con el cliente">
-                    <div>
-                        <p class="req-kpi-label">Por resolver</p>
-                        <p class="req-kpi-valor text-success" id="kpi-valor-resolucion">0</p>
-                    </div>
-                    <span class="req-kpi-icono" style="background:rgba(10,179,156,.13);color:#0ab39c"><i class="ri-check-double-line"></i></span>
-                </div>
-            </div>
-            <div class="col-6 col-lg-3">
-                <div class="req-kpi" id="kpi-incompletos" onclick="filtrarIncompletos(this)" title="Les falta el proveedor o la factura de compra: no se pueden enviar">
-                    <div>
-                        <p class="req-kpi-label">Sin datos para enviar</p>
-                        <p class="req-kpi-valor text-danger" id="kpi-valor-incompletos">0</p>
-                    </div>
-                    <span class="req-kpi-icono" style="background:rgba(240,101,72,.12);color:#f06548"><i class="ri-error-warning-line"></i></span>
-                </div>
-            </div>
-        </div>
 
-        <div class="card mb-0">
-            <!-- Filtros: plegados por defecto para no robarle alto a la tabla -->
-            <div class="card-body border-bottom border-bottom-dashed py-2" id="filtros-section" style="display:none;">
-                <form id="form-filtros">
-                    <div class="row g-2 align-items-end">
-                        <div class="col-6 col-md-4 col-xl-3">
-                            <label class="form-label small mb-1">Búsqueda</label>
-                            <div class="input-group input-group-sm">
-                                <span class="input-group-text bg-white"><i class="ri-search-line"></i></span>
-                                <input type="text" class="form-control" id="filtro-busqueda" placeholder="N° req, SKU, cliente, RUT, boleta">
+            <div class="card-body p-2 p-md-3">
+                <input type="hidden" id="rol-usuario" value="{{ rol_usuario }}">
+
+                <!-- Avisos de gestión: correo del módulo sin definir, casos sin
+                     respuesta del proveedor y casos que no se pueden enviar. -->
+                <div id="aviso-correo-modulo"></div>
+                <div id="avisos-gestion"></div>
+
+                <!-- ══════════ KPIs por ETAPA ══════════
+                     La pregunta real del que gestiona no es "cuántos hay" sino
+                     "quién tiene la pelota". Clic = filtra la tabla. -->
+                <div class="req-kpis">
+                    <div>
+                        <div class="req-kpi" id="kpi-empresa" role="button" tabindex="0" onclick="filtrarPorEtapa('EMPRESA', this)" title="Casos que dependen de la empresa: revisar, completar datos o validar">
+                            <div>
+                                <p class="req-kpi-label">Por revisar (empresa)</p>
+                                <p class="req-kpi-valor text-dark" id="kpi-valor-empresa">0</p>
                             </div>
+                            <span class="req-kpi-icono" style="background:rgba(64,81,137,.12);color:#405189"><i class="ri-user-star-line"></i></span>
                         </div>
-                        <div class="col-6 col-md-4 col-xl-2">
-                            <label class="form-label small mb-1">Estado</label>
-                            <select class="form-select form-select-sm" id="filtro-estado" name="estado">
-                                <option value="">Todos</option>
-                                <optgroup label="En la empresa">
-                                    <option value="PENDIENTE">Pendiente de revisión</option>
-                                    <option value="EN_REVISION">En revisión</option>
-                                    <option value="VALIDADO">Validado</option>
-                                </optgroup>
-                                <optgroup label="En el proveedor">
-                                    <option value="ESPERANDO_RESPUESTA">Esperando respuesta</option>
-                                </optgroup>
-                                <optgroup label="Respondidos">
-                                    <option value="APROBADO">Aprobado por proveedor</option>
-                                    <option value="RECHAZADO">Rechazado por proveedor</option>
-                                    <option value="EN_PROCESO">En proceso</option>
-                                </optgroup>
-                                <optgroup label="Cerrados">
-                                    <option value="COMPLETADO">Completado</option>
-                                    <option value="RECHAZADO_INTERNO">Rechazado internamente</option>
-                                    <option value="CANCELADO">Cancelado</option>
-                                </optgroup>
-                            </select>
+                    </div>
+                    <div>
+                        <div class="req-kpi" id="kpi-proveedor" role="button" tabindex="0" onclick="filtrarPorEtapa('PROVEEDOR', this)" title="Enviados al proveedor, esperando su respuesta">
+                            <div>
+                                <p class="req-kpi-label">Esperando al proveedor</p>
+                                <p class="req-kpi-valor text-primary" id="kpi-valor-proveedor">0</p>
+                            </div>
+                            <span class="req-kpi-icono" style="background:rgba(0,102,255,.12);color:#0066FF"><i class="ri-building-line"></i></span>
                         </div>
-                        <div class="col-6 col-md-4 col-xl-2">
-                            <label class="form-label small mb-1">Tipo</label>
-                            <select class="form-select form-select-sm" id="filtro-tipo" name="tipo">
-                                <option value="">Todos</option>
-                                <option value="PRODUCTO_FALLADO">Producto fallado</option>
-                                <option value="GARANTIA">Garantía</option>
-                                <option value="ERROR_DESPACHO">Error de despacho</option>
-                                <option value="DEVOLUCION">Devolución</option>
-                                <option value="RECLAMO">Reclamo</option>
-                                <option value="CONSULTA">Consulta técnica</option>
-                                <option value="OTROS">Otros</option>
-                            </select>
+                    </div>
+                    <div>
+                        <div class="req-kpi" id="kpi-resolucion" role="button" tabindex="0" onclick="filtrarPorEtapa('RESOLUCION', this)" title="El proveedor ya respondió: falta resolver con el cliente y cerrar">
+                            <div>
+                                <p class="req-kpi-label">Respondidos, por cerrar</p>
+                                <p class="req-kpi-valor text-success" id="kpi-valor-resolucion">0</p>
+                            </div>
+                            <span class="req-kpi-icono" style="background:rgba(10,179,156,.13);color:#0ab39c"><i class="ri-check-double-line"></i></span>
                         </div>
-                        <div class="col-6 col-md-4 col-xl-2">
-                            <label class="form-label small mb-1">Prioridad</label>
-                            <select class="form-select form-select-sm" id="filtro-prioridad" name="prioridad">
-                                <option value="">Todas</option>
-                                <option value="URGENTE">Urgente</option>
-                                <option value="ALTA">Alta</option>
-                                <option value="MEDIA">Media</option>
-                                <option value="BAJA">Baja</option>
-                            </select>
+                    </div>
+                    <div>
+                        <div class="req-kpi" id="kpi-incompletos" role="button" tabindex="0" onclick="filtrarIncompletos(this)" title="Les falta el proveedor o la factura de compra: no se pueden enviar">
+                            <div>
+                                <p class="req-kpi-label">Faltan datos para enviar</p>
+                                <p class="req-kpi-valor text-danger" id="kpi-valor-incompletos">0</p>
+                            </div>
+                            <span class="req-kpi-icono" style="background:rgba(240,101,72,.12);color:#f06548"><i class="ri-error-warning-line"></i></span>
                         </div>
-                        <!-- Entrega del correo: un caso "esperando respuesta" cuyo
-                             correo rebotó no está esperando nada, y sin este filtro
-                             se ve igual que uno que sí llegó. -->
-                        <div class="col-6 col-md-4 col-xl-2">
-                            <label class="form-label small mb-1">Correo</label>
-                            <select class="form-select form-select-sm" id="filtro-correo" name="correo">
-                                <option value="">Cualquiera</option>
-                                <option value="problema">No llegó (rebotó / falló)</option>
-                                <option value="sin_confirmar">Sin confirmación de entrega</option>
-                                <option value="respondido">Respondió — falta clasificar</option>
-                            </select>
-                        </div>
-                        <div class="col-6 col-md-4 col-xl-2">
-                            <label class="form-label small mb-1">Desde</label>
-                            <input type="date" class="form-control form-control-sm" id="filtro-fecha-inicio">
-                        </div>
-                        <div class="col-6 col-md-4 col-xl-2">
-                            <label class="form-label small mb-1">Hasta</label>
-                            <input type="date" class="form-control form-control-sm" id="filtro-fecha-fin">
-                        </div>
-                        <div class="col-12 col-xl-auto">
-                            <div class="hstack gap-1">
-                                <button type="submit" class="btn btn-primary btn-sm"><i class="ri-search-line me-1"></i>Buscar</button>
+                    </div>
+                </div>
+
+                <!-- Búsqueda SIEMPRE visible: es lo que más se usa. Los filtros
+                     finos quedan plegados para no robarle alto a la tabla. -->
+                <div class="req-toolbar">
+                    <div class="input-group input-group-sm req-buscador">
+                        <span class="input-group-text"><i class="ri-search-line"></i></span>
+                        <input type="search" class="form-control" id="filtro-busqueda"
+                               placeholder="Buscar por N° de requerimiento, SKU, cliente, RUT o boleta" autocomplete="off">
+                    </div>
+                    <button type="button" class="btn btn-soft-secondary btn-sm" onclick="alternarFiltros()" id="btn-filtros">
+                        <i class="ri-filter-3-line me-1"></i>Más filtros
+                    </button>
+                    <div id="filtros-activos" class="d-flex flex-wrap gap-1"></div>
+                    <span class="ms-auto text-muted small d-none d-md-inline">
+                        <span class="fw-semibold" id="total-count-top">0</span> requerimiento(s)
+                    </span>
+                </div>
+
+                <div class="req-bloque py-2 px-3" id="filtros-section" style="display:none;">
+                    <form id="form-filtros">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-6 col-md-4 col-xl-2">
+                                <label class="form-label small mb-1" for="filtro-estado">Estado</label>
+                                <select class="form-select form-select-sm" id="filtro-estado" name="estado">
+                                    <option value="">Todos</option>
+                                    <optgroup label="En la empresa">
+                                        <option value="PENDIENTE">Pendiente de revisión</option>
+                                        <option value="EN_REVISION">En revisión</option>
+                                        <option value="VALIDADO">Validado</option>
+                                    </optgroup>
+                                    <optgroup label="En el proveedor">
+                                        <option value="ESPERANDO_RESPUESTA">Esperando respuesta</option>
+                                    </optgroup>
+                                    <optgroup label="Respondidos">
+                                        <option value="APROBADO">Aprobado por proveedor</option>
+                                        <option value="RECHAZADO">Rechazado por proveedor</option>
+                                        <option value="EN_PROCESO">En proceso</option>
+                                    </optgroup>
+                                    <optgroup label="Cerrados">
+                                        <option value="COMPLETADO">Completado</option>
+                                        <option value="RECHAZADO_INTERNO">Rechazado internamente</option>
+                                        <option value="CANCELADO">Cancelado</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-4 col-xl-2">
+                                <label class="form-label small mb-1" for="filtro-tipo">Tipo</label>
+                                <select class="form-select form-select-sm" id="filtro-tipo" name="tipo">
+                                    <option value="">Todos</option>
+                                    <option value="PRODUCTO_FALLADO">Producto fallado</option>
+                                    <option value="GARANTIA">Garantía</option>
+                                    <option value="ERROR_DESPACHO">Error de despacho</option>
+                                    <option value="DEVOLUCION">Devolución a proveedor</option>
+                                    <option value="RECLAMO">Reclamo</option>
+                                    <option value="CONSULTA">Consulta técnica</option>
+                                    <option value="OTROS">Otros</option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-4 col-xl-2">
+                                <label class="form-label small mb-1" for="filtro-prioridad">Prioridad</label>
+                                <select class="form-select form-select-sm" id="filtro-prioridad" name="prioridad">
+                                    <option value="">Todas</option>
+                                    <option value="URGENTE">Urgente</option>
+                                    <option value="ALTA">Alta</option>
+                                    <option value="MEDIA">Media</option>
+                                    <option value="BAJA">Baja</option>
+                                </select>
+                            </div>
+                            <!-- Entrega del correo: un caso "esperando respuesta" cuyo
+                                 correo rebotó no está esperando nada. -->
+                            <div class="col-6 col-md-4 col-xl-2">
+                                <label class="form-label small mb-1" for="filtro-correo">Correo al proveedor</label>
+                                <select class="form-select form-select-sm" id="filtro-correo" name="correo">
+                                    <option value="">Cualquiera</option>
+                                    <option value="problema">No llegó (rebotó / falló)</option>
+                                    <option value="sin_confirmar">Sin confirmación de entrega</option>
+                                    <option value="respondido">Respondió, falta registrar</option>
+                                </select>
+                            </div>
+                            <div class="col-6 col-md-4 col-xl-2">
+                                <label class="form-label small mb-1" for="filtro-fecha-inicio">Creado desde</label>
+                                <input type="date" class="form-control form-control-sm" id="filtro-fecha-inicio">
+                            </div>
+                            <div class="col-6 col-md-4 col-xl-2">
+                                <label class="form-label small mb-1" for="filtro-fecha-fin">Hasta</label>
+                                <input type="date" class="form-control form-control-sm" id="filtro-fecha-fin">
+                            </div>
+                            <div class="col-12 d-flex gap-1 justify-content-end">
                                 <button type="button" class="btn btn-soft-danger btn-sm" onclick="limpiarFiltros()"><i class="ri-close-line me-1"></i>Limpiar</button>
+                                <button type="submit" class="btn btn-primary btn-sm"><i class="ri-search-line me-1"></i>Aplicar</button>
                             </div>
                         </div>
-                    </div>
-                </form>
-            </div>
+                    </form>
+                </div>
 
-            <div class="card-body p-0">
-                <!-- Tabs por estado con su contador -->
-                <ul class="nav nav-tabs nav-tabs-custom nav-primary px-2 pt-2" role="tablist" id="tabs-estado">
+                <!-- Pestañas por estado con su contador -->
+                <ul class="nav nav-tabs nav-tabs-custom nav-primary px-1" role="tablist" id="tabs-estado">
                     <li class="nav-item"><a class="nav-link active" href="javascript:void(0);" data-estado="" onclick="filtroRapido('', this)">Todos <span class="badge bg-secondary ms-1" id="tab-todos">0</span></a></li>
                     <li class="nav-item"><a class="nav-link" href="javascript:void(0);" data-estado="PENDIENTE" onclick="filtroRapido('PENDIENTE', this)">Pendientes <span class="badge bg-warning ms-1" id="tab-PENDIENTE">0</span></a></li>
                     <li class="nav-item"><a class="nav-link" href="javascript:void(0);" data-estado="EN_REVISION" onclick="filtroRapido('EN_REVISION', this)">En revisión <span class="badge bg-info ms-1" id="tab-EN_REVISION">0</span></a></li>
                     <li class="nav-item"><a class="nav-link" href="javascript:void(0);" data-estado="VALIDADO" onclick="filtroRapido('VALIDADO', this)">Validados <span class="badge bg-success ms-1" id="tab-VALIDADO">0</span></a></li>
-                    <li class="nav-item"><a class="nav-link" href="javascript:void(0);" data-estado="ESPERANDO_RESPUESTA" onclick="filtroRapido('ESPERANDO_RESPUESTA', this)">Esperando <span class="badge bg-primary ms-1" id="tab-ESPERANDO_RESPUESTA">0</span></a></li>
+                    <li class="nav-item"><a class="nav-link" href="javascript:void(0);" data-estado="ESPERANDO_RESPUESTA" onclick="filtroRapido('ESPERANDO_RESPUESTA', this)">Esperando proveedor <span class="badge bg-primary ms-1" id="tab-ESPERANDO_RESPUESTA">0</span></a></li>
                     <li class="nav-item"><a class="nav-link" href="javascript:void(0);" data-estado="APROBADO" onclick="filtroRapido('APROBADO', this)">Aprobados <span class="badge bg-success ms-1" id="tab-APROBADO">0</span></a></li>
                     <li class="nav-item"><a class="nav-link" href="javascript:void(0);" data-estado="RECHAZADO" onclick="filtroRapido('RECHAZADO', this)">Rechazados <span class="badge bg-danger ms-1" id="tab-RECHAZADO">0</span></a></li>
                     <li class="nav-item"><a class="nav-link" href="javascript:void(0);" data-estado="COMPLETADO" onclick="filtroRapido('COMPLETADO', this)">Completados <span class="badge bg-secondary ms-1" id="tab-COMPLETADO">0</span></a></li>
                 </ul>
 
-                <div class="req-tabla-wrap">
+                <div class="req-tabla-wrap border rounded-bottom">
                     <table class="table req-tabla align-middle">
                         <thead>
                             <tr>
-                                <th style="width:2px"></th>
+                                <th style="width:2px" class="d-none d-md-table-cell"></th>
                                 <th>Requerimiento</th>
-                                <th>Estado</th>
+                                <th>Estado y qué falta</th>
                                 <th>Producto</th>
                                 <th>Cliente</th>
                                 <th>Proveedor</th>
                                 <th class="d-none d-xxl-table-cell">Sucursal</th>
-                                <th class="text-center">Evidencia</th>
-                                <th class="text-center">Antigüedad</th>
+                                <th class="text-center">Fotos</th>
+                                <th class="text-center" title="Días desde que se creó">Días</th>
                                 <th class="text-end">Acciones</th>
                             </tr>
                         </thead>
@@ -207,7 +218,7 @@
                     </table>
                 </div>
 
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 px-3 py-2 border-top">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pt-2">
                     <div class="text-muted small">
                         Mostrando <span class="fw-semibold" id="showing-count">0</span> de <span class="fw-semibold" id="total-count">0</span>
                     </div>
@@ -228,14 +239,14 @@
                 <div class="req-modal-icon"><i class="ri-add-circle-line"></i></div>
                 <div>
                     <h6>Nuevo requerimiento</h6>
-                    <div class="req-modal-sub">Reclamo a proveedor por producto fallado, error de despacho o garantía</div>
+                    <div class="req-modal-sub">Reclamo al proveedor por producto fallado, garantía o error de despacho</div>
                 </div>
                 <div class="req-steps">
                     <span class="req-step activo" data-paso="1"><span class="req-step-num">1</span><span class="req-step-txt">Qué pasó</span></span>
                     <span class="req-step" data-paso="2"><span class="req-step-num">2</span><span class="req-step-txt">Producto</span></span>
-                    <span class="req-step" data-paso="3"><span class="req-step-num">3</span><span class="req-step-txt">Cliente y evidencia</span></span>
+                    <span class="req-step" data-paso="3"><span class="req-step-num">3</span><span class="req-step-txt">Cliente y fotos</span></span>
                 </div>
-                <button type="button" class="btn-close btn-close-white btn-sm ms-2" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white btn-sm ms-2" onclick="cerrarAsistente()" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body p-3">
                 {% include 'vistas/modulo_requerimientos/_crear_requerimiento_form.html' with modo_embebido=True %}
@@ -245,11 +256,13 @@
 </div>
 
 {% include 'vistas/modulo_requerimientos/_scripts_requerimientos.html' %}
+{% include 'vistas/modulo_requerimientos/_modal_correo_modulo.html' %}
 
 <script>
 let paginaActual = 1;
 let filtrosActuales = {};
 let plazoRespuestaDias = 7;
+const TAM_PAGINA = 20;
 
 document.addEventListener('DOMContentLoaded', function () {
     cargarEstadisticas();
@@ -297,7 +310,43 @@ document.addEventListener('DOMContentLoaded', function () {
         e.preventDefault();
         aplicarFiltrosDesdeFormulario();
     });
+
+    // Los KPI son botones: también con teclado.
+    document.querySelectorAll('.req-kpi').forEach(k => k.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); k.click(); }
+    }));
+
+    // Toda la fila abre el caso (salvo que se haga clic en un botón o enlace).
+    document.getElementById('tabla-requerimientos').addEventListener('click', e => {
+        if (e.target.closest('a, button')) return;
+        const fila = e.target.closest('tr[data-id]');
+        if (!fila) return;
+        const url = `/app/requerimientos/${fila.dataset.id}/`;
+        if (e.ctrlKey || e.metaKey) window.open(url, '_blank'); else window.location.href = url;
+    });
+
+    // El botón del encabezado muestra el correo en uso: se ve de un vistazo
+    // a dónde van a llegar las respuestas.
+    ReqCorreoModulo.alCambiar(pintarCorreoModulo);
 });
+
+function pintarCorreoModulo(c) {
+    const txt = document.getElementById('txt-correo-modulo');
+    txt.textContent = c && c.correo_modulo ? c.correo_modulo : 'Correo del módulo';
+
+    const caja = document.getElementById('aviso-correo-modulo');
+    if (c && c.origen !== 'configurado' && c.puede_editar) {
+        caja.innerHTML = `<div class="alert alert-info alert-border-left d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-2">
+            <i class="ri-mail-settings-line fs-16"></i>
+            <span class="flex-grow-1 small">${c.correo_modulo
+                ? `El correo del módulo (<strong>${reqEsc(c.correo_modulo)}</strong>) viene de la configuración del servidor. Guárdelo aquí para poder cambiarlo cuando quiera.`
+                : 'Defina el <strong>correo del módulo</strong>: hoy la copia y las respuestas de los proveedores llegan al correo personal de quien envía.'}</span>
+            <button type="button" class="btn btn-sm btn-info" onclick="ReqCorreoModulo.abrir()">Definir correo</button>
+        </div>`;
+    } else {
+        caja.innerHTML = '';
+    }
+}
 
 // ══════════ Datos ══════════
 
@@ -336,26 +385,28 @@ function pintarAvisos(e) {
         html += `<div class="alert alert-danger alert-border-left d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-2">
             <i class="ri-alarm-warning-line fs-16"></i>
             <span class="flex-grow-1 small"><strong>${e.sin_respuesta_7dias}</strong> requerimiento(s) llevan más de ${plazoRespuestaDias} días
-                sin respuesta del proveedor.</span>
+                sin respuesta del proveedor. Conviene mandar un recordatorio o llamar.</span>
             <button type="button" class="btn btn-sm btn-danger" onclick="filtrarSinRespuesta()">Ver cuáles</button>
         </div>`;
     }
     if (e.incompletos > 0) {
-        html += `<div class="alert alert-warning alert-border-left d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-0">
+        html += `<div class="alert alert-warning alert-border-left d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-2">
             <i class="ri-error-warning-line fs-16"></i>
             <span class="flex-grow-1 small"><strong>${e.incompletos}</strong> requerimiento(s) no se pueden enviar:
                 les falta el proveedor o la factura de compra.</span>
-            <button type="button" class="btn btn-sm btn-warning" onclick="filtrarIncompletos()">Completar</button>
+            <button type="button" class="btn btn-sm btn-warning" onclick="filtrarIncompletos()">Ver y completar</button>
         </div>`;
     }
     caja.innerHTML = html;
 }
 
 function cargarRequerimientos(pagina = 1) {
-    const params = new URLSearchParams({ page: pagina, ...filtrosActuales });
+    const params = new URLSearchParams({ page: pagina, page_size: TAM_PAGINA,
+        ...Object.fromEntries(Object.entries(filtrosActuales).filter(([, v]) => v)) });
     const tbody = document.getElementById('tabla-requerimientos');
     tbody.innerHTML = `<tr><td colspan="10" class="text-center py-4">
         <div class="spinner-border text-primary spinner-border-sm"></div></td></tr>`;
+    pintarFiltrosActivos();
 
     fetch(`/app/api/requerimientos/listar/?${params}`)
         .then(r => r.json())
@@ -376,6 +427,29 @@ function cargarRequerimientos(pagina = 1) {
 
 // ══════════ Tabla ══════════
 
+// Una línea que dice qué toca con el caso: la misma idea que el "siguiente
+// paso" de la ficha, en corto, para no tener que abrir cada uno.
+function siguienteEnFila(req) {
+    const falta = req.faltantes || [];
+    switch (req.estado_codigo) {
+        case 'PENDIENTE':
+        case 'EN_REVISION':
+            return falta.length ? '' : '<i class="ri-scales-3-line"></i>Listo para validar';
+        case 'VALIDADO':
+            // Con datos faltantes el chip rojo ya dice qué hacer primero.
+            return falta.length ? '' : '<i class="ri-mail-send-line"></i>Falta enviarlo al proveedor';
+        case 'ESPERANDO_RESPUESTA':
+            if (req.correo_estado && req.correo_estado.hay_problema) return '<i class="ri-mail-close-line text-danger"></i><span class="text-danger">El correo no llegó</span>';
+            return `<i class="ri-time-line"></i>Enviado hace ${req.dias_sin_respuesta} día(s)`;
+        case 'APROBADO':
+        case 'RECHAZADO':
+        case 'EN_PROCESO':
+            return '<i class="ri-flag-line"></i>Resolver con el cliente y cerrar';
+        default:
+            return '';
+    }
+}
+
 function mostrarRequerimientos(requerimientos) {
     const tbody = document.getElementById('tabla-requerimientos');
 
@@ -385,27 +459,32 @@ function mostrarRequerimientos(requerimientos) {
             <i class="ri-inbox-line fs-1 d-block mb-2 opacity-50"></i>
             ${hayFiltros
                 ? 'Ningún requerimiento coincide con estos filtros.<div><button class="btn btn-sm btn-soft-primary mt-2" onclick="limpiarFiltros()">Quitar filtros</button></div>'
-                : 'Todavía no hay requerimientos cargados.'}
+                : `Todavía no hay requerimientos.<div><button class="btn btn-sm btn-success mt-2" data-bs-toggle="modal" data-bs-target="#modalCrearRequerimiento">
+                       <i class="ri-add-line me-1"></i>Crear el primero</button></div>`}
         </td></tr>`;
         return;
     }
 
     tbody.innerHTML = requerimientos.map(req => {
-        const alerta = req.requiere_recordatorio || req.nivel_urgencia === 'CRITICA';
+        const alerta = req.requiere_recordatorio || req.nivel_urgencia === 'CRITICA'
+            || (req.correo_estado && req.correo_estado.hay_problema);
         const dias = req.dias_transcurridos;
-        const colorDias = dias > 14 ? 'danger' : dias > 7 ? 'warning' : 'success';
+        const colorDias = req.nivel_urgencia === 'CERRADO' ? 'secondary'
+            : dias > 14 ? 'danger' : dias > 7 ? 'warning' : 'success';
+        const siguiente = siguienteEnFila(req);
 
         return `
-        <tr class="${alerta ? 'req-fila-alerta' : ''}">
-            <td class="p-0 d-none d-md-table-cell"><span class="req-etapa req-etapa-${req.etapa}" title="Etapa: ${req.etapa}"></span></td>
+        <tr class="req-fila ${alerta ? 'req-fila-alerta' : ''}" data-id="${req.id}" title="Abrir ${reqEsc(req.numero_requerimiento)}">
+            <td class="p-0 d-none d-md-table-cell"><span class="req-etapa req-etapa-${req.etapa}"></span></td>
             <td data-col="N°">
                 <a href="/app/requerimientos/${req.id}/" class="req-num link-primary d-block">${reqEsc(req.numero_requerimiento)}</a>
                 <div class="mt-1">${reqBadgeTipo(req.tipo_codigo, req.tipo)}</div>
             </td>
             <td data-col="Estado">
                 ${reqPillEstado(req.estado_codigo, req.estado)}
-                ${req.faltantes && req.faltantes.length ? `<div class="mt-1">${reqChipFaltantes(req.faltantes)}</div>` : ''}
-                ${req.requiere_recordatorio ? `<div class="mt-1"><span class="req-falta"><i class="ri-alarm-warning-line"></i>sin respuesta hace ${req.dias_sin_respuesta}d</span></div>` : ''}
+                ${req.faltantes && req.faltantes.length && !['COMPLETADO', 'CANCELADO', 'RECHAZADO_INTERNO'].includes(req.estado_codigo)
+                    ? `<div class="mt-1">${reqChipFaltantes(req.faltantes)}</div>` : ''}
+                ${siguiente ? `<div class="req-siguiente">${siguiente}</div>` : ''}
             </td>
             <td data-col="Producto" class="req-producto">
                 <div class="req-nombre">${reqEsc(req.nombre_producto)}</div>
@@ -423,35 +502,33 @@ function mostrarRequerimientos(requerimientos) {
                     ? `<div class="${req.correo_estado && req.correo_estado.hay_problema ? 'text-danger fw-semibold' : 'text-success'} text-truncate" style="font-size:.68rem;max-width:150px"
                           title="Correo enviado el ${reqEsc(req.fecha_envio_proveedor)}${req.correo_proveedor_destino ? ` a ${reqEsc(req.correo_proveedor_destino)}` : ''}${req.correo_estado ? ` — ${reqEsc(req.correo_estado.etiqueta)}${req.correo_estado.detalle ? ': ' + reqEsc(req.correo_estado.detalle) : ''}` : ''}">
                           <i class="${req.correo_estado ? req.correo_estado.icono : 'ri-mail-check-line'} me-1"></i>${
-                              // Un rebote manda sobre la fecha: es lo único de
-                              // esta celda que obliga a hacer algo hoy.
                               req.correo_estado && req.correo_estado.hay_problema
                                 ? reqEsc(req.correo_estado.etiqueta)
                                 : `${reqEsc((req.fecha_envio_proveedor || '').split(' ')[0]) || 'enviado'}${req.correo_proveedor_destino ? ` · ${reqEsc(req.correo_proveedor_destino)}` : ''}`
                           }</div>`
                     : ''}</td>
             <td data-col="Sucursal" class="d-none d-xxl-table-cell"><span class="badge badge-soft-secondary">${reqEsc(req.sucursal)}</span></td>
-            <td data-col="Evidencia" class="text-center">
+            <td data-col="Fotos" class="text-center">
                 ${req.cantidad_fotos > 0
                     ? `<span class="badge ${req.fotos_completas ? 'badge-soft-success' : 'badge-soft-warning'}"
                              title="${req.fotos_completas ? 'Fotos obligatorias completas' : 'Faltan fotos obligatorias'}">
                         <i class="ri-image-line me-1"></i>${req.cantidad_fotos}/${req.max_fotos}</span>`
-                    : '<span class="badge badge-soft-danger" title="Sin fotos: el proveedor puede rechazarlo"><i class="ri-image-off-line"></i></span>'}
+                    : '<span class="badge badge-soft-danger" title="Sin fotos: el proveedor puede rechazarlo"><i class="ri-image-off-line me-1"></i>0</span>'}
             </td>
-            <td data-col="Antigüedad" class="text-center">
-                <span class="badge badge-soft-${colorDias}">${dias}d</span>
+            <td data-col="Días" class="text-center">
+                <span class="badge badge-soft-${colorDias}" title="Creado el ${reqEsc(req.fecha_creacion)}">${dias}d</span>
             </td>
             <td data-col="" class="text-end">
                 <div class="hstack gap-1 justify-content-end">
-                    <a href="/app/requerimientos/${req.id}/" class="btn btn-sm btn-soft-primary" title="Ver detalle"><i class="ri-eye-line"></i></a>
-                    ${req.faltantes && req.faltantes.length
+                    ${req.faltantes && req.faltantes.length && !['COMPLETADO', 'CANCELADO', 'RECHAZADO_INTERNO'].includes(req.estado_codigo)
                         ? `<a href="/app/requerimientos/${req.id}/?completar=1" class="btn btn-sm btn-warning"
-                              title="Falta ${reqEsc(req.faltantes.join(' y '))}"><i class="ri-edit-2-line"></i></a>`
+                              title="Completar: falta ${reqEsc(reqEnumerar(req.faltantes))}"><i class="ri-edit-2-line"></i></a>`
                         : ''}
                     ${req.requiere_recordatorio
-                        ? `<button class="btn btn-sm btn-soft-danger" onclick="enviarRecordatorioRapido(${req.id}, '${reqEsc(req.numero_requerimiento)}', '${reqEsc(req.correo_proveedor_destino)}')"
+                        ? `<button class="btn btn-sm btn-soft-danger" onclick="enviarRecordatorioRapido(${req.id}, '${reqEsc(req.numero_requerimiento)}', '${reqEsc(req.correo_recordatorio || req.correo_proveedor_destino)}')"
                               title="Enviar recordatorio al proveedor"><i class="ri-mail-send-line"></i></button>`
                         : ''}
+                    <a href="/app/requerimientos/${req.id}/" class="btn btn-sm btn-soft-primary" title="Abrir"><i class="ri-arrow-right-line"></i></a>
                 </div>
             </td>
         </tr>`;
@@ -459,20 +536,27 @@ function mostrarRequerimientos(requerimientos) {
 }
 
 function actualizarPaginacion(pagination) {
-    const desde = pagination.total_items > 0 ? (pagination.current_page - 1) * 20 + 1 : 0;
-    const hasta = Math.min(pagination.current_page * 20, pagination.total_items);
+    const desde = pagination.total_items > 0 ? (pagination.current_page - 1) * TAM_PAGINA + 1 : 0;
+    const hasta = Math.min(pagination.current_page * TAM_PAGINA, pagination.total_items);
     document.getElementById('showing-count').textContent = pagination.total_items > 0 ? `${desde}-${hasta}` : '0';
     document.getElementById('total-count').textContent = pagination.total_items;
+    document.getElementById('total-count-top').textContent = pagination.total_items;
 
     let html = '';
     if (pagination.has_previous) {
         html += `<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargarRequerimientos(${pagination.current_page - 1})">‹</a></li>`;
     }
+    let puntos = false;
     for (let i = 1; i <= pagination.total_pages; i++) {
         if (i === pagination.current_page) {
             html += `<li class="page-item active"><a class="page-link" href="javascript:void(0);">${i}</a></li>`;
+            puntos = false;
         } else if (Math.abs(i - pagination.current_page) <= 2 || i === 1 || i === pagination.total_pages) {
             html += `<li class="page-item"><a class="page-link" href="javascript:void(0);" onclick="cargarRequerimientos(${i})">${i}</a></li>`;
+            puntos = false;
+        } else if (!puntos) {
+            html += '<li class="page-item disabled"><span class="page-link">…</span></li>';
+            puntos = true;
         }
     }
     if (pagination.has_next) {
@@ -483,13 +567,48 @@ function actualizarPaginacion(pagination) {
 
 // ══════════ Filtros ══════════
 
+const ETIQUETAS_FILTRO = {
+    etapa: { EMPRESA: 'Por revisar (empresa)', PROVEEDOR: 'Esperando al proveedor', RESOLUCION: 'Respondidos, por cerrar' },
+    incompletos: { 'true': 'Faltan datos para enviar' },
+    sin_respuesta: { 'true': `Sin respuesta del proveedor` },
+    correo: { problema: 'Correo no llegó', sin_confirmar: 'Sin confirmación de entrega', respondido: 'Respondió, falta registrar' },
+};
+
+// Chips con lo que está filtrando la tabla: sin esto, un KPI clickeado
+// dejaba la tabla filtrada sin que se notara por qué faltaban casos.
+function pintarFiltrosActivos() {
+    const caja = document.getElementById('filtros-activos');
+    const chips = [];
+    Object.entries(filtrosActuales).forEach(([k, v]) => {
+        if (!v || k === 'busqueda' || k === 'estado') return;
+        let texto = (ETIQUETAS_FILTRO[k] && ETIQUETAS_FILTRO[k][v]) || null;
+        if (!texto) {
+            const sel = document.getElementById('filtro-' + k.replace('_', '-'));
+            texto = sel && sel.selectedOptions && sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : v;
+            if (k === 'fecha_inicio') texto = `Desde ${v}`;
+            if (k === 'fecha_fin') texto = `Hasta ${v}`;
+        }
+        chips.push(`<span class="req-filtro-activo">${reqEsc(texto)}<button type="button" onclick="quitarFiltro('${k}')" aria-label="Quitar filtro">&times;</button></span>`);
+    });
+    caja.innerHTML = chips.join('');
+}
+
+function quitarFiltro(clave) {
+    delete filtrosActuales[clave];
+    if (clave === 'sin_respuesta') delete filtrosActuales.estado;
+    const campo = document.getElementById('filtro-' + clave.replace('_', '-'));
+    if (campo) campo.value = '';
+    if (['etapa', 'incompletos', 'sin_respuesta'].includes(clave)) marcarKpiActivo(null);
+    sincronizarTab(filtrosActuales.estado || '');
+    cargarRequerimientos(1);
+}
+
 function alternarFiltros() {
     const s = document.getElementById('filtros-section');
     const abierto = s.style.display !== 'none';
     s.style.display = abierto ? 'none' : 'block';
     document.getElementById('btn-filtros').classList.toggle('btn-primary', !abierto);
     document.getElementById('btn-filtros').classList.toggle('btn-soft-secondary', abierto);
-    if (!abierto) document.getElementById('filtro-busqueda').focus();
 }
 
 function aplicarFiltrosDesdeFormulario() {
@@ -498,7 +617,7 @@ function aplicarFiltrosDesdeFormulario() {
         tipo: document.getElementById('filtro-tipo').value,
         prioridad: document.getElementById('filtro-prioridad').value,
         correo: document.getElementById('filtro-correo').value,
-        busqueda: document.getElementById('filtro-busqueda').value,
+        busqueda: document.getElementById('filtro-busqueda').value.trim(),
         fecha_inicio: document.getElementById('filtro-fecha-inicio').value,
         fecha_fin: document.getElementById('filtro-fecha-fin').value,
     };
@@ -509,16 +628,24 @@ function aplicarFiltrosDesdeFormulario() {
 
 function limpiarFiltros() {
     document.getElementById('form-filtros').reset();
+    document.getElementById('filtro-busqueda').value = '';
     filtrosActuales = {};
     sincronizarTab('');
     marcarKpiActivo(null);
     cargarRequerimientos(1);
 }
 
+// Pestañas, KPI y avisos cambian SOLO su dimensión y respetan la búsqueda
+// escrita: antes cada clic borraba lo que se había tipeado.
+function conBusqueda(extra) {
+    const busqueda = document.getElementById('filtro-busqueda').value.trim();
+    return busqueda ? { busqueda, ...extra } : { ...extra };
+}
+
 function filtroRapido(estado, tab) {
     document.querySelectorAll('#tabs-estado .nav-link').forEach(t => t.classList.remove('active'));
     if (tab) tab.classList.add('active');
-    filtrosActuales = estado ? { estado } : {};
+    filtrosActuales = conBusqueda(estado ? { estado } : {});
     document.getElementById('filtro-estado').value = estado;
     marcarKpiActivo(null);
     cargarRequerimientos(1);
@@ -535,7 +662,7 @@ function marcarKpiActivo(id) {
 }
 
 function filtrarPorEtapa(etapa, tarjeta) {
-    filtrosActuales = { etapa };
+    filtrosActuales = conBusqueda({ etapa });
     document.getElementById('filtro-estado').value = '';
     sincronizarTab('');
     marcarKpiActivo(tarjeta ? tarjeta.id : null);
@@ -543,7 +670,7 @@ function filtrarPorEtapa(etapa, tarjeta) {
 }
 
 function filtrarIncompletos(tarjeta) {
-    filtrosActuales = { incompletos: 'true' };
+    filtrosActuales = conBusqueda({ incompletos: 'true' });
     document.getElementById('filtro-estado').value = '';
     sincronizarTab('');
     marcarKpiActivo(tarjeta ? tarjeta.id : 'kpi-incompletos');
@@ -551,7 +678,7 @@ function filtrarIncompletos(tarjeta) {
 }
 
 function filtrarSinRespuesta() {
-    filtrosActuales = { estado: 'ESPERANDO_RESPUESTA', sin_respuesta: 'true' };
+    filtrosActuales = conBusqueda({ estado: 'ESPERANDO_RESPUESTA', sin_respuesta: 'true' });
     document.getElementById('filtro-estado').value = 'ESPERANDO_RESPUESTA';
     sincronizarTab('ESPERANDO_RESPUESTA');
     marcarKpiActivo('kpi-proveedor');
@@ -562,19 +689,20 @@ function filtrarSinRespuesta() {
 
 function exportarRequerimientos() {
     // `filtrosActuales` ya trae todo lo aplicado (estado, etapa, incompletos,
-    // búsqueda, fechas...). El backend ahora los respeta todos, así que el
-    // Excel baja exactamente lo que está en pantalla.
+    // búsqueda, fechas...): el Excel baja exactamente lo que está en pantalla.
     const params = new URLSearchParams(
         Object.entries(filtrosActuales).filter(([, v]) => v));
     window.location.href = `/app/api/requerimientos/exportar/?${params}`;
 }
 
 function enviarRecordatorioRapido(requerimientoId, numero, correoDestino) {
+    const c = ReqCorreoModulo.config;
     Swal.fire({
         title: 'Enviar recordatorio',
         html: `Se le reenviará el requerimiento <strong>${numero}</strong> al proveedor
                ${correoDestino ? `(<strong>${correoDestino}</strong>)` : '(al correo de su ficha)'},
-               con el formato PDF y las fotos.`,
+               con el formato PDF y las fotos.
+               ${c && c.correo_modulo ? `<div class="small text-muted mt-2">La copia y la respuesta llegan a ${reqEsc(c.correo_modulo)}.</div>` : ''}`,
         icon: 'question',
         showCancelButton: true,
         confirmButtonText: 'Sí, enviar',

@@ -314,9 +314,11 @@ class _BaseVistaTest(TestCase):
         self.empresa = crear_empresa(nombre='NICK SPA', rut='76.111.111-1')
         self.sucursal = crear_sucursal(empresa=self.empresa, alias='NICK2')
         self.user = crear_usuario(rol='administrador')
-        modulo = ModuloSistema.objects.create(codigo='ecommerce', nombre='Ecommerce')
-        opcion = OpcionMenu.objects.create(
-            modulo=modulo, codigo='ecommerce_pedidos_todos', nombre='Pedidos Ecommerce',
+        # get_or_create: la migración 0218 ya siembra el módulo 'ecommerce' (y
+        # puede sembrar la opción); un create() reventaba por UNIQUE en sqlite.
+        modulo, _ = ModuloSistema.objects.get_or_create(codigo='ecommerce', defaults={'nombre': 'Ecommerce'})
+        opcion, _ = OpcionMenu.objects.get_or_create(
+            codigo='ecommerce_pedidos_todos', defaults={'modulo': modulo, 'nombre': 'Pedidos Ecommerce'},
         )
         PermisoRol.objects.create(
             rol=self.user.rol, opcion_menu=opcion,

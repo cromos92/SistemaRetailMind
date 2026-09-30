@@ -317,9 +317,11 @@ class DescargarTxtsZipEcommerceTest(_BaseFacturacionConDte):
         # El endpoint exige puede_ver sobre ecommerce_pedidos_todos (fail-closed):
         # sembrar la opción de menú y el permiso del rol del usuario de prueba.
         from app.models import ModuloSistema, OpcionMenu, PermisoRol
-        modulo = ModuloSistema.objects.create(codigo='ecommerce', nombre='Ecommerce')
-        self.opcion = OpcionMenu.objects.create(
-            modulo=modulo, codigo='ecommerce_pedidos_todos', nombre='Pedidos Ecommerce',
+        # get_or_create: la migración 0218 ya siembra el módulo 'ecommerce' (y
+        # puede sembrar la opción); un create() reventaba por UNIQUE en sqlite.
+        modulo, _ = ModuloSistema.objects.get_or_create(codigo='ecommerce', defaults={'nombre': 'Ecommerce'})
+        self.opcion, _ = OpcionMenu.objects.get_or_create(
+            codigo='ecommerce_pedidos_todos', defaults={'modulo': modulo, 'nombre': 'Pedidos Ecommerce'},
         )
         PermisoRol.objects.create(rol=self.user.rol, opcion_menu=self.opcion, puede_ver=True)
 

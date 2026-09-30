@@ -24,6 +24,9 @@ from django.utils import timezone
 
 from app.models import Requerimiento, HistorialRequerimiento, EnvioCorreo
 from app.services.correo_service import enviar_correo_trazado, CorreoError
+from app.services.correo_requerimientos import (
+    correo_modulo_requerimientos, correos_guardados,
+)
 from app.services.pdf_requerimiento_proveedor import (
     generar_pdf_requerimiento, nombre_archivo_pdf,
 )
@@ -148,7 +151,7 @@ class Command(BaseCommand):
             self.stdout.write('')
             self.stdout.write(self.style.WARNING('MODO SIMULACIÓN — no se envió nada.'))
             for req in a_enviar:
-                destino = (req.correo_proveedor_destino or '').strip() or '(sin correo)'
+                destino = self._destino(req) or '(sin correo)'
                 self.stdout.write(
                     f'   · {req.numero_requerimiento} → {destino} '
                     f'({req.dias_sin_respuesta} días sin respuesta)')
@@ -197,20 +200,33 @@ class Command(BaseCommand):
         logger.info('enviar_recordatorios_requerimientos: %s enviados, %s fallidos',
                     enviados, len(fallidos))
 
+    @staticmethod
+    def _destino(requerimiento):
+        """El correo recordado del proveedor manda sobre el del último envío:
+        si alguien lo corrigió (por un rebote), el recordatorio va al nuevo."""
+        return (correos_guardados([requerimiento.proveedor_id]).get(requerimiento.proveedor_id)
+                or (requerimiento.correo_proveedor_destino or '').strip())
+
     def _recordar(self, requerimiento, conexion):
         """Reenvía UN requerimiento con el formato PDF, sin las fotos originales.
 
         Las fotos ya viajaron en el envío original y van incrustadas en el PDF:
         repetirlas hace el correo pesado sin agregar información.
         """
-        destino = (requerimiento.correo_proveedor_destino or '').strip()
+        destino = self._destino(requerimiento)
         if not destino:
             raise CorreoError('El requerimiento no tiene correo de destino registrado')
+
+        # El correo del módulo: a él responde el proveedor, igual que en el
+        # envío hecho desde la pantalla. Sin esto el recordatorio salía sin
+        # "Responder" y la respuesta caía en el remitente, que no es un buzón.
+        correo_modulo, _ = correo_modulo_requerimientos()
 
         pdf_bytes = None
         try:
             pdf_bytes = generar_pdf_requerimiento(
-                requerimiento, plazo_dias=PLAZO_RESPUESTA_DIAS)
+                requerimiento, plazo_dias=PLAZO_RESPUESTA_DIAS,
+                correo_contacto=correo_modulo or None)
         except Exception:
             logger.exception('No se pudo generar el PDF del recordatorio %s',
                              requerimiento.id)
@@ -219,6 +235,7 @@ class Command(BaseCommand):
             'requerimiento': requerimiento,
             'empresa': requerimiento.sucursal.empresa,
             'usuario': None,
+            'correo_respuesta': correo_modulo,
             'es_reenvio': True,
             'mensaje_adicional': (
                 f'Este es un recordatorio automático: el requerimiento se envió el '
@@ -261,6 +278,7 @@ class Command(BaseCommand):
             texto=texto,
             html=html,
             destinatario=destino,
+            reply_to=[correo_modulo] if correo_modulo else None,
             adjuntos=adjuntos,
             from_email=(getattr(settings, 'REQUERIMIENTOS_FROM_EMAIL', '')
                         or settings.DEFAULT_FROM_EMAIL),

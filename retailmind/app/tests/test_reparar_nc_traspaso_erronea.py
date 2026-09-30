@@ -142,6 +142,90 @@ class RepararNcTraspasoErroneaTest(TestCase):
             self._run('--aplicar')
         self.assertEqual(self._stocks(), (1, 0))
 
+    def _sku_sin_ficha_en_destino(self):
+        """Agrega a la NC una talla que el destino nunca tuvo (el ajuste sacó el
+        artículo entero antes de que la recepción creara la ficha)."""
+        producto_origen, t_nueva = crear_producto_con_talla(
+            self.origen, articulo='SIN-FICHA', talla='5Y', sku=4843195, stock=3,
+            costo=200, precioventa=5000,
+        )
+        LoteProducto.objects.create(
+            producto_talla=t_nueva, cantidad_inicial=3, cantidad_disponible=3, costo_unitario=200,
+            sobreprecio_unitario=0, precio_venta_unitario=5000,
+        )
+        Dte_Productos.objects.create(
+            dte=self.dte, productoTalla=t_nueva, descripcion='SIN-FICHA - Talla 5Y',
+            costo=200, sobreprecio=0, precio=2500, stock=0, activo=False,
+        )
+        Dte_Productos.objects.create(
+            dte=self.nc, productoTalla=t_nueva, descripcion='[AJUSTE -3] SIN-FICHA - Talla 5Y',
+            costo=200, sobreprecio=0, precio=2500, stock=3, activo=True,
+        )
+        return producto_origen, t_nueva
+
+    def test_sku_inexistente_en_destino_aborta_sin_la_opcion(self):
+        self._sku_sin_ficha_en_destino()
+        with self.assertRaises(CommandError):
+            self._run('--aplicar')
+        self.assertEqual(self._stocks(), (2, 0))
+        self.assertFalse(Producto_Talla.objects.filter(sku=4843195, producto__sucursal=self.destino).exists())
+
+    def test_crear_en_destino_crea_la_ficha_y_repone(self):
+        producto_origen, t_nueva = self._sku_sin_ficha_en_destino()
+        salida = self._run('--crear-en-destino')
+        self.assertIn('nuevo 0→3', salida)
+        self.assertFalse(Producto_Talla.objects.filter(sku=4843195, producto__sucursal=self.destino).exists())
+
+        self._run('--crear-en-destino', '--aplicar')
+        t_dest = Producto_Talla.objects.select_related('producto').get(sku=4843195, producto__sucursal=self.destino)
+        self.assertEqual((t_dest.stock, t_dest.talla), (3, '5Y'))
+        self.assertEqual(
+            (t_dest.producto.articulo, t_dest.producto.costo, t_dest.producto.precioventa),
+            ('SIN-FICHA', 200, 5000),
+        )
+        self.assertEqual(Producto_Talla.objects.get(id=t_nueva.id).stock, 0)
+        # La otra línea (con ficha) también se repuso en la misma pasada.
+        self.assertEqual(self._stocks(), (0, 1))
+
+    def test_crear_en_destino_reusa_el_producto_del_articulo(self):
+        """Si el destino ya tiene el artículo (otra talla), la talla nueva se
+        cuelga de ESE producto: no se duplica la ficha."""
+        producto_origen, t_nueva = self._sku_sin_ficha_en_destino()
+        producto_dest, _ = crear_producto_con_talla(
+            self.destino, articulo='sin-ficha', talla='6Y', sku=4843196, stock=1,
+        )
+        self._run('--crear-en-destino', '--aplicar')
+        t_dest = Producto_Talla.objects.get(sku=4843195, producto__sucursal=self.destino)
+        self.assertEqual(t_dest.producto_id, producto_dest.id)
+
+    def test_filtro_por_articulo_repara_solo_esa_parte(self):
+        """Conteo físico: llegó SIN-FICHA pero no BQ-TEST. Se repara solo lo que
+        apareció; lo otro queda en el origen y se puede reparar después."""
+        _, t_nueva = self._sku_sin_ficha_en_destino()
+        self._run('--crear-en-destino', '--articulos', 'sin-ficha', '--aplicar')
+        # BQ-TEST intacto (sigue en origen, destino en 0); SIN-FICHA repuesto.
+        self.assertEqual(self._stocks(), (2, 0))
+        self.assertEqual(Producto_Talla.objects.get(sku=4843195, producto__sucursal=self.destino).stock, 3)
+        self.dte.refresh_from_db()
+        self.assertIn('PARCIAL: SIN-FICHA', self.dte.referencias)
+        # Más tarde aparece BQ-TEST: la segunda pasada repara solo lo que faltaba.
+        salida = self._run('--crear-en-destino', '--aplicar')
+        self.assertIn('ya reparada (se salta)', salida)
+        self.assertEqual(self._stocks(), (0, 1))
+        self.assertEqual(Producto_Talla.objects.get(sku=4843195, producto__sucursal=self.destino).stock, 3)
+
+    def test_filtro_con_articulo_que_no_esta_en_la_nc_aborta(self):
+        with self.assertRaises(CommandError):
+            self._run('--articulos', 'NO-EXISTE')
+        with self.assertRaises(CommandError):
+            self._run('--skus', '999')
+
+    def test_filtro_por_sku(self):
+        self._sku_sin_ficha_en_destino()
+        self._run('--crear-en-destino', '--skus', '4758174', '--aplicar')
+        self.assertEqual(self._stocks(), (0, 1))
+        self.assertFalse(Producto_Talla.objects.filter(sku=4843195, producto__sucursal=self.destino).exists())
+
     def test_aborta_si_la_nc_no_redujo_lineas(self):
         self.nc.redujo_lineas_documento = False
         self.nc.save(update_fields=['redujo_lineas_documento'])

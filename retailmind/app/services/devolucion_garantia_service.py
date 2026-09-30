@@ -1293,7 +1293,6 @@ def _validar_datos_transferencia(metodo_solicitado, banco, tipo_cuenta,
     return metodo, banco, tipo_cuenta, numero_cuenta, cuenta_titular_rut
 
 
-@transaction.atomic
 # ===================== INVENTARIO =====================
 
 def _mover_inventario_devolucion(devolucion, nc, lineas, aprobador, todas_no_aptas, ids_no_aptos):
@@ -1456,6 +1455,10 @@ def inventario_de_devolucion(devolucion):
     return inventario
 
 
+# Atómica: `_validar_lineas(lock=True)` hace select_for_update y la solicitud +
+# detalles deben quedar juntos (el bloque INVENTARIO de arriba se insertó entre
+# el decorador y esta función y la dejó sin transacción; integración 29-09).
+@transaction.atomic
 def crear_solicitud_devolucion(*, dte_original, sucursal, receptor, motivo,
                                usuario, detalles, requerimiento=None,
                                metodo_solicitado='', banco='', tipo_cuenta='',

@@ -207,6 +207,8 @@ from .requerimientos import (  # noqa: F401
     Requerimiento,
     FotoRequerimiento,
     HistorialRequerimiento,
+    ConfiguracionRequerimientos,
+    CorreoProveedorRequerimiento,
 )
 
 from .etiquetas import (  # noqa: F401

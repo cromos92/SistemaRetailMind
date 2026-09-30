@@ -315,7 +315,7 @@ def _contexto_producto(requerimiento):
 
 
 def generar_pdf_requerimiento(requerimiento, *, usuario=None, plazo_dias=7,
-                              fotos_bytes=None) -> bytes:
+                              fotos_bytes=None, correo_contacto=None) -> bytes:
     """
     Arma el formato RetailMind del requerimiento y devuelve los bytes del PDF.
 
@@ -325,6 +325,9 @@ def generar_pdf_requerimiento(requerimiento, *, usuario=None, plazo_dias=7,
     `fotos_bytes` ({foto_id: bytes}) permite reusar fotos ya descargadas del
     storage: si viene, una foto ausente del dict se da por irrecuperable (el
     llamador ya intentó leerla) y NO se vuelve a golpear el storage.
+
+    `correo_contacto` es el correo del módulo: el que va impreso como contacto
+    en vez del correo personal de quien envía.
     """
     st = _estilos()
     buffer = BytesIO()
@@ -565,10 +568,12 @@ def generar_pdf_requerimiento(requerimiento, *, usuario=None, plazo_dias=7,
     if usuario is not None:
         nombre_contacto = usuario.get_full_name() or usuario.get_username()
         contacto.append(f'Responsable: {nombre_contacto}')
-        if usuario.email:
+        if not correo_contacto and usuario.email:
             contacto.append(usuario.email)
     elif requerimiento.usuario_creador_id:
         contacto.append(f'Responsable: {requerimiento.usuario_creador.get_full_name()}')
+    if correo_contacto:
+        contacto.append(f'Respuestas a: {correo_contacto}')
     if contacto:
         els.append(Paragraph(_txt(' · '.join(contacto), 120), st['subtitulo']))
 

@@ -99,6 +99,8 @@ function seleccionarTipo(card) {
     card.querySelector('.tipo-card-inner').classList.add('selected');
 
     document.getElementById('bloque-origen').style.display = 'block';
+    const sinTipo = document.getElementById('fotos-sin-tipo');
+    if (sinTipo) sinTipo.style.display = 'none';
 
     // Mostrar/ocultar secciones condicionales
     actualizarSeccionesCondicionales(tipo);
@@ -198,7 +200,9 @@ function renderizarSlotsFoto(tiposFoto) {
                     ${tf.es_obligatorio ? '<span class="badge bg-danger" style="font-size:.5rem">REQ</span>' : ''}
                     <i class="ri-question-line text-muted" style="font-size:.75rem" title="${tf.descripcion_guia}"></i>
                 </div>
-                <input type="file" class="form-control form-control-sm mt-1" id="input-${tf.codigo}" name="foto_${tf.codigo}" accept="image/*" capture="environment" onchange="previsualizarFotoSlot(this,'${tf.codigo}')" style="font-size:.7rem">
+                <input type="file" class="d-none" id="input-${tf.codigo}" name="foto_${tf.codigo}" accept="image/*" onchange="previsualizarFotoSlot(this,'${tf.codigo}')">
+                <label for="input-${tf.codigo}" class="btn btn-soft-primary btn-sm w-100 mt-1 mb-0" id="lbl-${tf.codigo}" style="font-size:.72rem">
+                    <i class="ri-camera-line me-1"></i>Elegir foto</label>
                 <button type="button" class="btn btn-sm btn-outline-danger mt-1 w-100 py-0" style="display:none;font-size:.7rem" id="btn-quitar-${tf.codigo}" onclick="limpiarFotoSlot('${tf.codigo}')"><i class="ri-close-line"></i> Quitar</button>
             </div>
         `;
@@ -219,6 +223,7 @@ function previsualizarFotoSlot(input, codigo) {
             document.getElementById(`img-slot-${codigo}`).src = e.target.result;
             document.getElementById(`btn-quitar-${codigo}`).style.display = 'block';
             document.getElementById(`slotcard-${codigo}`).classList.add('has-foto');
+            document.getElementById(`lbl-${codigo}`).innerHTML = '<i class="ri-refresh-line me-1"></i>Cambiar';
         };
         reader.readAsDataURL(input.files[0]);
         actualizarChecklistFotos();
@@ -231,6 +236,7 @@ function limpiarFotoSlot(codigo) {
     document.getElementById(`preview-slot-${codigo}`).style.display = 'none';
     document.getElementById(`btn-quitar-${codigo}`).style.display = 'none';
     document.getElementById(`slotcard-${codigo}`).classList.remove('has-foto');
+    document.getElementById(`lbl-${codigo}`).innerHTML = '<i class="ri-camera-line me-1"></i>Elegir foto';
     actualizarChecklistFotos();
 }
 
@@ -274,23 +280,43 @@ function agregarFotoAdicional() {
     const div = document.createElement('div');
     div.className = 'row g-2 mb-2 foto-adicional-item';
     div.id = `foto-adicional-${contadorFotosAdicionales}`;
+    const n = contadorFotosAdicionales;
+    div.className = 'row g-2 mb-2 align-items-center foto-adicional-item';
     div.innerHTML = `
-        <div class="col-md-5">
-            <input type="file" class="form-control form-control-sm" name="foto_adicional_${contadorFotosAdicionales}"
-                   accept="image/*">
+        <div class="col-2 text-center">
+            <img id="prev-adicional-${n}" class="rounded" style="display:none;width:44px;height:44px;object-fit:cover" alt="">
+            <i id="ico-adicional-${n}" class="ri-image-add-line text-muted fs-4"></i>
         </div>
-        <div class="col-md-5">
-            <input type="text" class="form-control form-control-sm" name="descripcion_foto_adicional_${contadorFotosAdicionales}"
-                   placeholder="Descripcion (opcional)">
+        <div class="col-10 col-md-5">
+            <input type="file" class="d-none" id="input-adicional-${n}" name="foto_adicional_${n}" accept="image/*"
+                   onchange="previsualizarAdicional(this, ${n})">
+            <label for="input-adicional-${n}" class="btn btn-soft-primary btn-sm w-100 mb-0" id="lbl-adicional-${n}" style="font-size:.72rem">
+                <i class="ri-camera-line me-1"></i>Elegir foto</label>
         </div>
-        <div class="col-md-2">
-            <button type="button" class="btn btn-sm btn-soft-danger w-100"
-                    onclick="document.getElementById('foto-adicional-${contadorFotosAdicionales}').remove()">
+        <div class="col-9 col-md-4">
+            <input type="text" class="form-control form-control-sm" name="descripcion_foto_adicional_${n}"
+                   placeholder="Qué muestra (opcional)" maxlength="255">
+        </div>
+        <div class="col-3 col-md-1">
+            <button type="button" class="btn btn-sm btn-soft-danger w-100" title="Quitar"
+                    onclick="document.getElementById('foto-adicional-${n}').remove()">
                 <i class="ri-delete-bin-line"></i>
             </button>
         </div>
     `;
     container.appendChild(div);
+}
+
+function previsualizarAdicional(input, n) {
+    const img = document.getElementById(`prev-adicional-${n}`);
+    const ico = document.getElementById(`ico-adicional-${n}`);
+    if (!(input.files && input.files[0])) { img.style.display = 'none'; ico.style.display = ''; return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+        img.src = e.target.result; img.style.display = ''; ico.style.display = 'none';
+        document.getElementById(`lbl-adicional-${n}`).innerHTML = '<i class="ri-refresh-line me-1"></i>Cambiar';
+    };
+    reader.readAsDataURL(input.files[0]);
 }
 
 function validarFotosObligatorias() {
@@ -642,13 +668,22 @@ function enviarFormulario() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
+            formularioSucio = false;
             Swal.fire({
                 icon: 'success',
-                title: 'Requerimiento creado!',
-                text: `Numero de requerimiento: ${data.numero_requerimiento}`,
-                confirmButtonText: 'Aceptar'
-            }).then(() => {
-                window.location.href = '/app/requerimientos/';
+                title: 'Requerimiento creado',
+                html: `Quedó registrado como <strong>${data.numero_requerimiento}</strong>.<br>
+                       <span class="text-muted small">Ahora lo revisa un administrador o el jefe de local.</span>`,
+                showDenyButton: true,
+                confirmButtonText: '<i class="ri-eye-line me-1"></i>Abrir el requerimiento',
+                denyButtonText: 'Volver al listado',
+                confirmButtonColor: '#405189',
+                denyButtonColor: '#878a99',
+                allowOutsideClick: false,
+            }).then(r => {
+                window.location.href = r.isConfirmed
+                    ? `/app/requerimientos/${data.requerimiento_id}/`
+                    : '/app/requerimientos/';
             });
         } else {
             Swal.fire('Error', data.error || 'No se pudo crear el requerimiento', 'error');
@@ -713,6 +748,11 @@ function validarRUTModal() {
 }
 
 // ========== GESTION DE CLIENTES ==========
+// Panel EN LÍNEA dentro del paso 3. Antes era un modal abierto encima del
+// modal del asistente: Bootstrap 5 no apila modales y al cerrarlo la página
+// quedaba sin scroll o con el fondo oscuro trabado.
+const CAMPOS_CLIENTE_NUEVO = ['rut', 'nombre', 'apellido', 'telefono', 'email', 'direccion', 'comuna', 'ciudad'];
+
 function abrirModalCrearCliente() {
     const rut = document.getElementById('cliente_rut').value.trim();
     const nombre = document.getElementById('cliente_nombre').value.trim();
@@ -727,16 +767,31 @@ function abrirModalCrearCliente() {
             document.getElementById('modal-cliente-nombre').value = nombre;
         }
     }
+    document.getElementById('panel-nuevo-cliente').style.display = 'block';
+    document.getElementById('btn-nuevo-cliente').style.display = 'none';
+    document.getElementById(rut ? 'modal-cliente-nombre' : 'modal-cliente-rut').focus();
+}
 
-    const modal = new bootstrap.Modal(document.getElementById('modalCrearCliente'));
-    modal.show();
+function cerrarPanelCliente() {
+    CAMPOS_CLIENTE_NUEVO.forEach(c => {
+        const el = document.getElementById(`modal-cliente-${c}`);
+        el.value = '';
+        el.classList.remove('is-valid', 'is-invalid');
+    });
+    document.getElementById('modal-rut-validacion').textContent = '';
+    document.getElementById('panel-nuevo-cliente').style.display = 'none';
+    document.getElementById('btn-nuevo-cliente').style.display = '';
 }
 
 function guardarNuevoCliente() {
-    const form = document.getElementById('form-crear-cliente');
-    if (!form.checkValidity()) {
-        form.reportValidity();
-        return;
+    for (const c of ['nombre', 'apellido']) {
+        const el = document.getElementById(`modal-cliente-${c}`);
+        if (!el.value.trim()) {
+            el.classList.add('is-invalid');
+            el.focus();
+            el.addEventListener('input', () => el.classList.remove('is-invalid'), { once: true });
+            return;
+        }
     }
 
     const clienteData = {
@@ -761,15 +816,14 @@ function guardarNuevoCliente() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            document.getElementById('cliente_nombre').value = data.cliente.nombre;
-            document.getElementById('cliente_rut').value = data.cliente.rut;
-            document.getElementById('cliente_email').value = data.cliente.email;
-            document.getElementById('cliente_telefono').value = data.cliente.telefono;
+            document.getElementById('cliente_nombre').value = data.cliente.nombre || '';
+            document.getElementById('cliente_rut').value = data.cliente.rut || '';
+            document.getElementById('cliente_email').value = data.cliente.email || '';
+            document.getElementById('cliente_telefono').value = data.cliente.telefono || '';
 
-            const modal = bootstrap.Modal.getInstance(document.getElementById('modalCrearCliente'));
-            modal.hide();
-            document.getElementById('form-crear-cliente').reset();
-            Swal.fire('Exito', 'Cliente creado y datos completados', 'success');
+            cerrarPanelCliente();
+            Swal.fire({ icon: 'success', title: 'Cliente registrado', text: 'Sus datos quedaron cargados en el requerimiento.',
+                        timer: 1800, showConfirmButton: false });
         } else {
             Swal.fire('Error', data.error || 'No se pudo crear el cliente', 'error');
         }
@@ -777,6 +831,66 @@ function guardarNuevoCliente() {
     .catch(error => {
         console.error('Error:', error);
         Swal.fire('Error', 'Error al crear cliente', 'error');
+    });
+}
+
+// ========== CERRAR / DESCARTAR ==========
+// Con datos a medio cargar, cerrar pregunta antes de descartar. Si se
+// descarta, el asistente queda limpio para el próximo requerimiento (antes
+// reabría con el producto y las fotos del intento anterior).
+let formularioSucio = false;
+
+function asistenteTieneDatos() {
+    if (tipoSeleccionado) return true;
+    if (contarFotosSeleccionadas() > 0) return true;
+    return ['sku', 'nombre_producto', 'motivo', 'cliente_nombre', 'buscar_folio']
+        .some(id => (document.getElementById(id).value || '').trim());
+}
+
+function reiniciarAsistente() {
+    document.getElementById('form-requerimiento').reset();
+    // `reset()` no toca los input hidden: se limpian a mano.
+    ['tipo', 'tipo_documento', 'numero_factura_compra', 'fecha_factura_compra',
+     'dte_compra_id', 'proveedor_id'].forEach(id => { document.getElementById(id).value = ''; });
+    document.getElementById('origen').value = 'CLIENTE';
+    cambiarOrigen('CLIENTE');
+    tipoSeleccionado = '';
+    tiposFotoActuales = [];
+    document.querySelectorAll('.tipo-card .tipo-card-inner').forEach(c => c.classList.remove('selected'));
+    ['bloque-origen', 'seccion-defecto', 'seccion-error-despacho', 'checklist-fotos', 'guia-fotos']
+        .forEach(id => { document.getElementById(id).style.display = 'none'; });
+    document.getElementById('tipo-error').style.display = 'none';
+    document.getElementById('fotos-slots-container').innerHTML = '';
+    document.getElementById('fotos-adicionales-container').innerHTML = '';
+    const sinTipo = document.getElementById('fotos-sin-tipo');
+    if (sinTipo) sinTipo.style.display = '';
+    limpiarDocumento();
+    cerrarPanelCliente();
+    document.getElementById('rut-validacion-msg').textContent = '';
+    document.querySelectorAll('#form-requerimiento .is-invalid, #form-requerimiento .is-valid')
+        .forEach(el => el.classList.remove('is-invalid', 'is-valid'));
+    formularioSucio = false;
+    irAPaso(1);
+}
+
+function cerrarAsistente() {
+    const modalEl = document.getElementById('modalCrearRequerimiento');
+    const cerrar = () => { const m = bootstrap.Modal.getInstance(modalEl); if (m) m.hide(); };
+    if (!asistenteTieneDatos()) { cerrar(); return; }
+    Swal.fire({
+        icon: 'question',
+        title: '¿Descartar el requerimiento?',
+        text: 'Se pierde lo que cargó en el asistente.',
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: 'Descartar',
+        denyButtonText: 'Cerrar y guardar para después',
+        cancelButtonText: 'Seguir editando',
+        confirmButtonColor: '#f06548',
+        denyButtonColor: '#405189',
+    }).then(r => {
+        if (r.isConfirmed) { reiniciarAsistente(); cerrar(); }
+        else if (r.isDenied) { cerrar(); }
     });
 }
 

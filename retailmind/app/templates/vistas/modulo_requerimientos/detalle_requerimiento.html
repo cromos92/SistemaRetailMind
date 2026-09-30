@@ -10,31 +10,36 @@
     <div class="container-fluid">
 
         <!-- ══════════ Encabezado ══════════
-             Identidad del caso + el circuito dibujado. Con esto se entiende
-             en qué punto está sin tener que leer el historial. -->
-        <div class="card dt-card mb-2">
-            <div class="card-body py-2">
-                <div class="d-flex flex-wrap align-items-center gap-2">
-                    <a href="{% url 'modulo_requerimientos' %}" class="btn btn-soft-secondary btn-sm" title="Volver al listado">
+             Identidad del caso + el circuito dibujado: se entiende en qué
+             punto está sin tener que leer el historial. -->
+        <div class="card req-shell">
+            <div class="module-header">
+                <div class="module-header-left">
+                    <a href="{% url 'modulo_requerimientos' %}" class="module-header-icon text-white" title="Volver al listado" aria-label="Volver al listado">
                         <i class="ri-arrow-left-line"></i>
                     </a>
-                    <h5 class="mb-0 fs-6" id="numero-requerimiento">Cargando...</h5>
+                    <div class="module-header-info">
+                        <h5 id="numero-requerimiento">Cargando...</h5>
+                        <div class="module-header-status">
+                            <span id="fecha-creacion-txt"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="module-header-actions align-items-center">
                     <span id="badge-tipo"></span>
                     <span id="badge-estado"></span>
                     <span class="badge" id="badge-prioridad"></span>
-                    <span class="badge badge-soft-secondary" id="badge-origen"></span>
-                    <div class="ms-auto d-flex align-items-center gap-2">
-                        <span class="text-muted" style="font-size:.72rem" id="fecha-creacion-txt"></span>
-                        <span class="badge" id="dias-transcurridos">0</span>
-                    </div>
+                    <span class="badge bg-light text-dark" id="badge-origen"></span>
+                    <span class="badge" id="dias-transcurridos" title="Días desde que se creó"></span>
                 </div>
-                <div class="mt-2" id="flujo-estados"></div>
+            </div>
+            <div class="card-body py-2 px-3">
+                <div id="flujo-estados"></div>
             </div>
         </div>
 
         <!-- Siguiente paso: lo calcula el backend, que es quien conoce las
-             transiciones y los permisos. Antes había ocho botones y ninguno
-             decía cuál era el que tocaba. -->
+             transiciones y los permisos. -->
         <div id="siguiente-paso" class="mb-2"></div>
 
         <div class="row g-2">
@@ -44,10 +49,10 @@
                 <!-- Producto y respaldo de compra -->
                 <div class="card dt-card">
                     <div class="card-header d-flex align-items-center justify-content-between">
-                        <h6 class="card-title"><i class="ri-shopping-bag-line me-1"></i>Producto y respaldo de compra</h6>
+                        <h6 class="card-title"><i class="ri-shopping-bag-line me-1"></i>Producto y factura de compra</h6>
                         <button class="btn btn-soft-primary btn-sm py-0 px-2" id="btn-editar-inline"
-                                style="font-size:.7rem;display:none" onclick="abrirModalEditar()">
-                            <i class="ri-edit-2-line me-1"></i>Completar
+                                style="font-size:.72rem;display:none" onclick="abrirModalEditar()">
+                            <i class="ri-edit-2-line me-1"></i>Editar datos
                         </button>
                     </div>
                     <div class="card-body">
@@ -71,8 +76,7 @@
                         <hr class="my-2">
                         <div class="row g-2">
                             <!-- La factura de compra es EL dato que el proveedor
-                                 exige, así que ocupa el lugar principal y grita
-                                 cuando falta. -->
+                                 exige: ocupa el lugar principal y avisa si falta. -->
                             <div class="col-md-6">
                                 <div class="dt-label">Factura de compra al proveedor</div>
                                 <div class="dt-value" id="factura-compra">-</div>
@@ -82,6 +86,45 @@
                                 <div class="dt-value" id="documento-venta">-</div>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Qué pasó (motivo + clasificación) -->
+                <div class="card dt-card">
+                    <div class="card-header"><h6 class="card-title"><i class="ri-file-text-line me-1"></i>Qué pasó</h6></div>
+                    <div class="card-body">
+                        <div class="dt-label">Motivo</div>
+                        <p class="mb-2" style="font-size:.84rem;white-space:pre-wrap" id="motivo">-</p>
+                        <div id="bloque-detalle-problema">
+                            <div class="dt-label">Detalle</div>
+                            <p class="mb-2 text-muted" style="font-size:.82rem;white-space:pre-wrap" id="descripcion-problema">-</p>
+                        </div>
+                        <div class="row g-2" id="grilla-clasificacion"></div>
+                    </div>
+                </div>
+
+                <!-- Evidencia fotográfica: se puede completar después del alta -->
+                <div class="card dt-card" id="card-fotos">
+                    <div class="card-header d-flex flex-wrap gap-1 justify-content-between align-items-center">
+                        <h6 class="card-title">
+                            <i class="ri-camera-line me-1"></i>Fotos de evidencia
+                            <span class="badge ms-1" id="badge-fotos-completitud"></span>
+                        </h6>
+                        <div class="hstack gap-1">
+                            <button class="btn btn-soft-primary btn-sm py-0 px-2" style="font-size:.72rem;display:none"
+                                    onclick="elegirFoto('ADICIONAL', true)" id="btn-agregar-fotos">
+                                <i class="ri-image-add-line me-1"></i>Agregar fotos
+                            </button>
+                            <button class="btn btn-soft-secondary btn-sm py-0 px-2" style="font-size:.72rem"
+                                    onclick="abrirVisorDesde(0)" id="btn-ver-fotos">
+                                <i class="ri-fullscreen-line me-1"></i>Ver en grande
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="aviso-fotos"></div>
+                        <div class="row g-2" id="fotos-container"></div>
+                        <input type="file" id="input-subir-foto" accept="image/*" class="d-none">
                     </div>
                 </div>
 
@@ -111,44 +154,6 @@
                     </div>
                 </div>
 
-                <!-- Clasificación del defecto (condicional) -->
-                <div class="card dt-card" id="card-clasificacion-defecto" style="display:none;">
-                    <div class="card-header"><h6 class="card-title"><i class="ri-error-warning-line me-1 text-danger"></i>Clasificación del problema</h6></div>
-                    <div class="card-body">
-                        <div class="row g-2" id="grilla-clasificacion"></div>
-                    </div>
-                </div>
-
-                <!-- Descripción -->
-                <div class="card dt-card">
-                    <div class="card-header"><h6 class="card-title"><i class="ri-file-text-line me-1"></i>Qué pasó</h6></div>
-                    <div class="card-body">
-                        <div class="dt-label">Motivo</div>
-                        <p class="mb-2" style="font-size:.84rem" id="motivo">-</p>
-                        <div id="bloque-detalle-problema">
-                            <div class="dt-label">Detalle</div>
-                            <p class="mb-0 text-muted" style="font-size:.82rem" id="descripcion-problema">-</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Evidencia fotográfica -->
-                <div class="card dt-card" id="card-fotos" style="display:none;">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h6 class="card-title">
-                            <i class="ri-camera-line me-1"></i>Evidencia
-                            <span class="badge ms-1" id="badge-fotos-completitud"></span>
-                        </h6>
-                        <button class="btn btn-soft-primary btn-sm py-0 px-2" style="font-size:.7rem"
-                                onclick="abrirVisorDesde(0)" id="btn-ver-fotos">
-                            <i class="ri-fullscreen-line me-1"></i>Ver en grande
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-2" id="fotos-container"></div>
-                    </div>
-                </div>
-
                 <!-- Historial -->
                 <div class="card dt-card">
                     <div class="card-header d-flex justify-content-between align-items-center">
@@ -164,31 +169,31 @@
             <!-- ══════════ COLUMNA LATERAL ══════════ -->
             <div class="col-xl-4">
                 <div class="dt-sticky">
-                    <!-- Acciones -->
+                    <!-- Acciones: la que corresponde arriba, el resto abajo -->
                     <div class="card dt-card">
                         <div class="card-header"><h6 class="card-title"><i class="ri-flashlight-line me-1"></i>Acciones</h6></div>
                         <div class="card-body">
                             <div id="acciones-container" class="d-grid gap-1">
                                 <div class="text-center text-muted py-2"><div class="spinner-border spinner-border-sm"></div></div>
                             </div>
+                            <div id="acciones-secundarias" class="req-acciones-sec d-flex flex-wrap gap-1" style="display:none!important"></div>
                         </div>
                     </div>
 
-                    <!-- Decisiones tomadas: la de la empresa y la del proveedor,
-                         separadas. Antes se confundían en un solo estado. -->
-                    <div class="card dt-card" id="card-decisiones" style="display:none;">
-                        <div class="card-header"><h6 class="card-title"><i class="ri-scales-3-line me-1"></i>Decisiones</h6></div>
-                        <div class="card-body" id="decisiones-container"></div>
-                    </div>
-
-                    <!-- Proveedor y seguimiento -->
+                    <!-- Proveedor, correo y seguimiento -->
                     <div class="card dt-card" id="card-proveedor">
                         <div class="card-header"><h6 class="card-title"><i class="ri-building-line me-1"></i>Proveedor</h6></div>
                         <div class="card-body">
                             <div class="dt-value" id="proveedor-nombre">-</div>
-                            <div class="text-muted text-break" style="font-size:.72rem" id="proveedor-email">-</div>
+                            <div id="proveedor-correo" style="font-size:.74rem"></div>
                             <div id="info-seguimiento-proveedor"></div>
                         </div>
+                    </div>
+
+                    <!-- Decisiones tomadas: la de la empresa y la del proveedor, separadas -->
+                    <div class="card dt-card" id="card-decisiones" style="display:none;">
+                        <div class="card-header"><h6 class="card-title"><i class="ri-scales-3-line me-1"></i>Decisiones</h6></div>
+                        <div class="card-body" id="decisiones-container"></div>
                     </div>
 
                     <!-- Notas internas -->
@@ -216,7 +221,7 @@
                     <h6>Decisión de la empresa</h6>
                     <div class="req-modal-sub">¿Corresponde reclamárselo al proveedor?</div>
                 </div>
-                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body py-3">
                 <div id="dec-resumen" class="req-resumen mb-3"></div>
@@ -240,17 +245,18 @@
                 </div>
 
                 <div class="mb-0">
-                    <label class="form-label">Motivo <span class="text-danger">*</span></label>
+                    <label class="form-label" for="dec-motivo">Motivo <span class="text-danger">*</span></label>
                     <textarea class="form-control form-control-sm" id="dec-motivo" rows="3"
                               placeholder="Ej: la falla es de fabricación y está dentro del plazo de garantía"></textarea>
-                    <small class="text-muted" style="font-size:.7rem">
+                    <div class="req-chips mt-2" id="dec-chips"></div>
+                    <small class="text-muted d-block mt-1" style="font-size:.7rem">
                         Queda en el historial y es lo que se le explica a la tienda que levantó el caso.
                     </small>
                 </div>
             </div>
             <div class="req-modal-footer justify-content-end">
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary btn-sm" onclick="guardarDecision()">
+                <button type="button" class="btn btn-primary btn-sm" id="dec-btn-guardar" onclick="guardarDecision()">
                     <i class="ri-check-line me-1"></i>Registrar decisión
                 </button>
             </div>
@@ -260,8 +266,7 @@
 
 <!-- ── Completar / corregir datos ──
      El requerimiento nace incompleto a propósito: la tienda sabe qué falló,
-     pero no a qué proveedor se le compró ni con qué factura. Acá lo completa
-     quien revisa, antes de enviarlo. -->
+     pero no a qué proveedor se le compró ni con qué factura. -->
 <div class="modal fade req-modal" id="modalEditarDatos" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered">
         <div class="modal-content">
@@ -271,24 +276,22 @@
                     <h6>Completar datos</h6>
                     <div class="req-modal-sub">Lo que la tienda no puede saber lo completa quien revisa</div>
                 </div>
-                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body py-3">
-                <!-- Checklist de lo que falta: el usuario ve de entrada qué
-                     campos bloquean el envío, en vez de recorrer el formulario. -->
+                <!-- Checklist de lo que falta: se ve de entrada qué bloquea el envío -->
                 <div id="ed-checklist" class="mb-3"></div>
 
                 <div class="req-bloque">
                     <h6 class="req-bloque-titulo">
-                        <i class="ri-building-line"></i>Proveedor y respaldo de compra
+                        <i class="ri-building-line"></i>Proveedor y factura de compra
                         <button type="button" class="btn btn-primary btn-sm ms-auto py-0 px-2" style="font-size:.72rem" onclick="alternarBuscadorCompras()">
                             <i class="ri-search-2-line me-1"></i><span id="ed-btn-buscador-txt">Buscar la factura</span>
                         </button>
                     </h6>
 
-                    <!-- Buscador de compras: panel EN LÍNEA, no un modal anidado.
-                         Bootstrap 5 no apila modales y el segundo backdrop deja la
-                         pantalla negra al cerrar. -->
+                    <!-- Buscador de compras: panel EN LÍNEA, no un modal anidado
+                         (Bootstrap 5 no apila modales). -->
                     <div id="ed-buscador-compras" class="req-resumen mb-3" style="display:none;">
                         <ul class="nav nav-pills nav-sm mb-2" style="font-size:.75rem">
                             <li class="nav-item"><a class="nav-link active py-1 px-2" href="javascript:void(0)"
@@ -306,9 +309,8 @@
                                 <button class="btn btn-primary" type="button" onclick="buscarCompras()">Buscar</button>
                             </div>
                             <div class="text-muted mb-2" style="font-size:.7rem">
-                                <i class="ri-information-line me-1"></i>Busca en las líneas de las facturas de compra,
-                                en los lotes FIFO y en el kardex — incluidos los ingresos traídos del sistema anterior.
-                                Haz clic en una fila para usarla.
+                                <i class="ri-information-line me-1"></i>Busca en las facturas de compra, en los lotes y en el kardex
+                                (incluidos los ingresos del sistema anterior). Haga clic en una fila para usarla.
                             </div>
                         </div>
 
@@ -321,8 +323,8 @@
                                 <button class="btn btn-primary" type="button" onclick="buscarPorNumeroFactura()">Verificar</button>
                             </div>
                             <div class="text-muted mb-2" style="font-size:.7rem">
-                                <i class="ri-information-line me-1"></i>Si tienes la factura física, escribe su número:
-                                se comprueba contra el sistema y se completa solo el proveedor y la fecha.
+                                <i class="ri-information-line me-1"></i>Si tiene la factura física, escriba su número:
+                                se comprueba contra el sistema y se completan solos el proveedor y la fecha.
                             </div>
                         </div>
 
@@ -331,7 +333,7 @@
 
                     <div class="row g-2">
                         <div class="col-md-6">
-                            <label class="form-label small mb-0">Proveedor <span class="text-danger">*</span></label>
+                            <label class="form-label small mb-0" for="ed-proveedor">Proveedor <span class="text-danger">*</span></label>
                             <select class="form-select form-select-sm" id="ed-proveedor">
                                 <option value="">Sin asignar</option>
                                 {% for proveedor in proveedores %}
@@ -341,11 +343,11 @@
                             <small class="text-muted" id="ed-proveedor-sugerido" style="font-size:.7rem"></small>
                         </div>
                         <div class="col-6 col-md-3">
-                            <label class="form-label small mb-0">N° factura de compra</label>
+                            <label class="form-label small mb-0" for="ed-factura">N° factura de compra</label>
                             <input type="text" class="form-control form-control-sm" id="ed-factura" placeholder="Ej: 84512">
                         </div>
                         <div class="col-6 col-md-3">
-                            <label class="form-label small mb-0">Fecha factura</label>
+                            <label class="form-label small mb-0" for="ed-fecha-factura">Fecha factura</label>
                             <input type="date" class="form-control form-control-sm" id="ed-fecha-factura">
                         </div>
                     </div>
@@ -355,11 +357,11 @@
                     <h6 class="req-bloque-titulo"><i class="ri-shopping-bag-line"></i>Producto y clasificación</h6>
                     <div class="row g-2">
                         <div class="col-4 col-md-2">
-                            <label class="form-label small mb-0">Cantidad</label>
+                            <label class="form-label small mb-0" for="ed-cantidad">Cantidad</label>
                             <input type="number" class="form-control form-control-sm" id="ed-cantidad" min="1" step="1">
                         </div>
                         <div class="col-8 col-md-3">
-                            <label class="form-label small mb-0">Prioridad</label>
+                            <label class="form-label small mb-0" for="ed-prioridad">Prioridad</label>
                             <select class="form-select form-select-sm" id="ed-prioridad">
                                 <option value="BAJA">Baja</option>
                                 <option value="MEDIA">Media</option>
@@ -368,7 +370,7 @@
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small mb-0">Severidad</label>
+                            <label class="form-label small mb-0" for="ed-severidad">Severidad</label>
                             <select class="form-select form-select-sm" id="ed-severidad">
                                 <option value="">Sin definir</option>
                                 <option value="LEVE">Leve — estético, no afecta el uso</option>
@@ -377,7 +379,7 @@
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label small mb-0">Condición</label>
+                            <label class="form-label small mb-0" for="ed-condicion">Condición</label>
                             <select class="form-select form-select-sm" id="ed-condicion">
                                 <option value="">Sin definir</option>
                                 <option value="NUEVO_SIN_USO">Nuevo sin uso</option>
@@ -395,7 +397,7 @@
                     </h6>
                     <div class="row g-2">
                         <div class="col-md-3">
-                            <label class="form-label small mb-0">RUT</label>
+                            <label class="form-label small mb-0" for="ed-cliente-rut">RUT</label>
                             <div class="input-group input-group-sm">
                                 <input type="text" class="form-control" id="ed-cliente-rut" placeholder="12345678-9">
                                 <button class="btn btn-outline-info" type="button" onclick="buscarClienteEnEdicion()" title="Buscar en la ficha de clientes"><i class="ri-search-line"></i></button>
@@ -403,15 +405,15 @@
                             <small id="ed-rut-aviso" style="font-size:.68rem"></small>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small mb-0">Nombre</label>
+                            <label class="form-label small mb-0" for="ed-cliente-nombre">Nombre</label>
                             <input type="text" class="form-control form-control-sm" id="ed-cliente-nombre">
                         </div>
                         <div class="col-6 col-md-2">
-                            <label class="form-label small mb-0">Teléfono</label>
+                            <label class="form-label small mb-0" for="ed-cliente-telefono">Teléfono</label>
                             <input type="text" class="form-control form-control-sm" id="ed-cliente-telefono">
                         </div>
                         <div class="col-6 col-md-3">
-                            <label class="form-label small mb-0">Email</label>
+                            <label class="form-label small mb-0" for="ed-cliente-email">Email</label>
                             <input type="email" class="form-control form-control-sm" id="ed-cliente-email">
                         </div>
                     </div>
@@ -420,30 +422,29 @@
                 <div class="req-bloque mb-0">
                     <h6 class="req-bloque-titulo"><i class="ri-file-text-line"></i>Descripción</h6>
                     <div class="mb-2">
-                        <label class="form-label small mb-0">Motivo</label>
+                        <label class="form-label small mb-0" for="ed-motivo">Motivo</label>
                         <textarea class="form-control form-control-sm" id="ed-motivo" rows="2"></textarea>
                     </div>
                     <div class="mb-2">
-                        <label class="form-label small mb-0">Detalle del problema</label>
+                        <label class="form-label small mb-0" for="ed-descripcion">Detalle del problema</label>
                         <textarea class="form-control form-control-sm" id="ed-descripcion" rows="2"></textarea>
                     </div>
                     <div class="mb-0" id="ed-bloque-notas">
-                        <label class="form-label small mb-0">Notas internas <small class="text-muted">(no se envían al proveedor)</small></label>
+                        <label class="form-label small mb-0" for="ed-notas">Notas internas <small class="text-muted">(no se envían al proveedor)</small></label>
                         <textarea class="form-control form-control-sm" id="ed-notas" rows="2"></textarea>
                     </div>
                 </div>
             </div>
-            <div class="req-modal-footer justify-content-end">
+            <div class="req-modal-footer">
+                <span class="text-muted small me-auto" style="font-size:.72rem"><i class="ri-camera-line me-1"></i>Las fotos se agregan en la tarjeta "Fotos de evidencia".</span>
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary btn-sm" onclick="guardarEdicion()"><i class="ri-save-line me-1"></i>Guardar cambios</button>
+                <button type="button" class="btn btn-primary btn-sm" id="ed-btn-guardar" onclick="guardarEdicion()"><i class="ri-save-line me-1"></i>Guardar cambios</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- ── Enviar al proveedor ──
-     Era un SweetAlert con HTML dentro: en un notebook de 15" el diálogo
-     quedaba más alto que la pantalla y el botón de enviar caía fuera. -->
+<!-- ── Enviar al proveedor ── -->
 <div class="modal fade req-modal" id="modalEnviarProveedor" tabindex="-1" data-bs-backdrop="static">
     <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
         <div class="modal-content">
@@ -451,28 +452,46 @@
                 <div class="req-modal-icon"><i class="ri-mail-send-line"></i></div>
                 <div>
                     <h6 id="env-titulo">Enviar al proveedor</h6>
-                    <div class="req-modal-sub">Se envía el formato PDF con la evidencia y las fotos en alta resolución</div>
+                    <div class="req-modal-sub">Va el formato PDF con la evidencia y las fotos en alta resolución</div>
                 </div>
-                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body py-3">
                 <div id="env-resumen" class="req-resumen mb-3"></div>
                 <div id="env-avisos"></div>
 
-                <div class="row g-2 mb-2">
-                    <div class="col-md-6">
-                        <label class="form-label small mb-0">Correo del proveedor <span class="text-danger">*</span></label>
-                        <input type="email" class="form-control form-control-sm" id="env-correo-destino" placeholder="proveedor@correo.cl">
-                        <small class="text-muted" id="env-cc" style="font-size:.7rem"></small>
+                <div class="req-bloque">
+                    <h6 class="req-bloque-titulo"><i class="ri-mail-line"></i>Para: correo del proveedor</h6>
+                    <input type="email" class="form-control form-control-sm" id="env-correo-destino" placeholder="garantias@proveedor.cl" autocomplete="off">
+                    <div class="form-check mt-2 mb-0" id="env-recordar-wrap">
+                        <input class="form-check-input" type="checkbox" id="env-recordar" checked>
+                        <label class="form-check-label small" for="env-recordar" id="env-recordar-txt">
+                            Guardar como el correo de este proveedor: los próximos envíos irán aquí, los haga quien los haga
+                        </label>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label small mb-0">Copia de control</label>
-                        <input type="email" class="form-control form-control-sm" id="env-correo-copia" placeholder="copia@miempresa.cl">
-                        <small class="text-muted" style="font-size:.7rem">Recibe un resumen que certifica el envío, y las respuestas que el proveedor haga con "Responder". Editable en cada envío.</small>
-                    </div>
+                    <small class="text-muted d-block" id="env-cc" style="font-size:.7rem"></small>
                 </div>
+
+                <!-- Correo FIJO del módulo: copia de control y respuestas -->
+                <div class="req-bloque">
+                    <h6 class="req-bloque-titulo"><i class="ri-reply-line"></i>Copia y respuestas llegan a</h6>
+                    <div class="d-flex align-items-center gap-2 flex-wrap" id="env-modulo-vista">
+                        <strong id="env-modulo-correo" style="font-size:.85rem"></strong>
+                        <button type="button" class="btn btn-link btn-sm p-0" id="env-modulo-cambiar" onclick="editarCorreoModuloEnvio(true)">Cambiar</button>
+                    </div>
+                    <div class="input-group input-group-sm" id="env-modulo-edicion" style="display:none">
+                        <input type="email" class="form-control" id="env-modulo-input" placeholder="requerimientos@miempresa.cl">
+                        <button class="btn btn-primary" type="button" onclick="guardarCorreoModuloEnvio()">Guardar</button>
+                        <button class="btn btn-outline-secondary" type="button" onclick="editarCorreoModuloEnvio(false)" id="env-modulo-cancelar">Cancelar</button>
+                    </div>
+                    <small class="text-muted d-block mt-1" style="font-size:.7rem" id="env-modulo-ayuda">
+                        Es el correo del módulo: recibe una copia sin fotos que certifica el envío y es a donde responde el proveedor.
+                        No depende de quién envía.
+                    </small>
+                </div>
+
                 <div class="mb-2">
-                    <label class="form-label small mb-0">Mensaje adicional <small class="text-muted">(opcional)</small></label>
+                    <label class="form-label small mb-0" for="env-mensaje">Mensaje adicional <small class="text-muted">(opcional)</small></label>
                     <textarea class="form-control form-control-sm" id="env-mensaje" rows="2"
                               placeholder="Texto que se incluirá en el cuerpo del correo..."></textarea>
                 </div>
@@ -498,47 +517,47 @@
                 <div class="req-modal-icon"><i class="ri-mail-check-line"></i></div>
                 <div>
                     <h6>Respuesta del proveedor</h6>
-                    <div class="req-modal-sub">Lo que contestó, y qué se le dice al cliente</div>
+                    <div class="req-modal-sub">Lo que contestó, y qué se le dice a la tienda y al cliente</div>
                 </div>
-                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body py-3">
-                <label class="form-label">Decisión <span class="text-danger">*</span></label>
+                <div id="resp-aviso-correo"></div>
+                <label class="form-label">¿Qué decidió el proveedor? <span class="text-danger">*</span></label>
                 <div class="row g-2 mb-3 req-origen">
                     <div class="col-4">
-                        <input type="radio" class="btn-check" name="decision_radio" id="dec-aprobado" value="APROBADO" onchange="document.getElementById('decision-proveedor').value='APROBADO'">
-                        <label class="btn btn-outline-success w-100 btn-sm" for="dec-aprobado"><i class="ri-check-line me-1"></i>Aprobado</label>
+                        <input type="radio" class="btn-check" name="decision_radio" id="dec-aprobado" value="APROBADO">
+                        <label class="btn btn-outline-success w-100 btn-sm" for="dec-aprobado"><i class="ri-check-line me-1"></i>Aprobó</label>
                     </div>
                     <div class="col-4">
-                        <input type="radio" class="btn-check" name="decision_radio" id="dec-parcial" value="PARCIAL" onchange="document.getElementById('decision-proveedor').value='PARCIAL'">
-                        <label class="btn btn-outline-warning w-100 btn-sm" for="dec-parcial"><i class="ri-contrast-2-line me-1"></i>Parcial</label>
+                        <input type="radio" class="btn-check" name="decision_radio" id="dec-parcial" value="PARCIAL">
+                        <label class="btn btn-outline-warning w-100 btn-sm" for="dec-parcial"><i class="ri-contrast-2-line me-1"></i>Aprobó una parte</label>
                     </div>
                     <div class="col-4">
-                        <input type="radio" class="btn-check" name="decision_radio" id="dec-rechazado" value="RECHAZADO" onchange="document.getElementById('decision-proveedor').value='RECHAZADO'">
-                        <label class="btn btn-outline-danger w-100 btn-sm" for="dec-rechazado"><i class="ri-close-line me-1"></i>Rechazado</label>
+                        <input type="radio" class="btn-check" name="decision_radio" id="dec-rechazado" value="RECHAZADO">
+                        <label class="btn btn-outline-danger w-100 btn-sm" for="dec-rechazado"><i class="ri-close-line me-1"></i>Rechazó</label>
                     </div>
                 </div>
-                <input type="hidden" id="decision-proveedor">
 
                 <div class="row g-2">
                     <div class="col-md-6">
-                        <label class="form-label">Respuesta textual del proveedor <span class="text-danger">*</span></label>
-                        <textarea class="form-control form-control-sm" id="respuesta-proveedor-text" rows="3" placeholder="Copie lo que respondió (registro interno)"></textarea>
+                        <label class="form-label" for="respuesta-proveedor-text">Lo que respondió el proveedor <span class="text-danger">*</span></label>
+                        <textarea class="form-control form-control-sm" id="respuesta-proveedor-text" rows="4" placeholder="Copie su respuesta (registro interno)"></textarea>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Motivo para el cliente <span class="text-danger">*</span></label>
-                        <textarea class="form-control form-control-sm" id="motivo-usuario" rows="3" placeholder="Esto es lo que verá el vendedor y el cliente"></textarea>
+                        <label class="form-label" for="motivo-usuario">Qué se le explica a la tienda y al cliente <span class="text-danger">*</span></label>
+                        <textarea class="form-control form-control-sm" id="motivo-usuario" rows="4" placeholder="Ej: el proveedor repone el par; se le cambia al cliente"></textarea>
                     </div>
                 </div>
                 <div class="mt-2 mb-0">
-                    <label class="form-label">Fecha en que respondió</label>
+                    <label class="form-label" for="fecha-respuesta-proveedor">Fecha en que respondió</label>
                     <input type="datetime-local" class="form-control form-control-sm" id="fecha-respuesta-proveedor" style="max-width:260px">
                     <small class="text-muted" style="font-size:.7rem">Si contestó hace días, corrija la fecha: de ahí sale el tiempo de respuesta.</small>
                 </div>
             </div>
             <div class="req-modal-footer justify-content-end">
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-success btn-sm" onclick="guardarRespuestaProveedor()"><i class="ri-save-line me-1"></i>Registrar</button>
+                <button type="button" class="btn btn-success btn-sm" id="resp-btn-guardar" onclick="guardarRespuestaProveedor()"><i class="ri-save-line me-1"></i>Registrar respuesta</button>
             </div>
         </div>
     </div>
@@ -552,19 +571,25 @@
                 <div class="req-modal-icon"><i class="ri-check-double-line"></i></div>
                 <div>
                     <h6>Cerrar el requerimiento</h6>
-                    <div class="req-modal-sub">Cómo terminó resolviéndose con el cliente</div>
+                    <div class="req-modal-sub">Cómo terminó resolviéndose</div>
                 </div>
-                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body py-3">
-                <label class="form-label">Resolución final <span class="text-danger">*</span></label>
+                <div id="comp-contexto" class="mb-2"></div>
+                <label class="form-label" for="comp-resolucion">Resolución final <span class="text-danger">*</span></label>
+                <div class="req-chips mb-2" id="comp-chips"></div>
                 <textarea class="form-control form-control-sm" id="comp-resolucion" rows="3"
-                          placeholder="Ej: el proveedor cursó la NC y se le entregó un par nuevo al cliente"></textarea>
-                <small class="text-muted" style="font-size:.7rem">Queda como cierre del caso: el requerimiento ya no se edita.</small>
+                          placeholder="Ej: el proveedor emitió la NC y se le entregó un par nuevo al cliente"></textarea>
+                <small class="text-muted d-block mt-1" style="font-size:.7rem">Queda como cierre del caso: el requerimiento ya no se edita.</small>
+                <div class="alert alert-light border py-2 px-2 mt-2 mb-0" style="font-size:.72rem">
+                    <i class="ri-information-line me-1 text-primary"></i>Si al cliente hay que devolverle dinero, eso se hace en
+                    <strong>Ventas → Devolución de Dinero</strong>. Este módulo solo registra el reclamo al proveedor.
+                </div>
             </div>
             <div class="req-modal-footer justify-content-end">
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-success btn-sm" onclick="guardarCompletar()"><i class="ri-check-line me-1"></i>Completar</button>
+                <button type="button" class="btn btn-success btn-sm" id="comp-btn-guardar" onclick="guardarCompletar()"><i class="ri-check-line me-1"></i>Cerrar requerimiento</button>
             </div>
         </div>
     </div>
@@ -578,17 +603,17 @@
                 <div class="req-modal-icon"><i class="ri-refresh-line"></i></div>
                 <div>
                     <h6>Cambiar estado</h6>
-                    <div class="req-modal-sub">Solo se ofrecen las transiciones válidas desde el estado actual</div>
+                    <div class="req-modal-sub">Solo se ofrecen los cambios válidos desde el estado actual</div>
                 </div>
-                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white btn-sm ms-auto" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body py-3">
                 <div class="mb-2">
-                    <label class="form-label">Nuevo estado</label>
+                    <label class="form-label" for="nuevo-estado">Nuevo estado</label>
                     <select class="form-select form-select-sm" id="nuevo-estado"></select>
                 </div>
                 <div class="mb-0">
-                    <label class="form-label">Comentario <small class="text-muted">(queda en el historial)</small></label>
+                    <label class="form-label" for="comentario-estado">Comentario <small class="text-muted">(queda en el historial)</small></label>
                     <textarea class="form-control form-control-sm" id="comentario-estado" rows="2" placeholder="Por qué se cambia el estado"></textarea>
                 </div>
             </div>
@@ -601,6 +626,7 @@
 </div>
 
 {% include 'vistas/modulo_requerimientos/_scripts_requerimientos.html' %}
+{% include 'vistas/modulo_requerimientos/_modal_correo_modulo.html' %}
 
 <script>
 const requerimientoId = {{ requerimiento.id }};
@@ -609,7 +635,13 @@ let datosRequerimiento = null;
 let fotosVisor = [];
 let comprasEncontradas = [];
 
-document.addEventListener('DOMContentLoaded', cargarRequerimiento);
+document.addEventListener('DOMContentLoaded', () => {
+    cargarRequerimiento();
+    $id('input-subir-foto').addEventListener('change', alElegirFoto);
+    // Si alguien cambia el correo del módulo (acá o en el modal general), la
+    // ficha y el modal de envío lo muestran al instante.
+    ReqCorreoModulo.alCambiar(() => { if (datosRequerimiento) pintarCorreoModuloEnvio(); });
+});
 
 function $id(id) { return document.getElementById(id); }
 
@@ -625,8 +657,22 @@ function post(url, cuerpo) {
     });
 }
 
+// Deshabilita el botón mientras corre la acción: un doble clic registraba
+// dos veces la misma decisión o respuesta.
+function conBoton(id, textoCargando, promesa) {
+    const btn = $id(id);
+    const original = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${textoCargando}`; }
+    return promesa.finally(() => { if (btn) { btn.disabled = false; btn.innerHTML = original; } });
+}
+
+function cerrarModal(id) {
+    const m = bootstrap.Modal.getInstance($id(id));
+    if (m) m.hide();
+}
+
 function cargarRequerimiento() {
-    api(`/app/api/requerimientos/${requerimientoId}/`)
+    return api(`/app/api/requerimientos/${requerimientoId}/`)
         .then(data => {
             if (!data.success) {
                 Swal.fire('Sin acceso', data.error || 'No se pudo cargar', 'error');
@@ -636,10 +682,14 @@ function cargarRequerimiento() {
             mostrarRequerimiento(data.requerimiento);
             // Llegando desde el listado con "falta el proveedor", el modal se
             // abre solo: evita el paso de buscar dónde estaba la acción.
-            if (new URLSearchParams(window.location.search).get('completar') === '1'
-                && data.requerimiento.permisos.puede_editar) {
+            if (new URLSearchParams(window.location.search).get('completar') === '1') {
                 history.replaceState(null, '', window.location.pathname);
-                abrirModalEditar();
+                const soloFotos = (data.requerimiento.faltantes || []).every(f => f.startsWith('fotos'));
+                if (soloFotos && data.requerimiento.permisos.puede_gestionar_fotos) {
+                    $id('card-fotos').scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else if (data.requerimiento.permisos.puede_editar) {
+                    abrirModalEditar();
+                }
             }
         })
         .catch(() => Swal.fire('Error', 'No se pudo cargar el requerimiento', 'error'));
@@ -651,17 +701,18 @@ function cU(c) { return { NORMAL: 'success', MEDIA: 'info', ALTA: 'warning', CRI
 // ══════════ Pintado ══════════
 
 function mostrarRequerimiento(r) {
+    document.title = `${r.numero_requerimiento} · Requerimientos`;
     $id('numero-requerimiento').textContent = r.numero_requerimiento;
-    $id('badge-tipo').innerHTML = reqBadgeTipo(r.tipo_codigo, r.tipo);
-    $id('badge-estado').innerHTML = reqPillEstado(r.estado_codigo, r.estado);
-    $id('badge-prioridad').className = `badge badge-soft-${cP(r.prioridad_codigo)}`;
-    $id('badge-prioridad').textContent = r.prioridad;
+    $id('badge-tipo').innerHTML = reqBadgeTipo(r.tipo_codigo, r.tipo).replace('badge-soft-', 'bg-light badge-soft-');
+    $id('badge-estado').innerHTML = reqPillEstado(r.estado_codigo, r.estado).replace('req-pill ', 'req-pill bg-white ');
+    $id('badge-prioridad').className = `badge bg-light text-${cP(r.prioridad_codigo)}`;
+    $id('badge-prioridad').textContent = `Prioridad ${r.prioridad.toLowerCase()}`;
     $id('badge-origen').innerHTML = r.origen_codigo === 'STOCK'
         ? '<i class="ri-store-2-line me-1"></i>Detectado en tienda'
         : '<i class="ri-user-line me-1"></i>Reclamo de cliente';
-    $id('fecha-creacion-txt').textContent = `Creado el ${r.fecha_creacion}`;
-    $id('dias-transcurridos').textContent = `${r.dias_transcurridos}d`;
-    $id('dias-transcurridos').className = `badge badge-soft-${cU(r.nivel_urgencia)}`;
+    $id('fecha-creacion-txt').textContent = `Creado el ${r.fecha_creacion} en ${r.sucursal.nombre}${r.usuario_creador ? ' por ' + r.usuario_creador : ''}`;
+    $id('dias-transcurridos').textContent = `${r.dias_transcurridos} día(s)`;
+    $id('dias-transcurridos').className = `badge bg-light text-${cU(r.nivel_urgencia)}`;
     $id('flujo-estados').innerHTML = reqFlujo(r.estado_codigo);
 
     pintarSiguientePaso(r);
@@ -670,7 +721,7 @@ function mostrarRequerimiento(r) {
     $id('nombre-producto').textContent = r.nombre_producto;
     $id('sku').textContent = r.sku;
     $id('badge-cantidad').innerHTML = r.cantidad > 1
-        ? ` · <span class="fw-semibold text-primary">${r.cantidad} unidades</span>` : '';
+        ? ` · <span class="fw-semibold text-primary">${r.cantidad} unidades</span>` : ' · 1 unidad';
     $id('sucursal').textContent = r.sucursal.nombre;
     $id('usuario-creador').textContent = r.usuario_creador || '—';
 
@@ -678,14 +729,14 @@ function mostrarRequerimiento(r) {
         ? `<span class="text-success"><i class="ri-checkbox-circle-fill me-1"></i>N° ${reqEsc(r.numero_factura_compra)}</span>
            ${r.fecha_factura_compra ? `<small class="text-muted ms-1">${reqEsc(r.fecha_factura_compra)}</small>` : ''}`
         : `<span class="text-danger"><i class="ri-error-warning-fill me-1"></i>Sin registrar</span>
-           ${r.permisos.puede_editar ? ' <a href="javascript:void(0)" onclick="abrirModalEditar(true)" style="font-size:.75rem">buscarla</a>' : ''}`;
+           ${r.permisos.puede_editar && !r.esta_cerrado ? ' <a href="javascript:void(0)" onclick="abrirModalEditar(true)" style="font-size:.75rem">buscarla</a>' : ''}`;
 
     $id('documento-venta').innerHTML = r.numero_boleta
         ? `${reqEsc(r.tipo_documento || 'Documento')} N° ${reqEsc(r.numero_boleta)}
            ${r.fecha_compra ? `<small class="text-muted ms-1">${reqEsc(r.fecha_compra)}</small>` : ''}`
         : '<span class="dt-value vacio">Sin documento de venta</span>';
 
-    $id('btn-editar-inline').style.display = r.permisos.puede_editar ? '' : 'none';
+    $id('btn-editar-inline').style.display = r.permisos.puede_editar && !r.esta_cerrado ? '' : 'none';
 
     // ── Cliente ──
     if (r.origen_codigo === 'STOCK' && !r.cliente_nombre) {
@@ -695,11 +746,9 @@ function mostrarRequerimiento(r) {
             <i class="ri-store-2-line me-1"></i>Falla detectada en mercadería de la tienda: no hubo venta ni cliente afectado.</div>`;
     } else {
         // Se reponen SIEMPRE: si el caso nació sin cliente y después se le
-        // completaron los datos, la tarjeta quedaba pegada en "no hubo
-        // cliente afectado" aunque el nombre ya estuviera cargado.
+        // completaron los datos, la tarjeta quedaba pegada en el aviso.
         $id('datos-cliente').style.display = '';
         $id('aviso-sin-cliente').style.display = 'none';
-        // reqEsc: nombre y RUT los tipea un usuario y acá van por innerHTML.
         $id('cliente-nombre').innerHTML = reqEsc(r.cliente_nombre) || '<span class="vacio">Sin nombre</span>';
         $id('cliente-rut').innerHTML = reqEsc(r.cliente_rut) || '<span class="vacio">—</span>';
         $id('cliente-telefono').innerHTML = r.cliente_telefono
@@ -710,22 +759,7 @@ function mostrarRequerimiento(r) {
             : '<span class="vacio">—</span>';
     }
 
-    // ── Clasificación ──
-    const clasif = [
-        ['Subtipo', r.subtipo],
-        ['Severidad', r.severidad_defecto],
-        ['Condición del producto', r.condicion_producto],
-        ['Producto esperado', r.producto_esperado],
-    ].filter(([, v]) => v);
-    if (clasif.length) {
-        $id('card-clasificacion-defecto').style.display = '';
-        $id('grilla-clasificacion').innerHTML = clasif.map(([k, v]) => `
-            <div class="col-6 col-md-3"><div class="dt-label">${k}</div><div class="dt-value">${reqEsc(v)}</div></div>`).join('');
-    } else {
-        $id('card-clasificacion-defecto').style.display = 'none';
-    }
-
-    // ── Descripción ──
+    // ── Qué pasó + clasificación ──
     $id('motivo').textContent = r.motivo || '—';
     if (r.descripcion_problema) {
         $id('bloque-detalle-problema').style.display = '';
@@ -733,6 +767,14 @@ function mostrarRequerimiento(r) {
     } else {
         $id('bloque-detalle-problema').style.display = 'none';
     }
+    const clasif = [
+        ['Tipo de falla', r.subtipo],
+        ['Severidad', r.severidad_defecto],
+        ['Condición del producto', r.condicion_producto],
+        ['Producto esperado', r.producto_esperado],
+    ].filter(([, v]) => v);
+    $id('grilla-clasificacion').innerHTML = clasif.map(([k, v]) => `
+        <div class="col-6 col-md-3"><div class="dt-label">${k}</div><div class="dt-value">${reqEsc(v)}</div></div>`).join('');
 
     // ── Notas internas ──
     if (r.permisos.puede_ver_notas && r.notas_internas) {
@@ -749,31 +791,37 @@ function mostrarRequerimiento(r) {
     pintarAcciones(r);
 }
 
+const ACCIONES_PASO = {
+    editar:    { txt: 'Completar datos', icono: 'ri-edit-2-line', fn: 'abrirModalEditar()' },
+    fotos:     { txt: 'Subir fotos', icono: 'ri-image-add-line', fn: 'irAFotos()' },
+    decidir:   { txt: 'Validar o rechazar', icono: 'ri-scales-3-line', fn: 'abrirModalDecidir()' },
+    enviar:    { txt: 'Enviar al proveedor', icono: 'ri-mail-send-line', fn: 'abrirModalEnvio(false)' },
+    respuesta: { txt: 'Registrar respuesta', icono: 'ri-mail-check-line', fn: 'abrirModalRespuestaProveedor()' },
+    completar: { txt: 'Cerrar requerimiento', icono: 'ri-check-double-line', fn: 'abrirModalCompletar()' },
+};
+
 function pintarSiguientePaso(r) {
     const p = r.siguiente_paso || {};
-    const acciones = {
-        editar:    { txt: 'Completar datos', icono: 'ri-edit-2-line', fn: 'abrirModalEditar()' },
-        decidir:   { txt: 'Validar o rechazar', icono: 'ri-scales-3-line', fn: 'abrirModalDecidir()' },
-        enviar:    { txt: 'Enviar al proveedor', icono: 'ri-mail-send-line', fn: 'abrirModalEnvio(false)' },
-        respuesta: { txt: 'Registrar respuesta', icono: 'ri-mail-check-line', fn: 'abrirModalRespuestaProveedor()' },
-        completar: { txt: 'Completar', icono: 'ri-check-double-line', fn: 'abrirModalCompletar()' },
-    };
-    const accion = acciones[p.accion];
+    const accion = ACCIONES_PASO[p.accion];
+    const tono = p.tono || 'secondary';
+    const icono = { warning: 'ri-error-warning-line', danger: 'ri-alarm-warning-line', success: 'ri-checkbox-circle-line',
+                    primary: 'ri-guide-line', info: 'ri-time-line', secondary: 'ri-flag-line' }[tono] || 'ri-guide-line';
     $id('siguiente-paso').innerHTML = `
-        <div class="alert alert-${p.tono || 'secondary'} d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-0">
-            <i class="ri-guide-line fs-16"></i>
+        <div class="req-proximo tono-${tono}">
+            <span class="req-proximo-icono"><i class="${icono}"></i></span>
             <div class="flex-grow-1">
-                <strong style="font-size:.85rem">${reqEsc(p.titulo || '')}</strong>
+                <div class="text-uppercase fw-semibold opacity-75" style="font-size:.64rem;letter-spacing:.4px">Qué toca ahora</div>
+                <strong style="font-size:.9rem">${reqEsc(p.titulo || '')}</strong>
                 ${p.detalle ? `<div style="font-size:.76rem" class="opacity-75">${reqEsc(p.detalle)}</div>` : ''}
             </div>
-            ${accion ? `<button class="btn btn-sm btn-${p.tono === 'warning' ? 'warning' : 'primary'}" onclick="${accion.fn}">
+            ${accion ? `<button class="btn btn-sm btn-${tono === 'warning' ? 'warning' : tono === 'danger' ? 'danger' : 'primary'}" onclick="${accion.fn}">
                 <i class="${accion.icono} me-1"></i>${accion.txt}</button>` : ''}
         </div>`;
 }
 
 // Qué pasó con el correo DESPUÉS de mandarlo. Devuelve '' cuando el caso es
 // anterior a la bitácora: mejor no mostrar la sección que inventar un estado.
-function pintarSeguimientoCorreo(s) {
+function pintarSeguimientoCorreo(s, r) {
     if (!s) return '';
 
     let h = `<div class="d-flex justify-content-between align-items-center mt-2">
@@ -786,8 +834,9 @@ function pintarSeguimientoCorreo(s) {
     if (s.hay_problema) {
         h += `<div class="alert alert-danger py-1 px-2 mt-2 mb-0" style="font-size:.72rem">
             <i class="ri-error-warning-line me-1"></i><strong>El correo no llegó.</strong>
-            ${s.detalle ? reqEsc(s.detalle) + '. ' : ''}Corrige la dirección en la ficha
-            del proveedor y vuelve a enviarlo.</div>`;
+            ${s.detalle ? reqEsc(s.detalle) + '. ' : ''}Corrija el correo del proveedor y vuelva a enviarlo.
+            ${r.permisos.puede_enviar_proveedor ? `<div class="mt-1"><button class="btn btn-danger btn-sm py-0 px-2" style="font-size:.7rem" onclick="abrirModalEnvio(true)">
+                <i class="ri-mail-send-line me-1"></i>Corregir y reenviar</button></div>` : ''}</div>`;
     } else if (s.sin_confirmacion) {
         h += `<div class="req-correo-salvedad">Sin confirmación de entrega todavía.</div>`;
     }
@@ -805,31 +854,31 @@ function pintarSeguimientoCorreo(s) {
     }
 
     // El proveedor contestó y su respuesta ya está guardada, pero nadie dijo
-    // todavía si eso es un sí o un no. Es el punto donde el caso se queda
-    // trabado sin que nadie lo note.
+    // todavía si eso es un sí o un no.
     if (s.falta_clasificar) {
         h += `<div class="alert alert-warning py-1 px-2 mt-2 mb-0" style="font-size:.72rem">
             <i class="ri-question-answer-line me-1"></i><strong>Respondió el proveedor.</strong>
-            Falta registrar si aprueba, rechaza o aprueba parcial.</div>`;
+            Falta registrar si aprobó, rechazó o aprobó una parte.
+            ${r.permisos.puede_registrar_respuesta && r.estado_codigo === 'ESPERANDO_RESPUESTA'
+                ? `<div class="mt-1"><button class="btn btn-warning btn-sm py-0 px-2" style="font-size:.7rem" onclick="abrirModalRespuestaProveedor()">Registrar respuesta</button></div>` : ''}</div>`;
     }
 
     if (s.respuestas && s.respuestas.length) {
-        for (const r of s.respuestas) {
+        for (const resp of s.respuestas) {
             h += `<div class="border rounded p-2 mt-2" style="font-size:.72rem;background:#f8f9fb">
-                <div class="text-muted mb-1"><i class="ri-mail-line me-1"></i>${reqEsc(r.remitente)}
-                    · ${reqEsc(r.recibido_en)}</div>
-                <div style="white-space:pre-wrap">${reqEsc(r.cuerpo)}</div>
-                ${(r.adjuntos && r.adjuntos.length)
+                <div class="text-muted mb-1"><i class="ri-mail-line me-1"></i>${reqEsc(resp.remitente)}
+                    · ${reqEsc(resp.recibido_en)}</div>
+                <div style="white-space:pre-wrap">${reqEsc(resp.cuerpo)}</div>
+                ${(resp.adjuntos && resp.adjuntos.length)
                     ? `<div class="mt-1 text-muted"><i class="ri-attachment-2 me-1"></i>${
-                        r.adjuntos.map(a => reqEsc(a.nombre)).join(', ')}
+                        resp.adjuntos.map(a => reqEsc(a.nombre)).join(', ')}
                         <em>(en el correo, no en el sistema)</em></div>`
                     : ''}
             </div>`;
         }
     }
 
-    // Decirlo explícitamente evita que "Abierto" se lea como "lo leyó": Apple
-    // Mail precarga las imágenes de todos los correos y Outlook las bloquea.
+    // "Abierto" no es "lo leyó": Apple Mail precarga imágenes y Outlook las bloquea.
     if (s.es_indicativo) {
         h += `<div class="req-correo-salvedad">
             La apertura es indicativa: algunos clientes de correo cargan las
@@ -839,14 +888,27 @@ function pintarSeguimientoCorreo(s) {
 }
 
 function pintarProveedor(r) {
+    const puedeCambiar = r.permisos.puede_enviar_proveedor && !r.esta_cerrado;
     if (r.proveedor.id) {
         $id('proveedor-nombre').textContent = r.proveedor.nombre;
-        $id('proveedor-email').textContent = r.correo_proveedor_destino || r.proveedor.correo || 'Sin correo configurado';
+        const correo = r.proveedor.correo;
+        const origen = r.proveedor.correo_guardado ? 'guardado para requerimientos'
+            : r.proveedor.correo_ficha ? 'de la ficha del proveedor' : '';
+        $id('proveedor-correo').innerHTML = `
+            <div class="d-flex align-items-center gap-1 mt-1">
+                <i class="ri-mail-line text-muted"></i>
+                ${correo
+                    ? `<span class="text-break">${reqEsc(correo)}</span>`
+                    : '<span class="text-danger">Sin correo para requerimientos</span>'}
+                ${puedeCambiar ? `<button class="btn btn-link btn-sm p-0 ms-1" style="font-size:.72rem" onclick="cambiarCorreoProveedor()">
+                    ${correo ? 'cambiar' : 'agregar'}</button>` : ''}
+            </div>
+            ${origen ? `<div class="text-muted" style="font-size:.66rem">${origen}</div>` : ''}`;
     } else {
         $id('proveedor-nombre').innerHTML = '<span class="text-danger"><i class="ri-error-warning-line me-1"></i>Sin asignar</span>';
-        $id('proveedor-email').innerHTML = r.permisos.puede_editar
+        $id('proveedor-correo').innerHTML = r.permisos.puede_editar && !r.esta_cerrado
             ? '<a href="javascript:void(0)" onclick="abrirModalEditar(true)">Buscar el proveedor y la factura</a>'
-            : 'Lo asigna quien revisa el requerimiento';
+            : '<span class="text-muted">Lo asigna quien revisa el requerimiento</span>';
     }
 
     const caja = $id('info-seguimiento-proveedor');
@@ -861,9 +923,9 @@ function pintarProveedor(r) {
         <div class="d-flex justify-content-between"><span class="text-muted">Enviado</span><span>${reqEsc(r.fecha_envio_proveedor)}</span></div>
         <div class="d-flex justify-content-between"><span class="text-muted">Al correo</span>
             <span class="text-truncate ms-2" style="max-width:65%" title="${reqEsc(r.correo_proveedor_destino || '')}">${reqEsc(r.correo_proveedor_destino) || '<span class="text-muted">no registrado (envío antiguo)</span>'}</span></div>
-        <div class="d-flex justify-content-between"><span class="text-muted">Intentos</span><span class="badge badge-soft-info">${r.intentos_envio || 0}</span></div>`;
+        <div class="d-flex justify-content-between"><span class="text-muted">Envíos</span><span class="badge badge-soft-info">${r.intentos_envio || 0}</span></div>`;
 
-    h += pintarSeguimientoCorreo(r.seguimiento_correo);
+    h += pintarSeguimientoCorreo(r.seguimiento_correo, r);
 
     if (!r.fecha_respuesta_proveedor) {
         const d = r.dias_sin_respuesta || 0;
@@ -874,6 +936,35 @@ function pintarProveedor(r) {
         h += `<div class="d-flex justify-content-between mt-1"><span class="text-muted">Respondió</span><span>${reqEsc(r.fecha_respuesta_proveedor)}</span></div>`;
     }
     caja.innerHTML = h + '</div>';
+}
+
+// Correo del proveedor para requerimientos: se edita acá y queda para todos
+// los envíos siguientes, los haga quien los haga.
+function cambiarCorreoProveedor() {
+    const r = datosRequerimiento;
+    Swal.fire({
+        title: 'Correo del proveedor',
+        html: `<div class="small text-muted">A este correo se le enviarán los requerimientos a
+               <strong>${reqEsc(r.proveedor.nombre)}</strong>, los envíe quien los envíe.</div>`,
+        input: 'email',
+        inputValue: r.proveedor.correo || '',
+        inputPlaceholder: 'garantias@proveedor.cl',
+        showCancelButton: true,
+        confirmButtonText: 'Guardar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#405189',
+        validationMessage: 'Escriba un correo válido',
+        showLoaderOnConfirm: true,
+        preConfirm: correo => post(`/app/api/requerimientos/proveedor/${r.proveedor.id}/correo/`, { correo })
+            .then(d => { if (!d.success) throw new Error(d.error); return d; })
+            .catch(e => Swal.showValidationMessage(e.message)),
+        allowOutsideClick: () => !Swal.isLoading(),
+    }).then(res => {
+        if (res.isConfirmed && res.value) {
+            Swal.fire({ icon: 'success', title: 'Correo guardado', text: res.value.message, timer: 2200, showConfirmButton: false });
+            cargarRequerimiento();
+        }
+    });
 }
 
 function pintarDecisiones(r) {
@@ -894,7 +985,7 @@ function pintarDecisiones(r) {
     }
 
     if (r.decision_proveedor) {
-        const mapa = { APROBADO: ['success', 'Aprobado'], PARCIAL: ['warning', 'Aprobado parcial'], RECHAZADO: ['danger', 'Rechazado'] };
+        const mapa = { APROBADO: ['success', 'Aprobó'], PARCIAL: ['warning', 'Aprobó una parte'], RECHAZADO: ['danger', 'Rechazó'] };
         const [color, texto] = mapa[r.decision_proveedor] || ['secondary', r.decision_proveedor];
         bloques.push(`
             <div>
@@ -903,9 +994,9 @@ function pintarDecisiones(r) {
                     <span class="badge badge-soft-${color}">${texto}</span>
                     <span class="dt-label mb-0">El proveedor</span>
                 </div>
-                <div style="font-size:.78rem">${reqEsc(r.respuesta_proveedor || '')}</div>
+                <div style="font-size:.78rem;white-space:pre-wrap">${reqEsc(r.respuesta_proveedor || '')}</div>
                 ${r.motivo_resolucion ? `<div class="alert alert-light border py-1 px-2 mt-1 mb-0" style="font-size:.74rem">
-                    <strong>Para el cliente:</strong> ${reqEsc(r.motivo_resolucion)}</div>` : ''}
+                    <strong>Para la tienda y el cliente:</strong> ${reqEsc(r.motivo_resolucion)}</div>` : ''}
                 <div class="text-muted mt-1" style="font-size:.7rem">${reqEsc(r.fecha_respuesta_proveedor)}</div>
             </div>`);
     }
@@ -915,7 +1006,7 @@ function pintarDecisiones(r) {
             <div>
                 ${bloques.length ? '<hr class="my-2">' : ''}
                 <div class="dt-label">Resolución final</div>
-                <div style="font-size:.78rem">${reqEsc(r.resolucion)}</div>
+                <div style="font-size:.78rem;white-space:pre-wrap">${reqEsc(r.resolucion)}</div>
                 <div class="text-muted" style="font-size:.7rem">${reqEsc(r.fecha_resolucion)}</div>
             </div>`);
     }
@@ -924,78 +1015,191 @@ function pintarDecisiones(r) {
     $id('decisiones-container').innerHTML = bloques.join('');
 }
 
+// ══════════ Evidencia (ver, subir, reemplazar, quitar) ══════════
+
 function pintarFotos(r) {
     const fotos = r.fotos || [];
-    if (!fotos.length) {
-        $id('card-fotos').style.display = 'none';
-        return;
-    }
-    $id('card-fotos').style.display = '';
+    const puede = !!r.permisos.puede_gestionar_fotos;
+    const tipos = (r.tipos_foto_requeridos || []).filter(tf => tf.codigo !== 'FOTO_ADICIONAL');
+    const obligatorias = ['PRODUCTO_FALLADO', 'GARANTIA', 'ERROR_DESPACHO'].includes(r.tipo_codigo);
 
     const bc = $id('badge-fotos-completitud');
-    if (r.fotos_completas) {
+    if (!fotos.length) {
+        bc.className = 'badge badge-soft-danger ms-1';
+        bc.textContent = 'sin fotos';
+    } else if (r.fotos_completas || !obligatorias) {
         bc.className = 'badge badge-soft-success ms-1';
-        bc.textContent = `${fotos.length} · completas`;
-    } else if (['PRODUCTO_FALLADO', 'GARANTIA', 'ERROR_DESPACHO'].includes(r.tipo_codigo)) {
-        bc.className = 'badge badge-soft-warning ms-1';
-        bc.textContent = `${fotos.length} · faltan obligatorias`;
+        bc.textContent = `${fotos.length} de ${r.max_fotos}`;
     } else {
-        bc.className = 'badge badge-soft-secondary ms-1';
-        bc.textContent = fotos.length;
+        bc.className = 'badge badge-soft-warning ms-1';
+        bc.textContent = `${fotos.length} de ${r.max_fotos} · faltan obligatorias`;
     }
 
-    // Las fotos van al visor en el mismo orden en que se muestran, para que
-    // ← → recorran lo que el usuario está viendo.
+    const hayCupo = fotos.length < (r.max_fotos || 5);
+    $id('btn-agregar-fotos').style.display = puede && hayCupo ? '' : 'none';
+
+    $id('aviso-fotos').innerHTML = !fotos.length
+        ? `<div class="alert alert-${puede ? 'warning' : 'light border'} py-2 px-3 mb-2" style="font-size:.76rem">
+               <i class="ri-image-off-line me-1"></i>Este requerimiento no tiene fotos: sin evidencia el proveedor puede rechazarlo.
+               ${puede ? 'Súbalas en los recuadros de abajo.' : ''}</div>`
+        : '';
+
+    // Las fotos van al visor en el mismo orden en que se muestran.
     fotosVisor = [];
-    const tipos = r.tipos_foto_requeridos || [];
     const porTipo = {};
     fotos.forEach(f => {
         const k = f.tipo_foto_codigo || 'SIN';
         (porTipo[k] = porTipo[k] || []).push(f);
     });
 
-    let html = '';
-    const agregarCelda = (foto, titulo, obligatoria) => {
+    const celda = (foto, titulo, obligatoria, codigoSlot) => {
         const i = fotosVisor.length;
         fotosVisor.push({ url: foto.url, titulo, descripcion: foto.descripcion, fecha: foto.fecha });
-        return `<div class="foto-celda ${obligatoria ? 'req-obligatoria' : ''}" onclick="abrirVisorDesde(${i})">
+        const acciones = puede ? `<div class="foto-acciones">
+                ${codigoSlot ? `<button type="button" class="btn-foto" title="Reemplazar esta foto"
+                    onclick="event.stopPropagation(); elegirFoto('${codigoSlot}')"><i class="ri-refresh-line"></i></button>` : ''}
+                <button type="button" class="btn-foto peligro" title="Quitar esta foto"
+                    onclick="event.stopPropagation(); quitarFoto(${foto.id})"><i class="ri-delete-bin-line"></i></button>
+            </div>` : '';
+        return `<div class="foto-celda ${obligatoria ? 'req-obligatoria' : ''}" id="celda-${codigoSlot || 'f' + foto.id}" onclick="abrirVisorDesde(${i})">
                     <img src="${reqEsc(foto.url)}" alt="${reqEsc(titulo)}" loading="lazy"
-                         onerror="this.parentElement.innerHTML='<div class=\\'foto-slot-vacio\\'><i class=\\'ri-image-off-line fs-4\\'></i>No disponible<br>en el servidor</div>'">
+                         onerror="this.replaceWith(Object.assign(document.createElement('div'), {className: 'foto-slot-vacio', innerHTML: '<i class=&quot;ri-image-off-line fs-4&quot;></i>No disponible<br>en el servidor'}))">
                     <span class="foto-lupa"><i class="ri-zoom-in-line"></i></span>
+                    ${acciones}
                 </div>`;
     };
 
+    let html = '';
     tipos.forEach(tf => {
-        if (tf.codigo === 'FOTO_ADICIONAL') return;
         const fs = porTipo[tf.codigo] || [];
+        let cuerpo;
+        if (fs.length) {
+            cuerpo = celda(fs[0], tf.nombre, tf.es_obligatorio, tf.codigo);
+            // Si por historia hay más de una del mismo tipo, van como extra.
+            fs.slice(1).forEach(f => { (porTipo.EXTRA = porTipo.EXTRA || []).push(f); });
+        } else if (puede && hayCupo) {
+            cuerpo = `<div class="foto-slot-vacio subible ${tf.es_obligatorio ? 'obligatoria' : ''}" id="celda-${tf.codigo}"
+                           role="button" tabindex="0" onclick="elegirFoto('${tf.codigo}')" title="${reqEsc(tf.descripcion_guia || '')}">
+                           <i class="ri-upload-cloud-2-line fs-4 mb-1"></i>Subir foto</div>`;
+        } else {
+            cuerpo = `<div class="foto-slot-vacio"><i class="${tf.icono} fs-4 mb-1"></i>Sin foto</div>`;
+        }
         html += `<div class="col-6 col-md-4 col-xl-3">
             <div class="foto-titulo" title="${reqEsc(tf.descripcion_guia || tf.nombre)}">
                 <i class="${tf.icono}"></i><span class="texto">${reqEsc(tf.nombre)}</span>
                 ${tf.es_obligatorio ? '<span class="badge bg-danger" style="font-size:.5rem">REQ</span>' : ''}
-            </div>
-            ${fs.length
-                ? agregarCelda(fs[0], tf.nombre, tf.es_obligatorio)
-                : `<div class="foto-slot-vacio"><i class="${tf.icono} fs-4 mb-1"></i>Sin foto</div>`}
-        </div>`;
+            </div>${cuerpo}</div>`;
         delete porTipo[tf.codigo];
     });
 
     Object.values(porTipo).flat().forEach(f => {
-        const titulo = f.tipo_foto_nombre || 'Foto adicional';
+        const titulo = f.tipo_foto_nombre && f.tipo_foto_nombre !== 'Sin clasificar' ? f.tipo_foto_nombre : 'Foto adicional';
         html += `<div class="col-6 col-md-4 col-xl-3">
             <div class="foto-titulo"><i class="${f.tipo_foto_icono || 'ri-image-line'}"></i><span class="texto">${reqEsc(titulo)}</span></div>
-            ${agregarCelda(f, titulo, false)}
+            ${celda(f, titulo, false, null)}
         </div>`;
     });
 
-    $id('fotos-container').innerHTML = html;
+    if (puede && hayCupo) {
+        html += `<div class="col-6 col-md-4 col-xl-3">
+            <div class="foto-titulo"><i class="ri-image-add-line"></i><span class="texto">Otra foto</span></div>
+            <div class="foto-slot-vacio subible" id="celda-ADICIONAL" role="button" tabindex="0" onclick="elegirFoto('ADICIONAL', true)">
+                <i class="ri-add-line fs-4 mb-1"></i>Agregar fotos</div>
+        </div>`;
+    }
+
+    $id('fotos-container').innerHTML = html || '<div class="col-12 text-muted small">Sin fotos.</div>';
     $id('btn-ver-fotos').style.display = fotosVisor.length ? '' : 'none';
+    // Los recuadros para subir también responden al teclado.
+    document.querySelectorAll('#fotos-container .subible').forEach(el => el.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); }
+    }));
 }
 
 function abrirVisorDesde(indice) { ReqVisor.abrir(fotosVisor, indice); }
 
+function irAFotos() {
+    $id('card-fotos').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const primero = document.querySelector('#fotos-container .subible');
+    if (primero) setTimeout(() => primero.focus(), 400);
+}
+
+let claveSubida = null;
+
+function elegirFoto(clave, varias) {
+    const input = $id('input-subir-foto');
+    input.value = '';
+    input.multiple = !!varias;
+    claveSubida = clave;
+    input.click();
+}
+
+function alElegirFoto(e) {
+    const archivos = Array.from(e.target.files || []);
+    if (!archivos.length || !claveSubida) return;
+    const cuerpo = new FormData();
+    if (claveSubida === 'ADICIONAL') {
+        archivos.forEach((f, i) => cuerpo.append(`foto_adicional_${i + 1}`, f));
+    } else {
+        cuerpo.append(`foto_${claveSubida}`, archivos[0]);
+    }
+    const celda = $id(`celda-${claveSubida}`);
+    if (celda) {
+        celda.style.position = 'relative';
+        celda.insertAdjacentHTML('beforeend', '<div class="foto-subiendo"><div class="spinner-border spinner-border-sm text-primary"></div></div>');
+    }
+    fetch(`/app/api/requerimientos/${requerimientoId}/fotos/`, {
+        method: 'POST', headers: { 'X-CSRFToken': CSRF }, body: cuerpo,
+    }).then(r => r.json()).then(d => {
+        if (!d.success) { Swal.fire('No se subió', d.error, 'error'); }
+        else {
+            const omitidas = (d.omitidas || []).length
+                ? `<div class="small text-warning mt-2">No se subieron: ${d.omitidas.map(reqEsc).join('; ')}</div>` : '';
+            Swal.fire({ icon: 'success', title: d.message, html: omitidas || undefined,
+                        timer: omitidas ? undefined : 1500, showConfirmButton: !!omitidas });
+        }
+        cargarRequerimiento();
+    }).catch(() => { Swal.fire('Error', 'No se pudo subir la foto', 'error'); cargarRequerimiento(); });
+}
+
+function quitarFoto(fotoId) {
+    const foto = (datosRequerimiento.fotos || []).find(f => f.id === fotoId) || {};
+    const nombre = reqEsc(foto.tipo_foto_codigo && foto.tipo_foto_nombre !== 'Sin clasificar'
+        ? foto.tipo_foto_nombre : 'la foto adicional');
+    Swal.fire({
+        icon: 'warning',
+        title: '¿Quitar esta foto?',
+        html: `Se quita <strong>${nombre}</strong> de la evidencia. Queda anotado en el historial.`,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, quitar',
+        cancelButtonText: 'Volver',
+        confirmButtonColor: '#f06548',
+    }).then(res => {
+        if (!res.isConfirmed) return;
+        post(`/app/api/requerimientos/${requerimientoId}/fotos/${fotoId}/eliminar/`)
+            .then(d => {
+                if (!d.success) { Swal.fire('No se quitó', d.error, 'error'); return; }
+                Swal.fire({ icon: 'success', title: d.message, timer: 1300, showConfirmButton: false });
+                cargarRequerimiento();
+            })
+            .catch(() => Swal.fire('Error', 'No se pudo quitar la foto', 'error'));
+    });
+}
+
+// ══════════ Historial ══════════
+
+const NOMBRE_ACCION = {
+    CREADO: 'Creado', CAMBIO_ESTADO: 'Cambio de estado', DATOS_ACTUALIZADOS: 'Datos actualizados',
+    VALIDADO_INTERNAMENTE: 'Validado por la empresa', RECHAZADO_INTERNAMENTE: 'Rechazado por la empresa',
+    ENVIADO_A_PROVEEDOR: 'Enviado al proveedor', RECORDATORIO_ENVIADO: 'Recordatorio enviado',
+    RECORDATORIO_AUTOMATICO: 'Recordatorio automático', COPIA_RESUMEN_ENVIADA: 'Copia de control enviada',
+    ENVIO_FALLIDO: 'Envío fallido', RESPUESTA_PROVEEDOR_REGISTRADA: 'Respuesta del proveedor',
+    COMPLETADO: 'Cerrado', FOTOS_AGREGADAS: 'Fotos agregadas', FOTO_ELIMINADA: 'Foto quitada',
+};
+
 function pintarHistorial(r) {
     const h = r.historial || [];
+    const etiquetas = r.estados_labels || {};
     $id('contador-historial').textContent = h.length ? `${h.length} evento(s)` : '';
     if (!h.length) {
         $id('historial-container').innerHTML = '<div class="text-muted small">Sin movimientos registrados.</div>';
@@ -1004,137 +1208,157 @@ function pintarHistorial(r) {
     const hitos = ['ENVIADO_A_PROVEEDOR', 'RESPUESTA_PROVEEDOR_REGISTRADA',
                    'VALIDADO_INTERNAMENTE', 'RECHAZADO_INTERNAMENTE', 'COMPLETADO', 'CREADO'];
     $id('historial-container').innerHTML = h.map(ev => `
-        <div class="hist-item ${hitos.includes(ev.accion) ? 'hito' : ''}">
+        <div class="hist-item ${hitos.includes(ev.accion) ? 'hito' : ''} ${ev.accion === 'ENVIO_FALLIDO' ? 'text-danger' : ''}">
             <div class="d-flex justify-content-between gap-2">
-                <span class="fw-semibold">${reqEsc(ev.accion.replace(/_/g, ' '))}</span>
+                <span class="fw-semibold">${reqEsc(NOMBRE_ACCION[ev.accion] || ev.accion.replace(/_/g, ' ').toLowerCase())}</span>
                 <small class="text-muted text-nowrap">${reqEsc(ev.fecha)}</small>
             </div>
-            ${ev.estado_anterior ? `<div class="text-muted" style="font-size:.7rem">${reqEsc(ev.estado_anterior)} → ${reqEsc(ev.estado_nuevo)}</div>` : ''}
-            ${ev.comentario ? `<div class="text-muted" style="font-size:.75rem">${reqEsc(ev.comentario)}</div>` : ''}
+            ${ev.estado_anterior && ev.estado_nuevo && ev.estado_anterior !== ev.estado_nuevo
+                ? `<div class="text-muted" style="font-size:.7rem">${reqEsc(etiquetas[ev.estado_anterior] || ev.estado_anterior)} → ${reqEsc(etiquetas[ev.estado_nuevo] || ev.estado_nuevo)}</div>` : ''}
+            ${ev.comentario ? `<div class="text-muted" style="font-size:.75rem;white-space:pre-wrap">${reqEsc(ev.comentario)}</div>` : ''}
             ${ev.usuario ? `<div class="text-muted" style="font-size:.7rem"><i class="ri-user-line me-1"></i>${reqEsc(ev.usuario)}</div>` : ''}
         </div>`).join('');
 }
 
 // ══════════ Acciones disponibles ══════════
+// Las que hacen avanzar el caso van arriba y grandes; las de consulta o
+// excepción (PDF, cambiar estado, cancelar) quedan abajo y chicas.
 
 function pintarAcciones(r) {
     const p = r.permisos;
     const estado = r.estado_codigo;
-    const btns = [];
+    const transiciones = r.transiciones_permitidas || [];
+    const esGestor = ['administrador', 'jefe_local'].includes(r.rol_usuario);
+    const principales = [];
+    const secundarias = [];
 
-    // Completar datos primero cuando falta algo: sin proveedor asignado no se
-    // puede ni validar ni enviar.
     if (p.puede_editar && !r.esta_cerrado) {
-        const falta = r.faltantes || [];
-        btns.push(`<button class="btn ${falta.length ? 'btn-warning' : 'btn-soft-primary'} btn-sm"
+        const falta = (r.faltantes || []).filter(f => !f.startsWith('fotos'));
+        principales.push(`<button class="btn ${falta.length ? 'btn-warning' : 'btn-soft-primary'} btn-sm text-start"
             onclick="abrirModalEditar()"><i class="ri-edit-2-line me-1"></i>${
-            falta.length ? `Completar (falta ${reqEsc(falta.join(' y '))})` : 'Editar datos'}</button>`);
+            falta.length ? `Completar datos (falta ${reqEsc(reqEnumerar(falta))})` : 'Editar datos'}</button>`);
     }
 
-    if (estado === 'PENDIENTE' && (r.transiciones_permitidas || []).includes('EN_REVISION')
-        && ['administrador', 'jefe_local'].includes(r.rol_usuario)) {
-        btns.push(`<button class="btn btn-soft-info btn-sm" onclick="tomarEnRevision()">
+    if (p.puede_gestionar_fotos && ['PENDIENTE', 'EN_REVISION', 'VALIDADO'].includes(estado)
+        && (r.faltantes || []).some(f => f.startsWith('fotos'))) {
+        principales.push(`<button class="btn btn-warning btn-sm text-start" onclick="irAFotos()">
+            <i class="ri-image-add-line me-1"></i>Subir fotos que faltan</button>`);
+    }
+
+    if (estado === 'PENDIENTE' && transiciones.includes('EN_REVISION') && esGestor) {
+        principales.push(`<button class="btn btn-soft-info btn-sm text-start" onclick="tomarEnRevision()">
             <i class="ri-eye-line me-1"></i>Tomar en revisión</button>`);
     }
 
-    // Decisión de la empresa
     if (['PENDIENTE', 'EN_REVISION'].includes(estado) && (p.puede_validar || p.puede_rechazar_interno)) {
-        btns.push(`<button class="btn btn-primary btn-sm" onclick="abrirModalDecidir()">
+        principales.push(`<button class="btn btn-primary btn-sm text-start" onclick="abrirModalDecidir()">
             <i class="ri-scales-3-line me-1"></i>Validar o rechazar</button>`);
     }
 
-    // Envío al proveedor
     if (['PENDIENTE', 'EN_REVISION', 'VALIDADO'].includes(estado)) {
         if (p.puede_enviar_proveedor && r.proveedor.id) {
-            btns.push(`<button class="btn btn-${estado === 'VALIDADO' ? 'primary' : 'soft-primary'} btn-sm"
+            principales.push(`<button class="btn btn-${estado === 'VALIDADO' ? 'primary' : 'soft-primary'} btn-sm text-start"
                 onclick="abrirModalEnvio(false)"><i class="ri-mail-send-line me-1"></i>Enviar al proveedor</button>`);
         } else if (p.puede_enviar_proveedor) {
-            btns.push(`<button class="btn btn-outline-primary btn-sm" disabled
-                title="Asigne el proveedor en Completar datos"><i class="ri-mail-send-line me-1"></i>Enviar al proveedor</button>`);
-        } else if (['administrador', 'jefe_local'].includes(r.rol_usuario)) {
-            btns.push(`<button class="btn btn-outline-secondary btn-sm" disabled
-                title="Solo un administrador puede escribirle al proveedor"><i class="ri-lock-line me-1"></i>Enviar al proveedor</button>`);
+            principales.push(`<button class="btn btn-outline-primary btn-sm text-start" disabled
+                title="Asigne el proveedor en Completar datos"><i class="ri-mail-send-line me-1"></i>Enviar al proveedor (falta proveedor)</button>`);
+        } else if (esGestor) {
+            principales.push(`<button class="btn btn-outline-secondary btn-sm text-start" disabled
+                title="Solo un administrador puede escribirle al proveedor"><i class="ri-lock-line me-1"></i>Enviar al proveedor (solo administrador)</button>`);
         }
     }
 
     if (estado === 'ESPERANDO_RESPUESTA' && p.puede_registrar_respuesta) {
-        btns.push(`<button class="btn btn-success btn-sm" onclick="abrirModalRespuestaProveedor()">
-            <i class="ri-mail-check-line me-1"></i>Registrar respuesta</button>`);
-        btns.push(`<button class="btn btn-soft-warning btn-sm" onclick="abrirModalEnvio(true)">
-            <i class="ri-mail-send-line me-1"></i>Re-enviar recordatorio</button>`);
+        principales.push(`<button class="btn btn-success btn-sm text-start" onclick="abrirModalRespuestaProveedor()">
+            <i class="ri-mail-check-line me-1"></i>Registrar respuesta del proveedor</button>`);
+        principales.push(`<button class="btn btn-soft-warning btn-sm text-start" onclick="abrirModalEnvio(true)">
+            <i class="ri-mail-send-line me-1"></i>Enviar recordatorio</button>`);
     }
 
-    if (estado === 'APROBADO' && (r.transiciones_permitidas || []).includes('EN_PROCESO')) {
-        btns.push(`<button class="btn btn-soft-primary btn-sm" onclick="marcarEnProceso()">
-            <i class="ri-play-line me-1"></i>Iniciar proceso</button>`);
+    if (estado === 'APROBADO' && transiciones.includes('EN_PROCESO') && esGestor) {
+        principales.push(`<button class="btn btn-soft-primary btn-sm text-start" onclick="marcarEnProceso()">
+            <i class="ri-play-line me-1"></i>Marcar en proceso</button>`);
     }
 
-    if (p.puede_completar && (r.transiciones_permitidas || []).includes('COMPLETADO')) {
-        btns.push(`<button class="btn btn-success btn-sm" onclick="abrirModalCompletar()">
-            <i class="ri-check-double-line me-1"></i>Completar</button>`);
-    }
-
-    // Puente a Devolución por Garantía: cuando el proveedor ya respondió
-    // (aprobó o rechazó), el jefe de local puede decidir devolver el dinero
-    // directamente sin retipear folio/RUT/nombre del cliente.
-    if (['APROBADO', 'RECHAZADO'].includes(estado) && ['administrador', 'jefe_local'].includes(r.rol_usuario)) {
-        const qs = new URLSearchParams({
-            requerimiento_id: r.id || '', folio: r.numero_boleta || '', rut: r.cliente_rut || '',
-            nombre: r.cliente_nombre || '', telefono: r.cliente_telefono || '',
-            email: r.cliente_email || '', motivo: `Garantía: ${r.motivo || ''}`,
-        });
-        btns.push(`<a href="/app/devolucion-garantia/?${qs}" target="_blank" class="btn btn-soft-warning btn-sm">
-            <i class="ri-refund-2-line me-1"></i>Devolver el dinero</a>`);
+    if (p.puede_completar && transiciones.includes('COMPLETADO')) {
+        principales.push(`<button class="btn btn-success btn-sm text-start" onclick="abrirModalCompletar()">
+            <i class="ri-check-double-line me-1"></i>Cerrar requerimiento</button>`);
     }
 
     // Formato propio: el MISMO PDF que se adjunta al correo del proveedor.
-    // Verlo antes de enviar es lo que evita mandar un reclamo incompleto.
-    btns.push(`<a href="/app/api/requerimientos/${r.id}/formato-pdf/" target="_blank" class="btn btn-soft-info btn-sm">
-        <i class="ri-file-pdf-line me-1"></i>Ver formato PDF</a>`);
+    secundarias.push(`<a href="/app/api/requerimientos/${r.id}/formato-pdf/" target="_blank" class="btn btn-soft-info btn-sm">
+        <i class="ri-file-pdf-line me-1"></i>Formato PDF</a>`);
 
-    // Solo si queda alguna transicion que ESTE endpoint pueda ejecutar. En
-    // EN_PROCESO la unica salida es COMPLETADO, que tiene su propia accion:
-    // el modal abria con la unica opcion deshabilitada y no habia forma de
-    // enviarlo.
+    // Solo si queda alguna transición que ESTE endpoint pueda ejecutar.
     const ESTADOS_CON_ACCION_PROPIA = ['ESPERANDO_RESPUESTA', 'APROBADO', 'RECHAZADO',
                                        'VALIDADO', 'RECHAZADO_INTERNO', 'COMPLETADO'];
-    const transicionesLibres = (r.transiciones_permitidas || [])
-        .filter(c => !ESTADOS_CON_ACCION_PROPIA.includes(c));
-    if (['administrador', 'jefe_local'].includes(r.rol_usuario) && transicionesLibres.length) {
-        btns.push(`<button class="btn btn-soft-secondary btn-sm" onclick="cambiarEstado()">
+    const transicionesLibres = transiciones.filter(c => !ESTADOS_CON_ACCION_PROPIA.includes(c));
+    if (esGestor && transicionesLibres.length) {
+        secundarias.push(`<button class="btn btn-soft-secondary btn-sm" onclick="cambiarEstado()">
             <i class="ri-refresh-line me-1"></i>Cambiar estado</button>`);
     }
 
-    if (p.puede_cancelar && (r.transiciones_permitidas || []).includes('CANCELADO')) {
-        btns.push(`<button class="btn btn-soft-danger btn-sm" onclick="cancelarRequerimiento()">
-            <i class="ri-close-circle-line me-1"></i>Cancelar requerimiento</button>`);
+    if (p.puede_cancelar && transiciones.includes('CANCELADO')) {
+        secundarias.push(`<button class="btn btn-soft-danger btn-sm" onclick="cancelarRequerimiento()">
+            <i class="ri-close-circle-line me-1"></i>Cancelar</button>`);
     }
 
-    $id('acciones-container').innerHTML = btns.join('');
+    $id('acciones-container').innerHTML = principales.length
+        ? principales.join('')
+        : `<div class="text-muted small"><i class="ri-information-line me-1"></i>${
+              r.esta_cerrado ? 'El caso está cerrado.' : 'No hay acciones para usted en este momento.'}</div>`;
+    const sec = $id('acciones-secundarias');
+    sec.innerHTML = secundarias.join('');
+    sec.style.setProperty('display', secundarias.length ? 'flex' : 'none', 'important');
 }
 
 // ══════════ Decisión interna ══════════
 
+const MOTIVOS_DECISION = {
+    APROBADO: ['Falla de fabricación dentro del plazo de garantía', 'Error del proveedor en el despacho', 'Fotos y factura respaldan el reclamo'],
+    RECHAZADO: ['Daño por mal uso', 'Fuera del plazo de garantía', 'No se pudo identificar la compra', 'Duplicado de otro requerimiento'],
+};
+
 function abrirModalDecidir() {
     const r = datosRequerimiento;
     const falta = r.faltantes || [];
+    const sinProveedor = !r.proveedor.id;
     $id('dec-resumen').innerHTML = `
         <dl class="mb-0">
             <dt>Producto</dt><dd>${reqEsc(r.sku)} — ${reqEsc(r.nombre_producto)} (${r.cantidad} und)</dd>
+            <dt>Motivo</dt><dd class="fw-normal">${reqEsc(r.motivo)}</dd>
             <dt>Proveedor</dt><dd>${r.proveedor.nombre
                 ? reqEsc(r.proveedor.nombre)
                 : '<span class="text-danger">sin asignar</span>'}</dd>
             <dt>Factura de compra</dt><dd>${r.numero_factura_compra
                 ? 'N° ' + reqEsc(r.numero_factura_compra)
                 : '<span class="text-danger">sin registrar</span>'}</dd>
+            <dt>Fotos</dt><dd>${(r.fotos || []).length} ${r.fotos_completas ? '' : '<span class="text-warning fw-normal">(faltan obligatorias)</span>'}</dd>
         </dl>
-        ${falta.length ? `<div class="alert alert-warning py-1 px-2 mt-2 mb-0" style="font-size:.74rem">
-            <i class="ri-error-warning-line me-1"></i>Falta <strong>${reqEsc(falta.join(' y '))}</strong>.
-            Para validar hace falta al menos el proveedor.</div>` : ''}`;
+        ${sinProveedor ? `<div class="alert alert-warning py-1 px-2 mt-2 mb-0" style="font-size:.74rem">
+            <i class="ri-error-warning-line me-1"></i>Para decir que <strong>procede</strong> hace falta el proveedor.
+            ${r.permisos.puede_editar ? '<a href="javascript:void(0)" onclick="decidirACompletar()">Completar datos primero</a>' : ''}</div>`
+          : falta.length ? `<div class="alert alert-light border py-1 px-2 mt-2 mb-0" style="font-size:.74rem">
+            <i class="ri-information-line me-1"></i>Todavía falta <strong>${reqEsc(reqEnumerar(falta))}</strong>: se puede validar igual, pero habrá que completarlo antes de enviarlo.</div>` : ''}`;
 
     document.querySelectorAll('input[name="decision_interna_radio"]').forEach(i => { i.checked = false; });
+    $id('di-aprobado').disabled = sinProveedor;
     $id('dec-motivo').value = '';
+    $id('dec-chips').innerHTML = '';
+    document.querySelectorAll('input[name="decision_interna_radio"]').forEach(i => {
+        i.onchange = () => {
+            $id('dec-chips').innerHTML = (MOTIVOS_DECISION[i.value] || []).map(m =>
+                `<button type="button" class="req-chip" onclick="$id('dec-motivo').value = this.textContent">${reqEsc(m)}</button>`).join('');
+        };
+    });
     new bootstrap.Modal($id('modalDecidir')).show();
+}
+
+// Bootstrap no apila modales: se cierra uno y recién ahí se abre el otro.
+function decidirACompletar() {
+    const el = $id('modalDecidir');
+    el.addEventListener('hidden.bs.modal', () => abrirModalEditar(), { once: true });
+    cerrarModal('modalDecidir');
 }
 
 function guardarDecision() {
@@ -1143,16 +1367,17 @@ function guardarDecision() {
     if (!elegido) { Swal.fire('', 'Elija si el requerimiento procede o no', 'warning'); return; }
     if (!motivo) { Swal.fire('', 'Escriba el motivo de la decisión', 'warning'); return; }
 
-    post(`/app/api/requerimientos/${requerimientoId}/decidir/`, { decision: elegido.value, motivo })
-        .then(d => {
-            if (!d.success) { Swal.fire('No se pudo registrar', d.error, 'error'); return; }
-            bootstrap.Modal.getInstance($id('modalDecidir')).hide();
-            const pendiente = (d.faltantes || []).length
-                ? `<br><span class="text-warning">Antes de enviarlo falta: ${d.faltantes.join(' y ')}</span>` : '';
-            Swal.fire({ icon: 'success', title: 'Decisión registrada', html: d.message + pendiente });
-            cargarRequerimiento();
-        })
-        .catch(() => Swal.fire('Error', 'No se pudo registrar la decisión', 'error'));
+    conBoton('dec-btn-guardar', 'Guardando...',
+        post(`/app/api/requerimientos/${requerimientoId}/decidir/`, { decision: elegido.value, motivo })
+            .then(d => {
+                if (!d.success) { Swal.fire('No se pudo registrar', d.error, 'error'); return; }
+                cerrarModal('modalDecidir');
+                const pendiente = (d.faltantes || []).length
+                    ? `<br><span class="text-warning">Antes de enviarlo falta: ${reqEnumerar(d.faltantes)}</span>` : '';
+                Swal.fire({ icon: 'success', title: 'Decisión registrada', html: d.message + pendiente });
+                cargarRequerimiento();
+            })
+            .catch(() => Swal.fire('Error', 'No se pudo registrar la decisión', 'error')));
 }
 
 // ══════════ Completar / corregir datos ══════════
@@ -1184,12 +1409,12 @@ function abrirModalEditar(abrirBuscador) {
     // vacío borraría lo que escribió el administrador.
     $id('ed-bloque-notas').style.display = r.permisos.puede_ver_notas ? 'block' : 'none';
 
-    // Checklist de bloqueos arriba del formulario
     const falta = r.faltantes || [];
     $id('ed-checklist').innerHTML = falta.length
         ? `<div class="alert alert-warning py-2 px-3 mb-0" style="font-size:.78rem">
              <i class="ri-error-warning-line me-1"></i>Para poder enviarlo al proveedor falta:
-             <strong>${reqEsc(falta.join(', '))}</strong>.</div>`
+             <strong>${reqEsc(falta.join(', '))}</strong>.${falta.some(f => f.startsWith('fotos'))
+                ? ' Las fotos se suben en la tarjeta "Fotos de evidencia" de la ficha.' : ''}</div>`
         : `<div class="alert alert-success py-2 px-3 mb-0" style="font-size:.78rem">
              <i class="ri-checkbox-circle-line me-1"></i>El requerimiento tiene todo lo necesario para enviarse.</div>`;
 
@@ -1212,8 +1437,7 @@ function abrirModalEditar(abrirBuscador) {
     }
 
     // Panel de búsqueda cerrado salvo que se entre expresamente a buscar
-    const panel = $id('ed-buscador-compras');
-    panel.style.display = 'none';
+    $id('ed-buscador-compras').style.display = 'none';
     $id('ed-btn-buscador-txt').textContent = 'Buscar la factura';
     $id('ed-resultado-compras').innerHTML = '';
 
@@ -1238,7 +1462,7 @@ function alternarBuscadorCompras() {
     if (!abierto) {
         const campo = $id('ed-busqueda-compras');
         // Arranca con el SKU del requerimiento: es la búsqueda que se quiere
-        // el 90% de las veces, y así el panel abre con resultados a la vista.
+        // casi siempre, y así el panel abre con resultados a la vista.
         if (!campo.value) campo.value = datosRequerimiento.sku || '';
         campo.focus();
         if (campo.value) buscarCompras();
@@ -1256,7 +1480,7 @@ function cambiarPestanaBuscador(cual, tab) {
 
 const INSIGNIA_FUENTE = {
     LINEA_DTE:          ['success', 'La factura detalla el SKU'],
-    LOTE:               ['success', 'Lote FIFO ligado al documento'],
+    LOTE:               ['success', 'Lote ligado al documento'],
     LEGACY:             ['success', 'N° del sistema anterior'],
     KARDEX_DTE:         ['info',    'Movimiento ligado al documento'],
     KARDEX_SIN_DOC:     ['warning', 'Ingreso sin documento'],
@@ -1286,7 +1510,7 @@ function buscarCompras() {
                      ${diag.sugerencia ? `<div class="opacity-75">${reqEsc(diag.sugerencia)}</div>` : ''}</div>`
                 : '';
 
-            if (!comprasEncontradas.length) { caja.innerHTML = aviso; return; }
+            if (!comprasEncontradas.length) { caja.innerHTML = aviso || '<div class="text-muted small">Sin resultados.</div>'; return; }
 
             caja.innerHTML = aviso + `
                 <table class="table table-sm table-hover align-middle mb-0" style="font-size:.72rem">
@@ -1300,16 +1524,14 @@ function buscarCompras() {
                         ${comprasEncontradas.map((c, i) => {
                             const [color, titulo] = INSIGNIA_FUENTE[c.fuente] || ['secondary', ''];
                             // Basta con que haya NÚMERO: es lo único que el
-                            // proveedor pide. Exigir además la cabecera en la
-                            // BD dejaba sin elegir justo las facturas
-                            // recuperadas del sistema anterior.
+                            // proveedor pide.
                             const usable = !!(c.dte_id || c.numero_documento);
                             return `<tr style="cursor:${usable ? 'pointer' : 'default'}" ${usable ? `onclick="usarCompra(${i})"` : ''}
                                         title="${reqEsc(c.nota || titulo)}">
                                 <td class="text-nowrap">${reqEsc(c.fecha_texto) || '—'}</td>
                                 <td>${reqEsc(c.proveedor) || '<span class="text-muted">—</span>'}</td>
                                 <td class="text-nowrap">${c.numero_documento
-                                    ? `<span class="badge badge-soft-primary">${reqEsc(c.tipo_documento)} N°${c.numero_documento}</span>`
+                                    ? `<span class="badge badge-soft-primary">${reqEsc(c.tipo_documento)} N°${reqEsc(c.numero_documento)}</span>`
                                     : '<span class="text-muted">sin documento</span>'}
                                     <div><span class="badge badge-soft-${color}" style="font-size:.58rem">${reqEsc(titulo)}</span></div>
                                 </td>
@@ -1352,7 +1574,7 @@ function buscarPorNumeroFactura() {
             comprasEncontradas = d.encontrados.map(x => ({ ...x, fuente: 'LINEA_DTE' }));
             caja.innerHTML = `
                 <div class="alert alert-success border-0 py-1 px-2 mb-2" style="font-size:.72rem">
-                    <i class="ri-checkbox-circle-line me-1"></i>${d.encontrados.length} factura(s) de compra con ese número. Haz clic para usarla.
+                    <i class="ri-checkbox-circle-line me-1"></i>${d.encontrados.length} factura(s) de compra con ese número. Haga clic para usarla.
                 </div>
                 <table class="table table-sm table-hover align-middle mb-0" style="font-size:.72rem">
                     <thead class="table-light"><tr><th>Fecha</th><th>Proveedor</th><th>Documento</th><th>Sucursal</th><th class="text-end">Monto</th></tr></thead>
@@ -1360,7 +1582,7 @@ function buscarPorNumeroFactura() {
                         <tr style="cursor:pointer" onclick="usarCompra(${i})">
                             <td class="text-nowrap">${reqEsc(c.fecha_texto)}</td>
                             <td>${reqEsc(c.proveedor)}</td>
-                            <td class="text-nowrap"><span class="badge badge-soft-primary">${reqEsc(c.tipo_documento)} N°${c.numero_documento}</span></td>
+                            <td class="text-nowrap"><span class="badge badge-soft-primary">${reqEsc(c.tipo_documento)} N°${reqEsc(c.numero_documento)}</span></td>
                             <td>${reqEsc(c.sucursal)}</td>
                             <td class="text-end">$${(c.monto || 0).toLocaleString('es-CL')}</td>
                         </tr>`).join('')}</tbody>
@@ -1372,7 +1594,7 @@ function buscarPorNumeroFactura() {
 function usarNumeroTipeado(numero) {
     $id('ed-factura').value = numero;
     alternarBuscadorCompras();
-    Swal.fire({ icon: 'info', title: 'N° guardado', text: 'Recuerde completar el proveedor y la fecha.', timer: 2000, showConfirmButton: false });
+    Swal.fire({ icon: 'info', title: 'N° cargado', text: 'Recuerde completar el proveedor y la fecha.', timer: 2000, showConfirmButton: false });
 }
 
 function usarCompra(indice) {
@@ -1384,15 +1606,12 @@ function usarCompra(indice) {
 
     if (c.proveedor_id) {
         // El emisor del documento puede no estar marcado como proveedor en su
-        // ficha, y entonces no existe como <option>. Asignar el value a secas
-        // dejaba el select VACÍO y "Guardar cambios" mandaba proveedor_id
-        // nulo: elegir una factura terminaba BORRANDO el proveedor que ya
-        // estaba puesto. Se inserta la opción que falta.
+        // ficha y entonces no existe como <option>: se inserta la que falta
+        // (si no, el select quedaba vacío y se BORRABA el proveedor).
         if (!select.querySelector(`option[value="${c.proveedor_id}"]`)) {
             const opcion = document.createElement('option');
             opcion.value = c.proveedor_id;
-            opcion.textContent = (c.proveedor || `Proveedor #${c.proveedor_id}`) +
-                ' (emisor del documento)';
+            opcion.textContent = (c.proveedor || `Proveedor #${c.proveedor_id}`) + ' (emisor del documento)';
             select.appendChild(opcion);
         }
         select.value = String(c.proveedor_id);
@@ -1402,8 +1621,7 @@ function usarCompra(indice) {
     $id('ed-fecha-factura').value = c.fecha || '';
     alternarBuscadorCompras();
 
-    // Sin proveedor identificado el número igual sirve, pero hay que avisar
-    // que falta elegirlo a mano: si no, se guarda a medias sin que se note.
+    // Sin proveedor identificado el número igual sirve, pero hay que avisar.
     const faltaProveedor = !select.value;
     Swal.fire({
         icon: faltaProveedor ? 'info' : 'success',
@@ -1437,11 +1655,7 @@ function buscarClienteEnEdicion() {
 }
 
 function guardarEdicion() {
-    const g = id => $id(id).value.trim();
-
-    // Quitar el proveedor es una acción destructiva (deja el requerimiento sin
-    // a quién reclamarle) y casi siempre es un accidente del select, no una
-    // decisión. Se confirma antes de mandarlo.
+    // Quitar el proveedor casi siempre es un accidente del select: se confirma.
     const proveedorElegido = $id('ed-proveedor').value;
     if (!proveedorElegido && datosRequerimiento.proveedor.id) {
         Swal.fire({
@@ -1478,36 +1692,88 @@ function enviarEdicion() {
         descripcion_problema: g('ed-descripcion'),
     };
     if (datosRequerimiento.permisos.puede_ver_notas) payload.notas_internas = g('ed-notas');
+    if (!payload.motivo) { Swal.fire('', 'El motivo no puede quedar vacío', 'warning'); return; }
 
-    post(`/app/api/requerimientos/${requerimientoId}/editar/`, payload)
-        .then(d => {
-            if (!d.success) { Swal.fire('Error', d.error, 'error'); return; }
-            bootstrap.Modal.getInstance($id('modalEditarDatos')).hide();
-            Swal.fire({
-                icon: 'success', title: 'Datos actualizados', text: d.message,
-                timer: 1800, showConfirmButton: false,
-            });
-            cargarRequerimiento();
-        })
-        .catch(() => Swal.fire('Error', 'No se pudo guardar', 'error'));
+    conBoton('ed-btn-guardar', 'Guardando...',
+        post(`/app/api/requerimientos/${requerimientoId}/editar/`, payload)
+            .then(d => {
+                if (!d.success) { Swal.fire('Error', d.error, 'error'); return; }
+                cerrarModal('modalEditarDatos');
+                Swal.fire({ icon: 'success', title: 'Datos actualizados', text: d.message, timer: 1800, showConfirmButton: false });
+                cargarRequerimiento();
+            })
+            .catch(() => Swal.fire('Error', 'No se pudo guardar', 'error')));
 }
 
 // ══════════ Envío al proveedor ══════════
 
 let esReenvioActual = false;
 
+// El bloque "Copia y respuestas" del modal: muestra el correo FIJO del
+// módulo; si no hay, lo pide (solo el administrador puede guardarlo).
+function pintarCorreoModuloEnvio() {
+    const c = ReqCorreoModulo.config || {};
+    const d = datosRequerimiento || {};
+    const correo = c.correo_modulo || '';
+    const puedeEditar = !!c.puede_editar;
+
+    $id('env-modulo-correo').innerHTML = correo
+        ? reqEsc(correo)
+        : `<span class="text-danger fw-normal">Sin definir: llegarían a ${reqEsc(d.correo_copia_default || 'su correo personal')}</span>`;
+    $id('env-modulo-cambiar').style.display = puedeEditar ? '' : 'none';
+    $id('env-modulo-cambiar').textContent = correo ? 'Cambiar' : 'Definir ahora';
+    $id('env-modulo-cancelar').style.display = correo ? '' : 'none';
+    editarCorreoModuloEnvio(puedeEditar && !correo);
+}
+
+function editarCorreoModuloEnvio(editar) {
+    $id('env-modulo-vista').style.display = editar ? 'none' : 'flex';
+    $id('env-modulo-edicion').style.display = editar ? 'flex' : 'none';
+    if (editar) {
+        const c = ReqCorreoModulo.config || {};
+        $id('env-modulo-input').value = c.correo_modulo || '';
+        setTimeout(() => $id('env-modulo-input').focus(), 50);
+    }
+}
+
+function guardarCorreoModuloEnvio() {
+    const correo = $id('env-modulo-input').value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correo)) { Swal.fire('', 'Escriba un correo válido', 'warning'); return; }
+    ReqCorreoModulo.guardar(correo).then(d => {
+        if (!d.success) { Swal.fire('No se guardó', d.error, 'error'); return; }
+        pintarCorreoModuloEnvio();
+        Swal.fire({ icon: 'success', title: 'Correo del módulo guardado', text: d.message, timer: 2200, showConfirmButton: false });
+    }).catch(() => Swal.fire('Error', 'No se pudo guardar', 'error'));
+}
+
+function actualizarCasillaRecordar() {
+    const d = datosRequerimiento;
+    const escrito = $id('env-correo-destino').value.trim().toLowerCase();
+    const guardado = (d.proveedor.correo_guardado || '').toLowerCase();
+    // Si ya es el guardado no hay nada que recordar: la casilla sobra.
+    $id('env-recordar-wrap').style.display = escrito && escrito !== guardado ? '' : 'none';
+    $id('env-recordar-txt').textContent = guardado
+        ? `Reemplazar el correo guardado de ${d.proveedor.nombre} (${d.proveedor.correo_guardado}) por este para los próximos envíos`
+        : `Guardar como el correo de ${d.proveedor.nombre}: los próximos envíos irán aquí, los haga quien los haga`;
+}
+
 function abrirModalEnvio(esReenvio) {
     const d = datosRequerimiento;
     esReenvioActual = !!esReenvio;
 
-    $id('env-titulo').textContent = esReenvio ? 'Re-enviar al proveedor' : 'Enviar al proveedor';
-    $id('env-btn-enviar').innerHTML = `<i class="ri-send-plane-line me-1"></i>${esReenvio ? 'Re-enviar' : 'Enviar'}`;
-    $id('env-correo-destino').value = d.correo_proveedor_destino || d.proveedor.correo || '';
-    $id('env-correo-copia').value = d.correo_copia_default || '';
+    $id('env-titulo').textContent = esReenvio ? 'Enviar recordatorio al proveedor' : 'Enviar al proveedor';
+    $id('env-btn-enviar').innerHTML = `<i class="ri-send-plane-line me-1"></i>${esReenvio ? 'Enviar recordatorio' : 'Enviar'}`;
+    // El correo recordado del proveedor manda: si alguien lo corrigió después
+    // de un rebote, el recordatorio va al nuevo.
+    $id('env-correo-destino').value = d.proveedor.correo_guardado || d.correo_proveedor_destino || d.proveedor.correo || '';
+    $id('env-recordar').checked = true;
+    $id('env-correo-destino').oninput = actualizarCasillaRecordar;
+    actualizarCasillaRecordar();
     $id('env-mensaje').value = '';
     $id('env-link-pdf').href = `/app/api/requerimientos/${requerimientoId}/formato-pdf/`;
     $id('env-cc').textContent = d.proveedor.correo_administrador
-        ? `Con copia (CC) a ${d.proveedor.correo_administrador}` : '';
+        ? `Con copia (CC) a ${d.proveedor.correo_administrador}, el administrador de la ficha del proveedor.` : '';
+    pintarCorreoModuloEnvio();
 
     $id('env-resumen').innerHTML = `
         <dl class="mb-0">
@@ -1518,6 +1784,11 @@ function abrirModalEnvio(esReenvio) {
 
     const nFotos = (d.fotos || []).length;
     let avisos = '';
+    if (esReenvio && d.seguimiento_correo && d.seguimiento_correo.hay_problema) {
+        avisos += `<div class="alert alert-danger py-1 px-2 mb-2" style="font-size:.75rem">
+            <i class="ri-mail-close-line me-1"></i>El envío anterior a <strong>${reqEsc(d.correo_proveedor_destino)}</strong> no llegó.
+            Revise el correo antes de reenviar.</div>`;
+    }
     if (!d.numero_factura_compra) {
         avisos += `<div class="alert alert-warning py-1 px-2 mb-2" style="font-size:.75rem">
             <i class="ri-error-warning-line me-1"></i>Sin <strong>factura de compra</strong>:
@@ -1526,8 +1797,8 @@ function abrirModalEnvio(esReenvio) {
     avisos += nFotos > 0
         ? `<div class="alert alert-info py-1 px-2 mb-2" style="font-size:.75rem">
              <i class="ri-attachment-2 me-1"></i>Se adjunta el <strong>formato PDF</strong>
-             (con las ${nFotos} foto(s) incrustadas) más las fotos en alta resolución,
-             optimizadas para que el correo salga rápido. La copia de control no lleva adjuntos.</div>`
+             (con las ${nFotos} foto(s) incrustadas) más las fotos en alta resolución.
+             La copia de control no lleva adjuntos.</div>`
         : `<div class="alert alert-danger py-1 px-2 mb-2" style="font-size:.75rem">
              <i class="ri-error-warning-line me-1"></i>Este requerimiento <strong>no tiene fotos</strong>:
              el formato irá sin evidencia y el proveedor puede rechazarlo por eso.</div>`;
@@ -1538,74 +1809,106 @@ function abrirModalEnvio(esReenvio) {
 
 function confirmarEnvioProveedor() {
     const destino = $id('env-correo-destino').value.trim();
-    const copia = $id('env-correo-copia').value.trim();
     const emailRe = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-    if (!emailRe.test(destino)) { Swal.fire('', 'Ingrese un correo de proveedor válido', 'warning'); return; }
-    if (copia && !emailRe.test(copia)) { Swal.fire('', 'El correo de copia no es válido', 'warning'); return; }
+    if (!emailRe.test(destino)) {
+        $id('env-correo-destino').classList.add('is-invalid');
+        $id('env-correo-destino').focus();
+        Swal.fire('', 'Escriba el correo del proveedor', 'warning');
+        return;
+    }
+    $id('env-correo-destino').classList.remove('is-invalid');
+    if ($id('env-modulo-edicion').style.display !== 'none' && $id('env-modulo-input').value.trim()) {
+        Swal.fire('', 'Guarde (o cancele) el cambio del correo del módulo antes de enviar', 'info');
+        return;
+    }
 
-    const btn = $id('env-btn-enviar');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando...';
-
-    post(`/app/api/requerimientos/${requerimientoId}/enviar-proveedor/`, {
-        correo_destino: destino,
-        correo_copia: copia,
-        mensaje: $id('env-mensaje').value.trim(),
-        es_reenvio: esReenvioActual,
-    }).then(d => {
-        btn.disabled = false;
-        btn.innerHTML = `<i class="ri-send-plane-line me-1"></i>${esReenvioActual ? 'Re-enviar' : 'Enviar'}`;
-        if (!d.success) { Swal.fire('No se pudo enviar', d.error, 'error'); return; }
-        bootstrap.Modal.getInstance($id('modalEnviarProveedor')).hide();
-        Swal.fire('Enviado', d.message, 'success');
-        cargarRequerimiento();
-    }).catch(() => {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="ri-send-plane-line me-1"></i>Enviar';
-        Swal.fire('Error', 'No se pudo enviar el correo', 'error');
-    });
+    const recordar = $id('env-recordar-wrap').style.display !== 'none' && $id('env-recordar').checked;
+    conBoton('env-btn-enviar', 'Enviando...',
+        post(`/app/api/requerimientos/${requerimientoId}/enviar-proveedor/`, {
+            correo_destino: destino,
+            recordar_correo: recordar,
+            mensaje: $id('env-mensaje').value.trim(),
+            es_reenvio: esReenvioActual,
+        }).then(d => {
+            if (!d.success) { Swal.fire('No se pudo enviar', d.error, 'error'); return; }
+            cerrarModal('modalEnviarProveedor');
+            Swal.fire({
+                icon: 'success', title: 'Enviado',
+                html: `${reqEsc(d.message)}${d.correo_recordado ? '<div class="small text-muted mt-2">El correo quedó guardado para este proveedor.</div>' : ''}`,
+            });
+            cargarRequerimiento();
+        }).catch(() => Swal.fire('Error', 'No se pudo enviar el correo', 'error')));
 }
 
 // ══════════ Respuesta del proveedor ══════════
 
 function abrirModalRespuestaProveedor() {
-    // `toISOString` devuelve UTC: en Chile eso adelanta la hora varias horas y
-    // el campo aparecía con una hora que el usuario no tipeó.
+    const r = datosRequerimiento;
+    // `toISOString` devuelve UTC: en Chile eso adelanta la hora varias horas.
     const ahora = new Date();
     const local = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000);
     $id('fecha-respuesta-proveedor').value = local.toISOString().slice(0, 16);
-    $id('decision-proveedor').value = '';
     $id('respuesta-proveedor-text').value = '';
     $id('motivo-usuario').value = '';
-    document.querySelectorAll('input[name="decision_radio"]').forEach(r => { r.checked = false; });
+    document.querySelectorAll('input[name="decision_radio"]').forEach(x => { x.checked = false; });
+
+    // Si el proveedor ya contestó por correo y la respuesta se capturó, se
+    // precarga: el usuario solo tiene que decir qué decidió.
+    const s = r.seguimiento_correo;
+    const ultima = s && s.respuestas && s.respuestas.length ? s.respuestas[0] : null;
+    $id('resp-aviso-correo').innerHTML = ultima
+        ? `<div class="alert alert-info py-1 px-2 mb-2" style="font-size:.74rem">
+               <i class="ri-mail-download-line me-1"></i>Se cargó la respuesta que llegó por correo de
+               <strong>${reqEsc(ultima.remitente)}</strong> (${reqEsc(ultima.recibido_en)}). Revísela y elija la decisión.</div>`
+        : '';
+    if (ultima) {
+        $id('respuesta-proveedor-text').value = ultima.cuerpo || '';
+        const m = /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})$/.exec(ultima.recibido_en || '');
+        if (m) $id('fecha-respuesta-proveedor').value = `${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}`;
+    }
     new bootstrap.Modal($id('modalRegistrarRespuesta')).show();
 }
 
 function guardarRespuestaProveedor() {
-    const dec = $id('decision-proveedor').value;
+    const elegida = document.querySelector('input[name="decision_radio"]:checked');
+    const dec = elegida ? elegida.value : '';
     const resp = $id('respuesta-proveedor-text').value.trim();
     const mot = $id('motivo-usuario').value.trim();
-    if (!dec) { Swal.fire('', 'Elija la decisión del proveedor', 'warning'); return; }
-    if (!resp || !mot) { Swal.fire('', 'Complete la respuesta y el motivo para el cliente', 'warning'); return; }
+    if (!dec) { Swal.fire('', 'Elija qué decidió el proveedor', 'warning'); return; }
+    if (!resp || !mot) { Swal.fire('', 'Complete lo que respondió el proveedor y lo que se le explica a la tienda', 'warning'); return; }
 
-    post(`/app/api/requerimientos/${requerimientoId}/respuesta-proveedor/`, {
-        decision: dec, respuesta: resp, motivo: mot,
-        // La fecha se venía pidiendo y descartando: el backend siempre guardaba
-        // el instante del registro, no cuándo respondió el proveedor.
-        fecha_respuesta: $id('fecha-respuesta-proveedor').value || null,
-    }).then(d => {
-        if (!d.success) { Swal.fire('Error', d.error, 'error'); return; }
-        bootstrap.Modal.getInstance($id('modalRegistrarRespuesta')).hide();
-        Swal.fire(dec === 'RECHAZADO' ? 'Rechazo registrado' : 'Respuesta registrada',
-                  `El cliente verá: "${mot}"`, 'success');
-        cargarRequerimiento();
-    }).catch(() => Swal.fire('Error', 'No se pudo registrar la respuesta', 'error'));
+    conBoton('resp-btn-guardar', 'Guardando...',
+        post(`/app/api/requerimientos/${requerimientoId}/respuesta-proveedor/`, {
+            decision: dec, respuesta: resp, motivo: mot,
+            fecha_respuesta: $id('fecha-respuesta-proveedor').value || null,
+        }).then(d => {
+            if (!d.success) { Swal.fire('Error', d.error, 'error'); return; }
+            cerrarModal('modalRegistrarRespuesta');
+            Swal.fire(dec === 'RECHAZADO' ? 'Rechazo registrado' : 'Respuesta registrada',
+                      `La tienda verá: "${mot}"`, 'success');
+            cargarRequerimiento();
+        }).catch(() => Swal.fire('Error', 'No se pudo registrar la respuesta', 'error')));
 }
 
 // ══════════ Cierre y cambios de estado ══════════
 
+const RESOLUCIONES_RAPIDAS = {
+    APROBADO: ['El proveedor emitió nota de crédito', 'El proveedor repuso el producto', 'Se le cambió el producto al cliente', 'El producto fue reparado'],
+    RECHAZADO: ['Se le explicó al cliente el rechazo del proveedor', 'La empresa asumió el costo', 'El producto quedó como merma'],
+    EN_PROCESO: ['El proveedor emitió nota de crédito', 'El proveedor repuso el producto', 'Se le cambió el producto al cliente'],
+    VALIDADO: ['Se resolvió sin reclamar al proveedor'],
+};
+
 function abrirModalCompletar() {
+    const r = datosRequerimiento;
     $id('comp-resolucion').value = '';
+    $id('comp-contexto').innerHTML = r.decision_proveedor
+        ? `<div class="req-resumen py-2" style="font-size:.76rem"><strong>El proveedor:</strong> ${
+              { APROBADO: 'aprobó', PARCIAL: 'aprobó una parte', RECHAZADO: 'rechazó' }[r.decision_proveedor] || r.decision_proveedor}.
+              ${r.motivo_resolucion ? reqEsc(r.motivo_resolucion) : ''}</div>`
+        : '';
+    $id('comp-chips').innerHTML = (RESOLUCIONES_RAPIDAS[r.estado_codigo] || []).map(t =>
+        `<button type="button" class="req-chip" onclick="$id('comp-resolucion').value = this.textContent; $id('comp-resolucion').focus()">${reqEsc(t)}</button>`).join('');
     new bootstrap.Modal($id('modalCompletar')).show();
 }
 
@@ -1613,14 +1916,15 @@ function guardarCompletar() {
     const resolucion = $id('comp-resolucion').value.trim();
     if (!resolucion) { Swal.fire('', 'Describa cómo se resolvió', 'warning'); return; }
 
-    post(`/app/api/requerimientos/${requerimientoId}/completar/`, { resolucion })
-        .then(d => {
-            if (!d.success) { Swal.fire('Error', d.error, 'error'); return; }
-            bootstrap.Modal.getInstance($id('modalCompletar')).hide();
-            Swal.fire('Completado', d.message, 'success');
-            cargarRequerimiento();
-        })
-        .catch(() => Swal.fire('Error', 'No se pudo completar', 'error'));
+    conBoton('comp-btn-guardar', 'Cerrando...',
+        post(`/app/api/requerimientos/${requerimientoId}/completar/`, { resolucion })
+            .then(d => {
+                if (!d.success) { Swal.fire('Error', d.error, 'error'); return; }
+                cerrarModal('modalCompletar');
+                Swal.fire('Requerimiento cerrado', d.message, 'success');
+                cargarRequerimiento();
+            })
+            .catch(() => Swal.fire('Error', 'No se pudo cerrar', 'error')));
 }
 
 function cambiarEstado() {
@@ -1631,20 +1935,22 @@ function cambiarEstado() {
         return;
     }
     const labels = (r && r.estados_labels) || {};
-    // Los estados con acción propia se ofrecen desactivados y explicados: si
-    // no, el usuario los elige y recibe un error sin entender por qué.
+    // Los estados con acción propia se ofrecen desactivados y explicados.
     const conAccionPropia = {
         ESPERANDO_RESPUESTA: 'use "Enviar al proveedor"',
         APROBADO: 'use "Registrar respuesta"',
         RECHAZADO: 'use "Registrar respuesta"',
         VALIDADO: 'use "Validar o rechazar"',
         RECHAZADO_INTERNO: 'use "Validar o rechazar"',
-        COMPLETADO: 'use "Completar"',
+        COMPLETADO: 'use "Cerrar requerimiento"',
     };
-    $id('nuevo-estado').innerHTML = permitidas.map(c => {
+    const opciones = permitidas.map(c => {
         const nota = conAccionPropia[c];
         return `<option value="${c}" ${nota ? 'disabled' : ''}>${reqEsc(labels[c] || c)}${nota ? ` — ${nota}` : ''}</option>`;
-    }).join('');
+    });
+    $id('nuevo-estado').innerHTML = opciones.join('');
+    const primeraLibre = permitidas.find(c => !conAccionPropia[c]);
+    if (primeraLibre) $id('nuevo-estado').value = primeraLibre;
     $id('comentario-estado').value = '';
     new bootstrap.Modal($id('modalCambiarEstado')).show();
 }
@@ -1656,7 +1962,7 @@ function guardarEstado() {
         estado, comentario: $id('comentario-estado').value.trim(),
     }).then(d => {
         if (!d.success) { Swal.fire('Error', d.error, 'error'); return; }
-        bootstrap.Modal.getInstance($id('modalCambiarEstado')).hide();
+        cerrarModal('modalCambiarEstado');
         Swal.fire({ icon: 'success', title: 'Estado actualizado', timer: 1400, showConfirmButton: false });
         cargarRequerimiento();
     }).catch(() => Swal.fire('Error', 'No se pudo actualizar el estado', 'error'));
@@ -1672,7 +1978,7 @@ function cambiarEstadoRapido(estado, comentario) {
         .catch(() => Swal.fire('Error', 'No se pudo actualizar', 'error'));
 }
 
-function marcarEnProceso() { cambiarEstadoRapido('EN_PROCESO', 'Iniciando proceso de resolución'); }
+function marcarEnProceso() { cambiarEstadoRapido('EN_PROCESO', 'Resolución en curso'); }
 function tomarEnRevision() { cambiarEstadoRapido('EN_REVISION', 'Tomado para revisión'); }
 
 function cancelarRequerimiento() {

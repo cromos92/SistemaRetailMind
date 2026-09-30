@@ -18,8 +18,11 @@ Qué hace, por cada línea de la NC con talla:
      Aborta si el origen no tiene esas unidades (significa que ya se vendieron
      o movieron: hay que mirar antes de reparar).
   2. DESTINO: ingreso TRASPASO_ENTRADA (dte = el traspaso) por la misma
-     cantidad, con el costo/sobreprecio del documento y lote FIFO. Aborta si
-     el SKU no existe en el destino (crearlo antes desde «Crear en destino»).
+     cantidad, con el costo/sobreprecio del documento y lote FIFO. Si el SKU
+     no existe en el destino (el ajuste sacó el artículo entero antes de que
+     la recepción lo creara), aborta; con --crear-en-destino crea la ficha
+     como lo hace la recepción normal: reusa el Producto del mismo artículo y
+     atributos si ya existe en el destino, o lo copia del origen.
   3. Si en el destino ya se sumaron unidades A MANO después de emitida la NC
      (AJUSTE_POSITIVO / AJUSTE_INVENTARIO_ENTRADA sobre esa talla —el «le sumo
      1 para poder venderlo»—), esas unidades ya están contadas: se revierten
@@ -43,6 +46,8 @@ Por defecto corre en seco. Para escribir: --aplicar
     python manage.py reparar_nc_traspaso_erronea --nc-id 2205752
     python manage.py reparar_nc_traspaso_erronea --nc-id 2205752 --aplicar
     python manage.py reparar_nc_traspaso_erronea --folio 981 --emisor EDEL --aplicar
+    python manage.py reparar_nc_traspaso_erronea --nc-id 2205817 --crear-en-destino
+    python manage.py reparar_nc_traspaso_erronea --nc-id 2205817 --crear-en-destino --articulos FQ8317-446,HQ2324-446
 """
 import logging
 from datetime import datetime
@@ -52,7 +57,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from app.models import (
-    Dte, Dte_Productos, Movimientos_Producto, Producto_Talla, Productos_Recepcionados, Sucursal,
+    Dte, Dte_Productos, Movimientos_Producto, Producto, Producto_Talla, Productos_Recepcionados, Sucursal,
 )
 from app.services import inventario_service
 
@@ -81,6 +86,14 @@ class Command(BaseCommand):
                             help='No crea líneas de Productos_Recepcionados para lo repuesto.')
         parser.add_argument('--no-revertir-manuales', action='store_true',
                             help='No revierte los ajustes manuales positivos hechos en el destino tras la NC.')
+        parser.add_argument('--crear-en-destino', action='store_true',
+                            help='Crea en el destino los SKU que no existen (copia la ficha del origen), '
+                                 'en vez de abortar.')
+        parser.add_argument('--articulos',
+                            help='Solo repara las líneas de estos artículos (separados por coma). '
+                                 'Para cuando en el conteo apareció solo una parte de la NC.')
+        parser.add_argument('--skus',
+                            help='Solo repara las líneas de estos SKU (separados por coma).')
         parser.add_argument('--aplicar', action='store_true',
                             help='Escribe los cambios. Sin este flag solo muestra el plan.')
 
@@ -124,6 +137,24 @@ class Command(BaseCommand):
         if not lineas_nc:
             raise CommandError('La NC no tiene líneas con talla: no hay unidades que reponer.')
 
+        # Reparación parcial: solo lo que apareció en el conteo físico.
+        filtro_arts = {a.strip().upper() for a in (options.get('articulos') or '').split(',') if a.strip()}
+        filtro_skus = {s.strip() for s in (options.get('skus') or '').split(',') if s.strip()}
+        if filtro_arts or filtro_skus:
+            conocidos_arts = {(dp.productoTalla.producto.articulo or '').strip().upper() for dp in lineas_nc}
+            conocidos_skus = {str(dp.productoTalla.sku) for dp in lineas_nc}
+            desconocidos = sorted((filtro_arts - conocidos_arts) | (filtro_skus - conocidos_skus))
+            if desconocidos:
+                raise CommandError(
+                    f'No están en la NC: {", ".join(desconocidos)}. Revisa el artículo/SKU (la NC tiene: '
+                    f'{", ".join(sorted(conocidos_arts))}).'
+                )
+            lineas_nc = [
+                dp for dp in lineas_nc
+                if (dp.productoTalla.producto.articulo or '').strip().upper() in filtro_arts
+                or str(dp.productoTalla.sku) in filtro_skus
+            ]
+
         self.stdout.write(self.style.MIGRATE_HEADING(
             f'NC #{nc.numero_documento} (id {nc.id}) sobre traspaso #{dte.numero_documento} '
             f'({origen.alias} -> {destino.alias}), emitida {nc.fecha_emision} {nc.hora or ""}'
@@ -131,7 +162,8 @@ class Command(BaseCommand):
         self.stdout.write(f'Modo: {"APLICAR" if aplicar else "SIMULACIÓN (sin cambios)"} · responsable: {usuario}')
 
         plan, errores = self._armar_plan(lineas_nc, dte, origen, destino, momento_nc, tag,
-                                         revertir_manuales=not options['no_revertir_manuales'])
+                                         revertir_manuales=not options['no_revertir_manuales'],
+                                         crear_en_destino=options['crear_en_destino'])
         self._imprimir_plan(plan, origen, destino)
 
         if errores:
@@ -161,6 +193,8 @@ class Command(BaseCommand):
                 f"\n[REPARACION NC #{nc.numero_documento}] {ahora.strftime('%Y-%m-%d %H:%M')} {usuario}: "
                 f"{uds} uds de {len(pendientes)} línea(s) repuestas en {destino.alias} y descontadas de "
                 f"{origen.alias} (la NC se emitió por error, la mercadería sí llegó)."
+                + (f" Reparación PARCIAL: {', '.join(sorted({p['articulo'] for p in pendientes}))}."
+                   if (filtro_arts or filtro_skus) else '')
             )
             dte.referencias = ((dte.referencias or '') + nota).strip()
             dte.save(update_fields=['referencias'])
@@ -217,7 +251,8 @@ class Command(BaseCommand):
         naive = datetime.combine(nc.fecha_emision, hora)
         return timezone.make_aware(naive, timezone.get_current_timezone())
 
-    def _armar_plan(self, lineas_nc, dte, origen, destino, momento_nc, tag, revertir_manuales):
+    def _armar_plan(self, lineas_nc, dte, origen, destino, momento_nc, tag, revertir_manuales,
+                    crear_en_destino=False):
         plan, errores = [], []
         for dp in lineas_nc:
             talla_origen = dp.productoTalla
@@ -236,6 +271,7 @@ class Command(BaseCommand):
                 'manuales': [],
                 'revertir': 0,
                 'ya_reparada': False,
+                'crear_destino': False,
             }
             plan.append(item)
 
@@ -257,12 +293,18 @@ class Command(BaseCommand):
             )
             item['talla_destino'] = talla_destino
             if talla_destino is None:
-                errores.append(
-                    f'SKU {talla_origen.sku} (talla {talla_origen.talla}) no existe en {destino.alias}: '
-                    f'créalo primero («Crear en destino» en el detalle del DTE).'
-                )
-                continue
-            item['stock_destino'] = int(talla_destino.stock or 0)
+                if not crear_en_destino:
+                    errores.append(
+                        f'SKU {talla_origen.sku} (talla {talla_origen.talla}) no existe en {destino.alias}: '
+                        f'agrega --crear-en-destino para crearlo, o créalo desde «Crear en destino».'
+                    )
+                    continue
+                # Se crea al aplicar (misma regla que la recepción). Sin ficha
+                # tampoco puede haber ajustes manuales que revertir.
+                item['crear_destino'] = True
+                item['stock_destino'] = 0
+            else:
+                item['stock_destino'] = int(talla_destino.stock or 0)
 
             item['dp_dte'] = (
                 Dte_Productos.objects.filter(dte=dte, productoTalla=talla_origen).order_by('id').first()
@@ -275,7 +317,7 @@ class Command(BaseCommand):
                     f'movieron en el origen: revisa el kardex antes de reparar.'
                 )
 
-            if revertir_manuales:
+            if revertir_manuales and talla_destino is not None:
                 manuales = list(
                     Movimientos_Producto.objects
                     .filter(
@@ -311,7 +353,12 @@ class Command(BaseCommand):
             else:
                 estado = 'por reparar'
                 o_txt = f'{so}→{so - c}'
-                d_txt = f'{sd}→{sd + c - p["revertir"]}' if sd is not None else 'SKU no existe'
+                if p['crear_destino']:
+                    d_txt = f'nuevo 0→{c}'
+                elif sd is not None:
+                    d_txt = f'{sd}→{sd + c - p["revertir"]}'
+                else:
+                    d_txt = 'SKU no existe'
             manual = (
                 f"-{p['revertir']} (rev. mov {', '.join(str(m.id) for m in p['manuales'])})"
                 if p['revertir'] else '-'
@@ -321,9 +368,11 @@ class Command(BaseCommand):
                 f"{o_txt:>18} | {d_txt:>18} | {manual} | {estado}"
             )
         pend = [p for p in plan if not p['ya_reparada']]
+        nuevos = sum(1 for p in pend if p['crear_destino'])
         self.stdout.write(
             f"\nTotal por reparar: {sum(p['cantidad'] for p in pend)} uds en {len(pend)} línea(s); "
-            f"ajustes manuales a revertir en {destino.alias}: {sum(p['revertir'] for p in pend)} uds."
+            f"ajustes manuales a revertir en {destino.alias}: {sum(p['revertir'] for p in pend)} uds"
+            + (f"; SKU a crear en {destino.alias}: {nuevos}." if nuevos else '.')
         )
 
     def _aplicar_linea(self, p, dte, nc, origen, destino, usuario, tag, crear_recepcion):
@@ -331,6 +380,9 @@ class Command(BaseCommand):
         cantidad = p['cantidad']
         talla_origen = p['talla_origen']
         talla_destino = p['talla_destino']
+        if talla_destino is None and p['crear_destino']:
+            talla_destino = self._crear_talla_destino(talla_origen, destino)
+            p['talla_destino'] = talla_destino
         motivo = (
             f'Reparación NC #{nc.numero_documento} emitida por error sobre DTE #{dte.numero_documento}: '
             f'la mercadería sí llegó a {destino.alias}'
@@ -384,6 +436,44 @@ class Command(BaseCommand):
                 recepcionado_por=usuario,
                 movimiento_ingreso=mov_entrada,
             )
+
+    @staticmethod
+    def _crear_talla_destino(talla_origen, destino):
+        """Crea la talla en el destino con la misma regla que confirmar_recepcion_api:
+        reusa el Producto del mismo artículo (sin distinguir mayúsculas) y los
+        mismos 4 atributos si ya existe en el destino —el más antiguo—, y si no,
+        lo copia del origen. La talla nace en 0; el ingreso la suma después."""
+        producto_origen = talla_origen.producto
+        producto_destino = (
+            Producto.objects.filter(
+                articulo__iexact=(producto_origen.articulo or '').strip(),
+                sucursal=destino,
+                atributo1=producto_origen.atributo1,
+                atributo2=producto_origen.atributo2,
+                atributo3=producto_origen.atributo3,
+                atributo4=producto_origen.atributo4,
+            ).order_by('id').first()
+        )
+        if producto_destino is None:
+            producto_destino = Producto.objects.create(
+                articulo=producto_origen.articulo,
+                sucursal=destino,
+                atributo1=producto_origen.atributo1,
+                atributo2=producto_origen.atributo2,
+                atributo3=producto_origen.atributo3,
+                atributo4=producto_origen.atributo4,
+                descripcion=producto_origen.descripcion,
+                categoria=producto_origen.categoria,
+                costo=producto_origen.costo,
+                sobreprecio=producto_origen.sobreprecio,
+                precioventa=producto_origen.precioventa,
+                precioSugerido=producto_origen.precioSugerido,
+                tipo_talla=producto_origen.tipo_talla,
+                guia_talla=producto_origen.guia_talla,
+            )
+        return Producto_Talla.objects.create(
+            producto=producto_destino, talla=talla_origen.talla, sku=talla_origen.sku, stock=0,
+        )
 
     def _imprimir_resultado(self, pendientes, origen, destino):
         self.stdout.write(self.style.SUCCESS('\nAplicado. Stock actual:'))

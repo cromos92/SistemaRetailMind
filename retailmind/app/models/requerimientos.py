@@ -816,3 +816,75 @@ class HistorialRequerimiento(models.Model):
 
     def __str__(self):
         return f"{self.requerimiento.numero_requerimiento} - {self.accion} - {self.fecha.strftime('%d/%m/%Y %H:%M')}"
+
+
+class ConfiguracionRequerimientos(models.Model):
+    """Configuración del módulo de Requerimientos (una sola fila, pk=1).
+
+    `correo_modulo` es EL correo del módulo: recibe la copia de control de
+    cada envío, es la dirección de "Responder" de todos los correos a
+    proveedores y es el contacto que aparece en el correo y en el PDF.
+
+    Existe porque antes todo eso caía en el correo PERSONAL de quien apretaba
+    "Enviar": cada proveedor respondía a una persona distinta, y si esa persona
+    faltaba o dejaba la empresa, las respuestas se perdían. Ahora es uno solo,
+    se edita desde la pantalla y no depende del usuario que envía.
+    """
+    correo_modulo = models.EmailField(
+        blank=True,
+        default='',
+        help_text="Recibe la copia de cada envío y las respuestas de los proveedores",
+    )
+    actualizado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Configuración de Requerimientos'
+        verbose_name_plural = 'Configuración de Requerimientos'
+
+    def __str__(self):
+        return f"Correo del módulo: {self.correo_modulo or '(sin definir)'}"
+
+    @classmethod
+    def obtener(cls):
+        """La fila única, creándola vacía si todavía no existe."""
+        config, _ = cls.objects.get_or_create(pk=1)
+        return config
+
+
+class CorreoProveedorRequerimiento(models.Model):
+    """Correo al que se le mandan los requerimientos a UN proveedor.
+
+    Vive aparte de la ficha del proveedor (`Empresa`) a propósito: los campos
+    `correoVendedor`/`correoIntercambio` de la ficha los usan también Compras y
+    el intercambio de DTE, y el contacto de garantías casi nunca es el mismo.
+    Se guarda la primera vez que alguien lo escribe al enviar, y desde ahí se
+    usa siempre, lo envíe quien lo envíe.
+    """
+    proveedor = models.OneToOneField(
+        Empresa,
+        on_delete=models.CASCADE,
+        related_name='correo_requerimientos',
+    )
+    correo = models.EmailField(help_text="Destino de los requerimientos a este proveedor")
+    actualizado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Correo de proveedor (requerimientos)'
+        verbose_name_plural = 'Correos de proveedores (requerimientos)'
+
+    def __str__(self):
+        return f"{self.proveedor} → {self.correo}"
