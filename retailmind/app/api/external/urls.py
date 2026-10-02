@@ -9,6 +9,7 @@ from .views import (
     GuiasTallaExternalView,
     SucursalesPorEmpresaView,
     PreciosActualesView,
+    PreciosReferenciaView,
     NovedadesView,
     MovimientosVentasView,
     VentasView,
@@ -24,6 +25,9 @@ urlpatterns = [
     path('guias-talla/', GuiasTallaExternalView.as_view(), name='external-guias-talla'),
     path('sucursales/', SucursalesPorEmpresaView.as_view(), name='external-sucursales'),
     path('precios-actuales/', PreciosActualesView.as_view(), name='external-precios-actuales'),
+    # Precio original de referencia por SKU (historial de PVP + liquidación
+    # activa). Solo lectura.
+    path('precios-referencia/', PreciosReferenciaView.as_view(), name='external-precios-referencia'),
     path('novedades/', NovedadesView.as_view(), name='external-novedades'),
     # Movimientos de venta (líneas de DTE) — reemplaza la API legacy de
     # HoldingTebes consumida por la pantalla de devoluciones de AllConnected.

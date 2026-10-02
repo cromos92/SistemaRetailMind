@@ -446,7 +446,8 @@ class StockPorSkusView(APIView):
             items = []
         validos, invalidos = [], []
         for s in items:
-            if s.isdigit():
+            # isascii: '²' o dígitos de otros alfabetos pasan isdigit() y botan int()
+            if s.isascii() and s.isdigit():
                 validos.append(int(s))
             else:
                 invalidos.append(s)
@@ -562,7 +563,8 @@ class StockGlobalView(APIView):
             items = []
         validos, invalidos = [], []
         for s in items:
-            if s.isdigit():
+            # isascii: '²' o dígitos de otros alfabetos pasan isdigit() y botan int()
+            if s.isascii() and s.isdigit():
                 validos.append(int(s))
             else:
                 invalidos.append(s)
@@ -2006,3 +2008,332 @@ class VentasView(APIView):
             'data': data_page,
             'error': None,
         })
+
+
+# ──────────────────────────────────────────────
+# Endpoint 12 — Precios de referencia (historial de PVP + liquidaciones)
+# GET /api/precios-referencia/?rut_empresa=XXXXXXXX-X[&skus=A,B][&articulos=X,Y]
+#     [&desde=YYYY-MM-DD][&meses=12][&page=N&page_size=M]
+# ──────────────────────────────────────────────
+
+#: Ventana (meses) por defecto y máxima para el PVP máximo del historial.
+MESES_REFERENCIA_DEFAULT = 12
+MESES_REFERENCIA_MAX = 60
+
+#: Hasta cuántas fichas se filtra el historial/liquidaciones con IN (...).
+#: Por encima (catálogo completo sin paginar) se filtra por empresa con JOIN.
+MAX_FICHAS_FILTRO_IN = 5000
+
+
+class PreciosReferenciaView(APIView):
+    """
+    Precio original de referencia por SKU, a partir de lo que el ERP ya guarda:
+    HistorialCambioPrecio (cada cambio de PVP) y CampanaLiquidacion /
+    CampanaLiquidacionProducto (snapshot del precio original al activar).
+
+    Solo lectura. Una fila por SKU consolidado a nivel EMPRESA, igual que
+    /api/precios-actuales/: `pvp_actual` es el MISMO valor que ese endpoint
+    devuelve en `precio_venta` (MAX de Producto.precioventa entre las fichas
+    —una por sucursal— que contienen el SKU).
+
+    El historial y las campañas viven a nivel PRODUCTO (ficha), no SKU: para
+    cada SKU se consideran las filas de TODAS sus fichas en la empresa.
+
+    Parámetros:
+      rut_empresa  (obligatorio)
+      skus         CSV de códigos SKU (numéricos; los demás se ignoran y se
+                   reportan en `skus_invalidos`, igual que /stock/por-skus/)
+      articulos    CSV de códigos de artículo (Producto.articulo, exacto)
+      desde        YYYY-MM-DD: solo SKUs con un cambio de PVP en el historial,
+                   o una liquidación aplicada/revertida, desde esa fecha
+      meses        ventana del PVP máximo del historial (default 12, 1-60)
+      page / page_size  paginación igual a /api/skus/ (sin `page` devuelve
+                   todo; page_size default 2000, máx 5000). Orden: SKU asc.
+
+    Lógica de cálculo en app/services/precios_referencia.py (funciones puras):
+      ultimo_cambio_pvp        fila más reciente de PVP del historial
+      pvp_maximo_ventana       {precio, fecha}: mayor PVP observado en
+                               `meses` (precio_anterior y precio_nuevo)
+      pvp_antes_ultima_rebaja  precio_anterior del último cambio que BAJÓ
+      liquidacion              item en campaña ACTIVA y aplicado (activo=True)
+      precio_original_referencia / fuente_original
+                               max(pvp_actual, liquidacion.precio_original,
+                               pvp_maximo_ventana.precio); empate → PVP_ACTUAL
+      descuento_vigente_pct    round((1 - pvp/original) * 100, 1); 0 sin rebaja
+
+    Montos en int (CLP, IntegerField en el ERP), fechas YYYY-MM-DD en hora de
+    Chile (`ultimo_cambio_pvp.fecha_hora` en ISO-8601 con offset).
+
+    Respuesta:
+    {
+        "success": true,
+        "data": [ {"codigo_sku": "4810070", "articulo": "ART001",
+                   "pvp_actual": 39990, ...} ],
+        "total": 1, "rut_empresa": "...", "meses": 12,
+        "ventana_desde": "2025-10-02", "timestamp": "...", "error": null
+        (+ page, page_size, total_paginas, has_more si se pidió `page`)
+    }
+    """
+    authentication_classes = [ApiKeyAuthentication]
+    permission_classes = [ApiKeyPermission]
+
+    def get(self, request):
+        from datetime import datetime, time as dt_time
+        from django.db.models import Q
+        from app.models import CampanaLiquidacionProducto, HistorialCambioPrecio
+        from app.services.precios_referencia import (
+            MOTIVOS_NO_PVP,
+            PREFIJOS_MOTIVO_NO_PVP,
+            armar_referencia_sku,
+            elegir_liquidacion,
+            restar_meses,
+        )
+
+        def _error(msg):
+            return Response(
+                {'success': False, 'data': [], 'total': 0, 'error': msg},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        rut = request.query_params.get('rut_empresa', '').strip()
+        if not rut:
+            return _error('El parámetro rut_empresa es obligatorio.')
+
+        # ── Parámetros ──
+        meses_raw = request.query_params.get('meses', '').strip()
+        try:
+            meses = int(meses_raw) if meses_raw else MESES_REFERENCIA_DEFAULT
+        except ValueError:
+            return _error('meses debe ser un entero.')
+        if not 1 <= meses <= MESES_REFERENCIA_MAX:
+            return _error(f'meses debe estar entre 1 y {MESES_REFERENCIA_MAX}.')
+
+        skus_raw = request.query_params.get('skus', '').strip()
+        skus_validos, skus_invalidos = StockPorSkusView._parse_skus(skus_raw)
+        articulos = [
+            a.strip() for a in request.query_params.get('articulos', '').split(',')
+            if a.strip()
+        ]
+
+        desde = None
+        desde_str = request.query_params.get('desde', '').strip()
+        if desde_str:
+            try:
+                desde = datetime.strptime(desde_str, '%Y-%m-%d').date()
+            except ValueError:
+                return _error('Formato de fecha inválido. Use YYYY-MM-DD.')
+
+        # Paginación: misma semántica que _paginar() (solo si viene `page`).
+        page = page_size = None
+        if request.query_params.get('page'):
+            try:
+                page = max(1, int(request.query_params.get('page')))
+            except (TypeError, ValueError):
+                page = 1
+            try:
+                page_size = int(request.query_params.get('page_size') or 2000)
+            except (TypeError, ValueError):
+                page_size = 2000
+            page_size = max(1, min(page_size, PAGE_SIZE_MAX))
+
+        logger.info(
+            f"[external/precios-referencia] rut={rut} meses={meses} skus={len(skus_validos)} "
+            f"articulos={len(articulos)} desde={desde or '-'} page={page or '-'}"
+        )
+
+        # Filas de historial que NO son de PVP (costo / sobreprecio). Mismo
+        # criterio que es_cambio_pvp(), expresado en SQL para el filtro `desde`.
+        q_no_pvp = Q(motivo__in=MOTIVOS_NO_PVP)
+        for prefijo in PREFIJOS_MOTIVO_NO_PVP:
+            q_no_pvp |= Q(motivo__startswith=prefijo)
+
+        # ── 1. Selección de SKUs ──
+        base_qs = Producto_Talla.objects.filter(producto__sucursal__empresa__rut=rut)
+        sel_qs = base_qs
+        filtrado = False
+        if skus_raw:
+            # Pidió SKUs puntuales: si ninguno es válido, la respuesta es vacía
+            # (no el catálogo entero).
+            sel_qs = sel_qs.filter(sku__in=skus_validos)
+            filtrado = True
+        if articulos:
+            sel_qs = sel_qs.filter(producto__articulo__in=articulos)
+            filtrado = True
+        if desde:
+            desde_dt = timezone.make_aware(datetime.combine(desde, dt_time.min))
+            fichas_historial = (
+                HistorialCambioPrecio.objects
+                .filter(producto__sucursal__empresa__rut=rut, fecha_cambio__gte=desde_dt)
+                .exclude(q_no_pvp)
+                .values('producto_id')
+            )
+            fichas_campana = (
+                CampanaLiquidacionProducto.objects
+                .filter(producto__sucursal__empresa__rut=rut)
+                .filter(Q(fecha_aplicacion__gte=desde_dt) | Q(fecha_reversion__gte=desde_dt))
+                .values('producto_id')
+            )
+            sel_qs = sel_qs.filter(
+                Q(producto_id__in=fichas_historial) | Q(producto_id__in=fichas_campana)
+            )
+            filtrado = True
+
+        total = None
+        if page is not None:
+            # Se pagina sobre la lista ordenada de SKUs DISTINTOS (un SKU abarca
+            # varias fichas), y después se traen todas las fichas de esa página.
+            skus_ordenados = (
+                sel_qs.values_list('sku', flat=True).distinct().order_by('sku')
+            )
+            total = skus_ordenados.count()
+            inicio = (page - 1) * page_size
+            skus_pagina = list(skus_ordenados[inicio:inicio + page_size])
+            filas_qs = base_qs.filter(sku__in=skus_pagina) if skus_pagina else base_qs.none()
+        elif filtrado:
+            filas_qs = base_qs.filter(sku__in=sel_qs.values('sku'))
+        else:
+            filas_qs = base_qs
+
+        # ── 2. PVP actual: MAX(precioventa) entre fichas (= precios-actuales) ──
+        consolidado: dict = {}
+        for row in (
+            filas_qs
+            .values('sku', 'producto_id', 'producto__articulo', 'producto__precioventa')
+            .iterator(chunk_size=2000)
+        ):
+            sku = str(row['sku'])
+            if not sku:
+                continue
+            precio_venta = int(row.get('producto__precioventa', 0) or 0)
+            base = consolidado.get(sku)
+            if base is None:
+                consolidado[sku] = {
+                    'articulo': row.get('producto__articulo', '') or '',
+                    'pvp_actual': precio_venta,
+                    'producto_ids': {row['producto_id']},
+                }
+            else:
+                base['pvp_actual'] = max(base['pvp_actual'], precio_venta)
+                base['producto_ids'].add(row['producto_id'])
+
+        producto_ids = set()
+        for info in consolidado.values():
+            producto_ids |= info['producto_ids']
+
+        def _por_fichas(qs):
+            """Acota un queryset con FK `producto` a las fichas de la respuesta."""
+            if len(producto_ids) <= MAX_FICHAS_FILTRO_IN:
+                return qs.filter(producto_id__in=list(producto_ids))
+            return qs.filter(producto__sucursal__empresa__rut=rut)
+
+        # ── 3. Historial de precios en lote (1 query, sin N+1) ──
+        # Se traen todas las filas de las fichas (también las de costo: el
+        # filtro de PVP lo aplica la función pura). Sin ORDER BY: el cálculo
+        # no depende del orden.
+        cambios_por_ficha: dict = {}
+        if producto_ids:
+            for h in (
+                _por_fichas(HistorialCambioPrecio.objects)
+                .order_by()
+                .values('id', 'producto_id', 'precio_anterior', 'precio_nuevo',
+                        'tipo_cambio', 'fecha_cambio', 'motivo', 'usuario__username')
+                .iterator(chunk_size=5000)
+            ):
+                if h['producto_id'] not in producto_ids:
+                    continue
+                cambios_por_ficha.setdefault(h['producto_id'], []).append({
+                    'id': h['id'],
+                    'precio_anterior': h['precio_anterior'],
+                    'precio_nuevo': h['precio_nuevo'],
+                    'tipo_cambio': h['tipo_cambio'],
+                    'fecha_cambio': h['fecha_cambio'],
+                    'motivo': h['motivo'],
+                    'usuario': h['usuario__username'],
+                })
+
+        # ── 4. Liquidaciones activas en lote (1 query) ──
+        # Campaña ACTIVA + item aplicado (`activo` es el espejo de "aplicada
+        # sobre este producto"; PENDIENTE/EXCLUIDO no bajaron el precio).
+        liquidaciones_por_ficha: dict = {}
+        if producto_ids:
+            for it in (
+                _por_fichas(CampanaLiquidacionProducto.objects)
+                .filter(activo=True, campana__estado='ACTIVA')
+                .order_by()
+                .values('producto_id', 'precio_original', 'precio_liquidacion',
+                        'estado', 'fecha_aplicacion', 'campana_id',
+                        'campana__nombre', 'campana__estado', 'campana__tipo_regla',
+                        'campana__fecha_inicio', 'campana__fecha_fin')
+            ):
+                if it['producto_id'] not in producto_ids:
+                    continue
+                liquidaciones_por_ficha.setdefault(it['producto_id'], []).append({
+                    'campana_id': it['campana_id'],
+                    'nombre': it['campana__nombre'],
+                    'estado': it['campana__estado'],
+                    'tipo_regla': it['campana__tipo_regla'],
+                    'fecha_inicio': it['campana__fecha_inicio'],
+                    'fecha_fin': it['campana__fecha_fin'],
+                    'precio_original': it['precio_original'],
+                    'precio_liquidacion': it['precio_liquidacion'],
+                    'estado_item': it['estado'],
+                    'fecha_aplicacion': it['fecha_aplicacion'],
+                })
+
+        # ── 5. Armar respuesta ──
+        ahora_local = timezone.localtime(timezone.now())
+        ventana_desde = restar_meses(ahora_local, meses)
+
+        def _fmt_fecha(dt):
+            return timezone.localtime(dt).strftime('%Y-%m-%d') if dt else None
+
+        def _fmt_fecha_hora(dt):
+            return timezone.localtime(dt).isoformat() if dt else None
+
+        data = []
+        # Orden numérico del SKU (mismo que el ORDER BY sku de la paginación).
+        for sku in sorted(consolidado, key=lambda s: (len(s), s)):
+            info = consolidado[sku]
+            fichas = info['producto_ids']
+            cambios = [c for pid in fichas for c in cambios_por_ficha.get(pid, ())]
+            liquidacion = elegir_liquidacion(
+                [i for pid in fichas for i in liquidaciones_por_ficha.get(pid, ())]
+            )
+            ref = armar_referencia_sku(
+                info['pvp_actual'], cambios, liquidacion, ventana_desde,
+                fmt_fecha=_fmt_fecha, fmt_fecha_hora=_fmt_fecha_hora,
+            )
+            # Porcentaje (no dinero): número JSON con 1 decimal.
+            ref['descuento_vigente_pct'] = float(ref['descuento_vigente_pct'])
+            data.append({'codigo_sku': sku, 'articulo': info['articulo'], **ref})
+
+        payload = {
+            'success': True,
+            'data': data,
+            'total': total if total is not None else len(data),
+            'rut_empresa': rut,
+            'meses': meses,
+            'ventana_desde': ventana_desde.strftime('%Y-%m-%d'),
+            'timestamp': timezone.now().isoformat(),
+            'error': None,
+        }
+        if desde:
+            payload['desde'] = str(desde)
+        if page is not None:
+            total_paginas = (total + page_size - 1) // page_size if total else 0
+            payload.update({
+                'page': page,
+                'page_size': page_size,
+                'total_paginas': total_paginas,
+                'has_more': page < total_paginas,
+            })
+        if skus_invalidos:
+            payload['skus_invalidos'] = skus_invalidos[:50]  # acotado por log
+            payload['skus_invalidos_total'] = len(skus_invalidos)
+
+        logger.info(
+            f"[external/precios-referencia] rut={rut} -> {len(data)} SKUs "
+            f"(fichas={len(producto_ids)}, con historial={len(cambios_por_ficha)}, "
+            f"con liquidación={len(liquidaciones_por_ficha)})"
+        )
+        return Response(payload)
