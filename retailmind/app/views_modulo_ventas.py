@@ -13479,13 +13479,16 @@ def _sucursales_permitidas(request):
     return permitidas, es_supervisor
 
 
-def _resolver_sucursales_filtro(request):
+def _resolver_sucursales_filtro(request, raw=None):
     """Traduce el parámetro `sucursal_id` a una lista de ids ya autorizada.
 
-    Acepta: vacío (sucursal activa), `all`/`todas`, o "1,4,7".
+    Acepta: vacío (sucursal activa), `all`/`todas`, o "1,4,7". `raw` permite
+    pasarlo desde un body JSON; por defecto se lee de `request.GET`.
     """
     permitidas, es_supervisor = _sucursales_permitidas(request)
-    raw = (request.GET.get('sucursal_id') or '').strip().lower()
+    if raw is None:
+        raw = request.GET.get('sucursal_id')
+    raw = str(raw or '').strip().lower()
     activa = get_sucursal_id(request)
 
     if not raw:
@@ -16298,6 +16301,162 @@ def recalcular_teoricos_arqueo(request, arqueo_id):
             'success': False,
             'error': f'Error al recalcular: {str(e)}'
         }, status=500)
+
+
+# Recálculo masivo de teóricos. Cada arqueo cuesta una cuadratura completa
+# (~0,3-1 s) y gunicorn corta a los 60 s, así que el front pide la lista y
+# después simula/aplica en lotes chicos. El rango se acota para que un clic
+# no re-snapshotee meses de arqueos ya revisados.
+MAX_DIAS_RECALCULO_MASIVO = 92
+MAX_ARQUEOS_POR_LOTE_RECALCULO = 10
+
+
+@login_required
+@require_POST
+def recalcular_teoricos_masivo(request):
+    """«Recalcular teóricos del rango» de Revisión de Arqueos.
+
+    Mismo efecto que `recalcular_teoricos_arqueo`, pero para todos los arqueos
+    de un rango de fechas y de la(s) sucursal(es) seleccionadas. Sólo
+    administrador/administración (es el criterio de los arqueos cerrados).
+
+    Body JSON, según `modo`:
+      - `listar`:  fecha_desde, fecha_hasta, sucursal_id ('all' o id)
+                   → arqueos del rango (sin calcular nada).
+      - `simular`: arqueo_ids (≤ MAX_ARQUEOS_POR_LOTE_RECALCULO)
+                   → qué cambiaría, sin escribir (rollback del savepoint).
+      - `aplicar`: arqueo_ids + razon (≥ 5 caracteres) → re-snapshot real,
+                   observación SISTEMA en la bitácora y LogAccionCaja.
+
+    Recalcular un día ya contado puede dejar Dif. Conteo distinta de 0 (p.ej.
+    una NC imputada después del conteo): por eso el front muestra la
+    simulación y el usuario elige qué arqueos aplicar.
+    """
+    rol_usuario = rol_efectivo(request.user)
+    if rol_usuario not in ('administrador', 'administracion'):
+        return JsonResponse({
+            'success': False,
+            'error': 'Sólo administración puede recalcular los teóricos de los arqueos.',
+        }, status=403)
+
+    try:
+        body = json.loads(request.body or '{}')
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+
+    modo = str(body.get('modo') or '').strip().lower()
+    if modo not in ('listar', 'simular', 'aplicar'):
+        return JsonResponse({'success': False, 'error': 'Modo inválido.'}, status=400)
+
+    sucursal_ids, _ = _resolver_sucursales_filtro(request, body.get('sucursal_id'))
+    if not sucursal_ids:
+        return JsonResponse({'success': False, 'error': 'No hay sucursales autorizadas.'}, status=403)
+
+    if modo == 'listar':
+        try:
+            desde = datetime.strptime(str(body.get('fecha_desde') or ''), '%Y-%m-%d').date()
+            hasta = datetime.strptime(str(body.get('fecha_hasta') or ''), '%Y-%m-%d').date()
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Rango de fechas inválido.'}, status=400)
+        if desde > hasta:
+            return JsonResponse({'success': False, 'error': '"Desde" no puede ser posterior a "Hasta".'}, status=400)
+        if (hasta - desde).days + 1 > MAX_DIAS_RECALCULO_MASIVO:
+            return JsonResponse({
+                'success': False,
+                'error': f'El rango máximo es de {MAX_DIAS_RECALCULO_MASIVO} días.',
+            }, status=400)
+        arqueos = (
+            ArqueoCaja.objects
+            .filter(sucursal_id__in=sucursal_ids, fecha_arqueo__range=(desde, hasta))
+            .order_by('fecha_arqueo', 'sucursal_id')
+            .values('id', 'fecha_arqueo', 'sucursal__alias', 'estado')
+        )
+        return JsonResponse({
+            'success': True,
+            'lote_max': MAX_ARQUEOS_POR_LOTE_RECALCULO,
+            'arqueos': [{
+                'id': a['id'],
+                'fecha': a['fecha_arqueo'].strftime('%Y-%m-%d'),
+                'sucursal': a['sucursal__alias'] or '',
+                'estado': a['estado'],
+            } for a in arqueos],
+        })
+
+    ids = body.get('arqueo_ids')
+    if not isinstance(ids, list) or not ids:
+        return JsonResponse({'success': False, 'error': 'Faltan los arqueos a procesar.'}, status=400)
+    try:
+        ids = [int(i) for i in ids]
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': 'Ids de arqueo inválidos.'}, status=400)
+    if len(ids) > MAX_ARQUEOS_POR_LOTE_RECALCULO:
+        return JsonResponse({
+            'success': False,
+            'error': f'Máximo {MAX_ARQUEOS_POR_LOTE_RECALCULO} arqueos por lote.',
+        }, status=400)
+
+    aplicar = modo == 'aplicar'
+    razon = str(body.get('razon') or '').strip()[:500]
+    if aplicar and len(razon) < 5:
+        return JsonResponse({
+            'success': False,
+            'error': 'Indica el motivo (mínimo 5 caracteres): queda en la bitácora de cada arqueo.',
+        }, status=400)
+
+    resultados = []
+    arqueos = (
+        ArqueoCaja.objects
+        .filter(id__in=ids, sucursal_id__in=sucursal_ids)
+        .select_related('sucursal')
+        .order_by('fecha_arqueo', 'sucursal_id')
+    )
+    for arqueo in arqueos:
+        dif_antes = _to_int(arqueo.diferencia_efectivo)
+        fila = {
+            'id': arqueo.id,
+            'fecha': arqueo.fecha_arqueo.strftime('%Y-%m-%d'),
+            'sucursal': arqueo.sucursal.alias or '',
+            'estado': arqueo.estado,
+            'estado_display': arqueo.get_estado_display(),
+            'resultado_revision': getattr(arqueo, 'resultado_revision', '') or '',
+        }
+        try:
+            # Savepoint por arqueo: en `simular` se descarta siempre, y en
+            # `aplicar` un arqueo que falle no arrastra a los demás del lote.
+            with transaction.atomic():
+                res = _recalcular_teoricos_arqueo(
+                    arqueo,
+                    usuario=request.user,
+                    registrar_bitacora=aplicar,
+                    razon=f'recálculo masivo: {razon}' if aplicar else '',
+                )
+                if not aplicar:
+                    transaction.set_rollback(True)
+        except Exception:
+            logger.exception('Recálculo masivo: falló el arqueo id=%s (%s)', arqueo.id, modo)
+            fila.update({'error': True, 'hay_cambios': False, 'cambios': {}})
+            resultados.append(fila)
+            continue
+
+        if aplicar and res['hay_cambios']:
+            try:
+                log_accion_caja(
+                    request, 'RECALCULAR_TEORICOS', arqueo=arqueo,
+                    cambios=res['cambios'], razon=f'recálculo masivo: {razon}',
+                )
+            except Exception:
+                pass
+
+        fila.update({
+            'hay_cambios': res['hay_cambios'],
+            'cambios': res['cambios'],
+            'efectivo_fisico': _to_int(arqueo.total_efectivo_fisico),
+            'dif_efectivo_antes': dif_antes,
+            'dif_efectivo_despues': _to_int(arqueo.diferencia_efectivo),
+        })
+        resultados.append(fila)
+
+    return JsonResponse({'success': True, 'modo': modo, 'resultados': resultados})
 
 
 # ========== GESTIÓN POS TRANSBANK ==========

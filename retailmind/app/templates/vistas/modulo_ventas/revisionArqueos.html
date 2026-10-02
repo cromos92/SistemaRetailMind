@@ -190,6 +190,15 @@
             <button class="btn btn-sm" onclick="cargarDatos()" style="background:var(--nexo-accent);color:var(--nexo-secondary);font-weight:700;">
                 <i class="ri-search-line me-1"></i>Buscar
             </button>
+            {% if es_supervisor %}
+            <!-- Recalcular teóricos de TODOS los arqueos del rango y la sucursal
+                 elegidos (mismo backend que «Actualizar Teórico» del detalle).
+                 Simula primero y deja elegir qué arqueos aplicar. -->
+            <button class="btn btn-sm btn-outline-light" id="btnRecalcularMasivo" onclick="recalcularTeoricosMasivo()"
+                    title="Vuelve a calcular el Ef. Teórico y los demás teóricos de todos los arqueos del rango y la sucursal seleccionados. Primero muestra qué cambiaría, sin tocar nada.">
+                <i class="ri-refresh-line me-1"></i>Recalcular teóricos del rango
+            </button>
+            {% endif %}
         </div>
     </div>
 
@@ -1434,6 +1443,188 @@ function actualizarTeoricoDetalle() {
             Swal.fire('Error', 'Error de conexión al recalcular los teóricos.', 'error');
         });
     });
+}
+
+// ===== RECALCULAR TEÓRICOS DEL RANGO (masivo) =====
+// Igual que «Actualizar Teórico» pero para todos los arqueos del rango y la
+// sucursal elegidos. Cada arqueo es una cuadratura completa (~1 s) y gunicorn
+// corta a los 60 s: por eso se pide la lista y se procesa en lotes. Primero se
+// SIMULA (el backend hace rollback) y el usuario elige qué aplicar, porque un
+// día ya contado puede quedar con Dif. Conteo ≠ 0 tras el recálculo.
+const URL_RECALCULO_MASIVO = '/app/api/arqueos/recalcular-teoricos-masivo/';
+
+function _postRecalculoMasivo(payload) {
+    return fetch(URL_RECALCULO_MASIVO, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    }).then(r => r.json().catch(() => ({ success: false, error: 'Respuesta inválida del servidor (HTTP ' + r.status + ').' })));
+}
+
+function _fechaCorta(iso) {
+    return new Date(iso + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+function _swalProgreso(titulo) {
+    Swal.fire({
+        title: titulo,
+        html: '<div id="rmProgreso" style="font-size:.88rem;color:#6c757d;">Preparando…</div>',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => Swal.showLoading()
+    });
+}
+
+async function _procesarEnLotes(ids, lote, payloadBase, verbo) {
+    const resultados = [];
+    for (let i = 0; i < ids.length; i += lote) {
+        const el = document.getElementById('rmProgreso');
+        if (el) el.textContent = verbo + ' ' + Math.min(i + lote, ids.length) + ' de ' + ids.length + ' arqueos…';
+        const res = await _postRecalculoMasivo(Object.assign({}, payloadBase, { arqueo_ids: ids.slice(i, i + lote) }));
+        if (!res.success) throw new Error(res.error || 'No se pudo procesar el lote.');
+        resultados.push(...(res.resultados || []));
+    }
+    return resultados;
+}
+
+function _htmlCambios(cambios) {
+    return Object.keys(cambios || {}).map(function(campo) {
+        const c = cambios[campo];
+        const f = campo.indexOf('cantidad_') === 0 ? fmtN : fmt;
+        return escHtml(TEORICO_LABELS[campo] || campo) + ': <span style="color:#6c757d;">' + f(c.antes) +
+               '</span> → <b>' + f(c.despues) + '</b>';
+    }).join('<br>');
+}
+
+async function recalcularTeoricosMasivo() {
+    const desde = document.getElementById('fechaDesde').value;
+    const hasta = document.getElementById('fechaHasta').value;
+    if (!desde || !hasta) { Swal.fire('Rango incompleto', 'Selecciona las fechas Desde y Hasta.', 'warning'); return; }
+    const pill = document.querySelector('.sucursal-pill.active');
+    const sucursalTxt = pill ? pill.textContent : '';
+
+    const conf = await Swal.fire({
+        title: 'Recalcular teóricos del rango',
+        html: '<p style="font-size:.86rem;text-align:left;color:#6c757d;margin-bottom:0;">' +
+              'Sucursal: <b>' + escHtml(sucursalTxt) + '</b><br>' +
+              'Desde <b>' + escHtml(desde) + '</b> hasta <b>' + escHtml(hasta) + '</b><br><br>' +
+              'Vuelve a calcular el Ef. Teórico y los demás teóricos de cada arqueo leyendo los DTE y Tickets del día ' +
+              '(NC emitidas después del cierre, fechas corregidas, etc.).<br><br>' +
+              'Primero se <b>simula sin cambiar nada</b> y verás qué arqueos cambiarían antes de aplicar.</p>',
+        showCancelButton: true,
+        confirmButtonText: '<i class="ri-search-eye-line me-1"></i>Simular',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0066FF'
+    });
+    if (!conf.isConfirmed) return;
+
+    _swalProgreso('Simulando recálculo…');
+    let simulados;
+    try {
+        const lista = await _postRecalculoMasivo({ modo: 'listar', fecha_desde: desde, fecha_hasta: hasta, sucursal_id: sucursalActualId });
+        if (!lista.success) throw new Error(lista.error || 'No se pudo obtener la lista de arqueos.');
+        const ids = (lista.arqueos || []).map(a => a.id);
+        if (!ids.length) { Swal.fire('Sin arqueos', 'No hay arqueos en ese rango para la sucursal seleccionada.', 'info'); return; }
+        simulados = await _procesarEnLotes(ids, lista.lote_max || 10, { modo: 'simular', sucursal_id: sucursalActualId }, 'Simulando');
+    } catch (e) {
+        Swal.fire('Error', escHtml(e.message || 'Error de conexión.'), 'error');
+        return;
+    }
+
+    const conCambios = simulados.filter(r => r.hay_cambios);
+    const conError = simulados.filter(r => r.error);
+    const avisoError = conError.length
+        ? '<p style="font-size:.8rem;color:var(--nexo-error);text-align:left;">' + conError.length +
+          ' arqueo(s) no se pudieron calcular (quedó en el log): ' +
+          conError.map(r => escHtml(r.sucursal) + ' ' + escHtml(r.fecha)).join(', ') + '</p>'
+        : '';
+    if (!conCambios.length) {
+        Swal.fire({
+            icon: 'success',
+            title: 'Todo al día',
+            html: '<p style="font-size:.88rem;">Se revisaron <b>' + simulados.length + '</b> arqueos: ' +
+                  'sus teóricos ya coinciden con los DTE y Tickets de cada día.</p>' + avisoError
+        });
+        return;
+    }
+
+    let filas = '';
+    conCambios.forEach(function(r) {
+        const cambiaConteo = r.dif_efectivo_despues !== r.dif_efectivo_antes;
+        const revisado = ['REVISADO', 'DEPOSITO_DECLARADO', 'DEPOSITO_CONFIRMADO'].indexOf(r.estado) !== -1;
+        filas += '<tr>' +
+            '<td><input type="checkbox" class="form-check-input rm-chk" value="' + r.id + '" checked></td>' +
+            '<td style="white-space:nowrap;">' + escHtml(_fechaCorta(r.fecha)) + '</td>' +
+            '<td>' + escHtml(r.sucursal) + '</td>' +
+            '<td><span class="badge ' + (revisado ? 'bg-success' : 'bg-secondary') + '">' + escHtml(r.estado_display) + '</span></td>' +
+            '<td style="font-family:monospace;font-size:.74rem;">' + _htmlCambios(r.cambios) + '</td>' +
+            '<td style="font-family:monospace;font-size:.76rem;white-space:nowrap;' + (cambiaConteo ? 'color:var(--nexo-error);font-weight:700;' : 'color:#6c757d;') + '">' +
+                (cambiaConteo ? fmt(r.dif_efectivo_antes) + ' → ' + fmt(r.dif_efectivo_despues) : 'sin cambio') + '</td>' +
+            '</tr>';
+    });
+    const hayRevisados = conCambios.some(r => ['REVISADO', 'DEPOSITO_DECLARADO', 'DEPOSITO_CONFIRMADO'].indexOf(r.estado) !== -1);
+    const hayConteo = conCambios.some(r => r.dif_efectivo_despues !== r.dif_efectivo_antes);
+
+    const elegir = await Swal.fire({
+        title: conCambios.length + ' de ' + simulados.length + ' arqueos cambiarían',
+        width: 960,
+        html: '<div class="table-responsive" style="max-height:48vh;overflow:auto;">' +
+              '<table class="table table-sm align-middle" style="font-size:.8rem;text-align:left;">' +
+              '<thead><tr><th><input type="checkbox" class="form-check-input" id="rmChkTodos" checked></th>' +
+              '<th>Fecha</th><th>Sucursal</th><th>Estado</th><th>Cambios en teóricos</th><th>Dif. Conteo</th></tr></thead>' +
+              '<tbody>' + filas + '</tbody></table></div>' +
+              (hayConteo ? '<p style="font-size:.78rem;color:var(--nexo-error);text-align:left;margin:.3rem 0;">' +
+                           '<b>Ojo:</b> en rojo, arqueos cuya Dif. Conteo cambia (p.ej. una NC imputada a un día ya contado). ' +
+                           'Desmárcalos si esa plata salió de otra caja.</p>' : '') +
+              (hayRevisados ? '<p style="font-size:.78rem;color:#6c757d;text-align:left;margin:.3rem 0;">' +
+                              'Los arqueos ya revisados no cambian de estado: sólo se actualizan sus teóricos.</p>' : '') +
+              avisoError +
+              '<textarea id="rmRazon" class="form-control mt-2" rows="2" ' +
+              'placeholder="Motivo (obligatorio, queda en la bitácora de cada arqueo)"></textarea>',
+        showCancelButton: true,
+        confirmButtonText: '<i class="ri-refresh-line me-1"></i>Aplicar a seleccionados',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#0066FF',
+        didOpen: () => {
+            const todos = document.getElementById('rmChkTodos');
+            todos.addEventListener('change', () => {
+                document.querySelectorAll('.rm-chk').forEach(c => { c.checked = todos.checked; });
+            });
+        },
+        preConfirm: () => {
+            const ids = Array.from(document.querySelectorAll('.rm-chk:checked')).map(c => parseInt(c.value, 10));
+            const razon = (document.getElementById('rmRazon').value || '').trim();
+            if (!ids.length) { Swal.showValidationMessage('Marca al menos un arqueo'); return false; }
+            if (razon.length < 5) { Swal.showValidationMessage('El motivo debe tener al menos 5 caracteres'); return false; }
+            return { ids: ids, razon: razon };
+        }
+    });
+    if (!elegir.isConfirmed) return;
+
+    _swalProgreso('Aplicando recálculo…');
+    let aplicados;
+    try {
+        aplicados = await _procesarEnLotes(elegir.value.ids, 10,
+            { modo: 'aplicar', sucursal_id: sucursalActualId, razon: elegir.value.razon }, 'Aplicando');
+    } catch (e) {
+        Swal.fire('Error', escHtml(e.message || 'Error de conexión.') +
+                  '<br><small>Los lotes anteriores al error sí quedaron aplicados.</small>', 'error');
+        cargarDatos();
+        return;
+    }
+    const ok = aplicados.filter(r => r.hay_cambios).length;
+    const fallidos = aplicados.filter(r => r.error);
+    Swal.fire({
+        icon: fallidos.length ? 'warning' : 'success',
+        title: 'Teóricos actualizados',
+        html: '<p style="font-size:.88rem;"><b>' + ok + '</b> arqueo(s) actualizados. ' +
+              'Cada uno quedó con su observación en la bitácora.</p>' +
+              (fallidos.length ? '<p style="font-size:.8rem;color:var(--nexo-error);">' + fallidos.length +
+                                 ' no se pudieron recalcular: ' +
+                                 fallidos.map(r => escHtml(r.sucursal) + ' ' + escHtml(r.fecha)).join(', ') + '</p>' : '')
+    });
+    cargarDatos();
 }
 
 // ===== ACCIONES SOBRE DEPÓSITOS (gateadas por permiso) =====
