@@ -574,7 +574,7 @@ def api_generar_devolucion_garantia(request):
         })
 
     # Único aviso de caja que el wizard no pudo mostrar antes: el arqueo de
-    # hoy ya cerrado (la NC descuadra los teóricos guardados).
+    # hoy ya cerrado (`aprobar_devolucion` ya re-snapshoteó sus teóricos).
     avisos_caja = []
     impacto = service.impacto_caja_preview(
         devolucion=devolucion, metodo=metodo_directo, fecha_imputacion=devolucion.fecha_imputacion_caja,
@@ -582,7 +582,7 @@ def api_generar_devolucion_garantia(request):
     if impacto['arqueo_existe'] and not impacto['arqueo_abierto']:
         avisos_caja.append(
             f"El arqueo de hoy en {sucursal.alias} ya está '{impacto['arqueo_estado']}': "
-            f"recalcule sus teóricos para que incluya esta devolución."
+            f"sus teóricos se recalcularon con esta devolución (ver bitácora del arqueo)."
         )
 
     mp_dev = service.mercadopago_de_devolucion(devolucion)

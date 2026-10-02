@@ -190,6 +190,68 @@ class DevolucionGarantiaServiceTest(TestCase):
         self.assertEqual(int(nc.monto_neto), 10000)
         self.assertEqual(int(nc.monto_con_iva), 11900)
 
+    # ---------- aprobación: arqueo ya cerrado del día imputado ----------
+
+    def _arqueo_cerrado_con_snapshot(self):
+        """Arqueo CERRADO del día con los teóricos tal como quedaron al cerrar."""
+        from app.models import ArqueoCaja
+        c = _calcular_cuadratura_data(self.sucursal, self.hoy_str)
+        arqueo = ArqueoCaja.objects.create(
+            fecha_arqueo=self.hoy, sucursal=self.sucursal,
+            usuario_responsable=self.user, estado='CERRADO',
+        )
+        # update() y no save(): save() recalcula el físico desde billetes.
+        ArqueoCaja.objects.filter(pk=arqueo.pk).update(
+            estado='CERRADO',
+            total_efectivo_teorico=int(c['total_efectivo']),
+            total_efectivo_fisico=int(c['total_efectivo']),
+            total_notas_credito_teorico=int(c['total_notas_credito']),
+            diferencia_efectivo=0,
+        )
+        arqueo.refresh_from_db()
+        return arqueo
+
+    def test_aprobar_efectivo_recalcula_teorico_de_arqueo_cerrado(self):
+        """Caso NICK2 17-09 (NC #3654): la Cuadratura mostraba la NC pero el
+        `Ef. Teórico` del arqueo cerrado quedaba congelado en el snapshot."""
+        from app.models import ObservacionArqueo
+        boleta = _crear_documento(self.env, 5010, [(self.pt, 1, 69990)])
+        arqueo = self._arqueo_cerrado_con_snapshot()
+        teorico_antes = int(arqueo.total_efectivo_teorico)
+        dev = self._crear_solicitud(boleta, [{'dte_producto_id': boleta.dte_productos.first().id,
+                                              'modo': 'CANTIDAD', 'cantidad': 1}])
+
+        service.aprobar_devolucion(
+            devolucion_id=dev.id, aprobador=self.user,
+            metodo_devolucion='EFECTIVO_CAJA', fecha_imputacion=self.hoy,
+        )
+
+        arqueo.refresh_from_db()
+        self.assertEqual(int(arqueo.total_efectivo_teorico), teorico_antes - 69990)
+        self.assertEqual(int(arqueo.total_notas_credito_teorico), 69990)
+        # El conteo de ese día ya incluía la plata: queda a la vista como sobrante.
+        self.assertEqual(int(arqueo.diferencia_efectivo), 69990)
+        self.assertEqual(arqueo.estado, 'CERRADO')
+        self.assertTrue(ObservacionArqueo.objects.filter(
+            arqueo=arqueo, tipo='SISTEMA', texto__contains='Devolución de dinero').exists())
+
+    def test_aprobar_no_afecta_caja_no_toca_arqueo_cerrado(self):
+        from app.models import ObservacionArqueo
+        boleta = _crear_documento(self.env, 5011, [(self.pt, 1, 11900)])
+        arqueo = self._arqueo_cerrado_con_snapshot()
+        teorico_antes = int(arqueo.total_efectivo_teorico)
+        dev = self._crear_solicitud(boleta, [{'dte_producto_id': boleta.dte_productos.first().id,
+                                              'modo': 'CANTIDAD', 'cantidad': 1}])
+
+        service.aprobar_devolucion(
+            devolucion_id=dev.id, aprobador=self.user,
+            metodo_devolucion='NO_AFECTA_CAJA', fecha_imputacion=self.hoy,
+        )
+
+        arqueo.refresh_from_db()
+        self.assertEqual(int(arqueo.total_efectivo_teorico), teorico_antes)
+        self.assertFalse(ObservacionArqueo.objects.filter(arqueo=arqueo).exists())
+
     def test_modo_monto_parcial_linea_conceptual_razon_3(self):
         boleta = _crear_documento(self.env, 5004, [(self.pt, 1, 39990)])
         dev = self._crear_solicitud(boleta, [{'dte_producto_id': boleta.dte_productos.first().id,

@@ -1892,6 +1892,23 @@ def aprobar_devolucion(*, devolucion_id, aprobador, metodo_devolucion,
         aprobador, desvincular=False,
     )
 
+    # Re-snapshot del arqueo del día imputado. `ArqueoCaja.total_*_teorico` se
+    # congela al cerrar la caja: sin esto la Cuadratura (que calcula en vivo)
+    # mostraba la NC, pero Revisión de Arqueos seguía con el teórico viejo y el
+    # saldo por depositar sin rebajar (caso NICK2 17-09, NC #3654). Mismo
+    # criterio que la NC de Cambios/Devoluciones; deja observación SISTEMA.
+    if afecta_caja and fecha_imp:
+        from app.views_modulo_ventas import resincronizar_arqueos_por_fechas
+        resincronizar_arqueos_por_fechas(
+            {fecha_imp},
+            sucursal.id,
+            usuario=aprobador,
+            razon=(
+                f'NC #{numero_nc} de Devolución de dinero {devolucion.numero_operacion} '
+                f'vía {devolucion.get_metodo_devolucion_display()}'
+            ),
+        )
+
     contenido_txt, txt_warnings = _generar_txt_nc(nc, devolucion)
     return devolucion, nc, contenido_txt, txt_warnings
 
@@ -2184,9 +2201,9 @@ def impacto_caja_preview(*, devolucion, metodo, fecha_imputacion=None):
             if not arqueo_abierto:
                 advertencias.append(
                     f"El arqueo del {fecha_str} en {sucursal.alias} está en estado "
-                    f"'{arqueo.get_estado_display()}': la NC descuadrará los teóricos ya "
-                    f"guardados. Sugerencia: imputar a hoy, o recalcular los teóricos del "
-                    f"arqueo tras aprobar."
+                    f"'{arqueo.get_estado_display()}': al aprobar se recalcularán sus "
+                    f"teóricos (queda en la bitácora). Si el conteo de ese día ya incluía "
+                    f"esta plata, el arqueo mostrará un sobrante: en ese caso impute a hoy."
                 )
 
         if metodo == 'EFECTIVO_CAJA':
