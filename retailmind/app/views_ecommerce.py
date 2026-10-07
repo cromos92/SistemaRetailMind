@@ -1689,6 +1689,16 @@ class PedidosEcommerceListView(LoginRequiredMixin, ListView):
         except Sucursal.DoesNotExist:
             context['sucursal_sesion_obj'] = None
 
+        # Cuántas guías saldrían hoy por los botones "Guías nuevas" /
+        # "Reimprimir" de la sucursal activa. Va también en el parcial AJAX
+        # para que el contador se refresque junto con la tabla.
+        context['conteo_guias'] = None
+        if context['sucursal_sesion_obj']:
+            try:
+                context['conteo_guias'] = _conteo_guias_sucursal(context['sucursal_sesion_obj'])
+            except Exception:  # pragma: no cover - el contador nunca tumba la pantalla
+                logger.exception('No se pudo contar las guías de la sucursal')
+
         # El filtro de sucursal activo es solo el explícito en GET
         context['sucursal_filtro'] = self.request.GET.get('sucursal_id', '')
         context['ver_todas'] = self.request.GET.get('ver_todas', '')
@@ -3085,6 +3095,8 @@ def api_imprimir_guia_preparacion(request, pedido_id):
         PedidoEcommerce.objects.select_related('sucursal', 'sucursal__empresa'),
         id=pedido_id, estado='PENDIENTE',
     )
+    if pedido.ticket_id or pedido.dte_id:
+        return JsonResponse({'ok': False, 'error': _MSG_GUIA_YA_FACTURADO}, status=409)
 
     # Sin pago confirmado (o cancelado/despachado según el canal): imprimir la
     # guía sería sacar stock para una venta que no corresponde preparar.
@@ -3102,15 +3114,51 @@ def api_imprimir_guia_preparacion(request, pedido_id):
     return JsonResponse({'ok': True, **resultado})
 
 
-def _pedidos_para_guias(sucursal, incluir_reimpresiones=False):
-    """Pedidos por preparar de una sucursal (queryset, sin tope aplicado).
+# Modos de la guía masiva por sucursal:
+#   - 'nuevas'      → ASIGNADO/EN_PREPARACION que AÚN no tienen guía (default:
+#                     el botón es re-ejecutable sin duplicar papel).
+#   - 'reimprimir'  → los que YA tienen guía y siguen PENDIENTES de facturar.
+#                     Incluye LISTO_DESPACHO: es justo el que espera la boleta
+#                     con la guía en la mano (papel perdido o atascado).
+#   - 'todas'       → la unión de ambos (compat. con `incluir_reimpresiones`).
+MODOS_GUIAS_SUCURSAL = ('nuevas', 'reimprimir', 'todas')
+SUB_ESTADOS_GUIA_NUEVA = ('ASIGNADO', 'EN_PREPARACION')
+SUB_ESTADOS_GUIA_REIMPRESION = ('ASIGNADO', 'EN_PREPARACION', 'LISTO_DESPACHO')
 
-    Compartido por la impresión masiva ESC/POS y por el PDF: si divergieran, un
-    canal imprimiría pedidos que el otro no, y nadie lo notaría.
+
+def _modo_guias(valor, incluir_reimpresiones=False):
+    """Normaliza el modo pedido por el front ('' / desconocido → 'nuevas')."""
+    valor = str(valor or '').strip().lower()
+    if valor in MODOS_GUIAS_SUCURSAL:
+        return valor
+    return 'todas' if incluir_reimpresiones else 'nuevas'
+
+
+def _pedidos_para_guias(sucursal, modo='nuevas'):
+    """Pedidos de una sucursal que entran a la guía masiva (queryset, sin tope).
+
+    Compartido por la impresión masiva ESC/POS, por el PDF y por el conteo de
+    los botones del listado: si divergieran, un canal imprimiría pedidos que el
+    otro no, y nadie lo notaría.
+
+    Nunca entra un pedido facturado: además de ``estado='PENDIENTE'`` se exige
+    que no tenga ticket ni DTE vinculados (cinturón ante cualquier camino que
+    deje el documento emitido sin cerrar el estado).
     """
     from app.services.allconnected_pedidos_service import (
         ESTADOS_CANAL_CANCELADOS, ESTADOS_CANAL_DESPACHADOS,
     )
+
+    q_nuevas = django_models.Q(sub_estado__in=SUB_ESTADOS_GUIA_NUEVA,
+                               fecha_impresion_guia__isnull=True)
+    q_reimprimir = django_models.Q(sub_estado__in=SUB_ESTADOS_GUIA_REIMPRESION,
+                                   fecha_impresion_guia__isnull=False)
+    if modo == 'reimprimir':
+        q_modo = q_reimprimir
+    elif modo == 'todas':
+        q_modo = q_nuevas | q_reimprimir
+    else:
+        q_modo = q_nuevas
 
     qs = (
         PedidoEcommerce.objects
@@ -3118,8 +3166,10 @@ def _pedidos_para_guias(sucursal, incluir_reimpresiones=False):
         .filter(
             sucursal=sucursal,
             estado='PENDIENTE',
-            sub_estado__in=['ASIGNADO', 'EN_PREPARACION'],
+            ticket__isnull=True,
+            dte__isnull=True,
         )
+        .filter(q_modo)
         # Bloqueados por el estado del canal quedan FUERA del lote: sin pago
         # confirmado (PENDIENTE) no se saca stock, y cancelados/despachados
         # los cierra la sincronización — imprimirles guía sería picking basura.
@@ -3132,9 +3182,26 @@ def _pedidos_para_guias(sucursal, incluir_reimpresiones=False):
         .exclude(estado_logistica_canal__in=list(ESTADOS_CANAL_DESPACHADOS))
         .order_by('fecha_recepcion')  # los más antiguos primero
     )
-    if not incluir_reimpresiones:
-        qs = qs.filter(fecha_impresion_guia__isnull=True)
     return qs
+
+
+def _conteo_guias_sucursal(sucursal):
+    """{'nuevas': n, 'reimprimir': m} con el MISMO criterio que la impresión.
+
+    Lo usan los botones del listado para mostrar cuántas guías van a salir
+    antes de apretar (1 query agregada).
+    """
+    from django.db.models import Count
+
+    agg = _pedidos_para_guias(sucursal, 'todas').order_by().aggregate(
+        nuevas=Count('id', filter=django_models.Q(fecha_impresion_guia__isnull=True)),
+        reimprimir=Count('id', filter=django_models.Q(fecha_impresion_guia__isnull=False)),
+    )
+    return {'nuevas': agg['nuevas'] or 0, 'reimprimir': agg['reimprimir'] or 0}
+
+
+_MSG_GUIA_YA_FACTURADO = ('El pedido ya tiene boleta/ticket emitido: la guía de preparación '
+                          'solo se imprime mientras está pendiente de facturar.')
 
 
 def _registrar_guia_preparacion(pedido, user):
@@ -3225,11 +3292,12 @@ def api_imprimir_guias_sucursal(request):
     "Imprimir TODO lo por preparar de mi sucursal" en un clic, sin seleccionar
     fila por fila (la selección por checkbox solo alcanza la página visible).
 
-    Alcance: pedidos PENDIENTES de la sucursal ACTIVA en sesión con sub-estado
-    ASIGNADO o EN_PREPARACION (los RECIBIDO no tienen stock confirmado y los
-    LISTO_DESPACHO ya terminaron picking). Por defecto solo los que aún no
-    tienen guía impresa — así el botón es re-ejecutable sin duplicar papel;
-    body {"incluir_reimpresiones": true} imprime también los ya impresos.
+    Alcance: pedidos PENDIENTES de facturar de la sucursal ACTIVA en sesión,
+    según el modo (ver `MODOS_GUIAS_SUCURSAL`). Por defecto ('nuevas') solo
+    ASIGNADO/EN_PREPARACION sin guía impresa — así el botón es re-ejecutable
+    sin duplicar papel. Body {"modo": "reimprimir"} vuelve a sacar las ya
+    impresas que siguen sin facturar; {"incluir_reimpresiones": true} (legacy)
+    equivale a {"modo": "todas"}.
 
     Registra cada guía con la MISMA lógica que la impresión individual
     (transición a EN_PREPARACION incluida) y devuelve los print_data para que
@@ -3245,14 +3313,17 @@ def api_imprimir_guias_sucursal(request):
     if err:
         return err
 
-    incluir_reimpresiones = False
+    body = {}
     try:
         if request.body:
-            incluir_reimpresiones = bool(json.loads(request.body).get('incluir_reimpresiones'))
+            body = json.loads(request.body) or {}
     except (json.JSONDecodeError, ValueError):
         pass
+    if not isinstance(body, dict):
+        body = {}
+    modo = _modo_guias(body.get('modo'), bool(body.get('incluir_reimpresiones')))
 
-    qs = _pedidos_para_guias(sucursal, incluir_reimpresiones)
+    qs = _pedidos_para_guias(sucursal, modo)
 
     pedidos = list(qs[:MAX_GUIAS_MASIVAS + 1])
     truncado = len(pedidos) > MAX_GUIAS_MASIVAS
@@ -3272,6 +3343,7 @@ def api_imprimir_guias_sucursal(request):
         'total': len(guias),
         'truncado': truncado,
         'max': MAX_GUIAS_MASIVAS,
+        'modo': modo,
         'sucursal': sucursal.nombre or sucursal.alias or '',
         'guias': guias,
     })
@@ -3362,6 +3434,9 @@ def _responder_guia_pdf(pedidos, nombre_archivo):
     # inline: se abre en el visor del navegador y se imprime desde ahí (no baja
     # un archivo que después hay que buscar en Descargas).
     response['Content-Disposition'] = f'inline; filename="{nombre_archivo}"'
+    # Es una foto del momento: si el navegador la cacheara, reabrir la URL
+    # mostraría pedidos que desde entonces ya se facturaron.
+    response['Cache-Control'] = 'no-store'
     return response
 
 
@@ -3382,6 +3457,8 @@ def api_guia_preparacion_pdf(request, pedido_id):
         PedidoEcommerce.objects.select_related('sucursal', 'sucursal__empresa'),
         id=pedido_id, estado='PENDIENTE',
     )
+    if pedido.ticket_id or pedido.dte_id:
+        return JsonResponse({'ok': False, 'error': _MSG_GUIA_YA_FACTURADO}, status=409)
 
     bloqueo_canal = _bloqueo_por_estado_canal(pedido)
     if bloqueo_canal:
@@ -3396,11 +3473,14 @@ def api_guia_preparacion_pdf(request, pedido_id):
 @login_required
 @csrf_exempt
 def api_guias_pdf_sucursal(request):
-    """GET|POST /app/ecommerce/pedidos/guias-pdf-sucursal/
+    """GET|POST /app/ecommerce/pedidos/guias-pdf-sucursal/[?modo=nuevas|reimprimir|todas]
 
-    Un solo PDF con TODAS las guías por preparar de la sucursal activa (una
-    página por pedido). Mismo criterio de selección que la impresión masiva por
-    QZ, y registra cada impresión igual.
+    Un solo PDF con las guías de la sucursal activa (una página por pedido).
+    Mismo criterio de selección que la impresión masiva por QZ
+    (`_pedidos_para_guias`), y registra cada impresión igual. Solo entran
+    pedidos PENDIENTES de facturar: uno ya facturado nunca vuelve a salir.
+
+    ``?incluir_reimpresiones=1`` (legacy) equivale a ``?modo=todas``.
     """
     denegado = _verificar_permiso_ecommerce(request, 'puede_editar')
     if denegado:
@@ -3413,21 +3493,29 @@ def api_guias_pdf_sucursal(request):
     incluir_reimpresiones = str(
         request.GET.get('incluir_reimpresiones') or ''
     ).lower() in ('1', 'true', 'si', 'sí')
+    modo = _modo_guias(request.GET.get('modo'), incluir_reimpresiones)
 
-    pedidos = list(_pedidos_para_guias(sucursal, incluir_reimpresiones)[:MAX_GUIAS_MASIVAS])
+    pedidos = list(_pedidos_para_guias(sucursal, modo)[:MAX_GUIAS_MASIVAS])
     if not pedidos:
-        return JsonResponse({
-            'ok': False,
-            'error': 'No hay pedidos por preparar en esta sucursal.'
-                     + ('' if incluir_reimpresiones else ' Agregá ?incluir_reimpresiones=1 '
-                        'para reimprimir los que ya tienen guía.'),
-        }, status=404)
+        nombre = sucursal.nombre or sucursal.alias or 'esta sucursal'
+        if modo == 'reimprimir':
+            error = (f'No hay guías para reimprimir en {nombre}: ningún pedido con guía '
+                     'impresa sigue pendiente de facturar.')
+        elif modo == 'todas':
+            error = f'No hay pedidos pendientes de facturar con guía por imprimir en {nombre}.'
+        else:
+            error = f'No hay guías nuevas por imprimir en {nombre}.'
+            if _pedidos_para_guias(sucursal, 'reimprimir').exists():
+                error += (' Los pedidos pendientes ya tienen su guía: usá «Reimprimir» '
+                          'para volver a sacarlas.')
+        return JsonResponse({'ok': False, 'error': error}, status=404)
 
     for pedido in pedidos:
         _registrar_guia_preparacion(pedido, request.user)
 
     alias = (sucursal.alias or sucursal.nombre or 'sucursal').replace(' ', '_')
-    return _responder_guia_pdf(pedidos, f'guias-{alias}.pdf')
+    sufijo = '-reimpresion' if modo == 'reimprimir' else ''
+    return _responder_guia_pdf(pedidos, f'guias-{alias}{sufijo}.pdf')
 
 
 # ---------------------------------------------------------------------------

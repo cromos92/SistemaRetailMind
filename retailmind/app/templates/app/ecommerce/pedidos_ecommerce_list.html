@@ -24,6 +24,10 @@
 .he-badge-ok{background:rgba(255,255,255,.22);color:#eafff9;border:1px solid rgba(255,255,255,.35);}
 .he-badge-warn{background:rgba(240,101,72,.3);color:#fff;border:1px solid rgba(255,255,255,.3);}
 .he-badge-sel{background:rgba(255,255,255,.2);color:#fff;}
+/* contador de guías dentro de los botones del encabezado */
+.guias-n{display:inline-block;min-width:20px;margin-left:4px;padding:0 6px;border-radius:10px;background:#405189;color:#fff;font-size:.68rem;font-weight:700;line-height:1.5;text-align:center;}
+.btn-outline-light .guias-n{background:rgba(255,255,255,.25);}
+.guias-n.cero{opacity:.45;}
 .card-body{padding:20px 24px;background:#fff;}
 .pagination-controls{background:linear-gradient(135deg,#f8f9fa 0%,#eef1f6 100%);border-radius:12px;padding:14px 16px;margin-bottom:16px;border:1px solid rgba(64,81,137,.1);box-shadow:0 2px 8px rgba(0,0,0,.05);}
 .filtro-label{font-size:.7rem;font-weight:700;text-transform:uppercase;color:#405189;letter-spacing:.03em;display:block;margin-bottom:3px;}
@@ -44,7 +48,6 @@
 /* ── badges y colores ── */
 .ticket-rm-badge{font-family:monospace;background:#f1f5f9;border:1px solid #cbd5e1;padding:2px 8px;border-radius:4px;font-size:.85rem;color:#1e40af;font-weight:700;}
 .folio-badge{font-family:monospace;background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;padding:2px 8px;border-radius:6px;font-size:.82rem;font-weight:700;letter-spacing:.02em;white-space:nowrap;}
-.folio-pendiente{color:#94a3b8;font-style:italic;font-size:.8rem;}
 .badge-p{background:#fef9c3;color:#854d0e;font-size:.7rem;padding:3px 9px;border-radius:20px;font-weight:600;}
 .badge-f{background:#dcfce7;color:#166534;font-size:.7rem;padding:3px 9px;border-radius:20px;font-weight:600;}
 .badge-c{background:#fee2e2;color:#991b1b;font-size:.7rem;padding:3px 9px;border-radius:20px;font-weight:600;}
@@ -61,44 +64,54 @@
 .canal-otro{background:#6b7280;color:#fff;}
 .canal-b{font-size:.68rem;padding:2px 7px;border-radius:4px;font-weight:600;letter-spacing:.02em;}
 
-/* ── tabla ── */
-.tbl thead th{background:#eef2f9;color:#405189;font-weight:700;font-size:.72rem;text-transform:uppercase;padding:11px 12px;white-space:nowrap;letter-spacing:.04em;border-bottom:2px solid #0ab39c;}
-.tbl tbody td{padding:10px 12px;vertical-align:middle;font-size:.87rem;border-color:#f1f5f9;color:#1e293b;}
+/* ── tabla ──
+   6 columnas (Pedido · Cliente/Sucursal · Total · Estado · acciones): lo
+   secundario va como chip/span bajo el dato principal de cada celda, así la
+   tabla entra completa en 1366px y en celular cada fila es una tarjeta. */
+.tbl thead th{background:#eef2f9;color:#405189;font-weight:700;font-size:.7rem;text-transform:uppercase;padding:9px 10px;white-space:nowrap;letter-spacing:.04em;border-bottom:2px solid #0ab39c;}
+.tbl tbody td{padding:7px 10px;vertical-align:middle;font-size:.84rem;border-color:#f1f5f9;color:#1e293b;}
 .tbl tbody tr{border-bottom:1px solid #f1f5f9;}
 .tbl tbody tr:hover{background:#f0f9ff;}
 .tbl tbody tr.row-selected{background:#eff6ff !important;}
-.tbl .col-total{font-size:.95rem;font-weight:700;color:#0f172a;letter-spacing:-.01em;}
-.tbl .col-fecha{font-size:.78rem;color:#475569;white-space:nowrap;}
-.tbl .col-num-pedido{font-size:.78rem;color:#334155;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.tbl .col-sucursal{font-size:.82rem;font-weight:600;color:#334155;}
+.tbl .c-cb{width:34px;text-align:center;}
+.tbl .cb-all-lbl{display:none;}   /* solo en celular (ver @media <768px) */
+.tbl .c-acc{width:1%;white-space:nowrap;}
+.tbl .cel-linea{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+.tbl .cel-sub{display:flex;align-items:center;gap:4px 6px;flex-wrap:wrap;margin-top:3px;line-height:1.25;}
+.tbl .cel-sub-end{justify-content:flex-end;}
+.tbl .n-canal{font-size:.7rem;color:#475569;font-family:monospace;}
+.tbl .cel-fecha{font-size:.7rem;color:#64748b;white-space:nowrap;}
+.tbl .cel-fecha i{margin-right:3px;font-size:.66rem;}
+.tbl .col-total{white-space:nowrap;}
+.tbl .monto-total{font-size:.92rem;font-weight:700;color:#0f172a;letter-spacing:-.01em;}
+.tbl .col-cliente-nombre{font-weight:600;font-size:.84rem;color:#0f172a;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tbl .col-cliente-doc{font-size:.7rem;color:#64748b;white-space:nowrap;}
+.tbl .chips{display:flex;align-items:center;gap:4px;flex-wrap:wrap;max-width:230px;}
+.tbl .chip-ico{padding:2px 6px !important;}
+.tbl .doc-ref{font-size:.68rem;color:#475569;white-space:nowrap;}
+.tbl .acc-btns{display:flex;gap:4px;flex-wrap:nowrap;justify-content:flex-end;}
+.tbl .btn-acc{font-size:.7rem;padding:2px 7px;line-height:1.4;}
+.tbl .btn-acc-txt{font-size:.72rem;padding:2px 8px;}
 
 /* Medio de pago: SOLO LECTURA. Lo informa la tienda en el payload de ingesta
    (`payment_method` -> AllConnected -> `PedidoEcommerce.medio_pago`), así que el
    operador no tiene que llenarlo. El estado "sin definir" sigue en ámbar porque
    es una señal de que algo no llegó: mientras siga así esa venta no se puede
    atribuir ni a Webpay ni a Mercado Pago en la cuadratura de caja. */
-.tbl .col-medio-pago{white-space:nowrap;}
-.tbl .mp-valor{font-size:.78rem;color:#334155;font-weight:600;}
-.tbl .mp-origen{font-size:.62rem;color:#94a3b8;display:block;line-height:1.2;}
-.tbl .mp-na{font-size:.78rem;color:#cbd5e1;}
+.tbl .mp-valor{font-size:.66rem;color:#475569;font-weight:600;background:#f1f5f9;border-radius:10px;padding:1px 7px;white-space:nowrap;}
 .tbl .mp-sin-definir{
-  background:#fef9c3;color:#854d0e;font-size:.7rem;padding:3px 9px;border-radius:20px;
+  background:#fef9c3;color:#854d0e;font-size:.64rem;padding:1px 7px;border-radius:10px;
   font-weight:600;white-space:nowrap;
 }
-.tbl .col-cliente-nombre{font-weight:600;font-size:.87rem;color:#0f172a;}
-.tbl .col-cliente-doc{font-size:.74rem;color:#64748b;}
 
 /* Cupón: se muestra la CAMPAÑA (el prefijo), no el código entero. Los cupones
    del canal son de un solo uso y llevan un hash por cliente, así que el código
    completo ocuparía media tabla y no agruparía nada; el código va en el title. */
-.tbl .col-cupon{white-space:nowrap;}
 .tbl .cupon-b{
   background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;
-  font-size:.64rem;padding:2px 7px;border-radius:20px;font-weight:700;
+  font-size:.62rem;padding:1px 6px;border-radius:10px;font-weight:700;
   letter-spacing:.02em;white-space:nowrap;
 }
-.tbl .cupon-monto{font-size:.62rem;color:#dc2626;display:block;line-height:1.2;font-weight:600;}
-.tbl .cupon-na{font-size:.78rem;color:#cbd5e1;}
 
 /* ── checkbox ── */
 .cb-pedido{width:15px;height:15px;cursor:pointer;accent-color:#3b82f6;}
@@ -228,16 +241,14 @@
   .he-daterange input{font-size:11px;}
   .he-badge{padding:3px 10px;font-size:.7rem;}
   /* tabla densa: en 1366px caben todas las columnas */
-  .tbl thead th{padding:7px 7px;font-size:.65rem;letter-spacing:.02em;}
-  .tbl tbody td{padding:6px 7px;font-size:.79rem;}
-  .tbl .col-num-pedido{max-width:105px;}
-  .tbl .col-cliente-nombre{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .tbl .col-cliente-doc{font-size:.68rem;}
-  .tbl .col-sucursal{font-size:.75rem;}
-  .tbl .col-total{font-size:.84rem;}
-  .tbl .col-fecha{font-size:.7rem;}
-  .tbl .cupon-b{font-size:.58rem;padding:1px 5px;}
-  .tbl .cupon-monto{font-size:.58rem;}
+  .tbl thead th{padding:7px 7px;font-size:.64rem;letter-spacing:.02em;}
+  .tbl tbody td{padding:5px 7px;font-size:.78rem;}
+  .tbl .col-cliente-nombre{max-width:170px;font-size:.79rem;}
+  .tbl .col-cliente-doc{font-size:.66rem;}
+  .tbl .monto-total{font-size:.84rem;}
+  .tbl .cel-fecha,.tbl .n-canal{font-size:.66rem;}
+  .tbl .cupon-b,.tbl .mp-valor,.tbl .mp-sin-definir{font-size:.58rem;padding:1px 5px;}
+  .tbl .btn-acc{font-size:.66rem;padding:1px 6px;}
   .ticket-rm-badge{font-size:.72rem;padding:1px 5px;}
   .folio-badge{font-size:.7rem;padding:1px 5px;}
   .canal-b{font-size:.6rem;padding:1px 5px;}
@@ -261,6 +272,60 @@
   .qf-row{margin-bottom:8px;gap:5px;}
   .card.shadow{animation:none;}   /* sin fade-in: en POS lento se nota */
   .tabla-vacia{padding:22px 14px;}
+}
+
+/* ══ Tablet (<992px): el encabezado pasa a dos filas ordenadas ══ */
+@media (max-width:991.98px){
+  .module-header-actions{width:100%;}
+  .he-daterange{flex:1 1 220px;}
+  .he-daterange input{flex:1;min-width:0;}
+  .tbl .chips{max-width:none;}
+}
+
+/* ══ Celular (<768px): cada pedido es una tarjeta ══
+   Grilla por fila: checkbox a la izquierda, Pedido + Total arriba, Cliente,
+   chips de estado y botones abajo. Sin scroll lateral y con botones de 34px
+   para el dedo. Las clases de las celdas son las del parcial (_pedidos_tabla). */
+@media (max-width:767.98px){
+  .page-content .container-fluid{padding-left:8px;padding-right:8px;}
+  .card-body{padding:10px;}
+  .module-header{padding:10px 12px;}
+  .module-header-actions .btn{flex:1 1 auto;}
+  .he-badge{flex:1 1 100%;text-align:center;}
+  #bulk-bar{padding:8px 10px;gap:6px;}
+  #bulk-bar .bb-tipo-doc-group{width:100%;margin:0 !important;}
+  #bulk-bar .bb-tipo-doc-group .btn{flex:1;}
+  #bulk-bar > .btn,#bulk-bar > .btn-distribuir{flex:1 1 auto;}
+
+  /* Del encabezado solo queda el "seleccionar todos" (sin él no hay forma de
+     marcar la página entera en el celular). */
+  .tbl-pedidos thead,.tbl-pedidos thead tr{display:block;}
+  .tbl-pedidos thead th{display:none;}
+  .tbl-pedidos thead th.c-cb{display:flex;align-items:center;gap:8px;width:auto;text-align:left;padding:8px 10px;}
+  .tbl-pedidos .cb-all-lbl{display:inline;text-transform:none;letter-spacing:0;font-size:.75rem;cursor:pointer;}
+  .tbl-pedidos,.tbl-pedidos tbody{display:block;width:100%;}
+  .tbl-pedidos tbody tr{
+    display:grid;
+    grid-template-columns:26px minmax(0,1fr) auto;
+    grid-template-areas:
+      "cb ped tot"
+      "cb cli cli"
+      "cb est est"
+      "cb acc acc";
+    gap:4px 8px;padding:10px 8px;border-bottom:6px solid #f1f5f9;
+  }
+  .tbl-pedidos tbody td{display:block;padding:0;border:0;font-size:.82rem;}
+  .tbl-pedidos td.c-cb{grid-area:cb;width:auto;padding-top:2px;}
+  .tbl-pedidos td.c-ped{grid-area:ped;}
+  .tbl-pedidos td.col-total{grid-area:tot;}
+  .tbl-pedidos td.c-cli{grid-area:cli;}
+  .tbl-pedidos td.c-est{grid-area:est;}
+  .tbl-pedidos td.c-acc{grid-area:acc;width:auto;}
+  .tbl-pedidos .col-cliente-nombre{max-width:none;white-space:normal;}
+  .tbl-pedidos .acc-btns{justify-content:flex-start;flex-wrap:wrap;gap:6px;margin-top:4px;}
+  .tbl-pedidos .btn-acc{min-width:34px;min-height:34px;font-size:.8rem;display:inline-flex;align-items:center;justify-content:center;}
+  .tbl-pedidos .btn-acc-txt{padding:2px 14px;}
+  .cb-pedido{width:20px;height:20px;}
 }
 </style>
 
@@ -295,9 +360,15 @@
           <i class="bi bi-cloud-download me-1"></i>Traer pedidos
         </button>
         {% if sucursal_sesion_obj %}
-        <button class="btn btn-light btn-sm fw-bold" id="btn-guias-pdf-suc" onclick="abrirGuiasPdfSucursal()"
-                title="Abre en PDF (80mm) la guía de preparación de TODOS los pedidos por preparar de tu sucursal">
-          <i class="bi bi-file-earmark-pdf me-1"></i>Guías de mi sucursal
+        <button class="btn btn-light btn-sm fw-bold" id="btn-guias-pdf-suc" onclick="abrirGuiasPdfSucursal('nuevas')"
+                title="PDF (80mm) con las guías de preparación que AÚN NO se imprimieron en tu sucursal (pasan a En Preparación)">
+          <i class="bi bi-file-earmark-pdf me-1"></i>Guías nuevas
+          <span class="guias-n" id="guias-n-nuevas">{{ conteo_guias.nuevas|default:0 }}</span>
+        </button>
+        <button class="btn btn-outline-light btn-sm" id="btn-guias-pdf-reimp" onclick="abrirGuiasPdfSucursal('reimprimir')"
+                title="Vuelve a sacar en PDF las guías ya impresas de pedidos que siguen PENDIENTES de facturar (los facturados nunca salen)">
+          <i class="bi bi-arrow-repeat me-1"></i>Reimprimir
+          <span class="guias-n" id="guias-n-reimprimir">{{ conteo_guias.reimprimir|default:0 }}</span>
         </button>
         <button class="btn btn-outline-light btn-sm" id="btn-imprimir-guias-suc" onclick="imprimirGuiasSucursal()"
                 title="Impresión directa por QZ Tray (sin diálogo). Requiere QZ configurado en esta sucursal.">
@@ -966,6 +1037,7 @@ function aplicarFiltros(page, silencioso){
       cont.style.opacity = ''; cont.style.pointerEvents = '';
       formatMiles(cont);
       pintarAging(cont);
+      actualizarConteoGuias(cont);
       reaplicarSeleccion();   // el re-render borra los checks del DOM; la verdad vive en _seleccion
       actualizarContador();
     })
@@ -1111,11 +1183,11 @@ const _seleccion = new Set();      // IDs de pedidos marcados (cruza páginas)
 const _montoPorId = new Map();     // ID → monto de la fila (para el total)
 
 function _montoDeFila(cb){
-  // Anclado a .col-total a propósito: la fila tiene más de un .fmt-miles
-  // (el descuento del cupón también lleva separador de miles) y un
-  // querySelector suelto dependería del orden de las columnas para no
-  // sumar el monto equivocado en el contador de facturación masiva.
-  const el = cb.closest('tr')?.querySelector('.col-total .fmt-miles');
+  // Anclado a .monto-total a propósito: la celda del total también lleva el
+  // descuento del cupón (otro .fmt-miles), y un querySelector suelto
+  // dependería del orden de los spans para no sumar el monto equivocado en
+  // el contador de facturación masiva.
+  const el = cb.closest('tr')?.querySelector('.col-total .monto-total');
   return el ? (parseInt(el.dataset.val, 10) || 0) : 0;
 }
 
@@ -1787,7 +1859,7 @@ async function imprimirGuiasSeleccionadas(){
     } catch(e){ fallidas++; }
   }
   btn.disabled = false;
-  btn.innerHTML = '<i class="bi bi-printer me-1"></i>Guías';
+  btn.innerHTML = '<i class="bi bi-printer me-1"></i>Guías QZ';
   alert(`Guías: ${impresas} impresa(s)` + (fallidas ? `, ${fallidas} con error` : ''));
   deseleccionarTodo();
   aplicarFiltros(_pagina, true);
@@ -1862,8 +1934,33 @@ function abrirGuiaPdf(pedidoId){
   _pedirPdf(`/app/ecommerce/pedidos/${pedidoId}/guia-pdf/`, 'Guía de preparación');
 }
 
-function abrirGuiasPdfSucursal(){
-  _pedirPdf("{% url 'api_guias_pdf_sucursal' %}", 'Guías de mi sucursal');
+/* modo 'nuevas'     → solo las que nunca se imprimieron (default, re-ejecutable).
+   modo 'reimprimir' → las ya impresas de pedidos que siguen PENDIENTES de
+                       facturar. El backend nunca incluye un pedido facturado. */
+function abrirGuiasPdfSucursal(modo){
+  modo = modo || 'nuevas';
+  if(modo === 'reimprimir'){
+    const n = parseInt(document.getElementById('guias-n-reimprimir')?.textContent, 10) || 0;
+    if(!confirm(`¿Reimprimir ${n ? n + ' guía(s)' : 'las guías'} ya impresa(s) de pedidos pendientes de facturar?\n\n`
+                + 'Los pedidos ya facturados no se incluyen.')) return;
+  }
+  const url = "{% url 'api_guias_pdf_sucursal' %}?modo=" + encodeURIComponent(modo);
+  _pedirPdf(url, modo === 'reimprimir' ? 'Reimpresión de guías (pendientes de facturar)' : 'Guías nuevas de mi sucursal');
+}
+
+/* Contadores de los botones "Guías nuevas" / "Reimprimir": el parcial de la
+   tabla trae #guias-conteo con el mismo criterio que la impresión, así se
+   refrescan con cada filtro, auto-refresh o cierre del visor. */
+function actualizarConteoGuias(root){
+  const el = (root || document).querySelector('#guias-conteo');
+  if(!el) return;
+  [['nuevas', 'guias-n-nuevas'], ['reimprimir', 'guias-n-reimprimir']].forEach(([k, id]) => {
+    const span = document.getElementById(id);
+    if(!span) return;
+    const n = parseInt(el.dataset[k], 10) || 0;
+    span.textContent = n;
+    span.classList.toggle('cero', n === 0);
+  });
 }
 
 /* ─────────────────────────────────────────────────────
@@ -1984,6 +2081,7 @@ document.addEventListener('keydown', function(e){
 /* ── Inicialización (render inicial ya viene del servidor) ── */
 formatMiles(document);
 pintarAging(document);
+actualizarConteoGuias(document);
 setInterval(function(){ pintarAging(document); }, 120000);  // el aging envejece solo
 actualizarContador();
 

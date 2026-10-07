@@ -169,11 +169,15 @@ class BloqueosPorEstadoLogisticoTest(TestCase):
     def setUp(self):
         self.sucursal = crear_sucursal()
         self.user = crear_usuario(rol='administrador')
-        modulo = ModuloSistema.objects.create(codigo='ecommerce', nombre='Ecommerce')
-        opcion = OpcionMenu.objects.create(
-            modulo=modulo, codigo='ecommerce_pedidos_todos', nombre='Pedidos Ecommerce')
-        PermisoRol.objects.create(rol=self.user.rol, opcion_menu=opcion,
-                                  puede_ver=True, puede_editar=True)
+        # get_or_create: la migración 0218 ya siembra el módulo 'ecommerce'.
+        modulo, _ = ModuloSistema.objects.get_or_create(
+            codigo='ecommerce', defaults={'nombre': 'Ecommerce'})
+        opcion, _ = OpcionMenu.objects.get_or_create(
+            codigo='ecommerce_pedidos_todos',
+            defaults={'modulo': modulo, 'nombre': 'Pedidos Ecommerce'})
+        PermisoRol.objects.update_or_create(
+            rol=self.user.rol, opcion_menu=opcion,
+            defaults={'puede_ver': True, 'puede_editar': True})
         self.pedido = PedidoEcommerce.objects.create(
             numero_ticket_rm='RM-LOG1', numero_pedido_canal='ORD-LOG1',
             canal_origen='PARIS', sucursal=self.sucursal, cliente_nombre='Cliente',

@@ -55,13 +55,16 @@ class _BaseSinStockTest(TestCase):
     def setUp(self):
         self.sucursal = crear_sucursal()
         self.user = crear_usuario(rol='administrador')
-        modulo = ModuloSistema.objects.create(codigo='ecommerce', nombre='Ecommerce')
-        self.opcion = OpcionMenu.objects.create(
-            modulo=modulo, codigo='ecommerce_pedidos_todos', nombre='Pedidos Ecommerce',
+        # get_or_create: la migración 0218 ya siembra el módulo 'ecommerce'.
+        modulo, _ = ModuloSistema.objects.get_or_create(
+            codigo='ecommerce', defaults={'nombre': 'Ecommerce'})
+        self.opcion, _ = OpcionMenu.objects.get_or_create(
+            codigo='ecommerce_pedidos_todos',
+            defaults={'modulo': modulo, 'nombre': 'Pedidos Ecommerce'},
         )
-        PermisoRol.objects.create(
+        PermisoRol.objects.update_or_create(
             rol=self.user.rol, opcion_menu=self.opcion,
-            puede_ver=True, puede_editar=True, puede_crear=True,
+            defaults={'puede_ver': True, 'puede_editar': True, 'puede_crear': True},
         )
         self.pedido = PedidoEcommerce.objects.create(
             numero_ticket_rm='RM-SINSTOCK1',

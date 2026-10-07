@@ -1,37 +1,34 @@
 {% load static %}
+{# Contador de guías de la sucursal activa: viaja con el parcial para que los #}
+{# botones "Guías nuevas" / "Reimprimir" del encabezado se refresquen junto   #}
+{# con la tabla (auto-refresh, filtros, después de imprimir).                  #}
+{% if conteo_guias %}<span id="guias-conteo" hidden data-nuevas="{{ conteo_guias.nuevas }}" data-reimprimir="{{ conteo_guias.reimprimir }}"></span>{% endif %}
 {% if pedidos %}
 <div class="card border-0 shadow-sm">
   <div class="card-body p-0">
+    {# 6 columnas en vez de 14: los datos secundarios (canal, n° canal, folio, #}
+    {# fecha, sucursal, cupón, medio de pago, sub-estado y avisos) van como     #}
+    {# chips/spans dentro de la celda de su dato principal. En celular cada     #}
+    {# fila se vuelve tarjeta (ver CSS .tbl-pedidos en el listado).            #}
     <div class="table-responsive">
-      <table class="table tbl mb-0" id="tbl-pedidos">
+      <table class="table tbl tbl-pedidos mb-0" id="tbl-pedidos">
         <thead>
           <tr>
-            <th style="width:36px;text-align:center;">
+            <th class="c-cb">
               <input type="checkbox" id="cb-all" class="cb-pedido" title="Seleccionar todos">
+              <label for="cb-all" class="cb-all-lbl">Seleccionar todos los de esta página</label>
             </th>
-            <th>N Pedido</th>
-            <th>Folio</th>
-            <th>Canal</th>
-            <th>N Pedido Canal</th>
-            <th>Cliente</th>
-            <th>Sucursal</th>
-            <th class="text-end">Total</th>
-            <th title="Campaña del cupón que aplicó el canal sobre el total del pedido (el código completo está en el tooltip de cada fila).">Cupón</th>
-            <th title="Con qué pagó el cliente en el canal. Define cómo se clasifica la venta en la cuadratura de caja.">Medio pago</th>
-            <th>Fecha</th>
-            <th>Estado</th>
-            <th>Sub-estado</th>
-            <th></th>
+            <th title="N° de pedido · canal · n° en el canal · folio de despacho · fecha de recepción">Pedido</th>
+            <th title="Cliente · RUT · sucursal asignada">Cliente / Sucursal</th>
+            <th class="text-end" title="Total del pedido · cupón del canal · medio de pago">Total</th>
+            <th title="Estado · sub-estado · tiempo en espera · avisos">Estado</th>
+            <th class="c-acc"></th>
           </tr>
         </thead>
         <tbody>
           {% for p in pedidos %}
-          {% if p.id in pedidos_sin_stock_ids %}
-          <tr data-pedido-id="{{ p.id }}" data-estado="{{ p.estado }}" data-sin-stock="1" data-guia="{% if p.fecha_impresion_guia %}1{% else %}0{% endif %}" class="row-sin-stock">
-          {% else %}
-          <tr data-pedido-id="{{ p.id }}" data-estado="{{ p.estado }}" data-guia="{% if p.fecha_impresion_guia %}1{% else %}0{% endif %}">
-          {% endif %}
-            <td style="text-align:center;">
+          <tr data-pedido-id="{{ p.id }}" data-estado="{{ p.estado }}"{% if p.id in pedidos_sin_stock_ids %} data-sin-stock="1" class="row-sin-stock"{% endif %} data-guia="{% if p.fecha_impresion_guia %}1{% else %}0{% endif %}">
+            <td class="c-cb">
               {% if p.estado == 'PENDIENTE' %}
                 {% if p.id in pedidos_sin_stock_ids %}
                   <input type="checkbox" class="cb-pedido cb-pedido-row" value="{{ p.id }}" disabled title="Sin stock en sucursal activa">
@@ -40,161 +37,171 @@
                 {% endif %}
               {% endif %}
             </td>
-            <td><span class="ticket-rm-badge" title="N° RM: {{ p.numero_ticket_rm }}">{{ p.numero_pedido_origen|default:p.numero_ticket_rm }}</span></td>
-            <td>
-              {% if p.correlativo %}
-                <span class="folio-badge" title="Folio de despacho (etiqueta física)">{{ p.correlativo }}</span>
-              {% else %}
-                <span class="folio-pendiente" title="Aún sin folio: no impreso en AllConnected">—</span>
-              {% endif %}
+
+            {# ── Pedido: N° + canal + n° canal + folio + fecha ── #}
+            <td class="c-ped">
+              <div class="cel-linea">
+                <span class="ticket-rm-badge" title="N° RM: {{ p.numero_ticket_rm }} · N° canal: {{ p.numero_pedido_canal }}">{{ p.numero_pedido_origen|default:p.numero_ticket_rm }}</span>
+                <span class="canal-b canal-{{ p.canal_origen|lower }}">{{ p.canal_origen }}</span>
+              </div>
+              <div class="cel-sub">
+                {# El n° del canal casi siempre viene dentro del N° AllConnected #}
+                {# (PAR-3149930990 / 3149930990): solo se muestra si aporta.     #}
+                {% if p.numero_pedido_canal and p.numero_pedido_canal not in p.numero_pedido_origen %}
+                  <span class="n-canal" title="N° de pedido en el canal">#{{ p.numero_pedido_canal }}</span>
+                {% endif %}
+                {% if p.correlativo %}
+                  <span class="folio-badge" title="Folio de despacho (etiqueta física)">{{ p.correlativo }}</span>
+                {% endif %}
+                <span class="cel-fecha" title="Recibido el {{ p.fecha_recepcion|date:'d/m/Y H:i' }}"><i class="bi bi-clock"></i>{{ p.fecha_recepcion|date:"d/m H:i" }}</span>
+              </div>
             </td>
-            <td><span class="canal-b canal-{{ p.canal_origen|lower }}">{{ p.canal_origen }}</span></td>
-            <td class="col-num-pedido">{{ p.numero_pedido_canal }}</td>
-            <td>
-              <div class="col-cliente-nombre">{{ p.cliente_nombre }}</div>
-              {% if p.cliente_documento %}<div class="col-cliente-doc">{{ p.cliente_documento }}</div>{% endif %}
+
+            {# ── Cliente + sucursal ── #}
+            <td class="c-cli">
+              <div class="col-cliente-nombre" title="{{ p.cliente_nombre }}">{{ p.cliente_nombre }}</div>
+              <div class="cel-sub">
+                {% if p.cliente_documento %}<span class="col-cliente-doc">{{ p.cliente_documento }}</span>{% endif %}
+                {% if sucursal_sesion_obj and p.sucursal_id == sucursal_sesion_obj.id %}
+                  <span class="badge-mi-suc" title="Asignado a tu sucursal"><i class="bi bi-check-circle-fill me-1"></i>{{ p.sucursal.nombre|default:p.sucursal.alias }}</span>
+                {% else %}
+                  <span class="badge-otra-suc" title="Asignado a otra sucursal"><i class="bi bi-building me-1"></i>{{ p.sucursal.nombre|default:p.sucursal.alias }}</span>
+                {% endif %}
+                {% if p.id in pedidos_sin_stock_ids %}
+                  <span class="badge-sin-stock" title="Stock insuficiente en la sucursal activa"><i class="bi bi-exclamation-triangle-fill me-1"></i>Stock insuf.</span>
+                {% endif %}
+              </div>
             </td>
-            <td class="col-sucursal">
-              {% if sucursal_sesion_obj and p.sucursal_id == sucursal_sesion_obj.id %}
-                <span class="suc-mia">{{ p.sucursal.nombre|default:p.sucursal.alias }}</span>
-                <span class="badge-mi-suc"><i class="bi bi-check-circle-fill me-1"></i>Mi suc.</span>
-              {% else %}
-                <span class="suc-otra">{{ p.sucursal.nombre|default:p.sucursal.alias }}</span>
-                <span class="badge-otra-suc"><i class="bi bi-building me-1"></i>Otra</span>
-              {% endif %}
+
+            {# ── Total + cupón + medio de pago ── #}
+            <td class="col-total text-end">
+              {# .monto-total es el que suma el contador de facturación masiva #}
+              {# (la celda tiene otro .fmt-miles: el descuento del cupón).      #}
+              <span class="monto-total fmt-miles" data-val="{{ p.total|floatformat:0 }}">${{ p.total|floatformat:0 }}</span>
+              <div class="cel-sub cel-sub-end">
+                {# El descuento del cupón va al PEDIDO, no a la línea: sin esto #}
+                {# el total no cuadra con la suma de los ítems de la ficha.     #}
+                {% if p.coupon_code %}
+                  <span class="cupon-b" title="Cupón {{ p.coupon_code }} — aplicado por el canal sobre el total del pedido">{{ p.cupon_campana }}{% if p.descuento %} -<span class="fmt-miles" data-val="{{ p.descuento|floatformat:0 }}">${{ p.descuento|floatformat:0 }}</span>{% endif %}</span>
+                {% elif p.descuento %}
+                  <span class="cupon-b" title="El canal informó un descuento sin código de cupón">-<span class="fmt-miles" data-val="{{ p.descuento|floatformat:0 }}">${{ p.descuento|floatformat:0 }}</span></span>
+                {% endif %}
+                {# Medio de pago: SOLO LECTURA (lo informa el canal en la ingesta; #}
+                {# la corrección puntual es `api_fijar_medio_pago`, sin UI). En un   #}
+                {# MARKETPLACE no aplica: la cuadratura clasifica por plataforma.    #}
+                {% if p.medio_pago %}
+                  <span class="mp-valor" title="Medio de pago: {{ p.get_medio_pago_display }}{% if p.medio_pago_origen == 'MANUAL' %} (fijado a mano){% else %} (informado por el canal){% endif %}">{{ p.get_medio_pago_display }}{% if p.medio_pago_origen == 'MANUAL' %}*{% endif %}</span>
+                {% elif not p.es_marketplace %}
+                  <span class="mp-sin-definir" title="El canal no informó el medio de pago: la venta cae en “Ecommerce otros / s-def.” de la cuadratura">⚠ Medio s/def.</span>
+                {% endif %}
+              </div>
+            </td>
+
+            {# ── Estado + sub-estado + aging + avisos (chips) ── #}
+            <td class="c-est">
+              <div class="chips">
+                {# En la vista por defecto (solo PENDIENTES) el badge "Pendiente" #}
+                {# se repetiría en todas las filas: el sub-estado ya lo dice.      #}
+                {% if p.estado == 'PENDIENTE' %}
+                  {% if estado_filtro != 'PENDIENTE' %}<span class="badge-p">Pendiente</span>{% endif %}
+                {% elif p.estado == 'FACTURADO' %}<span class="badge-f">Facturado</span>
+                {% elif p.estado == 'CANCELADO' %}<span class="badge-c">Cancelado</span>
+                {% else %}<span class="badge-c">{{ p.get_estado_display }}</span>{% endif %}
+                {% if p.estado == 'PENDIENTE' or p.sub_estado != 'FACTURADO_OK' %}
+                  <span class="sub-{{ p.sub_estado|lower }}" title="{{ p.get_sub_estado_display }}">{{ p.sub_estado_corto }}</span>
+                {% endif %}
+                {% if p.estado == 'PENDIENTE' %}
+                  <span class="aging-b" data-asig="{% if p.fecha_asignacion %}{{ p.fecha_asignacion|date:'c' }}{% else %}{{ p.fecha_recepcion|date:'c' }}{% endif %}" title="Tiempo desde {% if p.fecha_asignacion %}asignación{% else %}recepción{% endif %}"></span>
+                  {% if p.estado_canal == 'PENDIENTE' %}
+                    {# El canal aún no confirma el pago: no sacar ni facturar. #}
+                    <span class="badge-sin-pago" title="AllConnected reporta el pedido SIN PAGO confirmado: no imprimir guía ni facturar hasta que el canal lo confirme (se actualiza con Traer pedidos)"><i class="bi bi-cash-coin me-1"></i>Sin pago</span>
+                  {% endif %}
+                  {% if not p.fecha_impresion_guia and p.sub_estado != 'SIN_STOCK' %}
+                    {# Sin guía impresa no hubo picking: facturar está bloqueado. #}
+                    <span class="badge-sin-guia" title="Guía de preparación NO impresa: no se puede facturar hasta imprimirla (botón PDF o térmica)"><i class="bi bi-printer me-1"></i>Sin guía</span>
+                  {% endif %}
+                  {% if p.estado_logistica_canal == 'LISTO_ENVIO' or p.estado_logistica_canal == 'LISTO_RETIRO' %}
+                    <span class="badge-central chip-ico" title="Canal: listo para envío/retiro (informativo). OJO: Paris lo marca por su cuenta y NO significa que el producto esté sacado — igual hay que prepararlo."><i class="bi bi-truck"></i></span>
+                  {% endif %}
+                  {% if p.sub_estado == 'SIN_STOCK' and not p.sin_stock_avisado_ac %}
+                    {# El aviso a AllConnected falló: el pedido está marcado acá pero central NO lo sabe. #}
+                    <span class="badge-aviso-pendiente" title="No se pudo avisar a AllConnected. Volvé a apretar &quot;Sin stock&quot; para reintentar el aviso."><i class="bi bi-wifi-off me-1"></i>Aviso AC</span>
+                  {% endif %}
+                {% endif %}
+              </div>
+              {% if p.estado == 'FACTURADO' %}{% if p.ticket or p.dte %}
+                <div class="cel-sub">
+                  {% if p.ticket %}<span class="doc-ref">Ticket #{{ p.ticket.correlativo }}</span>{% endif %}
+                  {% if p.dte %}<span class="doc-ref">DTE #{{ p.dte.numero_documento }}</span>{% endif %}
+                </div>
+              {% endif %}{% endif %}
+            </td>
+
+            {# ── Acciones ── #}
+            <td class="c-acc">
+              <div class="acc-btns">
               {% if p.id in pedidos_sin_stock_ids %}
-                <br><span class="badge-sin-stock"><i class="bi bi-exclamation-triangle-fill me-1"></i>Stock insuf.</span>
-              {% endif %}
-            </td>
-            <td class="col-total text-end"><span class="fmt-miles" data-val="{{ p.total|floatformat:0 }}">${{ p.total|floatformat:0 }}</span></td>
-            <td class="col-cupon">
-              {# El descuento del cupón va al PEDIDO, no a la línea: sin esta #}
-              {# columna el total de acá no cuadra con la suma de los ítems de #}
-              {# la ficha y no hay forma de medir qué costó una campaña.       #}
-              {% if p.coupon_code %}
-                <span class="cupon-b" title="Cupón {{ p.coupon_code }} — aplicado por el canal sobre el total del pedido">{{ p.cupon_campana }}</span>
-                {% if p.descuento %}<span class="cupon-monto">-<span class="fmt-miles" data-val="{{ p.descuento|floatformat:0 }}">${{ p.descuento|floatformat:0 }}</span></span>{% endif %}
-              {% elif p.descuento %}
-                {# Descuento sin código: el canal lo informó sin cupón asociado. #}
-                <span class="cupon-monto" title="El canal informó un descuento sin código de cupón">-<span class="fmt-miles" data-val="{{ p.descuento|floatformat:0 }}">${{ p.descuento|floatformat:0 }}</span></span>
-              {% else %}
-                <span class="cupon-na">—</span>
-              {% endif %}
-            </td>
-            <td class="col-medio-pago">
-              {# SOLO LECTURA: lo informa la tienda en la ingesta (`payment_method` #}
-              {# del payload) y RetailMind lo normaliza. Antes había un <select>    #}
-              {# porque AllConnected no mandaba el dato y alguien tenía que fijarlo #}
-              {# a mano; ahora viaja solo. La corrección puntual sigue existiendo   #}
-              {# en el backend (`api_fijar_medio_pago`), sin UI.                    #}
-              {# En un MARKETPLACE (Paris, Ripley, Walmart, MercadoLibre, Shopify)  #}
-              {# la plata la liquida el canal y la cuadratura clasifica la venta    #}
-              {# por la plataforma: `medio_pago` no cambia nada, así que no se      #}
-              {# muestra como "falta" ni se amenaza con "OTROS / S-DEF.".           #}
-              {% if p.medio_pago %}
-                <span class="mp-valor" title="{% if p.medio_pago_origen == 'MANUAL' %}Fijado a mano{% else %}Informado por el canal{% endif %}">{{ p.get_medio_pago_display }}</span>
-                {% if p.medio_pago_origen == 'MANUAL' %}<span class="mp-origen">fijado a mano</span>{% endif %}
-              {% elif p.es_marketplace %}
-                <span class="mp-na" title="No aplica: {{ p.canal_origen }} liquida la venta y la cuadratura la clasifica por plataforma">—</span>
-              {% else %}
-                <span class="mp-sin-definir" title="El canal no informó el medio de pago: la venta cae en “Ecommerce otros / s-def.” de la cuadratura">⚠ Sin definir</span>
-              {% endif %}
-            </td>
-            <td class="col-fecha">{{ p.fecha_recepcion|date:"d/m/Y H:i" }}</td>
-            <td>
-              {% if p.estado == 'PENDIENTE' %}<span class="badge-p">Pendiente</span>
-              {% elif p.estado == 'FACTURADO' %}
-                <span class="badge-f">Facturado</span>
-                {% if p.ticket %}<div style="font-size:.7rem;color:#475569;">Ticket #{{ p.ticket.correlativo }}</div>{% endif %}
-                {% if p.dte %}<div style="font-size:.7rem;color:#475569;">DTE #{{ p.dte.numero_documento }}</div>{% endif %}
-              {% elif p.estado == 'CANCELADO' %}<span class="badge-c">Cancelado</span>
-              {% else %}<span>{{ p.estado }}</span>{% endif %}
-            </td>
-            <td>
-              <span class="sub-{{ p.sub_estado|lower }}">{{ p.get_sub_estado_display }}</span>
-              {% if p.estado == 'PENDIENTE' %}
-                <span class="aging-b" data-asig="{% if p.fecha_asignacion %}{{ p.fecha_asignacion|date:'c' }}{% else %}{{ p.fecha_recepcion|date:'c' }}{% endif %}" title="Tiempo desde {% if p.fecha_asignacion %}asignación{% else %}recepción{% endif %}"></span>
-                {% if p.estado_canal == 'PENDIENTE' %}
-                  {# El canal aún no confirma el pago: no sacar ni facturar. #}
-                  <br><span class="badge-sin-pago" title="AllConnected reporta el pedido SIN PAGO confirmado: no imprimir guía ni facturar hasta que el canal lo confirme (se actualiza con Traer pedidos)"><i class="bi bi-cash-coin me-1"></i>Sin pago canal</span>
-                {% endif %}
-                {% if p.estado_logistica_canal == 'LISTO_ENVIO' or p.estado_logistica_canal == 'LISTO_RETIRO' %}
-                  <br><span class="badge-central" title="Estado logístico que reporta el canal (informativo). OJO: Paris lo marca por su cuenta y NO significa que el producto esté sacado — igual hay que prepararlo."><i class="bi bi-truck me-1"></i>Canal: listo p/envío</span>
-                {% endif %}
-                {% if not p.fecha_impresion_guia and p.sub_estado != 'SIN_STOCK' %}
-                  {# Sin guía impresa no hubo picking: facturar está bloqueado. #}
-                  <br><span class="badge-sin-guia" title="Guía de preparación NO impresa: no se puede facturar hasta imprimirla (botón PDF o térmica)"><i class="bi bi-printer me-1"></i>Sin guía</span>
-                {% endif %}
-                {% if p.sub_estado == 'SIN_STOCK' and not p.sin_stock_avisado_ac %}
-                  {# El aviso a AllConnected falló: el pedido está marcado acá pero central NO lo sabe. #}
-                  <br><span class="badge-aviso-pendiente" title="No se pudo avisar a AllConnected. Volvé a apretar &quot;Sin stock&quot; para reintentar el aviso."><i class="bi bi-wifi-off me-1"></i>Aviso AC pendiente</span>
-                {% endif %}
-              {% endif %}
-            </td>
-            <td>
-              {% if p.id in pedidos_sin_stock_ids %}
-                <div class="d-flex gap-1">
                   <span class="btn btn-sm btn-sin-stock disabled" title="Stock insuficiente en sucursal activa">
                     <i class="bi bi-exclamation-circle"></i>
                   </span>
                   {% if p.estado == 'PENDIENTE' and p.sub_estado == 'SIN_STOCK' %}
-                  <button class="btn btn-sm btn-outline-warning" style="font-size:.68rem;padding:1px 6px;" onclick="reactivarSinStock({{ p.id }}, this)" title="El producto apareció: volver al flujo de preparación">
+                  <button class="btn btn-sm btn-outline-warning btn-acc" onclick="reactivarSinStock({{ p.id }}, this)" title="El producto apareció: volver al flujo de preparación">
                     <i class="bi bi-arrow-counterclockwise"></i>
                   </button>
                   {% elif p.estado == 'PENDIENTE' %}
-                  <button class="btn btn-sm btn-outline-danger" style="font-size:.68rem;padding:1px 6px;" onclick="abrirSinStock({{ p.id }}, '{{ p.numero_ticket_rm|escapejs }}')" title="Confirmar que no hay stock y avisar a AllConnected">
+                  <button class="btn btn-sm btn-outline-danger btn-acc" onclick="abrirSinStock({{ p.id }}, '{{ p.numero_ticket_rm|escapejs }}')" title="Confirmar que no hay stock y avisar a AllConnected">
                     <i class="bi bi-box-seam"></i>
                   </button>
                   {% endif %}
                   {% if p.estado == 'PENDIENTE' %}
-                  <button class="btn btn-sm btn-outline-secondary" style="font-size:.68rem;padding:1px 6px;" onclick="abrirReasignar({{ p.id }})" title="Reasignar a otra sucursal">
+                  <button class="btn btn-sm btn-outline-secondary btn-acc" onclick="abrirReasignar({{ p.id }})" title="Reasignar a otra sucursal">
                     <i class="bi bi-arrow-left-right"></i>
                   </button>
                   {% endif %}
-                  <a href="{% url 'pedido_ecommerce_detalle' pedido_id=p.id %}" class="btn btn-sm btn-outline-primary" style="font-size:.68rem;padding:1px 6px;" title="Ver detalle">
+                  <a href="{% url 'pedido_ecommerce_detalle' pedido_id=p.id %}" class="btn btn-sm btn-outline-primary btn-acc" title="Ver detalle">
                     <i class="bi bi-eye"></i>
                   </a>
-                </div>
               {% else %}
-                <div class="d-flex gap-1">
-                  <a href="{% url 'pedido_ecommerce_detalle' pedido_id=p.id %}" class="btn btn-sm btn-outline-primary" style="font-size:.72rem;padding:2px 8px;">
+                  <a href="{% url 'pedido_ecommerce_detalle' pedido_id=p.id %}" class="btn btn-sm btn-outline-primary btn-acc btn-acc-txt" title="{% if p.estado == 'PENDIENTE' %}Abrir para facturar{% else %}Ver detalle{% endif %}">
                     {% if p.estado == 'PENDIENTE' %}Facturar{% else %}Ver{% endif %}
                   </a>
                   {% if p.estado == 'PENDIENTE' and p.sub_estado != 'RECIBIDO' and p.sub_estado != 'SIN_STOCK' %}
                   {# PDF por defecto (no necesita QZ Tray); el botón térmico va al lado. #}
-                  <button class="btn btn-sm btn-outline-dark" style="font-size:.68rem;padding:1px 6px;" onclick="abrirGuiaPdf({{ p.id }})" title="Guía de preparación en PDF 80mm{% if p.sub_estado == 'ASIGNADO' %} (marca En Preparación){% else %} (reimprimir){% endif %}">
-                    <i class="bi bi-file-earmark-pdf"></i>
+                  {# Ya impresa = reimpresión: sigue permitida mientras esté pendiente  #}
+                  {# de facturar (el backend no la deja salir si ya tiene boleta).      #}
+                  <button class="btn btn-sm btn-acc {% if p.fecha_impresion_guia %}btn-outline-secondary{% else %}btn-outline-dark{% endif %}" onclick="abrirGuiaPdf({{ p.id }})" title="{% if p.fecha_impresion_guia %}Reimprimir guía PDF 80mm (impresa el {{ p.fecha_impresion_guia|date:'d/m H:i' }}){% elif p.sub_estado == 'ASIGNADO' %}Guía de preparación PDF 80mm (marca En Preparación){% else %}Guía de preparación PDF 80mm{% endif %}">
+                    <i class="bi {% if p.fecha_impresion_guia %}bi-arrow-repeat{% else %}bi-file-earmark-pdf{% endif %}"></i>
                   </button>
-                  <button class="btn btn-sm btn-outline-secondary" style="font-size:.68rem;padding:1px 6px;" onclick="imprimirGuiaPedido({{ p.id }}, this)" title="Impresión directa por QZ Tray (requiere QZ configurado)">
+                  <button class="btn btn-sm btn-outline-secondary btn-acc" onclick="imprimirGuiaPedido({{ p.id }}, this)" title="Impresión directa por QZ Tray (requiere QZ configurado)">
                     <i class="bi bi-printer"></i>
                   </button>
                   {% endif %}
                   {% if p.estado == 'PENDIENTE' and p.sub_estado == 'EN_PREPARACION' %}
-                  <button class="btn btn-sm btn-outline-success" style="font-size:.68rem;padding:1px 6px;" onclick="marcarListoDespacho({{ p.id }}, this)" title="Marcar Listo para Despacho (picking terminado)">
+                  <button class="btn btn-sm btn-outline-success btn-acc" onclick="marcarListoDespacho({{ p.id }}, this)" title="Marcar Listo para Despacho (picking terminado)">
                     <i class="bi bi-check2-circle"></i>
                   </button>
                   {% endif %}
                   {% if p.estado == 'PENDIENTE' and p.sub_estado == 'SIN_STOCK' %}
-                  <button class="btn btn-sm btn-outline-warning" style="font-size:.68rem;padding:1px 6px;" onclick="reactivarSinStock({{ p.id }}, this)" title="El producto apareció: volver al flujo de preparación{% if p.sin_stock_motivo %} (marcado: {{ p.sin_stock_motivo }}){% endif %}">
+                  <button class="btn btn-sm btn-outline-warning btn-acc" onclick="reactivarSinStock({{ p.id }}, this)" title="El producto apareció: volver al flujo de preparación{% if p.sin_stock_motivo %} (marcado: {{ p.sin_stock_motivo }}){% endif %}">
                     <i class="bi bi-arrow-counterclockwise"></i>
                   </button>
                   {% elif p.estado == 'PENDIENTE' and p.sub_estado != 'RECIBIDO' %}
-                  <button class="btn btn-sm btn-outline-danger" style="font-size:.68rem;padding:1px 6px;" onclick="abrirSinStock({{ p.id }}, '{{ p.numero_ticket_rm|escapejs }}')" title="No hay stock del producto: marcar y avisar a AllConnected">
+                  <button class="btn btn-sm btn-outline-danger btn-acc" onclick="abrirSinStock({{ p.id }}, '{{ p.numero_ticket_rm|escapejs }}')" title="No hay stock del producto: marcar y avisar a AllConnected">
                     <i class="bi bi-box-seam"></i>
                   </button>
                   {% endif %}
                   {% if p.estado == 'PENDIENTE' %}
-                  <button class="btn btn-sm btn-outline-secondary" style="font-size:.68rem;padding:1px 6px;" onclick="abrirReasignar({{ p.id }})" title="Reasignar">
+                  <button class="btn btn-sm btn-outline-secondary btn-acc" onclick="abrirReasignar({{ p.id }})" title="Reasignar">
                     <i class="bi bi-arrow-left-right"></i>
                   </button>
                   {% endif %}
                   {% if p.estado == 'FACTURADO' and p.dte_id and p.dte.tipo_documento != 'BOLETA PAPEL' %}
-                  <a href="{% url 'descargar_txt_dte_ecommerce' dte_id=p.dte_id %}" class="btn btn-sm btn-outline-secondary" style="font-size:.68rem;padding:1px 6px;" title="Descargar TXT Acepta">
+                  <a href="{% url 'descargar_txt_dte_ecommerce' dte_id=p.dte_id %}" class="btn btn-sm btn-outline-secondary btn-acc" title="Descargar TXT Acepta">
                     <i class="bi bi-file-earmark-text"></i>
                   </a>
                   {% endif %}
-                </div>
               {% endif %}
+              </div>
             </td>
           </tr>
           {% endfor %}

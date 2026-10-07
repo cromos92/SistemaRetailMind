@@ -10,6 +10,7 @@ Correr en BD local desechable:
     python manage.py test app.tests.test_guia_pdf_ecommerce
 """
 import json
+import re
 
 from django.http import Http404
 from django.test import RequestFactory, TestCase
@@ -174,11 +175,16 @@ class EndpointGuiaPdfTest(TestCase):
     def setUp(self):
         self.sucursal = crear_sucursal()
         self.user = crear_usuario(rol='administrador')
-        modulo = ModuloSistema.objects.create(codigo='ecommerce', nombre='Ecommerce')
-        opcion = OpcionMenu.objects.create(
-            modulo=modulo, codigo='ecommerce_pedidos_todos', nombre='Pedidos Ecommerce')
-        PermisoRol.objects.create(rol=self.user.rol, opcion_menu=opcion,
-                                  puede_ver=True, puede_editar=True)
+        # get_or_create: las migraciones de datos ya siembran el módulo y la
+        # opción de menú (con create el setUp reventaba por UNIQUE).
+        modulo, _ = ModuloSistema.objects.get_or_create(
+            codigo='ecommerce', defaults={'nombre': 'Ecommerce'})
+        opcion, _ = OpcionMenu.objects.get_or_create(
+            codigo='ecommerce_pedidos_todos',
+            defaults={'modulo': modulo, 'nombre': 'Pedidos Ecommerce'})
+        PermisoRol.objects.update_or_create(
+            rol=self.user.rol, opcion_menu=opcion,
+            defaults={'puede_ver': True, 'puede_editar': True})
         self.pedido = PedidoEcommerce.objects.create(
             numero_ticket_rm='RM-PDFEP1', numero_pedido_canal='ORD-PDF1',
             canal_origen='PARIS', sucursal=self.sucursal, cliente_nombre='Cliente PDF',
@@ -249,7 +255,120 @@ class EndpointGuiaPdfTest(TestCase):
         self.pedido.save(update_fields=['sub_estado'])
         response = self._pdf()
         self.assertEqual(response.status_code, 404)
-        self.assertIn('No hay pedidos', json.loads(response.content)['error'])
+        self.assertIn('No hay guías nuevas', json.loads(response.content)['error'])
+
+    # ── Modos de la guía masiva (07-oct): nuevas / reimprimir ──────────────
+
+    def _pdf_modo(self, modo):
+        request = RequestFactory().post(f'/x/?modo={modo}')
+        request.user = self.user
+        request.session = {'idSucursalActual': self.sucursal.id}
+        return api_guias_pdf_sucursal(request)
+
+    def _otro(self, n, **kw):
+        datos = dict(
+            numero_ticket_rm=f'RM-PDFM{n}', numero_pedido_canal=f'ORD-M{n}',
+            canal_origen='PARIS', sucursal=self.sucursal, cliente_nombre=f'Cli {n}',
+            sub_estado='EN_PREPARACION', fecha_asignacion=timezone.now(), total=1000,
+            items=[{'sku': '9', 'nombre': 'X', 'cantidad': 1, 'precio_unitario': 1000}],
+        )
+        datos.update(kw)
+        return PedidoEcommerce.objects.create(**datos)
+
+    def test_nuevas_no_reimprime_y_sugiere_reimprimir(self):
+        """Todo impreso → 'nuevas' da 404 y el mensaje apunta al botón
+        Reimprimir (antes pedía escribir ?incluir_reimpresiones=1 en la URL)."""
+        self.pedido.fecha_impresion_guia = timezone.now()
+        self.pedido.sub_estado = 'EN_PREPARACION'
+        self.pedido.save(update_fields=['fecha_impresion_guia', 'sub_estado'])
+        response = self._pdf_modo('nuevas')
+        self.assertEqual(response.status_code, 404)
+        error = json.loads(response.content)['error']
+        self.assertIn('Reimprimir', error)
+        self.assertNotIn('incluir_reimpresiones', error)
+
+    def test_reimprimir_solo_pendientes_de_facturar(self):
+        """Reimprimir saca las ya impresas que siguen PENDIENTES (incluido
+        LISTO_DESPACHO) y nunca una facturada ni una sin imprimir."""
+        ahora = timezone.now()
+        listo = self._otro(1, sub_estado='LISTO_DESPACHO', fecha_impresion_guia=ahora)
+        self._otro(2, fecha_impresion_guia=ahora, estado='FACTURADO',
+                   sub_estado='FACTURADO_OK', fecha_facturacion=ahora)
+        # self.pedido sigue ASIGNADO y sin guía → no es reimpresión
+        response = self._pdf_modo('reimprimir')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'/Count 1', response.content)
+        self.assertEqual(response['Cache-Control'], 'no-store')
+
+        listo.refresh_from_db()
+        self.assertEqual(listo.sub_estado, 'LISTO_DESPACHO',
+                         'reimprimir no debe hacer retroceder el picking')
+        self.pedido.refresh_from_db()
+        self.assertIsNone(self.pedido.fecha_impresion_guia,
+                          'una guía nueva no sale por el botón Reimprimir')
+
+    def test_reimprimir_sin_pendientes_da_404(self):
+        response = self._pdf_modo('reimprimir')
+        self.assertEqual(response.status_code, 404)
+        self.assertIn('pendiente de facturar', json.loads(response.content)['error'])
+
+    def test_conteo_coincide_con_lo_que_imprime(self):
+        from app.views_ecommerce import _conteo_guias_sucursal, _pedidos_para_guias
+        ahora = timezone.now()
+        self._otro(1, fecha_impresion_guia=ahora)
+        self._otro(2, sub_estado='LISTO_DESPACHO', fecha_impresion_guia=ahora)
+        self._otro(3, estado='FACTURADO', sub_estado='FACTURADO_OK',
+                   fecha_impresion_guia=ahora)
+        conteo = _conteo_guias_sucursal(self.sucursal)
+        self.assertEqual(conteo, {'nuevas': 1, 'reimprimir': 2})
+        self.assertEqual(_pedidos_para_guias(self.sucursal, 'nuevas').count(), 1)
+        self.assertEqual(_pedidos_para_guias(self.sucursal, 'reimprimir').count(), 2)
+        self.assertEqual(_pedidos_para_guias(self.sucursal, 'todas').count(), 3)
+
+    def _dte(self):
+        from datetime import time
+
+        from app.models import Dte
+        hoy = timezone.localdate()
+        return Dte.objects.create(
+            emisor=self.sucursal.empresa, numero_documento=777,
+            tipo_documento='BOLETA ELECTRONICA', monto_con_iva=10000, monto_neto=8403,
+            estado_pago='PAGADO', estado_dte='EMITIDO', responsable='caja1',
+            fecha_emision=hoy, fecha_vencimiento=hoy, diasCredito=0, bultos=0,
+            unidades_productos=1, sucursal=self.sucursal,
+            tipo_transaccion='VENTA_PUBLICO', hora=time(12, 0),
+        )
+
+    def test_pendiente_con_boleta_no_sale_en_ningun_modo(self):
+        """Cinturón: si un camino deja el DTE vinculado sin cerrar el estado,
+        la guía igual lo trata como facturado (ni masiva ni individual)."""
+        from app.views_ecommerce import _pedidos_para_guias
+        self.pedido.fecha_impresion_guia = timezone.now()
+        self.pedido.dte = self._dte()
+        self.pedido.save(update_fields=['fecha_impresion_guia', 'dte'])
+        for modo in ('nuevas', 'reimprimir', 'todas'):
+            self.assertFalse(_pedidos_para_guias(self.sucursal, modo).exists(), modo)
+        self.assertEqual(self._pdf(self.pedido.id).status_code, 409)
+
+    def test_listado_renderiza_tabla_compacta_y_contador(self):
+        """Smoke del parcial AJAX: 6 columnas y el contador de guías viaja con
+        la tabla para refrescar los botones del encabezado."""
+        from app.views_ecommerce import PedidosEcommerceListView
+        self.pedido.coupon_code = 'WELCOME-ABC123'
+        self.pedido.descuento = 1500
+        self.pedido.save(update_fields=['coupon_code', 'descuento'])
+        request = RequestFactory().get('/x/', HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        request.user = self.user
+        request.session = {'idSucursalActual': self.sucursal.id}
+        response = PedidosEcommerceListView.as_view()(request)
+        response.render()
+        html = response.content.decode()
+        self.assertEqual(len(re.findall(r'<th[\s>]', html)), 6)
+        self.assertIn('id="guias-conteo"', html)
+        self.assertIn('data-nuevas="1"', html)
+        self.assertIn('class="monto-total fmt-miles"', html)
+        self.assertIn('WELCOME', html)
+        self.assertIn('Asignado', html)
 
     def test_contexto_toma_talla_y_stock_del_erp(self):
         """La guía muestra el dato del ERP, no el del canal: es lo que la

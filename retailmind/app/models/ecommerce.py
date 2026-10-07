@@ -496,6 +496,26 @@ class PedidoEcommerce(models.Model):
             return ''
         return codigo.split('-', 1)[0].upper()
 
+    # Rótulos cortos para el chip del listado (el largo va en el title): con
+    # "Facturado por Concepto (externo)" la columna de estado no entraba en 15".
+    _SUB_ESTADO_CORTO = {
+        'RECIBIDO': 'Recibido',
+        'ASIGNADO': 'Asignado',
+        'EN_PREPARACION': 'En prep.',
+        'LISTO_DESPACHO': 'Listo desp.',
+        'SIN_STOCK': 'Sin stock',
+        'FACTURADO_OK': 'Facturado',
+        'FACTURADO_EXTERNO': 'Fact. externo',
+        'CANCELADO_CLIENTE': 'Canc. cliente',
+        'CANCELADO_SIN_STOCK': 'Canc. sin stock',
+        'ERROR_STOCK': 'Error stock',
+        'ERROR_DTE': 'Error DTE',
+    }
+
+    @property
+    def sub_estado_corto(self):
+        return self._SUB_ESTADO_CORTO.get(self.sub_estado) or self.get_sub_estado_display()
+
     def puede_transicionar_sub_estado(self, nuevo_sub_estado):
         """Verifica si la transición de sub-estado es válida."""
         permitidos = TRANSICIONES_SUB_ESTADO.get(self.sub_estado, [])
