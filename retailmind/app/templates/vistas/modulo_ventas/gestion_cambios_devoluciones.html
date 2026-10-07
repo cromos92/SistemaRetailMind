@@ -2114,6 +2114,8 @@
         border-color: var(--nexo-accent);
         color: var(--nexo-secondary);
     }
+    #modalNuevoCambio .wizard-step.completed .wizard-circle { box-shadow: none; transform: none; }
+    #modalNuevoCambio .wizard-step.completed:hover .wizard-circle { box-shadow: 0 0 0 4px rgba(0, 212, 170, 0.3); }
     #modalNuevoCambio .wizard-step.completed .wizard-num { display: none; }
     #modalNuevoCambio .wizard-step.completed .wizard-check { display: inline; }
     #modalNuevoCambio .wizard-step.completed:not(:last-child)::after { background: var(--nexo-accent); }
@@ -2218,6 +2220,35 @@
     #modalNuevoCambio .nc-info-chips .info-chip { padding: 0.45rem 0.7rem; }
     #modalNuevoCambio .nc-info-chips .nc-chip-ancho { flex: 2; min-width: 160px; }
     #modalNuevoCambio .nc-btn-cambiar-doc { min-height: 36px; }
+    /* La acción "Continuar" vive en la barra inferior (grande y siempre visible) */
+    #modalNuevoCambio .info-ticket-cta { display: none !important; }
+
+    #modalNuevoCambio .nc-guia {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-top: 1rem;
+    }
+    #modalNuevoCambio .nc-guia-paso {
+        display: flex; align-items: flex-start; gap: 0.65rem;
+        padding: 0.75rem 0.85rem;
+        border: 1px dashed var(--nexo-gray-300);
+        border-radius: var(--nexo-radius-md);
+        color: var(--nexo-text-secondary);
+        font-size: 0.85rem;
+    }
+    #modalNuevoCambio .nc-guia-num {
+        width: 26px; height: 26px; flex-shrink: 0;
+        border-radius: 50%;
+        background: var(--nexo-primary-light); color: var(--nexo-primary);
+        font-weight: 800; font-size: 0.8rem;
+        display: flex; align-items: center; justify-content: center;
+    }
+    #modalNuevoCambio .nc-guia-paso strong { display: block; color: var(--nexo-secondary); }
+    #modalNuevoCambio .nc-guia-paso small { display: block; color: var(--nexo-text-muted); font-size: 0.76rem; line-height: 1.3; }
+    @media (max-width: 767.98px) {
+        #modalNuevoCambio .nc-guia { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
+    }
 
     /* ---- Paso 2: barra de contexto fija arriba ---- */
     #modalNuevoCambio .nc-contexto {
@@ -2304,28 +2335,61 @@
     #modalNuevoCambio .nc-scan-tools .btn { min-height: 40px; font-size: 0.85rem; }
     #modalNuevoCambio .nc-scan-total { font-size: 0.8rem; color: var(--nexo-text-secondary); font-weight: 600; }
 
-    /* ---- Tablas de productos (sin scroll propio: crecen con su contenido) ---- */
+    /* ---- Listas de productos (sin scroll propio: crecen con su contenido) ----
+       Cada línea es una tarjeta: nombre completo arriba y, debajo, los controles
+       (cantidad / condición / precio). Una tabla de 6 columnas no cabía en media
+       pantalla de un POS de 15" y obligaba a scrollear en horizontal. */
     #modalNuevoCambio .nc-tabla-wrap {
         margin-top: 0.75rem;
         border: 1px solid var(--nexo-gray-300);
         border-radius: var(--nexo-radius-md);
+        overflow: hidden;
     }
-    #modalNuevoCambio .nc-tabla { font-size: 0.9rem; }
-    #modalNuevoCambio .nc-tabla thead th {
-        background: var(--nexo-gray-100);
-        color: var(--nexo-text-secondary);
-        font-size: 0.7rem;
+    #modalNuevoCambio .nc-lista { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    #modalNuevoCambio .nc-lista > tbody > tr > td { padding: 0.7rem 0.75rem; border-bottom: 1px solid #ECECF1; vertical-align: top; }
+    #modalNuevoCambio .nc-lista > tbody > tr:last-child > td { border-bottom: 0; }
+    #modalNuevoCambio .nc-linea-grid {
+        display: grid;
+        grid-template-columns: 30px minmax(0, 1fr) auto 42px;
+        grid-template-areas:
+            "estado info precio quitar"
+            ".      ctrl ctrl   ctrl";
+        column-gap: 0.65rem;
+        row-gap: 0.55rem;
+        align-items: start;
+    }
+    #modalNuevoCambio .nc-linea-grid.nc-linea-entrega {
+        grid-template-columns: minmax(0, 1fr) auto 42px;
+        grid-template-areas:
+            "info precio quitar"
+            "ctrl ctrl   ctrl";
+    }
+    #modalNuevoCambio .nc-linea-estado { grid-area: estado; padding-top: 1px; text-align: center; }
+    #modalNuevoCambio .nc-linea-info { grid-area: info; min-width: 0; }
+    #modalNuevoCambio .nc-linea-precio { grid-area: precio; text-align: right; font-size: 0.98rem; }
+    #modalNuevoCambio .nc-linea-precio small { display: block; font-size: 0.7rem; font-weight: 500; color: var(--nexo-text-muted); }
+    #modalNuevoCambio .nc-linea .nc-btn-quitar { grid-area: quitar; }
+    #modalNuevoCambio .nc-linea-controles {
+        grid-area: ctrl;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 0.5rem 1rem;
+    }
+    #modalNuevoCambio .nc-ctrl { display: flex; flex-direction: column; gap: 0.2rem; }
+    #modalNuevoCambio .nc-ctrl-flex { flex: 1 1 170px; max-width: 280px; }
+    #modalNuevoCambio .nc-ctrl-label {
+        margin: 0;
+        font-size: 0.66rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.3px;
-        padding: 0.5rem 0.6rem;
-        border-bottom: 1px solid var(--nexo-gray-300);
-        white-space: nowrap;
+        color: var(--nexo-text-muted);
     }
-    #modalNuevoCambio .nc-tabla tbody td { padding: 0.55rem 0.6rem; vertical-align: middle; border-bottom: 1px solid #ECECF1; }
-    #modalNuevoCambio .nc-tabla tbody tr:last-child td { border-bottom: 0; }
-    #modalNuevoCambio .nc-col-estado { width: 44px; text-align: center; }
-    #modalNuevoCambio .nc-col-accion { width: 52px; }
+    #modalNuevoCambio .nc-ctrl-fila { display: flex; align-items: center; gap: 0.5rem; }
+    #modalNuevoCambio .nc-ctrl .form-select { min-height: 44px; font-size: 0.9rem; }
+    #modalNuevoCambio .nc-linea-aviso { display: none; margin-top: 3px; font-size: 0.75rem; color: var(--nexo-text-muted); }
+
     #modalNuevoCambio .nc-prod-nombre { font-weight: 700; color: var(--nexo-secondary); line-height: 1.25; }
     #modalNuevoCambio .nc-prod-meta {
         display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.45rem;
@@ -2342,8 +2406,7 @@
     }
     #modalNuevoCambio .nc-precio { font-weight: 700; white-space: nowrap; }
     #modalNuevoCambio .nc-precio del { display: block; font-size: 0.7rem; font-weight: 500; color: var(--nexo-text-muted); }
-    #modalNuevoCambio .nc-qty-max { display: block; font-size: 0.7rem; color: var(--nexo-text-muted); margin-top: 3px; white-space: nowrap; }
-    #modalNuevoCambio .nc-tabla .form-select { min-height: 44px; font-size: 0.86rem; min-width: 130px; }
+    #modalNuevoCambio .nc-qty-max { font-size: 0.72rem; color: var(--nexo-text-muted); white-space: nowrap; }
     #modalNuevoCambio .nc-btn-quitar {
         width: 42px; height: 42px;
         display: inline-flex; align-items: center; justify-content: center;
@@ -2357,24 +2420,44 @@
     #modalNuevoCambio .qty-stepper .qty-btn { width: 44px; min-height: 44px; font-size: 1.2rem; }
     #modalNuevoCambio .qty-stepper .qty-input { width: 52px; min-height: 44px; font-size: 1.05rem; }
 
-    /* Estado de escaneo por fila: icono en vez de un checkbox deshabilitado */
+    /* Estado de escaneo por línea: icono en vez de un checkbox deshabilitado.
+       Lo pendiente queda compacto; al escanear se despliegan los controles. */
     #modalNuevoCambio .nc-estado-scan { font-size: 1.35rem; line-height: 1; }
     #modalNuevoCambio .nc-estado-scan .nc-ico-ok { display: none; color: #16a34a; }
     #modalNuevoCambio .nc-estado-scan .nc-ico-pend { color: var(--nexo-gray-500); }
     #modalNuevoCambio .producto-row-escaneado .nc-ico-ok { display: inline; }
     #modalNuevoCambio .producto-row-escaneado .nc-ico-pend { display: none; }
-    #modalNuevoCambio .producto-row-pendiente td { opacity: 0.72; }
+    #modalNuevoCambio .producto-row-pendiente > td { opacity: 0.82; }
+    #modalNuevoCambio .producto-row-pendiente .nc-linea-controles { display: none; }
+    #modalNuevoCambio .producto-row-pendiente .nc-linea-aviso { display: block; }
     #modalNuevoCambio .producto-row-pendiente .nc-btn-quitar { visibility: hidden; }
-    #modalNuevoCambio .producto-row-escaneado td { background-color: #f3fbf5; }
-    #modalNuevoCambio .producto-row-escaneado td:first-child { box-shadow: inset 4px 0 0 #16a34a; }
-    #modalNuevoCambio tr.nc-agotado td { opacity: 0.45; }
+    #modalNuevoCambio .producto-row-escaneado > td { background-color: #f3fbf5; box-shadow: inset 4px 0 0 #16a34a; }
+    #modalNuevoCambio tr.nc-agotado > td { opacity: 0.5; }
+    #modalNuevoCambio tr.table-glow > td { animation: tableGlow 1.6s ease; }
 
-    #modalNuevoCambio .nc-precio-input { width: 138px; margin-left: auto; flex-wrap: nowrap; }
-    #modalNuevoCambio .nc-precio-input .form-control { min-height: 40px; font-weight: 700; }
-    #modalNuevoCambio .nc-precio-alza { display: block; font-size: 0.72rem; color: #16a34a; font-weight: 600; margin-top: 2px; }
+    #modalNuevoCambio .nc-precio-input { width: 150px; flex-wrap: nowrap; }
+    #modalNuevoCambio .nc-precio-input .input-group-text { min-height: 44px; }
+    #modalNuevoCambio .nc-precio-input .form-control { min-height: 44px; font-weight: 700; }
+    #modalNuevoCambio .nc-precio-alza { display: block; font-size: 0.72rem; color: #16a34a; font-weight: 600; }
 
     #modalNuevoCambio .nc-vacio { text-align: center; color: var(--nexo-text-muted); padding: 1.4rem 0.75rem !important; }
     #modalNuevoCambio .nc-vacio i { display: block; font-size: 1.8rem; opacity: 0.5; margin-bottom: 0.25rem; }
+
+    /* Tabla de resultados de búsqueda (sí es tabla: pocas columnas) */
+    #modalNuevoCambio .nc-tabla { font-size: 0.9rem; }
+    #modalNuevoCambio .nc-tabla thead th {
+        background: var(--nexo-gray-100);
+        color: var(--nexo-text-secondary);
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        padding: 0.5rem 0.6rem;
+        border-bottom: 1px solid var(--nexo-gray-300);
+        white-space: nowrap;
+    }
+    #modalNuevoCambio .nc-tabla tbody td { padding: 0.55rem 0.6rem; vertical-align: middle; border-bottom: 1px solid #ECECF1; }
+    #modalNuevoCambio .nc-tabla tbody tr:last-child td { border-bottom: 0; }
 
     /* ---- Resultados de búsqueda (producto a entregar) ---- */
     #modalNuevoCambio .nc-resultados-header {
@@ -2428,22 +2511,22 @@
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: 0.45rem;
-        font-size: 0.85rem;
+        gap: 0.35rem;
+        font-size: 0.82rem;
     }
-    #floating-action-bar .fab-sep { color: var(--nexo-gray-500); }
+    #floating-action-bar .fab-sep { display: none; }
     #floating-action-bar .fab-chip {
         display: inline-flex;
         align-items: center;
-        gap: 0.3rem;
-        padding: 0.3rem 0.75rem;
+        gap: 0.25rem;
+        padding: 0.25rem 0.6rem;
         border-radius: var(--nexo-radius-full);
         font-weight: 600;
-        font-size: 0.82rem;
+        font-size: 0.8rem;
         white-space: nowrap;
         border: 1px solid transparent;
     }
-    #floating-action-bar .fab-chip strong { font-size: 0.95rem; }
+    #floating-action-bar .fab-chip strong { font-size: 0.92rem; }
     #floating-action-bar .fab-chip-out { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
     #floating-action-bar .fab-chip-in  { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
     #floating-action-bar .fab-chip-diff          { background: #fffbeb; color: #d97706; border-color: #fde68a; }
@@ -2471,8 +2554,8 @@
         white-space: nowrap;
     }
     #floating-action-bar .fab-btn-primary {
-        min-width: 220px;
-        padding: 0 1.5rem;
+        min-width: 200px;
+        padding: 0 1.4rem;
         font-size: 1.02rem;
         border: 0;
         color: var(--nexo-white);
@@ -2484,7 +2567,7 @@
     #floating-action-bar .fab-btn-primary.fab-btn-success { background: #16a34a; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3); }
     #floating-action-bar .fab-btn-primary.fab-btn-success:hover:not(:disabled) { background: #15803d; }
     #floating-action-bar .fab-btn-secondary {
-        padding: 0 1.1rem;
+        padding: 0 0.95rem;
         font-size: 0.92rem;
         border: 1px solid var(--nexo-gray-300);
         background: var(--nexo-white);
@@ -2559,10 +2642,15 @@
         #modalNuevoCambio .nc-panel-body { padding: 0.6rem; }
         #modalNuevoCambio .nc-panel-header .badge { display: none; }
         #modalNuevoCambio .nc-col-xs-ocultar { display: none; }
-        #floating-action-bar .fab-chip { font-size: 0.74rem; padding: 0.2rem 0.55rem; }
+        /* Chips en UNA fila deslizable: en 3 filas se comían media pantalla */
+        #floating-action-bar .fab-summary { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+        #floating-action-bar .fab-summary::-webkit-scrollbar { display: none; }
+        #floating-action-bar .fab-chip { font-size: 0.74rem; padding: 0.2rem 0.55rem; flex-shrink: 0; }
         #floating-action-bar .fab-chip-monto,
         #floating-action-bar .fab-sep,
-        #floating-action-bar .fab-btn-txt { display: none; }
+        #floating-action-bar #fab-diff-caption,
+        #floating-action-bar .fab-chip-tipo,
+        #floating-action-bar .fab-btn-txt { display: none !important; }
         #floating-action-bar .fab-btn-secondary { padding: 0 0.85rem; font-size: 1.1rem; }
     }
 </style>
@@ -3098,6 +3186,22 @@
                             </button>
                         </div>
                     </div>
+
+                    <!-- Guía rápida del flujo -->
+                    <div class="nc-guia">
+                        <div class="nc-guia-paso">
+                            <span class="nc-guia-num">1</span>
+                            <div><strong>Busque la venta</strong><small>Número de la boleta, factura o ticket y su fecha de compra.</small></div>
+                        </div>
+                        <div class="nc-guia-paso">
+                            <span class="nc-guia-num">2</span>
+                            <div><strong>Escanee los productos</strong><small>Lo que el cliente devuelve y lo que se lleva a cambio.</small></div>
+                        </div>
+                        <div class="nc-guia-paso">
+                            <span class="nc-guia-num">3</span>
+                            <div><strong>Cree la solicitud</strong><small>No mueve stock, caja ni documentos hasta que se apruebe.</small></div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ═══════════ Paso 2: Productos ═══════════ -->
@@ -3163,18 +3267,8 @@
                                     <span class="nc-scan-total ms-auto"><span id="count-escaneados">0</span> unid. escaneadas</span>
                                 </div>
 
-                                <div class="table-responsive nc-tabla-wrap">
-                                    <table class="table nc-tabla mb-0">
-                                        <thead>
-                                            <tr>
-                                                <th class="nc-col-estado" title="Se selecciona al escanear"><i class="ri-barcode-line"></i></th>
-                                                <th>Producto</th>
-                                                <th class="text-end">Precio</th>
-                                                <th class="text-center">Cantidad</th>
-                                                <th>Condición</th>
-                                                <th class="nc-col-accion"></th>
-                                            </tr>
-                                        </thead>
+                                <div class="nc-tabla-wrap">
+                                    <table class="nc-lista">
                                         <tbody id="tbody-productos-originales">
                                             <!-- Productos cargados dinámicamente -->
                                         </tbody>
@@ -3240,19 +3334,11 @@
                                     </div>
                                 </div>
 
-                                <div class="table-responsive nc-tabla-wrap">
-                                    <table class="table nc-tabla mb-0">
-                                        <thead>
-                                            <tr>
-                                                <th>Producto</th>
-                                                <th class="text-end">Precio</th>
-                                                <th class="text-center">Cantidad</th>
-                                                <th class="nc-col-accion"></th>
-                                            </tr>
-                                        </thead>
+                                <div class="nc-tabla-wrap">
+                                    <table class="nc-lista">
                                         <tbody id="tbody-productos-nuevos">
                                             <tr id="fila-sin-productos-nuevos">
-                                                <td colspan="4" class="nc-vacio">
+                                                <td class="nc-vacio">
                                                     <i class="ri-shopping-bag-3-line"></i>
                                                     <span>Aún no agrega productos para entregar</span>
                                                 </td>
@@ -4144,14 +4230,9 @@ function configurarEventos() {
         }
     });
     
-    // Enter en búsqueda de productos
-    $('#input-buscar-producto').on('keypress', function(e) {
-        if (e.which === 13) {
-            e.preventDefault();
-            buscarProductosParaCambio();
-        }
-    });
-    
+    // (El Enter del buscador de productos a entregar se engancha junto a
+    //  escanearProductoEntrega.)
+
     // Enter en escaneo de SKU
     $('#input-escanear-sku').on('keypress', function(e) {
         if (e.which === 13) {
@@ -4266,8 +4347,11 @@ function seleccionarTipoDocumento(tipo) {
 
 // ========== SISTEMA DE ESCANEO DE PRODUCTOS ==========
 
-// Variable global para productos escaneados
-let productosEscaneados = {};  // { sku: { cantidad: N, productoData: {...} } }
+// Registro de lo escaneado, POR LÍNEA del documento (índice en ticketActual.productos).
+// Antes era por SKU: si la venta traía el mismo SKU en dos líneas solo se podía
+// tomar la primera, y lo sumado con el botón "+" no quedaba registrado (al volver
+// del resumen o al re-aplicar, la cantidad regresaba a la del escaneo).
+let productosEscaneados = {};  // { idxLinea: { cantidad: N, sku: 'X', productoData: {...} } }
 
 // Beep de feedback para escaneos (ok=true → agudo/éxito, ok=false → grave/error)
 function _beepCambio(ok) {
@@ -4286,48 +4370,85 @@ function _beepCambio(ok) {
     } catch (e) { /* audio no disponible */ }
 }
 
-// Ubica la línea del documento por SKU. Un mismo SKU puede aparecer dos veces
-// (la venta original y un reemplazo de cambio previo): gana la que tenga unidades
-// disponibles, si no el escaneo caería siempre en la línea ya agotada.
-function indiceProductoPorSku(sku) {
+// Todas las líneas del documento con ese SKU. Un mismo SKU puede venir en varias
+// líneas (escaneado dos veces en el POS, o venta original + reemplazo de un cambio
+// previo).
+function indicesProductoPorSku(sku) {
     if (!ticketActual || !ticketActual.productos) {
-        return -1;
+        return [];
     }
     const skuNorm = String(sku).toUpperCase();
-    const coincide = (p) => p.sku && String(p.sku).toUpperCase() === skuNorm;
+    const indices = [];
+    ticketActual.productos.forEach((p, i) => {
+        if (p.sku && String(p.sku).toUpperCase() === skuNorm) indices.push(i);
+    });
+    return indices;
+}
 
-    const conDisponible = ticketActual.productos.findIndex(
-        p => coincide(p) && (p.cantidad_disponible || 0) > 0
-    );
-    return conDisponible !== -1 ? conDisponible : ticketActual.productos.findIndex(coincide);
+// Primera línea con ese SKU que tenga unidades disponibles (compatibilidad).
+function indiceProductoPorSku(sku) {
+    const indices = indicesProductoPorSku(sku);
+    const conDisponible = indices.find(i => disponibleLinea(i) > 0);
+    return conDisponible !== undefined ? conDisponible : (indices.length ? indices[0] : -1);
+}
+
+function disponibleLinea(idx) {
+    const p = ticketActual && ticketActual.productos ? ticketActual.productos[idx] : null;
+    return p ? (parseInt(p.cantidad_disponible, 10) || 0) : 0;
+}
+
+function cantidadEscaneadaLinea(idx) {
+    const registro = productosEscaneados[idx];
+    return registro ? registro.cantidad : 0;
+}
+
+// Deja una línea seleccionada con `cantidad` unidades y lo refleja en su fila.
+function marcarLineaEscaneada(idx, cantidad) {
+    const producto = ticketActual.productos[idx];
+    productosEscaneados[idx] = {
+        cantidad: cantidad,
+        sku: String(producto.sku || '').toUpperCase(),
+        productoData: producto
+    };
+    $(`#check-producto-${idx}`)
+        .data('scan-validated', true)
+        .prop('disabled', false)
+        .prop('checked', true)
+        .attr('title', 'Producto validado mediante escaneo');
+    $(`#cantidad-producto-${idx}`).val(cantidad).prop('disabled', false);
+    $(`#condicion-${idx}`).prop('disabled', false);
+    $(`#fila-producto-${idx}`).removeClass('producto-row-pendiente').addClass('producto-row-escaneado');
+}
+
+// Vuelve una línea a "pendiente de escaneo" (sin tocar el registro).
+function desmarcarLinea(idx) {
+    $(`#check-producto-${idx}`).prop('checked', false).prop('disabled', true).data('scan-validated', false);
+    $(`#cantidad-producto-${idx}`).val(1).prop('disabled', true);
+    $(`#condicion-${idx}`).prop('disabled', true);
+    $(`#fila-producto-${idx}`).removeClass('producto-row-escaneado').addClass('producto-row-pendiente');
 }
 
 function escanearProducto() {
     const inputSku = $('#input-escanear-sku');
     const sku = inputSku.val().trim().toUpperCase();
-    
+
     if (!sku) {
         mostrarError('Por favor ingrese o escanee un SKU');
         return;
     }
-    
+
     if (!ticketActual || !ticketActual.productos) {
         mostrarError('Primero debe buscar un documento de venta');
         return;
     }
-    
-    console.log('🔍 Escaneando SKU:', sku);
 
-    // Buscar el producto en el ticket actual
-    const idxEncontrado = indiceProductoPorSku(sku);
-    const productoEncontrado = idxEncontrado !== -1 ? ticketActual.productos[idxEncontrado] : undefined;
+    const lineas = indicesProductoPorSku(sku);
 
-
-    if (!productoEncontrado) {
-        // Producto NO está en el ticket - ALERTA
+    if (lineas.length === 0) {
+        // Producto NO está en el documento - ALERTA
         Swal.fire({
             icon: 'error',
-            title: '⚠️ Producto No Válido',
+            title: 'Producto no pertenece a esta venta',
             html: `
                 <p class="text-danger fw-bold">El producto con SKU <code>${sku}</code> NO pertenece a este documento.</p>
                 <hr>
@@ -4340,135 +4461,58 @@ function escanearProducto() {
             confirmButtonText: 'Entendido',
             confirmButtonColor: '#dc3545'
         });
-        
-        // Sonido de error (si está disponible)
         _beepCambio(false);
-
         inputSku.val('').focus();
         return;
     }
-    
-    // Producto SÍ está en el ticket - Agregarlo/incrementar
-    let mensajeToast = '';
-    if (productosEscaneados[sku]) {
-        // Ya fue escaneado - incrementar cantidad
-        const disponible = productoEncontrado.cantidad_disponible || productoEncontrado.stock;
-        if (productosEscaneados[sku].cantidad < disponible) {
-            productosEscaneados[sku].cantidad++;
-            console.log(`✓ SKU ${sku} incrementado a ${productosEscaneados[sku].cantidad}`);
-            mensajeToast = `SKU ${sku} ×${productosEscaneados[sku].cantidad}`;
-        } else {
-            mostrarError(`Cantidad máxima alcanzada para este producto (${disponible})`);
-            inputSku.val('').focus();
-            return;
-        }
-    } else {
-        // Primera vez que se escanea
-        productosEscaneados[sku] = {
-            cantidad: 1,
-            productoData: productoEncontrado
-        };
-        console.log(`✓ SKU ${sku} agregado por primera vez`);
-        mensajeToast = `SKU ${sku} preparado para cambio`;
+
+    // Línea destino: la primera (en orden del documento) que aún tenga unidades
+    // libres. Así un SKU repartido en varias líneas suma todas sus unidades.
+    const idx = lineas.find(i => cantidadEscaneadaLinea(i) < disponibleLinea(i));
+
+    if (idx === undefined) {
+        const totalDisponible = lineas.reduce((s, i) => s + disponibleLinea(i), 0);
+        _beepCambio(false);
+        mostrarError(totalDisponible === 0
+            ? `El SKU ${sku} ya fue cambiado completo en esta venta: no quedan unidades para cambiar`
+            : `Ya están las ${totalDisponible} unidad(es) de ${sku} que tiene esta venta`);
+        inputSku.val('').focus();
+        return;
     }
-    
-    // Sonido de éxito (beep corto)
+
+    const nuevaCantidad = cantidadEscaneadaLinea(idx) + 1;
+    marcarLineaEscaneada(idx, nuevaCantidad);
     _beepCambio(true);
 
-    const indexProducto = ticketActual.productos.indexOf(productoEncontrado);
-    if (indexProducto !== -1) {
-        const checkbox = $(`#check-producto-${indexProducto}`);
-        const inputCantidad = $(`#cantidad-producto-${indexProducto}`);
-        const selectCondicion = $(`#condicion-${indexProducto}`);
-        const fila = $(`#fila-producto-${indexProducto}`);
-        
-        if (checkbox.length) {
-            checkbox.data('scan-validated', true);
-            checkbox.prop('disabled', false);
-            checkbox.attr('title', 'Producto validado mediante escaneo');
-            
-            if (!checkbox.prop('checked')) {
-                checkbox.prop('checked', true);
-                inputCantidad.prop('disabled', false);
-                selectCondicion.prop('disabled', false);
-            }
-            
-            if (inputCantidad.length) {
-                inputCantidad.val(productosEscaneados[sku].cantidad);
-            }
-
-            fila.removeClass('producto-row-pendiente').addClass('producto-row-escaneado');
-            actualizarBadgeProductosSeleccionados();
-            actualizarVistaPreviaTotales();
-        }
-        
-        $('.columna-sku-validacion').show();
-        
-        if (fila.length) {
-            fila.addClass('table-glow');
-            setTimeout(() => fila.removeClass('table-glow'), 1600);
-        }
+    const fila = $(`#fila-producto-${idx}`);
+    if (fila.length) {
+        fila.addClass('table-glow');
+        setTimeout(() => fila.removeClass('table-glow'), 1600);
     }
 
-    if (mensajeToast) {
-        mostrarToast('success', mensajeToast);
-    }
-    
-    // Actualizar UI
+    mostrarToast('success', nuevaCantidad > 1 ? `SKU ${sku} ×${nuevaCantidad}` : `SKU ${sku} listo para cambio`);
+
+    actualizarBadgeProductosSeleccionados();
+    actualizarVistaPreviaTotales();
     actualizarListaProductosEscaneados();
     inputSku.val('').focus();
 }
 
+// Total de unidades seleccionadas para devolver (contador del panel).
 function actualizarListaProductosEscaneados() {
-    const tbody = $('#tbody-productos-escaneados');
-    const container = $('#productos-escaneados-container');
-    const count = Object.keys(productosEscaneados).length;
-    
-    $('#count-escaneados').text(count);
-    
-    if (count === 0) {
-        container.hide();
-        return;
-    }
-    
-    container.show();
-    tbody.empty();
-    
-    Object.entries(productosEscaneados).forEach(([sku, data]) => {
-        const producto = data.productoData;
-        tbody.append(`
-            <tr>
-                <td><code class="fw-bold">${sku}</code></td>
-                <td>${producto.articulo}</td>
-                <td>${producto.talla || '-'}</td>
-                <td>
-                    <span class="badge bg-success fs-6">${data.cantidad}</span>
-                </td>
-                <td>
-                    <button class="btn btn-sm btn-danger" onclick='eliminarProductoEscaneado("${sku}")'>
-                        <i class="ri-delete-bin-line"></i>
-                    </button>
-                </td>
-            </tr>
-        `);
-    });
+    const unidades = Object.values(productosEscaneados)
+        .reduce((s, r) => s + (parseInt(r.cantidad, 10) || 0), 0);
+    $('#count-escaneados').text(unidades);
 }
 
-function eliminarProductoEscaneado(sku) {
-    delete productosEscaneados[sku];
-    
-    if (ticketActual && ticketActual.productos) {
-        const index = indiceProductoPorSku(sku);
-        if (index !== -1) {
-            $(`#check-producto-${index}`).prop('checked', false).prop('disabled', true).data('scan-validated', false);
-            $(`#cantidad-producto-${index}`).val(1).prop('disabled', true);
-            $(`#condicion-${index}`).prop('disabled', true);
-            $(`#fila-producto-${index}`).removeClass('producto-row-escaneado').addClass('producto-row-pendiente');
-            actualizarBadgeProductosSeleccionados();
-            actualizarVistaPreviaTotales();
-        }
+// Quitar una línea de lo que devuelve (botón ✕ de la fila).
+function eliminarProductoEscaneado(idx) {
+    delete productosEscaneados[idx];
+    if (ticketActual && ticketActual.productos && ticketActual.productos[idx]) {
+        desmarcarLinea(idx);
+        actualizarBadgeProductosSeleccionados();
+        actualizarVistaPreviaTotales();
     }
-    
     actualizarListaProductosEscaneados();
 }
 
@@ -4603,59 +4647,36 @@ function limpiarEscaneos() {
             actualizarListaProductosEscaneados();
             
             if (ticketActual && ticketActual.productos) {
-                ticketActual.productos.forEach((_, index) => {
-                    $(`#check-producto-${index}`).prop('checked', false).prop('disabled', true).data('scan-validated', false);
-                    $(`#cantidad-producto-${index}`).val(1).prop('disabled', true);
-                    $(`#condicion-${index}`).prop('disabled', true);
-                    $(`#fila-producto-${index}`).removeClass('producto-row-escaneado').addClass('producto-row-pendiente');
-                });
+                ticketActual.productos.forEach((_, index) => desmarcarLinea(index));
                 actualizarBadgeProductosSeleccionados();
                 actualizarVistaPreviaTotales();
             }
-            
+
             $('#input-escanear-sku').focus();
         }
     });
 }
 
+// Re-sincroniza la tabla con el registro de escaneos (fuente de verdad),
+// conservando la cantidad de cada línea, incluida la sumada con "+".
 function aplicarProductosEscaneados() {
     if (Object.keys(productosEscaneados).length === 0) {
-        mostrarError('No hay productos escaneados para aplicar');
         return;
     }
-    
-    ticketActual.productos.forEach((producto, index) => {
-        $(`#check-producto-${index}`).prop('checked', false).prop('disabled', true).data('scan-validated', false);
-        $(`#cantidad-producto-${index}`).val(1).prop('disabled', true);
-        $(`#condicion-${index}`).prop('disabled', true);
-        $(`#fila-producto-${index}`).removeClass('producto-row-escaneado').addClass('producto-row-pendiente');
-    });
-    
-    let productosAplicados = 0;
-    Object.entries(productosEscaneados).forEach(([sku, data]) => {
-        const index = indiceProductoPorSku(sku);
 
-        if (index !== -1) {
-            const checkbox = $(`#check-producto-${index}`);
-            checkbox.data('scan-validated', true).prop('disabled', false).prop('checked', true);
-            $(`#cantidad-producto-${index}`).val(data.cantidad).prop('disabled', false);
-            $(`#condicion-${index}`).prop('disabled', false);
-            $(`#fila-producto-${index}`).removeClass('producto-row-pendiente').addClass('producto-row-escaneado');
-            
-            const row = checkbox.closest('tr');
-            row.addClass('table-glow');
-            setTimeout(() => row.removeClass('table-glow'), 1600);
-            
-            productosAplicados++;
+    ticketActual.productos.forEach((_, index) => desmarcarLinea(index));
+
+    Object.entries(productosEscaneados).forEach(([idx, data]) => {
+        if (ticketActual.productos[idx]) {
+            marcarLineaEscaneada(idx, data.cantidad);
+        } else {
+            delete productosEscaneados[idx];
         }
     });
-    
+
+    actualizarListaProductosEscaneados();
     actualizarBadgeProductosSeleccionados();
     actualizarVistaPreviaTotales();
-    
-    if (productosAplicados > 0) {
-        mostrarToast('success', `${productosAplicados} producto(s) aplicado(s) desde el escaneo`);
-    }
 }
 
 // Escapa texto que se inyecta dentro de un atributo HTML (title, data-*)
@@ -5236,32 +5257,20 @@ function resetearFormularioNuevoCambio() {
     $('#tbody-productos-nuevos').empty();
     
     // ✅ LIMPIAR SECCIÓN DE PRODUCTOS NUEVOS COMPLETAMENTE
-    // Limpiar buscador y escáner de productos a entregar
-    $('#input-buscar-producto').val('');
+    // Limpiar buscador de productos a entregar
     $('#input-escanear-entrega').val('');
-    
+
     // Limpiar y ocultar panel de resultados de búsqueda
     $('#tbody-resultados-busqueda').empty();
     $('#panel-resultados-busqueda').hide();
     $('#contador-resultados').text('0');
-    
-    // Limpiar tabla de productos nuevos y mostrar mensaje vacío
-    $('#tbody-productos-nuevos').html(`
-        <tr id="fila-sin-productos-nuevos">
-            <td colspan="8" class="text-center text-muted py-2">
-                <i class="ri-inbox-2-line opacity-50 me-1"></i>
-                <span class="small">Busca y agrega productos para entregar</span>
-            </td>
-        </tr>
-    `);
-    
-    // Resetear badge de productos nuevos
-    $('#badge-productos-nuevos').text('0 agregados');
-    
+    _productosBusqueda = [];
+
+    // Tabla de productos nuevos vacía (mensaje + badge)
+    actualizarTablaProductosNuevos();
+
     // Limpiar sistema de escaneo
     $('#input-escanear-sku').val('');
-    $('#tbody-productos-escaneados').empty();
-    $('#productos-escaneados-container').hide();
     $('#count-escaneados').text('0');
     
     // Ocultar sección de productos nuevos
@@ -5708,12 +5717,20 @@ function mostrarInformacionDocumento(documento) {
     console.log('  → correlativo:', documento.correlativo);
     console.log('  → numero_documento:', documento.numero_documento);
     
-    // Determinar si es ticket o DTE
-    const esTicket = documento.tipo === 'TICKET' || documento.correlativo !== undefined;
+    // Determinar si es ticket o DTE. La respuesta de un DTE también trae
+    // `correlativo` (el ticket de referencia), así que se decide por `tipo`:
+    // antes una boleta se mostraba como "Ticket #<correlativo interno>".
+    const esTicket = documento.tipo !== 'DTE';
     const numero = esTicket ? documento.correlativo : documento.numero_documento;
-    const tipoTexto = esTicket ? 'Ticket' : documento.tipo_documento;
-    
+    const NOMBRES_DTE = { '39': 'Boleta', '41': 'Boleta exenta', '33': 'Factura', '34': 'Factura exenta' };
+    const tipoTexto = esTicket
+        ? (documento.tipo === 'TICKET_CAMBIO' ? 'Ticket cambio' : 'Ticket')
+        : (NOMBRES_DTE[String(documento.tipo_documento)] || documento.tipo_documento || 'DTE');
+
     $('#ticket-correlativo').text(`${tipoTexto} #${numero}`);
+    $('#badge-tipo-documento-encontrado')
+        .attr('class', 'badge ' + (esTicket ? 'bg-secondary' : 'bg-primary'))
+        .text(esTicket ? 'Ticket' : 'DTE');
     $('#ticket-fecha').text(documento.fecha);
     $('#ticket-cliente').text(documento.cliente_nombre || 'Sin nombre');
     $('#ticket-total').text('$' + formatearNumero(documento.total));
@@ -5998,7 +6015,8 @@ function cargarProductosOriginales() {
     if (ticketActual.productos.length === 0) {
         tbody.append(`
             <tr>
-                <td colspan="9" class="text-center text-muted">
+                <td class="nc-vacio">
+                    <i class="ri-inbox-2-line"></i>
                     No hay productos disponibles para cambio
                 </td>
             </tr>
@@ -6043,61 +6061,85 @@ function cargarProductosOriginales() {
             notaOrigen = `<div><small class="text-muted" style="font-size:0.7rem;">${detalleCambios}</small></div>`;
         }
 
-        const tallaText = producto.talla ? ` <span class="badge bg-light text-dark border">${producto.talla}</span>` : '';
+        const disponible = parseInt(producto.cantidad_disponible, 10) || 0;
+        const agotado = disponible === 0;
+        const tallaText = producto.talla ? `<span>Talla <span class="nc-talla">${producto.talla}</span></span>` : '';
+        const textoDisponible = `de ${disponible} disp.${producto.cantidad_ya_cambiada > 0 ? ` · ya cambiadas ${producto.cantidad_ya_cambiada}` : ''}`;
 
+        // Línea como tarjeta: lo pendiente queda compacto; al escanearla se
+        // despliegan cantidad y condición (antes la tabla de 6 columnas no
+        // cabía en media pantalla de un POS de 15").
         tbody.append(`
-            <tr class="producto-row-pendiente" id="fila-producto-${index}">
-                <td class="text-center">
-                    <input type='checkbox' class="form-check-input check-producto"
-                           id='check-producto-${index}'
-                           data-index='${index}'
-                           data-sku='${producto.sku || ''}'
-                           disabled
-                           title='Escanee el producto para seleccionarlo'
-                           onchange='toggleProductoOriginal(${index})'>
-                </td>
-                <td class="columna-sku-validacion" style="display: none;">${producto.sku || '-'}</td>
-                <td>
-                    <div class="d-flex align-items-center gap-1 flex-wrap">
-                        <span>${producto.articulo || '-'}</span>${tallaText}${badgeOrigen}${badgeCambiosAnteriores}
+            <tr class="producto-row-pendiente${agotado ? ' nc-agotado' : ''}" id="fila-producto-${index}">
+                <td class="nc-linea">
+                    <div class="nc-linea-grid">
+                        <div class="nc-linea-estado">
+                            <input type='checkbox' class="form-check-input check-producto visually-hidden"
+                                   id='check-producto-${index}'
+                                   data-index='${index}'
+                                   data-sku='${producto.sku || ''}'
+                                   disabled
+                                   tabindex="-1"
+                                   onchange='toggleProductoOriginal(${index})'>
+                            <span class="nc-estado-scan" title="${agotado ? 'Ya cambiado' : 'Escanee el producto para seleccionarlo'}">
+                                <i class="${agotado ? 'ri-forbid-line' : 'ri-barcode-line'} nc-ico-pend"></i>
+                                <i class="ri-checkbox-circle-fill nc-ico-ok"></i>
+                            </span>
+                        </div>
+                        <div class="nc-linea-info">
+                            <div class="nc-prod-nombre">${producto.articulo || '-'}</div>
+                            <div class="nc-prod-meta">
+                                <code>${producto.sku || '-'}</code>${tallaText}${badgeOrigen}${badgeCambiosAnteriores}
+                            </div>
+                            ${notaOrigen}
+                            <div class="nc-linea-aviso">${agotado
+                                ? '<i class="ri-forbid-line"></i> Ya cambiado: no quedan unidades de esta línea'
+                                : `<i class="ri-barcode-line"></i> Escanee para seleccionar · ${disponible} disp.`}</div>
+                        </div>
+                        <div class="nc-linea-precio nc-precio">
+                            $${formatearNumero(producto.precio_unitario || 0)}
+                            ${producto.tiene_descuento ? `<del>$${formatearNumero(producto.precio_lista)}</del>` : ''}
+                            <small>c/u</small>
+                        </div>
+                        <button type="button" class="nc-btn-quitar" onclick="eliminarProductoEscaneado(${index})" title="Quitar de lo que devuelve">
+                            <i class="ri-close-line"></i>
+                        </button>
+                        <div class="nc-linea-controles">
+                            <div class="nc-ctrl">
+                                <span class="nc-ctrl-label">Cantidad</span>
+                                <div class="nc-ctrl-fila">
+                                    <div class="qty-stepper" id="qty-stepper-${index}">
+                                        <button type="button" class="qty-btn" tabindex="-1" title="Restar 1"
+                                                onclick="ajustarCantidadProducto(${index}, -1)"><i class="ri-subtract-line"></i></button>
+                                        <input type='number' class="qty-input" inputmode="numeric"
+                                               id='cantidad-producto-${index}'
+                                               min='1'
+                                               max='${disponible || 1}'
+                                               value='1'
+                                               disabled
+                                               onchange='validarCantidadProducto(${index})'
+                                               oninput='previsualizarCantidadProducto(${index})'>
+                                        <button type="button" class="qty-btn" tabindex="-1" title="Sumar 1"
+                                                onclick="ajustarCantidadProducto(${index}, 1)"><i class="ri-add-line"></i></button>
+                                    </div>
+                                    <span class="nc-qty-max">${textoDisponible}</span>
+                                </div>
+                            </div>
+                            <div class="nc-ctrl nc-ctrl-flex">
+                                <label class="nc-ctrl-label" for="condicion-${index}">Condición del producto</label>
+                                <select class="form-select" id='condicion-${index}' disabled>
+                                    {% for value, display in condicion_producto_choices %}
+                                    <option value="{{ value }}">{{ display }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
                     </div>
-                    ${notaOrigen}
-                </td>
-                <td class="text-center">
-                    <strong class="${producto.cantidad_ya_cambiada > 0 ? 'text-warning' : ''}">${producto.cantidad_disponible || 0}</strong>
-                    ${producto.cantidad_ya_cambiada > 0 ? `<br><small class="text-muted" style="font-size:0.7rem;">Ya: ${producto.cantidad_ya_cambiada}</small>` : ''}
-                </td>
-                <td class="text-end">
-                    $${formatearNumero(producto.precio_unitario || 0)}
-                    ${producto.tiene_descuento ? `<br><small class="text-danger" style="font-size:0.65rem;"><del>$${formatearNumero(producto.precio_lista)}</del></small>` : ''}
-                </td>
-                <td class="text-center">
-                    <div class="qty-stepper" id="qty-stepper-${index}">
-                        <button type="button" class="qty-btn" tabindex="-1" title="Restar 1"
-                                onclick="ajustarCantidadProducto(${index}, -1)"><i class="ri-subtract-line"></i></button>
-                        <input type='number' class="qty-input"
-                               id='cantidad-producto-${index}'
-                               min='1'
-                               max='${producto.cantidad_disponible || 1}'
-                               value='1'
-                               disabled
-                               onchange='validarCantidadProducto(${index})'
-                               oninput='validarCantidadProducto(${index})'>
-                        <button type="button" class="qty-btn" tabindex="-1" title="Sumar 1"
-                                onclick="ajustarCantidadProducto(${index}, 1)"><i class="ri-add-line"></i></button>
-                    </div>
-                </td>
-                <td>
-                    <select class="form-control form-control-sm" id='condicion-${index}' disabled style="min-height:36px;">
-                        {% for value, display in condicion_producto_choices %}
-                        <option value="{{ value }}">{{ display }}</option>
-                        {% endfor %}
-                    </select>
                 </td>
             </tr>
         `);
     });
-    
+
     console.log('✅ Productos cargados en la tabla');
 }
 
@@ -6139,43 +6181,59 @@ function actualizarBadgeProductosSeleccionados() {
     const cantidadSeleccionados = $('.check-producto:checked').length;
     const total = (ticketActual && ticketActual.productos) ? ticketActual.productos.length : 0;
     const badge = $('#badge-productos-seleccionados');
-    badge.text(`${cantidadSeleccionados} de ${total} escaneado${cantidadSeleccionados !== 1 ? 's' : ''}`);
+    badge.text(`${cantidadSeleccionados} de ${total} producto${total !== 1 ? 's' : ''}`);
     badge.toggleClass('bg-info', cantidadSeleccionados === 0)
          .toggleClass('bg-success', cantidadSeleccionados > 0);
 }
 
-// Validar cantidad de producto a cambiar
+// Validar cantidad de producto a cambiar (al confirmar el valor: change / − / +).
+// La cantidad válida se guarda en el registro de escaneos: es la fuente de verdad
+// cuando se vuelve del resumen, así lo sumado no se pierde.
 function validarCantidadProducto(index) {
     if (!ticketActual || !ticketActual.productos[index]) {
         return;
     }
-    
+
     const producto = ticketActual.productos[index];
     const inputCantidad = $(`#cantidad-producto-${index}`);
-    const cantidad = parseInt(inputCantidad.val()) || 0;
-    const maxCantidad = producto.cantidad_disponible || 1;
-    
-    // Validar que no sea menor a 1
+    const cantidad = parseInt(inputCantidad.val(), 10) || 0;
+    const maxCantidad = parseInt(producto.cantidad_disponible, 10) || 1;
+    let valida = cantidad;
+
     if (cantidad < 1) {
-        inputCantidad.val(1);
+        valida = 1;
         mostrarError('La cantidad mínima es 1');
-        return;
+    } else if (cantidad > maxCantidad) {
+        valida = maxCantidad;
+        mostrarError(`Esta venta tiene ${maxCantidad} unidad(es) disponibles de este producto`);
     }
-    
-    // Validar que no exceda la cantidad disponible
-    if (cantidad > maxCantidad) {
-        inputCantidad.val(maxCantidad);
-        mostrarError(`La cantidad máxima para este producto es ${maxCantidad} (cantidad disponible en la boleta)`);
-        return;
+    inputCantidad.val(valida);
+
+    if (productosEscaneados[index]) {
+        productosEscaneados[index].cantidad = valida;
     }
-    
-    // Actualizar vista previa
+    actualizarListaProductosEscaneados();
     actualizarVistaPreviaTotales();
 }
 
+// Mientras se escribe en la cantidad no se corrige ni se muestran errores
+// (borrar el "1" para escribir "2" dejaba el campo vacío y lo devolvía a 1).
+// Solo se recalculan los totales si el valor ya es válido.
+function previsualizarCantidadProducto(index) {
+    const producto = ticketActual && ticketActual.productos ? ticketActual.productos[index] : null;
+    if (!producto) return;
+    const cantidad = parseInt($(`#cantidad-producto-${index}`).val(), 10);
+    const maxCantidad = parseInt(producto.cantidad_disponible, 10) || 1;
+    if (cantidad >= 1 && cantidad <= maxCantidad) {
+        if (productosEscaneados[index]) {
+            productosEscaneados[index].cantidad = cantidad;
+        }
+        actualizarListaProductosEscaneados();
+        actualizarVistaPreviaTotales();
+    }
+}
+
 // Botones − / + del stepper de cantidad (producto original a devolver).
-// El input sigue siendo la fuente de verdad: aquí solo se ajusta y se
-// delega en validarCantidadProducto, igual que al tipear.
 function ajustarCantidadProducto(index, delta) {
     const $input = $(`#cantidad-producto-${index}`);
     if (!$input.length) return;
@@ -6184,9 +6242,12 @@ function ajustarCantidadProducto(index, delta) {
         return;
     }
     const max = parseInt($input.attr('max'), 10) || 1;
-    let valor = (parseInt($input.val(), 10) || 1) + delta;
-    valor = Math.max(1, Math.min(max, valor));
-    $input.val(valor);
+    const actual = parseInt($input.val(), 10) || 1;
+    if (delta > 0 && actual >= max) {
+        mostrarToast('warning', `Esta venta tiene ${max} unidad(es) disponibles de este producto`);
+        return;
+    }
+    $input.val(Math.max(1, Math.min(max, actual + delta)));
     validarCantidadProducto(index);
 }
 
@@ -6373,7 +6434,7 @@ function actualizarFloatingBar() {
         $btnAnterior.hide();
         $btnPrincipal.show().prop('disabled', !ticketActual);
         $btnCrear.hide();
-        $texto.html('Continuar al Paso 2 <i class="ri-arrow-right-line ms-1"></i>');
+        $texto.html('Continuar <i class="ri-arrow-right-line ms-1"></i>');
         if (!ticketActual) {
             $hint.text('Busque un documento de venta para continuar').show();
         } else {
@@ -6384,7 +6445,7 @@ function actualizarFloatingBar() {
         $btnAnterior.show();
         $btnPrincipal.show();
         $btnCrear.hide();
-        $texto.html('<i class="ri-eye-line me-1"></i> Ver Resumen');
+        $texto.html('Revisar y confirmar <i class="ri-arrow-right-line ms-1"></i>');
 
         actualizarFabResumen();
 
@@ -6507,46 +6568,42 @@ function actualizarResumenFooter(montoOriginal, montoNuevo, diferencia) {
 // Cache de productos actuales en el panel
 let _productosBusqueda = [];
 
-// Activar búsqueda con Enter
-// Escáner dedicado para productos a ENTREGAR.
-// Independiente del escáner de devolución: agrega directo por SKU exacto
-// (o incrementa la cantidad si ya está agregado) sin robar el foco del otro input.
+// Buscador ÚNICO de productos a ENTREGAR (independiente del escáner de devolución).
+// - Código exacto: se agrega directo (o suma 1 si ya está en la lista).
+// - Texto (nombre / marca / parte del SKU): abre el panel de resultados.
 function escanearProductoEntrega() {
     const $input = $('#input-escanear-entrega');
-    const sku = $input.val().trim();
+    const termino = $input.val().trim();
 
-    if (!sku) {
-        mostrarError('Escanee o ingrese un SKU para entregar');
+    if (!termino) {
+        mostrarError('Escanee el código o escriba al menos 2 letras del producto a entregar');
+        $input.focus();
+        return;
+    }
+    if (termino.length < 2) {
+        mostrarError('Ingrese al menos 2 caracteres para buscar');
+        $input.focus();
         return;
     }
 
-    const skuNorm = sku.toUpperCase();
+    const terminoNorm = termino.toUpperCase();
 
-    // Si ya está en la lista de productos a entregar → incrementar cantidad
+    // Si ya está en la lista de productos a entregar → sumar 1
     const idxExistente = productosNuevos.findIndex(p =>
-        String(p.sku).toUpperCase() === skuNorm
+        String(p.sku).toUpperCase() === terminoNorm
     );
     if (idxExistente !== -1) {
-        const prod = productosNuevos[idxExistente];
-        if (prod.cantidad >= prod.stock_disponible) {
-            _beepCambio(false);
-            mostrarError(`Stock máximo alcanzado para ${prod.sku} (${prod.stock_disponible})`);
-        } else {
-            prod.cantidad++;
-            actualizarTablaProductosNuevos();
-            actualizarVistaPreviaTotales();
-            _beepCambio(true);
-            mostrarToast('success', `${prod.sku} ×${prod.cantidad}`);
-        }
+        _beepCambio(sumarUnidadProductoNuevo(idxExistente));
         $input.val('').focus();
         return;
     }
 
-    // Buscar por SKU en bodega y agregar la coincidencia EXACTA
     const $btn = $('#btn-escanear-entrega');
+    const $icono = $('#icono-busqueda-estado');
     $btn.prop('disabled', true);
+    $icono.html('<span class="spinner-border spinner-border-sm" role="status"></span>');
 
-    $.get('/app/ventas/api/buscar-productos-cambio/', { termino: sku })
+    $.get('/app/ventas/api/buscar-productos-cambio/', { termino: termino })
         .done(function(response) {
             if (!response.success) {
                 _beepCambio(false);
@@ -6556,24 +6613,23 @@ function escanearProductoEntrega() {
 
             const productos = response.productos || [];
             const exacto = productos.find(p =>
-                String(p.sku).toUpperCase() === skuNorm
+                String(p.sku).toUpperCase() === terminoNorm
             );
 
             if (exacto) {
-                agregarProductoNuevo(exacto);
-                _beepCambio(true);
+                _beepCambio(agregarProductoNuevo(exacto));
+                cerrarResultadosBusqueda();
             } else if (productos.length === 0) {
                 _beepCambio(false);
                 Swal.fire({
-                    icon: 'error',
-                    title: '⚠️ Sin stock o SKU inexistente',
-                    html: `<p class="text-danger fw-bold">No hay stock disponible para el SKU <code>${skuNorm}</code> en esta sucursal.</p>`,
-                    confirmButtonText: 'Entendido',
-                    confirmButtonColor: '#dc3545'
+                    icon: 'info',
+                    title: 'Sin resultados con stock',
+                    html: `<p>No hay productos con stock en esta sucursal para <strong>${escaparAtributo(termino)}</strong>.</p>
+                           <p class="small text-muted mb-0">Revise el código o pruebe con otra parte del nombre / marca.</p>`,
+                    confirmButtonText: 'Entendido'
                 });
             } else {
-                // No hubo match exacto pero sí parciales → mostrar el panel para elegir
-                _beepCambio(false);
+                // Sin coincidencia exacta de código: mostrar el panel para elegir
                 mostrarResultadosBusquedaProductos(productos);
             }
         })
@@ -6583,6 +6639,7 @@ function escanearProductoEntrega() {
         })
         .always(function() {
             $btn.prop('disabled', false);
+            $icono.html('<i class="ri-barcode-line"></i>');
             $input.val('').focus();
         });
 }
@@ -6594,35 +6651,9 @@ $('#input-escanear-entrega').on('keypress', function(e) {
     }
 });
 
+// Compatibilidad: la búsqueda por nombre ahora vive en el mismo buscador.
 function buscarProductosParaCambio() {
-    const termino = $('#input-buscar-producto').val().trim();
-
-    if (!termino || termino.length < 2) {
-        mostrarError('Ingrese al menos 2 caracteres para buscar');
-        return;
-    }
-
-    // Estado: cargando
-    const $icono = $('#icono-busqueda-estado');
-    const $btn   = $('#btn-buscar-producto');
-    $icono.html('<span class="spinner-border spinner-border-sm text-primary" role="status"></span>');
-    $btn.prop('disabled', true);
-
-    $.get('/app/ventas/api/buscar-productos-cambio/', { termino: termino })
-        .done(function(response) {
-            if (response.success) {
-                mostrarResultadosBusquedaProductos(response.productos);
-            } else {
-                mostrarError(response.error || 'Error al buscar productos');
-            }
-        })
-        .fail(function() {
-            mostrarError('Error de conexión al buscar productos');
-        })
-        .always(function() {
-            $icono.html('<i class="ri-search-line text-muted"></i>');
-            $btn.prop('disabled', false);
-        });
+    escanearProductoEntrega();
 }
 
 function mostrarResultadosBusquedaProductos(productos) {
@@ -6637,10 +6668,10 @@ function mostrarResultadosBusquedaProductos(productos) {
         return;
     }
 
-    // Auto-agregar si solo hay 1 resultado exacto
+    // Un solo resultado: se agrega directo
     if (productos.length === 1) {
         agregarProductoNuevo(productos[0]);
-        $('#input-buscar-producto').val('').focus();
+        $('#input-escanear-entrega').val('').focus();
         return;
     }
 
@@ -6652,11 +6683,10 @@ function mostrarResultadosBusquedaProductos(productos) {
     _renderizarFilasBusqueda(productos);
 
     const total = productos.length;
-    $('#contador-resultados').text(`${total} producto${total !== 1 ? 's' : ''}`);
+    $('#contador-resultados').text(`${total}`);
     $('#texto-pie-resultados').text(`${total} producto${total !== 1 ? 's' : ''} con stock disponible`);
 
-    $('#panel-resultados-busqueda').slideDown(250);
-    mostrarToast('success', `${total} producto${total !== 1 ? 's' : ''} encontrado${total !== 1 ? 's' : ''}`);
+    $('#panel-resultados-busqueda').slideDown(200);
 }
 
 function _renderizarFilasBusqueda(lista) {
@@ -6666,48 +6696,41 @@ function _renderizarFilasBusqueda(lista) {
     if (!lista || lista.length === 0) {
         tbody.append(`
             <tr>
-                <td colspan="7" class="text-center text-muted py-3">
-                    <i class="ri-search-eye-line me-1 opacity-50"></i>
-                    <span style="font-size:0.82rem;">Sin coincidencias en los resultados</span>
+                <td colspan="4" class="nc-vacio">
+                    <i class="ri-search-eye-line"></i>
+                    Sin coincidencias en los resultados
                 </td>
             </tr>`);
         return;
     }
 
-    lista.forEach((p, index) => {
-        window[`producto_busqueda_${index}`] = p;
-
+    lista.forEach((p) => {
+        // Índice en la lista completa: el filtro inline no debe correr los índices
+        const index = _productosBusqueda.indexOf(p);
         const stockClass = p.stock_disponible > 10 ? 'bg-success'
                          : p.stock_disponible > 0  ? 'bg-warning text-dark'
                          : 'bg-danger';
+        const enLista = productosNuevos.find(n => n.id === p.id);
 
         tbody.append(`
             <tr class="producto-resultado" data-index="${index}">
-                <td class="ps-3">
-                    <code style="font-size:0.78rem; background:#f0f4ff; padding:2px 6px; border-radius:4px; color:#0d6efd;">${p.sku}</code>
-                </td>
                 <td>
-                    <div class="fw-semibold lh-sm" style="font-size:0.82rem;">${p.articulo || p.nombre || '—'}</div>
-                    ${p.descripcion ? `<div class="text-muted" style="font-size:0.74rem;">${p.descripcion}</div>` : ''}
-                </td>
-                <td>
-                    <span class="text-muted" style="font-size:0.8rem;">${p.marca || '—'}</span>
+                    <div class="nc-prod-nombre">${p.articulo || p.nombre || '—'}</div>
+                    <div class="nc-prod-meta">
+                        <code>${p.sku}</code>
+                        ${p.talla ? `<span>Talla <span class="nc-talla">${p.talla}</span></span>` : ''}
+                        ${p.marca ? `<span>${p.marca}</span>` : ''}
+                    </div>
                 </td>
                 <td class="text-center">
-                    <span class="badge bg-info bg-opacity-75 text-dark" style="font-size:0.75rem;">${p.talla}</span>
+                    <span class="badge ${stockClass}">${p.stock_disponible}</span>
                 </td>
-                <td class="text-center">
-                    <span class="badge ${stockClass}" style="font-size:0.75rem;">${p.stock_disponible}</span>
-                </td>
-                <td class="text-end fw-semibold" style="font-size:0.82rem; color:#0a3060;">
-                    $${formatearNumero(p.precio_venta)}
-                </td>
-                <td class="text-center pe-2">
-                    <button class="btn btn-success btn-sm py-0 px-2"
+                <td class="text-end nc-precio">$${formatearNumero(p.precio_venta)}</td>
+                <td class="text-end">
+                    <button type="button" class="btn ${enLista ? 'btn-outline-success' : 'btn-success'}"
                             onclick="agregarProductoDesdeTabla(${index})"
-                            style="font-size:0.78rem;"
-                            title="Agregar al cambio">
-                        <i class="ri-add-line"></i> Agregar
+                            title="${enLista ? 'Sumar otra unidad' : 'Agregar a lo que se lleva'}">
+                        <i class="ri-add-line"></i> ${enLista ? `×${enLista.cantidad}` : 'Agregar'}
                     </button>
                 </td>
             </tr>`);
@@ -6721,7 +6744,7 @@ function filtrarResultadosBusqueda(valor) {
     if (!q) {
         _renderizarFilasBusqueda(_productosBusqueda);
         const total = _productosBusqueda.length;
-        $('#contador-resultados').text(`${total} producto${total !== 1 ? 's' : ''}`);
+        $('#contador-resultados').text(`${total}`);
         $('#texto-pie-resultados').text(`${total} producto${total !== 1 ? 's' : ''} con stock disponible`);
         return;
     }
@@ -6738,129 +6761,140 @@ function filtrarResultadosBusqueda(valor) {
     $('#texto-pie-resultados').text(`${vis} coincidencia${vis !== 1 ? 's' : ''} de ${total} producto${total !== 1 ? 's' : ''}`);
 }
 
-// Agregar producto desde la tabla de resultados
+// Agregar (o sumar otra unidad) desde la tabla de resultados
 function agregarProductoDesdeTabla(index) {
-    const producto = window[`producto_busqueda_${index}`];
-    if (producto) {
-        agregarProductoNuevo(producto);
-        $(`tr[data-index="${index}"]`)
-            .addClass('table-success')
-            .find('button')
-            .prop('disabled', true)
-            .removeClass('btn-success')
-            .addClass('btn-secondary')
-            .html('<i class="ri-check-line"></i> Agregado');
-    }
+    const producto = _productosBusqueda[index];
+    if (!producto) return;
+    agregarProductoNuevo(producto);
+    filtrarResultadosBusqueda($('#input-filtro-resultados').val() || '');
 }
 
 // Cerrar panel de resultados
 function cerrarResultadosBusqueda() {
-    $('#panel-resultados-busqueda').slideUp(250, function() {
+    $('#panel-resultados-busqueda').slideUp(200, function() {
         $('#tbody-resultados-busqueda').empty();
         $('#input-filtro-resultados').val('');
         _productosBusqueda = [];
     });
 }
 
-function agregarProductoNuevo(producto) {
-    // Verificar si ya está agregado
-    const existe = productosNuevos.find(p => p.id === producto.id);
-    if (existe) {
-        Swal.fire({
-            icon: 'warning',
-            title: 'Producto ya agregado',
-            text: 'Este producto ya está en la lista. Modifique la cantidad si es necesario.',
-            timer: 2000
-        });
-        return;
+// Suma una unidad a un producto ya agregado, respetando el stock. Devuelve true si sumó.
+function sumarUnidadProductoNuevo(index) {
+    const prod = productosNuevos[index];
+    if (!prod) return false;
+    if (prod.cantidad >= prod.stock_disponible) {
+        mostrarError(`Stock máximo alcanzado para ${prod.sku}: hay ${prod.stock_disponible} en esta sucursal`);
+        return false;
     }
-    
-    console.log('➕ Agregando producto nuevo:', producto);
-    console.log('   Precio del producto nuevo: $' + producto.precio_venta);
-    
-    // Agregar producto a la lista
+    prod.cantidad++;
+    actualizarTablaProductosNuevos();
+    actualizarVistaPreviaTotales();
+    mostrarToast('success', `${prod.articulo || prod.sku} ×${prod.cantidad}`);
+    return true;
+}
+
+// Agrega un producto a "lo que se lleva". Si ya está en la lista, suma una unidad
+// (antes avisaba "Producto ya agregado" y había que buscar el stepper).
+function agregarProductoNuevo(producto) {
+    const idxExistente = productosNuevos.findIndex(p => p.id === producto.id);
+    if (idxExistente !== -1) {
+        return sumarUnidadProductoNuevo(idxExistente);
+    }
+
     productosNuevos.push({
         ...producto,
         cantidad: 1
     });
-    
+
     actualizarTablaProductosNuevos();
-    Swal.close();
-    
-    // Actualizar vista previa de totales
     actualizarVistaPreviaTotales();
-    
-    mostrarToast('success', `${producto.articulo} agregado a la lista`);
+    mostrarToast('success', `${producto.articulo} agregado`);
+    return true;
 }
 
 function actualizarTablaProductosNuevos() {
     const tbody = $('#tbody-productos-nuevos');
     tbody.empty();
-    
-    // Actualizar badge
-    $('#badge-productos-nuevos').text(`${productosNuevos.length} agregado${productosNuevos.length !== 1 ? 's' : ''}`);
-    
+
+    const unidades = productosNuevos.reduce((s, p) => s + (p.cantidad || 0), 0);
+    $('#badge-productos-nuevos').text(
+        productosNuevos.length === 0 ? '0 agregados' : `${unidades} unid. · ${productosNuevos.length} producto${productosNuevos.length !== 1 ? 's' : ''}`
+    );
+
     if (productosNuevos.length === 0) {
         tbody.append(`
             <tr id="fila-sin-productos-nuevos">
-                <td colspan="8" class="text-center text-muted py-4">
-                    <i class="ri-inbox-2-line fs-2 d-block mb-2 opacity-50"></i>
-                    <span>Busca y agrega productos para entregar al cliente</span>
+                <td class="nc-vacio">
+                    <i class="ri-shopping-bag-3-line"></i>
+                    <span>Aún no agrega productos para entregar</span>
                 </td>
             </tr>
         `);
         return;
     }
-    
+
     productosNuevos.forEach((producto, index) => {
         // Guardar precio original si no existe
         if (!producto.precio_original) {
             producto.precio_original = producto.precio_venta;
         }
-        
-        const subtotal = producto.cantidad * producto.precio_venta;
         const precioOriginal = producto.precio_original;
-        
+        const alza = producto.precio_venta - precioOriginal;
+        const subtotal = (producto.cantidad || 0) * (producto.precio_venta || 0);
+
         tbody.append(`
-            <tr>
-                <td><code>${producto.sku}</code></td>
-                <td>
-                    <div><strong>${producto.articulo}</strong></div>
-                    <small class="text-muted">${producto.descripcion || ''}</small>
-                </td>
-                <td>${producto.marca || '-'}</td>
-                <td><span class="badge bg-info">${producto.talla}</span></td>
-                <td><span class="badge bg-success">${producto.stock_disponible}</span></td>
-                <td>
-                    <div class="input-group input-group-sm" style="width: 140px;">
-                        <span class="input-group-text">$</span>
-                        <input type='number' 
-                               class="form-control form-control-sm" 
-                               id='precio-nuevo-${index}'
-                               min='${precioOriginal}' 
-                               step='100'
-                               value='${producto.precio_venta}'
-                               onchange='cambiarPrecioProductoNuevo(${index}, this.value)'
-                               title='Precio mínimo: $${formatearNumero(precioOriginal)}'>
+            <tr class="nc-fila-entrega">
+                <td class="nc-linea">
+                    <div class="nc-linea-grid nc-linea-entrega">
+                        <div class="nc-linea-info">
+                            <div class="nc-prod-nombre">${producto.articulo}</div>
+                            <div class="nc-prod-meta">
+                                <code>${producto.sku}</code>
+                                ${producto.talla ? `<span>Talla <span class="nc-talla">${producto.talla}</span></span>` : ''}
+                                ${producto.marca ? `<span>${producto.marca}</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="nc-linea-precio nc-precio">
+                            $${formatearNumero(subtotal)}
+                            <small>${producto.cantidad} × $${formatearNumero(producto.precio_venta)}</small>
+                        </div>
+                        <button type="button" class="nc-btn-quitar" onclick='eliminarProductoNuevo(${index})' title='Quitar de lo que se lleva'>
+                            <i class="ri-delete-bin-line"></i>
+                        </button>
+                        <div class="nc-linea-controles">
+                            <div class="nc-ctrl">
+                                <span class="nc-ctrl-label">Cantidad</span>
+                                <div class="nc-ctrl-fila">
+                                    <div class="qty-stepper">
+                                        <button type="button" class="qty-btn" tabindex="-1" title="Restar 1"
+                                                onclick="ajustarCantidadProductoNuevo(${index}, -1)"><i class="ri-subtract-line"></i></button>
+                                        <input type='number' class="qty-input" inputmode="numeric"
+                                               min='1' max='${producto.stock_disponible}'
+                                               value='${producto.cantidad}'
+                                               onchange='cambiarCantidadProductoNuevo(${index}, this.value)'>
+                                        <button type="button" class="qty-btn" tabindex="-1" title="Sumar 1"
+                                                onclick="ajustarCantidadProductoNuevo(${index}, 1)"><i class="ri-add-line"></i></button>
+                                    </div>
+                                    <span class="nc-qty-max">stock ${producto.stock_disponible}</span>
+                                </div>
+                            </div>
+                            <div class="nc-ctrl">
+                                <label class="nc-ctrl-label" for="precio-nuevo-${index}">Precio unitario</label>
+                                <div class="input-group nc-precio-input">
+                                    <span class="input-group-text">$</span>
+                                    <input type='number' inputmode="numeric"
+                                           class="form-control"
+                                           id='precio-nuevo-${index}'
+                                           min='${precioOriginal}'
+                                           step='100'
+                                           value='${producto.precio_venta}'
+                                           onchange='cambiarPrecioProductoNuevo(${index}, this.value)'
+                                           title='Precio mínimo: $${formatearNumero(precioOriginal)}'>
+                                </div>
+                                ${alza > 0 ? `<span class="nc-precio-alza">+$${formatearNumero(alza)} sobre lista</span>` : ''}
+                            </div>
+                        </div>
                     </div>
-                    ${producto.precio_venta > precioOriginal ? `<small class="text-success">+$${formatearNumero(producto.precio_venta - precioOriginal)}</small>` : ''}
-                </td>
-                <td class="text-center">
-                    <div class="qty-stepper">
-                        <button type="button" class="qty-btn" tabindex="-1" title="Restar 1"
-                                onclick="ajustarCantidadProductoNuevo(${index}, -1)"><i class="ri-subtract-line"></i></button>
-                        <input type='number' class="qty-input"
-                               min='1' max='${producto.stock_disponible}'
-                               value='${producto.cantidad}'
-                               onchange='cambiarCantidadProductoNuevo(${index}, this.value)'>
-                        <button type="button" class="qty-btn" tabindex="-1" title="Sumar 1"
-                                onclick="ajustarCantidadProductoNuevo(${index}, 1)"><i class="ri-add-line"></i></button>
-                    </div>
-                </td>
-                <td class="text-center">
-                    <button class="btn btn-sm btn-outline-danger" onclick='eliminarProductoNuevo(${index})' title='Quitar de la lista'>
-                        <i class="ri-delete-bin-line"></i>
-                    </button>
                 </td>
             </tr>
         `);
@@ -6869,10 +6903,10 @@ function actualizarTablaProductosNuevos() {
 
 function cambiarPrecioProductoNuevo(index, nuevoPrecio) {
     nuevoPrecio = parseInt(nuevoPrecio) || 0;
-    
+
     if (productosNuevos[index]) {
         const precioOriginal = productosNuevos[index].precio_original || productosNuevos[index].precio_venta;
-        
+
         // Validar que el precio no sea menor al original
         if (nuevoPrecio < precioOriginal) {
             Swal.fire({
@@ -6888,58 +6922,64 @@ function cambiarPrecioProductoNuevo(index, nuevoPrecio) {
                 `,
                 confirmButtonText: 'Entendido'
             });
-            
+
             // Restaurar precio anterior
             actualizarTablaProductosNuevos();
             return;
         }
-        
+
         // Actualizar precio
         productosNuevos[index].precio_venta = nuevoPrecio;
-        
+
         // Mostrar mensaje si aumentó el precio
         if (nuevoPrecio > precioOriginal) {
             const aumento = nuevoPrecio - precioOriginal;
             mostrarToast('success', `Precio actualizado: +$${formatearNumero(aumento)}`);
         }
-        
+
         actualizarTablaProductosNuevos();
         actualizarVistaPreviaTotales();
     }
 }
 
 function cambiarCantidadProductoNuevo(index, nuevaCantidad) {
-    nuevaCantidad = parseInt(nuevaCantidad) || 1;
-    
-    if (productosNuevos[index]) {
-        if (nuevaCantidad < 1) {
-            mostrarError('La cantidad mínima es 1');
-            actualizarTablaProductosNuevos();
-            return;
-        }
-        
-        if (nuevaCantidad > productosNuevos[index].stock_disponible) {
-            mostrarError(`Stock insuficiente. Máximo: ${productosNuevos[index].stock_disponible}`);
-            actualizarTablaProductosNuevos();
-            return;
-        }
-        
-        productosNuevos[index].cantidad = nuevaCantidad;
-        actualizarTablaProductosNuevos();
-        
-        // Actualizar vista previa de totales
-        actualizarVistaPreviaTotales();
+    const producto = productosNuevos[index];
+    if (!producto) return;
+
+    nuevaCantidad = parseInt(nuevaCantidad, 10) || 1;
+
+    if (nuevaCantidad < 1) {
+        mostrarError('La cantidad mínima es 1');
+        nuevaCantidad = 1;
+    } else if (nuevaCantidad > producto.stock_disponible) {
+        mostrarError(`Stock insuficiente: hay ${producto.stock_disponible} en esta sucursal`);
+        nuevaCantidad = producto.stock_disponible;
     }
+
+    producto.cantidad = nuevaCantidad;
+    actualizarTablaProductosNuevos();
+    actualizarVistaPreviaTotales();
 }
 
 function eliminarProductoNuevo(index) {
-    if (confirm('¿Eliminar este producto de la lista?')) {
+    const producto = productosNuevos[index];
+    if (!producto) return;
+    Swal.fire({
+        icon: 'question',
+        title: '¿Quitar este producto?',
+        html: `<strong>${producto.articulo}</strong>${producto.talla ? ` · Talla ${producto.talla}` : ''}<br>
+               <span class="small text-muted">Se quita de lo que se lleva el cliente.</span>`,
+        showCancelButton: true,
+        confirmButtonText: 'Sí, quitar',
+        cancelButtonText: 'No',
+        confirmButtonColor: '#dc3545',
+        reverseButtons: true
+    }).then((r) => {
+        if (!r.isConfirmed) return;
         productosNuevos.splice(index, 1);
         actualizarTablaProductosNuevos();
-        
-        // Actualizar vista previa de totales
         actualizarVistaPreviaTotales();
-    }
+    });
 }
 
 function validarSeleccionProductos() {
@@ -7401,11 +7441,14 @@ function continuarCreacionCambio(datos, productosOriginalesSeleccionados) {
 }
 
 function enviarSolicitudCambio(datos) {
-    // Anti doble-envío: deshabilitar el botón mientras se procesa el AJAX.
-    const $btnCrear = $('#btn-crear-cambio');
-    if (!$btnCrear.data('html-original')) {
-        $btnCrear.data('html-original', $btnCrear.html());
-    }
+    // Anti doble-envío: deshabilitar el botón mientras se procesa el AJAX
+    // (el visible es #fab-btn-crear; #btn-crear-cambio es de la barra antigua oculta).
+    const $btnCrear = $('#btn-crear-cambio, #fab-btn-crear');
+    $btnCrear.each(function() {
+        if (!$(this).data('html-original')) {
+            $(this).data('html-original', $(this).html());
+        }
+    });
     $btnCrear.prop('disabled', true)
              .html('<span class="spinner-border spinner-border-sm me-1"></span>Procesando...');
 
@@ -7476,9 +7519,11 @@ function enviarSolicitudCambio(datos) {
         complete: function() {
             // Rehabilitar el botón siempre. Si el flujo continúa (confirmación de
             // condonación), la re-llamada a enviarSolicitudCambio() lo volverá a deshabilitar.
-            const htmlOriginal = $btnCrear.data('html-original');
-            $btnCrear.prop('disabled', false);
-            if (htmlOriginal) $btnCrear.html(htmlOriginal);
+            $btnCrear.each(function() {
+                const htmlOriginal = $(this).data('html-original');
+                $(this).prop('disabled', false);
+                if (htmlOriginal) $(this).html(htmlOriginal);
+            });
         }
     });
 }
@@ -10085,14 +10130,25 @@ function marcarRevisado(cambioId) {
     // --- Drag-to-scroll con click mantenido (solo mouse) ---
     let dragEl = null, startX = 0, startY = 0, startLeft = 0, startTop = 0, moved = false;
 
+    // Contenedor arrastrable más cercano que REALMENTE tenga scroll. Antes se
+    // tomaba el más cercano aunque no scrolleara (ej. la tabla del modal) y el
+    // arrastre moría ahí, sin mover el cuerpo del modal.
+    function contenedorArrastrable(target) {
+        let el = target.closest(DRAG_SELECTOR);
+        while (el) {
+            const puedeY = el.scrollHeight - el.clientHeight > 4;
+            const puedeX = el.scrollWidth - el.clientWidth > 4;
+            if (puedeY || puedeX) return el;
+            el = el.parentElement ? el.parentElement.closest(DRAG_SELECTOR) : null;
+        }
+        return null;
+    }
+
     document.addEventListener('mousedown', function(e) {
         if (e.button !== 0) return;
         if (e.target.closest(INTERACTIVE)) return;   // no interferir con controles
-        const el = e.target.closest(DRAG_SELECTOR);
+        const el = contenedorArrastrable(e.target);
         if (!el) return;
-        const puedeY = el.scrollHeight - el.clientHeight > 4;
-        const puedeX = el.scrollWidth - el.clientWidth > 4;
-        if (!puedeY && !puedeX) return;
         dragEl = el;
         moved = false;
         startX = e.clientX;
@@ -10109,6 +10165,19 @@ function marcarRevisado(cambioId) {
         if (!moved && Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
         if (!moved) {
             moved = true;
+            // Arrastre vertical sobre algo que solo scrollea en horizontal
+            // (tabla ancha): mover el contenedor de arriba que sí baja.
+            if (Math.abs(dy) > Math.abs(dx) && dragEl.scrollHeight - dragEl.clientHeight <= 4) {
+                let padre = dragEl.parentElement ? dragEl.parentElement.closest(DRAG_SELECTOR) : null;
+                while (padre && padre.scrollHeight - padre.clientHeight <= 4) {
+                    padre = padre.parentElement ? padre.parentElement.closest(DRAG_SELECTOR) : null;
+                }
+                if (padre) {
+                    dragEl = padre;
+                    startLeft = padre.scrollLeft;
+                    startTop = padre.scrollTop;
+                }
+            }
             dragEl.classList.add('is-dragging', 'drag-scrollable');
         }
         dragEl.scrollLeft = startLeft - dx;
