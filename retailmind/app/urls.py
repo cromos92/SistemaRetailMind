@@ -1855,6 +1855,8 @@ urlpatterns = [
     path('gestion-inventarios/api/importar-conteo/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.importar_conteo_pistola), name='api_importar_conteo_pistola'),
     path('gestion-inventarios/api/importar-conteo/preview/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.preview_conteo_pistola), name='api_preview_conteo_pistola'),
     path('gestion-inventarios/api/excluir-detalle/<int:inventario_id>/<int:detalle_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.actualizar_exclusion_detalle), name='api_excluir_detalle_inventario'),
+    # «No ajustar» varias líneas a la vez (seleccionadas en la tabla)
+    path('gestion-inventarios/api/excluir-detalles/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.actualizar_exclusion_detalles), name='api_excluir_detalles_inventario'),
     # Acción masiva sobre las líneas sin contar (excluir / marcar sin diferencia):
     # sin ella una toma parcial no se podía cerrar (se excluían de a una).
     path('gestion-inventarios/api/no-contados/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.resolver_no_contados), name='api_resolver_no_contados'),

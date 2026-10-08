@@ -173,6 +173,21 @@ button.kpi-card:focus-visible {
 .no-cargados-lista code { margin-right: 6px; }
 .aviso-alerta { color: var(--nexo-warning-dark); }
 
+/* Acción en bloque (mismo tratamiento que la barra de escaneo) */
+.seleccion-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    background: #fff8e1;
+    border: 1px solid rgba(255, 176, 32, 0.4);
+    border-radius: var(--nexo-radius-md);
+    padding: 0.5rem 1rem;
+    margin-bottom: 0.75rem;
+}
+.conteo-table .w-check { width: 36px; }
+.conteo-table .producto-desc { display: block; font-size: 0.78rem; color: var(--nexo-gray-700); }
+
 /* ========== FILTROS SEGMENTACIÓN ========== */
 .segmentation-filters {
     background: var(--nexo-white);
@@ -809,14 +824,77 @@ button.kpi-card:focus-visible {
 
                 <h5 class="card-title mb-2"><i class="bi bi-list-check me-1"></i>Detalle de Productos</h5>
 
-                <!-- Escáner: el lector teclea el SKU y manda Enter -->
+                <!-- Filtros: siempre a la vista (las tarjetas de arriba solo los cambian) -->
+                <div class="nexo-filters">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-lg-4 col-md-6 col-12">
+                            <label class="form-label small mb-1" for="filtroSearch">Buscar producto (no cuenta)</label>
+                            <input type="text" class="form-control form-control-sm" id="filtroSearch"
+                                   placeholder="SKU, artículo, descripción o marca…" autocomplete="off" autofocus>
+                        </div>
+                        <div class="col-lg-2 col-md-3 col-6">
+                            <label class="form-label small mb-1" for="filtroEstadoConteo">Estado</label>
+                            <select class="form-select form-select-sm" id="filtroEstadoConteo">
+                                <option value="">Todos</option>
+                                <option value="pendiente">Sin contar (falta decidir)</option>
+                                <option value="contado">Contados</option>
+                                <option value="reconteo">Requiere reconteo</option>
+                                <option value="excluido">No se ajustan (excluidos)</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-2 col-md-3 col-6">
+                            <label class="form-label small mb-1" for="filtroSigno">Diferencia</label>
+                            <select class="form-select form-select-sm" id="filtroSigno">
+                                <option value="">Todas</option>
+                                <option value="con">Con diferencia</option>
+                                <option value="positiva">Sobrantes</option>
+                                <option value="negativa">Faltantes</option>
+                                <option value="cero">Coinciden</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-3 col-md-6 col-12">
+                            <label class="form-label small mb-1" for="filtroOrden">Ordenar por</label>
+                            <select class="form-select form-select-sm" id="filtroOrden">
+                                <option value="">Producto (A-Z)</option>
+                                <option value="dif_unidades">Mayor diferencia (unidades)</option>
+                                <option value="dif_valor">Mayor diferencia ($ a costo)</option>
+                                <option value="sobrantes">Más sobrante primero</option>
+                                <option value="faltantes">Más faltante primero</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-1 col-md-6 col-12">
+                            <button type="button" class="btn btn-light btn-sm w-100" onclick="limpiarFiltros()" title="Quitar todos los filtros">
+                                <i class="bi bi-x-lg me-1"></i>Limpiar
+                            </button>
+                        </div>
+                        <div class="col-lg-3 col-md-6 col-6">
+                            <label class="form-label small mb-1" for="filtroMarca">Marca</label>
+                            <select class="form-select form-select-sm" id="filtroMarca">
+                                <option value="">Todas las marcas</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-3 col-md-6 col-6">
+                            <label class="form-label small mb-1" for="filtroCategoria">Departamento</label>
+                            <select class="form-select form-select-sm" id="filtroCategoria">
+                                <option value="">Todos los departamentos</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lector: apagado por defecto. Cada lectura SUMA y se guarda al instante,
+                     así que no puede ser la primera casilla con el cursor (se usaba para buscar). -->
                 <div class="scan-bar">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="activarLector">
+                        <label class="form-check-label small fw-semibold" for="activarLector">Contar con lector</label>
+                    </div>
                     <div class="scan-input-wrap">
                         <i class="bi bi-upc-scan"></i>
-                        <label for="inputEscaner" class="visually-hidden">Escanee o escriba el SKU</label>
-                        <input type="text" id="inputEscaner" class="form-control"
-                               placeholder="Escanee o escriba el SKU y presione Enter"
-                               autocomplete="off" autofocus>
+                        <label for="inputEscaner" class="visually-hidden">Escanee o escriba el SKU para contarlo</label>
+                        <input type="text" id="inputEscaner" class="form-control" disabled
+                               placeholder="Active «Contar con lector»: cada lectura SUMA unidades y se guarda"
+                               autocomplete="off">
                     </div>
                     <div class="scan-qty">
                         <label class="form-label small mb-0" for="cantidadPorLectura">Suma por lectura</label>
@@ -831,46 +909,16 @@ button.kpi-card:focus-visible {
                     <div id="scanFeedback" class="scan-feedback"></div>
                 </div>
 
-                <!-- Filtros rápidos -->
-                <div class="nexo-filters">
-                    <div class="row g-2 align-items-end">
-                        <div class="col-lg-3 col-md-4 col-6">
-                            <label class="form-label small mb-1" for="filtroSearch">Buscar producto</label>
-                            <input type="text" class="form-control form-control-sm" id="filtroSearch" placeholder="SKU, código o nombre...">
-                        </div>
-                        <div class="col-lg-2 col-md-4 col-6">
-                            <label class="form-label small mb-1" for="filtroEstadoConteo">Estado conteo</label>
-                            <select class="form-select form-select-sm" id="filtroEstadoConteo">
-                                <option value="">Todos</option>
-                                <option value="pendiente">Pendientes</option>
-                                <option value="contado">Contados</option>
-                                <option value="reconteo">Requiere Reconteo</option>
-                            </select>
-                        </div>
-                        <div class="col-lg-2 col-md-4 col-6">
-                            <label class="form-label small mb-1" for="filtroMarca">Marca</label>
-                            <select class="form-select form-select-sm" id="filtroMarca">
-                                <option value="">Todas las marcas</option>
-                            </select>
-                        </div>
-                        <div class="col-lg-2 col-md-4 col-6">
-                            <label class="form-label small mb-1" for="filtroCategoria">Departamento</label>
-                            <select class="form-select form-select-sm" id="filtroCategoria">
-                                <option value="">Todos los departamentos</option>
-                            </select>
-                        </div>
-                        <div class="col-lg-2 col-md-4 col-6">
-                            <div class="form-check form-switch mb-1">
-                                <input type="checkbox" class="form-check-input" id="filtroDiferencias">
-                                <label class="form-check-label small" for="filtroDiferencias">Solo con diferencias</label>
-                            </div>
-                        </div>
-                        <div class="col-lg-1 col-md-4 col-6">
-                            <button type="button" class="btn btn-light btn-sm w-100" onclick="limpiarFiltros()" title="Limpiar filtros">
-                                <i class="bi bi-x-lg me-1"></i>Limpiar
-                            </button>
-                        </div>
-                    </div>
+                <!-- Acción en bloque sobre las filas marcadas -->
+                <div class="seleccion-bar" id="barraSeleccion" style="display: none;">
+                    <span class="small"><strong id="nSeleccionados">0</strong> líneas marcadas</span>
+                    <button type="button" class="nexo-btn nexo-btn-sm nexo-btn-warning" onclick="excluirSeleccionados(true)" title="Al aplicar la toma estas líneas no mueven stock">
+                        <i class="bi bi-slash-circle"></i> No ajustar (dejar su stock como está)
+                    </button>
+                    <button type="button" class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="excluirSeleccionados(false)">
+                        <i class="bi bi-arrow-counterclockwise"></i> Volver a ajustar
+                    </button>
+                    <button type="button" class="btn btn-link btn-sm" onclick="limpiarSeleccion()">Quitar marcas</button>
                 </div>
 
                 <!-- Tabla de conteo -->
@@ -878,6 +926,9 @@ button.kpi-card:focus-visible {
                     <table class="table conteo-table" id="tablaConteo">
                         <thead>
                             <tr>
+                                <th class="w-check">
+                                    <input type="checkbox" class="form-check-input" id="marcarPagina" title="Marcar todas las de esta página" aria-label="Marcar todas las de esta página">
+                                </th>
                                 <th class="w-sku">SKU</th>
                                 <th>Producto</th>
                                 <th>Talla</th>
@@ -891,7 +942,7 @@ button.kpi-card:focus-visible {
                         </thead>
                         <tbody id="tbodyConteo">
                             <tr>
-                                <td colspan="9" class="text-center py-4">
+                                <td colspan="10" class="text-center py-4">
                                     <div class="spinner-border text-primary" role="status">
                                         <span class="visually-hidden">Cargando...</span>
                                     </div>
@@ -1090,7 +1141,8 @@ let perPage = 50;
 let conteosPendientes = {}; // {detalle_id: stock_fisico}
 let estadoInventario = '{{ inventario.estado }}';
 let segmentosCargados = false;
-let signoDiferencia = ''; // positiva | negativa | cero (tarjetas del dashboard)
+const seleccionados = new Set(); // ids de líneas marcadas (sobreviven al cambio de página)
+let lectorActivo = false;        // el lector solo suma cuando se activa a propósito
 let productosCache = {}; // {detalle_id: producto} de la página actual
 let pendientesNoContados = { total: 0, con_stock: 0, sin_stock: 0 }; // del último análisis
 const fechaCorteLocal = '{{ fecha_corte_local }}';
@@ -1112,7 +1164,13 @@ function escHtml(texto) {
 
 // === CARGA DE DATOS ===
 
+// ¿Hay algún filtro además de la búsqueda? (para ofrecer «buscar en toda la toma»)
+function _hayFiltrosActivos() {
+    return !!($('#filtroEstadoConteo').val() || $('#filtroSigno').val() || $('#filtroMarca').val() || $('#filtroCategoria').val());
+}
+
 function cargarProductos(page = 1) {
+    const signo = $('#filtroSigno').val() || '';
     const params = new URLSearchParams({
         page: page,
         per_page: perPage,
@@ -1120,16 +1178,17 @@ function cargarProductos(page = 1) {
         estado_conteo: $('#filtroEstadoConteo').val() || '',
         marca: $('#filtroMarca').val() || '',
         categoria: $('#filtroCategoria').val() || '',
-        solo_diferencias: $('#filtroDiferencias').is(':checked'),
-        signo: signoDiferencia
+        solo_diferencias: signo === 'con',
+        signo: ['positiva', 'negativa', 'cero'].includes(signo) ? signo : '',
+        orden: $('#filtroOrden').val() || ''
     });
-    
+
     $.get(`/app/gestion-inventarios/api/productos-conteo/${inventarioId}/?${params}`, function(response) {
         if (!response.success) {
             Swal.fire('Error', response.error, 'error');
             return;
         }
-        
+
         productosCache = {};
         (response.productos || []).forEach(p => { productosCache[p.id] = p; });
 
@@ -1137,11 +1196,16 @@ function cargarProductos(page = 1) {
         tbody.empty();
 
         if (response.productos.length === 0) {
+            // Con filtros puestos, una búsqueda vacía casi siempre es por el filtro
+            // (antes quedaba un filtro oculto de las tarjetas y «no encontraba» el SKU).
+            const conFiltros = ($('#filtroSearch').val() || '').trim() && _hayFiltrosActivos();
             tbody.html(`
                 <tr>
-                    <td colspan="9" class="text-center py-4">
+                    <td colspan="10" class="text-center py-4">
                         <i class="bi bi-inbox fs-3 text-muted"></i>
-                        <p class="text-muted mb-0 mt-2">No hay productos para mostrar</p>
+                        <p class="text-muted mb-0 mt-2">No hay productos para mostrar${conFiltros ? ' con los filtros puestos' : ''}</p>
+                        ${conFiltros ? `<button type="button" class="nexo-btn nexo-btn-sm nexo-btn-primary mt-2" onclick="buscarEnTodaLaToma()">
+                            <i class="bi bi-search"></i> Buscar en toda la toma</button>` : ''}
                     </td>
                 </tr>
             `);
@@ -1163,12 +1227,15 @@ function cargarProductos(page = 1) {
                 }
                 
                 const excluidoClass = p.excluido ? 'row-excluido' : '';
+                const descripcion = (p.descripcion && p.descripcion !== p.producto_nombre)
+                    ? `<span class="producto-desc">${escHtml(p.descripcion)}</span>` : '';
                 tbody.append(`
-                    <tr class="${rowClass} ${excluidoClass}" data-id="${p.id}" data-sku="${p.sku}">
-                        <td><code>${p.sku}</code></td>
-                        <td><strong>${p.producto_nombre}</strong></td>
-                        <td>${p.talla_nombre || '-'}</td>
-                        <td><small>${p.marca_nombre || '-'}</small></td>
+                    <tr class="${rowClass} ${excluidoClass}" data-id="${p.id}" data-sku="${escHtml(p.sku)}">
+                        <td><input type="checkbox" class="form-check-input chk-linea" data-id="${p.id}" ${seleccionados.has(p.id) ? 'checked' : ''} aria-label="Marcar ${escHtml(p.sku)}"></td>
+                        <td><code>${escHtml(p.sku)}</code></td>
+                        <td><strong>${escHtml(p.producto_nombre)}</strong>${descripcion}</td>
+                        <td>${escHtml(p.talla_nombre) || '-'}</td>
+                        <td><small>${escHtml(p.marca_nombre) || '-'}</small></td>
                         <td class="text-end fw-bold col-stock-sistema">${p.stock_sistema_ajustado}</td>
                         <td class="text-end">
                             <input type="number"
@@ -1181,7 +1248,7 @@ function cargarProductos(page = 1) {
                                    onchange="registrarConteo(this)">
                         </td>
                         <td class="text-end col-diferencia">${diferenciaHtml}</td>
-                        <td class="text-center">${p.excluido ? '<span class="badge bg-light text-body text-decoration-line-through">Excluido</span>' : estadoHtml}</td>
+                        <td class="text-center">${p.excluido ? '<span class="badge bg-light text-body" title="Al aplicar la toma no mueve stock">No se ajusta</span>' : estadoHtml}</td>
                         <td>
                             <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="verDetalleProducto(${p.id})" title="Ver detalle">
                                 <i class="bi bi-eye"></i>
@@ -1191,8 +1258,10 @@ function cargarProductos(page = 1) {
                                     <i class="bi bi-arrow-repeat"></i>
                                 </button>
                             ` : ''}
-                            <button class="nexo-btn nexo-btn-sm ${p.excluido ? 'nexo-btn-outline' : 'nexo-btn-warning'}" onclick="toggleExclusion(${p.id}, ${p.excluido})" title="${p.excluido ? 'Incluir' : 'Excluir'}">
-                                <i class="bi bi-slash-circle"></i>
+                            <button class="nexo-btn nexo-btn-sm ${p.excluido ? 'nexo-btn-outline' : 'nexo-btn-warning'}" onclick="toggleExclusion(${p.id}, ${p.excluido})"
+                                    title="${p.excluido ? 'Volver a ajustar esta línea' : 'No ajustar: al aplicar la toma su stock queda como está'}"
+                                    aria-label="${p.excluido ? 'Volver a ajustar' : 'No ajustar'}">
+                                <i class="bi ${p.excluido ? 'bi-arrow-counterclockwise' : 'bi-slash-circle'}"></i>
                             </button>
                         </td>
                     </tr>
@@ -1207,10 +1276,77 @@ function cargarProductos(page = 1) {
         $('#paginacionInfo').text(`${response.productos.length} de ${formatNumber(pagination.total_items)}`);
         $('#btnPrevPage').toggleClass('disabled', !pagination.has_previous);
         $('#btnNextPage').toggleClass('disabled', !pagination.has_next);
-        
+
+        actualizarBarraSeleccion();
+
         // Actualizar estadísticas (simplificado)
         actualizarEstadisticas();
     });
+}
+
+// === SELECCIÓN DE LÍNEAS («No ajustar» en bloque) ===
+function actualizarBarraSeleccion() {
+    $('#nSeleccionados').text(formatNumber(seleccionados.size));
+    const enEdicion = ['BORRADOR', 'EN_CONTEO', 'CONTEO_FINALIZADO', 'EN_REVISION'].includes(estadoInventario);
+    $('#barraSeleccion').toggle(seleccionados.size > 0 && enEdicion);
+    const enPagina = $('#tbodyConteo .chk-linea');
+    $('#marcarPagina').prop('checked', enPagina.length > 0 && enPagina.toArray().every(c => c.checked));
+}
+
+function limpiarSeleccion() {
+    seleccionados.clear();
+    $('#tbodyConteo .chk-linea').prop('checked', false);
+    actualizarBarraSeleccion();
+}
+
+function excluirSeleccionados(excluir) {
+    const ids = Array.from(seleccionados);
+    if (!ids.length) return;
+    Swal.fire({
+        title: excluir ? '¿No ajustar estas líneas?' : '¿Volver a ajustarlas?',
+        html: excluir
+            ? `<p><strong>${formatNumber(ids.length)}</strong> líneas quedarán fuera del ajuste: al aplicar la toma
+               <strong>su stock queda como está</strong> y salen del informe (hoja «Excluidos»).</p>`
+            : `<p><strong>${formatNumber(ids.length)}</strong> líneas vuelven a ajustarse según su conteo.</p>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: excluir ? 'Sí, no ajustar' : 'Sí, volver a ajustar',
+        cancelButtonText: 'Volver'
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        $.ajax({
+            url: `/app/gestion-inventarios/api/excluir-detalles/${inventarioId}/`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ ids, excluir }),
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(resp) {
+                if (!resp.success) { Swal.fire('Error', resp.error, 'error'); return; }
+                limpiarSeleccion();
+                Swal.fire({ icon: 'success', title: 'Listo', text: `${formatNumber(resp.actualizados)} líneas actualizadas`, timer: 1800, showConfirmButton: false });
+                cargarProductos(currentPage);
+                cargarInformeMarcas();
+            },
+            error: function() { Swal.fire('Error', 'No se pudieron actualizar las líneas', 'error'); }
+        });
+    });
+}
+
+// Quita los filtros pero conserva lo escrito en el buscador
+function buscarEnTodaLaToma() {
+    $('#filtroEstadoConteo, #filtroSigno, #filtroMarca, #filtroCategoria').val('');
+    $('.segment-chip').removeClass('active');
+    $('.segment-chip[data-filter=""]').addClass('active');
+    cargarProductos(1);
+}
+
+function actualizarLector() {
+    const enConteo = ['BORRADOR', 'EN_CONTEO'].includes(estadoInventario);
+    $('#inputEscaner')
+        .prop('disabled', !(enConteo && lectorActivo))
+        .attr('placeholder', lectorActivo
+            ? 'Escanee o escriba el SKU y presione Enter: SUMA unidades y se guarda'
+            : 'Active «Contar con lector»: cada lectura SUMA unidades y se guarda');
 }
 
 // Antes esta función escribía en #statTotal, #statContados, #statPendientes,
@@ -1332,8 +1468,7 @@ function renderGuia(a) {
 }
 
 function filtrarReconteos() {
-    signoDiferencia = '';
-    $('#filtroDiferencias').prop('checked', false);
+    $('#filtroSigno').val('');
     $('#filtroEstadoConteo').val('reconteo');
     cargarProductos(1);
     document.getElementById('tablaConteo').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1399,9 +1534,9 @@ function renderTablaMarcas() {
     }
     if (r.posibles_dobles) {
         avisos.push(`<div class="aviso-alerta mt-1"><i class="bi bi-copy me-1"></i>
-            <strong>${formatNumber(r.posibles_dobles)}</strong> SKUs con la pistola exactamente al doble del sistema
-            (+${formatNumber(r.posibles_dobles_unidades)} u.): posible caja leída dos veces. Recontar antes de aprobar
-            (columna «alerta» de la hoja Diferencias).</div>`);
+            <strong>${formatNumber(r.posibles_dobles)}</strong> SKUs con la pistola al doble o más del sistema
+            (+${formatNumber(r.posibles_dobles_unidades)} u.): posible caja leída dos veces o código pistoleado de más.
+            Recontar antes de aprobar (Ordenar por «Más sobrante primero» o columna «alerta» del Excel).</div>`);
     }
     if (r.sin_stock_sistema) {
         avisos.push(`<div class="aviso-alerta mt-1"><i class="bi bi-box-seam me-1"></i>
@@ -1501,7 +1636,7 @@ function actualizarPasosYAcciones(analisis) {
     $('#btnRechazar').toggle(!!analisis.puede_rechazar);
     $('#btnCancelarToma').toggle(!!analisis.puede_cancelar);
     $('#btnAplicarAjustes').toggle(!!analisis.puede_aplicar_ajustes);
-    $('#inputEscaner').prop('disabled', !enConteo);
+    actualizarLector();
 }
 
 // Llena los selects y los chips de segmentación (antes se quedaban con la opción
@@ -1538,18 +1673,21 @@ function poblarSegmentos(segmentos) {
 // === FILTROS QUE ANTES LANZABAN ReferenceError ===
 // Los onclick inline llamaban a filtrarPorTipoDiferencia / filtrarPorDepartamento /
 // filtrarPorMarca, funciones que no existían en ninguna parte del archivo.
+// Las tarjetas solo cambian los filtros VISIBLES (antes dejaban un filtro oculto
+// que hacía que el buscador «no encontrara» SKUs).
 function filtrarPorTipoDiferencia(tipo) {
     $('#filtroEstadoConteo').val('');
-    $('#filtroDiferencias').prop('checked', false);
-
-    if (tipo === 'sobrantes' || tipo === 'faltantes') {
-        $('#filtroDiferencias').prop('checked', true);
-        signoDiferencia = (tipo === 'sobrantes') ? 'positiva' : 'negativa';
+    $('#filtroSigno').val('');
+    if (tipo === 'sobrantes') {
+        $('#filtroSigno').val('positiva');
+        $('#filtroOrden').val('sobrantes');
+    } else if (tipo === 'faltantes') {
+        $('#filtroSigno').val('negativa');
+        $('#filtroOrden').val('faltantes');
     } else if (tipo === 'coinciden') {
-        signoDiferencia = 'cero';
+        $('#filtroSigno').val('cero');
         $('#filtroEstadoConteo').val('contado');
     } else { // pendientes
-        signoDiferencia = '';
         $('#filtroEstadoConteo').val('pendiente');
     }
     cargarProductos(1);
@@ -1592,7 +1730,7 @@ function registrarConteo(input) {
     
     // Calcular diferencia visual
     const diferencia = stockFisico - stockSistema;
-    const diferenciaCell = $(input).closest('tr').find('td:eq(6)');
+    const diferenciaCell = $(input).closest('tr').find('td.col-diferencia');
     if (diferencia !== 0) {
         diferenciaCell.html(`<span class="${diferencia > 0 ? 'diferencia-positiva' : 'diferencia-negativa'}">${diferencia > 0 ? '+' : ''}${diferencia}</span>`);
     } else {
@@ -2347,9 +2485,7 @@ function getCookie(name) {
 }
 
 function limpiarFiltros() {
-    $('#filtroSearch, #filtroEstadoConteo, #filtroMarca, #filtroCategoria').val('');
-    $('#filtroDiferencias').prop('checked', false);
-    signoDiferencia = '';
+    $('#filtroSearch, #filtroEstadoConteo, #filtroSigno, #filtroOrden, #filtroMarca, #filtroCategoria').val('');
     $('.segment-chip').removeClass('active');
     $('.segment-chip[data-filter=""]').addClass('active');
     cargarProductos(1);
@@ -2361,7 +2497,7 @@ function limpiarFiltros() {
 // mano no debe exigir mouse ni buscar la fila en la tabla.
 function procesarEscaneo(sku) {
     sku = (sku || '').trim();
-    if (!sku) return;
+    if (!sku || !lectorActivo) return;  // sin el switch, el lector no suma nada
 
     const paso = parseInt($('#cantidadPorLectura').val()) || 1;
     const fila = $(`#tbodyConteo tr[data-sku="${sku}"]`);
@@ -2469,14 +2605,33 @@ $(document).ready(function() {
         cargarProductos(1);
     }, 500));
     
-    $('#filtroEstadoConteo, #filtroMarca, #filtroCategoria').on('change', function() {
+    $('#filtroEstadoConteo, #filtroSigno, #filtroOrden, #filtroMarca, #filtroCategoria').on('change', function() {
         cargarProductos(1);
     });
-    
-    $('#filtroDiferencias').on('change', function() {
-        cargarProductos(1);
+
+    // Marcar líneas (persisten al cambiar de página) para «No ajustar» en bloque
+    $('#tbodyConteo').on('change', '.chk-linea', function() {
+        const id = parseInt(this.dataset.id, 10);
+        if (this.checked) seleccionados.add(id); else seleccionados.delete(id);
+        actualizarBarraSeleccion();
     });
-    
+    $('#marcarPagina').on('change', function() {
+        const marcar = this.checked;
+        $('#tbodyConteo .chk-linea').each(function() {
+            this.checked = marcar;
+            const id = parseInt(this.dataset.id, 10);
+            if (marcar) seleccionados.add(id); else seleccionados.delete(id);
+        });
+        actualizarBarraSeleccion();
+    });
+
+    // El lector solo suma con el switch encendido
+    $('#activarLector').on('change', function() {
+        lectorActivo = this.checked;
+        actualizarLector();
+        if (lectorActivo) $('#inputEscaner').focus();
+    });
+
     // Paginación
     $('#btnPrevPage').on('click', function() {
         if (!$(this).hasClass('disabled') && currentPage > 1) {
@@ -2501,7 +2656,7 @@ $(document).ready(function() {
         if (objetivo.length) {
             objetivo.find('.input-conteo').focus().select();
         } else {
-            $('#inputEscaner').focus();
+            $(lectorActivo ? '#inputEscaner' : '#filtroSearch').focus();
         }
     });
 

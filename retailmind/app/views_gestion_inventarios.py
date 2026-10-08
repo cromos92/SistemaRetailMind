@@ -21,7 +21,7 @@ from django.http import JsonResponse, HttpResponse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST, require_GET, require_http_methods
 from django.db.models import Sum, F, Q, Count, Case, When, Prefetch, Value, CharField, DecimalField, ExpressionWrapper, Max
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Abs, Coalesce
 from django.core.paginator import Paginator
 from django.utils import timezone
 from django.db import transaction, connection
@@ -205,6 +205,25 @@ def _error_sin_acceso():
     )
 
 
+def _sucursal_pedida(request, valor):
+    """
+    Sucursal elegida en la pantalla (id) o, si no viene, la activa de la sesión.
+    Devuelve el id solo si el usuario tiene acceso y la sucursal está activa;
+    None si no. Antes la toma se creaba SIEMPRE en la sucursal de la sesión sin
+    mostrarla: con la sesión en PAO2 se podía crear «el inventario de PAO4» en PAO2.
+    """
+    sucursal_id = valor or request.session.get('idSucursalActual')
+    try:
+        sucursal_id = int(sucursal_id)
+    except (TypeError, ValueError):
+        return None
+    if not puede_ver_sucursal(request.user, sucursal_id):
+        return None
+    if not obtener_sucursales_usuario(request.user).filter(id=sucursal_id).exists():
+        return None
+    return sucursal_id
+
+
 # ==============================================================================
 # VISTAS PRINCIPALES
 # ==============================================================================
@@ -212,7 +231,15 @@ def _error_sin_acceso():
 @login_required
 def gestion_inventarios(request):
     """Vista principal del módulo de Gestión de Inventarios"""
-    return render(request, 'vistas/modulo_existencias/gestion_inventarios.html')
+    activa = request.session.get('idSucursalActual')
+    return render(request, 'vistas/modulo_existencias/gestion_inventarios.html', {
+        # Para elegir explícitamente la sucursal del listado y de la toma nueva
+        'sucursales_toma': list(
+            obtener_sucursales_usuario(request.user)
+            .values('id', 'alias', 'direccion', 'es_centro_distribucion').order_by('alias')
+        ),
+        'sucursal_activa_id': int(activa) if str(activa or '').isdigit() else None,
+    })
 
 
 @login_required
@@ -269,7 +296,17 @@ def obtener_inventarios(request):
             'sucursal', 'empresa', 'creado_por', 'aprobado_por'
         ).filter(empresa_id__in=empresas_ids)
 
-        # Filtrar por sucursal actual (respetando el acceso del usuario)
+        # Sucursal: la del selector del listado ('todas' = todas las del usuario);
+        # sin elegir, la activa de la sesión (comportamiento anterior).
+        sucursal_param = (request.GET.get('sucursal') or '').strip()
+        if sucursal_param == 'todas':
+            sucursal_id = None
+        elif sucursal_param:
+            sucursal_id = _sucursal_pedida(request, sucursal_param)
+            if sucursal_id is None:
+                return JsonResponse({'success': False, 'error': 'No tiene acceso a esa sucursal'})
+
+        # Filtrar por sucursal (respetando el acceso del usuario)
         if sucursal_id and puede_ver_sucursal(request.user, sucursal_id):
             queryset = queryset.filter(sucursal_id=sucursal_id)
         else:
@@ -403,9 +440,14 @@ def obtener_filtros_disponibles(request):
     Devuelve marcas, categorías y atributos activos.
     """
     try:
-        # Los filtros dependen de la SUCURSAL activa, no de la primera EmpresaUser
-        # del usuario (con multi-empresa eso podía ser una empresa ajena a la tienda).
+        # Los filtros dependen de la SUCURSAL de la toma (la elegida en el modal o,
+        # sin elegir, la activa), no de la primera EmpresaUser del usuario (con
+        # multi-empresa eso podía ser una empresa ajena a la tienda).
         sucursal_id = request.session.get('idSucursalActual')
+        if request.GET.get('sucursal_id'):
+            sucursal_id = _sucursal_pedida(request, request.GET.get('sucursal_id'))
+            if sucursal_id is None:
+                return JsonResponse({'success': False, 'error': 'No tiene acceso a esa sucursal'})
 
         # Marcas y categorías ACOTADAS a la sucursal activa y con stock: antes se
         # ofrecían las de todo el holding, así que era fácil segmentar por una marca
@@ -506,14 +548,35 @@ def crear_inventario(request):
                 'error': 'Debe seleccionar al menos un atributo para este tipo de inventario'
             })
 
-        sucursal_id = request.session.get('idSucursalActual')
-        if not sucursal_id:
-            return JsonResponse({'success': False, 'error': 'Debe seleccionar una sucursal'})
-
-        if not puede_ver_sucursal(request.user, sucursal_id):
-            return JsonResponse({'success': False, 'error': 'No tiene acceso a la sucursal activa'})
+        # La sucursal se elige en el modal (por defecto la activa de la sesión).
+        if not (data.get('sucursal_id') or request.session.get('idSucursalActual')):
+            return JsonResponse({'success': False, 'error': 'Debe seleccionar la sucursal a inventariar'})
+        sucursal_id = _sucursal_pedida(request, data.get('sucursal_id'))
+        if sucursal_id is None:
+            return JsonResponse({'success': False, 'error': 'No tiene acceso a esa sucursal'})
 
         sucursal = get_object_or_404(Sucursal.objects.select_related('empresa'), id=sucursal_id)
+
+        # Otra toma abierta en la misma tienda: si se aplicaran las dos, el ajuste
+        # entraría DOS veces (la segunda reconstruye el stock al corte restando
+        # también los ajustes de la primera). Se pide confirmación explícita.
+        abiertas = list(
+            TomaInventario.objects.filter(sucursal_id=sucursal_id)
+            .exclude(estado__in=['COMPLETADO', 'CANCELADO'])
+            .order_by('-created_at')
+            .values('id', 'numero_inventario', 'nombre', 'estado', 'tipo_inventario')
+        )
+        if abiertas and not data.get('permitir_otra_abierta'):
+            return JsonResponse({
+                'success': False,
+                'requiere_confirmacion': True,
+                'sucursal': sucursal.alias,
+                'abiertas': abiertas,
+                'error': (
+                    f'{sucursal.alias} ya tiene {len(abiertas)} toma(s) sin cerrar. Si se aplican dos tomas '
+                    f'de la misma tienda, el ajuste se aplica dos veces: cancele la anterior o confirme.'
+                ),
+            })
 
         # La empresa de la toma es la DUEÑA de la sucursal. Antes se tomaba la
         # primera EmpresaUser activa del usuario: una toma de NICK1 (1320) quedaba
@@ -596,6 +659,7 @@ def crear_inventario(request):
             'message': f'Inventario {numero_inventario} creado exitosamente',
             'inventario_id': inventario.id,
             'numero_inventario': numero_inventario,
+            'sucursal': sucursal.alias,
             'total_productos': total_productos,
             'fecha_corte': corte_local,
             'corte_recortado': corte_recortado,
@@ -936,20 +1000,29 @@ def obtener_productos_conteo(request, inventario_id):
         marca = request.GET.get('marca')
         categoria = request.GET.get('categoria')
         
+        orden = request.GET.get('orden', '')  # nombre | dif_unidades | dif_valor | sobrantes | faltantes
+
         # Construir queryset
-        queryset = inventario.detalles.all()
-        
+        queryset = inventario.detalles.select_related('producto_talla__producto')
+
         if estado_conteo == 'contado':
             queryset = queryset.filter(contado=True)
         elif estado_conteo == 'pendiente':
-            queryset = queryset.filter(contado=False)
+            # «Pendiente» = falta decidir: las excluidas ya están resueltas
+            queryset = queryset.filter(contado=False, excluir_de_analisis=False)
         elif estado_conteo == 'reconteo':
             queryset = queryset.filter(reconteo_requerido=True, stock_reconteo__isnull=True)
-        
+        elif estado_conteo == 'excluido':
+            queryset = queryset.filter(excluir_de_analisis=True)
+
         if search:
+            # También por descripción y marca: el artículo «45-1» es la BOLSA
+            # CORPORATIVA y solo la descripción lo dice.
             queryset = queryset.filter(
                 Q(sku__icontains=search) |
-                Q(producto_nombre__icontains=search)
+                Q(producto_nombre__icontains=search) |
+                Q(producto_talla__producto__descripcion__icontains=search) |
+                Q(marca_nombre__icontains=search)
             )
         
         if solo_diferencias:
@@ -970,13 +1043,26 @@ def obtener_productos_conteo(request, inventario_id):
         if categoria:
             queryset = queryset.filter(categoria_nombre__icontains=categoria)
 
-        # Ordenar
-        queryset = queryset.order_by('producto_nombre', 'talla_nombre')
-        
+        # Ordenar: por defecto alfabético; «mayor diferencia» sirve para revisar
+        # (y dejar sin ajustar) lo que más pesa antes de aprobar.
+        if orden == 'dif_unidades':
+            queryset = queryset.annotate(dif_abs=Abs('diferencia')).order_by('-dif_abs', 'producto_nombre', 'talla_nombre')
+        elif orden == 'dif_valor':
+            queryset = queryset.annotate(dif_abs_valor=ExpressionWrapper(
+                Abs('diferencia') * F('costo_unitario_sistema'),
+                output_field=DecimalField(max_digits=18, decimal_places=2),
+            )).order_by('-dif_abs_valor', 'producto_nombre', 'talla_nombre')
+        elif orden == 'sobrantes':
+            queryset = queryset.order_by('-diferencia', 'producto_nombre', 'talla_nombre')
+        elif orden == 'faltantes':
+            queryset = queryset.order_by('diferencia', 'producto_nombre', 'talla_nombre')
+        else:
+            queryset = queryset.order_by('producto_nombre', 'talla_nombre')
+
         # Paginar
         paginator = Paginator(queryset, per_page)
         productos_page = paginator.get_page(page)
-        
+
         # Serializar
         productos_data = []
         for det in productos_page:
@@ -984,6 +1070,7 @@ def obtener_productos_conteo(request, inventario_id):
                 'id': det.id,
                 'sku': det.sku,
                 'producto_nombre': det.producto_nombre,
+                'descripcion': det.producto_talla.producto.descripcion if det.producto_talla_id else '',
                 'talla_nombre': det.talla_nombre,
                 'marca_nombre': det.marca_nombre,
                 'categoria_nombre': det.categoria_nombre,
@@ -1591,6 +1678,61 @@ def actualizar_exclusion_detalle(request, inventario_id, detalle_id):
     except Exception as e:
         logger.error(f"Error al excluir detalle: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_POST
+@login_required
+@transaction.atomic
+def actualizar_exclusion_detalles(request, inventario_id):
+    """
+    «No ajustar» en bloque: excluye (o vuelve a incluir) varias líneas a la vez.
+    Una línea excluida NO mueve stock al aplicar la toma (queda como está) y sale
+    del informe a la hoja «Excluidos». Pensado para ordenar por mayor diferencia
+    y dejar fuera lo que no se quiere ajustar. Body: {"ids": [...], "excluir": bool}
+    """
+    inventario = _inventario_del_usuario(request, inventario_id)
+    if inventario is None:
+        return _error_sin_acceso()
+    if inventario.estado not in ESTADOS_EN_PROCESO:
+        return JsonResponse({
+            'success': False,
+            'error': f'El inventario está en estado {inventario.get_estado_display()}: '
+                     f'ya no se pueden cambiar exclusiones'
+        })
+    try:
+        data = json.loads(request.body or '{}')
+        ids = [int(i) for i in (data.get('ids') or [])]
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({'success': False, 'error': 'Datos inválidos'})
+    if not ids:
+        return JsonResponse({'success': False, 'error': 'No hay líneas seleccionadas'})
+    excluir = bool(data.get('excluir'))
+
+    detalles = list(inventario.detalles.filter(id__in=ids))
+    for d in detalles:
+        d.excluir_de_analisis = excluir
+        d.recalcular_diferencia()  # misma marca de reconteo que dejaría save()
+    TomaInventarioDetalle.objects.bulk_update(
+        detalles, ['excluir_de_analisis', 'reconteo_requerido', 'diferencia'], batch_size=BATCH_SIZE
+    )
+    inventario.calcular_metricas()
+    _registrar_log(
+        inventario=inventario,
+        tipo_accion='MODIFICACION',
+        descripcion=(
+            f'{len(detalles)} líneas '
+            + ('excluidas: no se ajustan (su stock queda como está)' if excluir else 'vueltas a incluir en el ajuste')
+            + f': {", ".join(d.sku for d in detalles[:30])}{"…" if len(detalles) > 30 else ""}'
+        ),
+        usuario=request.user,
+        datos={'ids': ids[:1000], 'excluir': excluir},
+    )
+    return JsonResponse({
+        'success': True,
+        'actualizados': len(detalles),
+        'excluido': excluir,
+        'progreso': float(inventario.progreso_conteo),
+    })
 
 
 @require_POST

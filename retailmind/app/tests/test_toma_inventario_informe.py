@@ -282,8 +282,84 @@ class NoPistoleadoMantieneStockTest(BaseTomaContadaAnoche):
         self.assertEqual([f['sku'] for f in analisis['diferencias']], ['9200003'])
 
 
+class SucursalYRevisionTest(BaseTomaContadaAnoche):
+    """Elegir la sucursal al crear, aviso de toma abierta, buscar/ordenar y «No ajustar» en bloque."""
+
+    def _crear(self, **extra):
+        payload = {'nombre': 'Completo', 'tipo_inventario': 'COMPLETO', 'filtros': {'solo_con_stock': True},
+                   'fecha_corte': self.corte.strftime('%Y-%m-%dT%H:%M'), 'conteo_tienda_cerrada': True}
+        payload.update(extra)
+        return self.client.post(reverse('api_crear_inventario'), data=json.dumps(payload),
+                                content_type='application/json').json()
+
+    def test_crear_en_la_sucursal_elegida_y_aviso_de_toma_abierta(self):
+        otra = crear_sucursal(self.empresa, alias='PAO4-TEST', direccion='Matta 2458')
+        self._pt('ZAPATILLA', 9300001, 2, sucursal=otra)
+        data = self._crear(sucursal_id=otra.id)  # la sesión está en self.sucursal
+        self.assertTrue(data['success'], data)
+        self.assertEqual(data['sucursal'], 'PAO4-TEST')
+        self.assertEqual(TomaInventario.objects.get(id=data['inventario_id']).sucursal_id, otra.id)
+
+        # Otra toma en la misma tienda: pide confirmación (aplicar las dos duplicaría el ajuste)
+        data = self._crear(sucursal_id=otra.id)
+        self.assertFalse(data['success'])
+        self.assertTrue(data['requiere_confirmacion'])
+        self.assertEqual(len(data['abiertas']), 1)
+        self.assertTrue(self._crear(sucursal_id=otra.id, permitir_otra_abierta=True)['success'])
+
+        # Sucursal inexistente / sin acceso
+        self.assertIn('acceso', self._crear(sucursal_id=999999)['error'])
+
+        # El listado filtra por la sucursal elegida
+        resp = self.client.get(reverse('api_obtener_inventarios'), {'sucursal': otra.id}).json()
+        self.assertEqual(resp['pagination']['total_items'], 2)
+        self.assertEqual({i['sucursal'] for i in resp['inventarios']}, {'PAO4-TEST'})
+
+    def test_buscar_por_descripcion_ordenar_y_no_ajustar_en_bloque(self):
+        bolsa = self._pt('45-1', 9300010, 50, marca=self.paola, descripcion='BOLSA CORPORATIVA')
+        sobra = self._pt('SOBRA MUCHO', 9300011, 1)
+        falta = self._pt('FALTA POCO', 9300012, 5)
+        self._pt('EXACTO', 9300013, 3)
+        toma = TomaInventario.objects.get(id=self._crear()['inventario_id'])
+        self.assertTrue(self._importar_pistola(toma.id, 'sku,stock\n9300011,8\n9300012,4\n9300013,3\n')['success'])
+        url = reverse('api_productos_conteo', args=[toma.id])
+
+        # «BOLSA» encuentra el artículo 45-1 por su descripción, y la trae para mostrarla
+        resp = self.client.get(url, {'search': 'BOLSA'}).json()
+        self.assertEqual([p['sku'] for p in resp['productos']], ['9300010'])
+        self.assertEqual(resp['productos'][0]['descripcion'], 'BOLSA CORPORATIVA')
+
+        # Mayor diferencia primero: el pistoleado 8 veces (+7) encabeza
+        resp = self.client.get(url, {'orden': 'dif_unidades', 'estado_conteo': 'contado'}).json()
+        self.assertEqual([p['sku'] for p in resp['productos']][:2], ['9300011', '9300012'])
+
+        # «No ajustar» en bloque: excluidas, no mueven stock al aplicar
+        ids = list(toma.detalles.filter(sku__in=['9300011', '9300012']).values_list('id', flat=True))
+        resp = self._post('api_excluir_detalles_inventario', toma.id, {'ids': ids, 'excluir': True})
+        self.assertEqual(resp['actualizados'], 2)
+        resp = self.client.get(url, {'estado_conteo': 'excluido'}).json()
+        self.assertEqual({p['sku'] for p in resp['productos']}, {'9300011', '9300012'})
+
+        resp = self._post('api_resolver_no_contados', toma.id, {'plan': [{'accion': 'operativos'}, {'accion': 'sin_diferencia'}]})
+        self.assertTrue(resp['success'], resp)
+        for url_paso in ('api_finalizar_conteo', 'api_enviar_aprobacion', 'api_aprobar_inventario'):
+            self.assertTrue(self._post(url_paso, toma.id)['success'], url_paso)
+        _iniciar_tarea_ajustes(toma, self.user)
+        _ejecutar_ajustes_background(toma.id, self.user.id, cerrar_conexion=False)
+        for pt, stock in ((sobra, 1), (falta, 5), (bolsa, 50)):
+            pt.refresh_from_db()
+            self.assertEqual(pt.stock, stock, pt.sku)
+        self.assertFalse(Movimientos_Producto.objects.filter(referencia_externa=toma.numero_inventario).exists())
+
+
 class InformePuroTest(SimpleTestCase):
     """El cálculo sin BD (lo usa también el script que simula una toma)."""
+
+    def test_lectura_repetida(self):
+        # Un código pistoleado 8 veces con 1 en el sistema
+        self.assertIn('lectura repetida', informe.alerta_diferencia(1, 8, 7))
+        self.assertIn('doble lectura', informe.alerta_diferencia(3, 6, 3))
+        self.assertEqual(informe.alerta_diferencia(4, 5, 1), '')
 
     def test_sin_contar_cuenta_cero_y_excluidas_no_suman(self):
         filas = [

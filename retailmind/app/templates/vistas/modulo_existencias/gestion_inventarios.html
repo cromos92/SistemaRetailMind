@@ -532,8 +532,13 @@
                     <div class="module-header-info">
                         <h5>Tomas de Inventario</h5>
                         <div class="module-header-status">
-                            <span class="status-dot"></span>
-                            Sistema Activo
+                            <label for="filtroSucursal" class="mb-0">Sucursal:</label>
+                            <select id="filtroSucursal" class="form-select form-select-sm w-auto" title="Ver las tomas de esta sucursal">
+                                {% for s in sucursales_toma %}
+                                <option value="{{ s.id }}" {% if s.id == sucursal_activa_id %}selected{% endif %}>{{ s.alias }}{% if s.direccion %} · {{ s.direccion }}{% endif %}</option>
+                                {% endfor %}
+                                <option value="todas" {% if not sucursal_activa_id %}selected{% endif %}>Todas mis sucursales</option>
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -773,11 +778,20 @@
             <div class="modal-body">
                 <form id="formNuevoInventario">
                     <div class="row g-3">
-                        <div class="col-md-8">
-                            <label class="form-label" for="nombreInventario">Nombre del Inventario <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="nombreInventario" placeholder="Ej: Inventario Mensual Enero 2026" required>
-                        </div>
                         <div class="col-md-4">
+                            <label class="form-label" for="sucursalInventario">Sucursal a inventariar <span class="text-danger">*</span></label>
+                            <select class="form-select fw-semibold" id="sucursalInventario" required>
+                                {% for s in sucursales_toma %}
+                                <option value="{{ s.id }}" {% if s.id == sucursal_activa_id %}selected{% endif %}>{{ s.alias }}{% if s.direccion %} · {{ s.direccion }}{% endif %}{% if s.es_centro_distribucion %} (CD){% endif %}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Viene la sucursal de su sesión: confirme que sea la tienda que se contó.</div>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label" for="nombreInventario">Nombre del Inventario <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="nombreInventario" placeholder="Ej: Inventario completo PAO4 octubre" required>
+                        </div>
+                        <div class="col-md-3">
                             <label class="form-label" for="tipoInventario">Tipo de Inventario <span class="text-danger">*</span></label>
                             <select class="form-select" id="tipoInventario" required>
                                 <option value="COMPLETO">Inventario Completo</option>
@@ -912,6 +926,7 @@ function cargarInventarios(page = 1) {
         tipo: $('#filtroTipo').val() || '',
         fecha_desde: $('#filtroFechaDesde').val() || '',
         fecha_hasta: $('#filtroFechaHasta').val() || '',
+        sucursal: $('#filtroSucursal').val() || '',
         // Los tabs "En Proceso" / "Con Diferencias" ahora sí viajan al backend
         grupo: (currentTabFilter === 'EN_PROCESO' || currentTabFilter === 'CON_DIFERENCIAS') ? currentTabFilter : ''
     });
@@ -995,6 +1010,7 @@ function cargarInventarios(page = 1) {
                             <strong class="text-primary" title="Creado por ${inv.creado_por}">${inv.numero_inventario}</strong>
                         </td>
                         <td>
+                            <span class="badge bg-primary me-1" title="Sucursal">${inv.sucursal}</span>
                             <strong>${inv.nombre}</strong>
                             <span class="badge bg-light text-dark ms-1">${inv.tipo_inventario_display}</span>
                         </td>
@@ -1220,8 +1236,12 @@ function abrirModalNuevoInventario() {
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     const fechaCorte = now.toISOString().slice(0, 16);
     $('#fechaCorteInventario').val(fechaCorte).attr('max', fechaCorte);
-    
-    // Cargar filtros disponibles
+
+    // Sucursal: la que se está mirando en el listado (si es una) o la de la sesión
+    const vista = $('#filtroSucursal').val();
+    if (vista && vista !== 'todas') $('#sucursalInventario').val(vista);
+
+    // Cargar filtros disponibles (marcas/categorías de ESA sucursal)
     cargarFiltrosDisponibles();
     
     // Mostrar modal
@@ -1229,9 +1249,14 @@ function abrirModalNuevoInventario() {
 }
 
 function cargarFiltrosDisponibles() {
-    $.get('/app/gestion-inventarios/api/filtros/', function(response) {
+    const sucursalId = $('#sucursalInventario').val() || '';
+    $.get(`/app/gestion-inventarios/api/filtros/?sucursal_id=${encodeURIComponent(sucursalId)}`, function(response) {
         if (response.success) {
             filtrosDisponibles = response.filtros;
+            // Al cambiar de sucursal se vuelven a armar los Select2
+            $('#selectMarcas, #selectCategorias, .select-atributo').each(function() {
+                if ($(this).hasClass('select2-hidden-accessible')) $(this).select2('destroy');
+            });
             
             // Poblar select de marcas
             const selectMarcas = $('#selectMarcas');
@@ -1338,12 +1363,34 @@ function crearInventario() {
     const datos = {
         nombre: nombre,
         tipo_inventario: tipo,
+        sucursal_id: $('#sucursalInventario').val(),
         fecha_corte: fechaCorte,
         conteo_tienda_cerrada: $('#conteoTiendaCerrada').is(':checked'),
         filtros: filtros,
         observaciones: $('#observacionesInventario').val()
     };
-    
+
+    // Resumen antes de crear: la sucursal y el corte son lo que más se equivoca
+    // (antes la sucursal ni se mostraba: era la de la sesión).
+    const sucursalTxt = $('#sucursalInventario option:selected').text().trim();
+    const corteTxt = fechaCorte.replace('T', ' ').split(' ');
+    const [anio, mes, dia] = corteTxt[0].split('-');
+    Swal.fire({
+        title: '¿Crear esta toma?',
+        html: `<table class="table table-sm text-start mb-0">
+                   <tr><td class="text-muted">Sucursal</td><td class="fw-bold">${sucursalTxt}</td></tr>
+                   <tr><td class="text-muted">Tipo</td><td>${$('#tipoInventario option:selected').text()}</td></tr>
+                   <tr><td class="text-muted">Corte</td><td class="fw-bold">${dia}/${mes}/${anio} ${corteTxt[1] || ''}</td></tr>
+                   <tr><td class="text-muted">Contado con la tienda cerrada</td><td>${datos.conteo_tienda_cerrada ? 'Sí (las ventas posteriores al corte no cuentan como sobrante)' : 'No'}</td></tr>
+               </table>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, crear',
+        cancelButtonText: 'Revisar'
+    }).then(r => { if (r.isConfirmed) _enviarCrearInventario(datos); });
+}
+
+function _enviarCrearInventario(datos) {
     // Mostrar loading
     Swal.fire({
         title: 'Creando inventario...',
@@ -1353,7 +1400,7 @@ function crearInventario() {
             Swal.showLoading();
         }
     });
-    
+
     $.ajax({
         url: '/app/gestion-inventarios/api/crear/',
         method: 'POST',
@@ -1361,11 +1408,29 @@ function crearInventario() {
         data: JSON.stringify(datos),
         headers: { 'X-CSRFToken': getCookie('csrftoken') },
         success: function(response) {
+            if (!response.success && response.requiere_confirmacion) {
+                // Ya hay una toma abierta en esa tienda: aplicar las dos duplica el ajuste
+                const lista = (response.abiertas || []).map(a =>
+                    `<li><a href="/app/gestion-inventarios/detalle/${a.id}/">${a.numero_inventario}</a> · ${a.nombre} (${a.estado})</li>`).join('');
+                Swal.fire({
+                    icon: 'warning',
+                    title: `${response.sucursal} ya tiene una toma abierta`,
+                    html: `<ul class="text-start">${lista}</ul>
+                           <p>Si se aplican dos tomas de la misma tienda, <strong>el ajuste se aplica dos veces</strong>.
+                              Lo recomendado es abrir la anterior y cancelarla (botón «Cancelar toma») antes de crear otra.</p>`,
+                    showCancelButton: true,
+                    confirmButtonText: 'Crear igual',
+                    cancelButtonText: 'Volver'
+                }).then(r => {
+                    if (r.isConfirmed) _enviarCrearInventario({ ...datos, permitir_otra_abierta: true });
+                });
+                return;
+            }
             if (response.success) {
                 Swal.fire({
                     icon: 'success',
                     title: 'Inventario Creado',
-                    html: `<p>Se creó el inventario <strong>${response.numero_inventario}</strong></p>
+                    html: `<p>Se creó el inventario <strong>${response.numero_inventario}</strong> de <strong>${response.sucursal || ''}</strong></p>
                            <p>Total de productos a contar: <strong>${response.total_productos}</strong></p>
                            <p class="text-muted small">Fecha de corte: ${response.fecha_corte || ''}${response.corte_recortado ? ' (la fecha enviada era futura y se ajustó a la hora actual)' : ''}</p>`,
                     confirmButtonText: 'Ir al Inventario'
@@ -1899,6 +1964,10 @@ $(document).ready(function() {
     $('#filtroSearch').on('input', debounce(function() {
         cargarInventarios(1);
     }, 500));
+
+    // Sucursal del listado y sucursal de la toma nueva (sus marcas/categorías)
+    $('#filtroSucursal').on('change', function() { cargarInventarios(1); });
+    $('#sucursalInventario').on('change', cargarFiltrosDisponibles);
 
     $('#filtroEstado, #filtroTipo, #filtroFechaDesde, #filtroFechaHasta').on('change', function() {
         if (this.id === 'filtroEstado') {

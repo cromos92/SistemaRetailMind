@@ -69,7 +69,8 @@ def alerta_diferencia(base, fisico, final, no_aparecio=False):
     """
     Pista de qué revisar en una diferencia. La «doble lectura» es el caso real de
     PAO4 07-10-2026: la curva completa CHALADA 23-MITSU-2 (filas 1255-1260 de la
-    pistola) vino exactamente al doble del sistema.
+    pistola) vino exactamente al doble del sistema. Un código pistoleado de más
+    varias veces (1 en sistema, 8 en pistola) cae en «lectura repetida».
     """
     if not final:
         return ''
@@ -77,6 +78,8 @@ def alerta_diferencia(base, fisico, final, no_aparecio=False):
         return 'No apareció: buscar antes de darlo por perdido' if base >= 2 else 'No apareció en la pistola'
     if base > 0 and fisico == 2 * base:
         return 'Posible doble lectura (pistola = 2 × sistema): recontar'
+    if base > 0 and fisico > 2 * base:
+        return f'Posible lectura repetida (pistola {fisico} vs sistema {base}): recontar'
     if base == 0 and final > 0:
         return 'Sin stock en sistema: ¿llegó sin ingreso o traspaso?'
     if base < 0:
@@ -196,7 +199,7 @@ def analizar(filas):
             r['mantenidos'] += 1
             r['mantenidos_unidades'] += max(fila['fisico'], 0)
             mantenidas.append(fila)
-        if fila['alerta'].startswith('Posible doble'):
+        if fila['alerta'].startswith(('Posible doble', 'Posible lectura repetida')):
             r['posibles_dobles'] += 1
             r['posibles_dobles_unidades'] += fila['final']
         elif fila['alerta'].startswith('Sin stock en sistema'):
@@ -596,7 +599,7 @@ def construir_workbook(cabecera, analisis, no_cargados=()):
         ('…de ellos todavía sin resolver en la toma', r['sin_contar']),
         ('No pistoleados que conservan el stock del sistema (SKUs / unidades)',
          f"{r['mantenidos']} / {r['mantenidos_unidades']}"),
-        ('Posible doble lectura: pistola = 2 × sistema (SKUs / unidades de más)',
+        ('Posible lectura doble o repetida: pistola ≥ 2 × sistema (SKUs / unidades de más)',
          f"{r['posibles_dobles']} / {r['posibles_dobles_unidades']}"),
         ('Sobrantes sin stock en sistema (SKUs / unidades)',
          f"{r['sin_stock_sistema']} / {r['sin_stock_sistema_unidades']}"),
