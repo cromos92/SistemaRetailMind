@@ -629,6 +629,13 @@
                     </div>
                 </div>
 
+                <!-- === AVISO: faltantes que el jefe de local encontró y esperan reposición === -->
+                <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2" id="avisoPorReponer" style="display: none !important;">
+                    <span><i class="ri-checkbox-circle-line me-1"></i>
+                        <strong id="avisoPorReponerN">0</strong> faltantes fueron encontrados en la tienda y esperan que un administrador los reponga al stock.</span>
+                    <a href="/app/revision-faltantes/?estado=encontrado" class="btn btn-sm btn-primary"><i class="ri-search-eye-line me-1"></i>Ir a Faltantes por revisar</a>
+                </div>
+
                 <!-- === ALERTA DE DIFERENCIAS (si hay inventarios con diferencias) === -->
                 <div class="diferencias-summary" id="alertaDiferencias" style="display: none;">
                     <div class="diferencias-summary-content">
@@ -1056,6 +1063,12 @@ function cargarInventarios(page = 1) {
                                         <i class="bi bi-file-earmark-bar-graph"></i>
                                     </button>
                                 ` : ''}
+                                ${(inv.faltantes_por_revisar || inv.faltantes_por_reponer) ? `
+                                    <a href="/app/revision-faltantes/?toma=${inv.id}" class="btn btn-sm btn-outline-warning" onclick="event.stopPropagation();"
+                                       title="Faltantes de esta toma: ${inv.faltantes_por_revisar} por revisar, ${inv.faltantes_por_reponer} encontrados por reponer">
+                                        <i class="ri-search-eye-line"></i> ${inv.faltantes_por_revisar}${inv.faltantes_por_reponer ? ` · ${inv.faltantes_por_reponer} por reponer` : ''}
+                                    </a>
+                                ` : ''}
                                 ${puedeCancelar ? `
                                     <button type="button" class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); cancelarInventario(${inv.id}, '${inv.numero_inventario}')" title="Cancelar toma" aria-label="Cancelar toma">
                                         <i class="bi bi-x-circle"></i>
@@ -1079,6 +1092,9 @@ function cargarInventarios(page = 1) {
         // KPIs y tabs desde el resumen del servidor (antes contaban solo la página)
         actualizarResumen(response.resumen || {});
         actualizarAlertaDiferencias(response.inventarios);
+        const porReponer = response.faltantes_por_reponer || 0;
+        $('#avisoPorReponerN').text(porReponer);
+        document.getElementById('avisoPorReponer').style.setProperty('display', porReponer ? 'flex' : 'none', 'important');
     }).fail(function() {
         Swal.fire('Error', 'No se pudieron cargar los inventarios', 'error');
     });

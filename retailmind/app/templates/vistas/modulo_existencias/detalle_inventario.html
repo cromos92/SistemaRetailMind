@@ -1456,8 +1456,11 @@ function renderGuia(a) {
     } else if (e === 'COMPLETADO') {
         tono = 'guia-ok'; icono = 'bi-check-circle';
         titulo = 'Inventario cerrado';
-        texto = `Ajustes aplicados al stock (${formatNumber(r.ajustes_aplicados)} SKUs, referencia <code>${numeroInventario}</code> en el kardex). Descargue el informe final.`;
-        acciones = boton('exportarInformeFinal()', 'bi-file-earmark-excel', 'Informe final (Excel)');
+        texto = `Ajustes aplicados al stock (${formatNumber(r.ajustes_aplicados)} SKUs, referencia <code>${numeroInventario}</code> en el kardex).
+                 Descargue el informe final. Los faltantes descontados quedan en <strong>Faltantes por revisar</strong>: el jefe de
+                 local los busca y avisa, y un administrador repone al stock lo que aparezca.`;
+        acciones = boton('exportarInformeFinal()', 'bi-file-earmark-excel', 'Informe final (Excel)')
+                 + `<a href="/app/revision-faltantes/?toma=${inventarioId}" class="nexo-btn nexo-btn-sm nexo-btn-outline"><i class="ri-search-eye-line"></i> Faltantes por revisar</a>`;
     }
 
     $('#guiaPaso').removeClass('guia-ok guia-alerta').addClass(tono);

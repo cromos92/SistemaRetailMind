@@ -797,7 +797,39 @@ class TomaInventarioDetalle(models.Model):
         blank=True,
         verbose_name='Fecha de Ajuste'
     )
-    
+
+    # === REVISIÓN POSTERIOR DE FALTANTES ===
+    # Después de aplicar la toma el faltante ya se descontó. El jefe de local lo
+    # busca y reporta si apareció (con cuántas unidades) o si de verdad falta;
+    # un administrador repone al stock lo encontrado (pantalla «Faltantes por
+    # revisar», views_revision_faltantes.py).
+    REVISION_FALTANTE_CHOICES = [
+        ('', 'Sin revisar'),
+        ('ENCONTRADO', 'Encontrado: falta reponer'),
+        ('CONFIRMADO', 'Faltante confirmado'),
+        ('REPUESTO', 'Repuesto al stock'),
+    ]
+    revision_estado = models.CharField(
+        max_length=12, choices=REVISION_FALTANTE_CHOICES, blank=True, default='',
+        verbose_name='Revisión del faltante'
+    )
+    revision_cantidad = models.IntegerField(
+        null=True, blank=True, verbose_name='Unidades encontradas'
+    )
+    revision_nota = models.CharField(
+        max_length=255, blank=True, default='', verbose_name='Nota de la revisión'
+    )
+    revision_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='revisiones_faltante_toma', verbose_name='Revisado por'
+    )
+    revision_fecha = models.DateTimeField(null=True, blank=True, verbose_name='Fecha de revisión')
+    reposicion_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='reposiciones_faltante_toma', verbose_name='Repuesto por'
+    )
+    reposicion_fecha = models.DateTimeField(null=True, blank=True, verbose_name='Fecha de reposición')
+
     class Meta:
         verbose_name = 'Detalle de Inventario'
         verbose_name_plural = 'Detalles de Inventario'

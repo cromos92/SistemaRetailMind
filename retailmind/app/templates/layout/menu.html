@@ -31,6 +31,7 @@
 {% puede_ver_opcion_tag 'gestion_empresas' as permiso_gestion_empresas %}
 {% puede_ver_opcion_tag 'gestion_etiquetas_zebra' as permiso_gestion_etiquetas_zebra %}
 {% puede_ver_opcion_tag 'gestion_inventarios' as permiso_gestion_inventarios %}
+{% puede_ver_opcion_tag 'revision_faltantes_inventario' as permiso_revision_faltantes %}
 {% puede_ver_opcion_tag 'gestion_permisos' as permiso_gestion_permisos %}
 {% puede_ver_opcion_tag 'gestion_producto' as permiso_gestion_producto %}
 {% puede_ver_opcion_tag 'gestion_sucursales' as permiso_gestion_sucursales %}
@@ -2661,6 +2662,12 @@
                                 <i class="ri-arrow-left-right-line"></i> <span>Movimientos Producto</span>
                             </a>
                         </li>
+                        {% elif permiso_revision_faltantes %}
+                        <li class="nav-item">
+                            <a href="{% url 'revision_faltantes' %}" class="nav-link menu-link">
+                                <i class="ri-search-eye-line"></i> <span>Faltantes por revisar</span>
+                            </a>
+                        </li>
                         {% endif %}
                         {% elif total_existencias > 1 %}
                         <li class="nav-item">
@@ -2707,6 +2714,13 @@
                                     <li class="nav-item">
                                         <a href="{% url 'ver_fusion_duplicados' %}" class="nav-link" data-key="t-fusion-duplicados">
                                             <i class="ri-git-merge-line"></i> Fusionar Duplicados
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if permiso_revision_faltantes %}
+                                    <li class="nav-item">
+                                        <a href="{% url 'revision_faltantes' %}" class="nav-link" data-key="t-revision-faltantes">
+                                            <i class="ri-search-eye-line"></i> Faltantes por revisar
                                         </a>
                                     </li>
                                     {% endif %}

@@ -205,6 +205,7 @@ class Command(BaseCommand):
             ('trazabilidad_producto', 'Trazabilidad Completa', 'trazabilidad_producto', None, 'ri-route-line', 10),
             ('modificacion_precios_costos', 'Modificación Precios y Costos', 'modificacion_precios_costos', None, 'ri-money-dollar-circle-line', 11),
             ('ver_guias_talla', 'Guias de Talla', 'ver_guias_talla', None, 'ri-ruler-line', 12),
+            ('revision_faltantes_inventario', 'Faltantes por revisar', 'revision_faltantes', None, 'ri-search-eye-line', 13),
         ]
         
         for codigo, nombre, url_name, url_path, icono, orden in opciones:
@@ -586,7 +587,7 @@ class Command(BaseCommand):
             'dte_compras_pagos', 'dte_compras_eliminar',
             # Existencias
             'gestion_producto', 'edicion_rapida_precios', 'revisar_cambios_precios', 'movimientos_producto',
-            'gestion_inventarios', 'gestion_etiquetas_zebra', 'buscar_productos_sucursal',
+            'gestion_inventarios', 'revision_faltantes_inventario', 'gestion_etiquetas_zebra', 'buscar_productos_sucursal',
             'tarjeta_movimiento_producto', 'despacho_sucursales', 'trazabilidad_producto',
             'modificacion_precios_costos', 'ver_guias_talla',
             # Compras

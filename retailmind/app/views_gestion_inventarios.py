@@ -314,6 +314,8 @@ def obtener_inventarios(request):
                 obtener_sucursales_usuario(request.user).values_list('id', flat=True)
             )
             queryset = queryset.filter(sucursal_id__in=sucursales_ids)
+        # Alcance del aviso «encontrados por reponer»: no depende de los filtros de la tabla
+        alcance_aviso = queryset
 
         # Aplicar filtros
         if estado:
@@ -373,6 +375,22 @@ def obtener_inventarios(request):
             .annotate(lineas=Count('id'), contados=Count('id', filter=Q(contado=True)))
         }
 
+        # Revisión posterior de faltantes (tomas aplicadas): cuántos falta que el
+        # jefe de local revise y cuántos encontró y esperan que un admin los reponga.
+        revision_map = {
+            row['toma_inventario_id']: row
+            for row in TomaInventarioDetalle.objects
+            .filter(toma_inventario__in=[i for i in inventarios_page.object_list if i.estado == 'COMPLETADO'],
+                    contado=True, excluir_de_analisis=False, ajuste_aplicado=True, diferencia__lt=0)
+            .values('toma_inventario_id')
+            .annotate(por_revisar=Count('id', filter=Q(revision_estado='')),
+                      por_reponer=Count('id', filter=Q(revision_estado='ENCONTRADO')))
+        }
+        por_reponer_total = TomaInventarioDetalle.objects.filter(
+            toma_inventario__in=alcance_aviso.filter(estado='COMPLETADO'), revision_estado='ENCONTRADO',
+            ajuste_aplicado=True, diferencia__lt=0,
+        ).count()
+
         # Tareas de aplicación de las tomas APLICANDO de la página: para ofrecer
         # «Reanudar» solo cuando el hilo se dio por muerto (ver _tarea_huerfana).
         tareas_map = {
@@ -387,7 +405,10 @@ def obtener_inventarios(request):
         for inv in inventarios_page:
             conteo = skus_map.get(inv.id) or {}
             tarea = tareas_map.get(inv.id)
+            revision = revision_map.get(inv.id) or {}
             inventarios_data.append({
+                'faltantes_por_revisar': revision.get('por_revisar', 0),
+                'faltantes_por_reponer': revision.get('por_reponer', 0),
                 'skus_contados': conteo.get('contados', 0),
                 'skus_esperados': conteo.get('lineas', inv.total_productos_esperados),
                 'unidades_contadas': inv.total_productos_contados,
@@ -418,6 +439,7 @@ def obtener_inventarios(request):
             'success': True,
             'inventarios': inventarios_data,
             'resumen': resumen,
+            'faltantes_por_reponer': por_reponer_total,
             'pagination': {
                 'current_page': inventarios_page.number,
                 'total_pages': paginator.num_pages,

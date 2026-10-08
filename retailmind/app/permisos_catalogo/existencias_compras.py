@@ -68,6 +68,21 @@ CATALOGO = {
                  'sucursal de prod). Fusionar duplicados mueve stock y solo pide puede_ver. puede_eliminar, puede_exportar '
                  'y puede_aprobar no se usan.',
     },
+    'revision_faltantes_inventario': {
+        'pantalla': 'Faltantes por revisar',
+        'ruta': '/app/revision-faltantes/',
+        'resumen': 'Después de aplicar una toma de inventario: los faltantes ya descontados, ordenados por urgencia, '
+                   'para que el jefe de local los busque y avise; un administrador repone al stock lo encontrado.',
+        'permisos': {
+            'puede_ver': 'Entrar a la pantalla y ver los faltantes de las tomas aplicadas de sus sucursales.',
+            'puede_editar': 'Reportar un faltante como encontrado (cuántas unidades) o «no está». Reponer al stock '
+                            'exige además rol Administrador, Jefe o Maestro.',
+        },
+        'depende_de': [],
+        'notas': 'Permiso aparte de Gestión de Inventarios a propósito: aquel comparte permiso con Fusionar '
+                 'Duplicados, que mueve stock con solo Ver. Reponer crea AJUSTE_INVENTARIO_ENTRADA con '
+                 'referencia a la toma y lote FIFO al costo del corte.',
+    },
     'gestion_etiquetas_zebra': {
         'pantalla': 'Impresión Etiquetas Zebra',
         'ruta': '/app/etiquetas/',

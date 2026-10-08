@@ -296,6 +296,9 @@ URL_PERMISO_MAP = {
     '/app/gestion-precios/revisar-pendientes/': 'revisar_cambios_precios',
     '/app/verMovimientosProducto/': 'movimientos_producto',
     '/app/gestion-inventarios/': 'gestion_inventarios',
+    # Faltantes por revisar: permiso propio (el jefe de local entra aquí sin
+    # recibir Gestión de Inventarios, que comparte permiso con Fusionar Duplicados)
+    '/app/revision-faltantes/': 'revision_faltantes_inventario',
     # Fusión de duplicados: comparte el permiso fino de Gestión de Inventarios
     # (opera stock/kardex). Cubre la página y sus 2 endpoints AJAX.
     '/app/existencias/fusion-duplicados/': 'gestion_inventarios',

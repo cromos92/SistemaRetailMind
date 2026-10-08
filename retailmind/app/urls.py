@@ -13,6 +13,7 @@ from . import views_resumen_existencias
 from . import views_inteligencia_compra
 from . import views_dashboard_home
 from . import views_gestion_inventarios
+from . import views_revision_faltantes
 from . import views_etiquetas_zebra
 from . import views_fusion_duplicados
 from . import views_ecommerce
@@ -1857,6 +1858,12 @@ urlpatterns = [
     path('gestion-inventarios/api/excluir-detalle/<int:inventario_id>/<int:detalle_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.actualizar_exclusion_detalle), name='api_excluir_detalle_inventario'),
     # «No ajustar» varias líneas a la vez (seleccionadas en la tabla)
     path('gestion-inventarios/api/excluir-detalles/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.actualizar_exclusion_detalles), name='api_excluir_detalles_inventario'),
+    # Faltantes por revisar (después de aplicar la toma): el jefe de local reporta,
+    # un administrador repone. Permiso propio 'revision_faltantes_inventario'.
+    path('revision-faltantes/', views_revision_faltantes.revision_faltantes, name='revision_faltantes'),
+    path('revision-faltantes/api/', views_revision_faltantes.api_revision_faltantes, name='api_revision_faltantes'),
+    path('revision-faltantes/api/reportar/<int:detalle_id>/', views_revision_faltantes.api_reportar_faltante, name='api_reportar_faltante'),
+    path('revision-faltantes/api/reponer/<int:detalle_id>/', views_revision_faltantes.api_reponer_faltante, name='api_reponer_faltante'),
     # Acción masiva sobre las líneas sin contar (excluir / marcar sin diferencia):
     # sin ella una toma parcial no se podía cerrar (se excluían de a una).
     path('gestion-inventarios/api/no-contados/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.resolver_no_contados), name='api_resolver_no_contados'),

@@ -1,0 +1,442 @@
+{% load static %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+
+<style>
+/* Mismos patrones que Gestión de Inventarios (detalle_inventario.html):
+   module-header, kpi-card, conteo-table, nexo-btn. Paleta --nexo-* del design system. */
+:root {
+    --nexo-success-dark: #008866;
+    --nexo-warning-dark: #b87900;
+    --nexo-error-dark: #cc3d3d;
+}
+.inventarios-card { border: none; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(64, 81, 137, 0.08); }
+.module-header {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white; padding: 16px 24px;
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+}
+.module-header-left { display: flex; align-items: center; gap: 14px; }
+.module-header-icon {
+    width: 48px; height: 48px; background: rgba(255,255,255,0.2); border-radius: 12px;
+    display: flex; align-items: center; justify-content: center; font-size: 24px;
+}
+.module-header-info h5 { margin: 0; font-size: 18px; font-weight: 600; color: white; }
+.module-header-status { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 6px; flex-wrap: wrap; }
+.module-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.guia-paso {
+    display: flex; align-items: flex-start; gap: 12px;
+    background: var(--nexo-primary-light); border: 1px solid rgba(0, 102, 255, 0.25);
+    border-left: 4px solid var(--nexo-primary); border-radius: var(--nexo-radius-md);
+    padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.85rem; color: var(--nexo-gray-700);
+}
+.guia-paso > i { font-size: 1.5rem; color: var(--nexo-primary); line-height: 1; }
+
+.kpi-card { border-radius: 12px; border: none; transition: all 0.3s ease; overflow: hidden; padding: 0; text-align: center; font-family: inherit; color: inherit; }
+button.kpi-card { cursor: pointer; }
+button.kpi-card:hover, button.kpi-card:focus-visible { transform: translateY(-4px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); outline: none; }
+button.kpi-card.activo { box-shadow: 0 0 0 3px var(--nexo-primary); }
+.kpi-card .card-body { padding: 12px 16px; }
+.kpi-card .kpi-value { display: block; font-size: 1.5rem; font-weight: 700; line-height: 1.2; color: #405189; }
+.kpi-card .kpi-label { display: block; font-size: 0.75rem; font-weight: 500; color: #6c757d; }
+.kpi-pendientes { background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 4px solid #ffbe0b; }
+.kpi-faltantes { background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); border-left: 4px solid #f06548; }
+.kpi-sobrantes { background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 4px solid #0ab39c; }
+.kpi-coinciden { background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid #299cdb; }
+.kpi-sistema { background: linear-gradient(135deg, #eef1f7 0%, #dfe4ef 100%); border-left: 4px solid #405189; }
+
+.nexo-filters { background: var(--nexo-gray-100); border-radius: var(--nexo-radius-md); padding: 1rem; margin-bottom: 1rem; }
+.tabla-wrap { max-height: 65vh; overflow-y: auto; }
+.conteo-table { font-size: 0.875rem; }
+.conteo-table thead th {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--nexo-gray-700);
+    background: var(--nexo-gray-100); padding: 10px 8px; border-bottom: 2px solid var(--nexo-gray-300);
+    white-space: nowrap; position: sticky; top: 0; z-index: 2;
+}
+.conteo-table tbody td { padding: 8px; vertical-align: middle; border-bottom: 1px solid var(--nexo-gray-300); }
+.conteo-table .producto-desc { display: block; font-size: 0.78rem; color: var(--nexo-gray-700); }
+.urg { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; }
+.urg-ALTA { background: #ffebee; color: var(--nexo-error-dark); }
+.urg-MEDIA { background: #fff8e1; color: var(--nexo-warning-dark); }
+.urg-BAJA { background: var(--nexo-gray-100); color: var(--nexo-gray-700); }
+.est { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
+.est-pendiente { background: var(--nexo-gray-100); color: var(--nexo-gray-700); }
+.est-ENCONTRADO { background: #e3f2fd; color: var(--nexo-primary); }
+.est-CONFIRMADO { background: #ffebee; color: var(--nexo-error-dark); }
+.est-REPUESTO { background: #e8f5e9; color: var(--nexo-success-dark); }
+.quien { display: block; font-size: 0.72rem; color: var(--nexo-gray-700); }
+
+.nexo-btn { padding: 8px 12px; border-radius: var(--nexo-radius-md); font-weight: 500; font-size: 0.8rem; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; }
+.nexo-btn-primary { background: var(--nexo-primary); color: white; }
+.nexo-btn-success { background: var(--nexo-success); color: var(--nexo-secondary); }
+.nexo-btn-danger { background: var(--nexo-error-dark); color: white; }
+.nexo-btn-outline { background: transparent; border: 1px solid var(--nexo-gray-300); color: var(--nexo-gray-700); }
+.acciones { display: flex; gap: 6px; flex-wrap: wrap; }
+
+@media (max-width: 768px) {
+    .module-header { padding: 12px 16px; }
+    .tabla-wrap { max-height: none; }
+}
+@media (pointer: coarse) {
+    .nexo-btn { min-height: 48px; }
+}
+</style>
+
+<div class="page-content nexo-page">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0"><i class="ri-search-eye-line text-primary me-2"></i>Faltantes por revisar</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="/app/home/">Inicio</a></li>
+                            <li class="breadcrumb-item">Existencias</li>
+                            <li class="breadcrumb-item active">Faltantes por revisar</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow inventarios-card">
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon"><i class="ri-search-eye-line"></i></div>
+                    <div class="module-header-info">
+                        <h5>Faltantes por revisar</h5>
+                        <div class="module-header-status">
+                            <label for="filtroSucursal" class="mb-0">Sucursal:</label>
+                            <select id="filtroSucursal" class="form-select form-select-sm w-auto">
+                                {% for s in sucursales_revision %}
+                                <option value="{{ s.id }}" {% if s.id == sucursal_activa_id %}selected{% endif %}>{{ s.alias }}{% if s.direccion %} · {{ s.direccion }}{% endif %}</option>
+                                {% endfor %}
+                                <option value="todas" {% if not sucursal_activa_id %}selected{% endif %}>Todas mis sucursales</option>
+                            </select>
+                            <label for="filtroToma" class="mb-0 ms-2">Toma:</label>
+                            <select id="filtroToma" class="form-select form-select-sm w-auto">
+                                <option value="">Todas las tomas aplicadas</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="module-header-actions">
+                    <button type="button" class="btn btn-light btn-sm" onclick="imprimirLista()" title="Lista para recorrer la tienda (lo que falta revisar)">
+                        <i class="ri-printer-line me-1"></i>Imprimir lista
+                    </button>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <div class="guia-paso">
+                    <i class="ri-information-line"></i>
+                    <div>
+                        Estos productos <strong>ya se descontaron del stock</strong> al aplicar la toma de inventario.
+                        Búsquelos en la tienda, primero los de urgencia <strong>Alta</strong>. Si aparece, márquelo
+                        <strong>«Encontrado»</strong> con cuántas unidades; si no, <strong>«No está»</strong>.
+                        {% if puede_reponer %}
+                        Como administrador, usted repone al stock lo encontrado con <strong>«Reponer al stock»</strong>.
+                        {% else %}
+                        El administrador repone al stock lo que usted marque como encontrado.
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- KPIs (clicables: filtran la tabla) -->
+                <div class="row g-2 mb-3">
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <button type="button" class="kpi-card kpi-pendientes card h-100 w-100" data-estado="pendiente">
+                            <div class="card-body"><span class="kpi-value" id="kpiPendiente">—</span>
+                                <span class="kpi-label"><i class="ri-time-line me-1"></i>Por revisar</span></div>
+                        </button>
+                    </div>
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <button type="button" class="kpi-card kpi-faltantes card h-100 w-100" data-estado="pendiente" data-urgentes="1">
+                            <div class="card-body"><span class="kpi-value" id="kpiUrgentes">—</span>
+                                <span class="kpi-label"><i class="ri-alarm-warning-line me-1"></i>Urgentes por revisar</span></div>
+                        </button>
+                    </div>
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <button type="button" class="kpi-card kpi-coinciden card h-100 w-100" data-estado="encontrado">
+                            <div class="card-body"><span class="kpi-value" id="kpiEncontrado">—</span>
+                                <span class="kpi-label"><i class="ri-checkbox-circle-line me-1"></i>Encontrados por reponer</span></div>
+                        </button>
+                    </div>
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <button type="button" class="kpi-card kpi-faltantes card h-100 w-100" data-estado="confirmado">
+                            <div class="card-body"><span class="kpi-value" id="kpiConfirmado">—</span>
+                                <span class="kpi-label"><i class="ri-close-circle-line me-1"></i>Confirmados (no están)</span></div>
+                        </button>
+                    </div>
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <button type="button" class="kpi-card kpi-sobrantes card h-100 w-100" data-estado="repuesto">
+                            <div class="card-body"><span class="kpi-value" id="kpiRepuesto">—</span>
+                                <span class="kpi-label"><i class="ri-arrow-go-back-line me-1"></i>Repuestos al stock</span></div>
+                        </button>
+                    </div>
+                    <div class="col-6 col-md-4 col-lg-2">
+                        <button type="button" class="kpi-card kpi-sistema card h-100 w-100" data-estado="">
+                            <div class="card-body"><span class="kpi-value" id="kpiTotal">—</span>
+                                <span class="kpi-label"><i class="ri-list-check me-1"></i>Todos <span id="kpiValor"></span></span></div>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="nexo-filters">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-6">
+                            <label class="form-label small mb-1" for="filtroTexto">Buscar</label>
+                            <input type="text" class="form-control form-control-sm" id="filtroTexto" placeholder="SKU, artículo, descripción o marca…" autocomplete="off">
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <label class="form-label small mb-1" for="filtroEstado">Estado</label>
+                            <select class="form-select form-select-sm" id="filtroEstado">
+                                <option value="pendiente">Por revisar</option>
+                                <option value="encontrado">Encontrados por reponer</option>
+                                <option value="confirmado">Confirmados (no están)</option>
+                                <option value="repuesto">Repuestos al stock</option>
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 col-6">
+                            <label class="form-label small mb-1" for="filtroUrgencia">Urgencia</label>
+                            <select class="form-select form-select-sm" id="filtroUrgencia">
+                                <option value="">Todas</option>
+                                <option value="ALTA">Alta</option>
+                                <option value="MEDIA">Media</option>
+                                <option value="BAJA">Baja</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive tabla-wrap">
+                    <table class="table conteo-table" id="tablaFaltantes">
+                        <thead>
+                            <tr>
+                                <th title="Alta: 3 o más unidades o $60.000+ a precio de venta">Urgencia</th>
+                                <th>SKU</th>
+                                <th>Producto</th>
+                                <th>Talla</th>
+                                <th>Marca</th>
+                                <th class="text-end" title="Unidades que se descontaron al aplicar la toma">Descontado</th>
+                                <th class="text-end">$ venta</th>
+                                <th>Motivo</th>
+                                <th>Toma</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyFaltantes">
+                            <tr><td colspan="11" class="text-center py-4 text-muted">Cargando…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-muted small mt-2" id="pieTabla"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'js/jquery-3.5.1.min.js' %}"></script>
+<script>
+const puedeReponer = {% if puede_reponer %}true{% else %}false{% endif %};
+const tomaInicial = '{{ toma_inicial|escapejs }}';
+let items = [];
+let soloUrgentes = false;
+
+function formatNumber(n) { return new Intl.NumberFormat('es-CL').format(Math.round(n || 0)); }
+function escHtml(t) {
+    return String(t === null || t === undefined ? '' : t)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function getCookie(name) {
+    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? decodeURIComponent(m.pop()) : null;
+}
+
+function cargar() {
+    const params = new URLSearchParams({ sucursal: $('#filtroSucursal').val() || '', toma: $('#filtroToma').val() || '' });
+    $.get(`/app/revision-faltantes/api/?${params}`, function(resp) {
+        if (!resp.success) { Swal.fire('Error', resp.error, 'error'); return; }
+        items = resp.items || [];
+        const r = resp.resumen || {};
+        $('#kpiPendiente').text(formatNumber(r.pendiente));
+        $('#kpiUrgentes').text(formatNumber(r.urgentes_pendientes));
+        $('#kpiEncontrado').text(formatNumber(r.encontrado));
+        $('#kpiConfirmado').text(formatNumber(r.confirmado));
+        $('#kpiRepuesto').text(formatNumber(r.repuesto));
+        $('#kpiTotal').text(formatNumber(r.lineas));
+        $('#kpiValor').text(r.lineas ? `($${formatNumber(r.valor_venta)} a venta)` : '');
+        const sel = $('#filtroToma');
+        const actual = sel.val() || tomaInicial;
+        sel.find('option:not(:first)').remove();
+        (resp.tomas || []).forEach(t => sel.append(`<option value="${t.id}">${escHtml(t.numero)} · ${escHtml(t.sucursal)} (${t.lineas})</option>`));
+        if (actual && sel.find(`option[value="${actual}"]`).length) sel.val(actual);
+        render();
+    }).fail(() => Swal.fire('Error', 'No se pudo cargar la lista', 'error'));
+}
+
+function filtrados() {
+    const estado = $('#filtroEstado').val();
+    const urg = $('#filtroUrgencia').val();
+    const texto = ($('#filtroTexto').val() || '').trim().toUpperCase();
+    const mapa = { pendiente: '', encontrado: 'ENCONTRADO', confirmado: 'CONFIRMADO', repuesto: 'REPUESTO' };
+    return items.filter(i =>
+        (estado === '' || i.revision_estado === mapa[estado]) &&
+        (!urg || i.urgencia === urg) &&
+        (!soloUrgentes || i.urgencia === 'ALTA') &&
+        (!texto || `${i.sku} ${i.articulo} ${i.descripcion} ${i.marca}`.toUpperCase().includes(texto)));
+}
+
+function celdaEstado(i) {
+    if (i.revision_estado === 'ENCONTRADO')
+        return `<span class="est est-ENCONTRADO">Encontrado: ${i.revision_cantidad} u.</span><span class="quien">${escHtml(i.revision_por)} · ${i.revision_fecha}</span>`;
+    if (i.revision_estado === 'CONFIRMADO')
+        return `<span class="est est-CONFIRMADO">No está</span><span class="quien">${escHtml(i.revision_por)} · ${i.revision_fecha}</span>`;
+    if (i.revision_estado === 'REPUESTO')
+        return `<span class="est est-REPUESTO">Repuesto: ${i.revision_cantidad} u.</span><span class="quien">${escHtml(i.reposicion_por)} · ${i.reposicion_fecha}</span>`;
+    return '<span class="est est-pendiente">Por revisar</span>';
+}
+
+function celdaAcciones(i) {
+    if (i.revision_estado === 'REPUESTO') return '';
+    if (!i.revision_estado) {
+        return `<div class="acciones">
+            <button type="button" class="nexo-btn nexo-btn-success" onclick="reportar(${i.id}, 'ENCONTRADO')"><i class="ri-checkbox-circle-line"></i> Encontrado</button>
+            <button type="button" class="nexo-btn nexo-btn-outline" onclick="reportar(${i.id}, 'CONFIRMADO')"><i class="ri-close-circle-line"></i> No está</button></div>`;
+    }
+    let html = '<div class="acciones">';
+    if (i.revision_estado === 'ENCONTRADO' && puedeReponer) {
+        html += `<button type="button" class="nexo-btn nexo-btn-primary" onclick="reponer(${i.id})"><i class="ri-arrow-go-back-line"></i> Reponer ${i.revision_cantidad} al stock</button>`;
+    }
+    html += `<button type="button" class="nexo-btn nexo-btn-outline" onclick="reportar(${i.id}, '')" title="Volver a «Por revisar»"><i class="ri-arrow-go-back-line"></i> Deshacer</button></div>`;
+    return html;
+}
+
+function render() {
+    const lista = filtrados();
+    $('#tbodyFaltantes').html(lista.length ? lista.map(i => `
+        <tr>
+            <td><span class="urg urg-${i.urgencia}">${i.urgencia === 'ALTA' ? 'Alta' : i.urgencia === 'MEDIA' ? 'Media' : 'Baja'}</span></td>
+            <td><code>${escHtml(i.sku)}</code></td>
+            <td><strong>${escHtml(i.articulo)}</strong>${i.descripcion && i.descripcion !== i.articulo ? `<span class="producto-desc">${escHtml(i.descripcion)}</span>` : ''}</td>
+            <td>${escHtml(i.talla) || '-'}</td>
+            <td><small>${escHtml(i.marca) || '-'}</small></td>
+            <td class="text-end fw-bold" title="Sistema ${i.sistema}, contado ${i.contado}${i.recontado ? ' (recontado)' : ''}">−${formatNumber(i.faltante)}</td>
+            <td class="text-end">$${formatNumber(i.valor_venta)}</td>
+            <td><small>${escHtml(i.motivo)}${i.recontado ? ' · recontado' : ''}</small></td>
+            <td><small><a href="/app/gestion-inventarios/detalle/${i.toma_id}/">${escHtml(i.numero)}</a><br>${escHtml(i.sucursal)}</small></td>
+            <td>${celdaEstado(i)}${i.revision_nota ? `<span class="quien">«${escHtml(i.revision_nota)}»</span>` : ''}</td>
+            <td>${celdaAcciones(i)}</td>
+        </tr>`).join('') : '<tr><td colspan="11" class="text-center py-4 text-muted">No hay faltantes en este filtro</td></tr>');
+    const unidades = lista.reduce((s, i) => s + i.faltante, 0);
+    $('#pieTabla').text(`${formatNumber(lista.length)} líneas · ${formatNumber(unidades)} u. · orden: urgencia y valor a precio de venta`);
+    $('.kpi-card').removeClass('activo');
+}
+
+function reportar(id, estado) {
+    const i = items.find(x => x.id === id);
+    if (!i) return;
+    if (estado === 'ENCONTRADO') {
+        Swal.fire({
+            title: `¿Cuántas encontró? · ${escHtml(i.sku)}`,
+            html: `<p class="mb-2">${escHtml(i.articulo)} ${escHtml(i.talla)} — se descontaron <strong>${i.faltante}</strong>.</p>
+                   <input type="number" id="swCant" class="form-control mb-2" min="1" max="${i.faltante}" value="${i.faltante}">
+                   <input type="text" id="swNota" class="form-control" maxlength="255" placeholder="Dónde estaba (opcional)">`,
+            showCancelButton: true, confirmButtonText: 'Reportar encontrado', cancelButtonText: 'Volver',
+            preConfirm: () => {
+                const c = parseInt(document.getElementById('swCant').value, 10);
+                if (!c || c < 1 || c > i.faltante) { Swal.showValidationMessage(`Entre 1 y ${i.faltante}`); return false; }
+                return { estado, cantidad: c, nota: document.getElementById('swNota').value };
+            }
+        }).then(r => { if (r.isConfirmed) enviarReporte(id, r.value); });
+    } else if (estado === 'CONFIRMADO') {
+        Swal.fire({
+            title: '¿Confirma que no está?',
+            html: `<p>${escHtml(i.articulo)} ${escHtml(i.talla)} (${escHtml(i.sku)}): el faltante de ${i.faltante} u. queda confirmado.</p>
+                   <input type="text" id="swNota" class="form-control" maxlength="255" placeholder="Nota (opcional)">`,
+            showCancelButton: true, confirmButtonText: 'Sí, no está', cancelButtonText: 'Volver',
+            preConfirm: () => ({ estado, nota: document.getElementById('swNota').value })
+        }).then(r => { if (r.isConfirmed) enviarReporte(id, r.value); });
+    } else {
+        enviarReporte(id, { estado: '' });
+    }
+}
+
+function enviarReporte(id, payload) {
+    $.ajax({
+        url: `/app/revision-faltantes/api/reportar/${id}/`, method: 'POST', contentType: 'application/json',
+        data: JSON.stringify(payload), headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        success: function(resp) {
+            if (!resp.success) { Swal.fire('No se pudo', resp.error, 'error'); return; }
+            Swal.fire({ icon: 'success', title: 'Listo', timer: 1200, showConfirmButton: false });
+            cargar();
+        },
+        error: function(xhr) { Swal.fire('Error', xhr.status === 403 ? 'No tiene permiso para reportar' : 'No se pudo guardar', 'error'); }
+    });
+}
+
+function reponer(id) {
+    const i = items.find(x => x.id === id);
+    if (!i) return;
+    Swal.fire({
+        title: '¿Reponer al stock?',
+        html: `<p>${escHtml(i.articulo)} ${escHtml(i.talla)} (${escHtml(i.sku)}) — ${escHtml(i.sucursal)}</p>
+               <p>Entran <strong>${i.revision_cantidad}</strong> u. (reportó ${escHtml(i.revision_por)}). Queda en el kardex como
+               ajuste de inventario con referencia <code>${escHtml(i.numero)}</code>.</p>`,
+        icon: 'question', showCancelButton: true, confirmButtonText: 'Sí, reponer', cancelButtonText: 'Volver'
+    }).then(r => {
+        if (!r.isConfirmed) return;
+        $.ajax({
+            url: `/app/revision-faltantes/api/reponer/${id}/`, method: 'POST', contentType: 'application/json',
+            data: JSON.stringify({}), headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(resp) {
+                if (!resp.success) { Swal.fire('No se pudo', resp.error, 'error'); return; }
+                Swal.fire('Repuesto', `Stock actual de ${escHtml(i.sku)}: ${resp.item.stock_actual}`, 'success');
+                cargar();
+            },
+            error: function(xhr) { Swal.fire('Error', xhr.status === 403 ? 'Solo un administrador repone al stock' : 'No se pudo reponer', 'error'); }
+        });
+    });
+}
+
+// Lista para recorrer la tienda: lo que falta revisar, por urgencia
+function imprimirLista() {
+    const lista = items.filter(i => !i.revision_estado);
+    const filas = lista.map(i => `<tr><td>${i.urgencia}</td><td>${escHtml(i.sku)}</td><td>${escHtml(i.articulo)} ${escHtml(i.descripcion)}</td>
+        <td>${escHtml(i.talla)}</td><td>${escHtml(i.marca)}</td><td style="text-align:right">${i.faltante}</td><td style="width:90px"></td></tr>`).join('');
+    const w = window.open('', '_blank');
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Faltantes por revisar</title>
+        <style>body{font-family:Arial,sans-serif;font-size:12px}table{border-collapse:collapse;width:100%}
+        th,td{border:1px solid #999;padding:4px}th{background:#eee}</style></head><body>
+        <h3>Faltantes por revisar — ${escHtml($('#filtroSucursal option:selected').text())}</h3>
+        <p>${lista.length} líneas. Anote cuántas encontró.</p>
+        <table><thead><tr><th>Urgencia</th><th>SKU</th><th>Producto</th><th>Talla</th><th>Marca</th><th>Descontado</th><th>Encontré</th></tr></thead>
+        <tbody>${filas}</tbody></table></body></html>`);
+    w.document.close();
+    w.focus();
+    w.print();
+}
+
+$(document).ready(function() {
+    // Enlaces con filtro (p. ej. el aviso de Gestión de Inventarios: ?estado=encontrado)
+    const estadoUrl = new URLSearchParams(window.location.search).get('estado');
+    if (estadoUrl !== null && $(`#filtroEstado option[value="${estadoUrl}"]`).length) $('#filtroEstado').val(estadoUrl);
+    cargar();
+    $('#filtroSucursal').on('change', function() { $('#filtroToma').val(''); cargar(); });
+    $('#filtroToma').on('change', cargar);
+    $('#filtroEstado, #filtroUrgencia').on('change', function() { soloUrgentes = false; render(); });
+    $('#filtroTexto').on('input', render);
+    $('.kpi-card[data-estado]').on('click', function() {
+        $('#filtroEstado').val(this.dataset.estado);
+        $('#filtroUrgencia').val('');
+        soloUrgentes = this.dataset.urgentes === '1';
+        render();
+        $(this).addClass('activo');
+    });
+});
+</script>
+
+{% include '../../layout/footer.html' %}
