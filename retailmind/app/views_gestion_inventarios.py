@@ -39,6 +39,8 @@ from .models import (
     LoteProducto, Movimientos_Producto, Sucursal, Empresa, EmpresaUser,
     TomaInventario, TomaInventarioDetalle, TomaInventarioLog, TareaAplicacionAjustes
 )
+from .models.inventario import requiere_reconteo
+from .services import informe_toma_inventario as informe_toma
 from .utils_permisos import (
     puede_ver_sucursal, obtener_empresas_usuario, obtener_sucursales_usuario
 )
@@ -61,6 +63,45 @@ TAREA_HUERFANA_MINUTOS = 30
 
 # Tolerancia para fechas que manda el navegador (resolución de minuto + reloj del PC)
 TOLERANCIA_RELOJ = timedelta(minutes=2)
+
+# SKUs OPERATIVOS: viven en el catálogo de cada tienda pero no son mercadería
+# (cuadratura de tarjetas, bolsas de empaque, cobro de envíos). En PAO4 son 4 SKUs
+# con 13.173 «unidades» (VISA/DIFER VISA 9.914, 45-1 BOLSA CORPORATIVA 1.249,
+# BOLSA CALZADOS/PAPEL 1.138, ENVIOS/COSTO ENVIO 870). Nadie los pasa por la
+# pistola, así que en una toma completa saldrían como faltante y el ajuste los
+# llevaría a 0: se excluyen del análisis en vez de ajustarse. Se reconocen por
+# artículo/descripción y no por Producto.excluir_de_analitica: BOLSA CALZADOS no
+# lo tiene marcado, y esa marca también se usa para consignación/exhibición, que
+# sí es mercadería que se cuenta.
+_ARTICULOS_OPERATIVOS = {'VISA', 'ENVIO', 'ENVIOS'}
+_FRASES_SKU_OPERATIVO = (
+    'DIFER VISA', 'BOLSA CORPORATIVA', 'BOLSA CALZADO', 'BOLSA GENERO',
+    'BOLSA PAPEL', 'REAL PAPEL', 'COSTO ENVIO',
+)
+MARCA_OBSERVACION_OPERATIVO = 'SKU operativo (no es mercadería): excluido del análisis'
+
+
+def _es_sku_operativo(articulo, descripcion):
+    articulo = _sin_tildes(articulo or '').upper()
+    texto = f'{articulo} | {_sin_tildes(descripcion or "").upper()}'
+    return articulo in _ARTICULOS_OPERATIVOS or any(f in texto for f in _FRASES_SKU_OPERATIVO)
+
+
+def _ids_operativos(detalles_qs):
+    """Ids de detalle (del queryset dado) que corresponden a SKUs operativos.
+    La BD preselecciona (la pantalla de análisis lo pide en cada refresco y hay
+    tomas de 335.000 líneas) y _es_sku_operativo confirma sin tildes."""
+    articulo = 'producto_talla__producto__articulo'
+    descripcion = 'producto_talla__producto__descripcion'
+    q = Q()
+    for nombre in _ARTICULOS_OPERATIVOS:
+        q |= Q(**{f'{articulo}__iexact': nombre})
+    for frase in _FRASES_SKU_OPERATIVO:
+        q |= Q(**{f'{articulo}__icontains': frase}) | Q(**{f'{descripcion}__icontains': frase})
+    return [
+        d['id'] for d in detalles_qs.filter(q).values('id', articulo, descripcion)
+        if _es_sku_operativo(d[articulo], d[descripcion])
+    ]
 
 
 def _normalizar_sku(valor):
@@ -614,8 +655,20 @@ def _generar_detalles_inventario(inventario, filtros, sucursal_id):
     # "Solo productos con stock" evita generar decenas de miles de líneas en cero.
     # En bodega EDEL hay 341.945 tallas y solo 275 con stock: sin este filtro la
     # toma nace con 335.000 líneas imposibles de contar.
-    if filtros.get('solo_con_stock', True):
-        queryset = queryset.filter(stock__gt=0)
+    # Es stock AL CORTE, no el de ahora: con un corte de anoche, lo vendido hoy en
+    # la mañana (stock actual 0) existía al contar y debe estar en la toma (PAO4
+    # 08-10: 3 SKUs vendidos antes de cargar la pistola). También entran los
+    # negativos: un inventario completo es justamente lo que los corrige.
+    solo_con_stock = filtros.get('solo_con_stock', True)
+    if solo_con_stock:
+        corte_date, corte_time = _fecha_hora_local(inventario.fecha_corte)
+        movidos_post_corte = Movimientos_Producto.objects.filter(
+            Q(sucursal_destino_id=sucursal_id) | Q(sucursal_origen_id=sucursal_id),
+            ProductoTalla__producto__sucursal_id=sucursal_id,
+        ).filter(
+            Q(fecha__gt=corte_date) | Q(fecha=corte_date, hora__gt=corte_time)
+        ).values('ProductoTalla_id')
+        queryset = queryset.filter(~Q(stock=0) | Q(id__in=movidos_post_corte))
 
     # Procesar productos en lotes para reducir consultas N+1
     detalles = []
@@ -632,8 +685,11 @@ def _generar_detalles_inventario(inventario, filtros, sucursal_id):
         costo_map = _obtener_costo_promedio_batch(ids)
 
         for pt in batch_items:
+            posteriores = posteriores_map.get(pt.id, 0)
+            if solo_con_stock and not pt.stock and not ((pt.stock or 0) - posteriores):
+                continue  # en 0 al corte y en 0 ahora: nada que contar
             detalles.append(_nuevo_detalle_desde_pt(
-                inventario, pt, posteriores_map.get(pt.id, 0), costo_map.get(pt.id)
+                inventario, pt, posteriores, costo_map.get(pt.id)
             ))
 
         if len(detalles) >= BATCH_SIZE:
@@ -1408,6 +1464,7 @@ def importar_conteo_pistola(request, inventario_id):
 
         actualizados = 0
         sobreescritos = []
+        a_guardar = []
         for sku, cantidad in conteos_por_sku.items():
             detalle = detalles_por_sku.get(sku)
             if not detalle:
@@ -1422,18 +1479,33 @@ def importar_conteo_pistola(request, inventario_id):
             detalle.contado = True
             detalle.fecha_conteo = fecha_conteo
             detalle.usuario_conteo = request.user
-            detalle.save()
+            detalle.recalcular_diferencia()  # lo mismo que haría save()
+            a_guardar.append(detalle)
             actualizados += 1
+        # En lotes: una tienda completa (PAO4: 8.175 SKUs) eran 8.175 UPDATE de a
+        # uno y la carga podía pasar el timeout de 60 s de gunicorn y perderse.
+        TomaInventarioDetalle.objects.bulk_update(a_guardar, [
+            'stock_movimientos_post_corte', 'stock_sistema_ajustado', 'stock_fisico',
+            'contado', 'fecha_conteo', 'usuario_conteo', 'diferencia', 'reconteo_requerido',
+        ], batch_size=BATCH_SIZE)
 
         inventario.calcular_metricas()
 
+        # Con cantidad: el informe final los lista en «No cargados» (mercadería que
+        # está en la tienda pero no en el sistema de la sucursal).
+        no_encontrados_detalle = [
+            {'sku': sku, 'cantidad': conteos_por_sku.get(sku)} for sku in no_encontrados
+        ]
+        unidades_leidas = sum(conteos_por_sku.values())
         fecha_conteo_local = timezone.localtime(fecha_conteo).strftime('%d/%m/%Y %H:%M')
         _registrar_log(
             inventario=inventario,
             tipo_accion='REGISTRO_CONTEO',
             descripcion=(
                 f'Importación de archivo: {actualizados} productos actualizados'
+                f' ({len(conteos_por_sku)} SKU / {unidades_leidas} u. leídas)'
                 + (f', {len(agregados)} SKU agregados a la toma' if agregados else '')
+                + (f', {len(no_encontrados)} códigos no existen en la sucursal' if no_encontrados else '')
                 + f'. Conteo físico al {fecha_conteo_local}'
                 + f' (columnas: SKU={encabezados[sku_idx] if tiene_encabezado else sku_idx}, '
                   f'conteo={encabezados[cantidad_idx] if tiene_encabezado else cantidad_idx})'
@@ -1441,9 +1513,11 @@ def importar_conteo_pistola(request, inventario_id):
             usuario=request.user,
             datos={
                 'actualizados': actualizados, 'agregados': agregados,
-                'no_encontrados': no_encontrados, 'ambiguos': ambiguos, 'errores': errores,
+                'no_encontrados': no_encontrados, 'no_encontrados_detalle': no_encontrados_detalle,
+                'ambiguos': ambiguos, 'errores': errores,
                 'sobreescritos': sobreescritos[:200], 'fecha_conteo': fecha_conteo_local,
-                'archivo': archivo.name,
+                'archivo': archivo.name, 'skus_leidos': len(conteos_por_sku),
+                'unidades_leidas': unidades_leidas,
             }
         )
 
@@ -1452,9 +1526,12 @@ def importar_conteo_pistola(request, inventario_id):
             'actualizados': actualizados,
             'agregados': agregados,
             'no_encontrados': no_encontrados,
+            'no_encontrados_unidades': sum(d['cantidad'] or 0 for d in no_encontrados_detalle),
             'ambiguos': ambiguos,
             'sobreescritos': sobreescritos,
             'fecha_conteo': fecha_conteo_local,
+            'skus_leidos': len(conteos_por_sku),
+            'unidades_leidas': unidades_leidas,
             'errores': errores if errores else None,
             'progreso': float(inventario.progreso_conteo)
         })
@@ -1763,6 +1840,19 @@ def obtener_analisis_inventario(request, inventario_id):
         pendientes_contar = detalles_analisis.filter(contado=False).count()
         pendientes_con_stock = detalles_analisis.filter(contado=False, stock_sistema__gt=0).count()
         ajustes_aplicados = inventario.ajustes_aplicados().count()
+        # «Unid. en sistema» de TODA la toma (el inventario antiguo), no solo de lo
+        # contado: con 8.000 SKUs pendientes la tarjeta decía 0 y no se entendía.
+        unidades_sistema_total = detalles_analisis.aggregate(
+            t=Coalesce(Sum('stock_sistema_ajustado'), 0)
+        )['t']
+        unidades_pendientes = detalles_analisis.filter(contado=False, stock_sistema__gt=0).aggregate(
+            t=Coalesce(Sum('stock_sistema'), 0)
+        )['t']
+        operativos_pendientes = (
+            detalles_analisis.filter(contado=False, id__in=_ids_operativos(detalles_analisis.filter(contado=False)))
+            .aggregate(lineas=Count('id'), unidades=Coalesce(Sum('stock_sistema'), 0))
+            if pendientes_contar else {'lineas': 0, 'unidades': 0}
+        )
 
         # === SEGMENTOS (para los filtros del detalle) ===
         segmentos_marcas = list(
@@ -1818,9 +1908,16 @@ def obtener_analisis_inventario(request, inventario_id):
                 'pendientes_contar': pendientes_contar,
                 'pendientes_con_stock': pendientes_con_stock,
                 'pendientes_sin_stock': pendientes_contar - pendientes_con_stock,
+                'pendientes_unidades': unidades_pendientes or 0,
+                'operativos_pendientes': operativos_pendientes['lineas'] or 0,
+                'operativos_pendientes_unidades': operativos_pendientes['unidades'] or 0,
                 'ajustes_aplicados': ajustes_aplicados,
                 'unidades_fisicas': unidades['fisicas'] or 0,
+                # solo de lo contado (comparable con unidades_fisicas)
                 'unidades_sistema': unidades['sistema'] or 0,
+                'unidades_sistema_total': unidades_sistema_total or 0,
+                'sobrantes_unidades': inventario.total_diferencias_positivas,
+                'faltantes_unidades': inventario.total_diferencias_negativas,
                 'progreso': float(inventario.progreso_conteo),
                 'excluidos': inventario.detalles.filter(excluir_de_analisis=True).count(),
                 'con_diferencia': diferencias_positivas.count() + diferencias_negativas.count(),
@@ -1866,6 +1963,8 @@ def obtener_analisis_inventario(request, inventario_id):
             },
             'estado': inventario.estado,
             'estado_display': inventario.get_estado_display(),
+            'tipo_inventario': inventario.tipo_inventario,
+            'numero_inventario': inventario.numero_inventario,
             'conteo_tienda_cerrada': inventario.conteo_tienda_cerrada,
             'fecha_corte_local': timezone.localtime(inventario.fecha_corte).strftime('%Y-%m-%dT%H:%M'),
             # Mismo criterio que TomaInventario.puede_aprobar(): nada pendiente de
@@ -2087,6 +2186,64 @@ def exportar_diferencias_inventario(request, inventario_id):
 
     except Exception as e:
         logger.error(f"Error al exportar diferencias: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_GET
+@login_required
+def obtener_informe_marcas(request, inventario_id):
+    """
+    Resultado por marca para la pantalla: inventario antiguo (sistema) vs nuevo
+    (pistola) con Stock, P COSTO y P VENTA, como el informe «Inventario General».
+    Mismo cálculo que el Excel (services/informe_toma_inventario.py).
+    """
+    try:
+        inventario = _inventario_del_usuario(request, inventario_id)
+        if inventario is None:
+            return _error_sin_acceso()
+        analisis = informe_toma.analizar(informe_toma.filas_desde_toma(inventario))
+        return JsonResponse({
+            'success': True,
+            'titulo': informe_toma.titulo_informe(informe_toma.cabecera_desde_toma(inventario)),
+            'marcas': analisis['marcas'],
+            'total': analisis['total'],
+            'resumen': analisis['resumen'],
+            'no_cargados': informe_toma.no_cargados_desde_logs(inventario),
+        })
+    except Exception as e:
+        logger.error(f"Error al obtener informe por marca: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_GET
+@login_required
+def exportar_informe_final(request, inventario_id):
+    """
+    Informe final en Excel: «Por marca» (inventario antiguo | DIF | nuevo),
+    «Diferencias» por SKU (id, sku, art, marca, costo, costo2, stk, pistola, mov,
+    final, pvp, ttcosto1, ttpvp1, ttcosto2, ttpvp2), «No cargados», «Excluidos»
+    y «Resumen». Sirve en cualquier estado: antes de aprobar es la vista previa
+    de lo que se ajustará.
+    """
+    try:
+        inventario = _inventario_del_usuario(request, inventario_id)
+        if inventario is None:
+            return _error_sin_acceso()
+        cabecera = informe_toma.cabecera_desde_toma(inventario)
+        analisis = informe_toma.analizar(informe_toma.filas_desde_toma(inventario))
+        wb = informe_toma.construir_workbook(
+            cabecera, analisis, informe_toma.no_cargados_desde_logs(inventario)
+        )
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = (
+            f'attachment; filename="informe_{inventario.numero_inventario}_{inventario.sucursal.alias}.xlsx"'
+        )
+        wb.save(response)
+        return response
+    except Exception as e:
+        logger.error(f"Error al exportar informe final: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -2803,30 +2960,118 @@ def cancelar_inventario(request, inventario_id):
 # API: NO CONTADOS EN BLOQUE (cerrar tomas parciales)
 # ==============================================================================
 
-def _resolver_no_contados(inventario, usuario, accion, solo_stock_cero=False, previsualizar=False):
+# SKUs que se listan por marca en el modal de no contados (el resto se decide por marca)
+LIMITE_SKUS_POR_MARCA = 100
+
+
+def _pendientes_no_contados(inventario, solo_stock_cero=False, marcas=None, detalle_ids=None):
+    """Líneas sin contar y no excluidas, opcionalmente acotadas a marcas o a ids.
+    La marca '' (o 'SIN MARCA') toma las líneas sin marca."""
+    pendientes = inventario.detalles.filter(excluir_de_analisis=False, contado=False)
+    if solo_stock_cero:
+        pendientes = pendientes.filter(stock_sistema__lte=0)
+    if detalle_ids is not None:
+        pendientes = pendientes.filter(id__in=[int(i) for i in detalle_ids])
+    if marcas is not None:
+        nombres = [str(m).strip() for m in marcas]
+        q = Q(marca_nombre__in=[m for m in nombres if m])
+        if any(not m or m == informe_toma.SIN_MARCA for m in nombres):
+            q |= Q(marca_nombre__isnull=True) | Q(marca_nombre='')
+        pendientes = pendientes.filter(q)
+    return pendientes
+
+
+def _agrupar_no_contados(inventario):
+    """
+    Lo que no apareció en el conteo, agrupado por marca para decidir en la
+    pantalla (mantener / faltante / excluir) y la lista de SKUs operativos, que
+    siempre se excluyen. Cada marca trae sus primeros LIMITE_SKUS_POR_MARCA SKUs
+    para poder decidir de a uno.
+    """
+    pendientes = inventario.detalles.filter(excluir_de_analisis=False, contado=False)
+    ids_operativos = set(_ids_operativos(pendientes))
+    grupos, operativos = {}, []
+    filas = pendientes.values(
+        'id', 'sku', 'producto_nombre', 'talla_nombre', 'marca_nombre', 'stock_sistema', 'costo_unitario_sistema'
+    ).order_by('marca_nombre', 'producto_nombre', 'talla_nombre')
+    for d in filas.iterator(chunk_size=2000):
+        if d['id'] in ids_operativos:
+            operativos.append({
+                'id': d['id'], 'sku': d['sku'], 'articulo': d['producto_nombre'], 'stock': d['stock_sistema'],
+            })
+            continue
+        marca = (d['marca_nombre'] or '').strip()
+        g = grupos.get(marca)
+        if g is None:
+            g = grupos[marca] = {
+                'marca': marca, 'etiqueta': marca or informe_toma.SIN_MARCA,
+                'lineas': 0, 'unidades': 0, 'valor_costo': 0.0, 'skus': [],
+            }
+        g['lineas'] += 1
+        stock = d['stock_sistema'] or 0
+        if stock > 0:
+            g['unidades'] += stock
+            g['valor_costo'] += float(stock * (d['costo_unitario_sistema'] or 0))
+        if len(g['skus']) < LIMITE_SKUS_POR_MARCA:
+            g['skus'].append({
+                'id': d['id'], 'sku': d['sku'], 'articulo': d['producto_nombre'],
+                'talla': d['talla_nombre'] or '', 'stock': stock,
+                'costo': float(d['costo_unitario_sistema'] or 0),
+            })
+    for g in grupos.values():
+        g['skus_completos'] = len(g['skus']) == g['lineas']
+    return (
+        sorted(grupos.values(), key=lambda g: (-g['unidades'], g['etiqueta'])),
+        sorted(operativos, key=lambda o: -(o['stock'] or 0)),
+    )
+
+
+def _resolver_no_contados(inventario, usuario, accion, solo_stock_cero=False, previsualizar=False,
+                          marcas=None, detalle_ids=None):
     """
     Resuelve en bloque las líneas sin contar (no excluidas) para poder cerrar una
     toma parcial. Antes solo se podían excluir de a una (INV-6: 33.070 requests).
 
     accion:
       'excluir'        → excluir_de_analisis=True (no se ajustan, no bloquean).
-      'sin_diferencia' → contado=True con stock_fisico = stock del sistema al
-                         momento (corte + movimientos posteriores): diferencia 0,
-                         no mueven stock. Es la lectura «lo no contado está bien»;
-                         NUNCA se pone en 0 (sería un ajuste negativo masivo: en
-                         INV-6, 1.313 unidades).
+      'sin_diferencia' → «MANTENER EL STOCK DEL SISTEMA»: contado=True con
+                         stock_fisico = stock del sistema, diferencia 0, no mueven
+                         stock. Para lo que no se pistolea a propósito (o una toma
+                         parcial): el inventario nuevo toma la cantidad del antiguo.
+      'faltante'       → contado=True con stock_fisico = 0: lo que no apareció en
+                         la pistola falta y al aplicar se descuenta (igual que el
+                         informe antiguo: pistola vacía = 0). Las líneas con
+                         diferencia grande quedan para reconteo («búsquelo antes de
+                         darlo por perdido»).
+    En 'sin_diferencia' y 'faltante' los SKUs operativos (VISA, bolsas, envíos) se
+    EXCLUYEN: su stock queda igual y no inflan el informe con miles de unidades
+    que no son mercadería.
+    marcas / detalle_ids: acotan a esas marcas / líneas (decisión por marca o por
+      SKU desde la pantalla; ver «plan» en resolver_no_contados).
     solo_stock_cero: limitar a las líneas con stock_sistema <= 0 (las que más
       abundan en una toma creada sin filtro de stock; un negativo tampoco es
       «algo que contar»).
     previsualizar: solo devuelve el impacto (líneas, unidades, $ a costo; las
       unidades y el valor consideran solo stock > 0).
     """
-    if accion not in ('excluir', 'sin_diferencia'):
-        raise ValidationError('Acción no válida: use "excluir" o "sin_diferencia"')
+    if accion not in ('excluir', 'sin_diferencia', 'faltante', 'operativos'):
+        raise ValidationError('Acción no válida: use "excluir", "sin_diferencia", "faltante" u "operativos"')
 
-    pendientes = inventario.detalles.filter(excluir_de_analisis=False, contado=False)
-    if solo_stock_cero:
-        pendientes = pendientes.filter(stock_sistema__lte=0)
+    pendientes = _pendientes_no_contados(inventario, solo_stock_cero, marcas, detalle_ids)
+
+    operativos = []
+    if accion in ('faltante', 'sin_diferencia', 'operativos'):
+        ids_operativos = _ids_operativos(pendientes)
+        if ids_operativos:
+            operativos = list(
+                inventario.detalles.filter(id__in=ids_operativos)
+                .values('id', 'sku', 'producto_nombre', 'stock_sistema').order_by('-stock_sistema')
+            )
+            pendientes = pendientes.exclude(id__in=ids_operativos)
+    if accion == 'operativos':
+        # Solo dejar fuera los operativos (primer paso del plan de la pantalla:
+        # así quedan excluidos aunque no se decida nada sobre su marca).
+        pendientes = pendientes.none()
 
     impacto = pendientes.aggregate(
         lineas=Count('id'),
@@ -2846,16 +3091,86 @@ def _resolver_no_contados(inventario, usuario, accion, solo_stock_cero=False, pr
         'unidades': impacto['unidades'],
         'valor_costo': float(impacto['valor'] or 0),
         'excluidas_por_stock_negativo': 0,
+        'operativos': [
+            {'id': o['id'], 'sku': o['sku'], 'articulo': o['producto_nombre'], 'stock': o['stock_sistema']}
+            for o in operativos
+        ],
+        'operativos_unidades': sum(max(o['stock_sistema'], 0) for o in operativos),
     }
-    if previsualizar or impacto['lineas'] == 0:
+    if accion == 'faltante':
+        # Misma regla que el modelo con físico 0: |diferencia| = |stock| (sin
+        # contar el post-corte, que solo se conoce al aplicar).
+        resultado['reconteo_estimado'] = pendientes.filter(
+            Q(stock_sistema__gte=2) | Q(stock_sistema__lte=-2)
+        ).count()
+    if previsualizar or (impacto['lineas'] == 0 and not operativos):
         return resultado
 
     ahora = timezone.now()
+    if operativos:
+        # Operativos: excluidos (el stock de bolsas/VISA/envíos queda igual)
+        lineas_operativas = list(inventario.detalles.filter(id__in=[o['id'] for o in operativos]))
+        for d in lineas_operativas:
+            d.excluir_de_analisis = True
+            d.reconteo_requerido = False
+            d.observaciones = ((d.observaciones or '') + '\n' + MARCA_OBSERVACION_OPERATIVO).strip()
+        TomaInventarioDetalle.objects.bulk_update(
+            lineas_operativas, ['excluir_de_analisis', 'reconteo_requerido', 'observaciones']
+        )
+    # El momento del conteo es el del archivo: el corte si se contó con la tienda
+    # cerrada (post-corte 0); si no, ahora. Así «faltante» y «mantener» quedan en la
+    # misma foto que lo que vino en la pistola (el informe compara todo al corte).
+    fecha_conteo = (
+        _resolver_fecha_conteo(inventario, None, inventario.conteo_tienda_cerrada)
+        if accion in ('faltante', 'sin_diferencia') else ahora
+    )
     if accion == 'excluir':
         pendientes.update(excluir_de_analisis=True, reconteo_requerido=False)
-    else:
-        # Contar «igual al sistema»: hay que fijar el post-corte por línea, como
-        # hace registrar_conteo, para que diferencia quede en 0 de verdad.
+    elif accion == 'faltante':
+        ids = list(pendientes.values_list('id', flat=True))
+        for inicio in range(0, len(ids), BATCH_SIZE):
+            lote = list(inventario.detalles.filter(id__in=ids[inicio:inicio + BATCH_SIZE]))
+            pt_ids = [d.producto_talla_id for d in lote]
+            movimientos = _obtener_movimientos_post_corte_batch(
+                pt_ids, inventario.fecha_corte, fecha_conteo, inventario.sucursal_id
+            )
+            # Lo vendido DESPUÉS del conteo existía al contar (si no, no se habría
+            # vendido): esas unidades no son faltante. Sin esto, un SKU no
+            # pistoleado y vendido hoy dejaba el stock en negativo al aplicar y la
+            # toma quedaba trabada en «Aprobado» con error.
+            despues = (
+                _obtener_movimientos_post_corte_batch(pt_ids, fecha_conteo, ahora, inventario.sucursal_id)
+                if fecha_conteo < ahora else {}
+            )
+            for d in lote:
+                post = movimientos.get(d.producto_talla_id, 0)
+                base = d.stock_sistema + post
+                vendido_despues = max(0, -despues.get(d.producto_talla_id, 0))
+                fisico = min(vendido_despues, max(base, 0))
+                d.stock_movimientos_post_corte = post
+                d.stock_sistema_ajustado = base
+                d.stock_fisico = fisico
+                d.diferencia = fisico - base
+                d.reconteo_requerido = requiere_reconteo(d.diferencia, base) and d.stock_reconteo is None
+                d.contado = True
+                d.fecha_conteo = fecha_conteo
+                d.usuario_conteo = usuario
+                d.observaciones = (
+                    (d.observaciones or '') + '\n' + informe_toma.OBSERVACION_NO_APARECIO
+                    + (f' (se cuentan {fisico} u. vendidas después del conteo)' if fisico else '')
+                ).strip()
+            TomaInventarioDetalle.objects.bulk_update(lote, [
+                'stock_movimientos_post_corte', 'stock_sistema_ajustado', 'stock_fisico',
+                'diferencia', 'reconteo_requerido', 'contado', 'fecha_conteo',
+                'usuario_conteo', 'observaciones',
+            ], batch_size=BATCH_SIZE)
+        if inventario.estado == 'BORRADOR':
+            inventario.estado = 'EN_CONTEO'
+            inventario.fecha_inicio_conteo = inventario.fecha_inicio_conteo or ahora
+            inventario.save(update_fields=['estado', 'fecha_inicio_conteo', 'updated_at'])
+    elif accion == 'sin_diferencia':
+        # Mantener el stock del sistema: hay que fijar el post-corte por línea,
+        # como hace registrar_conteo, para que diferencia quede en 0 de verdad.
         ids = list(pendientes.values_list('id', flat=True))
         negativas = []
         for inicio in range(0, len(ids), BATCH_SIZE):
@@ -2863,7 +3178,7 @@ def _resolver_no_contados(inventario, usuario, accion, solo_stock_cero=False, pr
                 inventario.detalles.filter(id__in=ids[inicio:inicio + BATCH_SIZE])
             )
             movimientos = _obtener_movimientos_post_corte_batch(
-                [d.producto_talla_id for d in lote], inventario.fecha_corte, ahora, inventario.sucursal_id
+                [d.producto_talla_id for d in lote], inventario.fecha_corte, fecha_conteo, inventario.sucursal_id
             )
             a_contar = []
             for d in lote:
@@ -2880,9 +3195,9 @@ def _resolver_no_contados(inventario, usuario, accion, solo_stock_cero=False, pr
                 d.diferencia = 0
                 d.reconteo_requerido = False
                 d.contado = True
-                d.fecha_conteo = ahora
+                d.fecha_conteo = fecha_conteo
                 d.usuario_conteo = usuario
-                d.observaciones = ((d.observaciones or '') + '\nNo contado: se asume igual al sistema').strip()
+                d.observaciones = ((d.observaciones or '') + '\n' + informe_toma.OBSERVACION_MANTENIDO).strip()
                 a_contar.append(d)
             TomaInventarioDetalle.objects.bulk_update(a_contar, [
                 'stock_movimientos_post_corte', 'stock_sistema_ajustado', 'stock_fisico',
@@ -2901,14 +3216,26 @@ def _resolver_no_contados(inventario, usuario, accion, solo_stock_cero=False, pr
             inventario.save(update_fields=['estado', 'fecha_inicio_conteo', 'updated_at'])
 
     inventario.calcular_metricas()
+    descripcion_accion = {
+        'excluir': 'excluidas del análisis',
+        'sin_diferencia': 'conservan el stock del sistema (no se pistolearon)',
+        'faltante': 'contadas en 0 (faltante: no aparecieron en el conteo)',
+        'operativos': 'resueltas (solo SKU operativos)',
+    }[accion]
+    alcance = ''
+    if marcas is not None:
+        alcance = f' [marcas: {", ".join(str(m) or informe_toma.SIN_MARCA for m in marcas)[:300]}]'
+    elif detalle_ids is not None:
+        alcance = f' [{len(detalle_ids)} SKU elegidos]'
     _registrar_log(
         inventario=inventario,
         tipo_accion='MODIFICACION',
         descripcion=(
-            f'{impacto["lineas"]} líneas sin contar '
-            + ('excluidas del análisis' if accion == 'excluir' else 'marcadas como sin diferencia (igual al sistema)')
+            f'{impacto["lineas"]} líneas sin contar {descripcion_accion}{alcance}'
             + (' (solo stock 0)' if solo_stock_cero else '')
             + f'; {impacto["unidades"]} u. / ${float(impacto["valor"] or 0):,.0f} a costo'
+            + (f'. {len(operativos)} SKU operativos excluidos ({resultado["operativos_unidades"]} u.)'
+               if operativos else '')
         ),
         usuario=usuario,
         datos=resultado,
@@ -2922,9 +3249,17 @@ def _resolver_no_contados(inventario, usuario, accion, solo_stock_cero=False, pr
 def resolver_no_contados(request, inventario_id):
     """
     POST gestion-inventarios/api/no-contados/<id>/
-    Body: {"accion": "excluir"|"sin_diferencia", "solo_stock_cero": bool,
-           "previsualizar": bool}
-    Con previsualizar=true solo devuelve el impacto (para la confirmación).
+
+    Tres formas de body:
+    - {"agrupar": true}: lo que no apareció en el conteo agrupado por marca (con
+      sus SKUs) + los SKUs operativos, para decidir en la pantalla. No escribe.
+    - {"plan": [{"accion": ..., "marcas": [...]} | {"accion": ..., "detalle_ids": [...]}, ...],
+       "previsualizar": bool}: decisiones por marca y por SKU en UNA transacción.
+      Los pasos se aplican en orden y cada uno solo toca lo que sigue sin
+      resolver, así que las decisiones por SKU van primero y la de su marca
+      después cubre el resto. Un paso sin marcas ni ids toma todo lo pendiente.
+    - {"accion": "excluir"|"sin_diferencia"|"faltante", "solo_stock_cero": bool,
+       "previsualizar": bool}: una sola acción para todo lo pendiente.
     """
     inventario = _inventario_del_usuario(request, inventario_id)
     if inventario is None:
@@ -2936,6 +3271,37 @@ def resolver_no_contados(request, inventario_id):
         })
     try:
         data = json.loads(request.body) if request.body else {}
+        if data.get('agrupar'):
+            grupos, operativos = _agrupar_no_contados(inventario)
+            return JsonResponse({
+                'success': True,
+                'grupos': grupos,
+                'operativos': operativos,
+                'tipo_inventario': inventario.tipo_inventario,
+                'tienda_cerrada': inventario.conteo_tienda_cerrada,
+            })
+
+        plan = data.get('plan')
+        if plan is not None:
+            if not isinstance(plan, list) or not plan:
+                return JsonResponse({'success': False, 'error': 'El plan está vacío'})
+            pasos = []
+            for paso in plan:
+                pasos.append(_resolver_no_contados(
+                    inventario, request.user,
+                    accion=paso.get('accion'),
+                    marcas=paso.get('marcas'),
+                    detalle_ids=paso.get('detalle_ids'),
+                    previsualizar=bool(data.get('previsualizar')),
+                ))
+            return JsonResponse({
+                'success': True,
+                'pasos': pasos,
+                'estado': inventario.estado,
+                'progreso': float(inventario.progreso_conteo),
+                'pendientes': inventario.detalles.filter(excluir_de_analisis=False, contado=False).count(),
+            })
+
         resultado = _resolver_no_contados(
             inventario, request.user,
             accion=data.get('accion', 'excluir'),

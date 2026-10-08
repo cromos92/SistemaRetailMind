@@ -736,9 +736,10 @@
         <div id="res-lista"></div>
       </div>
       <div class="modal-footer d-flex gap-2">
-        <a class="btn btn-outline-primary btn-sm" id="btn-zip-txt" style="display:none;" href="#">
-          <i class="bi bi-file-zip me-1"></i>Descargar TXT (ZIP)
-        </a>
+        <button class="btn btn-outline-primary btn-sm" id="btn-txt-todos" style="display:none;" onclick="redescargarTxtsCorrida()"
+                title="Vuelve a bajar los .txt de esta facturación (solo si no llegaron a la carpeta de Acepta)">
+          <i class="bi bi-file-earmark-text me-1"></i>Descargar TXT (<span id="btn-txt-todos-n">0</span>)
+        </button>
         <button class="btn btn-outline-secondary btn-sm" id="btn-imprimir-todos" style="display:none;" onclick="imprimirTodosResultados()">
           <i class="bi bi-printer me-1"></i>Imprimir todos
         </button>
@@ -995,7 +996,6 @@ function traerPedidos(){
 let _pagina = 1;
 let _debounceFiltro = null;
 const URL_LISTA = "{% url 'pedidos_ecommerce_list' %}";
-const ZIP_TXT_URL = "{% url 'descargar_txts_zip_ecommerce' %}";
 
 function construirParams(page){
   const f = document.getElementById('form-filtros');
@@ -1316,6 +1316,65 @@ function confirmarFacturacionMasiva(){
 const LOTE_FACTURACION = 8;
 let _facturacionEnCurso = false;
 
+/* TXT Acepta: SIEMPRE un .txt por boleta. La carpeta que lee Acepta solo
+   procesa .txt — el ZIP que se bajaba antes quedaba ahí sin subir.
+   Chrome corta las ráfagas de descargas automáticas, así que salen en cola,
+   de a una y con pausa, a medida que vuelve cada tanda (si la pestaña se
+   cae a mitad de lote, lo ya facturado ya tiene su TXT en disco). La 1ª vez
+   Chrome pregunta "Descargar varios archivos" → Permitir (queda recordado). */
+const PAUSA_DESCARGA_TXT_MS = 400;
+const _colaTxt = [];
+let _colaTxtActiva = null;
+let _txtsCorrida = [];      // TXT de la última facturación masiva
+let _txtsDescargados = 0;
+
+function _nombreTxt(nombre){
+  const limpio = String(nombre || 'DTE').replace(/[\\/:*?"<>|]/g, '_');
+  return /\.txt$/i.test(limpio) ? limpio : limpio + '.txt';
+}
+
+function _descargarTxt(archivo){
+  const blob = new Blob([archivo.contenido], { type: 'text/plain;charset=utf-8' });
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = _nombreTxt(archivo.nombre_archivo);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  // Revocar al tiro podía abortar una descarga que aún no partía.
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+}
+
+function encolarTxt(archivos){
+  _colaTxt.push(...archivos);
+  if(!_colaTxtActiva){
+    _colaTxtActiva = (async () => {
+      while(_colaTxt.length){
+        const archivo = _colaTxt.shift();
+        try { _descargarTxt(archivo); _txtsDescargados++; }
+        catch(e){ console.error('Error descargando TXT:', archivo.nombre_archivo, e); }
+        await new Promise(res => setTimeout(res, PAUSA_DESCARGA_TXT_MS));
+      }
+      _colaTxtActiva = null;
+    })();
+  }
+  return _colaTxtActiva;
+}
+
+async function redescargarTxtsCorrida(){
+  if(!_txtsCorrida.length || _colaTxtActiva) return;
+  const n = _txtsCorrida.length;
+  if(!confirm(`¿Descargar otra vez los ${n} TXT?\n\n`
+    + 'Hazlo solo si NO llegaron a la carpeta de Acepta: si ya están, '
+    + 'quedarían duplicados (Chrome les agrega " (1)" al nombre).')) return;
+  const btn = document.getElementById('btn-txt-todos');
+  if(btn) btn.disabled = true;
+  _txtsDescargados = 0;
+  await encolarTxt(_txtsCorrida);
+  if(btn) btn.disabled = false;
+}
+
 async function ejecutarFacturacionMasiva(){
   if(_facturacionEnCurso) return;
   const ids = getSeleccionados();
@@ -1339,6 +1398,8 @@ async function ejecutarFacturacionMasiva(){
 
   const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
   const agregado = { total: ids.length, exitosos: 0, fallidos: 0, resultados: [] };
+  _txtsCorrida = [];
+  _txtsDescargados = 0;
 
   for(let i = 0; i < ids.length; i += LOTE_FACTURACION){
     const lote = ids.slice(i, i + LOTE_FACTURACION);
@@ -1386,6 +1447,14 @@ async function ejecutarFacturacionMasiva(){
       agregado.exitosos += data.exitosos || 0;
       agregado.fallidos += data.fallidos || 0;
       agregado.resultados.push(...(data.resultados || []));
+
+      const txtsTanda = (data.resultados || [])
+        .filter(r => r.ok && r.archivo_txt && r.archivo_txt.contenido)
+        .map(r => r.archivo_txt);
+      if(txtsTanda.length){
+        _txtsCorrida.push(...txtsTanda);
+        encolarTxt(txtsTanda);
+      }
     } catch(err){
       // La tanda falló completa (red/timeout): se reporta y se sigue con la
       // siguiente — así un tropiezo no esconde el resultado del resto.
@@ -1397,6 +1466,12 @@ async function ejecutarFacturacionMasiva(){
     }
   }
   agregado.ok = agregado.fallidos === 0;
+
+  // Terminar de bajar los TXT antes de cerrar el modal.
+  if(_colaTxtActiva){
+    if(progTxt) progTxt.textContent = `Descargando ${_txtsCorrida.length} TXT…`;
+    await _colaTxtActiva;
+  }
 
   // Salen de la selección: los facturados OK y los que ya no son facturables
   // (ya facturado/cancelado por otro operador) — si quedaran marcados, cada
@@ -1451,69 +1526,15 @@ function mostrarResultados(data){
 
   let html = '';
 
-  /* Descarga de TXT: UNA sola descarga. Con varias boletas, el loop antiguo
-     disparaba N descargas y el navegador bloquea las descargas automáticas
-     después de la primera (permiso "Descargas automáticas") — los TXT
-     "perdidos" nunca llegaban a Acepta. Ahora: 1 boleta → TXT directo;
-     2 o más → un ZIP con todos (endpoint canónico). Sobre 300 se trocea en
-     varios ZIP con un botón cada uno (cada click es un gesto del usuario →
-     sin bloqueo, y el querystring no revienta el límite del server). */
-  const conTxt = (data.resultados || []).filter(r => r.ok && r.dte_id && r.archivo_txt && r.archivo_txt.contenido);
-  const dteIdsTxt = conTxt.map(r => parseInt(r.dte_id, 10)).filter(Number.isFinite);
-  const ZIP_CHUNK = 300;
-  const zipUrls = [];
-  for(let i = 0; i < dteIdsTxt.length; i += ZIP_CHUNK){
-    zipUrls.push(ZIP_TXT_URL + '?ids=' + dteIdsTxt.slice(i, i + ZIP_CHUNK).join(','));
-  }
-  let txtsDescargados = 0;
-  let botonesZipMultiple = '';
-  if(conTxt.length === 1){
-    try {
-      const r = conTxt[0];
-      const blob = new Blob([r.archivo_txt.contenido], { type: 'text/plain;charset=utf-8' });
-      const link = document.createElement('a');
-      const blobUrl = window.URL.createObjectURL(blob);
-      link.href = blobUrl;
-      link.download = r.archivo_txt.nombre_archivo;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      // Revocar al tiro podía abortar una descarga que aún no partía.
-      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 30000);
-      txtsDescargados = 1;
-    } catch(e){ console.error('Error descargando TXT:', e); }
-  } else if(zipUrls.length === 1){
-    try {
-      // target=_blank: si el server responde un error (texto plano, sin
-      // Content-Disposition) se abre en otra pestaña en vez de navegar
-      // esta página y perder el modal de resultados.
-      const link = document.createElement('a');
-      link.href = zipUrls[0];
-      link.target = '_blank';
-      link.rel = 'noopener';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      txtsDescargados = conTxt.length;
-    } catch(e){ console.error('Error descargando ZIP de TXT:', e); }
-  } else if(zipUrls.length > 1){
-    // Sin auto-descarga: un botón por tramo (cada click = gesto del usuario).
-    botonesZipMultiple = zipUrls.map((u, idx) => {
-      const desde = idx * ZIP_CHUNK + 1;
-      const hasta = Math.min((idx + 1) * ZIP_CHUNK, dteIdsTxt.length);
-      return `<a class="btn btn-sm btn-outline-primary me-1 mb-1" target="_blank" rel="noopener" href="${u}">
-                <i class="bi bi-file-zip me-1"></i>ZIP ${idx + 1} (${desde}–${hasta})
-              </a>`;
-    }).join('');
-  }
-  // Botón manual de respaldo en el footer (por si la descarga automática no partió)
-  const btnZip = document.getElementById('btn-zip-txt');
-  if(btnZip){
-    if(zipUrls.length === 1 && conTxt.length > 0){
-      btnZip.href = zipUrls[0]; btnZip.target = '_blank'; btnZip.style.display = '';
-    } else {
-      btnZip.style.display = 'none';
-    }
+  // Los TXT ya se bajaron durante la facturación (encolarTxt). Acá solo el
+  // botón de respaldo, por si Chrome bloqueó las descargas múltiples.
+  const nTxt = _txtsCorrida.length;
+  const btnTxtTodos = document.getElementById('btn-txt-todos');
+  if(btnTxtTodos){
+    btnTxtTodos.disabled = false;
+    btnTxtTodos.style.display = nTxt > 0 ? '' : 'none';
+    const lbl = document.getElementById('btn-txt-todos-n');
+    if(lbl) lbl.textContent = nTxt;
   }
 
   for(const r of data.resultados){
@@ -1554,26 +1575,17 @@ function mostrarResultados(data){
     }
   }
 
-  if(txtsDescargados > 0){
-    const detalleDescarga = txtsDescargados === 1
-      ? '1 archivo TXT descargado automáticamente.'
-      : `${txtsDescargados} TXT descargados en UN solo ZIP (descarga única — el navegador no bloquea nada).`;
+  if(nTxt > 0){
+    const detalleDescarga = nTxt === 1
+      ? '1 archivo <strong>.txt</strong> descargado.'
+      : `<strong>${_txtsDescargados} de ${nTxt}</strong> archivos <strong>.txt</strong> descargados (uno por boleta).`;
     summary.innerHTML += `
       <div class="col-12 mt-2">
         <div class="alert alert-info py-2 mb-0" style="font-size:.78rem;">
-          <i class="bi bi-file-earmark-arrow-down me-1"></i>
+          <i class="bi bi-file-earmark-text me-1"></i>
           ${detalleDescarga}
-          Si no inició la descarga, usa el botón <strong>Descargar TXT (ZIP)</strong> abajo o el botón <strong>TXT</strong> de cada fila.
-        </div>
-      </div>`;
-  } else if(botonesZipMultiple){
-    summary.innerHTML += `
-      <div class="col-12 mt-2">
-        <div class="alert alert-warning py-2 mb-0" style="font-size:.78rem;">
-          <i class="bi bi-file-earmark-zip me-1"></i>
-          Son <strong>${dteIdsTxt.length}</strong> TXT — por el tamaño del lote se dividen en
-          <strong>${zipUrls.length}</strong> ZIP. Descarga TODOS (un click cada uno) para no dejar
-          boletas sin subir a Acepta:<br>${botonesZipMultiple}
+          ${nTxt > 1 ? 'Si Chrome pregunta <strong>«Descargar varios archivos»</strong>, elige <strong>Permitir</strong>.' : ''}
+          Si alguno no llegó a la carpeta de Acepta, usa <strong>Descargar TXT</strong> abajo o el botón <strong>TXT</strong> de su fila.
         </div>
       </div>`;
   }

@@ -8,14 +8,14 @@ FIFO de ecommerce los dejaba como tipo_movimiento='INGRESO').
 Correr en BD local desechable:
     python manage.py test app.tests.test_ecommerce_facturacion
 """
-import io
-import zipfile
+import json
 
 from django.test import RequestFactory, TestCase
+from django.utils import timezone
 
 from app.models import Movimientos_Producto, TicketDetallePago, Dte, PedidoEcommerce
 from app.views import obtener_siguiente_correlativo
-from app.views_ecommerce import _crear_ticket_desde_pedido, descargar_txts_zip_ecommerce
+from app.views_ecommerce import _crear_ticket_desde_pedido, facturar_ecommerce_masivo
 from app.views_modulo_documentos import construir_datos_txt_desde_dte, generar_txt_dte_acepta
 from app.views_modulo_ventas import generar_dte_desde_ticket
 
@@ -308,67 +308,49 @@ class TxtEcommerceLlevaSkuTest(_BaseFacturacionConDte):
         self.assertEqual(len(linea_sku), 1, 'la línea de detalle de la boleta debe partir con el SKU')
 
 
-class DescargarTxtsZipEcommerceTest(_BaseFacturacionConDte):
-    """El endpoint ZIP entrega UNA sola descarga con los TXT de todos los DTEs
-    del lote (la descarga múltiple era bloqueada por el navegador)."""
+class FacturacionMasivaEntregaTxtTest(_BaseFacturacionConDte):
+    """La facturación masiva entrega, por cada boleta, su TXT Acepta listo
+    para bajar como archivo .txt suelto: la carpeta que lee Acepta solo
+    procesa .txt (el ZIP que se bajaba antes quedaba ahí sin subir)."""
 
     def setUp(self):
         super().setUp()
-        # El endpoint exige puede_ver sobre ecommerce_pedidos_todos (fail-closed):
-        # sembrar la opción de menú y el permiso del rol del usuario de prueba.
         from app.models import ModuloSistema, OpcionMenu, PermisoRol
-        # get_or_create: la migración 0218 ya siembra el módulo 'ecommerce' (y
-        # puede sembrar la opción); un create() reventaba por UNIQUE en sqlite.
+        # get_or_create: la migración 0218 ya siembra el módulo 'ecommerce'.
         modulo, _ = ModuloSistema.objects.get_or_create(codigo='ecommerce', defaults={'nombre': 'Ecommerce'})
-        self.opcion, _ = OpcionMenu.objects.get_or_create(
+        opcion, _ = OpcionMenu.objects.get_or_create(
             codigo='ecommerce_pedidos_todos', defaults={'modulo': modulo, 'nombre': 'Pedidos Ecommerce'},
         )
-        PermisoRol.objects.create(rol=self.user.rol, opcion_menu=self.opcion, puede_ver=True)
+        PermisoRol.objects.create(rol=self.user.rol, opcion_menu=opcion, puede_ver=True, puede_crear=True)
+        crear_vendedor(nombre='Venta Internet', empresa=self.sucursal.empresa, codigo_vendedor=1000)
 
-    def _get(self, ids_param):
-        request = RequestFactory().get('/app/ecommerce/dte/txts-zip/', {'ids': ids_param})
+    def _pedido_con_guia(self, num):
+        pedido = self._pedido(num, cantidad=1)
+        pedido.fecha_impresion_guia = timezone.now()
+        pedido.save(update_fields=['fecha_impresion_guia'])
+        return pedido
+
+    def test_cada_boleta_trae_su_txt(self):
+        pedidos = [self._pedido_con_guia('M1'), self._pedido_con_guia('M2')]
+        request = RequestFactory().post(
+            '/app/api/ecommerce/facturar-masivo/',
+            data=json.dumps({'pedido_ids': [p.id for p in pedidos],
+                             'tipo_documento': 'BOLETA_ELECTRONICA'}),
+            content_type='application/json',
+        )
         request.user = self.user
-        request.session = {}
-        return descargar_txts_zip_ecommerce(request)
+        request.session = {'idSucursalActual': self.sucursal.id}
+        data = json.loads(facturar_ecommerce_masivo(request).content)
 
-    def test_zip_contiene_un_txt_por_dte(self):
-        dte1 = self._facturar_con_dte(self._pedido('Z1'))
-        dte2 = self._facturar_con_dte(self._pedido('Z2'))
-
-        response = self._get(f'{dte1.id},{dte2.id}')
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], 'application/zip')
-
-        zf = zipfile.ZipFile(io.BytesIO(response.content))
-        nombres = set(zf.namelist())
-        esperados = {
-            f'BOLETA_ELECTRONICA_{dte1.numero_documento}.txt',
-            f'BOLETA_ELECTRONICA_{dte2.numero_documento}.txt',
-        }
-        self.assertEqual(nombres, esperados)
-        for nombre in nombres:
-            contenido = zf.read(nombre).decode('utf-8')
-            self.assertTrue(contenido.strip(), f'{nombre} no debe venir vacío')
-
-    def test_ids_duplicados_no_duplican_archivos(self):
-        dte1 = self._facturar_con_dte(self._pedido('Z3'))
-        response = self._get(f'{dte1.id},{dte1.id},{dte1.id}')
-        self.assertEqual(response.status_code, 200)
-        zf = zipfile.ZipFile(io.BytesIO(response.content))
-        self.assertEqual(len(zf.namelist()), 1)
-
-    def test_ids_invalidos_da_400(self):
-        self.assertEqual(self._get('abc,1').status_code, 400)
-        # Fuera de rango bigint: 400 controlado, no 500 de PostgreSQL.
-        self.assertEqual(self._get('99999999999999999999').status_code, 400)
-
-    def test_sin_ids_da_400(self):
-        self.assertEqual(self._get('').status_code, 400)
-
-    def test_ids_inexistentes_da_404(self):
-        self.assertEqual(self._get('99999998,99999999').status_code, 404)
-
-    def test_sin_permiso_da_403(self):
-        from app.models import PermisoRol
-        PermisoRol.objects.filter(rol=self.user.rol, opcion_menu=self.opcion).update(puede_ver=False)
-        self.assertEqual(self._get('1').status_code, 403)
+        self.assertEqual(data['exitosos'], 2, data)
+        nombres = set()
+        for r in data['resultados']:
+            self.assertTrue(r['ok'], r)
+            archivo = r['archivo_txt']
+            self.assertIsNotNone(archivo, f'pedido {r["pedido_id"]} sin TXT')
+            self.assertTrue(archivo['nombre_archivo'].endswith('.txt'), archivo['nombre_archivo'])
+            # Mismo contenido que el generador canónico (el de /app/ventas/documentos/).
+            dte = Dte.objects.get(id=r['dte_id'])
+            self.assertEqual(archivo['contenido'], generar_txt_dte_acepta(construir_datos_txt_desde_dte(dte)))
+            nombres.add(archivo['nombre_archivo'])
+        self.assertEqual(len(nombres), 2, 'cada boleta debe bajar con su propio nombre de archivo')

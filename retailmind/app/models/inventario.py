@@ -814,33 +814,40 @@ class TomaInventarioDetalle(models.Model):
     
     def save(self, *args, **kwargs):
         # Calcular diferencia automáticamente
-        if self.contado:
-            base_stock = self.stock_sistema_ajustado if self.stock_sistema_ajustado is not None else self.stock_sistema
-            self.diferencia = self.stock_fisico - base_stock
-
-            # Marcar para reconteo si la diferencia supera el umbral (regla y
-            # constantes al inicio de este archivo).
-            supera_umbral = requiere_reconteo(self.diferencia, base_stock)
-
-            if self.excluir_de_analisis:
-                # Excluida del análisis: no se ajusta ni se recuenta. Si se vuelve
-                # a incluir, este mismo save() la marca otra vez cuando corresponda.
-                self.reconteo_requerido = False
-            elif supera_umbral:
-                # `stock_reconteo is not None` = ya se recontó y el reconteo
-                # confirmó la diferencia: no se vuelve a pedir reconteo.
-                if not self.reconteo_requerido and self.stock_reconteo is None:
-                    self.reconteo_requerido = True
-            elif self.reconteo_requerido:
-                # La marca era una foto de un conteo anterior: si el conteo se
-                # corrigió y la diferencia ya no supera el umbral, el motivo del
-                # reconteo desapareció. Sin esto la marca sólo se limpiaba
-                # pasando por registrar_reconteo(): recontar desde la pantalla
-                # normal de conteo dejaba el detalle marcado para siempre y
-                # bloqueaba finalizar_conteo() y la aprobación de la toma.
-                self.reconteo_requerido = False
-
+        self.recalcular_diferencia()
         super().save(*args, **kwargs)
+
+    def recalcular_diferencia(self):
+        """Diferencia y marca de reconteo de una línea contada. La llama save() y
+        también la importación de la pistola antes de su bulk_update (un save()
+        por línea eran 8.200 UPDATE para una tienda completa: no cabía en el
+        timeout de 60 s de gunicorn)."""
+        if not self.contado:
+            return
+        base_stock = self.stock_sistema_ajustado if self.stock_sistema_ajustado is not None else self.stock_sistema
+        self.diferencia = self.stock_fisico - base_stock
+
+        # Marcar para reconteo si la diferencia supera el umbral (regla y
+        # constantes al inicio de este archivo).
+        supera_umbral = requiere_reconteo(self.diferencia, base_stock)
+
+        if self.excluir_de_analisis:
+            # Excluida del análisis: no se ajusta ni se recuenta. Si se vuelve
+            # a incluir, este mismo save() la marca otra vez cuando corresponda.
+            self.reconteo_requerido = False
+        elif supera_umbral:
+            # `stock_reconteo is not None` = ya se recontó y el reconteo
+            # confirmó la diferencia: no se vuelve a pedir reconteo.
+            if not self.reconteo_requerido and self.stock_reconteo is None:
+                self.reconteo_requerido = True
+        elif self.reconteo_requerido:
+            # La marca era una foto de un conteo anterior: si el conteo se
+            # corrigió y la diferencia ya no supera el umbral, el motivo del
+            # reconteo desapareció. Sin esto la marca sólo se limpiaba
+            # pasando por registrar_reconteo(): recontar desde la pantalla
+            # normal de conteo dejaba el detalle marcado para siempre y
+            # bloqueaba finalizar_conteo() y la aprobación de la toma.
+            self.reconteo_requerido = False
     
     @property
     def porcentaje_diferencia(self):

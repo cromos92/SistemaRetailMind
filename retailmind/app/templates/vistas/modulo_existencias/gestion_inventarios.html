@@ -799,8 +799,9 @@
                                 </label>
                             </div>
                             <div class="form-text">
-                                Si el archivo se carga después de abrir, las ventas entre el corte y la carga
-                                no se descuentan del stock a comparar (evita sobrantes falsos).
+                                Ej.: contaron anoche después del cierre y el archivo se sube hoy → ponga como corte
+                                la hora en que terminaron de contar (ayer) y marque esta casilla. Las ventas de hoy
+                                no se confunden con sobrantes y al aplicar se respetan.
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -1032,6 +1033,11 @@ function cargarInventarios(page = 1) {
                                 ${tieneDiferencias ? `
                                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); exportarDiferenciasInventario(${inv.id})" title="Exportar diferencias" aria-label="Exportar diferencias">
                                         <i class="bi bi-file-earmark-excel"></i>
+                                    </button>
+                                ` : ''}
+                                ${inv.skus_contados > 0 ? `
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); window.open('/app/gestion-inventarios/api/informe-final/${inv.id}/', '_blank')" title="Informe final: por marca (antiguo vs nuevo) y diferencias por SKU" aria-label="Informe final">
+                                        <i class="bi bi-file-earmark-bar-graph"></i>
                                     </button>
                                 ` : ''}
                                 ${puedeCancelar ? `

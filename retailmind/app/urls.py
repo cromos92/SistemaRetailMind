@@ -1863,6 +1863,9 @@ urlpatterns = [
     path('gestion-inventarios/api/analisis/<int:inventario_id>/', views_gestion_inventarios.obtener_analisis_inventario, name='api_analisis_inventario'),
     path('gestion-inventarios/api/exportar/<int:inventario_id>/', views_gestion_inventarios.exportar_inventario, name='api_exportar_inventario'),
     path('gestion-inventarios/api/exportar-diferencias/<int:inventario_id>/', views_gestion_inventarios.exportar_diferencias_inventario, name='api_exportar_diferencias_inventario'),
+    # Informe final con el formato antiguo: por marca (antiguo | DIF | nuevo) + diferencias por SKU
+    path('gestion-inventarios/api/informe-marcas/<int:inventario_id>/', views_gestion_inventarios.obtener_informe_marcas, name='api_informe_marcas_inventario'),
+    path('gestion-inventarios/api/informe-final/<int:inventario_id>/', views_gestion_inventarios.exportar_informe_final, name='api_informe_final_inventario'),
     path('gestion-inventarios/api/historial/<int:inventario_id>/', views_gestion_inventarios.obtener_historial_inventario, name='api_historial_inventario'),
     
     # APIs de flujo de aprobación
@@ -1975,7 +1978,6 @@ urlpatterns = [
     path('ecommerce/pedidos/exportar-csv/', views_ecommerce.exportar_pedidos_csv, name='exportar_pedidos_csv'),
     path('ecommerce/dashboard-asignacion/', views_ecommerce.ecommerce_dashboard_asignacion, name='ecommerce_dashboard_asignacion'),
     path('ecommerce/dte/<int:dte_id>/txt/', views_ecommerce.descargar_txt_dte_ecommerce, name='descargar_txt_dte_ecommerce'),
-    path('ecommerce/dte/txts-zip/', views_ecommerce.descargar_txts_zip_ecommerce, name='descargar_txts_zip_ecommerce'),
 
     # Retiro de pedido en tienda (meson PAO1): pantalla interna con login del
     # ERP que valida el codigo de retiro contra AllConnected e imprime el
