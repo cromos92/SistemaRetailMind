@@ -1136,10 +1136,14 @@ def registrar_conteo(request, inventario_id):
             return JsonResponse({'success': False, 'error': 'No hay conteos para registrar'})
 
         # Momento del conteo físico (N1): por defecto AHORA (escáner / tabla en vivo);
-        # `fecha_conteo` explícita o `conteo_tienda_cerrada` → la fecha de corte.
-        fecha_conteo = _resolver_fecha_conteo(
-            inventario, data.get('fecha_conteo'), bool(data.get('conteo_tienda_cerrada'))
+        # `fecha_conteo` explícita o `conteo_tienda_cerrada` → la fecha de corte. En
+        # una toma declarada «tienda cerrada» el default es el corte, igual que al
+        # importar: corregir a mano un conteo de anoche (p. ej. un código mal leído)
+        # con «ahora» restaba las ventas de hoy y dejaba un sobrante falso.
+        tienda_cerrada = bool(data.get('conteo_tienda_cerrada')) or (
+            not data.get('fecha_conteo') and inventario.conteo_tienda_cerrada
         )
+        fecha_conteo = _resolver_fecha_conteo(inventario, data.get('fecha_conteo'), tienda_cerrada)
 
         # Actualizar estado si es el primer conteo
         if inventario.estado == 'BORRADOR':

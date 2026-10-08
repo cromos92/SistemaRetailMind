@@ -352,6 +352,30 @@ class SucursalYRevisionTest(BaseTomaContadaAnoche):
         self.assertFalse(Movimientos_Producto.objects.filter(referencia_externa=toma.numero_inventario).exists())
 
 
+class CorreccionManualTiendaCerradaTest(BaseTomaContadaAnoche):
+    """Corregir a mano en la tabla un conteo de anoche (código mal leído) en una
+    toma de tienda cerrada: vale al corte, las ventas de hoy no lo inflan."""
+
+    def test_conteo_manual_vale_al_corte(self):
+        pt = self._pt('HT3900 GORRO', 9400001, 2)  # anoche 3, hoy se vendió 1
+        Movimientos_Producto.objects.create(
+            ProductoTalla=pt, cantidad=-1, concepto='VENTA_PUBLICO', sucursal_origen=self.sucursal,
+            responsable='POS', fecha=self.venta_hoy.date(), hora=self.venta_hoy.time(),
+        )
+        data = self.client.post(reverse('api_crear_inventario'), data=json.dumps({
+            'nombre': 'Completo', 'tipo_inventario': 'COMPLETO', 'conteo_tienda_cerrada': True,
+            'fecha_corte': self.corte.strftime('%Y-%m-%dT%H:%M'), 'filtros': {'solo_con_stock': True},
+        }), content_type='application/json').json()
+        toma = TomaInventario.objects.get(id=data['inventario_id'])
+        d = toma.detalles.get(sku='9400001')
+        self.assertEqual(d.stock_sistema, 3)
+        # La pistola lo leyó mal anoche; se corrige a mano con lo que había: 3
+        resp = self._post('api_registrar_conteo', toma.id, {'conteos': [{'detalle_id': d.id, 'stock_fisico': 3}]})
+        self.assertTrue(resp['success'], resp)
+        d.refresh_from_db()
+        self.assertEqual((d.stock_movimientos_post_corte, d.diferencia), (0, 0))  # antes: −1 de base → +1 falso
+
+
 class InformePuroTest(SimpleTestCase):
     """El cálculo sin BD (lo usa también el script que simula una toma)."""
 
