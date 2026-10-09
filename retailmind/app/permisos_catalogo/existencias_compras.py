@@ -59,16 +59,18 @@ CATALOGO = {
         'ruta': '/app/gestion-inventarios/',
         'resumen': 'Tomas de inventario: crear, contar, recontar, aprobar y aplicar ajustes al stock. Incluye Fusionar Duplicados.',
         'permisos': {
-            'puede_ver': 'Revisar las tomas de sus tiendas en unidades: lo contado, diferencias y faltantes. Sin costos, precios, '
-                         'análisis valorizado ni Excel.',
+            'puede_ver': 'Revisar las tomas de sus tiendas en unidades (sin costos ni Excel). El jefe de local además cuenta: '
+                         'pistola, lector y reconteo.',
             'puede_crear': 'Crear una toma de inventario nueva (botón Nuevo Inventario).',
             'puede_editar': 'Contar, importar pistola, excluir, finalizar, aprobar, aplicar y cancelar; ver costos, análisis y Excel; '
                             'Fusionar Duplicados.',
         },
         'depende_de': [],
         'notas': 'Aprobar Inventario y Aplicar Ajustes usan puede_editar a propósito (puede_aprobar está en False en toda '
-                 'sucursal de prod). Con solo Ver la pantalla queda en modo revisión (pensado para el jefe de local). '
-                 'Fusionar duplicados mueve stock y exige puede_editar. puede_eliminar, puede_exportar y puede_aprobar no se usan.',
+                 'sucursal de prod). Con solo Ver la pantalla queda en modo revisión; el jefe de local igual cuenta (contar no '
+                 'mueve stock). «Ajustar stock ya» (llevar lo contado al stock con la toma abierta) y aprobar una toma así '
+                 'ajustada son solo del Maestro. Fusionar duplicados mueve stock y exige puede_editar. puede_eliminar, '
+                 'puede_exportar y puede_aprobar no se usan.',
     },
     'revision_faltantes_inventario': {
         'pantalla': 'Faltantes por revisar',

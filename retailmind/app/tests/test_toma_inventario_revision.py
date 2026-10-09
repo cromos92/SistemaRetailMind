@@ -81,9 +81,11 @@ class ModoRevisionJefeLocalTest(BaseTomaContadaAnoche):
         self.assertEqual(detalle.status_code, 200)
         self.assertTrue(detalle.context['solo_revision'])
         html = detalle.content.decode()
-        self.assertIn('Modo revisión', html)
-        self.assertNotIn('id="floatingActions"', html)
-        self.assertNotIn('id="inputEscaner"', html)
+        # El jefe de local cuenta (contar no mueve stock) pero no decide ni aprueba
+        self.assertIn('Conteo de la tienda', html)
+        self.assertIn('id="inputEscaner"', html)
+        self.assertNotIn('id="btnFinalizar"', html)
+        self.assertNotIn('id="barraSeleccion"', html)
         self.assertNotIn('Antiguo · P. costo', html)
 
         for orden in ('', 'dif_valor'):  # «$ a costo» cae a «unidades» y no revela costos
@@ -111,11 +113,10 @@ class ModoRevisionJefeLocalTest(BaseTomaContadaAnoche):
         for nombre in ('api_exportar_inventario', 'api_exportar_diferencias_inventario', 'api_informe_final_inventario'):
             self.assertEqual(self._get(nombre, self.toma.id).status_code, 403, nombre)
 
-    def test_jefe_no_mueve_la_toma(self):
+    def test_jefe_cuenta_pero_no_decide_la_toma(self):
         self._como(self.jefe)
         det = self.toma.detalles.get(sku='9600002')
         intentos = [
-            ('api_registrar_conteo', {'conteos': [{'detalle_id': det.id, 'stock_fisico': 3}]}),
             ('api_excluir_detalles_inventario', {'ids': [det.id], 'excluir': True}),
             ('api_resolver_no_contados', {'accion': 'faltante'}),
             ('api_finalizar_conteo', {}),
@@ -128,6 +129,13 @@ class ModoRevisionJefeLocalTest(BaseTomaContadaAnoche):
         self.assertEqual(crear.status_code, 403)
         det.refresh_from_db()
         self.assertEqual((det.stock_fisico, det.excluir_de_analisis), (1, False))
+        # Contar sí (09-10: el jefe de local sigue el conteo; el stock lo mueve el Maestro)
+        resp = self.client.post(reverse('api_registrar_conteo', args=[self.toma.id]), content_type='application/json',
+                                data=json.dumps({'conteos': [{'detalle_id': det.id, 'stock_fisico': 3}]})).json()
+        self.assertTrue(resp['success'], resp)
+        det.refresh_from_db()
+        self.assertEqual(det.stock_fisico, 3)
+        self.assertEqual(Producto_Talla.objects.get(pk=self.pt_b.pk).stock, 3)  # contar no mueve stock
 
     def test_jefe_no_fusiona_duplicados(self):
         self._como(self.jefe)
@@ -164,7 +172,8 @@ class ModoRevisionJefeLocalTest(BaseTomaContadaAnoche):
         with CaptureQueriesContext(connection) as ctx:
             self._get('api_analisis_inventario', self.toma.id)
         conteos = [q['sql'] for q in ctx.captured_queries if 'tomainventariodetalle' in q['sql'].lower()]
-        self.assertLessEqual(len(conteos), 8, conteos)
+        # (+1 desde el 09-10: lo «por ajustar» del Ajustar stock ya, en un solo aggregate)
+        self.assertLessEqual(len(conteos), 9, conteos)
         with CaptureQueriesContext(connection) as ctx:
             self._get('api_obtener_inventarios')
         # (la consulta principal; la del aviso «por reponer» cuenta líneas, no tomas)

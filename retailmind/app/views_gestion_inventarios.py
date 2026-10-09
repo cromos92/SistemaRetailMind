@@ -92,6 +92,17 @@ def _encontrados_en_reconteo(inventario):
     return inventario.detalles.filter(excluir_de_analisis=False, observaciones__contains=MARCA_ENCONTRADO_RECONTEO)
 
 
+# «AJUSTAR STOCK YA» (pedido del usuario, 09-10): los ecommerce venden el stock de las
+# tiendas, así que el Maestro puede llevar al stock lo ya contado sin cerrar la toma. La
+# toma sigue abierta en estos estados: la tienda cuenta y recuenta, y lo nuevo queda «por
+# ajustar» hasta que el Maestro lo autorice (otro «Ajustar stock ya» o la aprobación).
+ESTADOS_AJUSTE_ANTICIPADO = ('EN_CONTEO', 'CONTEO_FINALIZADO', 'EN_REVISION')
+
+# Lo que escribe la propia toma al ajustar (kardex con su número en referencia_externa).
+# No es un movimiento físico: no se resta como venta/traspaso al recontar después.
+CONCEPTOS_AJUSTE_TOMA = ('AJUSTE_INVENTARIO_ENTRADA', 'AJUSTE_INVENTARIO_SALIDA')
+
+
 def _es_sku_operativo(articulo, descripcion):
     articulo = _sin_tildes(articulo or '').upper()
     texto = f'{articulo} | {_sin_tildes(descripcion or "").upper()}'
@@ -238,6 +249,24 @@ def _modo_revision(request):
     return request._modo_revision_inventario
 
 
+# Contar (pistola, lector, tabla, reconteo) NO mueve stock: lo mueven el «Ajustar stock
+# ya» del Maestro o la aplicación de una toma aprobada. Por eso el jefe de local, que en
+# el permiso solo tiene Ver, también cuenta (pedido del usuario, 09-10); decidir qué no se
+# ajusta, lo no pistoleado, finalizar, aprobar y cancelar sigue exigiendo Editar.
+ROLES_CUENTAN = ('jefe_local',)
+
+
+def _puede_contar(request):
+    return not _modo_revision(request) or getattr(request.user, 'rol', None) in ROLES_CUENTAN
+
+
+def _error_no_cuenta():
+    return JsonResponse(
+        {'success': False, 'error': 'Su perfil solo revisa la toma: cuentan el jefe de local y los administradores'},
+        status=403,
+    )
+
+
 # Quién ve PLATA y ANÁLISIS de las tomas (costos, precios, valorización, informe final,
 # Excel): solo el Maestro y el Administrador. El Jefe y el jefe de local ven solo pares
 # aunque puedan operar la toma: es información sensible (pedido del usuario, 09-10).
@@ -318,6 +347,9 @@ def detalle_inventario(request, inventario_id):
     return render(request, 'vistas/modulo_existencias/detalle_inventario.html', {
         'inventario': inventario,
         'solo_revision': _modo_revision(request),
+        'puede_contar': _puede_contar(request),
+        'es_maestro': es_maestro(request.user),
+        'ajustada_en_conteo': inventario.ajustada_en_conteo,
         'ver_valores': _ve_valorizacion(request.user),
         'puede_aplicar_ajustes': inventario.estado in ('APROBADO', 'APLICANDO'),
         'conteo_tienda_cerrada': inventario.conteo_tienda_cerrada,
@@ -959,7 +991,8 @@ def _agregar_detalles_al_vuelo(inventario, skus):
 
     if a_crear:
         ids = [pt.id for pt in a_crear]
-        posteriores = _obtener_movimientos_desde_corte_batch(ids, inventario.fecha_corte, inventario.sucursal_id)
+        posteriores = _obtener_movimientos_desde_corte_batch(
+            ids, inventario.fecha_corte, inventario.sucursal_id, excluir_referencia=inventario.numero_inventario)
         costos = _obtener_costo_promedio_batch(ids)
         nuevos = [
             _nuevo_detalle_desde_pt(inventario, pt, posteriores.get(pt.id, 0), costos.get(pt.id))
@@ -983,13 +1016,22 @@ def _fecha_hora_local(momento):
     return local.date(), local.time()
 
 
-def _obtener_movimientos_desde_corte_batch(producto_talla_ids, fecha_corte, sucursal_id):
+def _sin_ajustes_de_la_toma(movimientos, referencia):
+    """Saca del cálculo los ajustes que escribió la propia toma («Ajustar stock ya»):
+    no son ventas ni traspasos, y restarlos como tales falsea el reconteo posterior."""
+    if not referencia:
+        return movimientos
+    return movimientos.exclude(referencia_externa=referencia, concepto__in=CONCEPTOS_AJUSTE_TOMA)
+
+
+def _obtener_movimientos_desde_corte_batch(producto_talla_ids, fecha_corte, sucursal_id, excluir_referencia=None):
     """
     Suma neta de movimientos ocurridos DESPUÉS de la fecha de corte y hasta ahora.
 
     Sirve para reconstruir el stock al corte: stock_al_corte = stock_actual - esta suma.
     Así la base de comparación queda anclada al stock plano (el que ve el POS) y no
     a la suma del kardex, que en producción difiere en 126.455 SKUs.
+    `excluir_referencia`: número de la toma (ver _sin_ajustes_de_la_toma).
     """
     corte_date, corte_time = _fecha_hora_local(fecha_corte)
 
@@ -1000,7 +1042,8 @@ def _obtener_movimientos_desde_corte_batch(producto_talla_ids, fecha_corte, sucu
     ).filter(
         Q(fecha__gt=corte_date) |
         Q(fecha=corte_date, hora__gt=corte_time)
-    ).values('ProductoTalla_id').annotate(
+    )
+    movimientos = _sin_ajustes_de_la_toma(movimientos, excluir_referencia).values('ProductoTalla_id').annotate(
         total_cantidad=Coalesce(Sum('cantidad'), 0)
     )
 
@@ -1036,10 +1079,12 @@ def _obtener_costo_promedio_batch(producto_talla_ids):
     return costo_map
 
 
-def _obtener_movimientos_post_corte_batch(producto_talla_ids, fecha_corte, fecha_conteo, sucursal_id):
+def _obtener_movimientos_post_corte_batch(producto_talla_ids, fecha_corte, fecha_conteo, sucursal_id,
+                                         excluir_referencia=None):
     """
     Obtiene la suma neta de movimientos entre fecha de corte y fecha de conteo.
     Considera sucursal origen/destino y respeta fecha/hora.
+    `excluir_referencia`: número de la toma (ver _sin_ajustes_de_la_toma).
     """
     fecha_corte_date, fecha_corte_time = _fecha_hora_local(fecha_corte)
     fecha_conteo_date, fecha_conteo_time = _fecha_hora_local(fecha_conteo)
@@ -1054,7 +1099,8 @@ def _obtener_movimientos_post_corte_batch(producto_talla_ids, fecha_corte, fecha
     ).filter(
         Q(fecha__lt=fecha_conteo_date) |
         Q(fecha=fecha_conteo_date, hora__lte=fecha_conteo_time)
-    ).values('ProductoTalla_id').annotate(
+    )
+    movimientos = _sin_ajustes_de_la_toma(movimientos, excluir_referencia).values('ProductoTalla_id').annotate(
         total_cantidad=Coalesce(Sum('cantidad'), 0)
     )
 
@@ -1115,6 +1161,12 @@ def obtener_productos_conteo(request, inventario_id):
             queryset = queryset.filter(reconteo_requerido=True, stock_reconteo__isnull=True)
         elif estado_conteo == 'excluido':
             queryset = queryset.filter(excluir_de_analisis=True)
+        elif estado_conteo == 'por_ajustar':
+            # Lo contado que todavía no está en el stock (con la toma ya ajustada una
+            # vez: lo que la tienda contó o recontó después y espera al Maestro)
+            queryset = queryset.filter(id__in=inventario.lineas_por_ajustar().values('id'))
+        elif estado_conteo == 'ajustado':
+            queryset = queryset.filter(ajuste_aplicado=True)
 
         if search:
             # También por descripción y marca: el artículo «45-1» es la BOLSA
@@ -1189,6 +1241,9 @@ def obtener_productos_conteo(request, inventario_id):
                 'stock_reconteo': det.stock_reconteo,
                 'ubicacion': det.ubicacion,
                 'observaciones': det.observaciones,
+                # Ya movió stock (se recuenta con ↻, no se edita) y lo que le falta mover
+                'ajuste_aplicado': det.ajuste_aplicado,
+                'por_ajustar': det.por_ajustar,
                 'costo_unitario': float(det.costo_unitario_sistema),
                 'precio_venta': float(det.precio_venta_sistema)
             })
@@ -1226,14 +1281,16 @@ def registrar_conteo(request, inventario_id):
         inventario = _inventario_del_usuario(request, inventario_id)
         if inventario is None:
             return _error_sin_acceso()
-        
+        if not _puede_contar(request):
+            return _error_no_cuenta()
+
         # Verificar estado
         if inventario.estado not in ['BORRADOR', 'EN_CONTEO']:
             return JsonResponse({
-                'success': False, 
+                'success': False,
                 'error': 'El inventario no está en estado de conteo'
             })
-        
+
         data = json.loads(request.body)
         conteos = data.get('conteos', [])
 
@@ -1245,8 +1302,11 @@ def registrar_conteo(request, inventario_id):
         # una toma declarada «tienda cerrada» el default es el corte, igual que al
         # importar: corregir a mano un conteo de anoche (p. ej. un código mal leído)
         # con «ahora» restaba las ventas de hoy y dejaba un sobrante falso.
+        # Si el Maestro ya ajustó el stock con la toma abierta, la tienda volvió a
+        # vender: lo que se cuente desde entonces se cuenta AHORA.
         tienda_cerrada = bool(data.get('conteo_tienda_cerrada')) or (
             not data.get('fecha_conteo') and inventario.conteo_tienda_cerrada
+            and not inventario.ajustada_en_conteo
         )
         fecha_conteo = _resolver_fecha_conteo(inventario, data.get('fecha_conteo'), tienda_cerrada)
 
@@ -1297,7 +1357,8 @@ def registrar_conteo(request, inventario_id):
 
         producto_talla_ids = [d.producto_talla_id for d in detalles_por_id.values()]
         movimientos_map = _obtener_movimientos_post_corte_batch(
-            producto_talla_ids, inventario.fecha_corte, fecha_conteo, inventario.sucursal_id
+            producto_talla_ids, inventario.fecha_corte, fecha_conteo, inventario.sucursal_id,
+            excluir_referencia=inventario.numero_inventario,
         )
 
         for detalle_id, conteo in conteos_map.items():
@@ -1316,6 +1377,18 @@ def registrar_conteo(request, inventario_id):
                     # Un −5 tipeado por error producía un faltante mayor que el stock y
                     # después «dejaría el stock en negativo» al aplicar.
                     errores.append(f"SKU {detalle.sku}: cantidad negativa ({cantidad}) no permitida")
+                    continue
+                if detalle.ajuste_aplicado:
+                    # Ya movió stock («Ajustar stock ya»): el conteo de esa foto no se pisa
+                    # desde la tabla o el lector. Lo que hay AHORA se registra con Recontar,
+                    # que descuenta lo vendido desde el conteo. Las anotaciones sí se guardan.
+                    if cantidad != detalle.stock_fisico:
+                        errores.append(f'SKU {detalle.sku}: ya se ajustó al stock; si cambió, use Recontar (↻)')
+                        continue
+                    detalle.ubicacion = ubicacion
+                    detalle.observaciones = observaciones
+                    detalle.save()
+                    conteos_realizados += 1
                     continue
                 movimientos_post_corte = movimientos_map.get(detalle.producto_talla_id, 0)
                 detalle.stock_movimientos_post_corte = movimientos_post_corte
@@ -1568,6 +1641,8 @@ def importar_conteo_pistola(request, inventario_id):
     inventario = _inventario_del_usuario(request, inventario_id)
     if inventario is None:
         return _error_sin_acceso()
+    if not _puede_contar(request):
+        return _error_no_cuenta()
 
     archivo = request.FILES.get('archivo')
     if not archivo:
@@ -1586,9 +1661,11 @@ def importar_conteo_pistola(request, inventario_id):
 
         # Momento del conteo físico (N1). Para un archivo el default es el corte si
         # la toma (o este envío) declara «conté con la tienda cerrada»; si no, ahora.
+        # Con el stock ya ajustado por el Maestro la tienda volvió a vender: ahora.
         tienda_cerrada = (
             str(request.POST.get('conteo_tienda_cerrada', '')).lower() in ('1', 'true', 'on', 'si', 'sí')
-            or (not request.POST.get('fecha_conteo') and inventario.conteo_tienda_cerrada)
+            or (not request.POST.get('fecha_conteo') and inventario.conteo_tienda_cerrada
+                and not inventario.ajustada_en_conteo)
         )
         fecha_conteo = _resolver_fecha_conteo(inventario, request.POST.get('fecha_conteo'), tienda_cerrada)
 
@@ -1655,15 +1732,23 @@ def importar_conteo_pistola(request, inventario_id):
             [d.producto_talla_id for d in detalles_por_sku.values()],
             inventario.fecha_corte,
             fecha_conteo,
-            inventario.sucursal_id
+            inventario.sucursal_id,
+            excluir_referencia=inventario.numero_inventario,
         )
 
         actualizados = 0
         sobreescritos = []
         a_guardar = []
+        # Líneas que ya movieron stock («Ajustar stock ya»): un archivo no las pisa (la
+        # pistola de otra zona traería solo parte de ese SKU). Si cambió, se recuenta.
+        ya_ajustados = []
         for sku, cantidad in conteos_por_sku.items():
             detalle = detalles_por_sku.get(sku)
             if not detalle:
+                continue
+            if detalle.ajuste_aplicado:
+                if detalle.stock_fisico != cantidad:
+                    ya_ajustados.append({'sku': sku, 'contado': detalle.stock_fisico, 'archivo': cantidad})
                 continue
 
             if detalle.contado and detalle.stock_fisico != cantidad:
@@ -1702,6 +1787,7 @@ def importar_conteo_pistola(request, inventario_id):
                 f' ({len(conteos_por_sku)} SKU / {unidades_leidas} u. leídas)'
                 + (f', {len(agregados)} SKU agregados a la toma' if agregados else '')
                 + (f', {len(no_encontrados)} códigos no existen en la sucursal' if no_encontrados else '')
+                + (f', {len(ya_ajustados)} ya ajustados al stock no se cambiaron (se recuentan)' if ya_ajustados else '')
                 + f'. Conteo físico al {fecha_conteo_local}'
                 + f' (columnas: SKU={encabezados[sku_idx] if tiene_encabezado else sku_idx}, '
                   f'conteo={encabezados[cantidad_idx] if tiene_encabezado else cantidad_idx})'
@@ -1713,7 +1799,7 @@ def importar_conteo_pistola(request, inventario_id):
                 'ambiguos': ambiguos, 'errores': errores,
                 'sobreescritos': sobreescritos[:200], 'fecha_conteo': fecha_conteo_local,
                 'archivo': archivo.name, 'skus_leidos': len(conteos_por_sku),
-                'unidades_leidas': unidades_leidas,
+                'unidades_leidas': unidades_leidas, 'ya_ajustados': ya_ajustados[:200],
             }
         )
 
@@ -1724,6 +1810,7 @@ def importar_conteo_pistola(request, inventario_id):
             'no_encontrados': no_encontrados,
             'no_encontrados_unidades': sum(d['cantidad'] or 0 for d in no_encontrados_detalle),
             'ambiguos': ambiguos,
+            'ya_ajustados': ya_ajustados,
             'sobreescritos': sobreescritos,
             'fecha_conteo': fecha_conteo_local,
             'skus_leidos': len(conteos_por_sku),
@@ -1762,6 +1849,12 @@ def actualizar_exclusion_detalle(request, inventario_id, detalle_id):
         data = json.loads(request.body)
         excluir = bool(data.get('excluir'))
         detalle = inventario.detalles.get(id=detalle_id)
+        if detalle.ajuste_aplicado and excluir:
+            # Ya movió stock: «No ajustar» lo dejaría ajustado y fuera del informe
+            return JsonResponse({
+                'success': False,
+                'error': f'SKU {detalle.sku}: ya se ajustó al stock y no se puede dejar sin ajustar; si cambió, recuéntelo'
+            })
         detalle.excluir_de_analisis = excluir
         # Una línea excluida no se recuenta: save() limpia reconteo_requerido (y lo
         # vuelve a evaluar si se reincluye). Antes quedaba marcada y bloqueaba
@@ -1818,6 +1911,15 @@ def actualizar_exclusion_detalles(request, inventario_id):
     excluir = bool(data.get('excluir'))
 
     detalles = list(inventario.detalles.filter(id__in=ids))
+    # Las que ya movieron stock («Ajustar stock ya») no pasan a «No ajustar»
+    ya_ajustadas = [d.sku for d in detalles if excluir and d.ajuste_aplicado]
+    if ya_ajustadas:
+        detalles = [d for d in detalles if not d.ajuste_aplicado]
+        if not detalles:
+            return JsonResponse({
+                'success': False,
+                'error': 'Esas líneas ya se ajustaron al stock y no se pueden dejar sin ajustar; si cambiaron, recuéntelas',
+            })
     for d in detalles:
         d.excluir_de_analisis = excluir
         d.recalcular_diferencia()  # misma marca de reconteo que dejaría save()
@@ -1834,11 +1936,12 @@ def actualizar_exclusion_detalles(request, inventario_id):
             + f': {", ".join(d.sku for d in detalles[:30])}{"…" if len(detalles) > 30 else ""}'
         ),
         usuario=request.user,
-        datos={'ids': ids[:1000], 'excluir': excluir},
+        datos={'ids': ids[:1000], 'excluir': excluir, 'ya_ajustadas': ya_ajustadas[:200]},
     )
     return JsonResponse({
         'success': True,
         'actualizados': len(detalles),
+        'ya_ajustadas': ya_ajustadas,
         'excluido': excluir,
         'progreso': float(inventario.progreso_conteo),
     })
@@ -1858,6 +1961,8 @@ def preview_conteo_pistola(request, inventario_id):
     inventario = _inventario_del_usuario(request, inventario_id)
     if inventario is None:
         return _error_sin_acceso()
+    if not _puede_contar(request):
+        return _error_no_cuenta()
 
     archivo = request.FILES.get('archivo')
     if not archivo:
@@ -1934,18 +2039,21 @@ def registrar_reconteo(request, inventario_id):
         inventario = _inventario_del_usuario(request, inventario_id)
         if inventario is None:
             return _error_sin_acceso()
-        
+        if not _puede_contar(request):
+            return _error_no_cuenta()
+
         if inventario.estado not in ['EN_CONTEO', 'CONTEO_FINALIZADO', 'EN_REVISION']:
             return JsonResponse({
-                'success': False, 
+                'success': False,
                 'error': 'El inventario no está en un estado válido para reconteo'
             })
-        
+
         data = json.loads(request.body)
         reconteos = data.get('reconteos', [])
 
         reconteos_realizados = 0
         encontrados = []
+        por_autorizar = []  # líneas ya ajustadas cuyo reconteo cambió: las autoriza el Maestro
         errores = []
         ahora = timezone.now()
 
@@ -1968,9 +2076,12 @@ def registrar_reconteo(request, inventario_id):
                 # período de revisión) se descuenta para comparar con la base del conteo.
                 # Antes no: un par vendido en el medio salía como faltante y, al aplicar,
                 # se descontaba dos veces (la venta ya había bajado el stock).
+                # (sin los ajustes de la propia toma: si el Maestro ya ajustó esta línea,
+                # ese movimiento no es una venta)
                 desde = detalle.fecha_conteo or inventario.fecha_corte
                 movido = _obtener_movimientos_post_corte_batch(
-                    [detalle.producto_talla_id], desde, ahora, inventario.sucursal_id
+                    [detalle.producto_talla_id], desde, ahora, inventario.sucursal_id,
+                    excluir_referencia=inventario.numero_inventario,
                 ).get(detalle.producto_talla_id, 0)
                 fisico = cantidad - movido
                 if fisico < 0:
@@ -1989,6 +2100,9 @@ def registrar_reconteo(request, inventario_id):
                 if fisico > anterior:
                     nota += f' — {MARCA_ENCONTRADO_RECONTEO}: +{fisico - anterior} (antes {anterior})'
                     encontrados.append(detalle.sku)
+                if detalle.ajuste_aplicado and fisico != anterior:
+                    nota += f' — ya estaba ajustada: {fisico - anterior:+d} queda por ajustar hasta que lo autorice el Maestro'
+                    por_autorizar.append(detalle.sku)
                 if observaciones:
                     nota += f' · {observaciones}'
                 detalle.observaciones = f"{detalle.observaciones or ''}\n{nota}".strip()
@@ -2013,9 +2127,10 @@ def registrar_reconteo(request, inventario_id):
             inventario=inventario,
             tipo_accion='RECONTEO',
             descripcion=f'{reconteos_realizados} productos recontados'
-                        + (f'; encontrados en el reconteo (los revisa el Maestro): {", ".join(encontrados)}' if encontrados else ''),
+                        + (f'; encontrados en el reconteo (los revisa el Maestro): {", ".join(encontrados)}' if encontrados else '')
+                        + (f'; ya ajustados, quedan por autorizar: {", ".join(por_autorizar)}' if por_autorizar else ''),
             usuario=request.user,
-            datos={'errores': errores, 'encontrados': encontrados}
+            datos={'errores': errores, 'encontrados': encontrados, 'por_autorizar': por_autorizar}
         )
 
         return JsonResponse({
@@ -2023,6 +2138,7 @@ def registrar_reconteo(request, inventario_id):
             'message': f'{reconteos_realizados} reconteos registrados',
             'reconteos_realizados': reconteos_realizados,
             'encontrados': encontrados,
+            'por_autorizar': por_autorizar,
             'errores': errores if errores else None,
         })
         
@@ -2136,6 +2252,7 @@ def obtener_analisis_inventario(request, inventario_id):
             .aggregate(lineas=Count('id'), unidades=Coalesce(Sum('stock_sistema'), 0))
             if pendientes_contar else {'lineas': 0, 'unidades': 0}
         )
+        ajuste_anticipado = _bloque_ajuste_anticipado(inventario, request.user, con_valor=not sin_valores)
 
         # === RESUMEN FINANCIERO ===
         resumen_financiero = {
@@ -2203,9 +2320,11 @@ def obtener_analisis_inventario(request, inventario_id):
                 'precision_inventario': round(precision_inventario, 2)
             },
             'solo_revision': _modo_revision(request),
+            'puede_contar': _puede_contar(request),
             'ver_valores': not sin_valores,
             'es_maestro': es_maestro(request.user),
             'encontrados_reconteo': encontrados_reconteo,
+            'ajuste_anticipado': ajuste_anticipado,
             'resumen_financiero': None if sin_valores else resumen_financiero,
             'top_faltantes': top_faltantes_data,
             'top_sobrantes': top_sobrantes_data,
@@ -2248,8 +2367,11 @@ def obtener_analisis_inventario(request, inventario_id):
             'fecha_corte_local': timezone.localtime(inventario.fecha_corte).strftime('%Y-%m-%dT%H:%M'),
             # Mismo criterio que TomaInventario.puede_aprobar(): nada pendiente de
             # contar ni de recontar (líneas excluidas fuera).
-            # (con «encontrados» en el reconteo, la aprobación es del Maestro)
-            'puede_aprobar': inventario.puede_aprobar() and (not encontrados_reconteo or es_maestro(request.user)),
+            # (con «encontrados» en el reconteo, o con stock ya ajustado con la toma
+            # abierta, la aprobación es del Maestro)
+            'puede_aprobar': inventario.puede_aprobar() and (
+                not (encontrados_reconteo or ajuste_anticipado['ajustada']) or es_maestro(request.user)
+            ),
             'puede_enviar_aprobacion': (
                 inventario.estado in ('CONTEO_FINALIZADO', 'EN_REVISION') and
                 requieren_reconteo == 0
@@ -2530,9 +2652,7 @@ def exportar_informe_final(request, inventario_id):
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        response['Content-Disposition'] = (
-            f'attachment; filename="informe_{inventario.numero_inventario}_{inventario.sucursal.alias}.xlsx"'
-        )
+        response['Content-Disposition'] = f'attachment; filename="{informe_toma.nombre_archivo_informe(cabecera)}"'
         wb.save(response)
         return response
     except Exception as e:
@@ -2712,6 +2832,13 @@ def aprobar_inventario(request, inventario_id):
                 'error': f'{encontrados} productos subieron su conteo en el reconteo (se «encontraron»): '
                          f'esta toma la revisa y aprueba el Maestro.'
             })
+        # Con stock ya ajustado con la toma abierta, lo que falta (lo contado o recontado
+        # después) lo autoriza el Maestro: aprobar es esa autorización final.
+        if inventario.ajustada_en_conteo and not es_maestro(request.user):
+            return JsonResponse({
+                'success': False,
+                'error': 'El Maestro ya ajustó stock con esta toma abierta: el ajuste final lo autoriza él (aprobar).'
+            })
 
         data = json.loads(request.body) if request.body else {}
         observaciones = data.get('observaciones', '')
@@ -2821,12 +2948,14 @@ def _tarea_huerfana(tarea, inventario, ahora=None):
     return True
 
 
-def _iniciar_tarea_ajustes(inventario, usuario, reanudar=False):
+def _iniciar_tarea_ajustes(inventario, usuario, reanudar=False, parcial=False):
     """
     Toma el «lock» de la aplicación de ajustes de una toma (N2/H6).
 
     Devuelve (tarea, iniciada). Si `iniciada` es False la tarea ya estaba EN_PROCESO
     (y no huérfana, o no se pidió reanudar): el llamador NO debe lanzar un worker.
+    `parcial`: «Ajustar stock ya» del Maestro: la toma NO pasa a APLICANDO, sigue
+    abierta y la tienda puede seguir contando mientras corre.
 
     Con gunicorn 2 workers × 2 threads, dos clics que llegaran antes de que el
     primero grabara EN_PROCESO lanzaban dos hilos con la misma lista de detalles y
@@ -2863,13 +2992,14 @@ def _iniciar_tarea_ajustes(inventario, usuario, reanudar=False):
         if filas != 1:
             return tarea, False
 
-        TomaInventario.objects.filter(pk=inventario.pk).update(estado='APLICANDO')
-        inventario.estado = 'APLICANDO'
+        if not parcial:
+            TomaInventario.objects.filter(pk=inventario.pk).update(estado='APLICANDO')
+            inventario.estado = 'APLICANDO'
         tarea.refresh_from_db()
         return tarea, True
 
 
-def _ejecutar_ajustes_background(inventario_id, usuario_id, cerrar_conexion=True):
+def _ejecutar_ajustes_background(inventario_id, usuario_id, cerrar_conexion=True, parcial=False, log_id=None):
     """
     Worker que aplica los ajustes de una toma (en un thread desde la vista, o de
     forma síncrona desde el command `aplicar_ajustes_toma`).
@@ -2877,6 +3007,11 @@ def _ejecutar_ajustes_background(inventario_id, usuario_id, cerrar_conexion=True
     que el frontend pueda hacer polling del progreso.
     `cerrar_conexion`: el thread cierra su conexión al terminar (evita leaks); el
     command y los tests, que comparten la conexión del llamador, pasan False.
+
+    Aplica lo PENDIENTE de cada línea (diferencia − lo que ya movió), así que
+    sirve igual para la aplicación final y para el «Ajustar stock ya» del Maestro
+    (`parcial`): con la toma abierta no se toca su estado, se deja afuera lo que
+    espera reconteo y el resultado se anota en el log AJUSTE_ANTICIPADO `log_id`.
     """
     PROGRESS_UPDATE_INTERVAL = 25
 
@@ -2887,34 +3022,27 @@ def _ejecutar_ajustes_background(inventario_id, usuario_id, cerrar_conexion=True
         inventario = TomaInventario.objects.get(pk=inventario_id)
         tarea = TareaAplicacionAjustes.objects.get(inventario=inventario)
 
+        # lo excluido del análisis NO ajusta stock; en el ajuste anticipado tampoco lo
+        # que espera reconteo (se ajusta cuando lo recuenten y el Maestro lo autorice)
         detalles_pendientes = list(
-            inventario.detalles.filter(
-                contado=True,
-                ajuste_aplicado=False,
-                excluir_de_analisis=False  # lo excluido del análisis NO debe ajustar stock
-            ).exclude(diferencia=0)
+            inventario.lineas_por_ajustar(incluir_reconteo_pendiente=not parcial).order_by('id')
         )
 
         tarea.total = len(detalles_pendientes)
         tarea.procesados = 0
         tarea.save(update_fields=['total', 'procesados'])
 
-        if not detalles_pendientes:
-            inventario.estado = 'COMPLETADO'
-            inventario.save()
-            tarea.estado = 'COMPLETADO'
-            tarea.finalizada_en = timezone.now()
-            tarea.save(update_fields=['estado', 'finalizada_en'])
-            return
-
         ajustes_aplicados = 0
         omitidos = 0  # ya aplicados por otro worker (guarda N2)
         errores = []
+        unidades = {'suben': 0, 'bajan': 0}
 
         for i, detalle in enumerate(detalles_pendientes):
             try:
-                if _aplicar_ajuste_individual(detalle, inventario, usuario):
+                movido = _aplicar_ajuste_individual(detalle, inventario, usuario)
+                if movido:
                     ajustes_aplicados += 1
+                    unidades['suben' if movido > 0 else 'bajan'] += abs(movido)
                 else:
                     omitidos += 1
             except Exception as e:
@@ -2926,28 +3054,42 @@ def _ejecutar_ajustes_background(inventario_id, usuario_id, cerrar_conexion=True
                 tarea.procesados = i + 1
                 tarea.save(update_fields=['procesados'])
 
-        # El inventario solo se cierra si TODOS los ajustes entraron. Si alguno falló,
-        # queda en APROBADO para reintentar (el filtro ajuste_aplicado=False hace que
-        # el reintento sea idempotente) en vez de darse por completado a medias.
-        inventario.estado = 'COMPLETADO' if not errores else 'APROBADO'
-        inventario.save()
-
-        # Registrar log
-        _registrar_log(
-            inventario=inventario,
-            tipo_accion='APLICACION_AJUSTES',
-            descripcion=(
-                f'{ajustes_aplicados} ajustes aplicados de {len(detalles_pendientes)} esperados'
-                + (f', {omitidos} ya estaban aplicados' if omitidos else '')
-                + (f', {len(errores)} con error (inventario queda en Aprobado para reintentar)'
-                   if errores else '')
-            ),
-            usuario=usuario,
-            datos={
-                'ajustes_aplicados': ajustes_aplicados, 'esperados': len(detalles_pendientes),
-                'omitidos': omitidos, 'errores': errores,
-            }
+        datos = {
+            'ajustes_aplicados': ajustes_aplicados, 'esperados': len(detalles_pendientes),
+            'omitidos': omitidos, 'errores': errores,
+            'unidades_suben': unidades['suben'], 'unidades_bajan': unidades['bajan'],
+        }
+        resumen = (
+            f'{ajustes_aplicados} ajustes aplicados de {len(detalles_pendientes)} esperados'
+            f' (+{unidades["suben"]} / −{unidades["bajan"]} u.)'
+            + (f', {omitidos} ya estaban aplicados' if omitidos else '')
         )
+        if parcial:
+            # La toma sigue abierta: no se toca su estado (la tienda puede estar
+            # contando ahora mismo). Solo se completa el log que abrió la vista.
+            descripcion = (f'Ajuste de stock con la toma abierta: {resumen}'
+                           + (f', {len(errores)} con error (quedan por ajustar)' if errores else ''))
+            actualizados = TomaInventarioLog.objects.filter(pk=log_id).update(
+                descripcion=descripcion, datos_adicionales={**datos, 'estado': 'ERROR' if errores else 'COMPLETADO'},
+            ) if log_id else 0
+            if not actualizados:
+                _registrar_log(inventario, 'AJUSTE_ANTICIPADO', descripcion, usuario, datos)
+        else:
+            # El inventario solo se cierra si TODOS los ajustes entraron. Si alguno
+            # falló, queda en APROBADO para reintentar (lo pendiente se recalcula por
+            # línea, así que el reintento es idempotente) en vez de darse por
+            # completado a medias.
+            inventario.estado = 'COMPLETADO' if not errores else 'APROBADO'
+            inventario.save()
+            if detalles_pendientes:
+                _registrar_log(
+                    inventario=inventario,
+                    tipo_accion='APLICACION_AJUSTES',
+                    descripcion=resumen + (f', {len(errores)} con error (inventario queda en Aprobado para reintentar)'
+                                           if errores else ''),
+                    usuario=usuario,
+                    datos=datos,
+                )
 
         tarea.procesados = ajustes_aplicados + omitidos
         tarea.errores = errores
@@ -2963,10 +3105,17 @@ def _ejecutar_ajustes_background(inventario_id, usuario_id, cerrar_conexion=True
             tarea.errores = [{'error': str(e)}]
             tarea.finalizada_en = timezone.now()
             tarea.save(update_fields=['estado', 'errores', 'finalizada_en'])
-            inventario = TomaInventario.objects.get(pk=inventario_id)
-            if inventario.estado == 'APLICANDO':
-                inventario.estado = 'APROBADO'
-                inventario.save()
+            if parcial:
+                if log_id:
+                    TomaInventarioLog.objects.filter(pk=log_id).update(
+                        descripcion=f'Ajuste de stock con la toma abierta: se detuvo por un error ({e})'[:2000],
+                        datos_adicionales={'estado': 'ERROR', 'error': str(e)},
+                    )
+            else:
+                inventario = TomaInventario.objects.get(pk=inventario_id)
+                if inventario.estado == 'APLICANDO':
+                    inventario.estado = 'APROBADO'
+                    inventario.save()
         except Exception:
             pass
     finally:
@@ -3080,6 +3229,140 @@ def estado_tarea_ajustes(request, inventario_id):
         logger.error(f"Error al obtener estado de tarea: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
 
+
+# ==============================================================================
+# «AJUSTAR STOCK YA» (Maestro, toma abierta)
+# ==============================================================================
+
+def _resumen_por_ajustar(inventario, incluir_reconteo_pendiente=False, con_valor=False):
+    """Lo que movería ahora un ajuste: líneas y unidades que suben y bajan, cuántas
+    son correcciones de líneas ya ajustadas y (con valores) el impacto a costo."""
+    agg = inventario.lineas_por_ajustar(incluir_reconteo_pendiente=incluir_reconteo_pendiente).aggregate(
+        lineas=Count('id'),
+        lineas_suben=Count('id', filter=Q(delta__gt=0)),
+        unidades_suben=Coalesce(Sum('delta', filter=Q(delta__gt=0)), 0),
+        lineas_bajan=Count('id', filter=Q(delta__lt=0)),
+        unidades_bajan=Coalesce(Sum('delta', filter=Q(delta__lt=0)), 0),
+        correcciones=Count('id', filter=Q(ajuste_aplicado=True)),
+        valor=Coalesce(
+            Sum(ExpressionWrapper(F('delta') * F('costo_unitario_sistema'),
+                                  output_field=DecimalField(max_digits=18, decimal_places=2))),
+            Value(0), output_field=DecimalField(max_digits=18, decimal_places=2),
+        ),
+    )
+    resumen = {
+        'lineas': agg['lineas'],
+        'lineas_suben': agg['lineas_suben'],
+        'unidades_suben': agg['unidades_suben'],
+        'lineas_bajan': agg['lineas_bajan'],
+        'unidades_bajan': abs(agg['unidades_bajan']),
+        'correcciones': agg['correcciones'],
+    }
+    if con_valor:
+        resumen['valor'] = float(agg['valor'] or 0)
+    return resumen
+
+
+def _bloque_ajuste_anticipado(inventario, usuario, con_valor=False):
+    """Lo que la pantalla necesita del «Ajustar stock ya»: los ya hechos, si hay uno
+    corriendo, si este usuario puede hacerlo y qué movería ahora."""
+    hechos = []
+    for log in inventario.ajustes_anticipados().select_related('usuario').order_by('-created_at')[:10]:
+        datos = log.datos_adicionales or {}
+        hechos.append({
+            'fecha': timezone.localtime(log.created_at).strftime('%d/%m/%Y %H:%M'),
+            'usuario': (log.usuario.get_full_name() or log.usuario.username) if log.usuario else 'Sistema',
+            'estado': datos.get('estado', 'COMPLETADO'),
+            'lineas': datos.get('ajustes_aplicados', 0),
+            'unidades_suben': datos.get('unidades_suben', 0),
+            'unidades_bajan': datos.get('unidades_bajan', 0),
+            'errores': len(datos.get('errores') or []),
+        })
+    # (un hilo muerto a mitad —deploy, reinicio— no bloquea: se puede volver a ajustar)
+    tarea = TareaAplicacionAjustes.objects.filter(inventario=inventario).first()
+    en_curso = bool(tarea and tarea.estado == 'EN_PROCESO' and not _tarea_huerfana(tarea, inventario))
+    return {
+        'ajustada': bool(hechos),
+        'hechos': hechos,
+        'en_curso': en_curso,
+        'puede': es_maestro(usuario) and inventario.estado in ESTADOS_AJUSTE_ANTICIPADO and not en_curso,
+        'por_ajustar': _resumen_por_ajustar(inventario, con_valor=con_valor),
+    }
+
+
+@require_POST
+@login_required
+def ajustar_stock_ya(request, inventario_id):
+    """
+    POST gestion-inventarios/api/ajustar-ya/<id>/ — solo el Maestro.
+
+    Lleva al stock lo contado (y recontado) que todavía no está ajustado, SIN cerrar
+    la toma: los ecommerce venden el stock de la tienda y no pueden esperar al fin de
+    la revisión (pedido del usuario, 09-10). Mismo camino que «Aplicar ajustes»
+    (kardex con la referencia de la toma + lote FIFO / consumo FIFO), en un hilo con
+    progreso. No toca lo que espera reconteo ni lo que no se ha contado (conserva su
+    stock); la tienda sigue contando y recontando, y lo que cambie después queda «por
+    ajustar» hasta que el Maestro vuelva a autorizarlo aquí o apruebe la toma.
+    """
+    try:
+        inventario = _inventario_del_usuario(request, inventario_id)
+        if inventario is None:
+            return _error_sin_acceso()
+        if not es_maestro(request.user):
+            return JsonResponse({'success': False, 'error': 'Ajustar el stock con la toma abierta lo autoriza solo el Maestro'},
+                                status=403)
+        if inventario.estado not in ESTADOS_AJUSTE_ANTICIPADO:
+            return JsonResponse({
+                'success': False,
+                'error': f'La toma está en {inventario.get_estado_display()}: el ajuste con la toma abierta es '
+                         f'para tomas en conteo o en revisión'
+                         + (' (aprobada: use «Aplicar ajustes al stock»)' if inventario.estado == 'APROBADO' else ''),
+            })
+
+        resumen = _resumen_por_ajustar(inventario, con_valor=True)
+        if not resumen['lineas']:
+            return JsonResponse({'success': False, 'sin_cambios': True,
+                                 'error': 'No hay nada por ajustar: el stock ya está como dice lo contado'})
+
+        with transaction.atomic():
+            # reanudar=True solo toma una tarea huérfana (sin avance hace 30 min); con un
+            # hilo vivo no inicia otro. Lo ya ajustado no se repite (pendiente por línea).
+            tarea, iniciada = _iniciar_tarea_ajustes(inventario, request.user, reanudar=True, parcial=True)
+            if not iniciada:
+                return JsonResponse({'success': True, 'task_id': tarea.id, 'already_running': True,
+                                     'message': 'Ya hay un ajuste de esta toma en curso'})
+            # El log se abre ANTES de mover stock: desde aquí la toma cuenta como
+            # «ajustada» (lo que se cuente después se toma como contado ahora)
+            log = TomaInventarioLog.objects.create(
+                toma_inventario=inventario, tipo_accion='AJUSTE_ANTICIPADO', usuario=request.user,
+                descripcion=(f'Ajuste de stock con la toma abierta: en curso ({resumen["lineas"]} líneas, '
+                             f'+{resumen["unidades_suben"]} / −{resumen["unidades_bajan"]} u.)'),
+                datos_adicionales={'estado': 'EN_PROCESO', 'esperados': resumen['lineas'],
+                                   'unidades_suben': resumen['unidades_suben'],
+                                   'unidades_bajan': resumen['unidades_bajan']},
+            )
+            usuario_id, log_id = request.user.id, log.id
+
+            def _lanzar():
+                threading.Thread(
+                    target=_ejecutar_ajustes_background,
+                    args=(inventario.id, usuario_id),
+                    kwargs={'parcial': True, 'log_id': log_id},
+                    daemon=True,
+                ).start()
+
+            transaction.on_commit(_lanzar)
+
+        return JsonResponse({
+            'success': True,
+            'task_id': tarea.id,
+            'resumen': resumen,
+            'message': 'Ajuste de stock iniciado: la toma sigue abierta',
+        })
+    except Exception as e:
+        logger.error(f'Error al ajustar stock con la toma abierta: {e}')
+        return JsonResponse({'success': False, 'error': str(e)})
+
 def _aplicar_ajuste_individual(detalle, inventario, usuario):
     """
     Aplica el ajuste de un producto individual: kardex + stock plano + lotes FIFO.
@@ -3103,27 +3386,31 @@ def _aplicar_ajuste_individual(detalle, inventario, usuario):
       y, si otro worker ya lo aplicó (dos POST casi simultáneos, «reanudar» con el
       hilo original todavía vivo), se sale sin tocar nada. La idempotencia ya no
       depende de que un solo hilo haya leído `ajuste_aplicado=False` en memoria.
+    - Mueve solo lo PENDIENTE: diferencia − lo que la línea ya movió
+      (`diferencia_ya_aplicada`). Con «Ajustar stock ya» una línea se ajusta con la
+      toma abierta y después se puede recontar: el siguiente ajuste mueve solo la
+      corrección (y la guarda N2 queda igual: bajo lock lo pendiente ya es 0).
 
-    Devuelve True si aplicó el ajuste, False si no había nada que hacer.
+    Devuelve lo que movió (+n entra / −n sale) o 0 si no había nada que hacer.
     """
     from .views import registrar_movimiento_producto
     from .views_modulo_productos import crear_lote_producto
-
-    if detalle.diferencia == 0:
-        return False
 
     referencia = inventario.numero_inventario
     observaciones = f'Ajuste inventario {referencia}'
 
     with transaction.atomic():
         det = TomaInventarioDetalle.objects.select_for_update().get(pk=detalle.pk)
-        if det.ajuste_aplicado:
-            detalle.ajuste_aplicado = True
+        if not det.contado or det.excluir_de_analisis:
+            return 0
+        diferencia = det.por_ajustar
+        if diferencia == 0:
+            detalle.ajuste_aplicado = det.ajuste_aplicado
             detalle.fecha_ajuste = det.fecha_ajuste
-            return False
-        diferencia = det.diferencia
-        if diferencia == 0 or det.excluir_de_analisis:
-            return False
+            return 0
+        if det.diferencia_ya_aplicada:
+            # Corrección de una línea que ya se había ajustado (reconteo posterior)
+            observaciones = f'{observaciones} - Corrección (antes {det.diferencia_ya_aplicada:+d})'
 
         producto_talla = (
             Producto_Talla.objects.select_for_update()
@@ -3183,10 +3470,13 @@ def _aplicar_ajuste_individual(detalle, inventario, usuario):
         # Marcar como aplicado solo si el ajuste efectivamente se registró (sobre la
         # fila bloqueada; el objeto del llamador se actualiza para que no la reintente)
         ahora = timezone.now()
-        TomaInventarioDetalle.objects.filter(pk=det.pk).update(ajuste_aplicado=True, fecha_ajuste=ahora)
+        TomaInventarioDetalle.objects.filter(pk=det.pk).update(
+            ajuste_aplicado=True, fecha_ajuste=ahora, diferencia_aplicada=det.diferencia,
+        )
         detalle.ajuste_aplicado = True
         detalle.fecha_ajuste = ahora
-        return True
+        detalle.diferencia_aplicada = det.diferencia
+        return diferencia
 
 
 # ==============================================================================
@@ -3226,7 +3516,8 @@ def cancelar_inventario(request, inventario_id):
             return JsonResponse({
                 'success': False,
                 'error': f'La toma ya aplicó {aplicados} ajuste(s) al stock y no se puede cancelar. '
-                         f'Reintente la aplicación para completar los pendientes.'
+                         + ('Termine de contarla y apruébela (el Maestro).' if inventario.ajustada_en_conteo
+                            else 'Reintente la aplicación para completar los pendientes.')
             })
 
         data = json.loads(request.body)
@@ -3435,14 +3726,16 @@ def _resolver_no_contados(inventario, usuario, accion, solo_stock_cero=False, pr
             lote = list(inventario.detalles.filter(id__in=ids[inicio:inicio + BATCH_SIZE]))
             pt_ids = [d.producto_talla_id for d in lote]
             movimientos = _obtener_movimientos_post_corte_batch(
-                pt_ids, inventario.fecha_corte, fecha_conteo, inventario.sucursal_id
+                pt_ids, inventario.fecha_corte, fecha_conteo, inventario.sucursal_id,
+                excluir_referencia=inventario.numero_inventario,
             )
             # Lo vendido DESPUÉS del conteo existía al contar (si no, no se habría
             # vendido): esas unidades no son faltante. Sin esto, un SKU no
             # pistoleado y vendido hoy dejaba el stock en negativo al aplicar y la
             # toma quedaba trabada en «Aprobado» con error.
             despues = (
-                _obtener_movimientos_post_corte_batch(pt_ids, fecha_conteo, ahora, inventario.sucursal_id)
+                _obtener_movimientos_post_corte_batch(pt_ids, fecha_conteo, ahora, inventario.sucursal_id,
+                                                      excluir_referencia=inventario.numero_inventario)
                 if fecha_conteo < ahora else {}
             )
             for d in lote:
@@ -3481,7 +3774,8 @@ def _resolver_no_contados(inventario, usuario, accion, solo_stock_cero=False, pr
                 inventario.detalles.filter(id__in=ids[inicio:inicio + BATCH_SIZE])
             )
             movimientos = _obtener_movimientos_post_corte_batch(
-                [d.producto_talla_id for d in lote], inventario.fecha_corte, fecha_conteo, inventario.sucursal_id
+                [d.producto_talla_id for d in lote], inventario.fecha_corte, fecha_conteo, inventario.sucursal_id,
+                excluir_referencia=inventario.numero_inventario,
             )
             a_contar = []
             for d in lote:

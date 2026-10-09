@@ -1853,10 +1853,12 @@ urlpatterns = [
 
     # APIs de conteo (escriben el conteo físico: requieren puede_editar)
     path('gestion-inventarios/api/productos-conteo/<int:inventario_id>/', views_gestion_inventarios.obtener_productos_conteo, name='api_productos_conteo'),
-    path('gestion-inventarios/api/registrar-conteo/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.registrar_conteo), name='api_registrar_conteo'),
-    path('gestion-inventarios/api/registrar-reconteo/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.registrar_reconteo), name='api_registrar_reconteo'),
-    path('gestion-inventarios/api/importar-conteo/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.importar_conteo_pistola), name='api_importar_conteo_pistola'),
-    path('gestion-inventarios/api/importar-conteo/preview/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.preview_conteo_pistola), name='api_preview_conteo_pistola'),
+    # Contar no mueve stock: con Ver basta si el rol cuenta (jefe de local, ver
+    # views_gestion_inventarios._puede_contar); el resto necesita Editar.
+    path('gestion-inventarios/api/registrar-conteo/<int:inventario_id>/', _permiso_inventarios('puede_ver', views_gestion_inventarios.registrar_conteo), name='api_registrar_conteo'),
+    path('gestion-inventarios/api/registrar-reconteo/<int:inventario_id>/', _permiso_inventarios('puede_ver', views_gestion_inventarios.registrar_reconteo), name='api_registrar_reconteo'),
+    path('gestion-inventarios/api/importar-conteo/<int:inventario_id>/', _permiso_inventarios('puede_ver', views_gestion_inventarios.importar_conteo_pistola), name='api_importar_conteo_pistola'),
+    path('gestion-inventarios/api/importar-conteo/preview/<int:inventario_id>/', _permiso_inventarios('puede_ver', views_gestion_inventarios.preview_conteo_pistola), name='api_preview_conteo_pistola'),
     path('gestion-inventarios/api/excluir-detalle/<int:inventario_id>/<int:detalle_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.actualizar_exclusion_detalle), name='api_excluir_detalle_inventario'),
     # «No ajustar» varias líneas a la vez (seleccionadas en la tabla)
     path('gestion-inventarios/api/excluir-detalles/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.actualizar_exclusion_detalles), name='api_excluir_detalles_inventario'),
@@ -1905,6 +1907,9 @@ urlpatterns = [
     # abierto: quien solo tiene ver/exportar en su sucursal no puede aplicar.
     path('gestion-inventarios/api/aplicar-ajustes/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.aplicar_ajustes_inventario), name='api_aplicar_ajustes'),
     path('gestion-inventarios/api/estado-ajustes/<int:inventario_id>/', views_gestion_inventarios.estado_tarea_ajustes, name='api_estado_tarea_ajustes'),
+    # «Ajustar stock ya»: lleva lo contado al stock con la toma abierta. Solo el
+    # Maestro (la vista lo exige); mueve stock y kardex igual que aplicar-ajustes.
+    path('gestion-inventarios/api/ajustar-ya/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.ajustar_stock_ya), name='api_ajustar_stock_ya'),
 
     # APIs de cancelación: quien puede crear/editar la toma puede abandonarla
     # (no borra datos, solo deja el inventario en CANCELADO).

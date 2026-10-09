@@ -1309,9 +1309,9 @@ def completar_numeros_mp(config, dias, presupuesto_seg=35, importar=False, salta
         # recién recibe su N° no se vuelve a crear como pago manual.
         for p in pagos:
             pid = str(p.get('id') or '')
-            pago = manuales.pop(pid, None)
-            if pago is None:
-                continue
+            if pid not in manuales or mp.motivo_no_presencial(p):
+                continue          # lo de internet no se registra como cobro de una caja
+            pago = manuales.pop(pid)
             caja = _caja_del_pago(p, cajas_de_tienda.get(pago.ticket.sucursal_id) or []) or config.id
             if _importar_pago_manual(pago, p, caja, retiro=retiro_de.get(pid)) is not None:
                 importados += 1

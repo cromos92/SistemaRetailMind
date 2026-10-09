@@ -1002,6 +1002,20 @@ def _pago_mp(monto, medio='debit_card', ext_ref='', estado='approved',
     return pago
 
 
+# Forma real de payments/search (medida en prod el 09-10-2026): un cobro de la
+# máquina de PAO2 y la compra en Mercado Libre pagada con la cuenta de Paola.
+_MARCAS_POINT = {'operation_type': 'pos_payment', 'collector_id': 3683924768,
+                 'pos_id': 138228201, 'store_id': 81131179,
+                 'point_of_interaction': {'type': 'POINT',
+                                          'device': {'serial_number': 'N950NCD400023536'}}}
+_COMPRA_MELI = {'operation_type': 'regular_payment', 'collector_id': None,
+                'collector': {'id': 3746749891},
+                'order': {'id': '2000015422941951', 'type': 'mercadolibre'},
+                'point_of_interaction': {'type': 'CHECKOUT',
+                                         'business_info': {'unit': 'marketplace',
+                                                           'sub_unit': 'checkout_on'}}}
+
+
 class ControlCierreMPTests(BaseMPTest):
 
     def setUp(self):
@@ -1142,6 +1156,88 @@ class ControlCierreMPTests(BaseMPTest):
         self.assertEqual(res['devoluciones_mp'], 4000)
         self.assertEqual(res['mp_total'], 0)
         self.assertEqual(res['sistema_total'], 0)
+        self.assertTrue(res['cuadra'])
+
+    def test_compra_con_la_cuenta_no_es_un_cobro_del_pos(self):
+        """PAO 08-10-2026: una compra en Mercado Libre pagada con la cuenta salía
+        como «FALTAN $184.810» en el cierre de las 4 tiendas."""
+        trx = _transaccion(self.config, correlativo='970', monto=9990, metodo_pago_mp='debit_card')
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[
+            _pago_mp(9990, 'debit_card', trx.external_reference, payment_id='P1', **_MARCAS_POINT),
+            _pago_mp(184810, 'credit_card', '2000015422941951', payment_id='183076001424',
+                     **_COMPRA_MELI),
+        ])
+        self.assertTrue(res['cuadra'])
+        self.assertEqual((res['sistema_total'], res['mp_total']), (9990, 9990))
+        self.assertEqual(res['sin_registro'], [])
+        self.assertFalse(res['hay_sin_atribuir'])
+        self.assertEqual([(d['payment_id'], d['monto'], d['motivo']) for d in res['fuera_pos']],
+                         [('183076001424', 184810, 'compra con la cuenta')])
+
+    def test_compra_se_reconoce_aunque_ese_dia_no_haya_cobros(self):
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[
+            _pago_mp(184810, 'credit_card', '2000015422941951', payment_id='183076001424',
+                     **_COMPRA_MELI),
+        ])
+        self.assertTrue(res['cuadra'])
+        self.assertEqual([d['motivo'] for d in res['fuera_pos']], ['compra con la cuenta'])
+
+    def test_venta_por_internet_cobrada_por_la_cuenta_no_se_mezcla_con_el_pos(self):
+        trx = _transaccion(self.config, correlativo='971', monto=9990, metodo_pago_mp='debit_card')
+        internet = {'operation_type': 'regular_payment', 'collector_id': 3683924768,
+                    'point_of_interaction': {'type': 'CHECKOUT'}}
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[
+            _pago_mp(9990, 'debit_card', trx.external_reference, payment_id='P1', **_MARCAS_POINT),
+            _pago_mp(59990, 'credit_card', '2000018873696098', payment_id='M1',
+                     order={'id': '2000018873696098', 'type': 'mercadolibre'}, **internet),
+            _pago_mp(29990, 'debit_card', 'WEB-1234', payment_id='W1',
+                     order={'id': '3', 'type': 'mercadopago'}, **internet),
+        ])
+        self.assertTrue(res['cuadra'])
+        self.assertEqual(res['mp_total'], 9990)
+        self.assertEqual(sorted(d['motivo'] for d in res['fuera_pos']), ['Mercado Libre', 'internet'])
+
+    def test_cobro_hecho_en_la_maquina_sin_registro_sigue_saliendo(self):
+        """Máquina en modo manual («Venta presencial»): sin referencia propia, pero es del POS."""
+        trx = _transaccion(self.config, correlativo='972', monto=9990, metodo_pago_mp='debit_card')
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[
+            _pago_mp(9990, 'debit_card', trx.external_reference, payment_id='P1', **_MARCAS_POINT),
+            _pago_mp(23690, 'debit_card', '', payment_id='P2', description='Venta presencial',
+                     **_MARCAS_POINT),
+        ])
+        self.assertEqual(res['diferencia'], 23690)
+        self.assertEqual([(d['payment_id'], d['atribuible']) for d in res['sin_registro']],
+                         [('P2', True)])
+        self.assertEqual(res['fuera_pos'], [])
+
+    def test_pago_con_la_cuenta_en_la_maquina_de_otro_comercio_es_compra(self):
+        trx = _transaccion(self.config, correlativo='973', monto=9990, metodo_pago_mp='debit_card')
+        ajeno = dict(_MARCAS_POINT, collector_id=999, pos_id=1, store_id=2)
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[
+            _pago_mp(9990, 'debit_card', trx.external_reference, payment_id='P1', **_MARCAS_POINT),
+            _pago_mp(15000, 'debit_card', '', payment_id='P3', **ajeno),
+        ])
+        self.assertTrue(res['cuadra'])
+        self.assertEqual([d['motivo'] for d in res['fuera_pos']], ['compra con la cuenta'])
+
+    def test_pago_de_internet_registrado_a_mano_se_sigue_comparando(self):
+        """Un «MP manual» importado tiene fila local: está en los dos lados."""
+        _transaccion(self.config, correlativo='974', monto=29990, metodo_pago_mp='debit_card',
+                     external_reference='MANUAL-555', payment_id_mp='555')
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[
+            _pago_mp(29990, 'debit_card', '', payment_id='555', operation_type='regular_payment',
+                     point_of_interaction={'type': 'CHECKOUT'}),
+        ])
+        self.assertTrue(res['cuadra'])
+        self.assertEqual(res['sistema_total'], 29990)
+        self.assertEqual(res['fuera_pos'], [])
+
+    def test_compra_devuelta_no_es_devolucion_de_la_caja(self):
+        res = mp.conciliar_cierre_mp(self.config, self.hoy, pagos=[
+            _pago_mp(184810, 'credit_card', '2000015422941951', estado='refunded',
+                     payment_id='183076001424', **_COMPRA_MELI),
+        ])
+        self.assertEqual(res['devoluciones_mp'], 0)
         self.assertTrue(res['cuadra'])
 
     def test_error_de_api_no_finge_que_cuadra(self):

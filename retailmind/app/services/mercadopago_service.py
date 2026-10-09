@@ -701,6 +701,45 @@ def _pago_es_de_la_caja(pago, config, ids_propios=None, ids_ajenos=None):
     return None
 
 
+def motivo_no_presencial(pago, cobradores=None):
+    """None si `pago` es un cobro presencial de la cuenta (máquina Point o QR de
+    una caja); si no, una etiqueta corta de lo que es.
+
+    payments/search trae TODO lo de la cuenta, no solo lo de las máquinas: también
+    ventas por internet y hasta las COMPRAS pagadas con la cuenta. El 08-10-2026 una
+    compra de $184.810 en Mercado Libre pagada con la cuenta de Paola salió como
+    «FALTAN $184.810» en el cierre de las 4 tiendas PAO. Lo del POS y lo de internet
+    son cosas distintas y no se mezclan.
+
+    `cobradores`: ids de cobrador aprendidos de los pagos que calzaron con un cobro
+    propio. Sin ellos se usa la forma en que MP entrega el pago (medido en prod): el
+    cobrado por la cuenta trae `collector_id`; el que la cuenta PAGÓ trae solo el
+    objeto `collector`, con el id del vendedor.
+    """
+    cobrador = str(pago.get('collector_id') or '')
+    vendedor = str((pago.get('collector') or {}).get('id') or '')
+    if cobradores:
+        if (cobrador or vendedor) and (cobrador or vendedor) not in cobradores:
+            return 'compra con la cuenta'
+    elif vendedor and not cobrador:
+        return 'compra con la cuenta'
+    poi = pago.get('point_of_interaction') or {}
+    # En 35 días de las dos cuentas (3.353 cobros) todos traían estas marcas.
+    if (pago.get('operation_type') == 'pos_payment'
+            or str(poi.get('type') or '').upper() == 'POINT'
+            or pago.get('pos_id') not in (None, '')
+            or pago.get('store_id') not in (None, '')
+            or (poi.get('device') or {}).get('serial_number')
+            or str(pago.get('external_reference') or '').startswith('RM-')):
+        return None
+    tipo_orden = str((pago.get('order') or {}).get('type') or '')
+    if tipo_orden == 'mercadolibre':
+        return 'Mercado Libre'
+    if pago.get('operation_type') or poi.get('type') or tipo_orden:
+        return 'internet'
+    return None                 # MP no dice qué es: se compara, no se esconde
+
+
 def _imputacion_en_ventas(config, fecha, transacciones):
     """¿Cada cobro de MP quedó registrado como Mercado Pago EN LA VENTA?
 
@@ -776,7 +815,9 @@ def conciliar_cierre_mp(config, fecha, pagos=None):
       - `sin_registro`:  cobrado en MP, sin pago registrado en el sistema;
       - `sin_confirmar`: registrado como aprobado, MP no lo reporta;
       - `medio_distinto`: mismo cobro, distinto medio (débito/crédito) — hace
-        que la cuadratura lo impute al sub-bucket equivocado.
+        que la cuadratura lo impute al sub-bucket equivocado;
+      - `fuera_pos`: pagos de la cuenta que no son del POS (internet, compras
+        pagadas con la cuenta). Quedan FUERA de la comparación.
     """
     if pagos is None:
         try:
@@ -831,9 +872,12 @@ def conciliar_cierre_mp(config, fecha, pagos=None):
 
     # PASADA 1: de los pagos que calzan por external_reference se aprenden los
     # ids que MP le pone a ESTA caja y a las otras de la misma cuenta.
-    ids_propios, ids_ajenos = set(), set()
+    # También el id de la cuenta como cobradora (para reconocer lo que la cuenta PAGÓ).
+    ids_propios, ids_ajenos, cobradores = set(), set(), set()
     for pago in pagos:
         trx = _local(pago)
+        if trx is not None and pago.get('collector_id'):
+            cobradores.add(str(pago['collector_id']))
         # Una fila MANUAL- o ASOC- (registrada por la conciliación o a mano) tiene
         # la caja deducida, no la real: no se aprende de ella a qué caja es un pos_id.
         if trx is None or str(trx.external_reference).startswith(('MANUAL-', 'ASOC-')):
@@ -846,7 +890,7 @@ def conciliar_cierre_mp(config, fecha, pagos=None):
     ids_ajenos -= ids_propios
 
     real = {}
-    sin_registro, medio_distinto = [], []
+    sin_registro, medio_distinto, fuera_pos = [], [], []
     devoluciones_mp = 0
     vistos = set()
 
@@ -856,17 +900,25 @@ def conciliar_cierre_mp(config, fecha, pagos=None):
         ext = str(pago.get('external_reference') or '')
         monto = int(round(float(pago.get('transaction_amount') or 0)))
         medio = str(pago.get('payment_type_id') or '')
+        trx = _local(pago)
+        # Internet y compras con la cuenta no son del POS: ni se cobran en la
+        # máquina ni se registran en una venta de la caja. Lo que SÍ tiene fila
+        # local se compara siempre (un «MP manual» importado está en los dos lados).
+        motivo = None if trx is not None else motivo_no_presencial(pago, cobradores)
+        if motivo:
+            if estado == 'approved':
+                fuera_pos.append({'payment_id': str(pago.get('id') or ''), 'monto': monto,
+                                  'hora': _hora_local_mp(pago.get('date_created')), 'motivo': motivo})
+            continue
         if estado == 'refunded':
             # Devuelto entero: el sistema tampoco lo cuenta como cobro, así
             # que queda fuera de la comparación y se informa aparte.
-            trx = _local(pago)
             if trx is None or trx.config_id == config.id:
                 devoluciones_mp += monto
             continue
         if estado != 'approved':
             continue
 
-        trx = _local(pago)
         if trx is not None:
             if trx.config_id != config.id:
                 continue                      # cobro de otra caja de la cuenta
@@ -960,6 +1012,8 @@ def conciliar_cierre_mp(config, fecha, pagos=None):
         'sin_registro': sin_registro,
         'sin_confirmar': sin_confirmar,
         'medio_distinto': medio_distinto,
+        # Internet / compras con la cuenta: NO entran a la comparación del POS.
+        'fuera_pos': fuera_pos,
         'devoluciones_mp': devoluciones_mp,
         # Cobrado por MP pero registrado en la venta con otro medio de pago
         'otro_medio': otro_medio,

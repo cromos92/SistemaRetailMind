@@ -1,4 +1,6 @@
 from django.db import models
+from django.db.models import Case, F, Value, When
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.conf import settings
 from .organizacion import Empresa, Sucursal
@@ -645,6 +647,34 @@ class TomaInventario(models.Model):
         guarda de cancelación: una toma con ajustes aplicados no se cancela)."""
         return self.detalles.filter(ajuste_aplicado=True)
 
+    def lineas_por_ajustar(self, incluir_reconteo_pendiente=True):
+        """Líneas contadas (no excluidas) cuyo conteo todavía no está reflejado en el
+        stock: diferencia ≠ lo que la línea ya movió. Anota `delta` (lo que falta
+        mover). Sirve igual para la aplicación final (todo lo pendiente) y para el
+        «Ajustar stock ya» del Maestro con la toma abierta, que deja afuera lo que
+        espera reconteo (`incluir_reconteo_pendiente=False`)."""
+        qs = self.detalles.filter(contado=True, excluir_de_analisis=False).annotate(
+            ya_aplicada=Coalesce(
+                'diferencia_aplicada',
+                Case(When(ajuste_aplicado=True, then=F('diferencia')), default=Value(0)),
+                output_field=models.IntegerField(),
+            ),
+        ).annotate(delta=F('diferencia') - F('ya_aplicada')).exclude(delta=0)
+        if not incluir_reconteo_pendiente:
+            qs = qs.exclude(reconteo_requerido=True, stock_reconteo__isnull=True)
+        return qs
+
+    def ajustes_anticipados(self):
+        """«Ajustar stock ya» hechos con la toma abierta (log append-only: quién y cuándo)."""
+        return self.logs.filter(tipo_accion='AJUSTE_ANTICIPADO')
+
+    @property
+    def ajustada_en_conteo(self):
+        """El Maestro ya ajustó stock con la toma abierta: la tienda sigue contando y lo
+        nuevo queda «por ajustar» hasta que él lo autorice (pedido del usuario, 09-10:
+        regularizar rápido porque los ecommerce venden ese stock)."""
+        return self.ajustes_anticipados().exists()
+
     @property
     def conteo_tienda_cerrada(self):
         """La toma se contó con la tienda cerrada, al momento del corte: la
@@ -797,6 +827,17 @@ class TomaInventarioDetalle(models.Model):
         blank=True,
         verbose_name='Fecha de Ajuste'
     )
+    # Lo que esta línea YA movió en el stock. Con «Ajustar stock ya» (Maestro, toma
+    # abierta) una línea se ajusta y la tienda puede seguir recontándola: lo pendiente
+    # es `diferencia - diferencia_aplicada`. NULL = línea anterior a este campo: vale
+    # `diferencia` si ajuste_aplicado y 0 si no (ver `diferencia_ya_aplicada`), así no
+    # hace falta rellenar las tomas viejas.
+    diferencia_aplicada = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Diferencia ya aplicada al stock',
+        help_text='Suma de lo que los ajustes de esta línea ya movieron en el stock'
+    )
 
     # === REVISIÓN POSTERIOR DE FALTANTES ===
     # Después de aplicar la toma el faltante ya se descontó. El jefe de local lo
@@ -894,6 +935,21 @@ class TomaInventarioDetalle(models.Model):
         """Calcula el valor monetario de la diferencia"""
         return self.diferencia * self.costo_unitario_sistema
 
+    @property
+    def diferencia_ya_aplicada(self):
+        """Lo que la línea ya movió en el stock (mismo criterio que
+        TomaInventario.lineas_por_ajustar)."""
+        if self.diferencia_aplicada is not None:
+            return self.diferencia_aplicada
+        return self.diferencia if self.ajuste_aplicado else 0
+
+    @property
+    def por_ajustar(self):
+        """Lo que falta mover en el stock para que quede como dice el conteo."""
+        if not self.contado or self.excluir_de_analisis:
+            return 0
+        return self.diferencia - self.diferencia_ya_aplicada
+
 
 class TomaInventarioLog(models.Model):
     """
@@ -911,6 +967,7 @@ class TomaInventarioLog(models.Model):
         ('APROBACION', 'Aprobación'),
         ('RECHAZO', 'Rechazo'),
         ('APLICACION_AJUSTES', 'Aplicación de Ajustes'),
+        ('AJUSTE_ANTICIPADO', 'Ajuste de stock con la toma abierta'),
         ('CANCELACION', 'Cancelación'),
         ('MODIFICACION', 'Modificación'),
     ]

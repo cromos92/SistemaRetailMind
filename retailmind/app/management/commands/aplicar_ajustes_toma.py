@@ -7,8 +7,9 @@ del worker de gunicorn. Un deploy de Railway, un OOM o un reinicio matan ese hil
 a mitad del bucle (una toma de tienda son miles de transacciones) y la toma queda
 en APLICANDO con la tarea EN_PROCESO para siempre. Este comando hace el mismo
 trabajo sin depender del worker web: se corre en la consola del servidor, se
-puede cortar y volver a correr (cada detalle marca `ajuste_aplicado`, y el
-detalle se relee bajo lock antes de tocar stock, así que nunca aplica dos veces).
+puede cortar y volver a correr (cada detalle guarda lo que ya movió en
+`diferencia_aplicada`, y se relee bajo lock antes de tocar stock, así que nunca
+aplica dos veces; con «Ajustar stock ya» previo, aplica solo lo que falta).
 
 Usa EXACTAMENTE el mismo camino que la pantalla:
   - `_iniciar_tarea_ajustes`: bloquea la fila de TareaAplicacionAjustes y pasa a
@@ -63,16 +64,16 @@ class Command(BaseCommand):
 
         usuario = self._usuario(toma, opts['usuario'])
 
-        pendientes = toma.detalles.filter(
-            contado=True, ajuste_aplicado=False, excluir_de_analisis=False,
-        ).exclude(diferencia=0)
+        # Lo pendiente de cada línea (diferencia − lo que ya movió): incluye las
+        # correcciones de líneas ajustadas antes con «Ajustar stock ya»
+        pendientes = toma.lineas_por_ajustar()
         resumen = pendientes.aggregate(
             lineas=Count('id'),
-            sobrantes=Coalesce(Sum('diferencia', filter=Q(diferencia__gt=0)), 0),
-            faltantes=Coalesce(Sum('diferencia', filter=Q(diferencia__lt=0)), 0),
+            sobrantes=Coalesce(Sum('delta', filter=Q(delta__gt=0)), 0),
+            faltantes=Coalesce(Sum('delta', filter=Q(delta__lt=0)), 0),
             valor=Coalesce(
                 Sum(ExpressionWrapper(
-                    F('diferencia') * F('costo_unitario_sistema'),
+                    F('delta') * F('costo_unitario_sistema'),
                     output_field=DecimalField(max_digits=18, decimal_places=2),
                 )),
                 Value(0), output_field=DecimalField(max_digits=18, decimal_places=2),

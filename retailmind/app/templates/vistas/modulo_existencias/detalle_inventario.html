@@ -635,9 +635,15 @@ button.kpi-card:focus-visible {
                     <a href="/app/gestion-inventarios/" class="btn btn-light btn-sm" title="Volver a tomas de inventario" aria-label="Volver a tomas de inventario">
                         <i class="bi bi-arrow-left me-1"></i>Volver
                     </a>
-                    {% if not solo_revision %}
+                    {% if puede_contar %}
                     <button type="button" class="btn btn-light btn-sm" onclick="abrirModalImportarConteo()" title="Cargar el archivo de la pistola">
                         <i class="bi bi-upload me-1"></i>Cargar pistola
+                    </button>
+                    {% endif %}
+                    {% if es_maestro %}
+                    <button type="button" class="btn btn-warning btn-sm fw-semibold" onclick="ajustarStockYa()" id="btnAjustarYa" style="display: none;"
+                            title="Llevar al stock lo ya contado sin cerrar la toma (los ecommerce venden ese stock); la tienda sigue contando">
+                        <i class="bi bi-lightning-charge me-1"></i>Ajustar stock ya <span class="badge bg-dark ms-1" id="badgeAjustarYa"></span>
                     </button>
                     {% endif %}
                     {% if ver_valores %}
@@ -878,6 +884,8 @@ button.kpi-card:focus-visible {
                                 <option value="contado">Contados</option>
                                 <option value="reconteo">Requiere reconteo</option>
                                 <option value="excluido">No se ajustan (excluidos)</option>
+                                <option value="por_ajustar">Por ajustar al stock</option>
+                                <option value="ajustado">Ya ajustados al stock</option>
                             </select>
                         </div>
                         <div class="col-lg-2 col-md-3 col-6">
@@ -921,13 +929,21 @@ button.kpi-card:focus-visible {
                 </div>
 
                 {% if solo_revision %}
-                <!-- Modo revisión (solo Ver): sin lector, sin selección y sin botones que muevan la toma -->
+                <!-- Solo Ver: sin selección ni botones que decidan o muevan la toma. El jefe de
+                     local sí cuenta (contar no mueve stock: lo mueve el Maestro) -->
                 <div class="alert alert-info small py-2 mb-3" role="status">
+                    {% if puede_contar %}
+                    <i class="bi bi-upc-scan me-1"></i><strong>Conteo de la tienda.</strong>
+                    Puede contar (pistola, lector o tabla) y recontar, y ver las diferencias en pares.
+                    Decidir qué no se ajusta o lo no pistoleado, aprobar y llevar el conteo al stock lo hacen un administrador y el Maestro.
+                    {% else %}
                     <i class="bi bi-eye me-1"></i><strong>Modo revisión.</strong>
                     Puede ver lo contado, las diferencias y los faltantes de esta toma en unidades.
                     Contar, aprobar y aplicar los ajustes lo hace un administrador.
+                    {% endif %}
                 </div>
-                {% else %}
+                {% endif %}
+                {% if puede_contar %}
                 <!-- Lector: apagado por defecto. Cada lectura SUMA y se guarda al instante,
                      así que no puede ser la primera casilla con el cursor (se usaba para buscar). -->
                 <div class="scan-bar">
@@ -954,7 +970,9 @@ button.kpi-card:focus-visible {
                     </div>
                     <div id="scanFeedback" class="scan-feedback"></div>
                 </div>
+                {% endif %}
 
+                {% if not solo_revision %}
                 <!-- Acción en bloque sobre las filas marcadas -->
                 <div class="seleccion-bar" id="barraSeleccion" style="display: none;">
                     <span class="small"><strong id="nSeleccionados">0</strong> líneas marcadas</span>
@@ -1016,12 +1034,13 @@ button.kpi-card:focus-visible {
     </div>
 </div>
 
-<!-- Acciones flotantes (no existen en modo revisión) -->
-{% if not solo_revision %}
+<!-- Acciones flotantes: quien solo cuenta (jefe de local) tiene Guardar; el resto exige Editar -->
+{% if puede_contar %}
 <div class="floating-actions" id="floatingActions">
     <button type="button" class="nexo-btn nexo-btn-primary" onclick="guardarConteos()" id="btnGuardar" style="display: none;">
         <i class="bi bi-save"></i> Guardar Conteos
     </button>
+    {% if not solo_revision %}
     <button type="button" class="nexo-btn nexo-btn-warning" onclick="resolverNoContados()" id="btnResolverNoContados" style="display: none;" title="Decidir por marca o SKU qué pasa con lo que no apareció en la pistola: mantener su stock, faltante o excluir">
         <i class="bi bi-list-check"></i> Resolver no contados <span class="badge bg-dark ms-1" id="badgeNoContados">0</span>
     </button>
@@ -1040,6 +1059,7 @@ button.kpi-card:focus-visible {
     <button type="button" class="nexo-btn nexo-btn-danger" onclick="aplicarAjustesDesdeDetalle()" id="btnAplicarAjustes" style="display: none;">
         <i class="bi bi-arrow-right-circle"></i> Aplicar Ajustes al Stock
     </button>
+    {% endif %}
 </div>
 {% endif %}
 
@@ -1079,6 +1099,11 @@ button.kpi-card:focus-visible {
                             Vacío y sin marcar = se está contando ahora.
                         </small>
                     </div>
+                </div>
+                <div class="alert alert-warning small py-2 mb-3" id="importAvisoAjustada" style="display: none;">
+                    <i class="bi bi-lightning-charge me-1"></i>El stock de esta toma ya se ajustó y la tienda volvió a vender:
+                    lo que cargue se toma como contado <strong>ahora</strong> (o a la hora que indique arriba).
+                    Los SKUs ya ajustados no se cambian con un archivo: si apareció algo, recuéntelos (<i class="bi bi-arrow-repeat"></i>).
                 </div>
                 <div class="row g-2 mb-3" id="columnasSection" style="display: none;">
                     <div class="col-md-6">
@@ -1224,6 +1249,12 @@ const tomaTiendaCerrada = {% if conteo_tienda_cerrada %}true{% else %}false{% en
 // Modo revisión (solo Ver, p. ej. el jefe de local): sin costos ni botones que muevan
 // la toma. El servidor tampoco devuelve costos ni acepta acciones en este modo.
 const SOLO_REVISION = {{ solo_revision|yesno:"true,false" }};
+// Contar (pistola, lector, tabla, reconteo): también el jefe de local con solo Ver,
+// porque contar no mueve stock (lo mueve el Maestro con «Ajustar stock ya» o al aplicar).
+const PUEDE_CONTAR = {{ puede_contar|yesno:"true,false" }};
+const ES_MAESTRO = {{ es_maestro|yesno:"true,false" }};
+// El Maestro ya llevó lo contado al stock con la toma abierta: lo nuevo queda «por ajustar»
+let ajustadaEnConteo = {{ ajustada_en_conteo|yesno:"true,false" }};
 // Plata y análisis (costos, precios, valorización, Excel): solo Maestro y Administrador.
 // El Jefe puede operar la toma pero también ve solo pares.
 const VER_VALORES = {{ ver_valores|yesno:"true,false" }};
@@ -1297,27 +1328,35 @@ function cargarProductos(page = 1) {
                     '-';
                 
                 let estadoHtml = '';
+                const porAjustar = p.por_ajustar || 0;
                 if (p.reconteo_requerido) {
                     estadoHtml = '<span class="badge bg-warning text-dark">Reconteo</span>';
+                } else if (porAjustar !== 0 && ajustadaEnConteo) {
+                    // Contado o recontado después de «Ajustar stock ya»: espera al Maestro
+                    estadoHtml = `<span class="badge bg-warning text-dark" title="Todavía no está en el stock: lo autoriza el Maestro">Por ajustar ${porAjustar > 0 ? '+' : ''}${porAjustar}</span>`;
+                } else if (p.ajuste_aplicado) {
+                    estadoHtml = '<span class="badge bg-info text-dark" title="Este conteo ya está en el stock">Ajustado</span>';
                 } else if (p.contado) {
                     estadoHtml = '<span class="badge bg-success">Contado</span>';
                 } else {
                     estadoHtml = '<span class="badge bg-secondary">Pendiente</span>';
                 }
-                
+
                 const excluidoClass = p.excluido ? 'row-excluido' : '';
                 const descripcion = (p.descripcion && p.descripcion !== p.producto_nombre)
                     ? `<span class="producto-desc">${escHtml(p.descripcion)}</span>` : '';
+                // Ya ajustada al stock: su conteo no se pisa desde la tabla, se recuenta (↻)
+                const conteoFijo = !PUEDE_CONTAR || p.ajuste_aplicado;
                 tbody.append(`
                     <tr class="${rowClass} ${excluidoClass}" data-id="${p.id}" data-sku="${escHtml(p.sku)}">
-                        <td>${SOLO_REVISION ? '' : `<input type="checkbox" class="form-check-input chk-linea" data-id="${p.id}" ${seleccionados.has(p.id) ? 'checked' : ''} aria-label="Marcar ${escHtml(p.sku)}">`}</td>
+                        <td>${SOLO_REVISION || p.ajuste_aplicado ? '' : `<input type="checkbox" class="form-check-input chk-linea" data-id="${p.id}" ${seleccionados.has(p.id) ? 'checked' : ''} aria-label="Marcar ${escHtml(p.sku)}">`}</td>
                         <td><code>${escHtml(p.sku)}</code></td>
                         <td><strong>${escHtml(p.producto_nombre)}</strong>${descripcion}</td>
                         <td>${escHtml(p.talla_nombre) || '-'}</td>
                         <td><small>${escHtml(p.marca_nombre) || '-'}</small></td>
                         <td class="text-end fw-bold col-stock-sistema">${p.stock_sistema_ajustado}</td>
                         <td class="text-end">
-                            ${SOLO_REVISION ? `<span class="fw-semibold">${p.contado ? p.stock_fisico : '-'}</span>` : `
+                            ${conteoFijo ? `<span class="fw-semibold"${p.ajuste_aplicado ? ' title="Ya ajustado al stock: si cambió, use Recontar"' : ''}>${p.contado ? p.stock_fisico : '-'}${p.ajuste_aplicado ? ' <i class="bi bi-lock-fill text-muted small"></i>' : ''}</span>` : `
                             <input type="number"
                                    class="input-conteo ${inputClass}"
                                    data-id="${p.id}"
@@ -1333,14 +1372,14 @@ function cargarProductos(page = 1) {
                             <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="verDetalleProducto(${p.id})" title="Ver detalle">
                                 <i class="bi bi-eye"></i>
                             </button>
-                            ${!SOLO_REVISION && ESTADOS_RECONTEO.includes(estadoInventario) && !p.excluido
-                                 && (p.reconteo_requerido || (p.contado && p.diferencia !== 0)) ? `
+                            ${PUEDE_CONTAR && ESTADOS_RECONTEO.includes(estadoInventario) && !p.excluido
+                                 && (p.reconteo_requerido || (p.contado && p.diferencia !== 0) || p.ajuste_aplicado) ? `
                                 <button class="nexo-btn nexo-btn-sm ${p.reconteo_requerido ? 'nexo-btn-warning' : 'nexo-btn-outline'}" onclick="realizarReconteo(${p.id})"
                                         title="${p.reconteo_requerido ? 'Reconteo obligatorio (diferencia grande)' : 'Recontar (si lo encontraron o se contó mal)'}">
                                     <i class="bi bi-arrow-repeat"></i>
                                 </button>
                             ` : ''}
-                            ${SOLO_REVISION ? '' : `
+                            ${SOLO_REVISION || p.ajuste_aplicado ? '' : `
                             <button class="nexo-btn nexo-btn-sm ${p.excluido ? 'nexo-btn-outline' : 'nexo-btn-warning'}" onclick="toggleExclusion(${p.id}, ${p.excluido})"
                                     title="${p.excluido ? 'Volver a ajustar esta línea' : 'No ajustar: al aplicar la toma su stock queda como está'}"
                                     aria-label="${p.excluido ? 'Volver a ajustar' : 'No ajustar'}">
@@ -1458,8 +1497,14 @@ function actualizarEstadisticas() {
 
         ultimoAnalisis = a;
         estadoInventario = a.estado || estadoInventario;
+        ajustadaEnConteo = !!(a.ajuste_anticipado && a.ajuste_anticipado.ajustada);
         actualizarPasosYAcciones(a);
         renderGuia(a);
+        // El Maestro recargó con su «Ajustar stock ya» corriendo: retomar el progreso
+        if (ES_MAESTRO && a.ajuste_anticipado && a.ajuste_anticipado.en_curso && !window._progresoAjusteVisto) {
+            window._progresoAjusteVisto = true;
+            _iniciarPollingAjustes({ titulo: 'Ajustando el stock (la toma sigue abierta)', listo: 'Stock ajustado' });
+        }
         poblarSegmentos(a.segmentos || {});
     });
 }
@@ -1471,6 +1516,9 @@ function actualizarEstadisticas() {
 function renderGuia(a) {
     const r = a.resumen || {};
     const e = estadoInventario;
+    // «Ajustar stock ya»: lo que ya está en el stock y lo que falta (aa.por_ajustar)
+    const aa = a.ajuste_anticipado || {};
+    const pa = aa.por_ajustar || {};
     const enConteo = ['BORRADOR', 'EN_CONTEO'].includes(e);
     const boton = (accion, icono, texto, clase = 'nexo-btn-primary') =>
         `<button type="button" class="nexo-btn nexo-btn-sm ${clase}" onclick="${accion}"><i class="bi ${icono}"></i> ${texto}</button>`;
@@ -1497,9 +1545,14 @@ function renderGuia(a) {
                      sobran <strong>+${formatNumber(r.sobrantes_unidades)}</strong> u. (${formatNumber(r.sobrantes)} SKUs) ·
                      faltan <strong>−${formatNumber(r.faltantes_unidades)}</strong> u. (${formatNumber(r.faltantes)} SKUs)
                      ${r.pendientes_contar ? ` · no aparecieron en la pistola <strong>${formatNumber(r.pendientes_contar)}</strong> SKUs (${formatNumber(r.pendientes_unidades)} u.)` : ''}.
-                     Revise los faltantes y avise al administrador lo que encuentre: todavía no se mueve stock.`;
+                     ${PUEDE_CONTAR
+                        ? `Cuente lo que falta (pistola o lector), busque los faltantes y recuente lo que aparezca: contar no mueve
+                           stock${ajustadaEnConteo ? '; lo nuevo queda <strong>por ajustar</strong> hasta que lo autorice el Maestro' : ''}.`
+                        : 'Revise los faltantes y avise al administrador lo que encuentre: todavía no se mueve stock.'}`;
             acciones = boton("filtrarPorTipoDiferencia('faltantes')", 'bi-funnel', 'Ver faltantes', 'nexo-btn-warning')
-                     + (r.pendientes_contar ? boton("filtrarPorTipoDiferencia('pendientes')", 'bi-eye', 'Ver los no pistoleados', 'nexo-btn-outline') : '');
+                     + (r.pendientes_contar ? boton("filtrarPorTipoDiferencia('pendientes')", 'bi-eye', 'Ver los no pistoleados', 'nexo-btn-outline') : '')
+                     + (PUEDE_CONTAR && r.requieren_reconteo ? boton('filtrarReconteos()', 'bi-arrow-repeat', `Recontar (${formatNumber(r.requieren_reconteo)})`, 'nexo-btn-warning') : '')
+                     + (PUEDE_CONTAR && enConteo ? boton('abrirModalImportarConteo()', 'bi-upload', 'Cargar pistola', 'nexo-btn-outline') : '');
         }
     } else if (e === 'CANCELADO') {
         tono = 'guia-alerta'; icono = 'bi-x-circle';
@@ -1546,13 +1599,19 @@ function renderGuia(a) {
         acciones = boton('enviarAprobacionDesdeDetalle()', 'bi-send', 'Enviar a aprobación') + botonInforme;
     } else if (e === 'PENDIENTE_APROBACION') {
         titulo = 'Paso 4 · Aprobación';
-        texto = 'Un jefe revisa el informe final (por marca y diferencias) y aprueba o rechaza. Aprobar no mueve stock: eso es el paso 5.';
+        texto = aa.ajustada
+            ? 'El stock ya se ajustó con la toma abierta: la aprobación (y lo que falta ajustar) la autoriza el Maestro. Aprobar no mueve stock: eso es el paso 5.'
+            : 'Un jefe revisa el informe final (por marca y diferencias) y aprueba o rechaza. Aprobar no mueve stock: eso es el paso 5.';
         acciones = (a.puede_aprobar ? boton('aprobarDesdeDetalle()', 'bi-check2-circle', 'Aprobar', 'nexo-btn-success') : '')
                  + boton('rechazarDesdeDetalle()', 'bi-arrow-counterclockwise', 'Rechazar', 'nexo-btn-outline') + botonInforme;
     } else if (e === 'APROBADO') {
         tono = 'guia-alerta'; icono = 'bi-arrow-right-circle';
         titulo = 'Paso 5 · Aplicar los ajustes al stock';
-        texto = `Entrarán <strong>+${formatNumber(r.sobrantes_unidades)}</strong> u. (lote FIFO nuevo al costo del corte) y saldrán
+        texto = aa.ajustada
+            ? `Falta llevar al stock <strong>+${formatNumber(pa.unidades_suben)}</strong> / <strong>−${formatNumber(pa.unidades_bajan)}</strong> u.
+               (${formatNumber(pa.lineas)} líneas): lo demás ya se ajustó con la toma abierta y no se repite. Kardex con referencia
+               <code>${numeroInventario}</code>.`
+            : `Entrarán <strong>+${formatNumber(r.sobrantes_unidades)}</strong> u. (lote FIFO nuevo al costo del corte) y saldrán
                  <strong>−${formatNumber(r.faltantes_unidades)}</strong> u., cada una con su movimiento en el kardex con referencia
                  <code>${numeroInventario}</code>. Las ventas hechas después del corte se respetan.`;
         acciones = boton('aplicarAjustesDesdeDetalle()', 'bi-arrow-right-circle', 'Aplicar ajustes al stock', 'nexo-btn-danger') + botonInforme;
@@ -1576,6 +1635,30 @@ function renderGuia(a) {
         texto += `<div class="mt-2"><i class="bi bi-search me-1"></i><strong>${formatNumber(encontrados.length)} productos subieron su conteo en
                   el reconteo</strong> (se «encontraron»): ${a.es_maestro ? 'revíselos antes de aprobar.' : 'esta toma la revisa y aprueba el Maestro.'}</div>`;
     }
+
+    // «Ajustar stock ya»: el Maestro llevó lo contado al stock sin cerrar la toma
+    const porAjustarTexto = `<strong>${formatNumber(pa.lineas)}</strong> líneas (+${formatNumber(pa.unidades_suben)} / −${formatNumber(pa.unidades_bajan)} u.`
+                          + `${pa.correcciones ? `, ${formatNumber(pa.correcciones)} correcciones de líneas ya ajustadas` : ''}`
+                          + `${VER_VALORES && pa.valor !== undefined ? ` · $${formatNumber(pa.valor)} a costo` : ''})`;
+    if (aa.en_curso) {
+        texto += `<div class="mt-2"><i class="bi bi-hourglass-split me-1"></i><strong>Ajustando el stock con la toma abierta…</strong>
+                  Se puede seguir contando mientras tanto.</div>`;
+    } else if (aa.ajustada) {
+        const h = (aa.hechos || [])[0] || {};
+        texto += `<div class="mt-2"><i class="bi bi-lightning-charge me-1"></i><strong>Stock ya ajustado con la toma abierta</strong>
+                  el ${escHtml(h.fecha)} por ${escHtml(h.usuario)} (${formatNumber(h.lineas)} líneas, +${formatNumber(h.unidades_suben)} / −${formatNumber(h.unidades_bajan)} u.${h.errores ? `, ${formatNumber(h.errores)} con error` : ''})${(aa.hechos || []).length > 1 ? ` · ${aa.hechos.length} ajustes en total` : ''}.
+                  Lo que se cuente o recuente ahora queda <strong>por ajustar</strong> hasta que lo autorice el Maestro
+                  ${pa.lineas ? `: ${porAjustarTexto} esperan.` : '(por ahora no hay nada pendiente).'}</div>`;
+        if (pa.lineas) tono = tono || 'guia-alerta';
+    }
+    if (aa.puede && pa.lineas) {
+        if (!aa.ajustada) {
+            texto += `<div class="mt-2"><i class="bi bi-lightning-charge me-1"></i>¿Los ecommerce necesitan el stock ya? Puede llevar al stock lo
+                      contado (${porAjustarTexto}) <strong>sin cerrar la toma</strong>: la tienda sigue contando y lo que cambie lo autoriza usted después.</div>`;
+        }
+        acciones += boton('ajustarStockYa()', 'bi-lightning-charge', aa.ajustada ? `Autorizar lo por ajustar (${formatNumber(pa.lineas)})` : 'Ajustar stock ya', 'nexo-btn-warning');
+        if (aa.ajustada) acciones += boton("filtrarEstado('por_ajustar')", 'bi-funnel', 'Ver lo por ajustar', 'nexo-btn-outline');
+    }
     $('#guiaPaso').removeClass('guia-ok guia-alerta').addClass(tono);
     $('#guiaPaso > i').attr('class', `bi ${icono}`);
     $('#guiaTitulo').html(titulo);
@@ -1584,8 +1667,12 @@ function renderGuia(a) {
 }
 
 function filtrarReconteos() {
+    filtrarEstado('reconteo');
+}
+
+function filtrarEstado(valor) {
     $('#filtroSigno').val('');
-    $('#filtroEstadoConteo').val('reconteo');
+    $('#filtroEstadoConteo').val(valor);
     cargarProductos(1);
     document.getElementById('tablaConteo').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -1688,10 +1775,15 @@ function exportarInformeFinal() {
 function aprobarDesdeDetalle() {
     const r = (ultimoAnalisis && ultimoAnalisis.resumen) || {};
     const encontrados = (ultimoAnalisis && ultimoAnalisis.encontrados_reconteo) || [];
+    const aa = (ultimoAnalisis && ultimoAnalisis.ajuste_anticipado) || {};
+    const pa = aa.por_ajustar || {};
     Swal.fire({
         title: '¿Aprobar la toma?',
-        html: `<p>Se ajustarán <strong>+${formatNumber(r.sobrantes_unidades)}</strong> u. sobrantes y
-               <strong>−${formatNumber(r.faltantes_unidades)}</strong> u. faltantes.</p>
+        html: `${aa.ajustada
+                 ? `<p>Falta ajustar <strong>+${formatNumber(pa.unidades_suben)}</strong> u. y <strong>−${formatNumber(pa.unidades_bajan)}</strong> u.
+                    (${formatNumber(pa.lineas)} líneas); el resto ya se ajustó con la toma abierta.</p>`
+                 : `<p>Se ajustarán <strong>+${formatNumber(r.sobrantes_unidades)}</strong> u. sobrantes y
+                    <strong>−${formatNumber(r.faltantes_unidades)}</strong> u. faltantes.</p>`}
                ${encontrados.length ? `<div class="alert alert-warning text-start small py-2">
                    <strong>${encontrados.length} productos subieron su conteo en el reconteo</strong> (la tienda los «encontró»):
                    confírmelo antes de aprobar.<br>${encontrados.slice(0, 12).map(e =>
@@ -1762,6 +1854,11 @@ function actualizarPasosYAcciones(analisis) {
     $('#btnRechazar').toggle(!!analisis.puede_rechazar);
     $('#btnCancelarToma').toggle(!!analisis.puede_cancelar);
     $('#btnAplicarAjustes').toggle(!!analisis.puede_aplicar_ajustes);
+    // «Ajustar stock ya» (Maestro): con algo contado que todavía no está en el stock
+    const aa = analisis.ajuste_anticipado || {};
+    const porAjustar = (aa.por_ajustar && aa.por_ajustar.lineas) || 0;
+    $('#btnAjustarYa').toggle(!!aa.puede && porAjustar > 0);
+    $('#badgeAjustarYa').text(formatNumber(porAjustar));
     actualizarLector();
 }
 
@@ -1889,14 +1986,19 @@ function guardarConteos() {
         headers: { 'X-CSRFToken': getCookie('csrftoken') },
         success: function(response) {
             if (response.success) {
-                Swal.fire({
+                const errores = response.errores || [];
+                Swal.fire(errores.length ? {
+                    icon: 'warning',
+                    title: 'Guardado con observaciones',
+                    html: `<p>${escHtml(response.message)}</p><p class="small text-start">${errores.map(escHtml).join('<br>')}</p>`,
+                } : {
                     icon: 'success',
                     title: 'Guardado',
                     text: response.message,
                     timer: 2000,
                     showConfirmButton: false
                 });
-                
+
                 conteosPendientes = {};
                 $('#btnGuardar').hide();
                 cargarProductos(currentPage);
@@ -1919,6 +2021,8 @@ function realizarReconteo(detalleId) {
                contado <strong>${p.contado ? p.stock_fisico : '-'}</strong>.</p>
             <p class="small text-muted mb-1">Cuente lo que hay AHORA en la tienda: lo vendido o recibido desde el conteo se descuenta solo.
                Si el reconteo <strong>sube</strong> lo contado (lo encontraron), queda marcado y la toma la aprueba el Maestro.</p>
+            ${p.ajuste_aplicado ? `<p class="small mb-1"><i class="bi bi-lightning-charge me-1"></i>Esta línea <strong>ya está en el stock</strong>:
+               si el reconteo cambia, la diferencia queda <strong>por ajustar</strong> hasta que la autorice el Maestro.</p>` : ''}
             <div class="text-start mt-3">
                 <label class="form-label small mb-1" for="inputReconteo">Nueva cantidad</label>
                 <input type="number" id="inputReconteo" class="form-control" placeholder="Nueva cantidad" min="0">
@@ -1956,9 +2060,11 @@ function realizarReconteo(detalleId) {
                 success: function(response) {
                     if (response.success) {
                         const errores = response.errores || [];
+                        const avisos = [];
+                        if ((response.encontrados || []).length) avisos.push('Subió lo contado: quedó marcado como encontrado y lo revisa el Maestro antes de aprobar.');
+                        if ((response.por_autorizar || []).length) avisos.push('Esta línea ya estaba en el stock: el cambio quedó por ajustar hasta que lo autorice el Maestro.');
                         Swal.fire(errores.length ? 'Revise el reconteo' : 'Reconteo registrado',
-                                  errores.length ? escHtml(errores.join(' · '))
-                                  : ((response.encontrados || []).length ? 'Subió lo contado: quedó marcado como encontrado y lo revisa el Maestro antes de aprobar.' : ''),
+                                  errores.length ? escHtml(errores.join(' · ')) : avisos.join(' '),
                                   errores.length ? 'warning' : 'success');
                         cargarProductos(currentPage);
                         cargarInformeMarcas();
@@ -2298,9 +2404,9 @@ function verDetalleProducto(detalleId) {
 
     const fila = (etiqueta, valor) =>
         `<tr><td class="text-muted text-start">${etiqueta}</td><td class="text-end fw-bold">${valor}</td></tr>`;
-    // En modo revisión: sin costos y las anotaciones se leen, no se editan
-    const editable = p.contado && !SOLO_REVISION;
-    const anotaciones = SOLO_REVISION ? `
+    // Sin permiso de contar: sin costos y las anotaciones se leen, no se editan
+    const editable = p.contado && PUEDE_CONTAR;
+    const anotaciones = !PUEDE_CONTAR ? `
             <table class="table table-sm mb-0">
                 ${fila('Ubicación', escHtml(p.ubicacion) || '-')}
                 ${fila('Observaciones', escHtml(p.observaciones) || '-')}
@@ -2329,6 +2435,9 @@ function verDetalleProducto(detalleId) {
                 ${!VER_VALORES ? '' : fila('Costo unitario (FIFO al corte)', '$' + formatNumber(p.costo_unitario))}
                 ${fila('Fecha de conteo', p.fecha_conteo || '-')}
                 ${fila('Reconteo', p.reconteo_requerido ? 'Requerido' : (p.stock_reconteo !== null ? `Hecho: ${p.stock_reconteo}` : 'No'))}
+                ${p.ajuste_aplicado || p.por_ajustar ? fila('En el stock', p.ajuste_aplicado
+                    ? (p.por_ajustar ? `Ajustada; falta ${p.por_ajustar > 0 ? '+' : ''}${p.por_ajustar} u. (lo autoriza el Maestro)` : 'Ajustada')
+                    : 'Todavía no') : ''}
             </table>
             ${anotaciones}
         `,
@@ -2512,9 +2621,12 @@ function abrirModalImportarConteo() {
     $('#importStatus').text('');
     CargaPistola.reiniciar();
     // Fecha del conteo físico: el corte si la toma es «tienda cerrada»; si no, vacío
-    // (= el instante exacto de la importación, sin perder los segundos del minuto)
-    $('#importTiendaCerrada').prop('checked', tomaTiendaCerrada);
-    $('#fechaConteoImport').val(tomaTiendaCerrada ? fechaCorteLocal : '').prop('disabled', tomaTiendaCerrada);
+    // (= el instante exacto de la importación, sin perder los segundos del minuto).
+    // Con el stock ya ajustado (la tienda volvió a vender) el default es ahora.
+    const alCorte = tomaTiendaCerrada && !ajustadaEnConteo;
+    $('#importTiendaCerrada').prop('checked', alCorte);
+    $('#fechaConteoImport').val(alCorte ? fechaCorteLocal : '').prop('disabled', alCorte);
+    $('#importAvisoAjustada').toggle(ajustadaEnConteo);
     new bootstrap.Modal(document.getElementById('modalImportarConteo')).show();
 }
 
@@ -2655,6 +2767,7 @@ function importarConteoPistola() {
                 const agregados = response.agregados || [];
                 const ambiguos = response.ambiguos || [];
                 const sobreescritos = response.sobreescritos || [];
+                const yaAjustados = response.ya_ajustados || [];
                 const lista = (arr) => arr.length ? `<div class="small text-muted text-start mt-1"><code>${arr.slice(0, 15).join('</code>, <code>')}</code>${arr.length > 15 ? ` … (+${arr.length - 15})` : ''}</div>` : '';
                 Swal.fire({
                     icon: 'success',
@@ -2666,6 +2779,8 @@ function importarConteoPistola() {
                            ${agregados.length ? `<p class="mb-0">Agregados a la toma (no estaban, stock 0): <strong>${agregados.length}</strong></p>${lista(agregados)}` : ''}
                            ${sobreescritos.length ? `<p class="mb-0 mt-2">Conteos anteriores reemplazados: <strong>${sobreescritos.length}</strong></p>${lista(sobreescritos.map(s => `${s.sku}: ${s.anterior}→${s.nuevo}`))}` : ''}
                            ${ambiguos.length ? `<p class="mb-0 mt-2 text-warning">SKU ambiguos (más de un producto en la sucursal): <strong>${ambiguos.length}</strong></p>${lista(ambiguos)}` : ''}
+                           ${yaAjustados.length ? `<p class="mb-0 mt-2 text-warning">Ya ajustados al stock, no se cambiaron: <strong>${yaAjustados.length}</strong>
+                              (el archivo trae otra cantidad: si apareció algo, recuéntelos)</p>${lista(yaAjustados.map(s => `${s.sku}: ${s.contado}→${s.archivo}`))}` : ''}
                            ${noEncontrados.length ? `<p class="mb-0 mt-2 text-danger">No existen en esta sucursal: <strong>${noEncontrados.length}</strong> códigos (${formatNumber(response.no_encontrados_unidades)} u.) — quedan en la hoja «No cargados» del informe final</p>${lista(noEncontrados)}` : ''}
                            ${(response.errores || []).length ? `<p class="mb-0 mt-2 text-danger">Filas con error: <strong>${response.errores.length}</strong></p>${lista(response.errores)}` : ''}`
                 });
@@ -2724,8 +2839,11 @@ function procesarEscaneo(sku) {
 
     const paso = parseInt($('#cantidadPorLectura').val()) || 1;
     const fila = $(`#tbodyConteo tr[data-sku="${sku}"]`);
+    const yaAjustado = () =>
+        mostrarFeedbackEscaneo(`${escHtml(sku)}: ya está ajustado al stock; si apareció más, use Recontar (↻)`, false);
 
     if (fila.length) {
+        if ((productosCache[fila.data('id')] || {}).ajuste_aplicado) return yaAjustado();
         const input = fila.find('.input-conteo');
         const actual = parseInt(input.val()) || 0;
         input.val(actual + paso);
@@ -2744,6 +2862,7 @@ function procesarEscaneo(sku) {
             guardarConteoDirecto(null, paso, `${sku} (nuevo en la toma)`, sku);
             return;
         }
+        if (exacto.ajuste_aplicado) return yaAjustado();
         const nuevo = (exacto.contado ? exacto.stock_fisico : 0) + paso;
         guardarConteoDirecto(exacto.id, nuevo, `${sku} · ${exacto.producto_nombre}`);
     }).fail(function() {
@@ -2819,7 +2938,7 @@ $(document).ready(function() {
     $('#soloMarcasConDif').on('change', renderTablaMarcas);
 
     const params = new URLSearchParams(window.location.search);
-    if (params.get('importar') === '1' && !SOLO_REVISION) {
+    if (params.get('importar') === '1' && PUEDE_CONTAR) {
         setTimeout(() => abrirModalImportarConteo(), 300);
     }
     
@@ -2933,14 +3052,25 @@ function debounce(func, wait) {
 function aplicarAjustesDesdeDetalle() {
     const r = (ultimoAnalisis && ultimoAnalisis.resumen) || {};
     const f = (ultimoAnalisis && ultimoAnalisis.resumen_financiero) || {};
-    Swal.fire({
-        title: '¿Aplicar Ajustes de Inventario?',
-        html: `<p class="text-danger"><strong>¡ATENCIÓN!</strong> Esto modifica el stock real del sistema.</p>
+    const aa = (ultimoAnalisis && ultimoAnalisis.ajuste_anticipado) || {};
+    const pa = aa.por_ajustar || {};
+    // Con «Ajustar stock ya» previo solo se mueve lo que falta (lo ya ajustado no se repite)
+    const tabla = aa.ajustada ? `
+               <table class="table table-sm text-start mb-2">
+                   <tr><td>Entran (lo que falta ajustar)</td><td class="text-end diferencia-positiva">+${formatNumber(pa.unidades_suben)} u. · ${formatNumber(pa.lineas_suben)} líneas</td></tr>
+                   <tr><td>Salen (lo que falta ajustar)</td><td class="text-end diferencia-negativa">−${formatNumber(pa.unidades_bajan)} u. · ${formatNumber(pa.lineas_bajan)} líneas</td></tr>
+                   ${VER_VALORES && pa.valor !== undefined ? `<tr><td>Impacto neto a costo</td><td class="text-end fw-bold">$${formatNumber(pa.valor)}</td></tr>` : ''}
+               </table>
+               <p class="small text-muted mb-1">El resto ya se ajustó con la toma abierta (${formatNumber(r.ajustes_aplicados)} líneas) y no se repite.</p>` : `
                <table class="table table-sm text-start mb-2">
                    <tr><td>Sobrantes (entran con lote FIFO nuevo)</td><td class="text-end diferencia-positiva">+${formatNumber(r.sobrantes_unidades)} u. · ${formatNumber(r.sobrantes)} SKUs</td></tr>
                    <tr><td>Faltantes (salen del stock)</td><td class="text-end diferencia-negativa">−${formatNumber(r.faltantes_unidades)} u. · ${formatNumber(r.faltantes)} SKUs</td></tr>
                    ${VER_VALORES ? `<tr><td>Impacto neto a costo</td><td class="text-end fw-bold">$${formatNumber(f.impacto_neto)}</td></tr>` : ''}
-               </table>
+               </table>`;
+    Swal.fire({
+        title: '¿Aplicar Ajustes de Inventario?',
+        html: `<p class="text-danger"><strong>¡ATENCIÓN!</strong> Esto modifica el stock real del sistema.</p>
+               ${tabla}
                <p class="small text-muted mb-1">Cada ajuste queda en el kardex con referencia <code>${numeroInventario}</code>.
                   Las ventas hechas después del corte se respetan (el stock final = contado − vendido después).</p>
                <p><strong>Esta acción no se puede deshacer.</strong></p>`,
@@ -2969,10 +3099,69 @@ function aplicarAjustesDesdeDetalle() {
     });
 }
 
-function _iniciarPollingAjustes() {
+// «Ajustar stock ya» (solo Maestro): lleva al stock lo contado que todavía no está,
+// SIN cerrar la toma. Lo que espera reconteo y lo no contado no se toca.
+function ajustarStockYa() {
+    const a = ultimoAnalisis || {};
+    const aa = a.ajuste_anticipado || {};
+    const pa = aa.por_ajustar || {};
+    const r = a.resumen || {};
+    if (!pa.lineas) {
+        Swal.fire('Nada por ajustar', 'El stock ya está como dice lo contado.', 'info');
+        return;
+    }
+    Swal.fire({
+        title: aa.ajustada ? '¿Autorizar lo por ajustar?' : '¿Ajustar el stock ahora?',
+        width: 620,
+        html: `<p class="text-start">Se lleva al stock lo contado ${aa.ajustada ? 'y recontado desde el último ajuste' : 'hasta ahora'}.
+                  <strong>La toma sigue abierta</strong>: la tienda puede seguir contando y recontando, y lo que cambie después
+                  lo vuelve a autorizar usted con este botón (o al aprobar la toma).</p>
+               <table class="table table-sm text-start mb-2">
+                   <tr><td>Entran (sobrantes; lote FIFO nuevo al costo del corte)</td>
+                       <td class="text-end diferencia-positiva">+${formatNumber(pa.unidades_suben)} u. · ${formatNumber(pa.lineas_suben)} líneas</td></tr>
+                   <tr><td>Salen (faltantes)</td>
+                       <td class="text-end diferencia-negativa">−${formatNumber(pa.unidades_bajan)} u. · ${formatNumber(pa.lineas_bajan)} líneas</td></tr>
+                   ${pa.correcciones ? `<tr><td>de ellas, correcciones de líneas ya ajustadas (reconteos)</td>
+                       <td class="text-end">${formatNumber(pa.correcciones)}</td></tr>` : ''}
+                   ${VER_VALORES && pa.valor !== undefined ? `<tr><td>Impacto neto a costo</td><td class="text-end fw-bold">$${formatNumber(pa.valor)}</td></tr>` : ''}
+               </table>
+               <p class="small text-muted text-start mb-1">No se tocan:
+                  ${r.requieren_reconteo ? `<strong>${formatNumber(r.requieren_reconteo)}</strong> líneas que esperan reconteo,` : ''}
+                  ${r.pendientes_contar ? `<strong>${formatNumber(r.pendientes_contar)}</strong> sin contar (conservan su stock hasta que se cuenten o se decidan),` : ''}
+                  y las marcadas «No ajustar».</p>
+               <p class="small text-muted text-start mb-0">Cada movimiento queda en el kardex con referencia <code>${numeroInventario}</code>;
+                  las ventas hechas después del corte se respetan.</p>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: aa.ajustada ? 'Sí, autorizar' : 'Sí, ajustar ahora',
+        cancelButtonText: 'Volver'
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        $.ajax({
+            url: `/app/gestion-inventarios/api/ajustar-ya/${inventarioId}/`,
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                if (response.success) {
+                    _iniciarPollingAjustes({
+                        titulo: 'Ajustando el stock (la toma sigue abierta)',
+                        listo: 'Stock ajustado',
+                        nota: 'La toma sigue abierta: lo que se cuente o recuente ahora queda por ajustar hasta que usted lo autorice.',
+                    });
+                } else {
+                    Swal.fire(response.sin_cambios ? 'Nada por ajustar' : 'No se pudo ajustar', response.error,
+                              response.sin_cambios ? 'info' : 'error').then(() => actualizarEstadisticas());
+                }
+            },
+            error: function() { Swal.fire('Error', 'No se pudo iniciar el ajuste', 'error'); }
+        });
+    });
+}
+
+function _iniciarPollingAjustes(opciones = {}) {
     let pollingInterval = null;
     Swal.fire({
-        title: 'Aplicando Ajustes de Inventario',
+        title: opciones.titulo || 'Aplicando Ajustes de Inventario',
         html: `
             <div class="mb-3">
                 <div class="progress progress-ajustes">
@@ -3010,14 +3199,22 @@ function _iniciarPollingAjustes() {
                         setTimeout(() => {
                             Swal.fire({
                                 icon: 'success',
-                                title: 'Ajustes Aplicados',
-                                html: `<p>${data.procesados} ajuste(s) aplicados.</p>${errCount > 0 ? `<p class="text-warning">${errCount} SKU(s) con errores</p>` : ''}`,
+                                title: opciones.listo || 'Ajustes Aplicados',
+                                html: `<p>${data.procesados} ajuste(s) aplicados.</p>${errCount > 0 ? `<p class="text-warning">${errCount} SKU(s) con errores</p>` : ''}`
+                                      + (opciones.nota ? `<p class="small text-muted">${opciones.nota}</p>` : ''),
                             }).then(() => window.location.reload());
                         }, 400);
                     } else if (data.estado === 'ERROR') {
                         clearInterval(pollingInterval);
-                        Swal.fire('Error al Aplicar', data.errores && data.errores[0] ? data.errores[0].error : 'Error desconocido', 'error')
-                            .then(() => window.location.reload());
+                        const errs = data.errores || [];
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error al Aplicar',
+                            html: `<p>${formatNumber(data.procesados)} de ${formatNumber(data.total)} procesados; ${formatNumber(errs.length)} con error
+                                      (quedan pendientes para reintentar).</p>
+                                   <p class="small text-start">${errs.slice(0, 8).map(er => `${er.sku ? `<code>${escHtml(er.sku)}</code> ` : ''}${escHtml(er.error)}`).join('<br>') || 'Error desconocido'}</p>`
+                                  + (opciones.nota ? `<p class="small text-muted">${opciones.nota}</p>` : ''),
+                        }).then(() => window.location.reload());
                     }
                 });
             }, 1500);

@@ -28,7 +28,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from app.models import (
-    AtributoOpcion, Movimientos_Producto, Producto, Producto_Talla, Productos_Atributos,
+    AtributoOpcion, Categoria, Movimientos_Producto, Producto, Producto_Talla, Productos_Atributos,
     TomaInventario,
 )
 from app.services import informe_toma_inventario as informe
@@ -376,8 +376,65 @@ class CorreccionManualTiendaCerradaTest(BaseTomaContadaAnoche):
         self.assertEqual((d.stock_movimientos_post_corte, d.diferencia), (0, 0))  # antes: −1 de base → +1 falso
 
 
+class TituloPorCategoriaTest(BaseTomaContadaAnoche):
+    """El título del informe dice el tipo de toma y qué cubre (pedido del usuario 09-10, toma 12 de NICK2:
+    era «por categoría» de calzado y el Excel decía «Inventario General»)."""
+
+    def setUp(self):
+        super().setUp()
+        self.calzado = Categoria.objects.create(nombre='Calzado')
+        self.zapatillas = Categoria.objects.create(nombre='Zapatillas', padre=self.calzado)
+        self.botines = Categoria.objects.create(nombre='Botines', padre=self.calzado)
+        self.sucursal.direccion = 'Matta 2438'
+        self.sucursal.save(update_fields=['direccion'])
+        pt = self._pt('ZAP', 9900001, 2)
+        Producto.objects.filter(id=pt.producto_id).update(categoria=self.zapatillas)
+        pt = self._pt('BOT', 9900002, 1)
+        Producto.objects.filter(id=pt.producto_id).update(categoria=self.botines)
+
+    def _toma(self, categorias):
+        data = self.client.post(reverse('api_crear_inventario'), data=json.dumps({
+            'nombre': 'Calzado', 'tipo_inventario': 'POR_CATEGORIA', 'conteo_tienda_cerrada': True,
+            'fecha_corte': self.corte.strftime('%Y-%m-%dT%H:%M'),
+            'filtros': {'solo_con_stock': True, 'categorias': [str(c.id) for c in categorias]},
+        }), content_type='application/json').json()
+        self.assertTrue(data['success'], data)
+        return TomaInventario.objects.get(id=data['inventario_id'])
+
+    def test_todas_las_hijas_de_calzado_dicen_calzado(self):
+        toma = self._toma([self.zapatillas, self.botines])
+        self.assertTrue(self._importar_pistola(toma.id, 'sku,stock\n9900001,2\n9900002,1\n')['success'])
+        anio = timezone.localtime(toma.fecha_corte).year
+        titulo = f'{anio} 2438  Inventario por Categoría · Calzado'
+        self.assertEqual(self.client.get(reverse('api_informe_marcas_inventario', args=[toma.id])).json()['titulo'], titulo)
+
+        excel = self.client.get(reverse('api_informe_final_inventario', args=[toma.id]))
+        self.assertEqual(excel.status_code, 200)
+        self.assertIn(f'informe_{toma.numero_inventario}_{self.sucursal.alias}_Calzado.xlsx', excel['Content-Disposition'])
+        wb = openpyxl.load_workbook(io.BytesIO(excel.content))
+        self.assertEqual(wb['Por marca']['A1'].value, titulo)
+        resumen = {fila[0]: fila[1] for fila in wb['Resumen'].iter_rows(values_only=True)}
+        self.assertEqual(resumen['Tipo'], 'Por Categoría/Departamento')
+        self.assertEqual(resumen['Qué cubre'], 'Calzado: Botines, Zapatillas')
+
+    def test_parte_de_calzado_nombra_las_categorias(self):
+        toma = self._toma([self.zapatillas])
+        cabecera = informe.cabecera_desde_toma(toma)
+        self.assertEqual((cabecera['alcance'], cabecera['alcance_detalle']), ('Calzado: Zapatillas', 'Calzado: Zapatillas'))
+        self.assertTrue(informe.titulo_informe(cabecera).endswith('Inventario por Categoría · Calzado: Zapatillas'))
+
+
 class InformePuroTest(SimpleTestCase):
     """El cálculo sin BD (lo usa también el script que simula una toma)."""
+
+    def test_titulo_y_archivo_dicen_tipo_y_alcance(self):
+        cabecera = {'anio': 2026, 'direccion': 'Matta 2438', 'alias': 'NICK2', 'numero': 'INV-7-20261009-001',
+                    'tipo_codigo': 'POR_CATEGORIA', 'alcance': 'Calzado (10 de 13 categorías)'}
+        self.assertEqual(informe.titulo_informe(cabecera), '2026 2438  Inventario por Categoría · Calzado (10 de 13 categorías)')
+        self.assertEqual(informe.nombre_archivo_informe(cabecera), 'informe_INV-7-20261009-001_NICK2_Calzado_10_de_13_categorias.xlsx')
+        completo = {**cabecera, 'tipo_codigo': 'COMPLETO', 'alcance': ''}
+        self.assertEqual(informe.titulo_informe(completo), '2026 2438  Inventario General')
+        self.assertEqual(informe.nombre_archivo_informe(completo), 'informe_INV-7-20261009-001_NICK2.xlsx')
 
     def test_lectura_repetida(self):
         # Un código pistoleado 8 veces con 1 en el sistema

@@ -231,6 +231,9 @@ class Command(BaseCommand):
                     self.stdout.write(f"      sin registro: {d['hora']} {_plata(d['monto'])} "
                                       f"{d['medio']} pago {d['payment_id']}"
                                       f"{'' if d['atribuible'] else '  (SIN ATRIBUIR)'}")
+                for d in control.get('fuera_pos', [])[:10]:
+                    self.stdout.write(f"      no es del POS (no se compara): {d['hora']} "
+                                      f"{_plata(d['monto'])} {d['motivo']} pago {d['payment_id']}")
 
         # 4) Papel exacto
         if papel and config:

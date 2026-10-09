@@ -382,7 +382,7 @@ def pagos_api_para_pago(pago, config):
             if not pid or pid in vistos:
                 continue
             vistos.add(pid)
-            if p.get('status') != 'approved':
+            if p.get('status') != 'approved' or mp.motivo_no_presencial(p):
                 continue
             if int(round(float(p.get('transaction_amount') or 0))) != int(pago.monto):
                 continue
@@ -699,6 +699,10 @@ def importar_y_asociar(payment_id, pago_id, config_id, usuario, recalcular_arque
     payment = _obtener_pago_api(config, payment_id)
     if payment.get('status') != 'approved':
         raise AsociacionError(f'El pago {payment_id} está «{payment.get("status")}» en Mercado Pago, no aprobado.')
+    motivo = mp.motivo_no_presencial(payment)
+    if motivo:
+        raise AsociacionError(f'El pago {payment_id} no es un cobro del POS ({motivo}): '
+                              f'lo de internet no se asigna a una venta de la caja.')
     if conc._monto(payment.get('transaction_amount_refunded') or 0) > 0 or payment.get('refunds'):
         raise AsociacionError(f'El pago {payment_id} tiene devoluciones en Mercado Pago: revíselo en el panel antes de asignarlo.')
     # Cobro del POS que el sistema ya tiene (aún sin su N°): se asocia ESE cobro,

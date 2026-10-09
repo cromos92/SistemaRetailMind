@@ -29,6 +29,7 @@ El cálculo es puro (iterables de dict) para que lo usen la vista y los scripts
 que simulan una toma antes de cargarla.
 """
 import re
+import unicodedata
 from collections import OrderedDict
 
 from django.utils import timezone
@@ -352,6 +353,7 @@ def _sugerencia_no_cargado(sku, otras):
 def cabecera_desde_toma(inventario):
     corte = timezone.localtime(inventario.fecha_corte)
     sucursal = inventario.sucursal
+    alcance, alcance_detalle = alcance_de_toma(inventario)
     return {
         'anio': corte.year,
         'direccion': (sucursal.direccion or '').strip(),
@@ -362,7 +364,91 @@ def cabecera_desde_toma(inventario):
         'tienda_cerrada': inventario.conteo_tienda_cerrada,
         'estado': inventario.get_estado_display(),
         'tipo': inventario.get_tipo_inventario_display(),
+        'tipo_codigo': inventario.tipo_inventario,
+        'alcance': alcance,
+        'alcance_detalle': alcance_detalle,
     }
+
+
+# Cómo se nombra cada tipo de toma en el título («2026 2438  Inventario por Categoría · Calzado»). El
+# completo conserva el título del informe antiguo de gerencia: «Inventario General».
+TIPO_EN_TITULO = {
+    'COMPLETO': 'General',
+    'POR_MARCA': 'por Marca',
+    'POR_CATEGORIA': 'por Categoría',
+    'POR_ATRIBUTO': 'por Atributo',
+    'SELECTIVO': 'Selectivo',
+    'CICLICO': 'Cíclico',
+    'ALEATORIO': 'Aleatorio',
+}
+# En el título van hasta estos nombres; con más se resume («Calzado (10 de 13 categorías)»).
+MAX_NOMBRES_TITULO = 3
+
+
+def _nombres_cortos(nombres):
+    if len(nombres) <= MAX_NOMBRES_TITULO:
+        return ', '.join(nombres)
+    return f"{', '.join(nombres[:MAX_NOMBRES_TITULO])} y {len(nombres) - MAX_NOMBRES_TITULO} más"
+
+
+def alcance_de_toma(inventario):
+    """
+    Qué cubre la toma, según sus filtros: (corto para el título, detalle para la hoja Resumen).
+
+    Categorías agrupadas por su padre: todas las hijas de Calzado elegidas → «Calzado»; unas
+    pocas → «Calzado: Zapatillas, Botines»; muchas → «Calzado (10 de 13 categorías)». Además
+    marcas, color/género y productos sueltos. Un inventario completo sin filtros → ('', '').
+    """
+    from app.models import AtributoOpcion, Categoria
+
+    filtros = inventario.filtros_aplicados or {}
+    cortos, detalles = [], []
+
+    ids_categorias = [int(i) for i in (filtros.get('categorias') or []) if str(i).isdigit()]
+    if ids_categorias:
+        por_padre = OrderedDict()
+        for c in Categoria.objects.filter(id__in=ids_categorias).select_related('padre').order_by('padre__nombre', 'nombre'):
+            por_padre.setdefault(c.padre, []).append(c.nombre)
+        for padre, nombres in por_padre.items():
+            if padre is None:  # categorías viejas, sin padre
+                cortos.append(_nombres_cortos(nombres))
+                detalles.append(', '.join(nombres))
+                continue
+            total = Categoria.objects.filter(padre=padre).count()
+            if len(nombres) >= total:
+                cortos.append(padre.nombre)
+            elif len(nombres) <= MAX_NOMBRES_TITULO:
+                cortos.append(f"{padre.nombre}: {', '.join(nombres)}")
+            else:
+                cortos.append(f'{padre.nombre} ({len(nombres)} de {total} categorías)')
+            detalles.append(f"{padre.nombre}: {', '.join(nombres)}")
+
+    ids_marcas = [int(i) for i in (filtros.get('marcas') or []) if str(i).isdigit()]
+    if ids_marcas:
+        nombres = list(AtributoOpcion.objects.filter(id__in=ids_marcas).order_by('valor').values_list('valor', flat=True))
+        cortos.append(_nombres_cortos(nombres))
+        detalles.append(f"Marcas: {', '.join(nombres)}")
+
+    for clave, etiqueta in (('color', 'Color'), ('genero', 'Género')):
+        ids = [int(i) for i in ((filtros.get('atributos') or {}).get(clave) or []) if str(i).isdigit()]
+        if ids:
+            nombres = list(AtributoOpcion.objects.filter(id__in=ids).order_by('valor').values_list('valor', flat=True))
+            cortos.append(f'{etiqueta}: {_nombres_cortos(nombres)}')
+            detalles.append(f"{etiqueta}: {', '.join(nombres)}")
+
+    if filtros.get('productos'):
+        n = len(filtros['productos'])
+        cortos.append(f'{n} producto{"s" if n != 1 else ""}')
+        detalles.append(f'{n} producto{"s" if n != 1 else ""} elegidos')
+
+    return ' + '.join(cortos), ' · '.join(detalles)
+
+
+def nombre_archivo_informe(cabecera):
+    """informe_<número>_<tienda>[_<alcance>].xlsx, en ASCII (va en Content-Disposition)."""
+    alcance = unicodedata.normalize('NFKD', cabecera.get('alcance') or '').encode('ascii', 'ignore').decode()
+    alcance = re.sub(r'[^A-Za-z0-9]+', '_', alcance).strip('_')[:40]
+    return f"informe_{cabecera.get('numero', '')}_{cabecera.get('alias', '')}{'_' + alcance if alcance else ''}.xlsx"
 
 
 # ---------------------------------------------------------------------------
@@ -370,9 +456,13 @@ def cabecera_desde_toma(inventario):
 # ---------------------------------------------------------------------------
 
 def titulo_informe(cabecera):
-    """'2026 2458  Inventario General' como el informe antiguo (número de la dirección)."""
+    """'2026 2458  Inventario General' como el informe antiguo (número de la dirección). Una toma
+    parcial dice su tipo y qué cubre: '2026 2438  Inventario por Categoría · Calzado'."""
     numero = re.search(r'\d+', cabecera.get('direccion') or '')
-    return f"{cabecera.get('anio', '')} {numero.group(0) if numero else cabecera.get('alias', '')}  Inventario General"
+    tipo = TIPO_EN_TITULO.get(cabecera.get('tipo_codigo') or 'COMPLETO', 'General')
+    alcance = cabecera.get('alcance') or ''
+    return (f"{cabecera.get('anio', '')} {numero.group(0) if numero else cabecera.get('alias', '')}  "
+            f"Inventario {tipo}{f' · {alcance}' if alcance else ''}")
 
 
 def construir_workbook(cabecera, analisis, no_cargados=()):
@@ -580,6 +670,7 @@ def construir_workbook(cabecera, analisis, no_cargados=()):
         ('Nombre', cabecera.get('nombre')),
         ('Sucursal', subtitulo),
         ('Tipo', cabecera.get('tipo')),
+        ('Qué cubre', cabecera.get('alcance_detalle') or 'Toda la tienda'),
         ('Fecha de corte', cabecera.get('corte') + (' (contado con la tienda cerrada)' if cabecera.get('tienda_cerrada') else '')),
         ('Estado', cabecera.get('estado')),
         ('Generado', timezone.localtime().strftime('%d/%m/%Y %H:%M')),

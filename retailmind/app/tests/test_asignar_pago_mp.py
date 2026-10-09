@@ -127,6 +127,21 @@ class ImportarEnSuTiendaTest(_Base):
                 asoc.importar_y_asociar('555000000001', pago.id, self.cfg_b1.id, self.admin, recalcular_arqueo=False)
         self.assertFalse(TransaccionMercadoPago.objects.exists())
 
+    def test_compra_en_mercado_libre_con_la_cuenta_no_se_asigna(self):
+        """08-10-2026: una compra pagada con la cuenta no es el cobro de ninguna venta."""
+        pago = self._venta(self.a1, 184810)
+        payment = _pago_mp(183076001424, 184810, operation_type='regular_payment', collector_id=None,
+                           collector={'id': 3746749891},
+                           order={'id': '2000015422941951', 'type': 'mercadolibre'},
+                           point_of_interaction={'type': 'CHECKOUT'})
+        with mock.patch.object(mp, '_request', return_value=_resp(payment)):
+            with self.assertRaisesRegex(asoc.AsociacionError, 'no es un cobro del POS'):
+                asoc.importar_y_asociar('183076001424', pago.id, self.cfg_a1.id, self.admin,
+                                        recalcular_arqueo=False)
+            with mock.patch.object(mp, 'buscar_pagos_dia', return_value=[payment]):
+                self.assertEqual(asoc.pagos_api_para_pago(pago, self.cfg_a1), [])
+        self.assertFalse(TransaccionMercadoPago.objects.exists())
+
     def test_con_devoluciones_no_se_asigna(self):
         pago = self._venta(self.a1, 10000)
         payment = _pago_mp(555000000002, 10000, transaction_amount_refunded=10000)
