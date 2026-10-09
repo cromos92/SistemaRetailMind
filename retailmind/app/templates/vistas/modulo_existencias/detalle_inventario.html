@@ -820,7 +820,7 @@ button.kpi-card:focus-visible {
                                     <th>Marca</th>
                                     <th class="text-end grupo-antiguo" title="Stock del sistema al corte">Antiguo · Stock</th>
                                     {% if ver_valores %}
-                                    <th class="text-end grupo-antiguo" title="Stock × (costo + sobreprecio)">Antiguo · P. costo</th>
+                                    <th class="text-end grupo-antiguo" title="{% if costo_original %}Stock × costo original (bodega proveedora){% else %}Stock × (costo + sobreprecio){% endif %}">Antiguo · P. costo</th>
                                     <th class="text-end grupo-antiguo" title="Stock × precio de venta">Antiguo · P. venta</th>
                                     {% endif %}
                                     <th class="text-center col-sep" title="Nuevo − antiguo (unidades)">DIF</th>
@@ -837,7 +837,7 @@ button.kpi-card:focus-visible {
                         </table>
                     </div>
                     <div class="text-muted small mt-2">
-                        {% if ver_valores %}Igual que el informe antiguo: <strong>P. costo</strong> = unidades × (costo + sobreprecio).{% endif %}
+                        {% if ver_valores %}{% if costo_original %}Bodega proveedora: <strong>P. costo</strong> = unidades × costo original (sin sobreprecio).{% else %}Igual que el informe antiguo: <strong>P. costo</strong> = unidades × (costo + sobreprecio), el precio interno.{% endif %}{% endif %}
                         En el inventario nuevo, lo marcado como faltante cuenta 0 y lo «mantenido» (no se pistoleó) toma
                         la cantidad del antiguo. Los SKUs excluidos (operativos: VISA, bolsas, envíos…) no suman y su stock queda igual.
                     </div>

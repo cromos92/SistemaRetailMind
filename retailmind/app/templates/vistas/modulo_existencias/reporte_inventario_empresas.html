@@ -95,6 +95,7 @@
 .diferencia-positiva { color: var(--nexo-success-dark); font-weight: 700; }
 .diferencia-negativa { color: var(--nexo-error-dark); font-weight: 700; }
 .nota-cuadro { font-size: 0.8rem; color: var(--nexo-gray-700); }
+.tabla-empresas .base-costo { font-weight: 400; font-size: 0.8rem; color: var(--nexo-gray-700); }
 
 @media (max-width: 768px) {
     .module-header { padding: 12px 16px; }
@@ -170,32 +171,27 @@
                 </div>
 
                 <div class="row g-2 mb-3">
-                    <div class="col-6 col-md-2">
+                    <div class="col-6 col-md">
                         <div class="kpi-card kpi-total card h-100"><div class="card-body py-2">
                             <span class="kpi-value" id="kpiPares">–</span><span class="kpi-label">Pares holding</span>
                         </div></div>
                     </div>
-                    <div class="col-6 col-md-2">
+                    <div class="col-6 col-md">
                         <div class="kpi-card kpi-en-proceso card h-100"><div class="card-body py-2">
-                            <span class="kpi-value" id="kpiCosto">–</span><span class="kpi-label">Costo</span>
+                            <span class="kpi-value" id="kpiCosto">–</span><span class="kpi-label">Costo (según empresa)</span>
                         </div></div>
                     </div>
-                    <div class="col-6 col-md-2">
-                        <div class="kpi-card kpi-en-proceso card h-100"><div class="card-body py-2">
-                            <span class="kpi-value" id="kpiInterno">–</span><span class="kpi-label">P. Interno</span>
-                        </div></div>
-                    </div>
-                    <div class="col-6 col-md-2">
+                    <div class="col-6 col-md">
                         <div class="kpi-card kpi-completados card h-100"><div class="card-body py-2">
                             <span class="kpi-value" id="kpiVenta">–</span><span class="kpi-label">P. Venta</span>
                         </div></div>
                     </div>
-                    <div class="col-6 col-md-2">
+                    <div class="col-6 col-md">
                         <div class="kpi-card kpi-pendientes card h-100"><div class="card-body py-2">
                             <span class="kpi-value" id="kpiDiferencia">–</span><span class="kpi-label">Diferencia (pares)</span>
                         </div></div>
                     </div>
-                    <div class="col-6 col-md-2">
+                    <div class="col-6 col-md">
                         <div class="kpi-card kpi-pendientes card h-100"><div class="card-body py-2">
                             <span class="kpi-value" id="kpiConToma">–</span><span class="kpi-label">Locales con toma</span>
                         </div></div>
@@ -211,14 +207,13 @@
                                 <th class="col-local">Local</th>
                                 <th class="col-toma">Toma</th>
                                 <th class="text-end">Pares</th>
-                                <th class="text-end" title="Pares × costo de la ficha">Costo</th>
-                                <th class="text-end" title="Pares × (costo + sobreprecio): el P COSTO del informe antiguo">P. Interno</th>
+                                <th class="text-end" title="Bodegas proveedoras (EDEL, GILD): costo original · Paola y NICK: precio interno (costo + sobreprecio)">Costo</th>
                                 <th class="text-end" title="Pares × precio de venta (el de la toma, al corte)">P. Venta</th>
                                 <th class="text-center" title="Contado − sistema, en pares">Diferencia</th>
                             </tr>
                         </thead>
                         <tbody id="tbodyEmpresas">
-                            <tr><td colspan="7" class="text-center py-4 text-muted">
+                            <tr><td colspan="6" class="text-center py-4 text-muted">
                                 <span class="spinner-border spinner-border-sm me-2"></span>Armando el cuadro…
                             </td></tr>
                         </tbody>
@@ -227,7 +222,8 @@
                 <p class="nota-cuadro mb-0">
                     <strong>Con toma:</strong> el inventario nuevo del informe final de la toma (lo contado; lo que no apareció cuenta 0).
                     Una toma parcial (p. ej. solo Calzado) suma el stock del sistema de lo que quedó fuera de ella.
-                    <strong>Costo</strong> = pares × costo · <strong>P. Interno</strong> = pares × (costo + sobreprecio), el P COSTO del informe antiguo ·
+                    <strong>Costo:</strong> las bodegas proveedoras (EDEL, GILD) a costo original; Paola y NICK, también sus bodegas,
+                    a precio interno = costo + sobreprecio ·
                     <strong>P. Venta</strong> = pares × precio de venta.
                     <strong>Sin toma:</strong> stock del sistema al <span id="diaStock">cierre del mes</span>
                     (sin los productos marcados «excluir de analítica»).
@@ -284,33 +280,32 @@ function filaValores(v, extraClase, local, toma) {
         <td class="col-toma">${toma}</td>
         <td class="text-end col-num">${formatNumber(v.pares)}</td>
         <td class="text-end col-num">${pesos(v.costo)}</td>
-        <td class="text-end col-num">${pesos(v.p_interno)}</td>
         <td class="text-end col-num">${pesos(v.p_venta)}</td>
         <td class="text-center">${diferenciaHtml(v.diferencia)}</td>
     </tr>`;
 }
 
 function cargarCuadro() {
-    $('#tbodyEmpresas').html(`<tr><td colspan="7" class="text-center py-4 text-muted">
+    $('#tbodyEmpresas').html(`<tr><td colspan="6" class="text-center py-4 text-muted">
         <span class="spinner-border spinner-border-sm me-2"></span>Armando el cuadro…</td></tr>`);
     history.replaceState(null, '', `?${periodo()}`);
     $.get(`/app/gestion-inventarios/api/reporte-empresas/?${periodo()}`, function(r) {
         if (!r.success) {
-            $('#tbodyEmpresas').html(`<tr><td colspan="7" class="text-center py-4 text-danger">${escHtml(r.error)}</td></tr>`);
+            $('#tbodyEmpresas').html(`<tr><td colspan="6" class="text-center py-4 text-danger">${escHtml(r.error)}</td></tr>`);
             return;
         }
         $('#tituloCuadro').text(r.titulo);
         $('#diaStock').text(r.dia_stock);
         $('#kpiPares').text(formatNumber(r.total.pares));
         $('#kpiCosto').text(pesos(r.total.costo));
-        $('#kpiInterno').text(pesos(r.total.p_interno));
         $('#kpiVenta').text(pesos(r.total.p_venta));
         $('#kpiDiferencia').html(diferenciaHtml(r.total.diferencia));
         $('#kpiConToma').text(`${r.total.con_toma} de ${r.total.locales}`);
 
         let html = '';
         r.empresas.forEach(b => {
-            html += `<tr class="fila-empresa"><td colspan="7">${escHtml(b.nombre)}</td></tr>`;
+            html += `<tr class="fila-empresa"><td colspan="6">${escHtml(b.nombre)}
+                <span class="base-costo">· costo a ${escHtml(b.base_costo)}</span></td></tr>`;
             b.locales.forEach(l => {
                 const local = `<strong>${escHtml(l.local)}</strong><span class="local-alias">${escHtml(l.alias)}${l.es_bodega && l.direccion ? ' · ' + escHtml(l.direccion) : ''}</span>`;
                 html += filaValores(l, l.toma ? '' : 'sin-toma', local, celdaToma(l));
@@ -321,7 +316,7 @@ function cargarCuadro() {
         $('#tbodyEmpresas').html(html);
     }).fail(function(xhr) {
         const error = (xhr.responseJSON && xhr.responseJSON.error) || 'No se pudo armar el cuadro';
-        $('#tbodyEmpresas').html(`<tr><td colspan="7" class="text-center py-4 text-danger">${escHtml(error)}</td></tr>`);
+        $('#tbodyEmpresas').html(`<tr><td colspan="6" class="text-center py-4 text-danger">${escHtml(error)}</td></tr>`);
     });
 }
 

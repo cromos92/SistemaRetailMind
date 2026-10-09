@@ -18,7 +18,9 @@ Definiciones (las mismas en pantalla, Excel y scripts):
 - costo2   costo + sobreprecio del producto. Es el «P COSTO» del informe antiguo:
            se verificó contra el informe de NICK1 (venta/costo ADIDAS 1,72; con
            costo solo daría 1,92). ttcosto1/ttpvp1 = base × costo2/pvp (sistema),
-           ttcosto2/ttpvp2 = pistola × costo2/pvp (físico).
+           ttcosto2/ttpvp2 = pistola × costo2/pvp (físico). Excepción: las bodegas
+           proveedoras (EDEL, GILD) valorizan a costo original → costo2 = costo
+           (valoriza_a_costo_original; pedido del usuario 09-10).
 - El ajuste que entra al kardex se valoriza al costo FIFO de la toma
   (costo_unitario_sistema); va aparte en el Resumen para cuadrar con el módulo.
 
@@ -51,7 +53,7 @@ COLUMNAS_DIFERENCIAS = [
     ('talla', 'talla', 'Talla'),
     ('marca', 'marca', 'Marca'),
     ('costo', 'costo', 'Costo del producto'),
-    ('costo2', 'costo2', 'Costo + sobreprecio (P COSTO del informe antiguo)'),
+    ('costo2', 'costo2', 'P COSTO unitario: costo + sobreprecio (precio interno); en bodega proveedora, el costo'),
     ('stk', 'stk', 'Stock del sistema a la fecha de corte'),
     ('pistola', 'pistola', 'Conteo físico (pistola); vacío = no apareció'),
     ('mov', 'mov', 'Movimientos entre el corte y el conteo'),
@@ -136,8 +138,6 @@ def _acumulador_marca(marca):
         'marca': marca, 'skus': 0, 'skus_con_diferencia': 0, 'sin_contar': 0,
         'ant_stock': 0, 'ant_costo': 0.0, 'ant_venta': 0.0,
         'nue_stock': 0, 'nue_costo': 0.0, 'nue_venta': 0.0,
-        # a costo de la ficha, sin sobreprecio (el consolidado por empresa muestra ambos)
-        'ant_costo_puro': 0.0, 'nue_costo_puro': 0.0,
     }
 
 
@@ -185,8 +185,6 @@ def analizar(filas):
             a['nue_stock'] += fila['fisico']
             a['nue_costo'] += fila['ttcosto2']
             a['nue_venta'] += fila['ttpvp2']
-            a['ant_costo_puro'] += fila['base'] * fila['costo']
-            a['nue_costo_puro'] += fila['fisico'] * fila['costo']
             if fila['final']:
                 a['skus_con_diferencia'] += 1
             if fila.get('pistola') is None:
@@ -258,8 +256,28 @@ def analizar(filas):
 # Lectura desde la BD
 # ---------------------------------------------------------------------------
 
+def valoriza_a_costo_original(empresa_id):
+    """
+    Las bodegas proveedoras (EDEL, GILD) valorizan a COSTO ORIGINAL; Paola y NICK, también
+    sus bodegas PA00/IMP, a PRECIO INTERNO = costo + sobreprecio (el delta del CD). Pedido
+    del usuario, 09-10. Proveedora = empresa sin tiendas (todas sus sucursales son centro
+    de distribución): Empresa.esProveedor no sirve, está en True en las cuatro.
+    """
+    from app.models import Sucursal
+    return not Sucursal.objects.filter(empresa_id=empresa_id, es_centro_distribucion=False).exists()
+
+
+def texto_p_costo(costo_original):
+    """Cómo se calcula el P COSTO, para las notas del informe."""
+    if costo_original:
+        return 'P COSTO = unidades × costo original (bodega proveedora, sin sobreprecio)'
+    return 'P COSTO = unidades × (costo + sobreprecio), el precio interno, igual que el informe antiguo'
+
+
 def filas_desde_toma(inventario):
     """Genera las filas del informe desde los detalles de una toma (streaming)."""
+    # Bodega proveedora (EDEL, GILD): a costo original, sin el sobreprecio
+    sin_sobreprecio = valoriza_a_costo_original(inventario.sucursal.empresa_id)
     campos = (
         'producto_talla_id', 'sku', 'producto_nombre', 'talla_nombre', 'marca_nombre',
         'stock_sistema', 'stock_movimientos_post_corte', 'stock_fisico', 'contado',
@@ -276,7 +294,7 @@ def filas_desde_toma(inventario):
             'talla': d['talla_nombre'] or '',
             'marca': d['marca_nombre'],
             'costo': d['producto_talla__producto__costo'] or 0,
-            'sobreprecio': d['producto_talla__producto__sobreprecio'] or 0,
+            'sobreprecio': 0 if sin_sobreprecio else (d['producto_talla__producto__sobreprecio'] or 0),
             # El precio de la toma es el snapshot al corte (no el de hoy)
             'pvp': d['precio_venta_sistema'] or 0,
             'costo_fifo': d['costo_unitario_sistema'],
@@ -371,6 +389,7 @@ def cabecera_desde_toma(inventario):
         'tipo_codigo': inventario.tipo_inventario,
         'alcance': alcance,
         'alcance_detalle': alcance_detalle,
+        'costo_original': valoriza_a_costo_original(sucursal.empresa_id),
     }
 
 
@@ -538,7 +557,7 @@ def construir_workbook(cabecera, analisis, no_cargados=()):
         fila_n += 1
     _fila_marca(fila_n, analisis['total'], total=True)
     ws.cell(row=fila_n + 2, column=1, value=(
-        'P COSTO = unidades × (costo + sobreprecio), igual que el informe antiguo. '
+        f"{texto_p_costo(cabecera.get('costo_original'))}. "
         'Inventario nuevo: lo faltante cuenta 0 y lo no pistoleado que se mantuvo toma la cantidad del antiguo. '
         'No incluye los SKUs excluidos (operativos: VISA, bolsas, envíos…), cuyo stock queda igual.'
     )).font = Font(italic=True, size=9, color='595959')
@@ -675,6 +694,8 @@ def construir_workbook(cabecera, analisis, no_cargados=()):
         ('Sucursal', subtitulo),
         ('Tipo', cabecera.get('tipo')),
         ('Qué cubre', cabecera.get('alcance_detalle') or 'Toda la tienda'),
+        ('P COSTO', 'costo original (bodega proveedora)' if cabecera.get('costo_original')
+                    else 'precio interno = costo + sobreprecio'),
         ('Fecha de corte', cabecera.get('corte') + (' (contado con la tienda cerrada)' if cabecera.get('tienda_cerrada') else '')),
         ('Estado', cabecera.get('estado')),
         ('Generado', timezone.localtime().strftime('%d/%m/%Y %H:%M')),

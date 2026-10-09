@@ -115,7 +115,10 @@ CATALOGO = {
             'puede_ver': 'Entrar a la pantalla, verla en el menú, buscar productos y consultar su tarjeta.',
         },
         'depende_de': [],
-        'notas': '',
+        'notas': (
+            'El stock por talla y sucursal se ve de TODO el holding; kardex, llegadas, costo y proveedores '
+            'solo de las empresas del usuario (Administrador/Maestro o "ver todas las sucursales": todo).'
+        ),
     },
     'despacho_sucursales': {
         'pantalla': 'Despacho a Sucursales',

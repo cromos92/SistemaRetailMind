@@ -138,8 +138,15 @@ DELTA_KARDEX_SQL = Case(
 # EDEL, en PAO1-4 de Paola y en NICK1/NICK2 de Importadora, con el mismo SKU).
 # Antes la tarjeta tomaba un Producto_Talla cualquiera (`.first()` sin orden) y
 # mostraba solo las bodegas de SU empresa: según cuál saliera primero, NICK2
-# —la que tenía 59 de las 81 unidades— simplemente no aparecía. El universo
-# correcto es todo lo que el usuario puede ver del holding.
+# —la que tenía 59 de las 81 unidades— simplemente no aparecía.
+#
+# Hay DOS alcances distintos:
+#   · STOCK (matriz talla × sucursal, autocompletado): todo el holding, para
+#     cualquier usuario con al menos una empresa. "¿Dónde hay la 38?" es la
+#     pregunta del mesón y la respuesta puede estar en otra empresa.
+#   · HISTORIAL (kardex, llegadas, línea de vida, costos, proveedores): solo
+#     las empresas del usuario. Ahí están costos, compras y volumen de venta
+#     de cada empresa, y eso sigue siendo privado de cada una.
 
 # BigIntegerField: un texto de más dígitos no puede ser un SKU (y `int()` del
 # ORM reventaría al compararlo).
@@ -148,42 +155,104 @@ _SKU_MAX_DIGITOS = 18
 
 def _alcance_tarjeta(request):
     """
-    Sucursales que puede mostrar la tarjeta: las de TODAS las empresas del
-    holding a las que el usuario tiene acceso, o ``None`` si ve todo
-    (administrador / Maestro / flag `puede_ver_todas_sucursales`).
+    Sucursales cuyo HISTORIAL puede ver el usuario en la tarjeta: las de todas
+    sus empresas, o ``None`` si ve todo (administrador / Maestro / flag
+    `puede_ver_todas_sucursales`). El stock no pasa por aquí: es del holding.
     """
     return ids_sucursales_alcance(request.user)
 
 
 def _filtro_alcance_pt(suc_ids):
-    """kwargs para acotar un queryset de Producto_Talla al alcance (vacío = todo)."""
-    return {} if suc_ids is None else {'producto__sucursal_id__in': suc_ids}
+    """
+    kwargs para acotar un queryset de Producto_Talla al alcance. ``None`` es
+    todo el holding: toda variante cuyo producto pertenece a una sucursal (una
+    ficha sin sucursal no es stock de ninguna bodega y descuadraría la matriz).
+    """
+    if suc_ids is None:
+        return {'producto__sucursal__isnull': False}
+    return {'producto__sucursal_id__in': suc_ids}
 
 
-def _articulos_que_calzan(texto, suc_ids):
+def _codigos_por_sku(sku, suc_ids):
     """
-    Códigos de artículo que corresponden a lo escrito: SKU exacto o código
-    exacto (sin distinguir mayúsculas). Un SKU puede apuntar a más de un
-    artículo —hay cientos así, casi todos legado de EDEL— y un código numérico
-    puede coincidir a la vez con el SKU de otro artículo: por eso se devuelven
-    TODOS y el que llama decide si hay que preguntar.
+    Códigos de artículo con ese SKU: los de las empresas del usuario y, solo si
+    ahí no hay ninguno, los del resto del holding. Así un SKU que en su empresa
+    es de UN artículo no le pregunta por los artículos legados (casi todos de
+    EDEL) que reusan el número en otra empresa.
+
+    Una sola consulta por el índice de `sku`; el alcance se separa en Python.
     """
-    filtro = Q(producto__articulo__iexact=texto)
-    if texto.isdigit() and len(texto) <= _SKU_MAX_DIGITOS:
-        filtro |= Q(sku=int(texto))
-    return sorted(set(
+    filas = set(
         Producto_Talla.objects
-        .filter(filtro, **_filtro_alcance_pt(suc_ids))
+        .filter(sku=sku, **_filtro_alcance_pt(None))
+        .values_list('producto__articulo', 'producto__sucursal_id')
+        .distinct()
+    )
+    if suc_ids is not None:
+        permitidas = set(suc_ids)
+        propios = {art for art, suc in filas if suc in permitidas}
+        if propios:
+            return propios
+    return {art for art, _ in filas}
+
+
+def _codigos_por_articulo(texto, crudo=None):
+    """
+    Código de artículo igual a lo pedido, en todo el holding (el código ES el
+    artículo en todas las empresas; el alcance solo decide el historial).
+
+    El exacto gana: primero el valor tal cual llegó de una lista (`crudo`, que
+    puede traer espacios o un \\xa0 heredado del legado), después el recortado y
+    después en mayúsculas, que es como se guardan los códigos. Todos usan el
+    índice de `articulo`. Solo si nada calza se compara sin distinguir
+    mayúsculas (UPPER() no usa índice): así 'TM-CASO' y 'tm-caso' nunca
+    vuelven a pedir elegir cuando se eligió uno de los dos.
+    """
+    base = Producto_Talla.objects.filter(**_filtro_alcance_pt(None))
+    for candidato in dict.fromkeys(c for c in (crudo, texto, texto.upper()) if c):
+        if base.filter(producto__articulo=candidato).exists():
+            return {candidato}
+    if texto.upper() == texto.lower():
+        # Sin letras (p. ej. un SKU escaneado): iexact no encontraría nada más.
+        return set()
+    return set(
+        base.filter(producto__articulo__iexact=texto)
         .values_list('producto__articulo', flat=True)
         .distinct()
-    ))
+    )
+
+
+def _resolver_articulos(sku, articulo_crudo, suc_ids):
+    """
+    Códigos de artículo a mostrar para lo pedido.
+
+    - `articulo` (se elige de una lista: autocompletado o candidatos): ese
+      código, buscado por igualdad exacta antes que nada.
+    - `sku` (lo que se escribe o escanea): los artículos con ese SKU (primero
+      en sus empresas) MÁS el artículo cuyo código es ese texto. Un SKU puede
+      apuntar a más de un artículo y un código numérico puede ser a la vez el
+      SKU de otro: se devuelven todos y el que llama decide si hay que preguntar.
+
+    Lo que su empresa no trabaja igual se encuentra (en otra empresa): la
+    tarjeta muestra dónde hay stock, sin historial.
+    """
+    articulo_pedido = articulo_crudo.strip()
+    if articulo_pedido:
+        return sorted(_codigos_por_articulo(articulo_pedido, crudo=articulo_crudo))
+
+    codigos = set()
+    if sku.isdigit() and len(sku) <= _SKU_MAX_DIGITOS:
+        codigos |= _codigos_por_sku(int(sku), suc_ids)
+    codigos |= _codigos_por_articulo(sku)
+    return sorted(codigos)
 
 
 def _resumen_articulos(articulos, suc_ids):
     """
     Datos de cada artículo sobre TODAS sus variantes del alcance (no solo la
     fila que calzó con la búsqueda): stock total, bodegas y un SKU de muestra.
-    Se usa en el autocompletado y para elegir cuando un SKU es ambiguo.
+    Se usa en el autocompletado y para elegir cuando un SKU es ambiguo (en
+    ambos casos con el alcance de STOCK, es decir, todo el holding).
     """
     if not articulos:
         return {}
@@ -231,7 +300,8 @@ def _elegir_referencia(productos_talla, sucursal_actual_id, sku_buscado):
 
     Determinista: primero la sucursal desde donde se consulta (su precio es el
     que importa en el mesón), luego el SKU buscado, luego la que tiene stock y
-    al final la ficha más nueva.
+    al final la ficha más nueva. El que llama pasa SOLO variantes de las
+    empresas del usuario cuando las hay, para no mostrar el costo de otra.
     """
     try:
         sucursal_actual_id = int(sucursal_actual_id)
@@ -252,15 +322,17 @@ def _elegir_referencia(productos_talla, sucursal_actual_id, sku_buscado):
 @require_GET
 def api_tarjeta_movimiento(request):
     """
-    API: vida completa de un artículo en TODAS las bodegas del holding que el
-    usuario puede ver (todas sus empresas, no solo la dueña del SKU).
+    API: tarjeta de un artículo con DOS alcances (ver comentario de arriba):
+
+      - Stock de hoy por bodega y talla (matriz): TODO el holding, para que en
+        tienda se vea dónde hay aunque sea en otra empresa.
+      - Historial (kardex por serie bodega·talla con saldo acumulado, aperturas,
+        llegadas, línea de vida, totales) y costo: solo las bodegas de las
+        empresas del usuario.
 
     Un mismo artículo (código) existe como registros Producto distintos por
-    sucursal, cada uno con sus Producto_Talla (SKUs) propios. Aquí se agrupa
-    por artículo y se reconstruye:
-      - Distribución de stock actual por bodega y por talla.
-      - Kardex por (bodega, talla) con saldo acumulado correcto por serie.
-      - Timeline unificada (nacimiento → traspasos → ventas → hoy).
+    sucursal, cada uno con sus Producto_Talla (SKUs) propios: se agrupa por
+    artículo.
 
     Parámetros GET: sku (SKU o código de artículo) o articulo (código exacto,
     el que se elige cuando un SKU es ambiguo), fecha_desde, fecha_hasta.
@@ -269,7 +341,10 @@ def api_tarjeta_movimiento(request):
     los ``candidatos`` para que el usuario elija, en vez de adivinar.
     """
     sku = request.GET.get('sku', '').strip()
-    articulo_pedido = request.GET.get('articulo', '').strip()
+    # Sin recortar: viene de una lista y es el código tal cual está guardado
+    # (hay códigos legados con espacios o \xa0 que solo así se encuentran).
+    articulo_crudo = request.GET.get('articulo', '')
+    articulo_pedido = articulo_crudo.strip()
     fecha_desde = request.GET.get('fecha_desde', '')
     fecha_hasta = request.GET.get('fecha_hasta', '')
     sucursal_actual_id = request.session.get('idSucursalActual')
@@ -281,32 +356,14 @@ def api_tarjeta_movimiento(request):
     if suc_ids is not None and not suc_ids:
         return _sin_acceso('Tu usuario no tiene empresas asignadas.')
 
-    # 1) Resolver el artículo (código), SIEMPRE dentro del alcance del usuario.
-    #    Sin este filtro bastaba conocer un SKU ajeno para leer el kardex
-    #    completo de otra empresa.
+    # 1) Resolver el artículo (código) en el holding; el SKU, primero en sus empresas.
     buscado = articulo_pedido or sku
-    if articulo_pedido:
-        articulos = sorted(set(
-            Producto_Talla.objects
-            .filter(producto__articulo__iexact=articulo_pedido, **_filtro_alcance_pt(suc_ids))
-            .values_list('producto__articulo', flat=True)
-            .distinct()
-        ))
-    else:
-        articulos = _articulos_que_calzan(sku, suc_ids)
-
+    articulos = _resolver_articulos(sku, articulo_crudo, suc_ids)
     if not articulos:
-        # Distinguir "no existe" de "existe pero es de otra empresa".
-        if suc_ids is not None and _articulos_que_calzan(buscado, None):
-            logger.warning(
-                "Tarjeta de movimiento denegada: %s pidió el SKU/código «%s» fuera de su alcance",
-                request.user.username, buscado,
-            )
-            return _sin_acceso('Ese SKU pertenece a una empresa a la que no tienes acceso.')
         return JsonResponse({'success': False, 'error': f'SKU o código «{buscado}» no encontrado.'}, status=404)
 
     if len(articulos) > 1:
-        resumen_art = _resumen_articulos(articulos, suc_ids)
+        resumen_art = _resumen_articulos(articulos, None)
         candidatos = sorted(
             resumen_art.values(), key=lambda a: (-a['stock'], a['articulo'])
         )
@@ -319,20 +376,38 @@ def api_tarjeta_movimiento(request):
 
     articulo = articulos[0]
 
-    # 2) Todas las variantes (talla × sucursal) de este artículo en el holding.
+    # 2) Todas las variantes (talla × sucursal) de este artículo en el holding
+    #    (base de la matriz de stock) y, de ellas, las de las empresas del
+    #    usuario: SOLO de esas se leen movimientos, costos y proveedores.
     productos_talla = list(
         Producto_Talla.objects
         .select_related(
             'producto', 'producto__sucursal', 'producto__sucursal__empresa',
             'producto__atributo1', 'producto__atributo2', 'producto__categoria',
         )
-        .filter(producto__articulo=articulo, **_filtro_alcance_pt(suc_ids))
+        .filter(producto__articulo=articulo, **_filtro_alcance_pt(None))
         .order_by('producto__sucursal__alias', 'talla')
     )
-    pt_ids = [pt.id for pt in productos_talla]
-    pt_ref = _elegir_referencia(productos_talla, sucursal_actual_id, sku)
+    if suc_ids is None:
+        pts_historial = productos_talla
+        sucursales_historial = None
+    else:
+        sucursales_historial = set(suc_ids)
+        pts_historial = [
+            pt for pt in productos_talla if pt.producto.sucursal_id in sucursales_historial
+        ]
+    pt_ids = [pt.id for pt in pts_historial]
 
-    # 3) Movimientos de todas esas variantes.
+    def _con_historial(sucursal_id):
+        return sucursales_historial is None or sucursal_id in sucursales_historial
+
+    # Ficha de referencia: de una variante propia si la hay (su costo es el
+    # de SU empresa); si el artículo solo existe en otras empresas se muestra
+    # descripción y precio, pero el costo no.
+    pt_ref = _elegir_referencia(pts_historial or productos_talla, sucursal_actual_id, sku)
+    costo_visible = bool(pts_historial)
+
+    # 3) Movimientos de las variantes con historial visible.
     movimientos_qs = (
         Movimientos_Producto.objects
         .filter(ProductoTalla_id__in=pt_ids)
@@ -358,10 +433,10 @@ def api_tarjeta_movimiento(request):
     if fecha_desde:
         alias_por_sucursal = {
             pt.producto.sucursal_id: (pt.producto.sucursal.alias if pt.producto.sucursal else '-')
-            for pt in productos_talla
+            for pt in pts_historial
         }
         sku_por_serie = {
-            (pt.producto.sucursal_id, pt.talla): str(pt.sku) for pt in productos_talla
+            (pt.producto.sucursal_id, pt.talla): str(pt.sku) for pt in pts_historial
         }
         previos = (
             Movimientos_Producto.objects
@@ -438,6 +513,7 @@ def api_tarjeta_movimiento(request):
         })
 
     # 5) Info consolidada del producto (usa la variante de referencia para atributos).
+    #    Stock, bodegas y empresas son del holding (lo mismo que la matriz).
     producto = pt_ref.producto
     bodegas_presentes = sorted({
         pt.producto.sucursal.alias for pt in productos_talla if pt.producto.sucursal
@@ -454,7 +530,7 @@ def api_tarjeta_movimiento(request):
         'marca': producto.atributo1.valor if producto.atributo1 else '-',
         'color': producto.atributo2.valor if producto.atributo2 else '-',
         'categoria': producto.categoria.nombre if producto.categoria else '-',
-        'costo': producto.costo,
+        'costo': producto.costo if costo_visible else None,
         'precio_venta': producto.precioventa,
         'stock_total': stock_total,
         'num_bodegas': len(bodegas_presentes),
@@ -477,6 +553,8 @@ def api_tarjeta_movimiento(request):
                 'empresa': bodega.empresa.nombre if bodega.empresa else '',
                 'tipo': bodega.get_tipo_sucursal_display(),
                 'es_cd': bodega.es_compradora,
+                # False = bodega de otra empresa: se ve su stock, no su kardex.
+                'con_historial': _con_historial(bodega.id),
                 'stock_total': 0,
                 'tallas': [],
             }
@@ -495,11 +573,28 @@ def api_tarjeta_movimiento(request):
         # Orden natural de tallas ('7,5' antes que '38', y las letras al final).
         d['tallas'].sort(key=lambda t: clave_orden_talla(t['talla']))
 
-    # 7) Tallas y bodegas disponibles para poblar los filtros del frontend.
+    # 7) Tallas y bodegas disponibles para poblar los filtros del kardex. Las
+    #    tallas son todas las del artículo (la matriz puede mandar a filtrar por
+    #    cualquiera); las bodegas, solo las que tienen historial visible.
     tallas_disponibles = sorted({pt.talla for pt in productos_talla}, key=clave_orden_talla)
     bodegas_disponibles = [
-        {'id': d['bodega_id'], 'alias': d['bodega']} for d in distribucion_list
+        {'id': d['bodega_id'], 'alias': d['bodega']}
+        for d in distribucion_list if d['con_historial']
     ]
+
+    # 7.b) Qué parte de la matriz NO tiene historial para este usuario: el
+    #      frontend lo avisa y no deja saltar al kardex de esas bodegas.
+    bodegas_sin_historial = [d['bodega'] for d in distribucion_list if not d['con_historial']]
+    empresas_historial = sorted({
+        pt.producto.sucursal.empresa.nombre
+        for pt in pts_historial if pt.producto.sucursal and pt.producto.sucursal.empresa
+    })
+    alcance = {
+        'historial_completo': not bodegas_sin_historial,
+        'sin_historial': not pts_historial,
+        'empresas_historial': empresas_historial,
+        'bodegas_sin_historial': bodegas_sin_historial,
+    }
 
     # 8) Timeline: hitos clave del recorrido (nacimiento, traspasos, ventas, ajustes).
     #    Si hay muchísimos, se envían solo los más recientes (los últimos son los
@@ -554,7 +649,10 @@ def api_tarjeta_movimiento(request):
         'total_salidas': total_salidas,
         'total_vendido': total_vendido,
         'traspasos': traspasos_count,
+        # Stock de la matriz (holding). Para cuadrar contra `saldo_final` usar
+        # `stock_historial`: el kardex solo cubre las bodegas con historial.
         'stock_actual': stock_total,
+        'stock_historial': sum(pt.stock or 0 for pt in pts_historial),
         'saldo_apertura': saldo_apertura_total,
         'saldo_final': saldo_final_total,
         'primer_movimiento': movimientos_data[0]['fecha'] if movimientos_data else '-',
@@ -583,6 +681,7 @@ def api_tarjeta_movimiento(request):
             'tallas': tallas_disponibles,
             'bodegas': bodegas_disponibles,
         },
+        'alcance': alcance,
         'sucursal_actual_id': sucursal_actual_id,
     })
 
@@ -805,7 +904,8 @@ _TIMELINE_MAX = 150
 def api_buscar_productos_tarjeta_movimiento(request):
     """
     Autocomplete: sugiere artículos (agrupados por código) por SKU, código,
-    descripción o marca, en todas las bodegas del holding que el usuario ve.
+    descripción o marca, en TODO el holding (alcance de stock: un artículo que
+    la empresa del usuario no trabaja igual puede estar en otra sucursal).
 
     - Varias palabras se combinan con Y ("adilette negro"): cada una debe
       aparecer en el código, la descripción, la marca o el SKU.
@@ -820,6 +920,7 @@ def api_buscar_productos_tarjeta_movimiento(request):
     if len(q) < 2:
         return JsonResponse({'success': True, 'productos': []})
 
+    # Sin ninguna empresa asignada no hay nada que mostrar (ni siquiera stock).
     suc_ids = _alcance_tarjeta(request)
     if suc_ids is not None and not suc_ids:
         return JsonResponse({'success': True, 'productos': []})
@@ -847,13 +948,13 @@ def api_buscar_productos_tarjeta_movimiento(request):
 
     top = list(
         Producto_Talla.objects
-        .filter(filtro, **_filtro_alcance_pt(suc_ids))
+        .filter(filtro, **_filtro_alcance_pt(None))
         .values('producto__articulo')
         .annotate(rango=Min(rango), stock_match=Sum('stock'))
         .order_by('rango', '-stock_match', 'producto__articulo')[:15]
     )
     articulos = [f['producto__articulo'] for f in top]
-    resumen = _resumen_articulos(articulos, suc_ids)
+    resumen = _resumen_articulos(articulos, None)
 
     resultados = []
     for art in articulos:

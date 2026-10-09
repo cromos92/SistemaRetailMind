@@ -216,6 +216,10 @@ table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: var(--tm-surface);
 }
 .tm-tag-cd    { background: #e8f7f2; color: #0a8a78; }
 .tm-tag-aqui  { background: var(--tm-tint); color: var(--tm-primary); }
+.tm-tag-otra  { background: var(--nexo-gray-100); color: var(--nexo-gray-700); }
+/* Bodega de otra empresa: se ve su stock, pero no lleva a su kardex */
+.tm-cel.tm-cel-ajena, td.tm-col-suc.tm-suc-ajena { cursor: default; }
+.tm-cel.tm-cel-ajena:hover { transform: none; }
 .tm-fila-cero td { opacity: .7; }
 
 /* ---------- 3. Llegadas ---------- */
@@ -534,6 +538,7 @@ table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: var(--tm-surface);
                         </div>
                     </div>
 
+                    <div id="avisoAlcance"></div>
                     <div id="avisoMiSucursal"></div>
 
                     <div class="mb-3">
@@ -658,6 +663,7 @@ let movimientosData = [];
 let movimientosFiltrados = [];      // lo que se está viendo (y lo que se exporta)
 let aperturasData = [];             // saldo previo por serie cuando hay filtro "Desde"
 let distribucionData = [];          // stock actual por bodega (base de la matriz)
+let alcanceData = {};               // qué bodegas de la matriz traen historial para este usuario
 let llegadasData = [];
 let llegadasTipo = '';              // filtro activo de la sección Llegadas
 let llegadasVisibles = 12;          // paginación simple de las tarjetas de llegada
@@ -669,6 +675,7 @@ let ayudaAbortController = null;
 // Un SKU puede corresponder a varios artículos; con esto la búsqueda va directo
 // al elegido. Se olvida apenas el usuario vuelve a escribir.
 let articuloElegido = '';
+let busquedaSeq = 0;                // descarta respuestas de búsquedas ya reemplazadas
 
 function fmtMoneda(v) { return '$' + Number(v || 0).toLocaleString('es-CL'); }
 function fmtNum(v) { return Number(v || 0).toLocaleString('es-CL'); }
@@ -711,6 +718,20 @@ function limpiarFechas() {
     if (document.getElementById('inputSku').value.trim()) buscarMovimientos();
 }
 
+/* La caja de inicio también muestra errores y la lista de candidatos. */
+function mostrarInicial(html) {
+    const caja = document.getElementById('tmInicial');
+    caja.querySelector('.tm-empty').innerHTML = html;
+    caja.style.display = '';
+}
+
+/* Mensaje de una respuesta fallida: la vista manda `error` como texto; los
+   middlewares (sesión vencida, sin permiso) mandan `error: true` + `mensaje`. */
+function textoError(data) {
+    if (typeof data.error === 'string' && data.error) return data.error;
+    return data.mensaje || 'No se pudo consultar la tarjeta.';
+}
+
 function buscarMovimientos() {
     const sku = document.getElementById('inputSku').value.trim();
     if (!sku) { document.getElementById('inputSku').focus(); return; }
@@ -725,16 +746,24 @@ function buscarMovimientos() {
     if (desde) url += `&fecha_desde=${desde}`;
     if (hasta) url += `&fecha_hasta=${hasta}`;
 
+    // Una búsqueda nueva parte en limpio: nada de la anterior queda a la vista
+    // (ni su botón de exportar), y la URL refleja lo que se pidió aunque termine
+    // en la lista de candidatos o en un error.
+    const seq = ++busquedaSeq;
     document.getElementById('tmInicial').style.display = 'none';
     document.getElementById('tmResultados').style.display = 'none';
+    document.getElementById('btnExportar').style.display = 'none';
     document.getElementById('tmLoader').style.display = '';
+    history.replaceState(null, '', `?${consulta}`);
 
-    fetch(url).then(r => r.json()).then(data => {
+    // Cabeceras AJAX: con la sesión vencida el middleware responde JSON en vez
+    // de redirigir al login (HTML), que hacía fallar r.json().
+    fetch(url, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+    .then(r => r.json()).then(data => {
+        if (seq !== busquedaSeq) return;   // respuesta de una búsqueda ya reemplazada
         document.getElementById('tmLoader').style.display = 'none';
         if (!data.success) {
-            document.getElementById('tmInicial').style.display = '';
-            document.getElementById('tmInicial').querySelector('.tm-empty').innerHTML =
-                `<i class="ri-error-warning-line text-danger"></i><h6 class="text-danger">${escapeHtml(data.error || 'Error')}</h6>`;
+            mostrarInicial(`<i class="ri-error-warning-line text-danger"></i><h6 class="text-danger">${escapeHtml(textoError(data))}</h6>`);
             return;
         }
         if (data.ambiguo) {
@@ -744,6 +773,7 @@ function buscarMovimientos() {
         movimientosData = data.movimientos;
         aperturasData = data.aperturas || [];
         distribucionData = data.distribucion || [];
+        alcanceData = data.alcance || {};
         llegadasData = data.llegadas || [];
         llegadasVisibles = 12;
         tallaActiva = '';
@@ -759,11 +789,12 @@ function buscarMovimientos() {
 
         document.getElementById('tmResultados').style.display = '';
         document.getElementById('btnExportar').style.display = '';
-        // URL compartible: quien reciba el enlace abre la misma tarjeta.
-        history.replaceState(null, '', `?${consulta}`);
     }).catch(e => {
+        if (seq !== busquedaSeq) return;
         document.getElementById('tmLoader').style.display = 'none';
-        document.getElementById('tmInicial').style.display = '';
+        mostrarInicial(`<i class="ri-wifi-off-line text-danger"></i>
+            <h6 class="text-danger">No se pudo consultar la tarjeta</h6>
+            <p class="mb-0">Revise la conexión y vuelva a buscar.</p>`);
         if (window.Swal) {
             Swal.fire({ icon: 'error', title: 'Error de red', text: e.message, confirmButtonColor: '#405189' });
         }
@@ -771,7 +802,14 @@ function buscarMovimientos() {
 }
 
 /* ================= Autocomplete ================= */
-function ocultarListaAyuda() { document.getElementById('listaAyudaProductos').style.display = 'none'; }
+/* Cierra la lista y cancela la sugerencia pendiente: si no, con la pistola
+   (13 dígitos + Enter en menos de 250 ms) la lista reaparecía encima de la
+   tarjeta recién abierta. */
+function ocultarListaAyuda() {
+    clearTimeout(ayudaTimer);
+    if (ayudaAbortController) { ayudaAbortController.abort(); ayudaAbortController = null; }
+    document.getElementById('listaAyudaProductos').style.display = 'none';
+}
 
 /* Una fila por artículo: código, descripción, marca, dónde hay stock y total.
    La comparten el autocompletado y la lista de "¿cuál de estos?". */
@@ -827,10 +865,14 @@ function buscarAyudaProductos() {
     if (q.length < 2) { ocultarListaAyuda(); return; }
     ayudaTimer = setTimeout(() => {
         if (ayudaAbortController) ayudaAbortController.abort();
-        ayudaAbortController = new AbortController();
-        fetch(`/app/api/tarjeta-movimiento/buscar/?q=${encodeURIComponent(q)}`, { signal: ayudaAbortController.signal })
+        const ctrl = ayudaAbortController = new AbortController();
+        fetch(`/app/api/tarjeta-movimiento/buscar/?q=${encodeURIComponent(q)}`, {
+            signal: ctrl.signal,
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        })
             .then(r => r.json())
-            .then(data => renderListaAyuda(data.productos || []))
+            // Si entre tanto se cerró la lista (Enter, elegir, clic afuera), no se reabre.
+            .then(data => { if (!ctrl.signal.aborted) renderListaAyuda(data.productos || []); })
             .catch(e => { if (e.name !== 'AbortError') ocultarListaAyuda(); });
     }, 250);
 }
@@ -844,12 +886,17 @@ function renderFicha(p, r, dist) {
     document.getElementById('pCategoria').textContent = p.categoria;
     document.getElementById('pSkus').textContent = p.num_skus;
     document.getElementById('pPrecio').textContent = fmtMoneda(p.precio_venta);
+    // Sin variante en sus empresas el costo no viene (es el de otra empresa).
     document.getElementById('pCosto').textContent = fmtMoneda(p.costo);
+    document.getElementById('pCosto').parentElement.style.display = (p.costo === null || p.costo === undefined) ? 'none' : '';
 
-    // Stock
+    // Stock (todo el holding) · lo vendido sale del historial (sus empresas)
+    const historialParcial = alcanceData.historial_completo === false;
     document.getElementById('mStock').textContent = fmtNum(r.stock_actual);
     document.getElementById('mStock').className = 'tm-metrica-val ' + (r.stock_actual > 0 ? 'ok' : 'bad');
-    document.getElementById('mStockSub').textContent = `${fmtNum(r.total_vendido)} vendidos en el período`;
+    document.getElementById('mStockSub').textContent = alcanceData.sin_historial
+        ? 'en todo el holding'
+        : `${fmtNum(r.total_vendido)} vendidos en el período` + (historialParcial ? ' (tus empresas)' : '');
 
     // Sucursales con stock (de las que tienen registro del artículo)
     const conStock = (dist || []).filter(b => b.stock_total > 0).length;
@@ -880,7 +927,8 @@ function renderFicha(p, r, dist) {
     } else {
         elLleg.textContent = '—';
         elLleg.className = 'tm-metrica-val';
-        document.getElementById('mLlegadaSub').textContent = 'Sin llegadas en el período';
+        document.getElementById('mLlegadaSub').textContent = alcanceData.sin_historial
+            ? 'Sin historial en tus empresas' : 'Sin llegadas en el período';
     }
 
     // Última venta
@@ -892,8 +940,10 @@ function renderFicha(p, r, dist) {
         document.getElementById('mVentaSub').textContent = textoDias(r.ultima_venta_dias);
     } else {
         elVta.textContent = '—';
-        elVta.className = 'tm-metrica-val bad';
-        document.getElementById('mVentaSub').textContent = 'Sin ventas en el período';
+        // Sin historial visible no se sabe si se vende: no se pinta en rojo.
+        elVta.className = 'tm-metrica-val' + (alcanceData.sin_historial ? '' : ' bad');
+        document.getElementById('mVentaSub').textContent = alcanceData.sin_historial
+            ? 'Sin historial en tus empresas' : 'Sin ventas en el período';
     }
 }
 
@@ -968,16 +1018,21 @@ function renderMatriz() {
         const porTalla = {};
         b.tallas.forEach(t => { porTalla[t.talla] = (porTalla[t.talla] || 0) + (t.stock || 0); });
 
-        let fila = `<td class="tm-col-suc" data-bodega="${b.bodega_id}" title="${escapeHtml(b.empresa ? b.empresa + ' — ' : '')}Ver el kardex completo de ${escapeHtml(b.bodega)}">
+        // Bodega de otra empresa: su stock se ve, su kardex no.
+        const ajena = b.con_historial === false;
+        const empresaTxt = b.empresa ? b.empresa + ' — ' : '';
+        let fila = `<td class="tm-col-suc ${ajena ? 'tm-suc-ajena' : ''}" data-bodega="${b.bodega_id}"
+                        title="${escapeHtml(empresaTxt)}${ajena ? 'Otra empresa: solo stock, sin historial' : 'Ver el kardex completo de ' + escapeHtml(b.bodega)}">
             <span class="tm-suc-nombre">${escapeHtml(b.bodega)}</span>
             ${b.es_cd ? '<span class="tm-tag tm-tag-cd">CD</span>' : ''}
             ${esActual ? '<span class="tm-tag tm-tag-aqui">aquí</span>' : ''}
+            ${ajena ? '<span class="tm-tag tm-tag-otra">otra empresa</span>' : ''}
         </td>`;
         tallas.forEach(t => {
             const n = porTalla[t] || 0;
             fila += `<td class="${tallaActiva === t ? 'tm-col-activa' : ''}">
-                <span class="tm-cel ${claseCelda(n)}" data-bodega="${b.bodega_id}" data-talla="${escapeHtml(t)}"
-                      title="${escapeHtml(b.bodega)} · talla ${escapeHtml(t)}: ${n} u — clic para ver su kardex">${n}</span>
+                <span class="tm-cel ${claseCelda(n)} ${ajena ? 'tm-cel-ajena' : ''}" data-bodega="${b.bodega_id}" data-talla="${escapeHtml(t)}"
+                      title="${escapeHtml(b.bodega)} · talla ${escapeHtml(t)}: ${n} u${ajena ? '' : ' — clic para ver su kardex'}">${n}</span>
             </td>`;
         });
         fila += `<td class="tm-col-total"><span class="tm-suc-total">${fmtNum(b.stock_total)}</span></td>`;
@@ -1005,7 +1060,37 @@ function renderMatriz() {
     }
     document.getElementById('matrizNota').textContent = notas.length ? notas.join(' · ') : '';
 
+    renderAvisoAlcance();
     renderAvisoMiSucursal(totales);
+}
+
+/* El stock es de todo el holding; el historial, solo de las empresas del
+   usuario. Se avisa cuando la matriz muestra bodegas sin historial. */
+function renderAvisoAlcance() {
+    const caja = document.getElementById('avisoAlcance');
+    caja.innerHTML = '';
+    if (alcanceData.historial_completo !== false) return;
+
+    const ajenas = (alcanceData.bodegas_sin_historial || []).map(escapeHtml).join(', ');
+    const propias = (alcanceData.empresas_historial || []).map(escapeHtml).join(' · ');
+    // "Dónde hay" = solo las que hoy tienen stock (la matriz oculta las que están en cero).
+    const conStock = distribucionData
+        .filter(b => b.con_historial === false && (b.stock_total || 0) > 0)
+        .map(b => escapeHtml(b.bodega));
+    const texto = alcanceData.sin_historial
+        ? `Este artículo no se trabaja en tus empresas: aquí ves solo su stock en las demás sucursales del holding
+           (${conStock.length ? `hoy hay en <strong>${conStock.join(', ')}</strong>` : 'hoy ninguna tiene stock'}).
+           Llegadas, historial y costo son de la empresa dueña de cada sucursal.`
+        : `Ves el stock de <strong>todas las sucursales del holding</strong>. Llegadas, historial y costo
+           muestran solo <strong>${propias}</strong>; de ${ajenas} (otra empresa) se ve únicamente el stock.`;
+    caja.innerHTML = `<div class="alert alert-light border small mb-3 py-2">
+        <i class="ri-information-line me-1 text-primary"></i>${texto}</div>`;
+}
+
+/* ¿La bodega trae historial para este usuario? (false = otra empresa) */
+function bodegaConHistorial(bodegaId) {
+    const b = distribucionData.find(d => String(d.bodega_id) === String(bodegaId));
+    return !b || b.con_historial !== false;
 }
 
 /* "En mi sucursal falta la 38, pero hay 12 en otras": la pregunta más común
@@ -1036,8 +1121,10 @@ function renderAvisoMiSucursal(totales) {
     </div>`;
 }
 
-/* Clic en la matriz → salta al kardex ya filtrado. */
+/* Clic en la matriz → salta al kardex ya filtrado. Las bodegas de otra
+   empresa no tienen kardex aquí: el clic no hace nada (lo dice el tooltip). */
 function irAlKardex(bodegaId, talla) {
+    if (bodegaId && !bodegaConHistorial(bodegaId)) return;
     document.getElementById('filtroBodega').value = bodegaId ? String(bodegaId) : '';
     document.getElementById('filtroTalla').value = talla || '';
     document.getElementById('filtroTipo').value = '';
@@ -1061,7 +1148,9 @@ function renderLlegadas() {
 
     if (!lista.length) {
         cont.innerHTML = `<div class="tm-empty tm-empty--grid">
-            <i class="ri-inbox-unarchive-line"></i>Sin llegadas registradas para este filtro</div>`;
+            <i class="ri-inbox-unarchive-line"></i>${alcanceData.sin_historial
+                ? 'Este artículo no tiene historial en tus empresas'
+                : 'Sin llegadas registradas para este filtro'}</div>`;
         document.getElementById('masLlegadasBox').style.display = 'none';
         return;
     }
@@ -1130,7 +1219,9 @@ function renderTimeline(timeline, omitidos) {
            Mostrando los <strong>${timeline.length}</strong> hitos más recientes. Se omitieron <strong>${fmtNum(omitidos)}</strong> anteriores — use el <strong>Kardex detallado</strong> o filtre por fechas para ver el resto.</div>`
         : '';
     if (!timeline || !timeline.length) {
-        cont.innerHTML = '<div class="tm-empty"><i class="ri-time-line"></i>Sin hitos para el rango seleccionado</div>';
+        cont.innerHTML = `<div class="tm-empty"><i class="ri-time-line"></i>${alcanceData.sin_historial
+            ? 'Este artículo no tiene historial en tus empresas'
+            : 'Sin hitos para el rango seleccionado'}</div>`;
         return;
     }
     const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -1164,6 +1255,9 @@ function renderTimeline(timeline, omitidos) {
 function poblarFiltros(filtros) {
     const selBodega = document.getElementById('filtroBodega');
     const selTalla = document.getElementById('filtroTalla');
+    // Artículo nuevo, filtros en cero: el tipo quedaba elegido de la búsqueda
+    // anterior sin aplicarse (y el CSV lo ponía en la cabecera igual).
+    document.getElementById('filtroTipo').value = '';
     selBodega.innerHTML = '<option value="">Todas las bodegas</option>' +
         (filtros.bodegas || []).map(b => `<option value="${b.id}">${escapeHtml(b.alias)}</option>`).join('');
     selTalla.innerHTML = '<option value="">Todas las tallas</option>' +
@@ -1259,7 +1353,9 @@ function renderTabla(movimientos) {
     document.getElementById('kardexContador').textContent =
         `${movimientos.length} movimiento(s) · +${fmtNum(entradas)} / −${fmtNum(salidas)}`;
     if (!movimientos.length) {
-        tbody.innerHTML = '<tr><td colspan="14" class="tm-empty"><i class="ri-inbox-line"></i>Sin movimientos con estos filtros</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="14" class="tm-empty"><i class="ri-inbox-line"></i>${alcanceData.sin_historial
+            ? 'Este artículo no tiene historial en tus empresas'
+            : 'Sin movimientos con estos filtros'}</td></tr>`;
         return;
     }
 
@@ -1348,7 +1444,8 @@ function csvCampo(valor) {
 function exportarExcel() {
     // Exporta EXACTAMENTE lo que se está viendo (antes exportaba todo, ignorando
     // los filtros de bodega/talla/tipo, y el archivo no calzaba con la pantalla).
-    const filas = movimientosFiltrados.length ? movimientosFiltrados : movimientosData;
+    // Si el filtro deja 0 filas no se cae al kardex completo: no hay nada que exportar.
+    const filas = movimientosFiltrados;
     if (!filas.length) {
         if (window.Swal) Swal.fire({ icon: 'info', title: 'Nada que exportar', text: 'No hay movimientos con los filtros aplicados.', confirmButtonColor: '#405189' });
         return;

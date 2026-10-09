@@ -1,14 +1,16 @@
 """
 Consolidado de inventario por empresa, solo para el Maestro (pedido del usuario, 09-10):
-el cuadro de gerencia «2026 ENERO INV». Por empresa y local: Pares, Costo, P. Interno,
-P. Venta y la Diferencia de la toma del mes; total por empresa y «Total Holding».
+el cuadro de gerencia «2026 ENERO INV». Por empresa y local: Pares, Costo, P. Venta y la
+Diferencia de la toma del mes; total por empresa y «Total Holding».
 
+- Costo según la empresa (como el cuadro de gerencia): las bodegas proveedoras (EDEL,
+  GILD) a COSTO ORIGINAL; Paola y NICK, también sus bodegas PA00/IMP, a PRECIO INTERNO =
+  costo + sobreprecio (informe_toma.valoriza_a_costo_original).
 - Local con toma en el mes (la última por fecha de corte; sin borradores ni canceladas):
   el «inventario nuevo» de su informe final (services/informe_toma_inventario.analizar),
   así que cuadra con el informe de cada toma. Pares = lo contado (lo que no apareció
-  cuenta 0; lo resuelto «mantener» toma el sistema); Costo = pares × costo de la ficha;
-  P. Interno = pares × (costo + sobreprecio), el «P COSTO» del informe antiguo; P. Venta
-  = pares × precio al corte; Diferencia = nuevo − antiguo en pares. Una toma parcial
+  cuenta 0; lo resuelto «mantener» toma el sistema); Costo = su P COSTO; P. Venta =
+  pares × precio al corte; Diferencia = nuevo − antiguo en pares. Una toma parcial
   (p. ej. solo Calzado) suma además el stock del sistema de lo que quedó fuera de ella
   (NICK2 09-10: 7.794 pares contados de ~27 mil), y lo informa aparte.
 - Local sin toma en el mes: stock del sistema (al cierre del mes si ya pasó; si no, el
@@ -29,7 +31,9 @@ MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO
 # Una toma en borrador no se ha contado y una cancelada no vale: no entran al cuadro
 ESTADOS_FUERA = ('BORRADOR', 'CANCELADO')
 
-VALORES = ('pares', 'costo', 'p_interno', 'p_venta')
+VALORES = ('pares', 'costo', 'p_venta')
+
+BASE_COSTO = {True: 'costo original', False: 'precio interno (costo + sobreprecio)'}
 
 
 def rango_mes(anio, mes):
@@ -67,6 +71,16 @@ def _stock_sistema(tallas, dia):
     return _acumulados_historicos(tallas.filter(producto__excluir_de_analitica=False), dia)
 
 
+def _valorizar(stock, costo_original):
+    """Stock del sistema → {pares, costo, p_venta} con el costo que usa la empresa."""
+    stock = stock or {}
+    return {
+        'pares': int(stock.get('pares') or 0),
+        'costo': int(stock.get('costo' if costo_original else 'p_interno') or 0),
+        'p_venta': int(stock.get('p_venta') or 0),
+    }
+
+
 def _fuera_de_la_toma(toma, dia):
     """Stock del sistema de lo que una toma parcial no cubre (las tallas que no tiene)."""
     en_toma = toma.detalles.filter(producto_talla_id__isnull=False).values('producto_talla_id')
@@ -74,21 +88,21 @@ def _fuera_de_la_toma(toma, dia):
     return _stock_sistema(tallas, dia).get(toma.sucursal_id)
 
 
-def _local_con_toma(sucursal, toma, otras_en_el_mes, dia):
+def _local_con_toma(toma, otras_en_el_mes, dia, costo_original):
+    # el P COSTO del informe ya sigue la regla de la empresa (valoriza_a_costo_original)
     analisis = informe_toma.analizar(informe_toma.filas_desde_toma(toma))
     total = analisis['total']
     alcance, _ = informe_toma.alcance_de_toma(toma)
     contado = {
         'pares': int(total['nue_stock']),
-        'costo': int(round(total['nue_costo_puro'])),
-        'p_interno': int(round(total['nue_costo'])),
+        'costo': int(round(total['nue_costo'])),
         'p_venta': int(round(total['nue_venta'])),
     }
     # Una toma completa es la foto del local al corte: lo que no tiene llegó después. Una
     # parcial no miró el resto: va el stock del sistema para que el local quede entero.
     fuera = None
     if toma.tipo_inventario != 'COMPLETO':
-        fuera = {k: int((_fuera_de_la_toma(toma, dia) or {}).get(k) or 0) for k in VALORES}
+        fuera = _valorizar(_fuera_de_la_toma(toma, dia), costo_original)
     return {
         **{k: contado[k] + (fuera[k] if fuera else 0) for k in VALORES},
         'contado': contado,
@@ -109,9 +123,8 @@ def _local_con_toma(sucursal, toma, otras_en_el_mes, dia):
     }
 
 
-def _local_sin_toma(stock):
-    stock = stock or {}
-    return {**{k: int(stock.get(k) or 0) for k in VALORES}, 'contado': None, 'fuera_de_la_toma': None,
+def _local_sin_toma(stock, costo_original):
+    return {**_valorizar(stock, costo_original), 'contado': None, 'fuera_de_la_toma': None,
             'pares_sistema': None, 'diferencia': None, 'toma': None}
 
 
@@ -126,11 +139,13 @@ def _sumar(locales):
 def consolidar(sucursales, anio, mes):
     """
     `sucursales`: queryset de las sucursales del usuario. Devuelve el cuadro:
-    {titulo, anio, mes, empresas: [{id, nombre, solo_bodegas, locales, total}], total}.
-    Empresas con tiendas primero; dentro, las tiendas por alias y las bodegas al final.
+    {titulo, anio, mes, dia_stock, empresas: [{id, nombre, costo_original, base_costo,
+    locales, total}], total}. Empresas con tiendas primero (las proveedoras al final);
+    dentro, las tiendas por alias y las bodegas al final.
     """
     inicio, fin = rango_mes(anio, mes)
     sucursales = sorted(sucursales.select_related('empresa'), key=lambda s: (s.es_centro_distribucion, s.alias))
+    costo_original = {e: informe_toma.valoriza_a_costo_original(e) for e in {s.empresa_id for s in sucursales}}
 
     tomas, otras = {}, defaultdict(int)
     candidatas = (TomaInventario.objects
@@ -148,20 +163,19 @@ def consolidar(sucursales, anio, mes):
 
     empresas = OrderedDict()
     for s in sucursales:
+        original = costo_original[s.empresa_id]
         if s.id in tomas:
-            local = _local_con_toma(s, tomas[s.id], otras[s.id], dia)
+            local = _local_con_toma(tomas[s.id], otras[s.id], dia, original)
         else:
-            local = _local_sin_toma(sistema.get(s.id))
+            local = _local_sin_toma(sistema.get(s.id), original)
         local.update({'sucursal_id': s.id, 'alias': s.alias, 'local': _nombre_local(s),
                       'direccion': (s.direccion or '').strip(), 'es_bodega': s.es_centro_distribucion})
-        bloque = empresas.setdefault(s.empresa_id, {
+        empresas.setdefault(s.empresa_id, {
             'id': s.empresa_id, 'nombre': (s.empresa.nombre or '').strip().upper(),
-            'solo_bodegas': True, 'locales': [],
-        })
-        bloque['locales'].append(local)
-        bloque['solo_bodegas'] = bloque['solo_bodegas'] and s.es_centro_distribucion
+            'costo_original': original, 'base_costo': BASE_COSTO[original], 'locales': [],
+        })['locales'].append(local)
 
-    bloques = sorted(empresas.values(), key=lambda b: (b['solo_bodegas'], b['id']))
+    bloques = sorted(empresas.values(), key=lambda b: (b['costo_original'], b['id']))
     for b in bloques:
         b['total'] = _sumar(b['locales'])
     return {
@@ -195,8 +209,8 @@ def construir_workbook(datos):
     total_font = Font(bold=True, color='C00000')
     centro = Alignment(horizontal='center', vertical='center')
     cabecera_fill = PatternFill(start_color='DDE3EF', end_color='DDE3EF', fill_type='solid')
-    columnas = ['LOCAL', 'Toma', 'Pares', 'Costo', 'P. Interno', 'P. Venta', 'Diferencia']
-    ultima = 'G'
+    columnas = ['LOCAL', 'Toma', 'Pares', 'Costo', 'P. Venta', 'Diferencia']
+    ultima = 'F'
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -207,15 +221,15 @@ def construir_workbook(datos):
     ws['A1'].alignment = centro
 
     def _fila(n, nombre, toma_txt, valores, diferencia, font=None):
-        celdas = [nombre, toma_txt, valores['pares'], valores['costo'], valores['p_interno'], valores['p_venta'], diferencia]
+        celdas = [nombre, toma_txt, valores['pares'], valores['costo'], valores['p_venta'], diferencia]
         for col, valor in enumerate(celdas, 1):
             c = ws.cell(row=n, column=col, value=valor)
             c.border = borde
             if col == 3:
                 c.number_format = UNIDADES
-            elif col in (4, 5, 6):
+            elif col in (4, 5):
                 c.number_format = PESOS
-            elif col == 7:
+            elif col == 6:
                 c.number_format = DIFERENCIA
                 c.alignment = centro
             if font:
@@ -224,7 +238,7 @@ def construir_workbook(datos):
     n = 3
     for b in datos['empresas']:
         ws.merge_cells(f'A{n}:{ultima}{n}')
-        ws.cell(row=n, column=1, value=b['nombre']).font = Font(bold=True, size=12)
+        ws.cell(row=n, column=1, value=f"{b['nombre']}  ·  costo a {b['base_costo']}").font = Font(bold=True, size=12)
         ws.cell(row=n, column=1).alignment = centro
         n += 1
         for col, texto in enumerate(columnas, 1):
@@ -253,17 +267,17 @@ def construir_workbook(datos):
           datos['total']['diferencia'], font=Font(bold=True, size=12, color='C00000'))
     n += 2
     notas = [
+        'Costo: las bodegas proveedoras (EDEL, GILD) a costo original; Paola y NICK, también sus bodegas, '
+        'a precio interno = costo + sobreprecio. P. Venta = pares × precio de venta.',
         'Con toma: inventario nuevo del informe final de la toma (lo contado). Diferencia = contado − sistema, en pares.',
         'Toma parcial (p. ej. solo Calzado): se suma el stock del sistema de lo que quedó fuera de la toma.',
         f"Sin toma en el mes: stock del sistema al {datos['dia_stock']}, sin diferencia "
         '(sin los productos marcados «excluir de analítica»).',
-        'Costo = pares × costo · P. Interno = pares × (costo + sobreprecio), el P COSTO del informe antiguo · '
-        'P. Venta = pares × precio de venta.',
     ]
     for texto in notas:
         ws.cell(row=n, column=1, value=texto).font = Font(italic=True, size=9, color='595959')
         n += 1
 
-    for letra, ancho in {'A': 30, 'B': 44, 'C': 11, 'D': 17, 'E': 17, 'F': 17, 'G': 12}.items():
+    for letra, ancho in {'A': 30, 'B': 44, 'C': 11, 'D': 17, 'E': 17, 'F': 12}.items():
         ws.column_dimensions[letra].width = ancho
     return wb

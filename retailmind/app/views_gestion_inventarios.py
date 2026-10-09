@@ -357,6 +357,8 @@ def detalle_inventario(request, inventario_id):
         'es_maestro': es_maestro(request.user),
         'ajustada_en_conteo': inventario.ajustada_en_conteo,
         'ver_valores': _ve_valorizacion(request.user),
+        # P. costo: costo original en bodega proveedora (EDEL, GILD); si no, precio interno
+        'costo_original': informe_toma.valoriza_a_costo_original(inventario.sucursal.empresa_id),
         'puede_aplicar_ajustes': inventario.estado in ('APROBADO', 'APLICANDO'),
         'conteo_tienda_cerrada': inventario.conteo_tienda_cerrada,
         # Para precargar «¿cuándo se contó?» en el modal de importación (hora local)
