@@ -1833,9 +1833,11 @@ urlpatterns = [
 
 
     # ========== FUSIÓN Y RE-ETIQUETADO DE DUPLICADOS (EXISTENCIAS) ==========
-    path('existencias/fusion-duplicados/', views_fusion_duplicados.ver_fusion_duplicados, name='ver_fusion_duplicados'),
-    path('api/fusion-duplicados/buscar/', views_fusion_duplicados.api_buscar_producto_fusion, name='api_buscar_producto_fusion'),
-    path('api/fusion-duplicados/ejecutar/', views_fusion_duplicados.api_ejecutar_fusion, name='api_ejecutar_fusion'),
+    # Comparte la opción 'gestion_inventarios' y la fusión MUEVE STOCK: exige Editar.
+    # Con solo Ver (el jefe de local, que revisa sus tomas) ya no se puede fusionar.
+    path('existencias/fusion-duplicados/', _permiso_inventarios('puede_editar', views_fusion_duplicados.ver_fusion_duplicados), name='ver_fusion_duplicados'),
+    path('api/fusion-duplicados/buscar/', _permiso_inventarios('puede_editar', views_fusion_duplicados.api_buscar_producto_fusion), name='api_buscar_producto_fusion'),
+    path('api/fusion-duplicados/ejecutar/', _permiso_inventarios('puede_editar', views_fusion_duplicados.api_ejecutar_fusion), name='api_ejecutar_fusion'),
 
     # ========== MÓDULO DE GESTIÓN DE INVENTARIOS (TOMA FÍSICA) ==========
     # Vistas principales

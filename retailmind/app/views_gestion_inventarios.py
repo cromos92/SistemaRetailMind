@@ -33,11 +33,13 @@ import csv
 import io
 import json
 import logging
+import re
 
 from .models import (
     Producto, Producto_Talla, Productos_Atributos, AtributoOpcion, Categoria,
     LoteProducto, Movimientos_Producto, Sucursal, Empresa, EmpresaUser,
-    TomaInventario, TomaInventarioDetalle, TomaInventarioLog, TareaAplicacionAjustes
+    TomaInventario, TomaInventarioDetalle, TomaInventarioLog, TareaAplicacionAjustes,
+    PermisoRol, es_rol_administrador,
 )
 from .models.inventario import requiere_reconteo
 from .services import informe_toma_inventario as informe_toma
@@ -205,6 +207,47 @@ def _error_sin_acceso():
     )
 
 
+def _modo_revision(request):
+    """
+    True si el usuario solo puede REVISAR las tomas: tiene Ver en «Gestión de
+    Inventarios» pero no Editar (el jefe de local).
+
+    En modo revisión se ven las tomas de sus sucursales, lo contado, las
+    diferencias y los faltantes en UNIDADES; no se ven costos, precios ni la
+    valorización (análisis financiero, informe final, Excel) y no aparecen los
+    botones que mueven la toma. Las rutas de acción ya exigen Editar
+    (urls._permiso_inventarios); esto cubre las de LECTURA, que devolvían costos
+    a cualquiera que entrara. Un administrador ve todo aunque la sucursal activa
+    le restrinja Editar.
+    """
+    if not hasattr(request, '_modo_revision_inventario'):
+        usuario = request.user
+        operador = es_rol_administrador(usuario) or PermisoRol.tiene_permiso(
+            usuario, 'gestion_inventarios', 'puede_editar',
+            sucursal_id=request.session.get('idSucursalActual'),
+        )
+        request._modo_revision_inventario = not operador
+    return request._modo_revision_inventario
+
+
+def _error_solo_revision():
+    return JsonResponse(
+        {'success': False, 'error': 'Los informes con costos son solo para quien administra la toma'},
+        status=403,
+    )
+
+
+# Claves con plata en los resultados del informe (services/informe_toma_inventario):
+# por PALABRA (ant_costo, dif_venta, costo2, ttpvp1, ajuste_fifo…), no por subcadena,
+# porque «venta» también está dentro de «inventario».
+_CLAVE_CON_VALOR = re.compile(r'(^|_)(costo|venta|valor|precio|pvp|fifo|ttcosto|ttpvp)\d*(_|$)')
+
+
+def _solo_unidades(fila):
+    """Copia de un dict del informe sin costos ni precios (modo revisión)."""
+    return {k: v for k, v in fila.items() if not _CLAVE_CON_VALOR.search(k)}
+
+
 def _sucursal_pedida(request, valor):
     """
     Sucursal elegida en la pantalla (id) o, si no viene, la activa de la sesión.
@@ -239,6 +282,10 @@ def gestion_inventarios(request):
             .values('id', 'alias', 'direccion', 'es_centro_distribucion').order_by('alias')
         ),
         'sucursal_activa_id': int(activa) if str(activa or '').isdigit() else None,
+        'solo_revision': _modo_revision(request),
+        'puede_crear': es_rol_administrador(request.user) or PermisoRol.tiene_permiso(
+            request.user, 'gestion_inventarios', 'puede_crear', sucursal_id=activa,
+        ),
     })
 
 
@@ -250,6 +297,7 @@ def detalle_inventario(request, inventario_id):
         raise PermissionDenied('No tiene acceso a este inventario')
     return render(request, 'vistas/modulo_existencias/detalle_inventario.html', {
         'inventario': inventario,
+        'solo_revision': _modo_revision(request),
         'puede_aplicar_ajustes': inventario.estado in ('APROBADO', 'APLICANDO'),
         'conteo_tienda_cerrada': inventario.conteo_tienda_cerrada,
         # Para precargar «¿cuándo se contó?» en el modal de importación (hora local)
@@ -347,20 +395,21 @@ def obtener_inventarios(request):
 
         # Resumen sobre TODO el conjunto filtrado (antes los KPIs contaban solo la
         # página visible: con 20 por página el total nunca podía pasar de 20).
-        base_resumen = queryset
-        resumen = {
-            'total': base_resumen.count(),
-            'en_proceso': base_resumen.filter(estado__in=ESTADOS_EN_PROCESO).count(),
-            'pendientes_aprobacion': base_resumen.filter(estado='PENDIENTE_APROBACION').count(),
-            'completados': base_resumen.filter(estado='COMPLETADO').count(),
-            'con_diferencias': base_resumen.exclude(estado__in=['COMPLETADO', 'CANCELADO']).filter(
+        # Una sola consulta con conteos condicionales (antes eran 5 COUNT).
+        resumen = queryset.order_by().aggregate(
+            total=Count('id'),
+            en_proceso=Count('id', filter=Q(estado__in=ESTADOS_EN_PROCESO)),
+            pendientes_aprobacion=Count('id', filter=Q(estado='PENDIENTE_APROBACION')),
+            completados=Count('id', filter=Q(estado='COMPLETADO')),
+            con_diferencias=Count('id', filter=~Q(estado__in=['COMPLETADO', 'CANCELADO']) & (
                 Q(total_diferencias_positivas__gt=0) | Q(total_diferencias_negativas__gt=0)
-            ).count(),
-        }
+            )),
+        )
 
-        # Ordenar y paginar
+        # Ordenar y paginar (el total ya se contó arriba: el paginador no lo repite)
         queryset = queryset.order_by('-created_at')
         paginator = Paginator(queryset, per_page)
+        paginator.count = resumen['total']
         inventarios_page = paginator.get_page(page)
 
         # SKUs realmente contados (el campo total_productos_contados del modelo guarda
@@ -434,9 +483,14 @@ def obtener_inventarios(request):
                 'creado_por': inv.creado_por.get_full_name() if inv.creado_por else '',
                 'created_at': timezone.localtime(inv.created_at).strftime('%d/%m/%Y %H:%M')
             })
-        
+        solo_revision = _modo_revision(request)
+        if solo_revision:
+            for fila in inventarios_data:
+                fila.pop('valor_diferencias')
+
         return JsonResponse({
             'success': True,
+            'solo_revision': solo_revision,
             'inventarios': inventarios_data,
             'resumen': resumen,
             'faltantes_por_reponer': por_reponer_total,
@@ -1023,6 +1077,9 @@ def obtener_productos_conteo(request, inventario_id):
         categoria = request.GET.get('categoria')
         
         orden = request.GET.get('orden', '')  # nombre | dif_unidades | dif_valor | sobrantes | faltantes
+        solo_revision = _modo_revision(request)
+        if solo_revision and orden == 'dif_valor':
+            orden = 'dif_unidades'  # ordenar por plata revelaría los costos
 
         # Construir queryset
         queryset = inventario.detalles.select_related('producto_talla__producto')
@@ -1113,7 +1170,11 @@ def obtener_productos_conteo(request, inventario_id):
                 'costo_unitario': float(det.costo_unitario_sistema),
                 'precio_venta': float(det.precio_venta_sistema)
             })
-        
+        if solo_revision:
+            for fila in productos_data:
+                for clave in ('valor_diferencia', 'costo_unitario', 'precio_venta'):
+                    fila.pop(clave)
+
         return JsonResponse({
             'success': True,
             'productos': productos_data,
@@ -1939,95 +2000,86 @@ def obtener_analisis_inventario(request, inventario_id):
         if inventario is None:
             return _error_sin_acceso()
         
-        # Obtener detalles contados (solo los considerados en análisis)
-        detalles = inventario.detalles.filter(contado=True, excluir_de_analisis=False)
-        
-        # === ANÁLISIS DE DIFERENCIAS ===
-        diferencias_positivas = detalles.filter(diferencia__gt=0)
-        diferencias_negativas = detalles.filter(diferencia__lt=0)
-        sin_diferencia = detalles.filter(diferencia=0)
-        
-        # Top 10 mayores faltantes
-        top_faltantes = diferencias_negativas.order_by('diferencia')[:10]
-        top_faltantes_data = [
-            {
-                'sku': d.sku,
-                'producto': d.producto_nombre,
-                'talla': d.talla_nombre,
-                'diferencia': d.diferencia,
-                'valor': float(d.valor_diferencia),
-                'porcentaje': round(d.porcentaje_diferencia, 2)
-            }
-            for d in top_faltantes
-        ]
-        
-        # Top 10 mayores sobrantes
-        top_sobrantes = diferencias_positivas.order_by('-diferencia')[:10]
-        top_sobrantes_data = [
-            {
-                'sku': d.sku,
-                'producto': d.producto_nombre,
-                'talla': d.talla_nombre,
-                'diferencia': d.diferencia,
-                'valor': float(d.valor_diferencia),
-                'porcentaje': round(d.porcentaje_diferencia, 2)
-            }
-            for d in top_sobrantes
-        ]
-        
-        # === ANÁLISIS POR CATEGORÍA ===
-        analisis_categorias = detalles.values('categoria_nombre').annotate(
-            total_productos=Count('id'),
-            productos_con_diferencia=Count('id', filter=~Q(diferencia=0)),
-            suma_diferencias=Sum('diferencia'),
-            valor_diferencias=Sum(F('diferencia') * F('costo_unitario_sistema'))
-        ).order_by('-valor_diferencias')
-        
-        # === ANÁLISIS POR MARCA ===
-        analisis_marcas = detalles.values('marca_nombre').annotate(
-            total_productos=Count('id'),
-            productos_con_diferencia=Count('id', filter=~Q(diferencia=0)),
-            suma_diferencias=Sum('diferencia'),
-            valor_diferencias=Sum(F('diferencia') * F('costo_unitario_sistema'))
-        ).order_by('-valor_diferencias')
-        
+        # Quien solo revisa (jefe de local) no recibe costos ni valorización
+        solo_revision = _modo_revision(request)
+
+        # Líneas consideradas en el análisis (sin las excluidas) y, de ellas, las contadas
+        detalles_analisis = inventario.detalles.filter(excluir_de_analisis=False)
+        detalles = detalles_analisis.filter(contado=True)
+
+        # === CONTEOS Y UNIDADES: una sola consulta con agregados condicionales ===
+        # (antes eran ~13 COUNT/SUM sueltos sobre la misma tabla). «Unid. en sistema»
+        # se informa de TODA la toma (el inventario antiguo), no solo de lo contado:
+        # con 8.000 SKUs pendientes la tarjeta decía 0 y no se entendía.
+        contada = Q(excluir_de_analisis=False, contado=True)
+        pendiente = Q(excluir_de_analisis=False, contado=False)
+        totales = inventario.detalles.aggregate(
+            excluidos=Count('id', filter=Q(excluir_de_analisis=True)),
+            total_lineas=Count('id', filter=Q(excluir_de_analisis=False)),
+            total_contados=Count('id', filter=contada),
+            sin_diferencia=Count('id', filter=contada & Q(diferencia=0)),
+            sobrantes=Count('id', filter=contada & Q(diferencia__gt=0)),
+            faltantes=Count('id', filter=contada & Q(diferencia__lt=0)),
+            unidades_fisicas=Coalesce(Sum('stock_fisico', filter=contada), 0),
+            unidades_sistema=Coalesce(Sum('stock_sistema_ajustado', filter=contada), 0),
+            unidades_sistema_total=Coalesce(Sum('stock_sistema_ajustado', filter=Q(excluir_de_analisis=False)), 0),
+            pendientes_contar=Count('id', filter=pendiente),
+            pendientes_con_stock=Count('id', filter=pendiente & Q(stock_sistema__gt=0)),
+            unidades_pendientes=Coalesce(Sum('stock_sistema', filter=pendiente & Q(stock_sistema__gt=0)), 0),
+        )
+        total_contados = totales['total_contados']
+        pendientes_contar = totales['pendientes_contar']
+
+        # === TOP 10 mayores faltantes y sobrantes ===
+        def _top(qs):
+            filas = []
+            for d in qs[:10]:
+                fila = {
+                    'sku': d.sku,
+                    'producto': d.producto_nombre,
+                    'talla': d.talla_nombre,
+                    'diferencia': d.diferencia,
+                    'porcentaje': round(d.porcentaje_diferencia, 2),
+                }
+                if not solo_revision:
+                    fila['valor'] = float(d.valor_diferencia)
+                filas.append(fila)
+            return filas
+
+        top_faltantes_data = _top(detalles.filter(diferencia__lt=0).order_by('diferencia'))
+        top_sobrantes_data = _top(detalles.filter(diferencia__gt=0).order_by('-diferencia'))
+
+        # === POR MARCA Y POR CATEGORÍA: una consulta por campo da a la vez el análisis
+        # (solo lo contado) y los segmentos de los filtros (todas las líneas) ===
+        def _por(campo):
+            return list(detalles_analisis.values(campo).annotate(
+                n=Count('id'),
+                total_productos=Count('id', filter=Q(contado=True)),
+                productos_con_diferencia=Count('id', filter=Q(contado=True) & ~Q(diferencia=0)),
+                suma_diferencias=Sum('diferencia', filter=Q(contado=True)),
+                valor_diferencias=Sum(F('diferencia') * F('costo_unitario_sistema'), filter=Q(contado=True)),
+            ).order_by())
+
+        por_marca = _por('marca_nombre')
+        por_categoria = _por('categoria_nombre')
+        analisis_marcas = sorted((r for r in por_marca if r['total_productos']),
+                                 key=lambda r: -(r['valor_diferencias'] or 0))
+        analisis_categorias = sorted((r for r in por_categoria if r['total_productos']),
+                                     key=lambda r: -(r['valor_diferencias'] or 0))
+        segmentos_marcas = sorted(por_marca, key=lambda r: -r['n'])[:40]
+        segmentos_categorias = sorted(por_categoria, key=lambda r: -r['n'])[:40]
+
         # === PRODUCTOS QUE REQUIEREN RECONTEO (mismo criterio que finalizar/enviar/aprobar) ===
         requieren_reconteo = _reconteos_pendientes(inventario).count()
-        
-        # === INDICADORES DE PRECISIÓN ===
-        total_contados = detalles.count()
-        precision_inventario = (sin_diferencia.count() / total_contados * 100) if total_contados > 0 else 0
 
-        # === UNIDADES (panel de comparación físico vs sistema) ===
-        detalles_analisis = inventario.detalles.filter(excluir_de_analisis=False)
-        unidades = detalles.aggregate(
-            fisicas=Coalesce(Sum('stock_fisico'), 0),
-            sistema=Coalesce(Sum('stock_sistema_ajustado'), 0),
-        )
-        total_lineas = detalles_analisis.count()
-        pendientes_contar = detalles_analisis.filter(contado=False).count()
-        pendientes_con_stock = detalles_analisis.filter(contado=False, stock_sistema__gt=0).count()
+        # === INDICADORES DE PRECISIÓN ===
+        precision_inventario = (totales['sin_diferencia'] / total_contados * 100) if total_contados > 0 else 0
+
         ajustes_aplicados = inventario.ajustes_aplicados().count()
-        # «Unid. en sistema» de TODA la toma (el inventario antiguo), no solo de lo
-        # contado: con 8.000 SKUs pendientes la tarjeta decía 0 y no se entendía.
-        unidades_sistema_total = detalles_analisis.aggregate(
-            t=Coalesce(Sum('stock_sistema_ajustado'), 0)
-        )['t']
-        unidades_pendientes = detalles_analisis.filter(contado=False, stock_sistema__gt=0).aggregate(
-            t=Coalesce(Sum('stock_sistema'), 0)
-        )['t']
         operativos_pendientes = (
             detalles_analisis.filter(contado=False, id__in=_ids_operativos(detalles_analisis.filter(contado=False)))
             .aggregate(lineas=Count('id'), unidades=Coalesce(Sum('stock_sistema'), 0))
             if pendientes_contar else {'lineas': 0, 'unidades': 0}
-        )
-
-        # === SEGMENTOS (para los filtros del detalle) ===
-        segmentos_marcas = list(
-            detalles_analisis.values('marca_nombre').annotate(n=Count('id')).order_by('-n')[:40]
-        )
-        segmentos_categorias = list(
-            detalles_analisis.values('categoria_nombre').annotate(n=Count('id')).order_by('-n')[:40]
         )
 
         # === RESUMEN FINANCIERO ===
@@ -2055,7 +2107,7 @@ def obtener_analisis_inventario(request, inventario_id):
                 'mensaje': f'Precisión del inventario ({precision_inventario:.1f}%) está por debajo del 90% recomendado'
             })
         
-        if abs(resumen_financiero['impacto_neto']) > 1000000:  # > 1 millón
+        if not solo_revision and abs(resumen_financiero['impacto_neto']) > 1000000:  # > 1 millón
             alertas.append({
                 'tipo': 'warning',
                 'mensaje': f'Impacto financiero significativo: ${abs(resumen_financiero["impacto_neto"]):,.0f}'
@@ -2071,31 +2123,32 @@ def obtener_analisis_inventario(request, inventario_id):
         analisis = {
             'resumen': {
                 # OJO: total_contados son LÍNEAS/SKUs contados. Las unidades van aparte.
-                'total_esperados': total_lineas,
+                'total_esperados': totales['total_lineas'],
                 'total_contados': total_contados,
                 'pendientes_contar': pendientes_contar,
-                'pendientes_con_stock': pendientes_con_stock,
-                'pendientes_sin_stock': pendientes_contar - pendientes_con_stock,
-                'pendientes_unidades': unidades_pendientes or 0,
+                'pendientes_con_stock': totales['pendientes_con_stock'],
+                'pendientes_sin_stock': pendientes_contar - totales['pendientes_con_stock'],
+                'pendientes_unidades': totales['unidades_pendientes'],
                 'operativos_pendientes': operativos_pendientes['lineas'] or 0,
                 'operativos_pendientes_unidades': operativos_pendientes['unidades'] or 0,
                 'ajustes_aplicados': ajustes_aplicados,
-                'unidades_fisicas': unidades['fisicas'] or 0,
+                'unidades_fisicas': totales['unidades_fisicas'],
                 # solo de lo contado (comparable con unidades_fisicas)
-                'unidades_sistema': unidades['sistema'] or 0,
-                'unidades_sistema_total': unidades_sistema_total or 0,
+                'unidades_sistema': totales['unidades_sistema'],
+                'unidades_sistema_total': totales['unidades_sistema_total'],
                 'sobrantes_unidades': inventario.total_diferencias_positivas,
                 'faltantes_unidades': inventario.total_diferencias_negativas,
                 'progreso': float(inventario.progreso_conteo),
-                'excluidos': inventario.detalles.filter(excluir_de_analisis=True).count(),
-                'con_diferencia': diferencias_positivas.count() + diferencias_negativas.count(),
-                'sin_diferencia': sin_diferencia.count(),
-                'sobrantes': diferencias_positivas.count(),
-                'faltantes': diferencias_negativas.count(),
+                'excluidos': totales['excluidos'],
+                'con_diferencia': totales['sobrantes'] + totales['faltantes'],
+                'sin_diferencia': totales['sin_diferencia'],
+                'sobrantes': totales['sobrantes'],
+                'faltantes': totales['faltantes'],
                 'requieren_reconteo': requieren_reconteo,
                 'precision_inventario': round(precision_inventario, 2)
             },
-            'resumen_financiero': resumen_financiero,
+            'solo_revision': solo_revision,
+            'resumen_financiero': None if solo_revision else resumen_financiero,
             'top_faltantes': top_faltantes_data,
             'top_sobrantes': top_sobrantes_data,
             'analisis_categorias': [
@@ -2104,7 +2157,7 @@ def obtener_analisis_inventario(request, inventario_id):
                     'total_productos': a['total_productos'],
                     'productos_con_diferencia': a['productos_con_diferencia'],
                     'suma_diferencias': a['suma_diferencias'] or 0,
-                    'valor_diferencias': float(a['valor_diferencias'] or 0)
+                    **({} if solo_revision else {'valor_diferencias': float(a['valor_diferencias'] or 0)}),
                 }
                 for a in analisis_categorias
             ],
@@ -2114,7 +2167,7 @@ def obtener_analisis_inventario(request, inventario_id):
                     'total_productos': a['total_productos'],
                     'productos_con_diferencia': a['productos_con_diferencia'],
                     'suma_diferencias': a['suma_diferencias'] or 0,
-                    'valor_diferencias': float(a['valor_diferencias'] or 0)
+                    **({} if solo_revision else {'valor_diferencias': float(a['valor_diferencias'] or 0)}),
                 }
                 for a in analisis_marcas
             ],
@@ -2186,6 +2239,8 @@ def exportar_inventario(request, inventario_id):
         inventario = _inventario_del_usuario(request, inventario_id)
         if inventario is None:
             return _error_sin_acceso()
+        if _modo_revision(request):
+            return _error_solo_revision()
 
         # Crear workbook en modo streaming (sin hoja activa por defecto)
         wb = openpyxl.Workbook(write_only=True)
@@ -2300,6 +2355,8 @@ def exportar_diferencias_inventario(request, inventario_id):
         inventario = _inventario_del_usuario(request, inventario_id)
         if inventario is None:
             return _error_sin_acceso()
+        if _modo_revision(request):
+            return _error_solo_revision()
         detalles = inventario.detalles.filter(
             contado=True,
             excluir_de_analisis=False
@@ -2370,12 +2427,18 @@ def obtener_informe_marcas(request, inventario_id):
         if inventario is None:
             return _error_sin_acceso()
         analisis = informe_toma.analizar(informe_toma.filas_desde_toma(inventario))
+        marcas, total, resumen = analisis['marcas'], analisis['total'], analisis['resumen']
+        solo_revision = _modo_revision(request)
+        if solo_revision:  # el jefe de local ve el resultado en unidades, sin P COSTO / P VENTA
+            marcas = [_solo_unidades(m) for m in marcas]
+            total, resumen = _solo_unidades(total), _solo_unidades(resumen)
         return JsonResponse({
             'success': True,
+            'solo_revision': solo_revision,
             'titulo': informe_toma.titulo_informe(informe_toma.cabecera_desde_toma(inventario)),
-            'marcas': analisis['marcas'],
-            'total': analisis['total'],
-            'resumen': analisis['resumen'],
+            'marcas': marcas,
+            'total': total,
+            'resumen': resumen,
             'no_cargados': informe_toma.no_cargados_desde_logs(inventario),
         })
     except Exception as e:
@@ -2397,6 +2460,8 @@ def exportar_informe_final(request, inventario_id):
         inventario = _inventario_del_usuario(request, inventario_id)
         if inventario is None:
             return _error_sin_acceso()
+        if _modo_revision(request):
+            return _error_solo_revision()
         cabecera = informe_toma.cabecera_desde_toma(inventario)
         analisis = informe_toma.analizar(informe_toma.filas_desde_toma(inventario))
         wb = informe_toma.construir_workbook(

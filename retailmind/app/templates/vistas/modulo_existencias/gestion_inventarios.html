@@ -543,12 +543,16 @@
                     </div>
                 </div>
                 <div class="module-header-actions">
+                    {% if not solo_revision %}
                     <button type="button" class="btn btn-light btn-sm" onclick="exportarTodasDiferencias()" title="Exportar diferencias a Excel">
                         <i class="bi bi-file-earmark-excel me-1"></i>Exportar diferencias
                     </button>
+                    {% endif %}
+                    {% if puede_crear %}
                     <button type="button" class="btn btn-light btn-sm fw-semibold" onclick="abrirModalNuevoInventario()">
                         <i class="bi bi-plus-lg me-1"></i>Nueva toma
                     </button>
+                    {% endif %}
                 </div>
             </div>
 
@@ -647,11 +651,13 @@
                             <p id="alertaDiferenciasSubtitle">3 inventarios con diferencias detectadas</p>
                         </div>
                     </div>
+                    {% if not solo_revision %}
                     <div class="diferencias-summary-actions">
                         <button type="button" class="btn btn-outline-danger btn-sm" onclick="exportarTodasDiferencias()">
                             <i class="bi bi-file-earmark-excel me-1"></i>Exportar Diferencias a Excel
                         </button>
                     </div>
+                    {% endif %}
                 </div>
 
                 <!-- Tabs de estado rápido -->
@@ -914,6 +920,10 @@ let inventarioActual = null;
 let filtrosDisponibles = null;
 let currentTabFilter = ''; // Filtro especial de tabs
 let inventariosCargados = []; // Última página recibida (para exportar diferencias)
+// Modo revisión (solo Ver, p. ej. el jefe de local): ve sus tomas y entra al detalle,
+// sin crear, aprobar, aplicar, cancelar, análisis valorizado ni Excel.
+const SOLO_REVISION = {{ solo_revision|yesno:"true,false" }};
+const PUEDE_CREAR = {{ puede_crear|yesno:"true,false" }};
 
 // Lee un token de color de nexo-design-system.css (para los botones de SweetAlert,
 // que solo aceptan un color literal). Devuelve el fallback si el token no existe.
@@ -963,9 +973,9 @@ function cargarInventarios(page = 1) {
                     <div class="nexo-empty-state">
                         <i class="bi bi-clipboard-x"></i>
                         <p>No hay inventarios registrados</p>
-                        <button type="button" class="btn btn-primary mt-3" onclick="abrirModalNuevoInventario()">
+                        ${PUEDE_CREAR ? `<button type="button" class="btn btn-primary mt-3" onclick="abrirModalNuevoInventario()">
                             <i class="bi bi-plus-lg"></i> Crear Primer Inventario
-                        </button>
+                        </button>` : ''}
                     </div>
                 </td></tr>
             `);
@@ -975,9 +985,11 @@ function cargarInventarios(page = 1) {
                 const tieneDiferencias = inv.total_diferencias_positivas > 0 || inv.total_diferencias_negativas > 0;
                 const rowClass = tieneDiferencias && inv.estado !== 'COMPLETADO' ? 'table-warning-light' : '';
                 
-                // Botones de acción según estado
+                // Botones de acción según estado (en modo revisión no hay acciones)
                 let accionPrincipal = '';
-                if (inv.estado === 'BORRADOR' || inv.estado === 'EN_CONTEO') {
+                if (SOLO_REVISION) {
+                    accionPrincipal = '';
+                } else if (inv.estado === 'BORRADOR' || inv.estado === 'EN_CONTEO') {
                     accionPrincipal = `
                         <button type="button" class="btn btn-sm btn-primary" onclick="event.stopPropagation(); verDetalleInventario(${inv.id}, true)" title="Cargar Pistola">
                             <i class="bi bi-upc-scan"></i> Cargar
@@ -1009,7 +1021,7 @@ function cargarInventarios(page = 1) {
                 }
 
                 // Cancelar: cualquier estado salvo completado/aplicando/cancelado y sin ajustes aplicados
-                const puedeCancelar = !['COMPLETADO', 'APLICANDO', 'CANCELADO'].includes(inv.estado) && !(inv.ajustes_aplicados > 0);
+                const puedeCancelar = !SOLO_REVISION && !['COMPLETADO', 'APLICANDO', 'CANCELADO'].includes(inv.estado) && !(inv.ajustes_aplicados > 0);
 
                 tbody.append(`
                     <tr onclick="verDetalleInventario(${inv.id})" style="cursor: pointer;" class="${rowClass}">
@@ -1050,15 +1062,16 @@ function cargarInventarios(page = 1) {
                                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); verDetalleInventario(${inv.id})" title="Ver detalle" aria-label="Ver detalle">
                                     <i class="bi bi-eye"></i>
                                 </button>
+                                ${SOLO_REVISION ? '' : `
                                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); verAnalisis(${inv.id})" title="Análisis" aria-label="Análisis">
                                     <i class="bi bi-graph-up"></i>
-                                </button>
-                                ${tieneDiferencias ? `
+                                </button>`}
+                                ${tieneDiferencias && !SOLO_REVISION ? `
                                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); exportarDiferenciasInventario(${inv.id})" title="Exportar diferencias" aria-label="Exportar diferencias">
                                         <i class="bi bi-file-earmark-excel"></i>
                                     </button>
                                 ` : ''}
-                                ${inv.skus_contados > 0 ? `
+                                ${inv.skus_contados > 0 && !SOLO_REVISION ? `
                                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); window.open('/app/gestion-inventarios/api/informe-final/${inv.id}/', '_blank')" title="Informe final: por marca (antiguo vs nuevo) y diferencias por SKU" aria-label="Informe final">
                                         <i class="bi bi-file-earmark-bar-graph"></i>
                                     </button>
@@ -1241,6 +1254,10 @@ function exportarTodasDiferencias() {
 // === MODAL NUEVO INVENTARIO ===
 
 function abrirModalNuevoInventario() {
+    if (!PUEDE_CREAR) {  // el paso «1 · Crear» del asistente también llega acá
+        Swal.fire('Solo revisión', 'Crear tomas de inventario lo hace un administrador.', 'info');
+        return;
+    }
     // Resetear formulario
     $('#formNuevoInventario')[0].reset();
     $('#seccionFiltros').hide();
@@ -1518,6 +1535,7 @@ function verAnalisis(inventarioId) {
                         <p class="diferencia-negativa"><strong>Faltantes:</strong> ${analisis.resumen.faltantes}</p>
                     </div>
                 </div>
+                ${analisis.resumen_financiero ? `
                 <div class="col-md-4">
                     <div class="analysis-section">
                         <h6 class="analysis-title"><i class="bi bi-currency-dollar"></i> Impacto Financiero</h6>
@@ -1526,7 +1544,7 @@ function verAnalisis(inventarioId) {
                         <p><strong>Diferencia:</strong> $${formatNumber(analisis.resumen_financiero.diferencia_total)}</p>
                         <p><strong>Impacto neto:</strong> <span class="${analisis.resumen_financiero.impacto_neto >= 0 ? 'diferencia-positiva' : 'diferencia-negativa'}">$${formatNumber(analisis.resumen_financiero.impacto_neto)}</span></p>
                     </div>
-                </div>
+                </div>` : ''}
             </div>
             
             <!-- Top Faltantes y Sobrantes -->

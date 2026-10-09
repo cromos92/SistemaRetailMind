@@ -614,20 +614,26 @@ class Command(BaseCommand):
             'mi_perfil', 'ajuste_stock_rapido', 'cambiar_empresa',
         ]
 
+        # Opciones que el jefe local solo REVISA: en Gestión de Inventarios ve las
+        # tomas de su tienda en unidades (sin costos ni botones que muevan stock);
+        # crear, contar, aprobar y aplicar quedan para quien tiene Editar.
+        solo_ver = {'gestion_inventarios'}
+
         opciones = OpcionMenu.objects.filter(codigo__in=codigos_permitidos)
         for opcion in opciones:
+            revisa = opcion.codigo in solo_ver
             PermisoRol.objects.get_or_create(
                 rol='jefe_local',
                 opcion_menu=opcion,
                 defaults={
                     'puede_ver': True,
-                    'puede_crear': True,
-                    'puede_editar': True,
+                    'puede_crear': not revisa,
+                    'puede_editar': not revisa,
                     'puede_eliminar': False,  # No puede eliminar
-                    'puede_exportar': True,
+                    'puede_exportar': not revisa,
                 }
             )
-        
+
         self.stdout.write(f'   >> {opciones.count()} permisos creados para Jefe Local')
 
     def crear_permisos_cajero(self):

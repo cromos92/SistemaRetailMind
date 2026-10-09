@@ -277,6 +277,32 @@ button.kpi-card:focus-visible {
     background: var(--nexo-gray-300);
 }
 
+/* ========== CARGA DEL ARCHIVO DE LA PISTOLA: subir → procesar → listo ========== */
+.carga-panel {
+    margin-top: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--nexo-border-light);
+    border-radius: var(--nexo-radius-lg);
+    background: var(--nexo-gray-100);
+}
+.carga-pasos { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; font-size: 0.8rem; }
+.carga-paso {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px; border-radius: var(--nexo-radius-full);
+    color: var(--nexo-gray-500); background: var(--nexo-white);
+    border: 1px solid var(--nexo-border-light);
+}
+.carga-paso.activo { color: var(--nexo-white); background: var(--nexo-primary); border-color: var(--nexo-primary); font-weight: 600; }
+.carga-paso.hecho { color: var(--nexo-success); border-color: var(--nexo-success); }
+.carga-sep { color: var(--nexo-gray-300); }
+.carga-titulo { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--nexo-text-primary); margin-bottom: 8px; }
+.carga-progress { height: 22px; border-radius: 11px; background: var(--nexo-gray-300); }
+.carga-progress .progress-bar { font-size: 0.75rem; font-weight: 700; background-color: var(--nexo-primary); }
+.carga-progress .progress-bar.bg-success { background-color: var(--nexo-success) !important; }
+.carga-progress .progress-bar.bg-danger { background-color: var(--nexo-error) !important; }
+.carga-detalle { display: flex; gap: 12px; margin-top: 8px; font-size: 0.8rem; color: var(--nexo-text-muted); }
+.carga-detalle .carga-reloj { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
 .progress-text {
     font-size: 0.8rem;
     font-weight: 600;
@@ -609,6 +635,7 @@ button.kpi-card:focus-visible {
                     <a href="/app/gestion-inventarios/" class="btn btn-light btn-sm" title="Volver a tomas de inventario" aria-label="Volver a tomas de inventario">
                         <i class="bi bi-arrow-left me-1"></i>Volver
                     </a>
+                    {% if not solo_revision %}
                     <button type="button" class="btn btn-light btn-sm" onclick="abrirModalImportarConteo()" title="Cargar el archivo de la pistola">
                         <i class="bi bi-upload me-1"></i>Cargar pistola
                     </button>
@@ -624,6 +651,7 @@ button.kpi-card:focus-visible {
                     <button type="button" class="btn btn-light btn-sm text-danger" onclick="cancelarToma()" id="btnCancelarToma" style="display: none;" title="Cancelar esta toma (motivo obligatorio)">
                         <i class="bi bi-x-circle me-1"></i>Cancelar toma
                     </button>
+                    {% endif %}
                 </div>
             </div>
 
@@ -760,9 +788,11 @@ button.kpi-card:focus-visible {
                             <button type="button" class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="cargarInformeMarcas()" title="Recalcular con los conteos actuales">
                                 <i class="bi bi-arrow-clockwise"></i> Actualizar
                             </button>
+                            {% if not solo_revision %}
                             <button type="button" class="nexo-btn nexo-btn-sm nexo-btn-primary" onclick="exportarInformeFinal()" title="Excel con hojas Por marca, Diferencias, No cargados, Excluidos y Resumen">
                                 <i class="bi bi-file-earmark-excel"></i> Informe final (Excel)
                             </button>
+                            {% endif %}
                         </div>
                     </div>
                     <div class="small mb-2" id="informeAvisos"></div>
@@ -772,13 +802,17 @@ button.kpi-card:focus-visible {
                                 <tr>
                                     <th>Marca</th>
                                     <th class="text-end grupo-antiguo" title="Stock del sistema al corte">Antiguo · Stock</th>
+                                    {% if not solo_revision %}
                                     <th class="text-end grupo-antiguo" title="Stock × (costo + sobreprecio)">Antiguo · P. costo</th>
                                     <th class="text-end grupo-antiguo" title="Stock × precio de venta">Antiguo · P. venta</th>
+                                    {% endif %}
                                     <th class="text-center col-sep" title="Nuevo − antiguo (unidades)">DIF</th>
                                     <th class="text-end grupo-nuevo col-sep" title="Unidades contadas con la pistola">Nuevo · Stock</th>
+                                    {% if not solo_revision %}
                                     <th class="text-end grupo-nuevo">Nuevo · P. costo</th>
                                     <th class="text-end grupo-nuevo">Nuevo · P. venta</th>
                                     <th class="text-end col-sep" title="Diferencia valorizada a P. costo">DIF P. costo</th>
+                                    {% endif %}
                                 </tr>
                             </thead>
                             <tbody id="tbodyMarcas"></tbody>
@@ -786,7 +820,7 @@ button.kpi-card:focus-visible {
                         </table>
                     </div>
                     <div class="text-muted small mt-2">
-                        Igual que el informe antiguo: <strong>P. costo</strong> = unidades × (costo + sobreprecio).
+                        {% if not solo_revision %}Igual que el informe antiguo: <strong>P. costo</strong> = unidades × (costo + sobreprecio).{% endif %}
                         En el inventario nuevo, lo marcado como faltante cuenta 0 y lo «mantenido» (no se pistoleó) toma
                         la cantidad del antiguo. Los SKUs excluidos (operativos: VISA, bolsas, envíos…) no suman y su stock queda igual.
                     </div>
@@ -857,7 +891,7 @@ button.kpi-card:focus-visible {
                             <select class="form-select form-select-sm" id="filtroOrden">
                                 <option value="">Producto (A-Z)</option>
                                 <option value="dif_unidades">Mayor diferencia (unidades)</option>
-                                <option value="dif_valor">Mayor diferencia ($ a costo)</option>
+                                {% if not solo_revision %}<option value="dif_valor">Mayor diferencia ($ a costo)</option>{% endif %}
                                 <option value="sobrantes">Más sobrante primero</option>
                                 <option value="faltantes">Más faltante primero</option>
                             </select>
@@ -882,6 +916,14 @@ button.kpi-card:focus-visible {
                     </div>
                 </div>
 
+                {% if solo_revision %}
+                <!-- Modo revisión (solo Ver): sin lector, sin selección y sin botones que muevan la toma -->
+                <div class="alert alert-info small py-2 mb-3" role="status">
+                    <i class="bi bi-eye me-1"></i><strong>Modo revisión.</strong>
+                    Puede ver lo contado, las diferencias y los faltantes de esta toma en unidades.
+                    Contar, aprobar y aplicar los ajustes lo hace un administrador.
+                </div>
+                {% else %}
                 <!-- Lector: apagado por defecto. Cada lectura SUMA y se guarda al instante,
                      así que no puede ser la primera casilla con el cursor (se usaba para buscar). -->
                 <div class="scan-bar">
@@ -920,6 +962,7 @@ button.kpi-card:focus-visible {
                     </button>
                     <button type="button" class="btn btn-link btn-sm" onclick="limpiarSeleccion()">Quitar marcas</button>
                 </div>
+                {% endif %}
 
                 <!-- Tabla de conteo -->
                 <div class="table-responsive tabla-conteo-wrap">
@@ -927,7 +970,9 @@ button.kpi-card:focus-visible {
                         <thead>
                             <tr>
                                 <th class="w-check">
+                                    {% if not solo_revision %}
                                     <input type="checkbox" class="form-check-input" id="marcarPagina" title="Marcar todas las de esta página" aria-label="Marcar todas las de esta página">
+                                    {% endif %}
                                 </th>
                                 <th class="w-sku">SKU</th>
                                 <th>Producto</th>
@@ -967,7 +1012,8 @@ button.kpi-card:focus-visible {
     </div>
 </div>
 
-<!-- Acciones flotantes -->
+<!-- Acciones flotantes (no existen en modo revisión) -->
+{% if not solo_revision %}
 <div class="floating-actions" id="floatingActions">
     <button type="button" class="nexo-btn nexo-btn-primary" onclick="guardarConteos()" id="btnGuardar" style="display: none;">
         <i class="bi bi-save"></i> Guardar Conteos
@@ -991,6 +1037,7 @@ button.kpi-card:focus-visible {
         <i class="bi bi-arrow-right-circle"></i> Aplicar Ajustes al Stock
     </button>
 </div>
+{% endif %}
 
 <!-- Modal Importar Conteo Pistola -->
 <div class="modal fade" id="modalImportarConteo" tabindex="-1" aria-labelledby="tituloModalImportar" aria-hidden="true">
@@ -1060,17 +1107,37 @@ button.kpi-card:focus-visible {
                     </div>
                     <div class="text-muted small" id="previewInfo"></div>
                 </div>
-                <div class="progress progress-conteo mt-2" id="importProgress" style="display: none;">
-                    <div class="progress-bar bg-success" id="importProgressBar" role="progressbar" style="width: 0%"></div>
+                <!-- Carga visible por pasos: la barra de antes era delgada y, al llegar al 100 %,
+                     el servidor seguía procesando miles de SKUs sin ningún aviso -->
+                <div class="carga-panel" id="importProgress" style="display: none;" role="status" aria-live="polite">
+                    <div class="carga-pasos">
+                        <span class="carga-paso" data-paso="subir"><i class="bi bi-cloud-arrow-up"></i> Subiendo</span>
+                        <i class="bi bi-chevron-right carga-sep" aria-hidden="true"></i>
+                        <span class="carga-paso" data-paso="procesar"><i class="bi bi-cpu"></i> Procesando</span>
+                        <i class="bi bi-chevron-right carga-sep" aria-hidden="true"></i>
+                        <span class="carga-paso" data-paso="listo"><i class="bi bi-check2-circle"></i> Listo</span>
+                    </div>
+                    <div class="carga-titulo">
+                        <span class="spinner-border spinner-border-sm text-primary" id="importSpinner" aria-hidden="true"></span>
+                        <span id="importTitulo">Subiendo archivo…</span>
+                    </div>
+                    <div class="progress carga-progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" id="importProgressBar" role="progressbar"
+                             style="width: 0%" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">0%</div>
+                    </div>
+                    <div class="carga-detalle">
+                        <span id="importDetalle"></span>
+                        <span class="carga-reloj" id="importReloj" title="Tiempo transcurrido"></span>
+                    </div>
                 </div>
                 <div class="text-muted small mt-2" id="importStatus"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-outline-primary" onclick="previsualizarConteoPistola()">
+                <button type="button" class="btn btn-outline-primary" id="btnPrevisualizarConteo" onclick="previsualizarConteoPistola()">
                     <i class="bi bi-search me-1"></i> Previsualizar
                 </button>
-                <button type="button" class="btn btn-primary" onclick="importarConteoPistola()">
+                <button type="button" class="btn btn-primary" id="btnImportarConteo" onclick="importarConteoPistola()">
                     <i class="bi bi-upload me-1"></i> Importar
                 </button>
             </div>
@@ -1150,6 +1217,9 @@ const fechaCorteTexto = '{{ inventario.fecha_corte|date:"d/m/Y H:i" }}';
 const numeroInventario = '{{ inventario.numero_inventario|escapejs }}';
 const ahoraLocal = '{{ ahora_local }}';
 const tomaTiendaCerrada = {% if conteo_tienda_cerrada %}true{% else %}false{% endif %};
+// Modo revisión (solo Ver, p. ej. el jefe de local): sin costos ni botones que muevan
+// la toma. El servidor tampoco devuelve costos ni acepta acciones en este modo.
+const SOLO_REVISION = {{ solo_revision|yesno:"true,false" }};
 let ultimoAnalisis = null; // última respuesta de /api/analisis/ (guía y confirmación de ajustes)
 let informeMarcas = null;  // última respuesta de /api/informe-marcas/
 
@@ -1231,13 +1301,14 @@ function cargarProductos(page = 1) {
                     ? `<span class="producto-desc">${escHtml(p.descripcion)}</span>` : '';
                 tbody.append(`
                     <tr class="${rowClass} ${excluidoClass}" data-id="${p.id}" data-sku="${escHtml(p.sku)}">
-                        <td><input type="checkbox" class="form-check-input chk-linea" data-id="${p.id}" ${seleccionados.has(p.id) ? 'checked' : ''} aria-label="Marcar ${escHtml(p.sku)}"></td>
+                        <td>${SOLO_REVISION ? '' : `<input type="checkbox" class="form-check-input chk-linea" data-id="${p.id}" ${seleccionados.has(p.id) ? 'checked' : ''} aria-label="Marcar ${escHtml(p.sku)}">`}</td>
                         <td><code>${escHtml(p.sku)}</code></td>
                         <td><strong>${escHtml(p.producto_nombre)}</strong>${descripcion}</td>
                         <td>${escHtml(p.talla_nombre) || '-'}</td>
                         <td><small>${escHtml(p.marca_nombre) || '-'}</small></td>
                         <td class="text-end fw-bold col-stock-sistema">${p.stock_sistema_ajustado}</td>
                         <td class="text-end">
+                            ${SOLO_REVISION ? `<span class="fw-semibold">${p.contado ? p.stock_fisico : '-'}</span>` : `
                             <input type="number"
                                    class="input-conteo ${inputClass}"
                                    data-id="${p.id}"
@@ -1245,7 +1316,7 @@ function cargarProductos(page = 1) {
                                    value="${p.contado ? p.stock_fisico : ''}"
                                    placeholder="0"
                                    min="0"
-                                   onchange="registrarConteo(this)">
+                                   onchange="registrarConteo(this)">`}
                         </td>
                         <td class="text-end col-diferencia">${diferenciaHtml}</td>
                         <td class="text-center">${p.excluido ? '<span class="badge bg-light text-body" title="Al aplicar la toma no mueve stock">No se ajusta</span>' : estadoHtml}</td>
@@ -1253,16 +1324,17 @@ function cargarProductos(page = 1) {
                             <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="verDetalleProducto(${p.id})" title="Ver detalle">
                                 <i class="bi bi-eye"></i>
                             </button>
-                            ${p.reconteo_requerido ? `
+                            ${p.reconteo_requerido && !SOLO_REVISION ? `
                                 <button class="nexo-btn nexo-btn-sm nexo-btn-warning" onclick="realizarReconteo(${p.id})" title="Reconteo">
                                     <i class="bi bi-arrow-repeat"></i>
                                 </button>
                             ` : ''}
+                            ${SOLO_REVISION ? '' : `
                             <button class="nexo-btn nexo-btn-sm ${p.excluido ? 'nexo-btn-outline' : 'nexo-btn-warning'}" onclick="toggleExclusion(${p.id}, ${p.excluido})"
                                     title="${p.excluido ? 'Volver a ajustar esta línea' : 'No ajustar: al aplicar la toma su stock queda como está'}"
                                     aria-label="${p.excluido ? 'Volver a ajustar' : 'No ajustar'}">
                                 <i class="bi ${p.excluido ? 'bi-arrow-counterclockwise' : 'bi-slash-circle'}"></i>
-                            </button>
+                            </button>`}
                         </td>
                     </tr>
                 `);
@@ -1394,7 +1466,31 @@ function renderGuia(a) {
     const botonInforme = boton('exportarInformeFinal()', 'bi-file-earmark-excel', 'Informe final (Excel)', 'nexo-btn-outline');
     let tono = '', icono = 'bi-signpost-2', titulo = '', texto = '', acciones = '';
 
-    if (e === 'CANCELADO') {
+    if (SOLO_REVISION) {
+        // Quien solo revisa ve en qué va la toma y qué falta, sin botones que la muevan
+        icono = 'bi-eye';
+        if (e === 'COMPLETADO') {
+            tono = 'guia-ok'; icono = 'bi-check-circle';
+            titulo = 'Inventario cerrado';
+            texto = `El stock ya quedó como se contó (${formatNumber(r.ajustes_aplicados)} SKUs ajustados). Los faltantes descontados
+                     están en <strong>Faltantes por revisar</strong>: búsquelos y marque los que aparezcan para que un
+                     administrador los reponga.`;
+            acciones = `<a href="/app/revision-faltantes/?toma=${inventarioId}" class="nexo-btn nexo-btn-sm nexo-btn-warning"><i class="ri-search-eye-line"></i> Faltantes por revisar</a>`;
+        } else if (e === 'CANCELADO') {
+            tono = 'guia-alerta'; icono = 'bi-x-circle';
+            titulo = 'Toma cancelada';
+            texto = 'No movió stock.';
+        } else {
+            titulo = `Toma en curso · ${escHtml($('#badgeEstado').text())}`;
+            texto = `Contados <strong>${formatNumber(r.total_contados)}</strong> de ${formatNumber(r.total_esperados)} SKUs ·
+                     sobran <strong>+${formatNumber(r.sobrantes_unidades)}</strong> u. (${formatNumber(r.sobrantes)} SKUs) ·
+                     faltan <strong>−${formatNumber(r.faltantes_unidades)}</strong> u. (${formatNumber(r.faltantes)} SKUs)
+                     ${r.pendientes_contar ? ` · no aparecieron en la pistola <strong>${formatNumber(r.pendientes_contar)}</strong> SKUs (${formatNumber(r.pendientes_unidades)} u.)` : ''}.
+                     Revise los faltantes y avise al administrador lo que encuentre: todavía no se mueve stock.`;
+            acciones = boton("filtrarPorTipoDiferencia('faltantes')", 'bi-funnel', 'Ver faltantes', 'nexo-btn-warning')
+                     + (r.pendientes_contar ? boton("filtrarPorTipoDiferencia('pendientes')", 'bi-eye', 'Ver los no pistoleados', 'nexo-btn-outline') : '');
+        }
+    } else if (e === 'CANCELADO') {
         tono = 'guia-alerta'; icono = 'bi-x-circle';
         titulo = 'Toma cancelada';
         texto = 'No movió stock. Si hay que volver a contar, cree una toma nueva.';
@@ -1504,7 +1600,11 @@ function renderTablaMarcas() {
         if (!n) return '<span class="text-muted">$0</span>';
         return `<span class="${n > 0 ? 'diferencia-positiva' : 'diferencia-negativa'}">${n > 0 ? '+' : '−'}$${formatNumber(Math.abs(n))}</span>`;
     };
-    const fila = (m) => `
+    // En modo revisión solo unidades (el servidor no manda P. costo ni P. venta)
+    const fila = (m) => SOLO_REVISION ? `
+        <td class="text-end">${formatNumber(m.ant_stock)}</td>
+        <td class="text-center col-sep">${dif(m.dif)}</td>
+        <td class="text-end col-sep">${formatNumber(m.nue_stock)}</td>` : `
         <td class="text-end">${formatNumber(m.ant_stock)}</td>
         <td class="text-end">${pesos(m.ant_costo)}</td>
         <td class="text-end">${pesos(m.ant_venta)}</td>
@@ -1518,7 +1618,7 @@ function renderTablaMarcas() {
         .filter(m => !soloDif || m.dif !== 0 || m.skus_con_diferencia > 0)
         .map(m => `<tr title="${formatNumber(m.skus)} SKUs · ${formatNumber(m.skus_con_diferencia)} con diferencia${m.sin_contar ? ` · ${formatNumber(m.sin_contar)} no aparecieron` : ''}">
                        <td><strong>${escHtml(m.marca)}</strong></td>${fila(m)}</tr>`);
-    $('#tbodyMarcas').html(filas.join('') || '<tr><td colspan="9" class="text-center text-muted py-3">Ninguna marca con diferencia</td></tr>');
+    $('#tbodyMarcas').html(filas.join('') || `<tr><td colspan="${SOLO_REVISION ? 4 : 9}" class="text-center text-muted py-3">Ninguna marca con diferencia</td></tr>`);
     $('#tfootMarcas').html(`<tr><td>Total general</td>${fila(informeMarcas.total)}</tr>`);
 
     const r = informeMarcas.resumen || {};
@@ -2168,6 +2268,20 @@ function verDetalleProducto(detalleId) {
 
     const fila = (etiqueta, valor) =>
         `<tr><td class="text-muted text-start">${etiqueta}</td><td class="text-end fw-bold">${valor}</td></tr>`;
+    // En modo revisión: sin costos y las anotaciones se leen, no se editan
+    const editable = p.contado && !SOLO_REVISION;
+    const anotaciones = SOLO_REVISION ? `
+            <table class="table table-sm mb-0">
+                ${fila('Ubicación', escHtml(p.ubicacion) || '-')}
+                ${fila('Observaciones', escHtml(p.observaciones) || '-')}
+            </table>` : `
+            <div class="text-start">
+                <label class="form-label small mb-1" for="detUbicacion">Ubicación (pasillo / estante)</label>
+                <input id="detUbicacion" class="form-control mb-2" value="${(p.ubicacion || '').replace(/"/g, '&quot;')}" ${p.contado ? '' : 'disabled'}>
+                <label class="form-label small mb-1" for="detObs">Observaciones</label>
+                <textarea id="detObs" class="form-control" rows="2" ${p.contado ? '' : 'disabled'}>${p.observaciones || ''}</textarea>
+                ${p.contado ? '' : '<div class="text-muted small mt-2">Registre primero el conteo para poder anotar ubicación y observaciones.</div>'}
+            </div>`;
 
     Swal.fire({
         title: `${p.sku} · ${p.producto_nombre}`,
@@ -2181,29 +2295,23 @@ function verDetalleProducto(detalleId) {
                 ${fila('Stock sistema comparado', formatNumber(p.stock_sistema_ajustado))}
                 ${fila('Conteo físico', p.contado ? formatNumber(p.stock_fisico) : 'sin contar')}
                 ${fila('Diferencia', p.contado ? `${p.diferencia > 0 ? '+' : ''}${formatNumber(p.diferencia)} u. (${p.porcentaje_diferencia}%)` : '-')}
-                ${fila('Valor de la diferencia', '$' + formatNumber(p.valor_diferencia))}
-                ${fila('Costo unitario (FIFO al corte)', '$' + formatNumber(p.costo_unitario))}
+                ${SOLO_REVISION ? '' : fila('Valor de la diferencia', '$' + formatNumber(p.valor_diferencia))}
+                ${SOLO_REVISION ? '' : fila('Costo unitario (FIFO al corte)', '$' + formatNumber(p.costo_unitario))}
                 ${fila('Fecha de conteo', p.fecha_conteo || '-')}
                 ${fila('Reconteo', p.reconteo_requerido ? 'Requerido' : (p.stock_reconteo !== null ? `Hecho: ${p.stock_reconteo}` : 'No'))}
             </table>
-            <div class="text-start">
-                <label class="form-label small mb-1" for="detUbicacion">Ubicación (pasillo / estante)</label>
-                <input id="detUbicacion" class="form-control mb-2" value="${(p.ubicacion || '').replace(/"/g, '&quot;')}" ${p.contado ? '' : 'disabled'}>
-                <label class="form-label small mb-1" for="detObs">Observaciones</label>
-                <textarea id="detObs" class="form-control" rows="2" ${p.contado ? '' : 'disabled'}>${p.observaciones || ''}</textarea>
-                ${p.contado ? '' : '<div class="text-muted small mt-2">Registre primero el conteo para poder anotar ubicación y observaciones.</div>'}
-            </div>
+            ${anotaciones}
         `,
         showCancelButton: true,
-        confirmButtonText: p.contado ? 'Guardar anotaciones' : 'Cerrar',
+        confirmButtonText: editable ? 'Guardar anotaciones' : 'Cerrar',
         cancelButtonText: 'Cerrar',
-        showConfirmButton: p.contado,
-        preConfirm: () => ({
+        showConfirmButton: editable,
+        preConfirm: () => (editable ? {
             ubicacion: document.getElementById('detUbicacion').value,
             observaciones: document.getElementById('detObs').value
-        })
+        } : true)
     }).then(result => {
-        if (!result.isConfirmed || !p.contado) return;
+        if (!result.isConfirmed || !editable) return;
         $.ajax({
             url: `/app/gestion-inventarios/api/registrar-conteo/${inventarioId}/`,
             method: 'POST',
@@ -2257,6 +2365,111 @@ function exportarDiferencias() {
     window.open(`/app/gestion-inventarios/api/exportar-diferencias/${inventarioId}/`, '_blank');
 }
 
+// === Panel de carga del archivo: Subiendo (con %) → Procesando (con reloj) → Listo ===
+// Mientras corre, los botones del modal quedan bloqueados y el modal no se cierra:
+// cerrarlo a mitad no detiene el proceso en el servidor y solo confundía.
+const CargaPistola = {
+    ocupado: false,
+    reloj: null,
+    inicio: 0,
+    botonImportar: '',
+
+    iniciar(archivo, titulo, importando) {
+        this.ocupado = true;
+        this.inicio = Date.now();
+        $('#importProgress').show();
+        this._paso('subir');
+        $('#importSpinner').show();
+        $('#importTitulo').text(titulo);
+        this._barra(0, '0%', false);
+        $('#importDetalle').text(`${archivo.name} · ${this._peso(archivo.size)}`);
+        $('#importReloj').text('0 s');
+        clearInterval(this.reloj);
+        this.reloj = setInterval(() => $('#importReloj').text(this._transcurrido()), 1000);
+        $('#modalImportarConteo .modal-footer button, #modalImportarConteo .btn-close').prop('disabled', true);
+        if (importando) {
+            this.botonImportar = $('#btnImportarConteo').html();
+            $('#btnImportarConteo').html('<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span> Importando…');
+        }
+    },
+
+    subiendo(porcentaje) {
+        if (porcentaje >= 100) return this.procesando();
+        this._barra(porcentaje, `${porcentaje}%`, false);
+    },
+
+    procesando() {
+        if (!this.ocupado || $('[data-paso="procesar"]').hasClass('activo')) return;
+        this._paso('procesar');
+        $('#importTitulo').text('Procesando en el servidor…');
+        this._barra(100, 'Leyendo y cruzando con la toma…', false);
+        $('#importDetalle').text('Con miles de SKUs puede tardar hasta un minuto. No cierre esta ventana.');
+    },
+
+    terminar(ok, titulo, detalle) {
+        this.ocupado = false;
+        clearInterval(this.reloj);
+        $('#importSpinner').hide();
+        this._paso(ok ? 'listo' : null);
+        $('#importTitulo').text(titulo);
+        this._barra(100, ok ? `Listo en ${this._transcurrido()}` : 'No se completó', true, ok);
+        $('#importDetalle').text(detalle || '');
+        $('#modalImportarConteo .modal-footer button, #modalImportarConteo .btn-close').prop('disabled', false);
+        if (this.botonImportar) {
+            $('#btnImportarConteo').html(this.botonImportar);
+            this.botonImportar = '';
+        }
+    },
+
+    reiniciar() {
+        this.ocupado = false;
+        clearInterval(this.reloj);
+        $('#importProgress').hide();
+        $('#modalImportarConteo .modal-footer button, #modalImportarConteo .btn-close').prop('disabled', false);
+    },
+
+    _barra(ancho, texto, fin, ok) {
+        $('#importProgressBar')
+            .css('width', `${ancho}%`).attr('aria-valuenow', ancho).text(texto)
+            .toggleClass('progress-bar-striped progress-bar-animated', !fin)
+            .toggleClass('bg-success', !!fin && !!ok)
+            .toggleClass('bg-danger', !!fin && !ok);
+    },
+
+    _paso(actual) {
+        const orden = ['subir', 'procesar', 'listo'];
+        const i = orden.indexOf(actual);
+        orden.forEach((p, j) => $(`.carga-paso[data-paso="${p}"]`)
+            .toggleClass('activo', j === i)
+            .toggleClass('hecho', i >= 0 && j < i));
+    },
+
+    _transcurrido() {
+        const s = Math.round((Date.now() - this.inicio) / 1000);
+        return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`;
+    },
+
+    _peso(bytes) {
+        return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    },
+
+    // XHR con avance de subida; al terminar de subir pasa solo a «Procesando»
+    xhr() {
+        const xhr = $.ajaxSettings.xhr();
+        if (xhr.upload) {
+            xhr.upload.addEventListener('progress', evt => {
+                if (evt.lengthComputable) CargaPistola.subiendo(Math.round((evt.loaded / evt.total) * 100));
+            }, false);
+            xhr.upload.addEventListener('load', () => CargaPistola.procesando(), false);
+        }
+        return xhr;
+    },
+};
+
+document.getElementById('modalImportarConteo')?.addEventListener('hide.bs.modal', e => {
+    if (CargaPistola.ocupado) e.preventDefault();
+});
+
 function abrirModalImportarConteo() {
     $('#archivoConteo').val('');
     $('#nombreHojaConteo').val('');
@@ -2267,8 +2480,7 @@ function abrirModalImportarConteo() {
     $('#columnasSection').hide();
     $('#selectSkuCol, #selectCantidadCol').empty();
     $('#importStatus').text('');
-    $('#importProgress').hide();
-    $('#importProgressBar').css('width', '0%');
+    CargaPistola.reiniciar();
     // Fecha del conteo físico: el corte si la toma es «tienda cerrada»; si no, vacío
     // (= el instante exacto de la importación, sin perder los segundos del minuto)
     $('#importTiendaCerrada').prop('checked', tomaTiendaCerrada);
@@ -2324,9 +2536,8 @@ function previsualizarConteoPistola() {
 
     const formData = _formDataImportacion(archivo);
 
-    $('#importStatus').text('Generando preview...');
-    $('#importProgress').show();
-    $('#importProgressBar').css('width', '0%');
+    $('#importStatus').text('');
+    CargaPistola.iniciar(archivo, 'Subiendo archivo para la vista previa…', false);
 
     $.ajax({
         url: `/app/gestion-inventarios/api/importar-conteo/preview/${inventarioId}/`,
@@ -2335,25 +2546,14 @@ function previsualizarConteoPistola() {
         processData: false,
         contentType: false,
         headers: { 'X-CSRFToken': getCookie('csrftoken') },
-        xhr: function() {
-            const xhr = $.ajaxSettings.xhr();
-            if (xhr.upload) {
-                xhr.upload.addEventListener('progress', function(evt) {
-                    if (evt.lengthComputable) {
-                        const percent = Math.round((evt.loaded / evt.total) * 100);
-                        $('#importProgressBar').css('width', `${percent}%`);
-                    }
-                }, false);
-            }
-            return xhr;
-        },
+        xhr: () => CargaPistola.xhr(),
         success: function(response) {
             // Si no se identificó la columna del conteo, el backend igual devuelve
             // los encabezados para que el usuario la elija y vuelva a previsualizar
             if (response.columnas) _poblarSelectoresColumna(response.columnas);
             if (!response.success) {
                 $('#previewSection').hide();
-                $('#importStatus').text('');
+                CargaPistola.terminar(false, 'Revise las columnas', response.error);
                 Swal.fire('Revise las columnas', response.error, 'warning');
                 return;
             }
@@ -2387,13 +2587,12 @@ function previsualizarConteoPistola() {
                 (response.en_toma ? ` · ${response.coincidencias_sistema}/${response.en_toma} iguales al sistema` : '')
             );
             $('#previewSection').show();
-            $('#importStatus').text('Preview listo.');
+            CargaPistola.terminar(true, 'Vista previa lista: revise las columnas y presione Importar',
+                                  `${formatNumber(response.total_filas)} filas en el archivo`);
         },
         error: function() {
+            CargaPistola.terminar(false, 'No se pudo generar la vista previa', 'Revise la conexión e intente de nuevo.');
             Swal.fire('Error', 'No se pudo generar el preview', 'error');
-        },
-        complete: function() {
-            $('#importProgress').hide();
         }
     });
 }
@@ -2407,9 +2606,8 @@ function importarConteoPistola() {
 
     const formData = _formDataImportacion(archivo);
 
-    $('#importStatus').text('Subiendo archivo...');
-    $('#importProgress').show();
-    $('#importProgressBar').css('width', '0%');
+    $('#importStatus').text('');
+    CargaPistola.iniciar(archivo, 'Subiendo el archivo de la pistola…', true);
 
     $.ajax({
         url: `/app/gestion-inventarios/api/importar-conteo/${inventarioId}/`,
@@ -2417,27 +2615,17 @@ function importarConteoPistola() {
         data: formData,
         processData: false,
         contentType: false,
-        xhr: function() {
-            const xhr = $.ajaxSettings.xhr();
-            if (xhr.upload) {
-                xhr.upload.addEventListener('progress', function(evt) {
-                    if (evt.lengthComputable) {
-                        const percent = Math.round((evt.loaded / evt.total) * 100);
-                        $('#importProgressBar').css('width', `${percent}%`);
-                    }
-                }, false);
-            }
-            return xhr;
-        },
+        xhr: () => CargaPistola.xhr(),
         headers: { 'X-CSRFToken': getCookie('csrftoken') },
         success: function(response) {
             if (response.success) {
+                CargaPistola.terminar(true, 'Conteo importado',
+                    `${formatNumber(response.skus_leidos)} SKUs · ${formatNumber(response.unidades_leidas)} u. leídas`);
                 const noEncontrados = response.no_encontrados || [];
                 const agregados = response.agregados || [];
                 const ambiguos = response.ambiguos || [];
                 const sobreescritos = response.sobreescritos || [];
                 const lista = (arr) => arr.length ? `<div class="small text-muted text-start mt-1"><code>${arr.slice(0, 15).join('</code>, <code>')}</code>${arr.length > 15 ? ` … (+${arr.length - 15})` : ''}</div>` : '';
-                $('#importStatus').text('Procesando datos... ok');
                 Swal.fire({
                     icon: 'success',
                     title: 'Conteo Importado',
@@ -2458,14 +2646,16 @@ function importarConteoPistola() {
                 if (response.encabezados) {
                     _poblarSelectoresColumna({ tiene_encabezado: true, encabezados: response.encabezados, sku_col: 0, cantidad_col: null });
                 }
+                CargaPistola.terminar(false, 'No se importó', response.error);
                 Swal.fire('No se importó', response.error, 'warning');
             }
         },
         error: function() {
+            // Si se cortó la conexión el servidor pudo terminar igual: importar de nuevo
+            // reemplaza el conteo (no lo suma), pero conviene mirar antes de reintentar.
+            CargaPistola.terminar(false, 'No se pudo importar el conteo',
+                                  'Si la conexión se cortó, recargue la página para ver si quedó cargado antes de reintentar.');
             Swal.fire('Error', 'No se pudo importar el conteo', 'error');
-        },
-        complete: function() {
-            $('#importProgress').hide();
         }
     });
 }
@@ -2599,7 +2789,7 @@ $(document).ready(function() {
     $('#soloMarcasConDif').on('change', renderTablaMarcas);
 
     const params = new URLSearchParams(window.location.search);
-    if (params.get('importar') === '1') {
+    if (params.get('importar') === '1' && !SOLO_REVISION) {
         setTimeout(() => abrirModalImportarConteo(), 300);
     }
     

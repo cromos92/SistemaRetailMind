@@ -2711,11 +2711,14 @@
                                             <i class="ri-clipboard-line"></i> Gestión de Inventarios
                                         </a>
                                     </li>
+                                    {% tiene_permiso 'gestion_inventarios' 'puede_editar' as permiso_fusion_duplicados %}
+                                    {% if permiso_fusion_duplicados %}
                                     <li class="nav-item">
                                         <a href="{% url 'ver_fusion_duplicados' %}" class="nav-link" data-key="t-fusion-duplicados">
                                             <i class="ri-git-merge-line"></i> Fusionar Duplicados
                                         </a>
                                     </li>
+                                    {% endif %}
                                     {% endif %}
                                     {% if permiso_revision_faltantes %}
                                     <li class="nav-item">

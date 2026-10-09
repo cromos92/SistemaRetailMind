@@ -1,0 +1,135 @@
+{
+ "fecha": "2026-10-08T17:32:27.723016-03:00",
+ "referencia": "VACIADO-20261008_173227",
+ "sucursales": [
+  {
+   "id": 2,
+   "alias": "PAO1"
+  },
+  {
+   "id": 3,
+   "alias": "PAO2"
+  },
+  {
+   "id": 4,
+   "alias": "PAO3"
+  },
+  {
+   "id": 5,
+   "alias": "PAO4"
+  },
+  {
+   "id": 6,
+   "alias": "NICK1"
+  },
+  {
+   "id": 7,
+   "alias": "NICK2"
+  }
+ ],
+ "tallas": [
+  {
+   "pt_id": 566702,
+   "sku": 123456789,
+   "stock_antes": 872
+  },
+  {
+   "pt_id": 566701,
+   "sku": 123456789,
+   "stock_antes": 9949
+  },
+  {
+   "pt_id": 566698,
+   "sku": 123456789,
+   "stock_antes": 9955
+  },
+  {
+   "pt_id": 566700,
+   "sku": 123456789,
+   "stock_antes": 9914
+  },
+  {
+   "pt_id": 566703,
+   "sku": 123456789,
+   "stock_antes": 959
+  },
+  {
+   "pt_id": 566699,
+   "sku": 123456789,
+   "stock_antes": 928
+  }
+ ],
+ "lotes": [
+  {
+   "id": 4970,
+   "producto_talla_id": 566702,
+   "cantidad_disponible": 872,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33678,
+   "producto_talla_id": 566701,
+   "cantidad_disponible": 688,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 57215,
+   "producto_talla_id": 566701,
+   "cantidad_disponible": 9261,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 652,
+   "producto_talla_id": 566698,
+   "cantidad_disponible": 9955,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 5574,
+   "producto_talla_id": 566700,
+   "cantidad_disponible": 9914,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33398,
+   "producto_talla_id": 566703,
+   "cantidad_disponible": 721,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 57216,
+   "producto_talla_id": 566703,
+   "cantidad_disponible": 238,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 36467,
+   "producto_talla_id": 566699,
+   "cantidad_disponible": 633,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 57214,
+   "producto_talla_id": 566699,
+   "cantidad_disponible": 295,
+   "activo": true,
+   "agotado": false
+  }
+ ],
+ "movimientos_creados": [
+  3131152,
+  3131153,
+  3131154,
+  3131155,
+  3131156,
+  3131157
+ ]
+}
