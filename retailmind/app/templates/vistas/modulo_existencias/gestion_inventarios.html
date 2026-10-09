@@ -543,7 +543,7 @@
                     </div>
                 </div>
                 <div class="module-header-actions">
-                    {% if not solo_revision %}
+                    {% if ver_valores %}
                     <button type="button" class="btn btn-light btn-sm" onclick="exportarTodasDiferencias()" title="Exportar diferencias a Excel">
                         <i class="bi bi-file-earmark-excel me-1"></i>Exportar diferencias
                     </button>
@@ -636,7 +636,7 @@
                 <!-- === AVISO: faltantes que el jefe de local encontró y esperan reposición === -->
                 <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2" id="avisoPorReponer" style="display: none !important;">
                     <span><i class="ri-checkbox-circle-line me-1"></i>
-                        <strong id="avisoPorReponerN">0</strong> faltantes fueron encontrados en la tienda y esperan que un administrador los reponga al stock.</span>
+                        <strong id="avisoPorReponerN">0</strong> faltantes fueron encontrados en la tienda y esperan que el Maestro confirme que aparecieron (recién ahí vuelven al stock).</span>
                     <a href="/app/revision-faltantes/?estado=encontrado" class="btn btn-sm btn-primary"><i class="ri-search-eye-line me-1"></i>Ir a Faltantes por revisar</a>
                 </div>
 
@@ -651,7 +651,7 @@
                             <p id="alertaDiferenciasSubtitle">3 inventarios con diferencias detectadas</p>
                         </div>
                     </div>
-                    {% if not solo_revision %}
+                    {% if ver_valores %}
                     <div class="diferencias-summary-actions">
                         <button type="button" class="btn btn-outline-danger btn-sm" onclick="exportarTodasDiferencias()">
                             <i class="bi bi-file-earmark-excel me-1"></i>Exportar Diferencias a Excel
@@ -924,6 +924,8 @@ let inventariosCargados = []; // Última página recibida (para exportar diferen
 // sin crear, aprobar, aplicar, cancelar, análisis valorizado ni Excel.
 const SOLO_REVISION = {{ solo_revision|yesno:"true,false" }};
 const PUEDE_CREAR = {{ puede_crear|yesno:"true,false" }};
+// Plata y análisis (análisis valorizado, informe final, Excel): solo Maestro y Administrador
+const VER_VALORES = {{ ver_valores|yesno:"true,false" }};
 
 // Lee un token de color de nexo-design-system.css (para los botones de SweetAlert,
 // que solo aceptan un color literal). Devuelve el fallback si el token no existe.
@@ -1062,16 +1064,16 @@ function cargarInventarios(page = 1) {
                                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); verDetalleInventario(${inv.id})" title="Ver detalle" aria-label="Ver detalle">
                                     <i class="bi bi-eye"></i>
                                 </button>
-                                ${SOLO_REVISION ? '' : `
+                                ${!VER_VALORES ? '' : `
                                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); verAnalisis(${inv.id})" title="Análisis" aria-label="Análisis">
                                     <i class="bi bi-graph-up"></i>
                                 </button>`}
-                                ${tieneDiferencias && !SOLO_REVISION ? `
+                                ${tieneDiferencias && VER_VALORES ? `
                                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); exportarDiferenciasInventario(${inv.id})" title="Exportar diferencias" aria-label="Exportar diferencias">
                                         <i class="bi bi-file-earmark-excel"></i>
                                     </button>
                                 ` : ''}
-                                ${inv.skus_contados > 0 && !SOLO_REVISION ? `
+                                ${inv.skus_contados > 0 && VER_VALORES ? `
                                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation(); window.open('/app/gestion-inventarios/api/informe-final/${inv.id}/', '_blank')" title="Informe final: por marca (antiguo vs nuevo) y diferencias por SKU" aria-label="Informe final">
                                         <i class="bi bi-file-earmark-bar-graph"></i>
                                     </button>

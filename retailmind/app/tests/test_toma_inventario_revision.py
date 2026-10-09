@@ -14,7 +14,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
-from app.models import OpcionMenu, PermisoRol, TomaInventario
+from app.models import Movimientos_Producto, OpcionMenu, PermisoRol, Producto_Talla, TomaInventario
 from .factories import crear_empresa_user, crear_sucursal, crear_usuario
 from .test_toma_inventario_informe import BaseTomaContadaAnoche
 
@@ -171,3 +171,95 @@ class ModoRevisionJefeLocalTest(BaseTomaContadaAnoche):
         sobre_tomas = [q['sql'] for q in ctx.captured_queries
                        if 'COUNT' in q['sql'].upper() and 'FROM "APP_TOMAINVENTARIO" WHERE' in q['sql'].upper()]
         self.assertEqual(len(sobre_tomas), 1, sobre_tomas)
+
+    def test_jefe_opera_la_toma_pero_ve_solo_pares(self):
+        # El Jefe (rol 'jefe') puede operar la toma, pero la plata es solo de Maestro y Administrador
+        opcion = OpcionMenu.objects.get(codigo='gestion_inventarios')
+        PermisoRol.objects.create(rol='jefe', opcion_menu=opcion, puede_ver=True, puede_crear=True, puede_editar=True,
+                                  puede_eliminar=False, puede_exportar=True, puede_aprobar=True)
+        jefe = crear_usuario(username='jefe_zona', rol='jefe')
+        crear_empresa_user(jefe, self.empresa, self.sucursal)
+        self._como(jefe)
+
+        pagina = self.client.get(reverse('detalle_inventario', args=[self.toma.id]))
+        self.assertFalse(pagina.context['solo_revision'])
+        self.assertFalse(pagina.context['ver_valores'])
+        self.assertNotIn('Antiguo · P. costo', pagina.content.decode())
+        lineas = self._get('api_productos_conteo', self.toma.id).json()['productos']
+        self.assertEqual({k for p in lineas for k in _sin_plata(p)}, set())
+        analisis = self._get('api_analisis_inventario', self.toma.id).json()['analisis']
+        self.assertIsNone(analisis['resumen_financiero'])
+        self.assertEqual((analisis['top_faltantes'], analisis['analisis_marcas']), ([], []))
+        marcas = self._get('api_informe_marcas_inventario', self.toma.id).json()
+        self.assertEqual(_sin_plata(marcas['total']), [])
+        for nombre in ('api_exportar_inventario', 'api_exportar_diferencias_inventario', 'api_informe_final_inventario'):
+            self.assertEqual(self._get(nombre, self.toma.id).status_code, 403, nombre)
+        # …y sí opera: deja una línea sin ajustar
+        det = self.toma.detalles.get(sku='9600002')
+        resp = self.client.post(reverse('api_excluir_detalles_inventario', args=[self.toma.id]),
+                                data=json.dumps({'ids': [det.id], 'excluir': True}), content_type='application/json').json()
+        self.assertTrue(resp['success'], resp)
+
+
+class ReconteoEnRevisionTest(BaseTomaContadaAnoche):
+    """Período de revisión: se recuenta cualquier línea contada, lo vendido entre el conteo y el
+    reconteo se descuenta solo, y lo que «aparece» en el reconteo lo aprueba el Maestro."""
+
+    def setUp(self):
+        super().setUp()
+        self.maestro = crear_usuario(username='maestro_rec', rol='maestro')
+        crear_empresa_user(self.maestro, self.empresa, self.sucursal)
+        self.pt_vende = self._pt('SE VENDE', 9700001, 3)
+        self.pt_falta = self._pt('FALTA TRES', 9700002, 4)
+        data = self.client.post(reverse('api_crear_inventario'), data=json.dumps({
+            'nombre': 'Completo', 'tipo_inventario': 'COMPLETO', 'conteo_tienda_cerrada': True,
+            'fecha_corte': self.corte.strftime('%Y-%m-%dT%H:%M'), 'filtros': {'solo_con_stock': True},
+        }), content_type='application/json').json()
+        self.toma = TomaInventario.objects.get(id=data['inventario_id'])
+        self.assertTrue(self._importar_pistola(self.toma.id, 'sku,stock\n9700001,3\n9700002,1\n')['success'])
+        # Venta en el período de revisión (después del conteo de anoche)
+        Movimientos_Producto.objects.create(
+            ProductoTalla=self.pt_vende, cantidad=-1, concepto='VENTA_PUBLICO', sucursal_origen=self.sucursal,
+            responsable='POS', fecha=self.venta_hoy.date(), hora=self.venta_hoy.time(),
+        )
+        Producto_Talla.objects.filter(pk=self.pt_vende.pk).update(stock=2)
+
+    def _recontar(self, sku, cantidad):
+        det = self.toma.detalles.get(sku=sku)
+        return self._post('api_registrar_reconteo', self.toma.id,
+                          {'reconteos': [{'detalle_id': det.id, 'stock_reconteo': cantidad}]})
+
+    def test_reconteo_descuenta_lo_vendido_despues_del_conteo(self):
+        # La línea no estaba marcada (contó 3 = sistema): igual se puede recontar
+        self.assertFalse(self.toma.detalles.get(sku='9700001').reconteo_requerido)
+        resp = self._recontar('9700001', 2)  # hoy quedan 2: se vendió 1 después del conteo
+        self.assertTrue(resp['success'], resp)
+        self.assertFalse(resp['errores'])
+        det = self.toma.detalles.get(sku='9700001')
+        # Antes salía faltante −1 y al aplicar se descontaba otra vez la venta
+        self.assertEqual((det.stock_reconteo, det.stock_fisico, det.diferencia), (2, 3, 0))
+        self.assertEqual(resp['encontrados'], [])
+
+    def test_lo_encontrado_en_el_reconteo_lo_aprueba_el_maestro(self):
+        self.assertTrue(self.toma.detalles.get(sku='9700002').reconteo_requerido)  # 4 → 1
+        resp = self._recontar('9700002', 4)
+        self.assertEqual(resp['encontrados'], ['9700002'])
+        det = self.toma.detalles.get(sku='9700002')
+        self.assertEqual(det.diferencia, 0)
+        self.assertIn('ENCONTRADO EN RECONTEO: +3', det.observaciones)
+
+        for url in ('api_finalizar_conteo', 'api_enviar_aprobacion'):
+            self.assertTrue(self._post(url, self.toma.id)['success'], url)
+        analisis = self.client.get(reverse('api_analisis_inventario', args=[self.toma.id])).json()['analisis']
+        self.assertEqual([e['sku'] for e in analisis['encontrados_reconteo']], ['9700002'])
+        self.assertFalse(analisis['puede_aprobar'])  # el administrador no la aprueba
+
+        resp = self._post('api_aprobar_inventario', self.toma.id)
+        self.assertFalse(resp['success'])
+        self.assertIn('Maestro', resp['error'])
+        self.client.force_login(self.maestro)
+        session = self.client.session
+        session['idSucursalActual'] = self.sucursal.id
+        session.save()
+        resp = self._post('api_aprobar_inventario', self.toma.id)
+        self.assertTrue(resp['success'], resp)

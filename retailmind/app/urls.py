@@ -1866,6 +1866,7 @@ urlpatterns = [
     path('revision-faltantes/api/', views_revision_faltantes.api_revision_faltantes, name='api_revision_faltantes'),
     path('revision-faltantes/api/reportar/<int:detalle_id>/', views_revision_faltantes.api_reportar_faltante, name='api_reportar_faltante'),
     path('revision-faltantes/api/reponer/<int:detalle_id>/', views_revision_faltantes.api_reponer_faltante, name='api_reponer_faltante'),
+    path('revision-faltantes/api/rechazar/<int:detalle_id>/', views_revision_faltantes.api_rechazar_encontrado, name='api_rechazar_encontrado'),
     # Acción masiva sobre las líneas sin contar (excluir / marcar sin diferencia):
     # sin ella una toma parcial no se podía cerrar (se excluían de a una).
     path('gestion-inventarios/api/no-contados/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.resolver_no_contados), name='api_resolver_no_contados'),

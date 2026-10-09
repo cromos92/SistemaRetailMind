@@ -1,7 +1,8 @@
 """
 Faltantes por revisar (después de aplicar una toma): el jefe de local reporta lo
-que encontró o confirma que no está; un administrador repone al stock lo
-encontrado (AJUSTE_INVENTARIO_ENTRADA con referencia a la toma + lote FIFO).
+que encontró o confirma que no está; el MAESTRO confirma lo encontrado y lo repone
+al stock (AJUSTE_INVENTARIO_ENTRADA con referencia a la toma + lote FIFO) o lo
+rechaza. La plata ($ venta / $ costo) solo la ven el Maestro y el Administrador.
 
 Correr (sin tocar la BD del .env):
     DATABASE_URL='sqlite://:memory:' python manage.py test app.tests.test_revision_faltantes
@@ -34,6 +35,8 @@ class RevisionFaltantesTest(BaseTomaContadaAnoche):
             PermisoRol.objects.get_or_create(rol=rol, opcion_menu=opcion, defaults=VER_EDITAR)
         self.jefe = crear_usuario(username='jefelocal', rol='jefe_local')
         crear_empresa_user(self.jefe, self.empresa, self.sucursal)
+        self.maestro = crear_usuario(username='maestro_inv', rol='maestro')
+        crear_empresa_user(self.maestro, self.empresa, self.sucursal)
 
         # Toma aplicada: A no apareció (3 → faltante, recontado 0), B se contó 1 de 2, C cuadra
         self.pt_a = self._pt('GUANTE CH216', 9500001, 3, precio=29990)
@@ -79,8 +82,18 @@ class RevisionFaltantesTest(BaseTomaContadaAnoche):
         self.assertEqual(resp['items'][0]['motivo'], 'No apareció en la pistola')
         self.assertEqual(resp['resumen']['pendiente'], 2)
         self.assertFalse(resp['puede_reponer'])
+        # El jefe de local ve pares, no plata
+        self.assertFalse(resp['ver_valores'])
+        self.assertNotIn('valor_venta', resp['resumen'])
+        self.assertEqual({k for i in resp['items'] for k in i if k.startswith('valor')}, set())
+        # El administrador sí ve la plata, pero no repone (eso es del Maestro)
+        self._como(self.user)
+        resp = self.client.get(reverse('api_revision_faltantes')).json()
+        self.assertTrue(resp['ver_valores'])
+        self.assertIn('valor_venta', resp['items'][0])
+        self.assertFalse(resp['puede_reponer'])
 
-    def test_jefe_reporta_y_admin_repone(self):
+    def test_jefe_reporta_y_maestro_confirma(self):
         self._como(self.jefe)
         # No puede reportar más de lo que se descontó
         resp = self._post_json('api_reportar_faltante', self.det_a.id, estado='ENCONTRADO', cantidad=5).json()
@@ -89,6 +102,7 @@ class RevisionFaltantesTest(BaseTomaContadaAnoche):
                                nota='estaba en bodega').json()
         self.assertTrue(resp['success'], resp)
         self.assertEqual((resp['item']['revision_estado'], resp['item']['revision_cantidad']), ('ENCONTRADO', 2))
+        self.assertNotIn('valor_venta', resp['item'])
         # El jefe de local no repone al stock
         self.assertEqual(self._post_json('api_reponer_faltante', self.det_a.id).status_code, 403)
         self.pt_a.refresh_from_db()
@@ -100,7 +114,10 @@ class RevisionFaltantesTest(BaseTomaContadaAnoche):
         self.assertEqual(listado['faltantes_por_reponer'], 1)
         fila = next(i for i in listado['inventarios'] if i['id'] == self.toma.id)
         self.assertEqual((fila['faltantes_por_revisar'], fila['faltantes_por_reponer']), (1, 1))
+        # …pero el administrador tampoco lo repone: lo confirma el Maestro
+        self.assertEqual(self._post_json('api_reponer_faltante', self.det_a.id).status_code, 403)
 
+        self._como(self.maestro)
         resp = self._post_json('api_reponer_faltante', self.det_a.id).json()
         self.assertTrue(resp['success'], resp)
         self.assertEqual(resp['item']['revision_estado'], 'REPUESTO')
@@ -125,7 +142,7 @@ class RevisionFaltantesTest(BaseTomaContadaAnoche):
         resp = self._post_json('api_reportar_faltante', self.det_b.id, estado='CONFIRMADO').json()
         self.assertEqual(resp['item']['revision_estado'], 'CONFIRMADO')
         # Sin «encontrado» no hay nada que reponer
-        self._como(self.user)
+        self._como(self.maestro)
         self.assertFalse(self._post_json('api_reponer_faltante', self.det_b.id).json()['success'])
         self._como(self.jefe)
         resp = self._post_json('api_reportar_faltante', self.det_b.id, estado='').json()
@@ -138,3 +155,24 @@ class RevisionFaltantesTest(BaseTomaContadaAnoche):
         self._como(self.jefe)
         resp = self._post_json('api_reportar_faltante', det_c.id, estado='ENCONTRADO', cantidad=1)
         self.assertEqual(resp.status_code, 404)
+
+    def test_maestro_rechaza_lo_encontrado(self):
+        self._como(self.jefe)
+        self.assertTrue(self._post_json('api_reportar_faltante', self.det_a.id, estado='ENCONTRADO', cantidad=3).json()['success'])
+        # Ni el jefe de local ni el administrador pueden rechazar
+        self.assertEqual(self._post_json('api_rechazar_encontrado', self.det_a.id, motivo='no está').status_code, 403)
+        self._como(self.user)
+        self.assertEqual(self._post_json('api_rechazar_encontrado', self.det_a.id, motivo='no está').status_code, 403)
+
+        self._como(self.maestro)
+        self.assertFalse(self._post_json('api_rechazar_encontrado', self.det_a.id).json()['success'])  # motivo obligatorio
+        resp = self._post_json('api_rechazar_encontrado', self.det_a.id, motivo='en bodega no había nada').json()
+        self.assertTrue(resp['success'], resp)
+        self.assertEqual((resp['item']['revision_estado'], resp['item']['revision_cantidad']), ('', None))
+        self.assertIn('Rechazado por', resp['item']['revision_nota'])
+        self.assertIn('en bodega no había nada', resp['item']['revision_nota'])
+        self.pt_a.refresh_from_db()
+        self.assertEqual(self.pt_a.stock, 0)  # el faltante sigue descontado
+        # Ya no está «encontrado»: no se puede reponer ni volver a rechazar
+        self.assertFalse(self._post_json('api_reponer_faltante', self.det_a.id).json()['success'])
+        self.assertFalse(self._post_json('api_rechazar_encontrado', self.det_a.id, motivo='x').json()['success'])

@@ -25,11 +25,15 @@ from django.views.decorators.http import require_GET, require_POST
 
 from .decorators import requiere_permiso
 from .models import (
-    Producto_Talla, TomaInventarioDetalle, TomaInventarioLog, es_rol_administrador,
+    Producto_Talla, TomaInventarioDetalle, TomaInventarioLog, es_maestro,
 )
 from .services import informe_toma_inventario as informe_toma
 from .utils_permisos import obtener_sucursales_usuario, puede_ver_sucursal
-from .views_gestion_inventarios import _inventario_del_usuario
+from .views_gestion_inventarios import _inventario_del_usuario, _ve_valorizacion
+
+# Plata de los faltantes ($ costo / $ venta): solo Maestro y Administrador (el jefe
+# de local y el Jefe ven pares). Confirmar lo encontrado y reponerlo: solo el Maestro.
+CLAVES_PLATA = ('valor_costo', 'valor_venta')
 
 logger = logging.getLogger('app')
 
@@ -107,6 +111,15 @@ def _serializar(d):
     }
 
 
+def _item(request, d):
+    """Una línea para responder a la pantalla, sin plata si el usuario no la ve."""
+    item = _serializar(d)
+    if not _ve_valorizacion(request.user):
+        for clave in CLAVES_PLATA:
+            item.pop(clave, None)
+    return item
+
+
 def _sucursales_pedidas(request):
     """La sucursal elegida en la pantalla ('todas' = todas las del usuario); sin
     elegir, la activa de la sesión. Siempre dentro de las que el usuario ve."""
@@ -154,7 +167,8 @@ def revision_faltantes(request):
             obtener_sucursales_usuario(request.user).values('id', 'alias', 'direccion').order_by('alias')
         ),
         'sucursal_activa_id': int(activa) if str(activa or '').isdigit() else None,
-        'puede_reponer': es_rol_administrador(request.user),
+        'puede_reponer': es_maestro(request.user),
+        'ver_valores': _ve_valorizacion(request.user),
         'toma_inicial': request.GET.get('toma') or '',
     })
 
@@ -191,12 +205,20 @@ def api_revision_faltantes(request):
             i for i in todos if i['revision_estado'] == ESTADOS_FILTRO[estado]
         ]
         items.sort(key=lambda i: (ORDEN_URGENCIA[i['urgencia']], -i['valor_venta'], i['articulo'], i['talla']))
+        ver_valores = _ve_valorizacion(request.user)
+        if not ver_valores:
+            for i in items:
+                for clave in CLAVES_PLATA:
+                    i.pop(clave, None)
+            for clave in CLAVES_PLATA:
+                resumen.pop(clave, None)
         return JsonResponse({
             'success': True,
             'items': items,
             'resumen': resumen,
             'tomas': sorted(tomas.values(), key=lambda t: t['numero'], reverse=True),
-            'puede_reponer': es_rol_administrador(request.user),
+            'puede_reponer': es_maestro(request.user),
+            'ver_valores': ver_valores,
         })
     except Exception as e:
         logger.error(f'Error al listar faltantes por revisar: {e}')
@@ -255,11 +277,11 @@ def api_reportar_faltante(request, detalle_id):
     _log(d, request.user, f'Revisión de faltante {d.sku} {d.producto_nombre}: {texto}' + (f' — {nota}' if nota else ''),
          {'detalle_id': d.id, 'estado': estado, 'cantidad': cantidad, 'nota': nota})
     d.refresh_from_db()
-    return JsonResponse({'success': True, 'item': _serializar(d)})
+    return JsonResponse({'success': True, 'item': _item(request, d)})
 
 
 # ==============================================================================
-# ADMINISTRADOR: reponer al stock lo encontrado
+# MAESTRO: confirmar lo encontrado (reponer al stock) o rechazarlo
 # ==============================================================================
 
 @require_POST
@@ -275,8 +297,9 @@ def api_reponer_faltante(request, detalle_id):
     from .views import registrar_movimiento_producto
     from .views_modulo_productos import crear_lote_producto
 
-    if not es_rol_administrador(request.user):
-        return JsonResponse({'success': False, 'error': 'Solo un administrador repone al stock'}, status=403)
+    if not es_maestro(request.user):
+        return JsonResponse({'success': False, 'error': 'Solo el Maestro confirma lo encontrado y lo repone al stock'},
+                            status=403)
     try:
         data = json.loads(request.body or '{}')
     except json.JSONDecodeError:
@@ -323,6 +346,44 @@ def api_reponer_faltante(request, detalle_id):
     _log(d, request.user, f'Faltante {d.sku} {d.producto_nombre}: {cantidad} u. repuestas al stock (encontradas después del inventario)',
          {'detalle_id': d.id, 'cantidad': cantidad, 'movimiento_id': getattr(movimiento, 'id', None)})
     d.refresh_from_db()
-    item = _serializar(d)
+    item = _item(request, d)
     item['stock_actual'] = Producto_Talla.objects.get(pk=d.producto_talla_id).stock
     return JsonResponse({'success': True, 'item': item})
+
+
+@require_POST
+@login_required
+@requiere_permiso(OPCION, 'puede_editar')
+@transaction.atomic
+def api_rechazar_encontrado(request, detalle_id):
+    """
+    El Maestro NO confirma lo que el jefe de local reportó como encontrado: la línea
+    vuelve a «Por revisar» con el motivo a la vista y el stock no se toca (el
+    faltante sigue descontado). Body: {"motivo": "..."} obligatorio.
+    """
+    if not es_maestro(request.user):
+        return JsonResponse({'success': False, 'error': 'Solo el Maestro confirma o rechaza lo encontrado'}, status=403)
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        data = {}
+    motivo = (data.get('motivo') or '').strip()
+    if not motivo:
+        return JsonResponse({'success': False, 'error': 'Indique por qué no lo confirma'})
+
+    d = _detalle_del_usuario(request, detalle_id)
+    if d is None:
+        return JsonResponse({'success': False, 'error': 'Faltante no encontrado o sin acceso'}, status=404)
+    if d.revision_estado != 'ENCONTRADO':
+        return JsonResponse({'success': False, 'error': 'Solo se rechaza lo que está reportado como encontrado'})
+
+    reporto, cantidad = _nombre(d.revision_por) or 'jefe de local', d.revision_cantidad
+    TomaInventarioDetalle.objects.filter(pk=d.pk).update(
+        revision_estado='', revision_cantidad=None, revision_por=None, revision_fecha=None,
+        revision_nota=f'Rechazado por {_nombre(request.user)}: {motivo}'[:255],
+    )
+    _log(d, request.user,
+         f'Faltante {d.sku} {d.producto_nombre}: el Maestro NO confirmó lo encontrado ({cantidad} u., reportó {reporto}) — {motivo}',
+         {'detalle_id': d.id, 'cantidad_reportada': cantidad, 'motivo': motivo})
+    d.refresh_from_db()
+    return JsonResponse({'success': True, 'item': _item(request, d)})

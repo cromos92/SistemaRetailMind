@@ -74,16 +74,16 @@ CATALOGO = {
         'pantalla': 'Faltantes por revisar',
         'ruta': '/app/revision-faltantes/',
         'resumen': 'Después de aplicar una toma de inventario: los faltantes ya descontados, ordenados por urgencia, '
-                   'para que el jefe de local los busque y avise; un administrador repone al stock lo encontrado.',
+                   'para que el jefe de local los busque y avise; el Maestro confirma lo encontrado y lo repone al stock.',
         'permisos': {
-            'puede_ver': 'Entrar a la pantalla y ver los faltantes de las tomas aplicadas de sus sucursales.',
-            'puede_editar': 'Reportar un faltante como encontrado (cuántas unidades) o «no está». Reponer al stock '
-                            'exige además rol Administrador, Jefe o Maestro.',
+            'puede_ver': 'Entrar a la pantalla y ver los faltantes de las tomas aplicadas de sus sucursales (en pares).',
+            'puede_editar': 'Reportar un faltante como encontrado (cuántas unidades) o «no está». Confirmar/reponer o '
+                            'rechazar lo encontrado es solo del rol Maestro.',
         },
         'depende_de': [],
-        'notas': 'Permiso aparte de Gestión de Inventarios a propósito: aquel comparte permiso con Fusionar '
-                 'Duplicados, que mueve stock con solo Ver. Reponer crea AJUSTE_INVENTARIO_ENTRADA con '
-                 'referencia a la toma y lote FIFO al costo del corte.',
+        'notas': 'Permiso aparte de Gestión de Inventarios a propósito. Reponer crea AJUSTE_INVENTARIO_ENTRADA con '
+                 'referencia a la toma y lote FIFO al costo del corte. La plata ($ venta/costo) solo la ven el '
+                 'Maestro y el Administrador.',
     },
     'gestion_etiquetas_zebra': {
         'pantalla': 'Impresión Etiquetas Zebra',

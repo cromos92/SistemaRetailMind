@@ -1,0 +1,128 @@
+{
+ "fecha": "2026-10-09T11:03:44.877411-03:00",
+ "referencia": "VACIADO-20261009_110344",
+ "sucursales": [
+  {
+   "id": 2,
+   "alias": "PAO1"
+  },
+  {
+   "id": 3,
+   "alias": "PAO2"
+  },
+  {
+   "id": 4,
+   "alias": "PAO3"
+  },
+  {
+   "id": 5,
+   "alias": "PAO4"
+  },
+  {
+   "id": 6,
+   "alias": "NICK1"
+  },
+  {
+   "id": 7,
+   "alias": "NICK2"
+  }
+ ],
+ "tallas": [
+  {
+   "pt_id": 415511,
+   "sku": 4790546,
+   "stock_antes": 476
+  },
+  {
+   "pt_id": 415512,
+   "sku": 4790546,
+   "stock_antes": 895
+  },
+  {
+   "pt_id": 415513,
+   "sku": 4790546,
+   "stock_antes": 862
+  },
+  {
+   "pt_id": 415514,
+   "sku": 4790546,
+   "stock_antes": 870
+  },
+  {
+   "pt_id": 415508,
+   "sku": 4790546,
+   "stock_antes": 770
+  },
+  {
+   "pt_id": 415509,
+   "sku": 4790546,
+   "stock_antes": 557
+  }
+ ],
+ "lotes": [
+  {
+   "id": 25245,
+   "producto_talla_id": 415511,
+   "cantidad_disponible": 383,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 56845,
+   "producto_talla_id": 415511,
+   "cantidad_disponible": 93,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 15473,
+   "producto_talla_id": 415512,
+   "cantidad_disponible": 581,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 56846,
+   "producto_talla_id": 415512,
+   "cantidad_disponible": 314,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 17732,
+   "producto_talla_id": 415513,
+   "cantidad_disponible": 862,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 27383,
+   "producto_talla_id": 415514,
+   "cantidad_disponible": 869,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 33839,
+   "producto_talla_id": 415508,
+   "cantidad_disponible": 769,
+   "activo": true,
+   "agotado": false
+  },
+  {
+   "id": 28790,
+   "producto_talla_id": 415509,
+   "cantidad_disponible": 552,
+   "activo": true,
+   "agotado": false
+  }
+ ],
+ "movimientos_creados": [
+  3131264,
+  3131265,
+  3131266,
+  3131267,
+  3131268,
+  3131269
+ ]
+}

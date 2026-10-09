@@ -639,6 +639,8 @@ button.kpi-card:focus-visible {
                     <button type="button" class="btn btn-light btn-sm" onclick="abrirModalImportarConteo()" title="Cargar el archivo de la pistola">
                         <i class="bi bi-upload me-1"></i>Cargar pistola
                     </button>
+                    {% endif %}
+                    {% if ver_valores %}
                     <button type="button" class="btn btn-light btn-sm fw-semibold" onclick="exportarInformeFinal()" title="Informe final en Excel: por marca (inventario antiguo vs nuevo) y diferencias por SKU">
                         <i class="bi bi-file-earmark-bar-graph me-1"></i>Informe final
                     </button>
@@ -648,6 +650,8 @@ button.kpi-card:focus-visible {
                     <button type="button" class="btn btn-light btn-sm fw-semibold" onclick="exportarDiferencias()" id="btnExportarDiferencias" title="Exportar solo las diferencias a Excel">
                         <i class="bi bi-file-earmark-excel me-1"></i>Exportar diferencias
                     </button>
+                    {% endif %}
+                    {% if not solo_revision %}
                     <button type="button" class="btn btn-light btn-sm text-danger" onclick="cancelarToma()" id="btnCancelarToma" style="display: none;" title="Cancelar esta toma (motivo obligatorio)">
                         <i class="bi bi-x-circle me-1"></i>Cancelar toma
                     </button>
@@ -788,7 +792,7 @@ button.kpi-card:focus-visible {
                             <button type="button" class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="cargarInformeMarcas()" title="Recalcular con los conteos actuales">
                                 <i class="bi bi-arrow-clockwise"></i> Actualizar
                             </button>
-                            {% if not solo_revision %}
+                            {% if ver_valores %}
                             <button type="button" class="nexo-btn nexo-btn-sm nexo-btn-primary" onclick="exportarInformeFinal()" title="Excel con hojas Por marca, Diferencias, No cargados, Excluidos y Resumen">
                                 <i class="bi bi-file-earmark-excel"></i> Informe final (Excel)
                             </button>
@@ -802,13 +806,13 @@ button.kpi-card:focus-visible {
                                 <tr>
                                     <th>Marca</th>
                                     <th class="text-end grupo-antiguo" title="Stock del sistema al corte">Antiguo · Stock</th>
-                                    {% if not solo_revision %}
+                                    {% if ver_valores %}
                                     <th class="text-end grupo-antiguo" title="Stock × (costo + sobreprecio)">Antiguo · P. costo</th>
                                     <th class="text-end grupo-antiguo" title="Stock × precio de venta">Antiguo · P. venta</th>
                                     {% endif %}
                                     <th class="text-center col-sep" title="Nuevo − antiguo (unidades)">DIF</th>
                                     <th class="text-end grupo-nuevo col-sep" title="Unidades contadas con la pistola">Nuevo · Stock</th>
-                                    {% if not solo_revision %}
+                                    {% if ver_valores %}
                                     <th class="text-end grupo-nuevo">Nuevo · P. costo</th>
                                     <th class="text-end grupo-nuevo">Nuevo · P. venta</th>
                                     <th class="text-end col-sep" title="Diferencia valorizada a P. costo">DIF P. costo</th>
@@ -820,7 +824,7 @@ button.kpi-card:focus-visible {
                         </table>
                     </div>
                     <div class="text-muted small mt-2">
-                        {% if not solo_revision %}Igual que el informe antiguo: <strong>P. costo</strong> = unidades × (costo + sobreprecio).{% endif %}
+                        {% if ver_valores %}Igual que el informe antiguo: <strong>P. costo</strong> = unidades × (costo + sobreprecio).{% endif %}
                         En el inventario nuevo, lo marcado como faltante cuenta 0 y lo «mantenido» (no se pistoleó) toma
                         la cantidad del antiguo. Los SKUs excluidos (operativos: VISA, bolsas, envíos…) no suman y su stock queda igual.
                     </div>
@@ -891,7 +895,7 @@ button.kpi-card:focus-visible {
                             <select class="form-select form-select-sm" id="filtroOrden">
                                 <option value="">Producto (A-Z)</option>
                                 <option value="dif_unidades">Mayor diferencia (unidades)</option>
-                                {% if not solo_revision %}<option value="dif_valor">Mayor diferencia ($ a costo)</option>{% endif %}
+                                {% if ver_valores %}<option value="dif_valor">Mayor diferencia ($ a costo)</option>{% endif %}
                                 <option value="sobrantes">Más sobrante primero</option>
                                 <option value="faltantes">Más faltante primero</option>
                             </select>
@@ -1175,7 +1179,7 @@ button.kpi-card:focus-visible {
                                 <th>Marca / SKU</th>
                                 <th class="text-end">SKUs</th>
                                 <th class="text-end">Unid. sistema</th>
-                                <th class="text-end">$ costo</th>
+                                {% if ver_valores %}<th class="text-end">$ costo</th>{% endif %}
                                 <th>Qué hacer</th>
                                 <th></th>
                             </tr>
@@ -1220,6 +1224,11 @@ const tomaTiendaCerrada = {% if conteo_tienda_cerrada %}true{% else %}false{% en
 // Modo revisión (solo Ver, p. ej. el jefe de local): sin costos ni botones que muevan
 // la toma. El servidor tampoco devuelve costos ni acepta acciones en este modo.
 const SOLO_REVISION = {{ solo_revision|yesno:"true,false" }};
+// Plata y análisis (costos, precios, valorización, Excel): solo Maestro y Administrador.
+// El Jefe puede operar la toma pero también ve solo pares.
+const VER_VALORES = {{ ver_valores|yesno:"true,false" }};
+// Estados en los que se puede recontar cualquier línea contada (período de revisión)
+const ESTADOS_RECONTEO = ['EN_CONTEO', 'CONTEO_FINALIZADO', 'EN_REVISION'];
 let ultimoAnalisis = null; // última respuesta de /api/analisis/ (guía y confirmación de ajustes)
 let informeMarcas = null;  // última respuesta de /api/informe-marcas/
 
@@ -1324,8 +1333,10 @@ function cargarProductos(page = 1) {
                             <button class="nexo-btn nexo-btn-sm nexo-btn-outline" onclick="verDetalleProducto(${p.id})" title="Ver detalle">
                                 <i class="bi bi-eye"></i>
                             </button>
-                            ${p.reconteo_requerido && !SOLO_REVISION ? `
-                                <button class="nexo-btn nexo-btn-sm nexo-btn-warning" onclick="realizarReconteo(${p.id})" title="Reconteo">
+                            ${!SOLO_REVISION && ESTADOS_RECONTEO.includes(estadoInventario) && !p.excluido
+                                 && (p.reconteo_requerido || (p.contado && p.diferencia !== 0)) ? `
+                                <button class="nexo-btn nexo-btn-sm ${p.reconteo_requerido ? 'nexo-btn-warning' : 'nexo-btn-outline'}" onclick="realizarReconteo(${p.id})"
+                                        title="${p.reconteo_requerido ? 'Reconteo obligatorio (diferencia grande)' : 'Recontar (si lo encontraron o se contó mal)'}">
                                     <i class="bi bi-arrow-repeat"></i>
                                 </button>
                             ` : ''}
@@ -1463,7 +1474,7 @@ function renderGuia(a) {
     const enConteo = ['BORRADOR', 'EN_CONTEO'].includes(e);
     const boton = (accion, icono, texto, clase = 'nexo-btn-primary') =>
         `<button type="button" class="nexo-btn nexo-btn-sm ${clase}" onclick="${accion}"><i class="bi ${icono}"></i> ${texto}</button>`;
-    const botonInforme = boton('exportarInformeFinal()', 'bi-file-earmark-excel', 'Informe final (Excel)', 'nexo-btn-outline');
+    const botonInforme = VER_VALORES ? boton('exportarInformeFinal()', 'bi-file-earmark-excel', 'Informe final (Excel)', 'nexo-btn-outline') : '';
     let tono = '', icono = 'bi-signpost-2', titulo = '', texto = '', acciones = '';
 
     if (SOLO_REVISION) {
@@ -1559,6 +1570,12 @@ function renderGuia(a) {
                  + `<a href="/app/revision-faltantes/?toma=${inventarioId}" class="nexo-btn nexo-btn-sm nexo-btn-outline"><i class="ri-search-eye-line"></i> Faltantes por revisar</a>`;
     }
 
+    const encontrados = a.encontrados_reconteo || [];
+    if (encontrados.length && ['CONTEO_FINALIZADO', 'EN_REVISION', 'PENDIENTE_APROBACION'].includes(e)) {
+        tono = 'guia-alerta';
+        texto += `<div class="mt-2"><i class="bi bi-search me-1"></i><strong>${formatNumber(encontrados.length)} productos subieron su conteo en
+                  el reconteo</strong> (se «encontraron»): ${a.es_maestro ? 'revíselos antes de aprobar.' : 'esta toma la revisa y aprueba el Maestro.'}</div>`;
+    }
     $('#guiaPaso').removeClass('guia-ok guia-alerta').addClass(tono);
     $('#guiaPaso > i').attr('class', `bi ${icono}`);
     $('#guiaTitulo').html(titulo);
@@ -1601,7 +1618,7 @@ function renderTablaMarcas() {
         return `<span class="${n > 0 ? 'diferencia-positiva' : 'diferencia-negativa'}">${n > 0 ? '+' : '−'}$${formatNumber(Math.abs(n))}</span>`;
     };
     // En modo revisión solo unidades (el servidor no manda P. costo ni P. venta)
-    const fila = (m) => SOLO_REVISION ? `
+    const fila = (m) => !VER_VALORES ? `
         <td class="text-end">${formatNumber(m.ant_stock)}</td>
         <td class="text-center col-sep">${dif(m.dif)}</td>
         <td class="text-end col-sep">${formatNumber(m.nue_stock)}</td>` : `
@@ -1618,7 +1635,7 @@ function renderTablaMarcas() {
         .filter(m => !soloDif || m.dif !== 0 || m.skus_con_diferencia > 0)
         .map(m => `<tr title="${formatNumber(m.skus)} SKUs · ${formatNumber(m.skus_con_diferencia)} con diferencia${m.sin_contar ? ` · ${formatNumber(m.sin_contar)} no aparecieron` : ''}">
                        <td><strong>${escHtml(m.marca)}</strong></td>${fila(m)}</tr>`);
-    $('#tbodyMarcas').html(filas.join('') || `<tr><td colspan="${SOLO_REVISION ? 4 : 9}" class="text-center text-muted py-3">Ninguna marca con diferencia</td></tr>`);
+    $('#tbodyMarcas').html(filas.join('') || `<tr><td colspan="${VER_VALORES ? 9 : 4}" class="text-center text-muted py-3">Ninguna marca con diferencia</td></tr>`);
     $('#tfootMarcas').html(`<tr><td>Total general</td>${fila(informeMarcas.total)}</tr>`);
 
     const r = informeMarcas.resumen || {};
@@ -1670,10 +1687,16 @@ function exportarInformeFinal() {
 // Aprobar desde el detalle (antes solo existía en el listado)
 function aprobarDesdeDetalle() {
     const r = (ultimoAnalisis && ultimoAnalisis.resumen) || {};
+    const encontrados = (ultimoAnalisis && ultimoAnalisis.encontrados_reconteo) || [];
     Swal.fire({
         title: '¿Aprobar la toma?',
         html: `<p>Se ajustarán <strong>+${formatNumber(r.sobrantes_unidades)}</strong> u. sobrantes y
                <strong>−${formatNumber(r.faltantes_unidades)}</strong> u. faltantes.</p>
+               ${encontrados.length ? `<div class="alert alert-warning text-start small py-2">
+                   <strong>${encontrados.length} productos subieron su conteo en el reconteo</strong> (la tienda los «encontró»):
+                   confírmelo antes de aprobar.<br>${encontrados.slice(0, 12).map(e =>
+                       `<code>${escHtml(e.sku)}</code> ${escHtml(e.producto)} ${escHtml(e.talla)}: sistema ${e.sistema}, contado ${e.fisico}`).join('<br>')}
+                   ${encontrados.length > 12 ? `<br>… y ${encontrados.length - 12} más` : ''}</div>` : ''}
                <p class="small text-muted">Aprobar todavía no mueve stock: después se usa «Aplicar ajustes al stock».</p>
                <textarea id="obsAprobacion" class="form-control mt-2" placeholder="Observaciones (opcional)" rows="2"></textarea>`,
         icon: 'question',
@@ -1888,11 +1911,14 @@ function guardarConteos() {
 }
 
 function realizarReconteo(detalleId) {
+    const p = productosCache[detalleId] || {};
     Swal.fire({
-        title: 'Reconteo de Producto',
+        title: `Recontar ${escHtml(p.sku || '')}`,
         html: `
-            <p>Este producto tiene una diferencia significativa.</p>
-            <p>Por favor, realice un nuevo conteo:</p>
+            <p class="mb-1">${escHtml(p.producto_nombre || '')} ${escHtml(p.talla_nombre || '')} — sistema <strong>${p.stock_sistema_ajustado ?? '-'}</strong>,
+               contado <strong>${p.contado ? p.stock_fisico : '-'}</strong>.</p>
+            <p class="small text-muted mb-1">Cuente lo que hay AHORA en la tienda: lo vendido o recibido desde el conteo se descuenta solo.
+               Si el reconteo <strong>sube</strong> lo contado (lo encontraron), queda marcado y la toma la aprueba el Maestro.</p>
             <div class="text-start mt-3">
                 <label class="form-label small mb-1" for="inputReconteo">Nueva cantidad</label>
                 <input type="number" id="inputReconteo" class="form-control" placeholder="Nueva cantidad" min="0">
@@ -1929,7 +1955,11 @@ function realizarReconteo(detalleId) {
                 headers: { 'X-CSRFToken': getCookie('csrftoken') },
                 success: function(response) {
                     if (response.success) {
-                        Swal.fire('Reconteo Registrado', '', 'success');
+                        const errores = response.errores || [];
+                        Swal.fire(errores.length ? 'Revise el reconteo' : 'Reconteo registrado',
+                                  errores.length ? escHtml(errores.join(' · '))
+                                  : ((response.encontrados || []).length ? 'Subió lo contado: quedó marcado como encontrado y lo revisa el Maestro antes de aprobar.' : ''),
+                                  errores.length ? 'warning' : 'success');
                         cargarProductos(currentPage);
                         cargarInformeMarcas();
                     } else {
@@ -2070,7 +2100,7 @@ function renderNoContados() {
                 <td class="ps-4 small"><code>${escHtml(s.sku)}</code> ${escHtml(s.articulo)} <span class="text-muted">${escHtml(s.talla)}</span></td>
                 <td></td>
                 <td class="text-end small">${formatNumber(s.stock)}</td>
-                <td class="text-end small">$${formatNumber(Math.max(s.stock, 0) * s.costo)}</td>
+                ${VER_VALORES ? `<td class="text-end small">$${formatNumber(Math.max(s.stock, 0) * s.costo)}</td>` : ''}
                 <td>${_selectNoContados(ncDecisionSku[s.id] || accion, `data-sku-id="${s.id}" data-grupo="${i}" aria-label="Qué hacer con ${escHtml(s.sku)}"`)}</td>
                 <td></td>
             </tr>`).join('');
@@ -2079,12 +2109,12 @@ function renderNoContados() {
                 <td><strong>${escHtml(g.etiqueta)}</strong></td>
                 <td class="text-end">${formatNumber(g.lineas)}</td>
                 <td class="text-end">${formatNumber(g.unidades)}</td>
-                <td class="text-end">$${formatNumber(g.valor_costo)}</td>
+                ${VER_VALORES ? `<td class="text-end">$${formatNumber(g.valor_costo)}</td>` : ''}
                 <td>${_selectNoContados(accion, `data-marca-idx="${i}" aria-label="Qué hacer con ${escHtml(g.etiqueta)}"`)}</td>
                 <td class="text-nowrap">${g.skus.length ? `<button type="button" class="btn btn-link btn-sm p-0" onclick="$('.nc-sku-${i}').toggle()">ver SKUs${g.skus_completos ? '' : ` (${g.skus.length} de ${formatNumber(g.lineas)})`}</button>` : ''}</td>
             </tr>${skus}`;
     }).join('');
-    $('#tbodyNoContados').html(html || '<tr><td colspan="6" class="text-center text-muted py-3">Solo quedan SKUs operativos</td></tr>');
+    $('#tbodyNoContados').html(html || `<tr><td colspan="${VER_VALORES ? 6 : 5}" class="text-center text-muted py-3">Solo quedan SKUs operativos</td></tr>`);
     resumenNoContados();
 }
 
@@ -2113,7 +2143,7 @@ function resumenNoContados() {
     const t = _impactoNoContados();
     $('#ncResumen').html(`
         <span class="me-3"><i class="bi bi-shield-check me-1"></i>Conservan su stock: <strong>${formatNumber(t.sin_diferencia.unidades)}</strong> u. (${formatNumber(t.sin_diferencia.skus)} SKUs)</span>
-        <span class="me-3 diferencia-negativa"><i class="bi bi-dash-circle me-1"></i>Se descuentan: ${formatNumber(t.faltante.unidades)} u. (${formatNumber(t.faltante.skus)} SKUs · $${formatNumber(t.faltante.costo)} a costo)</span>
+        <span class="me-3 diferencia-negativa"><i class="bi bi-dash-circle me-1"></i>Se descuentan: ${formatNumber(t.faltante.unidades)} u. (${formatNumber(t.faltante.skus)} SKUs${VER_VALORES ? ` · $${formatNumber(t.faltante.costo)} a costo` : ''})</span>
         ${t.excluir.skus ? `<span class="text-muted"><i class="bi bi-slash-circle me-1"></i>Excluidos: ${formatNumber(t.excluir.skus)} SKUs</span>` : ''}`);
 }
 
@@ -2159,7 +2189,7 @@ function aplicarNoContados() {
         ? Swal.fire({
             icon: 'warning',
             title: '¿Confirmar?',
-            html: `<p><strong>${formatNumber(t.faltante.unidades)}</strong> u. (${formatNumber(t.faltante.skus)} SKUs, $${formatNumber(t.faltante.costo)} a costo)
+            html: `<p><strong>${formatNumber(t.faltante.unidades)}</strong> u. (${formatNumber(t.faltante.skus)} SKUs${VER_VALORES ? `, $${formatNumber(t.faltante.costo)} a costo` : ''})
                    quedarán como <strong>faltante</strong> y se descontarán al aplicar la toma.</p>
                    <p>${formatNumber(t.sin_diferencia.unidades)} u. conservan el stock del sistema.</p>
                    <p class="small text-muted">Lo faltante de 2 o más unidades pide reconteo antes de cerrar.</p>`,
@@ -2295,8 +2325,8 @@ function verDetalleProducto(detalleId) {
                 ${fila('Stock sistema comparado', formatNumber(p.stock_sistema_ajustado))}
                 ${fila('Conteo físico', p.contado ? formatNumber(p.stock_fisico) : 'sin contar')}
                 ${fila('Diferencia', p.contado ? `${p.diferencia > 0 ? '+' : ''}${formatNumber(p.diferencia)} u. (${p.porcentaje_diferencia}%)` : '-')}
-                ${SOLO_REVISION ? '' : fila('Valor de la diferencia', '$' + formatNumber(p.valor_diferencia))}
-                ${SOLO_REVISION ? '' : fila('Costo unitario (FIFO al corte)', '$' + formatNumber(p.costo_unitario))}
+                ${!VER_VALORES ? '' : fila('Valor de la diferencia', '$' + formatNumber(p.valor_diferencia))}
+                ${!VER_VALORES ? '' : fila('Costo unitario (FIFO al corte)', '$' + formatNumber(p.costo_unitario))}
                 ${fila('Fecha de conteo', p.fecha_conteo || '-')}
                 ${fila('Reconteo', p.reconteo_requerido ? 'Requerido' : (p.stock_reconteo !== null ? `Hecho: ${p.stock_reconteo}` : 'No'))}
             </table>
@@ -2909,7 +2939,7 @@ function aplicarAjustesDesdeDetalle() {
                <table class="table table-sm text-start mb-2">
                    <tr><td>Sobrantes (entran con lote FIFO nuevo)</td><td class="text-end diferencia-positiva">+${formatNumber(r.sobrantes_unidades)} u. · ${formatNumber(r.sobrantes)} SKUs</td></tr>
                    <tr><td>Faltantes (salen del stock)</td><td class="text-end diferencia-negativa">−${formatNumber(r.faltantes_unidades)} u. · ${formatNumber(r.faltantes)} SKUs</td></tr>
-                   <tr><td>Impacto neto a costo</td><td class="text-end fw-bold">$${formatNumber(f.impacto_neto)}</td></tr>
+                   ${VER_VALORES ? `<tr><td>Impacto neto a costo</td><td class="text-end fw-bold">$${formatNumber(f.impacto_neto)}</td></tr>` : ''}
                </table>
                <p class="small text-muted mb-1">Cada ajuste queda en el kardex con referencia <code>${numeroInventario}</code>.
                   Las ventas hechas después del corte se respetan (el stock final = contado − vendido después).</p>

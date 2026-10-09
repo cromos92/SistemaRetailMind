@@ -39,7 +39,7 @@ from .models import (
     Producto, Producto_Talla, Productos_Atributos, AtributoOpcion, Categoria,
     LoteProducto, Movimientos_Producto, Sucursal, Empresa, EmpresaUser,
     TomaInventario, TomaInventarioDetalle, TomaInventarioLog, TareaAplicacionAjustes,
-    PermisoRol, es_rol_administrador,
+    PermisoRol, es_maestro, es_rol_administrador,
 )
 from .models.inventario import requiere_reconteo
 from .services import informe_toma_inventario as informe_toma
@@ -81,6 +81,15 @@ _FRASES_SKU_OPERATIVO = (
     'BOLSA PAPEL', 'REAL PAPEL', 'COSTO ENVIO',
 )
 MARCA_OBSERVACION_OPERATIVO = 'SKU operativo (no es mercadería): excluido del análisis'
+
+# Un reconteo que SUBE lo contado («lo encontramos») queda marcado en la línea: el
+# Maestro lo ve antes de aprobar y esa toma solo la aprueba él (pedido del usuario,
+# 09-10: lo que la tienda «encuentra» lo confirma el Maestro).
+MARCA_ENCONTRADO_RECONTEO = 'ENCONTRADO EN RECONTEO'
+
+
+def _encontrados_en_reconteo(inventario):
+    return inventario.detalles.filter(excluir_de_analisis=False, observaciones__contains=MARCA_ENCONTRADO_RECONTEO)
 
 
 def _es_sku_operativo(articulo, descripcion):
@@ -213,12 +222,11 @@ def _modo_revision(request):
     Inventarios» pero no Editar (el jefe de local).
 
     En modo revisión se ven las tomas de sus sucursales, lo contado, las
-    diferencias y los faltantes en UNIDADES; no se ven costos, precios ni la
-    valorización (análisis financiero, informe final, Excel) y no aparecen los
-    botones que mueven la toma. Las rutas de acción ya exigen Editar
-    (urls._permiso_inventarios); esto cubre las de LECTURA, que devolvían costos
-    a cualquiera que entrara. Un administrador ve todo aunque la sucursal activa
-    le restrinja Editar.
+    diferencias y los faltantes, y no aparecen los botones que mueven la toma
+    (las rutas de acción ya exigen Editar en urls._permiso_inventarios). La
+    PLATA y el ANÁLISIS los decide aparte `_ve_valorizacion` (por rol): el Jefe
+    opera la toma pero tampoco ve costos. Un administrador opera aunque la
+    sucursal activa le restrinja Editar.
     """
     if not hasattr(request, '_modo_revision_inventario'):
         usuario = request.user
@@ -230,9 +238,20 @@ def _modo_revision(request):
     return request._modo_revision_inventario
 
 
+# Quién ve PLATA y ANÁLISIS de las tomas (costos, precios, valorización, informe final,
+# Excel): solo el Maestro y el Administrador. El Jefe y el jefe de local ven solo pares
+# aunque puedan operar la toma: es información sensible (pedido del usuario, 09-10).
+# Es un chequeo de rol a propósito: es_rol_administrador() también deja pasar al Jefe.
+ROLES_VEN_VALORIZACION = ('maestro', 'administrador')
+
+
+def _ve_valorizacion(usuario):
+    return getattr(usuario, 'rol', None) in ROLES_VEN_VALORIZACION
+
+
 def _error_solo_revision():
     return JsonResponse(
-        {'success': False, 'error': 'Los informes con costos son solo para quien administra la toma'},
+        {'success': False, 'error': 'Los informes con costos son solo para el Maestro y el Administrador'},
         status=403,
     )
 
@@ -283,6 +302,7 @@ def gestion_inventarios(request):
         ),
         'sucursal_activa_id': int(activa) if str(activa or '').isdigit() else None,
         'solo_revision': _modo_revision(request),
+        'ver_valores': _ve_valorizacion(request.user),
         'puede_crear': es_rol_administrador(request.user) or PermisoRol.tiene_permiso(
             request.user, 'gestion_inventarios', 'puede_crear', sucursal_id=activa,
         ),
@@ -298,6 +318,7 @@ def detalle_inventario(request, inventario_id):
     return render(request, 'vistas/modulo_existencias/detalle_inventario.html', {
         'inventario': inventario,
         'solo_revision': _modo_revision(request),
+        'ver_valores': _ve_valorizacion(request.user),
         'puede_aplicar_ajustes': inventario.estado in ('APROBADO', 'APLICANDO'),
         'conteo_tienda_cerrada': inventario.conteo_tienda_cerrada,
         # Para precargar «¿cuándo se contó?» en el modal de importación (hora local)
@@ -483,14 +504,15 @@ def obtener_inventarios(request):
                 'creado_por': inv.creado_por.get_full_name() if inv.creado_por else '',
                 'created_at': timezone.localtime(inv.created_at).strftime('%d/%m/%Y %H:%M')
             })
-        solo_revision = _modo_revision(request)
-        if solo_revision:
+        ver_valores = _ve_valorizacion(request.user)
+        if not ver_valores:
             for fila in inventarios_data:
                 fila.pop('valor_diferencias')
 
         return JsonResponse({
             'success': True,
-            'solo_revision': solo_revision,
+            'solo_revision': _modo_revision(request),
+            'ver_valores': ver_valores,
             'inventarios': inventarios_data,
             'resumen': resumen,
             'faltantes_por_reponer': por_reponer_total,
@@ -1077,8 +1099,8 @@ def obtener_productos_conteo(request, inventario_id):
         categoria = request.GET.get('categoria')
         
         orden = request.GET.get('orden', '')  # nombre | dif_unidades | dif_valor | sobrantes | faltantes
-        solo_revision = _modo_revision(request)
-        if solo_revision and orden == 'dif_valor':
+        sin_valores = not _ve_valorizacion(request.user)
+        if sin_valores and orden == 'dif_valor':
             orden = 'dif_unidades'  # ordenar por plata revelaría los costos
 
         # Construir queryset
@@ -1170,7 +1192,7 @@ def obtener_productos_conteo(request, inventario_id):
                 'costo_unitario': float(det.costo_unitario_sistema),
                 'precio_venta': float(det.precio_venta_sistema)
             })
-        if solo_revision:
+        if sin_valores:
             for fila in productos_data:
                 for clave in ('valor_diferencia', 'costo_unitario', 'precio_venta'):
                     fila.pop(clave)
@@ -1923,40 +1945,63 @@ def registrar_reconteo(request, inventario_id):
         reconteos = data.get('reconteos', [])
 
         reconteos_realizados = 0
+        encontrados = []
         errores = []
+        ahora = timezone.now()
 
         for rec in reconteos:
             detalle_id = rec.get('detalle_id')
             stock_reconteo = rec.get('stock_reconteo')
             observaciones = rec.get('observaciones', '')
-            
+
             try:
-                detalle = inventario.detalles.get(id=detalle_id, reconteo_requerido=True)
+                # Se puede recontar CUALQUIER línea contada (antes solo las marcadas): si en
+                # la revisión algo aparece, se recuenta y queda a la vista del Maestro.
+                detalle = inventario.detalles.get(id=detalle_id, contado=True, excluir_de_analisis=False)
 
                 cantidad = int(stock_reconteo)
                 if cantidad < 0:
                     errores.append(f'SKU {detalle.sku}: el reconteo no puede ser negativo ({cantidad})')
                     continue
+
+                # Lo que se movió entre el conteo y este reconteo (ventas, traspasos del
+                # período de revisión) se descuenta para comparar con la base del conteo.
+                # Antes no: un par vendido en el medio salía como faltante y, al aplicar,
+                # se descontaba dos veces (la venta ya había bajado el stock).
+                desde = detalle.fecha_conteo or inventario.fecha_corte
+                movido = _obtener_movimientos_post_corte_batch(
+                    [detalle.producto_talla_id], desde, ahora, inventario.sucursal_id
+                ).get(detalle.producto_talla_id, 0)
+                fisico = cantidad - movido
+                if fisico < 0:
+                    errores.append(f'SKU {detalle.sku}: el reconteo ({cantidad}) es menor que lo que entró después '
+                                   f'del conteo ({movido:+d}); revise si esa mercadería llegó físicamente')
+                    continue
+
+                anterior = detalle.stock_fisico
                 detalle.stock_reconteo = cantidad
-                detalle.fecha_reconteo = timezone.now()
+                detalle.fecha_reconteo = ahora
                 detalle.usuario_reconteo = request.user
-                
-                # Si el reconteo confirma el conteo original, usar ese valor
-                # Si es diferente, usar el reconteo
-                if detalle.stock_reconteo != detalle.stock_fisico:
-                    detalle.stock_fisico = detalle.stock_reconteo
-                    base_stock = detalle.stock_sistema_ajustado if detalle.stock_sistema_ajustado is not None else detalle.stock_sistema
-                    detalle.diferencia = detalle.stock_fisico - base_stock
-                    if observaciones:
-                        detalle.observaciones = f"{detalle.observaciones or ''}\nReconteo: {observaciones}".strip()
-                
+                detalle.stock_fisico = fisico
+                nota = f'Reconteo {timezone.localtime(ahora):%d/%m %H:%M} ({request.user.username}): {cantidad} u.'
+                if movido:
+                    nota += f' (movido desde el conteo {movido:+d} → al momento del conteo {fisico})'
+                if fisico > anterior:
+                    nota += f' — {MARCA_ENCONTRADO_RECONTEO}: +{fisico - anterior} (antes {anterior})'
+                    encontrados.append(detalle.sku)
+                if observaciones:
+                    nota += f' · {observaciones}'
+                detalle.observaciones = f"{detalle.observaciones or ''}\n{nota}".strip()
+
+                # save() recalcula la diferencia contra la base del conteo y, con el
+                # reconteo hecho, no la vuelve a marcar aunque siga siendo grande
                 detalle.reconteo_requerido = False
                 detalle.save()
-                
+
                 reconteos_realizados += 1
 
             except TomaInventarioDetalle.DoesNotExist:
-                errores.append(f'Detalle {detalle_id} no requiere reconteo o no existe')
+                errores.append(f'Detalle {detalle_id}: no está contado, está excluido o no existe')
             except (TypeError, ValueError):
                 errores.append(f'Detalle {detalle_id}: cantidad inválida ({stock_reconteo!r})')
 
@@ -1967,15 +2012,17 @@ def registrar_reconteo(request, inventario_id):
         _registrar_log(
             inventario=inventario,
             tipo_accion='RECONTEO',
-            descripcion=f'{reconteos_realizados} productos recontados',
+            descripcion=f'{reconteos_realizados} productos recontados'
+                        + (f'; encontrados en el reconteo (los revisa el Maestro): {", ".join(encontrados)}' if encontrados else ''),
             usuario=request.user,
-            datos={'errores': errores}
+            datos={'errores': errores, 'encontrados': encontrados}
         )
 
         return JsonResponse({
             'success': True,
             'message': f'{reconteos_realizados} reconteos registrados',
             'reconteos_realizados': reconteos_realizados,
+            'encontrados': encontrados,
             'errores': errores if errores else None,
         })
         
@@ -2000,8 +2047,9 @@ def obtener_analisis_inventario(request, inventario_id):
         if inventario is None:
             return _error_sin_acceso()
         
-        # Quien solo revisa (jefe de local) no recibe costos ni valorización
-        solo_revision = _modo_revision(request)
+        # Plata y análisis solo para el Maestro y el Administrador: el Jefe y el jefe de
+        # local reciben los conteos en pares (lo que necesita la pantalla), nada más
+        sin_valores = not _ve_valorizacion(request.user)
 
         # Líneas consideradas en el análisis (sin las excluidas) y, de ellas, las contadas
         detalles_analisis = inventario.detalles.filter(excluir_de_analisis=False)
@@ -2041,13 +2089,14 @@ def obtener_analisis_inventario(request, inventario_id):
                     'diferencia': d.diferencia,
                     'porcentaje': round(d.porcentaje_diferencia, 2),
                 }
-                if not solo_revision:
+                if not sin_valores:
                     fila['valor'] = float(d.valor_diferencia)
                 filas.append(fila)
             return filas
 
-        top_faltantes_data = _top(detalles.filter(diferencia__lt=0).order_by('diferencia'))
-        top_sobrantes_data = _top(detalles.filter(diferencia__gt=0).order_by('-diferencia'))
+        # (el «análisis» —top y por marca/categoría— es solo para quien ve valores)
+        top_faltantes_data = [] if sin_valores else _top(detalles.filter(diferencia__lt=0).order_by('diferencia'))
+        top_sobrantes_data = [] if sin_valores else _top(detalles.filter(diferencia__gt=0).order_by('-diferencia'))
 
         # === POR MARCA Y POR CATEGORÍA: una consulta por campo da a la vez el análisis
         # (solo lo contado) y los segmentos de los filtros (todas las líneas) ===
@@ -2076,6 +2125,12 @@ def obtener_analisis_inventario(request, inventario_id):
         precision_inventario = (totales['sin_diferencia'] / total_contados * 100) if total_contados > 0 else 0
 
         ajustes_aplicados = inventario.ajustes_aplicados().count()
+        encontrados_reconteo = [
+            {'sku': d['sku'], 'producto': d['producto_nombre'], 'talla': d['talla_nombre'],
+             'sistema': d['stock_sistema_ajustado'], 'fisico': d['stock_fisico'], 'diferencia': d['diferencia']}
+            for d in _encontrados_en_reconteo(inventario).order_by('producto_nombre', 'talla_nombre').values(
+                'sku', 'producto_nombre', 'talla_nombre', 'stock_sistema_ajustado', 'stock_fisico', 'diferencia')[:50]
+        ]
         operativos_pendientes = (
             detalles_analisis.filter(contado=False, id__in=_ids_operativos(detalles_analisis.filter(contado=False)))
             .aggregate(lineas=Count('id'), unidades=Coalesce(Sum('stock_sistema'), 0))
@@ -2107,7 +2162,7 @@ def obtener_analisis_inventario(request, inventario_id):
                 'mensaje': f'Precisión del inventario ({precision_inventario:.1f}%) está por debajo del 90% recomendado'
             })
         
-        if not solo_revision and abs(resumen_financiero['impacto_neto']) > 1000000:  # > 1 millón
+        if not sin_valores and abs(resumen_financiero['impacto_neto']) > 1000000:  # > 1 millón
             alertas.append({
                 'tipo': 'warning',
                 'mensaje': f'Impacto financiero significativo: ${abs(resumen_financiero["impacto_neto"]):,.0f}'
@@ -2147,8 +2202,11 @@ def obtener_analisis_inventario(request, inventario_id):
                 'requieren_reconteo': requieren_reconteo,
                 'precision_inventario': round(precision_inventario, 2)
             },
-            'solo_revision': solo_revision,
-            'resumen_financiero': None if solo_revision else resumen_financiero,
+            'solo_revision': _modo_revision(request),
+            'ver_valores': not sin_valores,
+            'es_maestro': es_maestro(request.user),
+            'encontrados_reconteo': encontrados_reconteo,
+            'resumen_financiero': None if sin_valores else resumen_financiero,
             'top_faltantes': top_faltantes_data,
             'top_sobrantes': top_sobrantes_data,
             'analisis_categorias': [
@@ -2157,9 +2215,9 @@ def obtener_analisis_inventario(request, inventario_id):
                     'total_productos': a['total_productos'],
                     'productos_con_diferencia': a['productos_con_diferencia'],
                     'suma_diferencias': a['suma_diferencias'] or 0,
-                    **({} if solo_revision else {'valor_diferencias': float(a['valor_diferencias'] or 0)}),
+                    **({} if sin_valores else {'valor_diferencias': float(a['valor_diferencias'] or 0)}),
                 }
-                for a in analisis_categorias
+                for a in ([] if sin_valores else analisis_categorias)
             ],
             'analisis_marcas': [
                 {
@@ -2167,9 +2225,9 @@ def obtener_analisis_inventario(request, inventario_id):
                     'total_productos': a['total_productos'],
                     'productos_con_diferencia': a['productos_con_diferencia'],
                     'suma_diferencias': a['suma_diferencias'] or 0,
-                    **({} if solo_revision else {'valor_diferencias': float(a['valor_diferencias'] or 0)}),
+                    **({} if sin_valores else {'valor_diferencias': float(a['valor_diferencias'] or 0)}),
                 }
-                for a in analisis_marcas
+                for a in ([] if sin_valores else analisis_marcas)
             ],
             'alertas': alertas,
             'segmentos': {
@@ -2190,7 +2248,8 @@ def obtener_analisis_inventario(request, inventario_id):
             'fecha_corte_local': timezone.localtime(inventario.fecha_corte).strftime('%Y-%m-%dT%H:%M'),
             # Mismo criterio que TomaInventario.puede_aprobar(): nada pendiente de
             # contar ni de recontar (líneas excluidas fuera).
-            'puede_aprobar': inventario.puede_aprobar(),
+            # (con «encontrados» en el reconteo, la aprobación es del Maestro)
+            'puede_aprobar': inventario.puede_aprobar() and (not encontrados_reconteo or es_maestro(request.user)),
             'puede_enviar_aprobacion': (
                 inventario.estado in ('CONTEO_FINALIZADO', 'EN_REVISION') and
                 requieren_reconteo == 0
@@ -2239,7 +2298,7 @@ def exportar_inventario(request, inventario_id):
         inventario = _inventario_del_usuario(request, inventario_id)
         if inventario is None:
             return _error_sin_acceso()
-        if _modo_revision(request):
+        if not _ve_valorizacion(request.user):  # Excel con costos: solo Maestro y Administrador
             return _error_solo_revision()
 
         # Crear workbook en modo streaming (sin hoja activa por defecto)
@@ -2355,7 +2414,7 @@ def exportar_diferencias_inventario(request, inventario_id):
         inventario = _inventario_del_usuario(request, inventario_id)
         if inventario is None:
             return _error_sin_acceso()
-        if _modo_revision(request):
+        if not _ve_valorizacion(request.user):  # Excel con costos: solo Maestro y Administrador
             return _error_solo_revision()
         detalles = inventario.detalles.filter(
             contado=True,
@@ -2428,13 +2487,14 @@ def obtener_informe_marcas(request, inventario_id):
             return _error_sin_acceso()
         analisis = informe_toma.analizar(informe_toma.filas_desde_toma(inventario))
         marcas, total, resumen = analisis['marcas'], analisis['total'], analisis['resumen']
-        solo_revision = _modo_revision(request)
-        if solo_revision:  # el jefe de local ve el resultado en unidades, sin P COSTO / P VENTA
+        ver_valores = _ve_valorizacion(request.user)
+        if not ver_valores:  # el Jefe y el jefe de local ven el resultado en pares, sin P COSTO / P VENTA
             marcas = [_solo_unidades(m) for m in marcas]
             total, resumen = _solo_unidades(total), _solo_unidades(resumen)
         return JsonResponse({
             'success': True,
-            'solo_revision': solo_revision,
+            'solo_revision': _modo_revision(request),
+            'ver_valores': ver_valores,
             'titulo': informe_toma.titulo_informe(informe_toma.cabecera_desde_toma(inventario)),
             'marcas': marcas,
             'total': total,
@@ -2460,7 +2520,7 @@ def exportar_informe_final(request, inventario_id):
         inventario = _inventario_del_usuario(request, inventario_id)
         if inventario is None:
             return _error_sin_acceso()
-        if _modo_revision(request):
+        if not _ve_valorizacion(request.user):  # Excel con costos: solo Maestro y Administrador
             return _error_solo_revision()
         cabecera = informe_toma.cabecera_desde_toma(inventario)
         analisis = informe_toma.analizar(informe_toma.filas_desde_toma(inventario))
@@ -2641,6 +2701,16 @@ def aprobar_inventario(request, inventario_id):
             return JsonResponse({
                 'success': False,
                 'error': f'No se puede aprobar: {reconteos_pendientes} productos esperan reconteo'
+            })
+
+        # Lo que la tienda «encontró» al recontar lo confirma el Maestro: con reconteos
+        # que subieron el conteo, la aprobación es suya.
+        encontrados = _encontrados_en_reconteo(inventario).count()
+        if encontrados and not es_maestro(request.user):
+            return JsonResponse({
+                'success': False,
+                'error': f'{encontrados} productos subieron su conteo en el reconteo (se «encontraron»): '
+                         f'esta toma la revisa y aprueba el Maestro.'
             })
 
         data = json.loads(request.body) if request.body else {}
@@ -3506,6 +3576,11 @@ def resolver_no_contados(request, inventario_id):
         data = json.loads(request.body) if request.body else {}
         if data.get('agrupar'):
             grupos, operativos = _agrupar_no_contados(inventario)
+            if not _ve_valorizacion(request.user):  # el Jefe decide en pares, sin costos
+                for g in grupos:
+                    g.pop('valor_costo', None)
+                    for s in g['skus']:
+                        s.pop('costo', None)
             return JsonResponse({
                 'success': True,
                 'grupos': grupos,
