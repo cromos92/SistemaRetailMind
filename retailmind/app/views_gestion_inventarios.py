@@ -27,6 +27,7 @@ from django.utils import timezone
 from django.db import transaction, connection
 from django.core.exceptions import ValidationError, PermissionDenied
 import threading
+from collections import defaultdict
 from datetime import datetime, timedelta
 from decimal import Decimal
 import csv
@@ -97,6 +98,9 @@ def _encontrados_en_reconteo(inventario):
 # toma sigue abierta en estos estados: la tienda cuenta y recuenta, y lo nuevo queda «por
 # ajustar» hasta que el Maestro lo autorice (otro «Ajustar stock ya» o la aprobación).
 ESTADOS_AJUSTE_ANTICIPADO = ('EN_CONTEO', 'CONTEO_FINALIZADO', 'EN_REVISION')
+
+# Estados en los que se puede recontar (uno a uno o con el «Reconteo masivo»)
+ESTADOS_RECONTEO = ('EN_CONTEO', 'CONTEO_FINALIZADO', 'EN_REVISION')
 
 # Lo que escribe la propia toma al ajustar (kardex con su número en referencia_externa).
 # No es un movimiento físico: no se resta como venta/traspaso al recontar después.
@@ -446,11 +450,18 @@ def obtener_inventarios(request):
                 Q(total_diferencias_positivas__gt=0) | Q(total_diferencias_negativas__gt=0)
             )
 
+        # Las tomas canceladas («eliminadas») no se listan salvo que se pidan con el
+        # filtro de estado «Cancelado» (pedido del usuario, 09-10). Se cuentan en la
+        # misma consulta del resumen para avisar cuántas quedaron ocultas.
+        ocultar_canceladas = not estado
+        visibles = ~Q(estado='CANCELADO') if ocultar_canceladas else Q(pk__isnull=False)
+
         # Resumen sobre TODO el conjunto filtrado (antes los KPIs contaban solo la
         # página visible: con 20 por página el total nunca podía pasar de 20).
         # Una sola consulta con conteos condicionales (antes eran 5 COUNT).
         resumen = queryset.order_by().aggregate(
-            total=Count('id'),
+            total=Count('id', filter=visibles),
+            canceladas_ocultas=Count('id', filter=Q(estado='CANCELADO')),
             en_proceso=Count('id', filter=Q(estado__in=ESTADOS_EN_PROCESO)),
             pendientes_aprobacion=Count('id', filter=Q(estado='PENDIENTE_APROBACION')),
             completados=Count('id', filter=Q(estado='COMPLETADO')),
@@ -458,6 +469,11 @@ def obtener_inventarios(request):
                 Q(total_diferencias_positivas__gt=0) | Q(total_diferencias_negativas__gt=0)
             )),
         )
+
+        if ocultar_canceladas:
+            queryset = queryset.exclude(estado='CANCELADO')
+        else:
+            resumen['canceladas_ocultas'] = 0   # se pidió un estado: no hay nada oculto
 
         # Ordenar y paginar (el total ya se contó arriba: el paginador no lo repite)
         queryset = queryset.order_by('-created_at')
@@ -2028,12 +2044,37 @@ def preview_conteo_pistola(request, inventario_id):
     })
 
 
+def _movido_desde_el_conteo(inventario, detalles, hasta):
+    """
+    {detalle_id: movimiento neto de su SKU entre el conteo de la línea y `hasta`}
+    (ventas, traspasos del período de revisión), sin los ajustes de la propia toma: si
+    el Maestro ya ajustó la línea, ese movimiento no es una venta. Una consulta por
+    momento de conteo (una carga de pistola fecha igual todo el archivo), no por línea.
+    """
+    por_momento = defaultdict(list)
+    for d in detalles:
+        por_momento[d.fecha_conteo or inventario.fecha_corte].append(d)
+    movido = {}
+    for desde, grupo in por_momento.items():
+        netos = _obtener_movimientos_post_corte_batch(
+            [d.producto_talla_id for d in grupo], desde, hasta, inventario.sucursal_id,
+            excluir_referencia=inventario.numero_inventario,
+        )
+        for d in grupo:
+            movido[d.id] = netos.get(d.producto_talla_id, 0)
+    return movido
+
+
 @require_POST
 @login_required
 @transaction.atomic
 def registrar_reconteo(request, inventario_id):
     """
     Registrar reconteo de productos con diferencias significativas.
+
+    Cada ítem trae `stock_reconteo` (lo que hay AHORA en la tienda) o, desde el
+    «Reconteo masivo» del Maestro, `aceptar_conteo: true`: da por bueno lo que leyó la
+    pistola sin recontar (la línea deja de esperar reconteo con el mismo conteo).
     """
     try:
         inventario = _inventario_del_usuario(request, inventario_id)
@@ -2042,7 +2083,7 @@ def registrar_reconteo(request, inventario_id):
         if not _puede_contar(request):
             return _error_no_cuenta()
 
-        if inventario.estado not in ['EN_CONTEO', 'CONTEO_FINALIZADO', 'EN_REVISION']:
+        if inventario.estado not in ESTADOS_RECONTEO:
             return JsonResponse({
                 'success': False,
                 'error': 'El inventario no está en un estado válido para reconteo'
@@ -2054,49 +2095,69 @@ def registrar_reconteo(request, inventario_id):
         reconteos_realizados = 0
         encontrados = []
         por_autorizar = []  # líneas ya ajustadas cuyo reconteo cambió: las autoriza el Maestro
+        aceptados = []      # pistola dada por buena sin recontar (Maestro)
         errores = []
         ahora = timezone.now()
+        maestro = es_maestro(request.user)
 
         for rec in reconteos:
             detalle_id = rec.get('detalle_id')
             stock_reconteo = rec.get('stock_reconteo')
             observaciones = rec.get('observaciones', '')
+            aceptar = bool(rec.get('aceptar_conteo'))
 
             try:
                 # Se puede recontar CUALQUIER línea contada (antes solo las marcadas): si en
                 # la revisión algo aparece, se recuenta y queda a la vista del Maestro.
                 detalle = inventario.detalles.get(id=detalle_id, contado=True, excluir_de_analisis=False)
 
-                cantidad = int(stock_reconteo)
-                if cantidad < 0:
-                    errores.append(f'SKU {detalle.sku}: el reconteo no puede ser negativo ({cantidad})')
-                    continue
+                if aceptar:
+                    # No recontar una diferencia grande es decisión del Maestro (pedido del
+                    # usuario, 09-10: «que tome lo fiel a la pistola»)
+                    if not maestro:
+                        errores.append(f'SKU {detalle.sku}: dar por bueno el conteo sin recontar lo autoriza solo el Maestro')
+                        continue
+                    if not detalle.reconteo_requerido or detalle.stock_reconteo is not None:
+                        errores.append(f'SKU {detalle.sku}: no esperaba reconteo')
+                        continue
+                else:
+                    cantidad = int(stock_reconteo)
+                    if cantidad < 0:
+                        errores.append(f'SKU {detalle.sku}: el reconteo no puede ser negativo ({cantidad})')
+                        continue
 
                 # Lo que se movió entre el conteo y este reconteo (ventas, traspasos del
                 # período de revisión) se descuenta para comparar con la base del conteo.
                 # Antes no: un par vendido en el medio salía como faltante y, al aplicar,
                 # se descontaba dos veces (la venta ya había bajado el stock).
-                # (sin los ajustes de la propia toma: si el Maestro ya ajustó esta línea,
-                # ese movimiento no es una venta)
-                desde = detalle.fecha_conteo or inventario.fecha_corte
-                movido = _obtener_movimientos_post_corte_batch(
-                    [detalle.producto_talla_id], desde, ahora, inventario.sucursal_id,
-                    excluir_referencia=inventario.numero_inventario,
-                ).get(detalle.producto_talla_id, 0)
-                fisico = cantidad - movido
-                if fisico < 0:
-                    errores.append(f'SKU {detalle.sku}: el reconteo ({cantidad}) es menor que lo que entró después '
-                                   f'del conteo ({movido:+d}); revise si esa mercadería llegó físicamente')
-                    continue
+                movido = _movido_desde_el_conteo(inventario, [detalle], ahora)[detalle.id]
+                if aceptar:
+                    # El conteo queda como lo leyó la pistola; el «reconteo» registrado es
+                    # lo que debería haber hoy según ella
+                    fisico = detalle.stock_fisico
+                    cantidad = max(fisico + movido, 0)
+                else:
+                    fisico = cantidad - movido
+                    if fisico < 0:
+                        errores.append(f'SKU {detalle.sku}: el reconteo ({cantidad}) es menor que lo que entró después '
+                                       f'del conteo ({movido:+d}); revise si esa mercadería llegó físicamente')
+                        continue
 
                 anterior = detalle.stock_fisico
                 detalle.stock_reconteo = cantidad
                 detalle.fecha_reconteo = ahora
                 detalle.usuario_reconteo = request.user
                 detalle.stock_fisico = fisico
-                nota = f'Reconteo {timezone.localtime(ahora):%d/%m %H:%M} ({request.user.username}): {cantidad} u.'
-                if movido:
-                    nota += f' (movido desde el conteo {movido:+d} → al momento del conteo {fisico})'
+                if aceptar:
+                    nota = (f'Conteo de pistola aceptado sin recontar {timezone.localtime(ahora):%d/%m %H:%M} '
+                            f'({request.user.username}): {fisico} u.')
+                    if movido:
+                        nota += f' (movido desde el conteo {movido:+d} → hoy {cantidad})'
+                    aceptados.append(detalle.sku)
+                else:
+                    nota = f'Reconteo {timezone.localtime(ahora):%d/%m %H:%M} ({request.user.username}): {cantidad} u.'
+                    if movido:
+                        nota += f' (movido desde el conteo {movido:+d} → al momento del conteo {fisico})'
                 if fisico > anterior:
                     nota += f' — {MARCA_ENCONTRADO_RECONTEO}: +{fisico - anterior} (antes {anterior})'
                     encontrados.append(detalle.sku)
@@ -2127,24 +2188,94 @@ def registrar_reconteo(request, inventario_id):
             inventario=inventario,
             tipo_accion='RECONTEO',
             descripcion=f'{reconteos_realizados} productos recontados'
+                        + (f'; aceptados según la pistola sin recontar (Maestro): {", ".join(aceptados[:30])}'
+                           f'{"…" if len(aceptados) > 30 else ""}' if aceptados else '')
                         + (f'; encontrados en el reconteo (los revisa el Maestro): {", ".join(encontrados)}' if encontrados else '')
                         + (f'; ya ajustados, quedan por autorizar: {", ".join(por_autorizar)}' if por_autorizar else ''),
             usuario=request.user,
-            datos={'errores': errores, 'encontrados': encontrados, 'por_autorizar': por_autorizar}
+            datos={'errores': errores, 'encontrados': encontrados, 'por_autorizar': por_autorizar,
+                   'aceptados': aceptados}
         )
 
         return JsonResponse({
             'success': True,
             'message': f'{reconteos_realizados} reconteos registrados',
             'reconteos_realizados': reconteos_realizados,
+            'aceptados': aceptados,
             'encontrados': encontrados,
             'por_autorizar': por_autorizar,
             'errores': errores if errores else None,
         })
-        
+
     except Exception as e:
         logger.error(f"Error al registrar reconteo: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+# Tope del «Reconteo masivo»: la pantalla lista cada línea para revisarla una por una
+MAX_RECONTEO_MASIVO = 500
+
+
+@require_POST
+@login_required
+def preparar_reconteo_masivo(request, inventario_id):
+    """
+    POST gestion-inventarios/api/reconteo-masivo/<id>/ — solo el Maestro. Body: {"ids": [...]}.
+
+    Arma el «Reconteo masivo» de las líneas marcadas (pedido del usuario, 09-10: no
+    recontar y quedarse con lo que leyó la pistola). Por línea: lo contado y lo que
+    debería haber HOY si la pistola estaba bien (contado + lo vendido o recibido desde el
+    conteo). La pantalla lo muestra prellenado: lo que se deja igual se da por bueno sin
+    recontar (`aceptar_conteo` en registrar_reconteo) y lo que se cambia se registra
+    como reconteo normal. No guarda nada.
+    """
+    inventario = _inventario_del_usuario(request, inventario_id)
+    if inventario is None:
+        return _error_sin_acceso()
+    if not es_maestro(request.user):
+        return JsonResponse({'success': False, 'error': 'El reconteo masivo lo hace solo el Maestro'}, status=403)
+    if inventario.estado not in ESTADOS_RECONTEO:
+        return JsonResponse({'success': False, 'error': 'El inventario no está en un estado válido para reconteo'})
+    try:
+        data = json.loads(request.body or '{}')
+        ids = [int(i) for i in (data.get('ids') or [])]
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({'success': False, 'error': 'Datos inválidos'})
+    if not ids:
+        return JsonResponse({'success': False, 'error': 'No hay líneas seleccionadas'})
+    if len(ids) > MAX_RECONTEO_MASIVO:
+        return JsonResponse({'success': False,
+                             'error': f'Marque como máximo {MAX_RECONTEO_MASIVO} líneas por reconteo masivo ({len(ids)} marcadas)'})
+
+    detalles = list(inventario.detalles.filter(id__in=ids).order_by('producto_nombre', 'talla_nombre'))
+    omitidas = []
+    recontables = []
+    for d in detalles:
+        if d.excluir_de_analisis:
+            omitidas.append({'sku': d.sku, 'motivo': 'está en «No ajustar»'})
+        elif not d.contado:
+            omitidas.append({'sku': d.sku, 'motivo': 'no está contada: cuéntela primero'})
+        else:
+            recontables.append(d)
+
+    movido = _movido_desde_el_conteo(inventario, recontables, timezone.now())
+    lineas = []
+    for d in recontables:
+        m = movido[d.id]
+        lineas.append({
+            'id': d.id,
+            'sku': d.sku,
+            'producto': d.producto_nombre,
+            'talla': d.talla_nombre,
+            'marca': d.marca_nombre,
+            'sistema': d.stock_sistema_ajustado if d.stock_sistema_ajustado is not None else d.stock_sistema,
+            'contado': d.stock_fisico,
+            'movido': m,
+            'hoy': max(d.stock_fisico + m, 0),
+            'espera_reconteo': d.reconteo_requerido and d.stock_reconteo is None,
+            'ajustada': d.ajuste_aplicado,
+        })
+    return JsonResponse({'success': True, 'lineas': lineas, 'omitidas': omitidas})
 
 
 # ==============================================================================

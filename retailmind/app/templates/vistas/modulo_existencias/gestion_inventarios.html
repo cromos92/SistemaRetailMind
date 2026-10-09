@@ -693,8 +693,8 @@
                         </div>
                         <div class="col-lg-2 col-md-4">
                             <label class="form-label" for="filtroEstado">Estado</label>
-                            <select class="form-select" id="filtroEstado">
-                                <option value="">Todos</option>
+                            <select class="form-select" id="filtroEstado" title="Las tomas canceladas solo se ven eligiendo «Cancelado»">
+                                <option value="">Todos (sin canceladas)</option>
                                 <option value="BORRADOR">Borrador</option>
                                 <option value="EN_CONTEO">En Conteo</option>
                                 <option value="CONTEO_FINALIZADO">Conteo Finalizado</option>
@@ -763,7 +763,7 @@
                 <!-- Paginación -->
                 <div class="pagination-controls">
                     <div class="text-muted small">
-                        Mostrando <strong id="paginacionInfo">0</strong> inventarios
+                        Mostrando <strong id="paginacionInfo">0</strong> inventarios<span id="avisoCanceladas"></span>
                     </div>
                     <div class="d-flex align-items-center gap-1">
                         <button type="button" class="btn btn-sm btn-outline-secondary" id="btnPrevPage" title="Página anterior" aria-label="Página anterior">
@@ -1100,6 +1100,11 @@ function cargarInventarios(page = 1) {
         const pagination = response.pagination;
         $('#pageInfo').text(`Página ${pagination.current_page} de ${pagination.total_pages}`);
         $('#paginacionInfo').text(`${response.inventarios.length} de ${pagination.total_items}`);
+        // Las canceladas no se listan: se avisa cuántas hay y se ven con el filtro «Cancelado»
+        const ocultas = (response.resumen || {}).canceladas_ocultas || 0;
+        $('#avisoCanceladas').html(ocultas
+            ? ` · <a href="#" onclick="verCanceladas(); return false;" title="Ver las tomas canceladas">${formatNumber(ocultas)} cancelada${ocultas === 1 ? '' : 's'} sin mostrar</a>`
+            : '');
         $('#btnPrevPage').toggleClass('disabled', !pagination.has_previous);
         $('#btnNextPage').toggleClass('disabled', !pagination.has_next);
         currentPage = pagination.current_page;
@@ -1194,6 +1199,10 @@ function filtrarPorTab(element, filtro) {
     }
     
     cargarInventarios(1);
+}
+
+function verCanceladas() {
+    $('#filtroEstado').val('CANCELADO').trigger('change');
 }
 
 // Helper para filtrar por estado desde las pills del wizard compacto

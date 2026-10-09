@@ -274,3 +274,84 @@ class AjusteAnticipadoTest(BaseTomaContadaAnoche):
         sobra.refresh_from_db()
         self.assertEqual((sobra.diferencia_ya_aplicada, sobra.por_ajustar), (1, 0))
         self.assertNotIn(sobra.id, self.toma.lineas_por_ajustar().values_list('id', flat=True))
+
+    # ---------- «Reconteo masivo» (Maestro): quedarse con la pistola sin recontar ----------
+
+    def _vender_grande_hoy(self):
+        Movimientos_Producto.objects.create(
+            ProductoTalla=self.pt_grande, cantidad=-1, concepto='VENTA_PUBLICO', sucursal_origen=self.sucursal,
+            responsable='POS', fecha=self.venta_hoy.date(), hora=self.venta_hoy.time(),
+        )
+        Producto_Talla.objects.filter(pk=self.pt_grande.pk).update(stock=3)
+
+    def test_reconteo_masivo_acepta_la_pistola_sin_recontar(self):
+        self._como(self.maestro)
+        self.assertIn('id="btnReconteoMasivo"', self.client.get(reverse('detalle_inventario', args=[self.toma.id])).content.decode())
+        self._vender_grande_hoy()  # GRANDE: pistola 1 anoche, hoy se vendió ese par
+        grande, sobra, no = (self.toma.detalles.get(sku=s) for s in ('9800003', '9800001', '9800004'))
+
+        prep = self._post('api_preparar_reconteo_masivo', self.toma.id, {'ids': [grande.id, sobra.id, no.id]})
+        self.assertTrue(prep['success'], prep)
+        lineas = {l['sku']: l for l in prep['lineas']}
+        self.assertEqual(set(lineas), {'9800003', '9800001'})
+        self.assertEqual([o['sku'] for o in prep['omitidas']], ['9800004'])  # sin contar
+        g = lineas['9800003']
+        self.assertEqual((g['sistema'], g['contado'], g['movido'], g['hoy'], g['espera_reconteo']), (4, 1, -1, 0, True))
+        self.assertFalse(lineas['9800001']['espera_reconteo'])
+
+        # Lo que se dejó igual se acepta; aceptar algo que no esperaba reconteo no hace nada
+        resp = self._post('api_registrar_reconteo', self.toma.id, {'reconteos': [
+            {'detalle_id': grande.id, 'aceptar_conteo': True, 'observaciones': 'sin tiempo'},
+            {'detalle_id': sobra.id, 'aceptar_conteo': True},
+        ]})
+        self.assertTrue(resp['success'], resp)
+        self.assertEqual((resp['aceptados'], resp['encontrados'], resp['reconteos_realizados']), (['9800003'], [], 1))
+        self.assertIn('no esperaba reconteo', resp['errores'][0])
+        grande.refresh_from_db()
+        # El conteo queda como lo leyó la pistola (la venta de hoy NO se descuenta otra vez)
+        self.assertEqual((grande.stock_fisico, grande.diferencia, grande.reconteo_requerido, grande.stock_reconteo),
+                         (1, -3, False, 0))
+        self.assertIn('Conteo de pistola aceptado sin recontar', grande.observaciones)
+        self.assertIn('sin tiempo', grande.observaciones)
+        self.assertFalse(self.toma.reconteos_pendientes().exists())
+        self.assertIn('aceptados según la pistola', self.toma.logs.filter(tipo_accion='RECONTEO').latest('created_at').descripcion)
+
+        # Ya no espera reconteo: entra en «Ajustar stock ya» y el stock queda en lo de la pistola menos la venta
+        self.assertTrue(self._ajustar_ya()['success'])
+        self.assertEqual(self._stock(self.pt_grande), 0)
+
+    def test_reconteo_masivo_mezcla_aceptar_y_recontar(self):
+        self._como(self.maestro)
+        self._vender_grande_hoy()
+        grande = self.toma.detalles.get(sku='9800003')
+        falta = self.toma.detalles.get(sku='9800002')
+        # FALTA (pistola 2) se recontó de verdad: hay 3 → encontrado; GRANDE se acepta
+        resp = self._post('api_registrar_reconteo', self.toma.id, {'reconteos': [
+            {'detalle_id': grande.id, 'aceptar_conteo': True},
+            {'detalle_id': falta.id, 'stock_reconteo': 3},
+        ]})
+        self.assertTrue(resp['success'], resp)
+        self.assertFalse(resp['errores'])
+        self.assertEqual((resp['aceptados'], resp['encontrados'], resp['reconteos_realizados']), (['9800003'], ['9800002'], 2))
+        falta.refresh_from_db()
+        self.assertEqual((falta.stock_fisico, falta.diferencia), (3, 0))
+
+    def test_reconteo_masivo_es_solo_del_maestro(self):
+        grande = self.toma.detalles.get(sku='9800003')
+        # Administrador: opera la toma pero no se salta el reconteo
+        self.assertNotIn('id="btnReconteoMasivo"',
+                         self.client.get(reverse('detalle_inventario', args=[self.toma.id])).content.decode())
+        resp = self.client.post(reverse('api_preparar_reconteo_masivo', args=[self.toma.id]),
+                                data=json.dumps({'ids': [grande.id]}), content_type='application/json')
+        self.assertEqual(resp.status_code, 403)
+        resp = self._post('api_registrar_reconteo', self.toma.id,
+                          {'reconteos': [{'detalle_id': grande.id, 'aceptar_conteo': True}]})
+        self.assertEqual(resp['reconteos_realizados'], 0)
+        self.assertIn('Maestro', resp['errores'][0])
+        self._como(self.jefe)
+        resp = self._post('api_registrar_reconteo', self.toma.id,
+                          {'reconteos': [{'detalle_id': grande.id, 'aceptar_conteo': True}]})
+        self.assertEqual(resp['reconteos_realizados'], 0)
+        grande.refresh_from_db()
+        self.assertTrue(grande.reconteo_requerido)
+        self.assertIsNone(grande.stock_reconteo)

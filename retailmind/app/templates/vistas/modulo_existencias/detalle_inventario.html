@@ -188,6 +188,13 @@ button.kpi-card:focus-visible {
 .conteo-table .w-check { width: 36px; }
 .conteo-table .producto-desc { display: block; font-size: 0.78rem; color: var(--nexo-gray-700); }
 
+/* Reconteo masivo (modal del Maestro) */
+.reconteo-masivo-wrap { max-height: 52vh; overflow: auto; border: 1px solid var(--nexo-gray-300); border-radius: var(--nexo-radius-md); }
+.reconteo-masivo-wrap table { margin-bottom: 0; font-size: 0.85rem; }
+.reconteo-masivo-wrap thead th { position: sticky; top: 0; background: var(--nexo-gray-100); z-index: 1; white-space: nowrap; }
+.reconteo-masivo-wrap .input-rm { width: 80px; margin-left: auto; }
+.reconteo-masivo-wrap tr.rm-cambiada > td { background: var(--nexo-primary-light); }
+
 /* ========== FILTROS SEGMENTACIÓN ========== */
 .segmentation-filters {
     background: var(--nexo-white);
@@ -976,6 +983,12 @@ button.kpi-card:focus-visible {
                 <!-- Acción en bloque sobre las filas marcadas -->
                 <div class="seleccion-bar" id="barraSeleccion" style="display: none;">
                     <span class="small"><strong id="nSeleccionados">0</strong> líneas marcadas</span>
+                    {% if es_maestro %}
+                    <button type="button" class="nexo-btn nexo-btn-sm nexo-btn-primary" id="btnReconteoMasivo" onclick="abrirReconteoMasivo()" style="display: none;"
+                            title="Recontar las marcadas de una vez: lo que deje igual se da por bueno según la pistola">
+                        <i class="bi bi-arrow-repeat"></i> Reconteo masivo
+                    </button>
+                    {% endif %}
                     <button type="button" class="nexo-btn nexo-btn-sm nexo-btn-warning" onclick="excluirSeleccionados(true)" title="Al aplicar la toma estas líneas no mueven stock">
                         <i class="bi bi-slash-circle"></i> No ajustar (dejar su stock como está)
                     </button>
@@ -1411,6 +1424,7 @@ function actualizarBarraSeleccion() {
     $('#nSeleccionados').text(formatNumber(seleccionados.size));
     const enEdicion = ['BORRADOR', 'EN_CONTEO', 'CONTEO_FINALIZADO', 'EN_REVISION'].includes(estadoInventario);
     $('#barraSeleccion').toggle(seleccionados.size > 0 && enEdicion);
+    $('#btnReconteoMasivo').toggle(ESTADOS_RECONTEO.includes(estadoInventario));
     const enPagina = $('#tbodyConteo .chk-linea');
     $('#marcarPagina').prop('checked', enPagina.length > 0 && enPagina.toArray().every(c => c.checked));
 }
@@ -1450,6 +1464,161 @@ function excluirSeleccionados(excluir) {
                 cargarInformeMarcas();
             },
             error: function() { Swal.fire('Error', 'No se pudieron actualizar las líneas', 'error'); }
+        });
+    });
+}
+
+// === RECONTEO MASIVO (solo Maestro) ===
+// Lista las marcadas con lo que debería haber HOY si la pistola estaba bien (contado +
+// lo vendido o recibido desde el conteo). Lo que se deja igual se da por bueno sin
+// recontar; lo que se cambia se registra como reconteo (lo que hay ahora en la tienda).
+function abrirReconteoMasivo() {
+    const ids = Array.from(seleccionados);
+    if (!ids.length) return;
+    Swal.fire({ title: 'Preparando reconteo…', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    $.ajax({
+        url: `/app/gestion-inventarios/api/reconteo-masivo/${inventarioId}/`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ ids }),
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        success: function(resp) {
+            if (!resp.success) { Swal.fire('Error', escHtml(resp.error), 'error'); return; }
+            _mostrarReconteoMasivo(resp.lineas || [], resp.omitidas || []);
+        },
+        error: function(xhr) {
+            Swal.fire('Error', escHtml((xhr.responseJSON && xhr.responseJSON.error) || 'No se pudo preparar el reconteo'), 'error');
+        }
+    });
+}
+
+function _mostrarReconteoMasivo(lineas, omitidas) {
+    const avisoOmitidas = omitidas.length
+        ? `<p class="small text-muted text-start mb-2"><i class="bi bi-info-circle me-1"></i>Quedan fuera ${formatNumber(omitidas.length)}:
+               ${omitidas.slice(0, 8).map(o => `<code>${escHtml(o.sku)}</code> ${escHtml(o.motivo)}`).join(' · ')}${omitidas.length > 8 ? ' …' : ''}</p>`
+        : '';
+    if (!lineas.length) {
+        Swal.fire({ icon: 'info', title: 'Nada que recontar', html: avisoOmitidas || 'Las líneas marcadas no se pueden recontar.' });
+        return;
+    }
+    const porId = {};
+    lineas.forEach(l => { porId[l.id] = l; });
+    const signo = n => n > 0 ? `+${n}` : `${n}`;
+    const filas = lineas.map(l => `
+        <tr data-id="${l.id}">
+            <td><code>${escHtml(l.sku)}</code></td>
+            <td class="text-start"><strong>${escHtml(l.producto)}</strong> <span class="text-muted">${escHtml(l.talla || '')}</span>
+                <small class="d-block text-muted">${escHtml(l.marca || '')}</small></td>
+            <td class="text-end">${l.sistema}</td>
+            <td class="text-end fw-semibold">${l.contado}</td>
+            <td class="text-end">${l.movido ? signo(l.movido) : '—'}</td>
+            <td><input type="number" class="form-control form-control-sm text-end input-rm" min="0" step="1"
+                       data-id="${l.id}" value="${l.hoy}" aria-label="Hay hoy ${escHtml(l.sku)}"></td>
+            <td class="text-center">${l.espera_reconteo ? '<span class="badge bg-warning text-dark">Reconteo</span>'
+                : (l.ajustada ? '<span class="badge bg-info text-dark">Ajustado</span>' : '<span class="badge bg-success">Contado</span>')}</td>
+        </tr>`).join('');
+
+    // Qué se va a mandar: las que esperan reconteo y quedaron igual se aceptan según la
+    // pistola; las cambiadas son reconteo; las demás sin cambio no se tocan.
+    const leer = () => {
+        const aceptar = [], recontar = [], invalidas = [];
+        document.querySelectorAll('.input-rm').forEach(inp => {
+            const l = porId[inp.dataset.id];
+            const valor = inp.value.trim();
+            const n = Number(valor);
+            if (valor === '' || !Number.isInteger(n) || n < 0) { invalidas.push(l.sku); return; }
+            if (n === l.hoy) { if (l.espera_reconteo) aceptar.push(l); return; }
+            recontar.push({ l, n });
+        });
+        return { aceptar, recontar, invalidas };
+    };
+    const pintarResumen = () => {
+        const { aceptar, recontar } = leer();
+        document.querySelectorAll('.input-rm').forEach(inp => {
+            const l = porId[inp.dataset.id];
+            inp.closest('tr').classList.toggle('rm-cambiada', inp.value.trim() !== '' && Number(inp.value) !== l.hoy);
+        });
+        const el = document.getElementById('rmResumen');
+        if (el) el.innerHTML = `<strong>${formatNumber(aceptar.length)}</strong> quedan con lo de la pistola (sin recontar) ·
+                                <strong>${formatNumber(recontar.length)}</strong> recontadas`;
+    };
+
+    Swal.fire({
+        title: `Reconteo masivo (${formatNumber(lineas.length)} líneas)`,
+        width: 980,
+        html: `
+            <p class="small text-start mb-2">Cada línea viene con lo que <strong>debería haber hoy</strong> según la pistola
+               (lo contado, más o menos lo vendido o recibido desde el conteo).
+               <strong>Si no la recontó, déjela igual</strong>: se da por bueno el conteo de la pistola.
+               Cambie solo las que contó de nuevo, con lo que hay ahora en la tienda.</p>
+            ${avisoOmitidas}
+            <div class="reconteo-masivo-wrap text-start">
+                <table class="table table-sm align-middle">
+                    <thead><tr>
+                        <th>SKU</th><th>Producto</th>
+                        <th class="text-end" title="Stock del sistema al momento del conteo">Sistema</th>
+                        <th class="text-end" title="Lo que leyó la pistola">Contado</th>
+                        <th class="text-end" title="Vendido (−) o recibido (+) desde el conteo">Desde el conteo</th>
+                        <th class="text-end">Hay hoy</th>
+                        <th class="text-center">Estado</th>
+                    </tr></thead>
+                    <tbody>${filas}</tbody>
+                </table>
+            </div>
+            <p id="rmResumen" class="small text-start mt-2 mb-2"></p>
+            <div class="text-start">
+                <label class="form-label small mb-1" for="obsReconteoMasivo">Observaciones (opcional, para todas)</label>
+                <textarea id="obsReconteoMasivo" class="form-control form-control-sm" rows="2"
+                          placeholder="Ej.: se acepta la pistola, no se alcanzó a recontar"></textarea>
+            </div>`,
+        showCancelButton: true,
+        confirmButtonText: 'Guardar reconteo',
+        cancelButtonText: 'Volver',
+        didOpen: () => {
+            pintarResumen();
+            document.querySelectorAll('.input-rm').forEach(inp => inp.addEventListener('input', pintarResumen));
+        },
+        preConfirm: () => {
+            const { aceptar, recontar, invalidas } = leer();
+            if (invalidas.length) {
+                Swal.showValidationMessage(`Revise la cantidad de: ${invalidas.slice(0, 5).join(', ')}${invalidas.length > 5 ? '…' : ''}`);
+                return false;
+            }
+            if (!aceptar.length && !recontar.length) {
+                Swal.showValidationMessage('No hay nada que guardar: ninguna espera reconteo y no cambió ninguna cantidad');
+                return false;
+            }
+            const observaciones = document.getElementById('obsReconteoMasivo').value;
+            return aceptar.map(l => ({ detalle_id: l.id, aceptar_conteo: true, observaciones }))
+                .concat(recontar.map(r => ({ detalle_id: r.l.id, stock_reconteo: r.n, observaciones })));
+        }
+    }).then(result => {
+        if (!result.isConfirmed) return;
+        $.ajax({
+            url: `/app/gestion-inventarios/api/registrar-reconteo/${inventarioId}/`,
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ reconteos: result.value }),
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(resp) {
+                if (!resp.success) { Swal.fire('Error', escHtml(resp.error), 'error'); return; }
+                const aceptados = (resp.aceptados || []).length;
+                const recontadas = (resp.reconteos_realizados || 0) - aceptados;
+                const errores = resp.errores || [];
+                const partes = [];
+                if (aceptados) partes.push(`<strong>${formatNumber(aceptados)}</strong> quedaron con lo de la pistola, sin recontar.`);
+                if (recontadas) partes.push(`<strong>${formatNumber(recontadas)}</strong> recontadas.`);
+                if ((resp.encontrados || []).length) partes.push(`Subió lo contado en ${escHtml(resp.encontrados.join(', '))}: queda marcado como encontrado en reconteo (se revisa al aprobar).`);
+                if ((resp.por_autorizar || []).length) partes.push(`Ya estaban en el stock (${escHtml(resp.por_autorizar.join(', '))}): el cambio queda por ajustar.`);
+                if (resp.reconteos_realizados) partes.push('<span class="text-muted small">Ya no esperan reconteo: entran en el próximo «Ajustar stock ya» o al aprobar la toma.</span>');
+                if (errores.length) partes.push(`<span class="text-warning">${escHtml(errores.join(' · '))}</span>`);
+                Swal.fire({ icon: errores.length ? 'warning' : 'success', title: errores.length ? 'Revise el reconteo' : 'Reconteo registrado',
+                            html: partes.join('<br>') });
+                limpiarSeleccion();
+                cargarProductos(currentPage);
+                cargarInformeMarcas();
+            },
+            error: function() { Swal.fire('Error', 'No se pudo registrar el reconteo', 'error'); }
         });
     });
 }

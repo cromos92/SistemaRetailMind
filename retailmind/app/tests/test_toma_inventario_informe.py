@@ -376,6 +376,32 @@ class CorreccionManualTiendaCerradaTest(BaseTomaContadaAnoche):
         self.assertEqual((d.stock_movimientos_post_corte, d.diferencia), (0, 0))  # antes: −1 de base → +1 falso
 
 
+class ListadoSinCanceladasTest(BaseTomaContadaAnoche):
+    """El listado no muestra las tomas canceladas («eliminadas») salvo con el filtro de estado
+    «Cancelado» (pedido del usuario 09-10); avisa cuántas quedaron sin mostrar."""
+
+    def test_canceladas_solo_con_su_filtro(self):
+        self._pt('UNO', 9910001, 1)
+        tomas = []
+        for nombre in ('Viva', 'Se cancela'):
+            data = self.client.post(reverse('api_crear_inventario'), data=json.dumps({
+                'nombre': nombre, 'tipo_inventario': 'COMPLETO', 'fecha_corte': self.corte.strftime('%Y-%m-%dT%H:%M'),
+                'filtros': {'solo_con_stock': True}, 'permitir_otra_abierta': True,
+            }), content_type='application/json').json()
+            self.assertTrue(data['success'], data)
+            tomas.append(data['inventario_id'])
+        self.assertTrue(self._post('api_cancelar_inventario', tomas[1], {'motivo': 'prueba'})['success'])
+
+        todos = self.client.get(reverse('api_obtener_inventarios')).json()
+        self.assertEqual([i['id'] for i in todos['inventarios']], [tomas[0]])
+        self.assertEqual((todos['resumen']['total'], todos['resumen']['canceladas_ocultas']), (1, 1))
+        self.assertEqual(todos['pagination']['total_items'], 1)
+
+        canceladas = self.client.get(reverse('api_obtener_inventarios'), {'estado': 'CANCELADO'}).json()
+        self.assertEqual([i['id'] for i in canceladas['inventarios']], [tomas[1]])
+        self.assertEqual(canceladas['resumen']['canceladas_ocultas'], 0)
+
+
 class TituloPorCategoriaTest(BaseTomaContadaAnoche):
     """El título del informe dice el tipo de toma y qué cubre (pedido del usuario 09-10, toma 12 de NICK2:
     era «por categoría» de calzado y el Excel decía «Inventario General»)."""

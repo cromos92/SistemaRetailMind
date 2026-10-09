@@ -1857,6 +1857,7 @@ urlpatterns = [
     # views_gestion_inventarios._puede_contar); el resto necesita Editar.
     path('gestion-inventarios/api/registrar-conteo/<int:inventario_id>/', _permiso_inventarios('puede_ver', views_gestion_inventarios.registrar_conteo), name='api_registrar_conteo'),
     path('gestion-inventarios/api/registrar-reconteo/<int:inventario_id>/', _permiso_inventarios('puede_ver', views_gestion_inventarios.registrar_reconteo), name='api_registrar_reconteo'),
+    path('gestion-inventarios/api/reconteo-masivo/<int:inventario_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.preparar_reconteo_masivo), name='api_preparar_reconteo_masivo'),
     path('gestion-inventarios/api/importar-conteo/<int:inventario_id>/', _permiso_inventarios('puede_ver', views_gestion_inventarios.importar_conteo_pistola), name='api_importar_conteo_pistola'),
     path('gestion-inventarios/api/importar-conteo/preview/<int:inventario_id>/', _permiso_inventarios('puede_ver', views_gestion_inventarios.preview_conteo_pistola), name='api_preview_conteo_pistola'),
     path('gestion-inventarios/api/excluir-detalle/<int:inventario_id>/<int:detalle_id>/', _permiso_inventarios('puede_editar', views_gestion_inventarios.actualizar_exclusion_detalle), name='api_excluir_detalle_inventario'),
