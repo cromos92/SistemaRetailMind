@@ -543,6 +543,11 @@
                     </div>
                 </div>
                 <div class="module-header-actions">
+                    {% if es_maestro %}
+                    <a href="/app/gestion-inventarios/reporte-empresas/" class="btn btn-light btn-sm" title="Pares, costo y venta por empresa y local (toma del mes)">
+                        <i class="bi bi-buildings me-1"></i>Inventario por empresa
+                    </a>
+                    {% endif %}
                     {% if ver_valores %}
                     <button type="button" class="btn btn-light btn-sm" onclick="exportarTodasDiferencias()" title="Exportar diferencias a Excel">
                         <i class="bi bi-file-earmark-excel me-1"></i>Exportar diferencias

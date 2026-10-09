@@ -44,6 +44,7 @@ from .models import (
 )
 from .models.inventario import requiere_reconteo
 from .services import informe_toma_inventario as informe_toma
+from .services import reporte_inventario_empresas as reporte_empresas
 from .utils_permisos import (
     puede_ver_sucursal, obtener_empresas_usuario, obtener_sucursales_usuario
 )
@@ -336,6 +337,7 @@ def gestion_inventarios(request):
         'sucursal_activa_id': int(activa) if str(activa or '').isdigit() else None,
         'solo_revision': _modo_revision(request),
         'ver_valores': _ve_valorizacion(request.user),
+        'es_maestro': es_maestro(request.user),  # «Inventario por empresa»
         'puede_crear': es_rol_administrador(request.user) or PermisoRol.tiene_permiso(
             request.user, 'gestion_inventarios', 'puede_crear', sucursal_id=activa,
         ),
@@ -2789,6 +2791,74 @@ def exportar_informe_final(request, inventario_id):
     except Exception as e:
         logger.error(f"Error al exportar informe final: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ==============================================================================
+# CONSOLIDADO POR EMPRESA (solo Maestro)
+# ==============================================================================
+
+def _periodo_pedido(request):
+    """(año, mes) de ?anio=&mes=; el mes en curso si no vienen o no son válidos."""
+    hoy = timezone.localdate()
+    try:
+        anio, mes = int(request.GET.get('anio') or hoy.year), int(request.GET.get('mes') or hoy.month)
+    except (TypeError, ValueError):
+        return hoy.year, hoy.month
+    if not (1 <= mes <= 12 and 2000 <= anio <= hoy.year + 1):
+        return hoy.year, hoy.month
+    return anio, mes
+
+
+def _error_solo_maestro():
+    return JsonResponse({'success': False, 'error': 'El inventario por empresa es solo para el Maestro'}, status=403)
+
+
+@login_required
+def reporte_inventario_empresas(request):
+    """
+    Pantalla «Inventario por empresa» (pedido del usuario, 09-10: el cuadro «2026 ENERO
+    INV» de gerencia, solo para el Maestro). Cálculo en services/reporte_inventario_empresas.
+    """
+    if not es_maestro(request.user):
+        raise PermissionDenied('El inventario por empresa es solo para el Maestro')
+    anio, mes = _periodo_pedido(request)
+    hoy = timezone.localdate()
+    return render(request, 'vistas/modulo_existencias/reporte_inventario_empresas.html', {
+        'anio': anio,
+        'mes': mes,
+        'meses': [(i, nombre.capitalize()) for i, nombre in enumerate(reporte_empresas.MESES, 1)],
+        'anios': list(range(hoy.year, 2024, -1)),
+    })
+
+
+@require_GET
+@login_required
+def obtener_reporte_inventario_empresas(request):
+    """GET gestion-inventarios/api/reporte-empresas/?anio=&mes= — el cuadro en JSON."""
+    if not es_maestro(request.user):
+        return _error_solo_maestro()
+    try:
+        anio, mes = _periodo_pedido(request)
+        datos = reporte_empresas.consolidar(obtener_sucursales_usuario(request.user), anio, mes)
+        return JsonResponse({'success': True, **datos})
+    except Exception as e:
+        logger.exception('Error al armar el inventario por empresa')
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_GET
+@login_required
+def exportar_reporte_inventario_empresas(request):
+    """GET gestion-inventarios/api/reporte-empresas/excel/?anio=&mes= — el mismo cuadro en Excel."""
+    if not es_maestro(request.user):
+        return _error_solo_maestro()
+    anio, mes = _periodo_pedido(request)
+    datos = reporte_empresas.consolidar(obtener_sucursales_usuario(request.user), anio, mes)
+    wb = reporte_empresas.construir_workbook(datos)
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="{reporte_empresas.nombre_archivo(datos)}"'
+    wb.save(response)
+    return response
 
 
 # ==============================================================================

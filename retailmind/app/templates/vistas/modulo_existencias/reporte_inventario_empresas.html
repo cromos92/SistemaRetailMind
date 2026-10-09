@@ -1,0 +1,339 @@
+{% load static %}
+{% include '../../layout/header.html' %}
+{% include '../../layout/menu.html' %}
+
+<style>
+/* La paleta --nexo-* la carga nexo-design-system.css (via layout/header.html).
+   Aquí solo los tonos oscuros de texto por estado, que el global no define. */
+:root {
+    --nexo-success-dark: #00694f;
+    --nexo-warning-dark: #8a5a00;
+    --nexo-error-dark: #cc3d3d;
+}
+
+/* ========== MODULE HEADER (estándar ESTILOS_MODULOS.md) ========== */
+.inventarios-card {
+    border: none;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(64, 81, 137, 0.08);
+}
+.module-header {
+    background: linear-gradient(135deg, #405189 0%, #0ab39c 100%);
+    color: white;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+.module-header-left { display: flex; align-items: center; gap: 14px; }
+.module-header-icon {
+    width: 48px; height: 48px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+}
+.module-header-info h5 { margin: 0; font-size: 18px; font-weight: 600; color: white; }
+.module-header-status { display: flex; align-items: center; gap: 6px; font-size: 13px; opacity: 0.9; margin-top: 4px; flex-wrap: wrap; }
+.module-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ========== KPI CARDS (solo lectura) ========== */
+.kpi-card { border-radius: 12px; border: none; overflow: hidden; text-align: center; }
+.kpi-card .card-body { padding: 12px 16px; }
+.kpi-card .kpi-value { display: block; font-size: 1.35rem; font-weight: 700; line-height: 1.2; color: #405189; }
+.kpi-card .kpi-label { display: block; font-size: 0.75rem; font-weight: 500; color: #6c757d; }
+.kpi-total       { background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-left: 4px solid #ffbe0b; }
+.kpi-en-proceso  { background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid #299cdb; }
+.kpi-pendientes  { background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-left: 4px solid #fb8c00; }
+.kpi-completados { background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left: 4px solid #0ab39c; }
+
+/* ========== FILTROS ========== */
+.nexo-filters {
+    background: var(--nexo-gray-100);
+    border-radius: var(--nexo-radius-md);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    border: 1px solid var(--nexo-gray-300);
+}
+.nexo-filters .form-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--nexo-gray-700);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+/* ========== CUADRO POR EMPRESA ========== */
+.titulo-cuadro { text-align: center; font-size: 1.35rem; font-weight: 700; text-decoration: underline; margin: 0.5rem 0 1rem; }
+.tabla-empresas { font-size: 0.9rem; }
+.tabla-empresas th, .tabla-empresas td { white-space: nowrap; vertical-align: middle; }
+.tabla-empresas thead th { background: var(--nexo-gray-100); font-size: 0.8rem; text-transform: uppercase; color: var(--nexo-gray-700); }
+.tabla-empresas tr.fila-empresa td {
+    background: var(--nexo-white);
+    text-align: center;
+    font-weight: 700;
+    font-size: 1rem;
+    border-top: 2px solid var(--nexo-gray-300);
+    padding-top: 1rem;
+}
+.tabla-empresas tr.fila-total td { font-weight: 700; background: var(--nexo-gray-100); color: var(--nexo-error-dark); }
+.tabla-empresas tr.fila-total td.col-local { color: inherit; }
+.tabla-empresas tr.fila-holding td {
+    font-weight: 700;
+    font-size: 1.05rem;
+    background: var(--nexo-primary-light);
+    border-top: 3px solid var(--nexo-primary);
+}
+.tabla-empresas tr.sin-toma td.col-num { color: var(--nexo-gray-700); }
+.tabla-empresas .col-local { min-width: 170px; }
+.tabla-empresas .col-toma { min-width: 220px; white-space: normal; font-size: 0.82rem; }
+.tabla-empresas .local-alias { display: block; font-size: 0.75rem; color: var(--nexo-gray-700); }
+.diferencia-positiva { color: var(--nexo-success-dark); font-weight: 700; }
+.diferencia-negativa { color: var(--nexo-error-dark); font-weight: 700; }
+.nota-cuadro { font-size: 0.8rem; color: var(--nexo-gray-700); }
+
+@media (max-width: 768px) {
+    .module-header { padding: 12px 16px; }
+    .module-header-icon { width: 40px; height: 40px; font-size: 20px; }
+    .kpi-card .kpi-value { font-size: 1.1rem; }
+}
+</style>
+
+<div class="page-content nexo-page">
+    <div class="container-fluid">
+
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0"><i class="bi bi-buildings text-primary me-2"></i>Inventario por empresa</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="/app/home/">Inicio</a></li>
+                            <li class="breadcrumb-item">Existencias</li>
+                            <li class="breadcrumb-item"><a href="/app/gestion-inventarios/">Tomas de Inventario</a></li>
+                            <li class="breadcrumb-item active">Por empresa</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow inventarios-card">
+            <div class="module-header">
+                <div class="module-header-left">
+                    <div class="module-header-icon"><i class="bi bi-buildings"></i></div>
+                    <div class="module-header-info">
+                        <h5>Inventario por empresa</h5>
+                        <div class="module-header-status">
+                            <i class="bi bi-shield-lock"></i> Solo Maestro · pares y valores de la toma del mes por local
+                        </div>
+                    </div>
+                </div>
+                <div class="module-header-actions">
+                    <button type="button" class="btn btn-light btn-sm" onclick="exportarExcel()" title="Descargar el cuadro en Excel">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                    </button>
+                    <a href="/app/gestion-inventarios/" class="btn btn-light btn-sm">
+                        <i class="bi bi-arrow-left me-1"></i>Tomas
+                    </a>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <div class="nexo-filters">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-6 col-md-3">
+                            <label class="form-label" for="filtroMes">Mes</label>
+                            <select id="filtroMes" class="form-select form-select-sm">
+                                {% for numero, nombre in meses %}
+                                <option value="{{ numero }}" {% if numero == mes %}selected{% endif %}>{{ nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label class="form-label" for="filtroAnio">Año</label>
+                            <select id="filtroAnio" class="form-select form-select-sm">
+                                {% for a in anios %}
+                                <option value="{{ a }}" {% if a == anio %}selected{% endif %}>{{ a }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-7 small text-muted">
+                            Cada local muestra la <strong>última toma del mes</strong> (sin borradores ni canceladas).
+                            Donde no hubo toma va el <strong>stock del sistema</strong>, sin diferencia.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6 col-md-2">
+                        <div class="kpi-card kpi-total card h-100"><div class="card-body py-2">
+                            <span class="kpi-value" id="kpiPares">–</span><span class="kpi-label">Pares holding</span>
+                        </div></div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="kpi-card kpi-en-proceso card h-100"><div class="card-body py-2">
+                            <span class="kpi-value" id="kpiCosto">–</span><span class="kpi-label">Costo</span>
+                        </div></div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="kpi-card kpi-en-proceso card h-100"><div class="card-body py-2">
+                            <span class="kpi-value" id="kpiInterno">–</span><span class="kpi-label">P. Interno</span>
+                        </div></div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="kpi-card kpi-completados card h-100"><div class="card-body py-2">
+                            <span class="kpi-value" id="kpiVenta">–</span><span class="kpi-label">P. Venta</span>
+                        </div></div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="kpi-card kpi-pendientes card h-100"><div class="card-body py-2">
+                            <span class="kpi-value" id="kpiDiferencia">–</span><span class="kpi-label">Diferencia (pares)</span>
+                        </div></div>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <div class="kpi-card kpi-pendientes card h-100"><div class="card-body py-2">
+                            <span class="kpi-value" id="kpiConToma">–</span><span class="kpi-label">Locales con toma</span>
+                        </div></div>
+                    </div>
+                </div>
+
+                <div class="titulo-cuadro" id="tituloCuadro">{{ anio }}</div>
+
+                <div class="table-responsive">
+                    <table class="table table-sm tabla-empresas mb-2">
+                        <thead>
+                            <tr>
+                                <th class="col-local">Local</th>
+                                <th class="col-toma">Toma</th>
+                                <th class="text-end">Pares</th>
+                                <th class="text-end" title="Pares × costo de la ficha">Costo</th>
+                                <th class="text-end" title="Pares × (costo + sobreprecio): el P COSTO del informe antiguo">P. Interno</th>
+                                <th class="text-end" title="Pares × precio de venta (el de la toma, al corte)">P. Venta</th>
+                                <th class="text-center" title="Contado − sistema, en pares">Diferencia</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyEmpresas">
+                            <tr><td colspan="7" class="text-center py-4 text-muted">
+                                <span class="spinner-border spinner-border-sm me-2"></span>Armando el cuadro…
+                            </td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="nota-cuadro mb-0">
+                    <strong>Con toma:</strong> el inventario nuevo del informe final de la toma (lo contado; lo que no apareció cuenta 0).
+                    Una toma parcial (p. ej. solo Calzado) suma el stock del sistema de lo que quedó fuera de ella.
+                    <strong>Costo</strong> = pares × costo · <strong>P. Interno</strong> = pares × (costo + sobreprecio), el P COSTO del informe antiguo ·
+                    <strong>P. Venta</strong> = pares × precio de venta.
+                    <strong>Sin toma:</strong> stock del sistema al <span id="diaStock">cierre del mes</span>
+                    (sin los productos marcados «excluir de analítica»).
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function formatNumber(num) {
+    return new Intl.NumberFormat('es-CL').format(Math.round(num || 0));
+}
+function escHtml(texto) {
+    return String(texto === null || texto === undefined ? '' : texto)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+const pesos = v => '$' + formatNumber(v);
+function diferenciaHtml(v) {
+    if (v === null || v === undefined) return '<span class="text-muted">—</span>';
+    const n = Math.round(v);
+    if (!n) return '<span class="text-muted">0</span>';
+    return `<span class="${n > 0 ? 'diferencia-positiva' : 'diferencia-negativa'}">${n > 0 ? '+' : ''}${formatNumber(n)}</span>`;
+}
+
+const ESTADO_BADGE = {
+    COMPLETADO: 'bg-success', APROBADO: 'bg-success', APLICANDO: 'bg-info text-dark',
+    PENDIENTE_APROBACION: 'bg-warning text-dark', EN_REVISION: 'bg-warning text-dark',
+    CONTEO_FINALIZADO: 'bg-info text-dark', EN_CONTEO: 'bg-primary'
+};
+
+function periodo() {
+    return new URLSearchParams({ anio: $('#filtroAnio').val(), mes: $('#filtroMes').val() });
+}
+
+function celdaToma(l) {
+    const t = l.toma;
+    if (!t) return '<span class="badge bg-light text-body border">Sin toma</span> <span class="text-muted">stock del sistema</span>';
+    const avisos = [];
+    if (t.alcance) avisos.push(`<span class="badge bg-light text-body border" title="La toma cubre solo esto">${escHtml(t.tipo)} · ${escHtml(t.alcance)}</span>`);
+    if (l.fuera_de_la_toma) avisos.push(`<span title="Toma parcial: lo que no cubre va con el stock del sistema">contados ${formatNumber(l.contado.pares)}
+        + ${formatNumber(l.fuera_de_la_toma.pares)} fuera de la toma (sistema)</span>`);
+    if (t.sin_contar && t.estado !== 'COMPLETADO') avisos.push(`<span class="text-warning" title="Cuentan 0 hasta que se cuenten o se resuelvan">${formatNumber(t.sin_contar)} sin contar</span>`);
+    if (t.otras_en_el_mes) avisos.push(`<span class="text-muted">+${t.otras_en_el_mes} anterior${t.otras_en_el_mes > 1 ? 'es' : ''} en el mes</span>`);
+    return `<a href="/app/gestion-inventarios/detalle/${t.id}/">${escHtml(t.numero)}</a>
+            <span class="badge ${ESTADO_BADGE[t.estado] || 'bg-secondary'}">${escHtml(t.estado_display)}</span>
+            <span class="text-muted">corte ${escHtml(t.corte)}</span>
+            ${avisos.length ? '<br>' + avisos.join(' · ') : ''}`;
+}
+
+function filaValores(v, extraClase, local, toma) {
+    return `<tr class="${extraClase}">
+        <td class="col-local">${local}</td>
+        <td class="col-toma">${toma}</td>
+        <td class="text-end col-num">${formatNumber(v.pares)}</td>
+        <td class="text-end col-num">${pesos(v.costo)}</td>
+        <td class="text-end col-num">${pesos(v.p_interno)}</td>
+        <td class="text-end col-num">${pesos(v.p_venta)}</td>
+        <td class="text-center">${diferenciaHtml(v.diferencia)}</td>
+    </tr>`;
+}
+
+function cargarCuadro() {
+    $('#tbodyEmpresas').html(`<tr><td colspan="7" class="text-center py-4 text-muted">
+        <span class="spinner-border spinner-border-sm me-2"></span>Armando el cuadro…</td></tr>`);
+    history.replaceState(null, '', `?${periodo()}`);
+    $.get(`/app/gestion-inventarios/api/reporte-empresas/?${periodo()}`, function(r) {
+        if (!r.success) {
+            $('#tbodyEmpresas').html(`<tr><td colspan="7" class="text-center py-4 text-danger">${escHtml(r.error)}</td></tr>`);
+            return;
+        }
+        $('#tituloCuadro').text(r.titulo);
+        $('#diaStock').text(r.dia_stock);
+        $('#kpiPares').text(formatNumber(r.total.pares));
+        $('#kpiCosto').text(pesos(r.total.costo));
+        $('#kpiInterno').text(pesos(r.total.p_interno));
+        $('#kpiVenta').text(pesos(r.total.p_venta));
+        $('#kpiDiferencia').html(diferenciaHtml(r.total.diferencia));
+        $('#kpiConToma').text(`${r.total.con_toma} de ${r.total.locales}`);
+
+        let html = '';
+        r.empresas.forEach(b => {
+            html += `<tr class="fila-empresa"><td colspan="7">${escHtml(b.nombre)}</td></tr>`;
+            b.locales.forEach(l => {
+                const local = `<strong>${escHtml(l.local)}</strong><span class="local-alias">${escHtml(l.alias)}${l.es_bodega && l.direccion ? ' · ' + escHtml(l.direccion) : ''}</span>`;
+                html += filaValores(l, l.toma ? '' : 'sin-toma', local, celdaToma(l));
+            });
+            html += filaValores(b.total, 'fila-total', 'TOTAL', `${b.total.con_toma} de ${b.total.locales} con toma`);
+        });
+        html += filaValores(r.total, 'fila-holding', 'Total Holding', `${r.total.con_toma} de ${r.total.locales} locales con toma`);
+        $('#tbodyEmpresas').html(html);
+    }).fail(function(xhr) {
+        const error = (xhr.responseJSON && xhr.responseJSON.error) || 'No se pudo armar el cuadro';
+        $('#tbodyEmpresas').html(`<tr><td colspan="7" class="text-center py-4 text-danger">${escHtml(error)}</td></tr>`);
+    });
+}
+
+function exportarExcel() {
+    window.location.href = `/app/gestion-inventarios/api/reporte-empresas/excel/?${periodo()}`;
+}
+
+// jQuery lo carga layout/footer.html (después de este script): se arranca al cargar el DOM
+document.addEventListener('DOMContentLoaded', function() {
+    $('#filtroMes, #filtroAnio').on('change', cargarCuadro);
+    cargarCuadro();
+});
+</script>
+
+{% include '../../layout/footer.html' %}

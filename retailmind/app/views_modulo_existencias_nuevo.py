@@ -17,7 +17,7 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 from django.db import transaction
 from django.db.models import (
     Q, F, Sum, Count, Case, When, Value, CharField, IntegerField,
-    DecimalField, Prefetch, Subquery, OuterRef,
+    DecimalField, Prefetch, Subquery, OuterRef, Max, Min,
 )
 from django.db.models.functions import Abs, Coalesce, TruncDate
 from django.utils import timezone
@@ -32,6 +32,7 @@ from .models import (
     CONCEPTO_MOVIMIENTO_CHOICES, TIPO_MOVIMIENTO_CHOICES,
 )
 from .utils_tallas import clave_orden_talla
+from .utils_permisos import ids_sucursales_alcance
 
 logger = logging.getLogger('app')
 
@@ -131,32 +132,128 @@ DELTA_KARDEX_SQL = Case(
 )
 
 
-def _empresa_ids_producto(producto, suc_ids_permitidos=None):
-    """
-    IDs de sucursal de la empresa dueña del producto (para acotar la búsqueda).
+# --- Alcance y resolución del artículo de la tarjeta ---------------------------
+#
+# Un mismo artículo vive en VARIAS empresas del holding (p. ej. F35542 está en
+# EDEL, en PAO1-4 de Paola y en NICK1/NICK2 de Importadora, con el mismo SKU).
+# Antes la tarjeta tomaba un Producto_Talla cualquiera (`.first()` sin orden) y
+# mostraba solo las bodegas de SU empresa: según cuál saliera primero, NICK2
+# —la que tenía 59 de las 81 unidades— simplemente no aparecía. El universo
+# correcto es todo lo que el usuario puede ver del holding.
 
-    Si se pasa `suc_ids_permitidos`, el resultado se intersecta con el alcance
-    del usuario: un artículo puede existir en varias empresas del holding y
-    solo deben verse las bodegas a las que el usuario tiene acceso.
+# BigIntegerField: un texto de más dígitos no puede ser un SKU (y `int()` del
+# ORM reventaría al compararlo).
+_SKU_MAX_DIGITOS = 18
+
+
+def _alcance_tarjeta(request):
     """
-    empresa_id = producto.sucursal.empresa_id if producto.sucursal else None
-    if empresa_id is None:
-        sucursal_ids = [producto.sucursal_id] if producto.sucursal_id else []
-    else:
-        sucursal_ids = list(
-            Sucursal.objects.filter(empresa_id=empresa_id).values_list('id', flat=True)
+    Sucursales que puede mostrar la tarjeta: las de TODAS las empresas del
+    holding a las que el usuario tiene acceso, o ``None`` si ve todo
+    (administrador / Maestro / flag `puede_ver_todas_sucursales`).
+    """
+    return ids_sucursales_alcance(request.user)
+
+
+def _filtro_alcance_pt(suc_ids):
+    """kwargs para acotar un queryset de Producto_Talla al alcance (vacío = todo)."""
+    return {} if suc_ids is None else {'producto__sucursal_id__in': suc_ids}
+
+
+def _articulos_que_calzan(texto, suc_ids):
+    """
+    Códigos de artículo que corresponden a lo escrito: SKU exacto o código
+    exacto (sin distinguir mayúsculas). Un SKU puede apuntar a más de un
+    artículo —hay cientos así, casi todos legado de EDEL— y un código numérico
+    puede coincidir a la vez con el SKU de otro artículo: por eso se devuelven
+    TODOS y el que llama decide si hay que preguntar.
+    """
+    filtro = Q(producto__articulo__iexact=texto)
+    if texto.isdigit() and len(texto) <= _SKU_MAX_DIGITOS:
+        filtro |= Q(sku=int(texto))
+    return sorted(set(
+        Producto_Talla.objects
+        .filter(filtro, **_filtro_alcance_pt(suc_ids))
+        .values_list('producto__articulo', flat=True)
+        .distinct()
+    ))
+
+
+def _resumen_articulos(articulos, suc_ids):
+    """
+    Datos de cada artículo sobre TODAS sus variantes del alcance (no solo la
+    fila que calzó con la búsqueda): stock total, bodegas y un SKU de muestra.
+    Se usa en el autocompletado y para elegir cuando un SKU es ambiguo.
+    """
+    if not articulos:
+        return {}
+    base = Producto_Talla.objects.filter(
+        producto__articulo__in=articulos, **_filtro_alcance_pt(suc_ids)
+    )
+    resumen = {
+        f['producto__articulo']: {
+            'articulo': f['producto__articulo'],
+            'sku': str(f['sku']),
+            'descripcion': f['descripcion'] or '',
+            'marca': f['marca'] or '-',
+            'stock': f['stock'] or 0,
+            'num_bodegas': f['num_bodegas'],
+            'bodegas': [],
+        }
+        for f in (
+            base.values('producto__articulo')
+            .annotate(
+                sku=Min('sku'),
+                descripcion=Max('producto__descripcion'),
+                marca=Max('producto__atributo1__valor'),
+                stock=Sum('stock'),
+                num_bodegas=Count('producto__sucursal_id', distinct=True),
+            )
+            .order_by()
         )
-    if suc_ids_permitidos is not None:
-        permitidos = set(suc_ids_permitidos)
-        sucursal_ids = [s for s in sucursal_ids if s in permitidos]
-    return empresa_id, sucursal_ids
+    }
+    # Bodegas CON stock (las que responden "¿dónde hay?"), por nombre.
+    for f in (
+        base.filter(stock__gt=0)
+        .values('producto__articulo', 'producto__sucursal__alias')
+        .distinct()
+        .order_by('producto__sucursal__alias')
+    ):
+        r = resumen.get(f['producto__articulo'])
+        if r is not None and f['producto__sucursal__alias']:
+            r['bodegas'].append(f['producto__sucursal__alias'])
+    return resumen
+
+
+def _elegir_referencia(productos_talla, sucursal_actual_id, sku_buscado):
+    """
+    Variante que da la descripción, marca, precio y costo de la ficha.
+
+    Determinista: primero la sucursal desde donde se consulta (su precio es el
+    que importa en el mesón), luego el SKU buscado, luego la que tiene stock y
+    al final la ficha más nueva.
+    """
+    try:
+        sucursal_actual_id = int(sucursal_actual_id)
+    except (TypeError, ValueError):
+        sucursal_actual_id = None
+
+    def clave(pt):
+        return (
+            pt.producto.sucursal_id != sucursal_actual_id,
+            str(pt.sku) != sku_buscado,
+            -(pt.stock or 0),
+            -pt.producto_id,
+        )
+    return min(productos_talla, key=clave)
 
 
 @login_required
 @require_GET
 def api_tarjeta_movimiento(request):
     """
-    API: vida completa de un producto en TODAS las bodegas de su empresa.
+    API: vida completa de un artículo en TODAS las bodegas del holding que el
+    usuario puede ver (todas sus empresas, no solo la dueña del SKU).
 
     Un mismo artículo (código) existe como registros Producto distintos por
     sucursal, cada uno con sus Producto_Talla (SKUs) propios. Aquí se agrupa
@@ -165,57 +262,75 @@ def api_tarjeta_movimiento(request):
       - Kardex por (bodega, talla) con saldo acumulado correcto por serie.
       - Timeline unificada (nacimiento → traspasos → ventas → hoy).
 
-    Parámetros GET: sku (SKU o código de artículo), fecha_desde, fecha_hasta.
+    Parámetros GET: sku (SKU o código de artículo) o articulo (código exacto,
+    el que se elige cuando un SKU es ambiguo), fecha_desde, fecha_hasta.
+
+    Si el SKU corresponde a más de un artículo responde ``ambiguo: True`` con
+    los ``candidatos`` para que el usuario elija, en vez de adivinar.
     """
     sku = request.GET.get('sku', '').strip()
+    articulo_pedido = request.GET.get('articulo', '').strip()
     fecha_desde = request.GET.get('fecha_desde', '')
     fecha_hasta = request.GET.get('fecha_hasta', '')
     sucursal_actual_id = request.session.get('idSucursalActual')
 
-    if not sku:
+    if not sku and not articulo_pedido:
         return JsonResponse({'success': False, 'error': 'Debe ingresar un SKU o código de artículo.'}, status=400)
 
-    suc_ids_usuario = _sucursales_usuario(request)
-    if not suc_ids_usuario:
+    suc_ids = _alcance_tarjeta(request)
+    if suc_ids is not None and not suc_ids:
         return _sin_acceso('Tu usuario no tiene empresas asignadas.')
 
-    # 1) Resolver el artículo (código) a partir del SKU o del código directo,
-    #    SIEMPRE dentro de las bodegas del usuario. Sin este filtro bastaba
-    #    conocer un SKU ajeno para leer el kardex completo de otra empresa.
-    def _buscar_pt(suc_ids):
-        qs = Producto_Talla.objects.select_related('producto', 'producto__sucursal')
-        if suc_ids is not None:
-            qs = qs.filter(producto__sucursal_id__in=suc_ids)
-        pt = qs.filter(sku=int(sku)).first() if sku.isdigit() else None
-        if pt is None:
-            pt = qs.filter(producto__articulo__iexact=sku).first()
-        return pt
+    # 1) Resolver el artículo (código), SIEMPRE dentro del alcance del usuario.
+    #    Sin este filtro bastaba conocer un SKU ajeno para leer el kardex
+    #    completo de otra empresa.
+    buscado = articulo_pedido or sku
+    if articulo_pedido:
+        articulos = sorted(set(
+            Producto_Talla.objects
+            .filter(producto__articulo__iexact=articulo_pedido, **_filtro_alcance_pt(suc_ids))
+            .values_list('producto__articulo', flat=True)
+            .distinct()
+        ))
+    else:
+        articulos = _articulos_que_calzan(sku, suc_ids)
 
-    pt_ref = _buscar_pt(suc_ids_usuario)
-    if pt_ref is None:
+    if not articulos:
         # Distinguir "no existe" de "existe pero es de otra empresa".
-        if _buscar_pt(None) is not None:
+        if suc_ids is not None and _articulos_que_calzan(buscado, None):
             logger.warning(
                 "Tarjeta de movimiento denegada: %s pidió el SKU/código «%s» fuera de su alcance",
-                request.user.username, sku,
+                request.user.username, buscado,
             )
             return _sin_acceso('Ese SKU pertenece a una empresa a la que no tienes acceso.')
-        return JsonResponse({'success': False, 'error': f'SKU o código «{sku}» no encontrado.'}, status=404)
+        return JsonResponse({'success': False, 'error': f'SKU o código «{buscado}» no encontrado.'}, status=404)
 
-    articulo = pt_ref.producto.articulo
-    empresa_id, sucursal_ids = _empresa_ids_producto(pt_ref.producto, suc_ids_usuario)
+    if len(articulos) > 1:
+        resumen_art = _resumen_articulos(articulos, suc_ids)
+        candidatos = sorted(
+            resumen_art.values(), key=lambda a: (-a['stock'], a['articulo'])
+        )
+        return JsonResponse({
+            'success': True,
+            'ambiguo': True,
+            'buscado': buscado,
+            'candidatos': candidatos,
+        })
 
-    # 2) Todas las variantes (talla × sucursal) de este artículo en la empresa.
+    articulo = articulos[0]
+
+    # 2) Todas las variantes (talla × sucursal) de este artículo en el holding.
     productos_talla = list(
         Producto_Talla.objects
         .select_related(
-            'producto', 'producto__sucursal',
+            'producto', 'producto__sucursal', 'producto__sucursal__empresa',
             'producto__atributo1', 'producto__atributo2', 'producto__categoria',
         )
-        .filter(producto__articulo=articulo, producto__sucursal_id__in=sucursal_ids)
+        .filter(producto__articulo=articulo, **_filtro_alcance_pt(suc_ids))
         .order_by('producto__sucursal__alias', 'talla')
     )
     pt_ids = [pt.id for pt in productos_talla]
+    pt_ref = _elegir_referencia(productos_talla, sucursal_actual_id, sku)
 
     # 3) Movimientos de todas esas variantes.
     movimientos_qs = (
@@ -327,6 +442,10 @@ def api_tarjeta_movimiento(request):
     bodegas_presentes = sorted({
         pt.producto.sucursal.alias for pt in productos_talla if pt.producto.sucursal
     })
+    empresas_presentes = sorted({
+        pt.producto.sucursal.empresa.nombre
+        for pt in productos_talla if pt.producto.sucursal and pt.producto.sucursal.empresa
+    })
     stock_total = sum(pt.stock or 0 for pt in productos_talla)
 
     producto_info = {
@@ -341,6 +460,7 @@ def api_tarjeta_movimiento(request):
         'num_bodegas': len(bodegas_presentes),
         'num_skus': len(productos_talla),
         'bodegas': bodegas_presentes,
+        'empresas': empresas_presentes,
     }
 
     # 6) Distribución de stock actual por bodega (con desglose por talla).
@@ -354,6 +474,7 @@ def api_tarjeta_movimiento(request):
             distribucion[key] = {
                 'bodega_id': bodega.id,
                 'bodega': bodega.alias,
+                'empresa': bodega.empresa.nombre if bodega.empresa else '',
                 'tipo': bodega.get_tipo_sucursal_display(),
                 'es_cd': bodega.es_compradora,
                 'stock_total': 0,
@@ -683,59 +804,70 @@ _TIMELINE_MAX = 150
 @require_GET
 def api_buscar_productos_tarjeta_movimiento(request):
     """
-    Autocomplete: sugiere artículos (agrupados por código) por SKU, código o
-    descripción. Un artículo puede existir en varias bodegas; se muestra una
-    fila por código con el total de bodegas donde aparece.
+    Autocomplete: sugiere artículos (agrupados por código) por SKU, código,
+    descripción o marca, en todas las bodegas del holding que el usuario ve.
+
+    - Varias palabras se combinan con Y ("adilette negro"): cada una debe
+      aparecer en el código, la descripción, la marca o el SKU.
+    - Se agrupa en SQL por código. Antes se traían 60 filas talla × bodega y
+      un artículo presente en 7 bodegas con 10 tallas copaba el cupo solo,
+      dejando fuera al resto.
+    - Orden: coincidencia exacta (código o SKU) → código que empieza igual →
+      el resto, y dentro de cada grupo el que tiene más stock.
+    - Stock y bodegas son del artículo COMPLETO, no solo de la fila que calzó.
     """
     q = request.GET.get('q', '').strip()
     if len(q) < 2:
         return JsonResponse({'success': True, 'productos': []})
 
-    suc_ids_usuario = _sucursales_usuario(request)
-    if not suc_ids_usuario:
+    suc_ids = _alcance_tarjeta(request)
+    if suc_ids is not None and not suc_ids:
         return JsonResponse({'success': True, 'productos': []})
 
-    filtro = (
-        Q(producto__articulo__icontains=q) |
-        Q(producto__descripcion__icontains=q)
-    )
-    if q.isdigit():
-        filtro |= Q(sku__icontains=q)
+    filtro = Q()
+    for palabra in q.split():
+        f = (
+            Q(producto__articulo__icontains=palabra) |
+            Q(producto__descripcion__icontains=palabra) |
+            Q(producto__atributo1__valor__icontains=palabra)
+        )
+        if palabra.isdigit():
+            f |= Q(sku__icontains=palabra)
+        filtro &= f
 
-    productos_talla = (
+    exacto = Q(producto__articulo__iexact=q)
+    if q.isdigit() and len(q) <= _SKU_MAX_DIGITOS:
+        exacto |= Q(sku=int(q))
+    rango = Case(
+        When(exacto, then=Value(0)),
+        When(producto__articulo__istartswith=q, then=Value(1)),
+        default=Value(2),
+        output_field=IntegerField(),
+    )
+
+    top = list(
         Producto_Talla.objects
-        .filter(producto__sucursal_id__in=suc_ids_usuario)
-        .filter(filtro)
-        .select_related('producto', 'producto__atributo1', 'producto__sucursal')
-        .order_by('producto__articulo', 'talla')[:60]
+        .filter(filtro, **_filtro_alcance_pt(suc_ids))
+        .values('producto__articulo')
+        .annotate(rango=Min(rango), stock_match=Sum('stock'))
+        .order_by('rango', '-stock_match', 'producto__articulo')[:15]
     )
-
-    # Agrupar por código de artículo para no repetir la misma prenda por bodega.
-    agrupados = {}
-    for pt in productos_talla:
-        art = pt.producto.articulo
-        if art not in agrupados:
-            agrupados[art] = {
-                'sku': str(pt.sku),  # SKU de muestra para lanzar la búsqueda
-                'articulo': art,
-                'descripcion': pt.producto.descripcion,
-                'marca': pt.producto.atributo1.valor if pt.producto.atributo1 else '-',
-                'bodegas': set(),
-                'stock': 0,
-            }
-        if pt.producto.sucursal:
-            agrupados[art]['bodegas'].add(pt.producto.sucursal.alias)
-        agrupados[art]['stock'] += pt.stock or 0
+    articulos = [f['producto__articulo'] for f in top]
+    resumen = _resumen_articulos(articulos, suc_ids)
 
     resultados = []
-    for a in list(agrupados.values())[:15]:
+    for art in articulos:
+        r = resumen.get(art)
+        if r is None:
+            continue
         resultados.append({
-            'sku': a['sku'],
-            'articulo': a['articulo'],
-            'descripcion': a['descripcion'],
-            'marca': a['marca'],
-            'num_bodegas': len(a['bodegas']),
-            'stock': a['stock'],
+            'sku': r['sku'],
+            'articulo': art,
+            'descripcion': r['descripcion'],
+            'marca': r['marca'],
+            'num_bodegas': r['num_bodegas'],
+            'bodegas': r['bodegas'],
+            'stock': r['stock'],
         })
 
     return JsonResponse({'success': True, 'productos': resultados})

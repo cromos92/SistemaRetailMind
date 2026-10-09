@@ -1843,6 +1843,10 @@ urlpatterns = [
     # Vistas principales
     path('gestion-inventarios/', views_gestion_inventarios.gestion_inventarios, name='gestion_inventarios'),
     path('gestion-inventarios/detalle/<int:inventario_id>/', views_gestion_inventarios.detalle_inventario, name='detalle_inventario'),
+    # Inventario por empresa (cuadro «2026 ENERO INV»): solo el Maestro, lo revisa la vista
+    path('gestion-inventarios/reporte-empresas/', views_gestion_inventarios.reporte_inventario_empresas, name='reporte_inventario_empresas'),
+    path('gestion-inventarios/api/reporte-empresas/', _permiso_inventarios('puede_ver', views_gestion_inventarios.obtener_reporte_inventario_empresas), name='api_reporte_inventario_empresas'),
+    path('gestion-inventarios/api/reporte-empresas/excel/', _permiso_inventarios('puede_ver', views_gestion_inventarios.exportar_reporte_inventario_empresas), name='api_exportar_reporte_inventario_empresas'),
     
     # APIs de listado y filtros
     path('gestion-inventarios/api/inventarios/', views_gestion_inventarios.obtener_inventarios, name='api_obtener_inventarios'),

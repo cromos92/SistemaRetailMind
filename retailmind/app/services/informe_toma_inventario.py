@@ -136,6 +136,8 @@ def _acumulador_marca(marca):
         'marca': marca, 'skus': 0, 'skus_con_diferencia': 0, 'sin_contar': 0,
         'ant_stock': 0, 'ant_costo': 0.0, 'ant_venta': 0.0,
         'nue_stock': 0, 'nue_costo': 0.0, 'nue_venta': 0.0,
+        # a costo de la ficha, sin sobreprecio (el consolidado por empresa muestra ambos)
+        'ant_costo_puro': 0.0, 'nue_costo_puro': 0.0,
     }
 
 
@@ -183,6 +185,8 @@ def analizar(filas):
             a['nue_stock'] += fila['fisico']
             a['nue_costo'] += fila['ttcosto2']
             a['nue_venta'] += fila['ttpvp2']
+            a['ant_costo_puro'] += fila['base'] * fila['costo']
+            a['nue_costo_puro'] += fila['fisico'] * fila['costo']
             if fila['final']:
                 a['skus_con_diferencia'] += 1
             if fila.get('pistola') is None:

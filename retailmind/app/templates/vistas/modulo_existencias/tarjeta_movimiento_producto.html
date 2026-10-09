@@ -74,6 +74,9 @@
     left: calc(var(--vz-gutter-x, 1.5rem) * .5); right: calc(var(--vz-gutter-x, 1.5rem) * .5);   /* el padding real de la columna: a ras del input */
 }
 #listaAyudaProductos .list-group-item-action:hover { background: var(--tm-tint); }
+/* SKU que corresponde a varios artículos: el usuario elige cuál */
+.tm-candidatos { max-width: 720px; margin: 1rem auto 0; text-align: left; }
+.tm-candidatos .list-group-item-action:hover { background: var(--tm-tint); }
 
 /* ---------- 1. Ficha del artículo ---------- */
 .tm-ficha {
@@ -517,6 +520,7 @@ table.tm-matriz tfoot td.tm-col-suc { z-index: 3; background: var(--tm-surface);
                         <div>
                             <h6 class="tm-card-title"><span class="tm-step">2</span> Tallas en todas las sucursales</h6>
                             <div class="tm-card-hint">Stock de hoy. Haga clic en una celda para ver el kardex de esa bodega y talla.</div>
+                            <div class="tm-card-hint" id="matrizEmpresas"></div>
                         </div>
                         <div class="d-flex flex-wrap gap-3 align-items-center">
                             <div class="form-check form-switch mb-0">
@@ -661,6 +665,10 @@ let tallaActiva = '';               // columna resaltada en la matriz
 let rangoConsultado = { desde: '', hasta: '' };
 let ayudaTimer = null;
 let ayudaAbortController = null;
+// Código de artículo elegido en el autocompletado o en la lista de candidatos.
+// Un SKU puede corresponder a varios artículos; con esto la búsqueda va directo
+// al elegido. Se olvida apenas el usuario vuelve a escribir.
+let articuloElegido = '';
 
 function fmtMoneda(v) { return '$' + Number(v || 0).toLocaleString('es-CL'); }
 function fmtNum(v) { return Number(v || 0).toLocaleString('es-CL'); }
@@ -709,7 +717,11 @@ function buscarMovimientos() {
     const desde = document.getElementById('inputFechaDesde').value;
     const hasta = document.getElementById('inputFechaHasta').value;
 
-    let url = `/app/api/tarjeta-movimiento/?sku=${encodeURIComponent(sku)}`;
+    // Con un artículo elegido se busca por su código exacto; si no, por lo escrito.
+    const consulta = articuloElegido
+        ? `articulo=${encodeURIComponent(articuloElegido)}`
+        : `sku=${encodeURIComponent(sku)}`;
+    let url = `/app/api/tarjeta-movimiento/?${consulta}`;
     if (desde) url += `&fecha_desde=${desde}`;
     if (hasta) url += `&fecha_hasta=${hasta}`;
 
@@ -723,6 +735,10 @@ function buscarMovimientos() {
             document.getElementById('tmInicial').style.display = '';
             document.getElementById('tmInicial').querySelector('.tm-empty').innerHTML =
                 `<i class="ri-error-warning-line text-danger"></i><h6 class="text-danger">${escapeHtml(data.error || 'Error')}</h6>`;
+            return;
+        }
+        if (data.ambiguo) {
+            renderCandidatos(data.buscado, data.candidatos || []);
             return;
         }
         movimientosData = data.movimientos;
@@ -744,7 +760,7 @@ function buscarMovimientos() {
         document.getElementById('tmResultados').style.display = '';
         document.getElementById('btnExportar').style.display = '';
         // URL compartible: quien reciba el enlace abre la misma tarjeta.
-        history.replaceState(null, '', `?sku=${encodeURIComponent(sku)}`);
+        history.replaceState(null, '', `?${consulta}`);
     }).catch(e => {
         document.getElementById('tmLoader').style.display = 'none';
         document.getElementById('tmInicial').style.display = '';
@@ -757,24 +773,52 @@ function buscarMovimientos() {
 /* ================= Autocomplete ================= */
 function ocultarListaAyuda() { document.getElementById('listaAyudaProductos').style.display = 'none'; }
 
+/* Una fila por artículo: código, descripción, marca, dónde hay stock y total.
+   La comparten el autocompletado y la lista de "¿cuál de estos?". */
+function filaArticulo(p) {
+    const bodegas = (p.bodegas || []).length
+        ? `hay en ${p.bodegas.map(escapeHtml).join(', ')}`
+        : `${escapeHtml(p.num_bodegas)} bodega(s), sin stock`;
+    return `
+        <button type="button" class="list-group-item list-group-item-action" data-articulo="${escapeHtml(p.articulo)}">
+            <div class="d-flex justify-content-between gap-2">
+                <div>
+                    <strong>${escapeHtml(p.articulo)}</strong>
+                    <small class="text-muted d-block">${escapeHtml(p.descripcion)}</small>
+                    <small class="text-muted">${escapeHtml(p.marca)} · ${bodegas}</small>
+                </div>
+                <span class="badge bg-light text-dark border align-self-start">Stock ${fmtNum(p.stock)}</span>
+            </div>
+        </button>`;
+}
+
 function renderListaAyuda(productos) {
     const lista = document.getElementById('listaAyudaProductos');
     if (!productos.length) {
         lista.innerHTML = '<div class="list-group-item text-muted small">Sin coincidencias</div>';
         lista.style.display = ''; return;
     }
-    lista.innerHTML = productos.map(p => `
-        <button type="button" class="list-group-item list-group-item-action" data-sku="${escapeHtml(p.sku)}">
-            <div class="d-flex justify-content-between gap-2">
-                <div>
-                    <strong>${escapeHtml(p.articulo)}</strong>
-                    <small class="text-muted d-block">${escapeHtml(p.descripcion)}</small>
-                    <small class="text-muted">${escapeHtml(p.marca)} · ${escapeHtml(p.num_bodegas)} bodega(s)</small>
-                </div>
-                <span class="badge bg-light text-dark border align-self-start">Stock ${escapeHtml(p.stock)}</span>
-            </div>
-        </button>`).join('');
+    lista.innerHTML = productos.map(filaArticulo).join('');
     lista.style.display = '';
+}
+
+/* El SKU escrito corresponde a más de un artículo: en vez de adivinar, se
+   listan y el usuario elige. */
+function renderCandidatos(buscado, candidatos) {
+    const caja = document.getElementById('tmInicial');
+    caja.style.display = '';
+    caja.querySelector('.tm-empty').innerHTML = `
+        <i class="ri-question-line text-warning"></i>
+        <h6>«${escapeHtml(buscado)}» corresponde a ${candidatos.length} artículos distintos</h6>
+        <p class="mb-0">Elija cuál quiere ver:</p>
+        <div class="list-group tm-candidatos" id="listaCandidatos">${candidatos.map(filaArticulo).join('')}</div>`;
+}
+
+function elegirArticulo(articulo) {
+    articuloElegido = articulo;
+    document.getElementById('inputSku').value = articulo;
+    ocultarListaAyuda();
+    buscarMovimientos();
 }
 
 function buscarAyudaProductos() {
@@ -810,7 +854,12 @@ function renderFicha(p, r, dist) {
     // Sucursales con stock (de las que tienen registro del artículo)
     const conStock = (dist || []).filter(b => b.stock_total > 0).length;
     document.getElementById('mSucursales').textContent = conStock;
-    document.getElementById('mSucursalesSub').textContent = `de ${(dist || []).length} con ficha del artículo`;
+    const empresas = p.empresas || [];
+    document.getElementById('mSucursalesSub').textContent = `de ${(dist || []).length} con ficha del artículo` +
+        (empresas.length > 1 ? ` · ${empresas.length} empresas` : '');
+    document.getElementById('matrizEmpresas').textContent = empresas.length
+        ? `Incluye ${empresas.length === 1 ? 'la empresa' : `las ${empresas.length} empresas`}: ${empresas.join(' · ')}`
+        : '';
 
     // Tallas con stock
     const totalPorTalla = totalesPorTalla();
@@ -919,7 +968,7 @@ function renderMatriz() {
         const porTalla = {};
         b.tallas.forEach(t => { porTalla[t.talla] = (porTalla[t.talla] || 0) + (t.stock || 0); });
 
-        let fila = `<td class="tm-col-suc" data-bodega="${b.bodega_id}" title="Ver el kardex completo de ${escapeHtml(b.bodega)}">
+        let fila = `<td class="tm-col-suc" data-bodega="${b.bodega_id}" title="${escapeHtml(b.empresa ? b.empresa + ' — ' : '')}Ver el kardex completo de ${escapeHtml(b.bodega)}">
             <span class="tm-suc-nombre">${escapeHtml(b.bodega)}</span>
             ${b.es_cd ? '<span class="tm-tag tm-tag-cd">CD</span>' : ''}
             ${esActual ? '<span class="tm-tag tm-tag-aqui">aquí</span>' : ''}
@@ -1355,13 +1404,14 @@ function activarTab(tab) {
 
 /* ================= Eventos ================= */
 document.getElementById('inputSku').addEventListener('keydown', e => { if (e.key === 'Enter') { ocultarListaAyuda(); buscarMovimientos(); } });
-document.getElementById('inputSku').addEventListener('input', buscarAyudaProductos);
+document.getElementById('inputSku').addEventListener('input', () => { articuloElegido = ''; buscarAyudaProductos(); });
 document.getElementById('listaAyudaProductos').addEventListener('click', e => {
-    const opcion = e.target.closest('[data-sku]');
-    if (!opcion) return;
-    document.getElementById('inputSku').value = opcion.dataset.sku;
-    ocultarListaAyuda();
-    buscarMovimientos();
+    const opcion = e.target.closest('[data-articulo]');
+    if (opcion) elegirArticulo(opcion.dataset.articulo);
+});
+document.getElementById('tmInicial').addEventListener('click', e => {
+    const opcion = e.target.closest('#listaCandidatos [data-articulo]');
+    if (opcion) elegirArticulo(opcion.dataset.articulo);
 });
 document.addEventListener('click', e => {
     if (!e.target.closest('#inputSku') && !e.target.closest('#listaAyudaProductos')) ocultarListaAyuda();
@@ -1425,9 +1475,13 @@ if ('IntersectionObserver' in window) {
         .forEach(id => { const el = document.getElementById(id); if (el) observador.observe(el); });
 }
 
-/* Enlace directo: /app/tarjeta-movimiento/?sku=12345 abre la tarjeta al entrar. */
+/* Enlace directo: /app/tarjeta-movimiento/?sku=12345 (o ?articulo=F35542) abre
+   la tarjeta al entrar. */
 (function cargarDesdeUrl() {
-    const skuUrl = new URLSearchParams(window.location.search).get('sku');
+    const params = new URLSearchParams(window.location.search);
+    const articuloUrl = params.get('articulo');
+    const skuUrl = params.get('sku');
+    if (articuloUrl) { elegirArticulo(articuloUrl); return; }
     if (!skuUrl) return;
     document.getElementById('inputSku').value = skuUrl;
     buscarMovimientos();
