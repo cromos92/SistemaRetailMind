@@ -4,9 +4,10 @@
 > más empresas sin que compartan datos entre ellas, **salvo las empresas que ya están
 > configuradas hoy**, que deben seguir compartiendo lo que comparten.
 >
-> Este documento es solo análisis + plan: **no cambia código ni datos**. Todo lo citado
-> con `archivo:línea` se verificó en el código (lectura) el 2026-10-10. Rutas relativas a
-> `retailmind/` salvo que se indique otra cosa.
+> Este documento es solo análisis + plan: **no cambia código ni datos**. Las referencias
+> `archivo:línea` salen de leer el código el 2026-10-10. Los hallazgos críticos se
+> revisaron dos veces; los conteos marcados como heurística o estimación son aproximados.
+> Rutas relativas a `retailmind/` salvo que se indique otra cosa.
 
 ---
 
@@ -36,7 +37,7 @@ este plan:
 | 4 | Los roles maestro/administrador/jefe **ven todas las empresas de la base, por diseño** (y hay tests que lo fijan). Para un grupo con el mismo dueño está bien; si mañana entra un tercero a esta misma base, su administrador vería tu grupo y viceversa. |
 | 5 | ✅ **Recomendación: un esquema PostgreSQL por cuenta** (librería `django-tenants`). Tu grupo pasa completo a un esquema ("Cuenta #1") y sigue compartiendo **todo** como hoy, incluidas las funciones cruzadas entre empresas del grupo. Cada cuenta nueva nace en su propio esquema vacío. **El aislamiento lo garantiza la base de datos, no 1.830 vistas**: aunque una vista olvide un filtro, nunca puede ver otra cuenta. Las 161 consultas SQL crudas siguen funcionando sin reescribirse. |
 | 6 | El **"módulo para vender"** es una **consola de plataforma** (fuera de las cuentas): alta automática de cuentas, planes, módulos contratados, límites (sucursales/usuarios/cajas), estado de suscripción (prueba/activa/morosa/suspendida), cobros y uso. |
-| 7 | **Responsive:** primero una capa global (CSS + layout) que mejora las 150 plantillas de una vez; después las pantallas que se usan en celular/tablet; después barrido por módulo. Con capturas automáticas antes/después para medir. |
+| 7 | **Responsive:** el problema más grande no está en cada pantalla sino en la base común. El **modo kiosko del POS queda activo por defecto para todos** (`POS_KIOSK_DEFAULT`), y eso hace que el iPhone haga zoom al tocar cualquier campo. Además: en celular todas las páginas se desbordan unos px a los lados, en tablet el menú solo abre con mouse, los modales grandes quedan de 500px y el login no hace scroll. Plan: primero arreglar la capa global (CSS + layout), que alcanza a las 107 páginas de una vez; después las pantallas que se usan en celular o tablet; al final un barrido por módulo. Se mide con capturas automáticas antes y después. |
 
 ### Hoja de ruta (estimación de orden de magnitud, 1 desarrollador + Claude)
 
@@ -44,7 +45,7 @@ este plan:
 |---|---|---|---|
 | **0** | Seguridad: repo privado, rotar credenciales, sacar `.env` y datos del repo | 2–3 días (+ rotación que haces tú) | — |
 | **R0–R1** | Responsive: medición + capa global | 1–2 semanas | — |
-| **R2** | Responsive: pantallas prioritarias (POS, caja, ventas, stock, requerimientos, home) | 2–3 semanas | R1 |
+| **R2** | Responsive: pantallas prioritarias (garantías, requerimientos, dashboards, documentos de venta, ecommerce, clientes, POS) | 2–3 semanas | R1 |
 | **R3–R4** | Responsive: barrido por módulo + POS tablet | 3–5 semanas | R2 |
 | **B0** | SaaS: preparación (sacar lo "hardcodeado" del grupo, seguridad cruzada, tests en Postgres + CI, staging) | 2–3 semanas | 0 |
 | **B1** | SaaS: esquema por cuenta en staging + ensayo de migración de tu grupo | 3–4 semanas | B0 |
@@ -79,8 +80,162 @@ la clave privada de QZ. Ningún cliente nuevo debería entrar a una plataforma a
 
 ## 2. Parte A — Responsive
 
-<!-- RESPONSIVE_PLACEHOLDER -->
-_Sección en preparación: auditoría de las 150 plantillas en curso._
+### 2.1 Diagnóstico
+
+**Tamaño:** 150 plantillas (264 mil líneas). 107 usan el layout (`header`/`menu`/`footer`),
+134 traen su propio `<style>` y suman 388 `@media` con unos 40 breakpoints distintos
+(82× `768px`, 67× `576px`, 16× `767.98px`, …). Hay 5 plantillas huérfanas que ningún
+código usa (~8,8 mil líneas, p. ej. `cuadraturaCaja_v2.html`).
+
+**Los 9 problemas que más pesan** (verificados en el código):
+
+| # | Problema | Dónde | Efecto |
+|---|---|---|---|
+| 1 | **El modo kiosko del POS queda activo para todos por defecto.** `POS_KIOSK_DEFAULT` vale `'True'` si no se define la variable, y el context processor lo aplica a cada página, usuario y equipo | `retailmind/settings.py:229`, `app/context_processors.py` | `pos-kiosk.css` §13 (`@media (max-height:800px),(max-width:1400px)`, `:755`) alcanza a todos los celulares y tablets, y fuerza los inputs a 15px `!important` (`:813-828`). Eso anula la regla anti-zoom de 16px de `nexo-responsive.css`, así que **el iPhone hace zoom al tocar cualquier campo**, incluido el login. *Verificar el valor en producción* |
+| 2 | **Todas las páginas "bailan" hacia los lados en celular** (≤576px) | `nexo-responsive.css:788-797` | El padding baja a 0,25rem pero las `.row` mantienen el gutter negativo de 0,75rem: desborde de ~4px por lado. `buscar_productos_sucursal.html:17-24` lo tapa con `overflow-x:hidden` en todo el layout |
+| 3 | **Los modales grandes quedan angostos en tablet vertical** (769–991px) | Bootstrap 5.2.3; nexo solo corrige ≤768 (`nexo-responsive.css:211-216`) | 145 modales `modal-lg`/`modal-xl` quedan en 500px. Ninguno usa `modal-fullscreen-*-down` |
+| 4 | **El menú en tablet (768–1024) solo funciona con mouse** | `app.js` fuerza `data-sidebar-size="sm"` | El menú queda como una franja de íconos de 70px y sus submenús se abren solo con *hover*. El buscador del menú queda aplastado |
+| 5 | **El login no hace scroll en celular** | `registration/login.html:59-63` (`height:100vh; overflow:hidden`), logo con estilo inline en `:513` | En pantallas bajas el formulario queda cortado |
+| 6 | **El POS solo funciona en pantallas ≥1024 en horizontal** | `generacionVentas.html:2044` (`clamp(510px,51%,630px)`, sin quiebre), alto fijo en `:1790` | En tablet vertical la tabla de productos queda de ~150px. En celular se desborda |
+| 7 | **Barra superior:** el bloque derecho no se encoge | `layout/menu.html:649` (`flex-nowrap` sin `min-width:0`) | Estimado: para un jefe de local con notificaciones, en 360–375px el menú de usuario (perfil / cerrar sesión) queda fuera de la pantalla |
+| 8 | **`nexo-responsive.css` tiene reglas dañinas y otras muertas** | dañinas: `:893-898`, `:143-151`, `:127-133`; muerta: `:926` | Dañinas: ver nota abajo. Muerta: `:926` usa `body.sidebar-enable`, pero Velzon usa `vertical-sidebar-enable` |
+| 9 | **El chat del asistente está roto** | `assistant/templates/assistant/chat.html:1` | Hace `{% extends 'layout/header.html' %}` sobre un archivo sin bloques: la página sale en blanco |
+
+Detalle de las reglas dañinas del punto 8:
+
+- `.row > .col-6` se fuerza a 100% bajo 576px (`:893-898`). Afecta a los 482 `col-6`,
+  que incluyen pares de KPI pensados para verse de a dos.
+- La primera columna fija de las tablas usa un fondo transparente (`:143-151`).
+- El margen negativo de `.table-responsive` (`:127-133`) desborda dentro de 26
+  `.card-body.p-0`.
+
+**Patrones repetidos** (conteos en todas las plantillas):
+
+| Patrón | Cantidad |
+|---|---|
+| Tablas sin contenedor con scroll | ~49 en el HTML + ~111 armadas en JS |
+| Columnas fijas sin breakpoint (`col-3`, `col-4`, `col-6`…) | 247, de ellas 41 envuelven formularios. Ej.: 4 KPI `col-3` en `dashboard_fifo.html:991-1018` |
+| Reglas `:hover` | 856, con solo 5 guardas `(hover:hover)` |
+| Botones que solo aparecen al pasar el mouse | p. ej. `verGestionProductos.html:737-744` |
+| Tamaños de fuente < 0,75rem | 1.997 |
+| `select` de 11px | `gestionVentasDocumentos.html:174-228` (provoca zoom en iOS) |
+| Páginas en uso sin ningún `@media` | 14, p. ej. `devolucion_garantia`, `lista_clientes`, `retiro_pedido_local`, `pedido_ecommerce_detalle`, `ficha_cliente` |
+| Plantillas que redeclaran sus propios tokens `:root` | 67 |
+| Plantillas que redefinen `.nexo-table` | 19 |
+
+**Lo que ya está bien y conviene copiar:**
+
+- widget del código de autorización (`menu.html:888-937`);
+- búsqueda de stock: la tabla pasa a tarjetas bajo 768px (`buscar_productos_sucursal.html:994-1086`);
+- ajuste de stock rápido, con barra fija abajo;
+- requerimientos (tarjetas bajo 768px);
+- `dashboard_home`;
+- modal a pantalla completa con `100dvh` bajo 992px en `gestion_cambios_devoluciones.html:2611-2631`.
+
+**Pantallas que el staff usa en el celular:**
+
+| Uso | Estado |
+|---|---|
+| Código de autorización, consulta y ajuste de stock, requerimientos (listado), ventas del día | ✅ Bien |
+| Tarjeta de existencia, inventarios, detalle de requerimiento, dashboards, documentos de venta, ticket de piso | 🟡 Regular |
+| Garantías (`devolucion_garantia`, `detalle_devolucion_garantia`), retiro y detalle de pedidos ecommerce, ficha de cliente de fidelización | 🔴 Mal |
+| POS (`generacionVentas`) | ⛔ No apto para celular ni tablet vertical |
+
+> Relación con `docs/PLAN_APP_MOVIL_STAFF.md`: ese plan descartó la web responsive para el
+> staff porque "el dolor es justamente la UX móvil". Este plan no lo reemplaza: arregla la
+> base web, y la app nativa puede seguir siendo una decisión aparte.
+
+### 2.2 Estrategia
+
+1. **Primero la capa global** (CSS + layout + un JS chico): arregla las 107 páginas del
+   layout de una vez, sin tocar plantilla por plantilla.
+2. **Después las pantallas que se usan en celular/tablet**, y al final un barrido por
+   módulo con checklist.
+3. **Expectativa realista por tamaño:**
+   - Celular: consultar y aprobar.
+   - Tablet: operar.
+   - Escritorio y kiosko 1920: todo.
+
+   Las pantallas gigantes de backoffice se dejan "usables en tablet", no "perfectas en
+   celular": `verGestionProductos` (19,5 mil líneas), `gestionCompras` y `recepcion_dte`.
+4. **Un solo juego de breakpoints:** los de Bootstrap (575.98 / 767.98 / 991.98 / 1199.98).
+   Se usan los tokens de `nexo-design-system.css` y nada de paletas nuevas.
+5. **No tocar la impresión** (boletas, etiquetas Zebra, PDFs): toda regla global nueva va
+   dentro de `@media screen`.
+6. **Medir, no adivinar:** un script con Playwright abre ~30 pantallas en 360, 390, 768,
+   1024, 1366 y 1920px. Detecta:
+   - scroll horizontal (`scrollWidth > innerWidth`);
+   - elementos fuera de pantalla;
+   - inputs < 16px;
+   - botones < 44px.
+
+   Guarda capturas antes y después. Es una herramienta de desarrollo: agregarla a
+   `requirements-dev.txt` requiere tu visto bueno. Necesita la app corriendo con datos de
+   prueba (staging).
+
+### 2.3 Fases
+
+**R0 — Decisiones y medición** (2–3 días)
+
+- **Modo kiosko:** dejar `POS_KIOSK_DEFAULT=False` en producción (es una variable de
+  entorno, no código) y activar el modo táctil solo en los equipos POS (`?kiosk=1` queda
+  guardado en la sesión).
+- Línea base con el script de capturas.
+- Excluir del alcance las 5 plantillas huérfanas y el CSS sin uso (`pos-transbank.css`,
+  `myCss.css`, `custom.css`). Se borran solo con tu OK.
+
+**R1 — Capa global** (1 semana)
+
+| # | Cambio | Archivo |
+|---|---|---|
+| 1 | Inputs ≥ 16px también en modo kiosko, o excluir de §13 los táctiles < 992px | `pos-kiosk.css:755`, `:813-828`, `:876-879` |
+| 2 | Corregir el desborde lateral en celular y quitar el parche | `nexo-responsive.css:788-797`, `buscar_productos_sucursal.html:17-24` |
+| 3 | Modales: 769–991 al 90–95% de ancho; `lg`/`xl` a pantalla completa bajo 768 (solo CSS, sin editar los 145 modales); borrar la regla muerta | `nexo-responsive.css:172-223` |
+| 4 | Menú en tablet: menú lateral deslizable (como en celular) entre 768 y 1024, sin submenús por *hover*; arreglar el selector muerto | JS chico después de `app.js`; `nexo-responsive.css:926` |
+| 5 | Login con scroll (`min-height:100dvh`) y logo con clase | `registration/login.html:59-63`, `:513` |
+| 6 | Barra superior: el bloque derecho puede encogerse; la píldora de sucursal pasa a ícono bajo 400px; el cambio de tema se mueve al menú de usuario en celular | `layout/menu.html:649`, `:1888-1895`, `:658-664` |
+| 7 | `.row > .col-6` a 100% deja de ser global (pasa a una clase opcional); fondo de la primera columna fija; margen de `.table-responsive` acotado | `nexo-responsive.css:893-898`, `:143-151`, `:127-133` |
+| 8 | Viewport: `width=1920`/`user-scalable=no` solo en el kiosko estricto; agregar `viewport-fit=cover` | `layout/header.html:9-15`, `login.html:8-10` |
+| 9 | El botón del asistente IA no tapa las barras de acción de abajo y se oculta en modo kiosko | `assistant/templates/assistant/widget.html:90-100` |
+| 10 | Componentes compartidos, sacados de las páginas que ya lo hacen bien: `.module-header` responsive, pestañas con scroll horizontal, tabla→tarjetas, barra de acción fija abajo, modal completo < 992 | `nexo-responsive.css` |
+| 11 | Envolver en `.table-responsive` las tablas que no lo están, incluidas las que se arman por JS | JS de layout, a evaluar |
+
+**R2 — Pantallas prioritarias** (2–3 semanas)
+
+- Garantías (`devolucion_garantia`, `detalle_devolucion_garantia`) y
+  `detalle_requerimiento` (botones `col-4`, tablas de .72rem).
+- `dashboard_ventas_nexo` y los otros 6 dashboards con el override `col-lg` copiado; sus
+  tablas sin contenedor.
+- `gestionVentasDocumentos` (controles de 11px).
+- Ecommerce: `retiro_pedido_local`, `pedido_ecommerce_detalle`, `pedidos_ecommerce_list`.
+- Clientes y fidelización: `ficha_cliente`, `lista_clientes`, `dashboard_clientes`.
+- `gestion_dte` (su `overflow:hidden` corta 7 tablas).
+- **POS (`generacionVentas`):** apilar las columnas en tablet vertical (paso 3 en `:2044`,
+  modal de producto en `:2707`) o mostrar el aviso "usar en horizontal ≥1024". **Decisión
+  tuya.**
+
+**R3 — Barrido por módulo** (3–4 semanas)
+
+- Orden: ventas → existencias → requerimientos → documentos → compras → reportes →
+  administración/configuración → fidelización/giftcards → empresas/clientes → usuarios.
+- Checklist por pantalla: §2.4.
+
+**R4 — POS en tablet y kiosko 1920** (1 semana)
+
+- Que el kiosko quede sin regresiones (capturas idénticas).
+- Tablet en horizontal.
+- Probar en el equipo real si el bloqueador de doble toque del modo estricto
+  (`menu.html:97-102`) se come los toques rápidos del teclado numérico.
+
+### 2.4 Criterios de "listo"
+
+| Ancho | Debe cumplir |
+|---|---|
+| 360–430px | Sin scroll horizontal de página (solo dentro de tablas); menú y menú de usuario alcanzables; modales a pantalla completa; formularios en una columna; inputs ≥ 16px (sin zoom en iPhone); botones ≥ 44px |
+| 768–1024px | Menú táctil sin *hover*; modales ≥ 90% de ancho; POS usable en horizontal |
+| 1920px kiosko | Sin regresiones |
+| Impresión | Boletas, etiquetas y PDFs idénticos a hoy |
+| Medición | El script reporta 0 pantallas prioritarias con scroll horizontal |
 
 ---
 
@@ -477,3 +632,8 @@ despliegue, una migración y un backup que mantener.
 6. **Fase 0:** ¿autorizas que prepare el commit que deja de versionar `.env` y los
    archivos de datos? La purga del historial necesita además tu confirmación explícita
    para el `push --force`.
+7. **Modo kiosko:** ¿en producción está definido `POS_KIOSK_DEFAULT`? Si no lo está, el
+   estilo táctil del POS se aplica a todos los usuarios. Recomiendo dejarlo en `False` y
+   activarlo solo en los equipos POS.
+8. **POS en tablet vertical:** ¿adaptarlo (columnas apiladas) o mostrar un aviso de "usar
+   en horizontal"? Adaptarlo cuesta ~1 semana más.
